@@ -170,7 +170,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     Long startTime = System.currentTimeMillis();
 
     String commit = instant.getTimestamp();
-    LOG.error("Rolling back instant " + instant);
+    LOG.error("Rolling back instant {}", instant);
 
     // Atomically un-publish all non-inflight commits
     if (instant.isCompleted()) {

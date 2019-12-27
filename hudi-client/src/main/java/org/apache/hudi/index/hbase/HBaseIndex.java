@@ -321,7 +321,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
             doPutsAndDeletes(hTable, puts, deletes);
           } catch (Exception e) {
             Exception we = new Exception("Error updating index for " + writeStatus, e);
-            LOG.error(we);
+            LOG.error("Error updating index for {}", writeStatus, e);
             writeStatus.setGlobalError(we);
           }
           writeStatusList.add(writeStatus);
@@ -486,7 +486,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
             .toIntExact(regionLocator.getAllRegionLocations().stream().map(e -> e.getServerName()).distinct().count());
         return numRegionServersForTable;
       } catch (IOException e) {
-        LOG.error(e);
+        LOG.error("Error while connecting HBase:", e);
         throw new RuntimeException(e);
       }
     }
