@@ -115,7 +115,7 @@
                 
                 
                 
-                <li><a href="news">新闻</a></li>
+                <li><a href="releases.html">发布</a></li>
                 
                 
                 
@@ -178,7 +178,11 @@
                 <li>
                     <!--start search-->
                     <div id="search-demo-container">
-                        <input type="text" id="search-input" placeholder="search...">
+
+                        
+                        <input type="text" id="search-input" placeholder="搜索...">
+                        
+
                         <ul id="results-container"></ul>
                     </div>
                     <script src="/js/jekyll-search.js" type="text/javascript"></script>
@@ -223,26 +227,26 @@
     
     
     <li>
-        <a href="#">Getting Started</a>
+        <a href="#">入门指南</a>
         <ul>
             
             
             
-            <li><a href="quickstart.html">Quickstart</a></li>
+            <li><a href="quickstart.html">快速开始</a></li>
             
             
             
             
             
             
-            <li><a href="use_cases.html">用户案例</a></li>
+            <li><a href="use_cases.html">使用案例</a></li>
             
             
             
             
             
             
-            <li><a href="powered_by.html">演讲 & Powered By</a></li>
+            <li><a href="powered_by.html">演讲 & Hudi 用户</a></li>
             
             
             
@@ -428,7 +432,7 @@ GCS和Hudi协同工作所需的配置。</li>
 
 <h5 id="INSERT_DROP_DUPS_OPT_KEY">INSERT_DROP_DUPS_OPT_KEY</h5>
 <p>属性：<code class="highlighter-rouge">hoodie.datasource.write.insert.drop.duplicates</code>, 默认值：<code class="highlighter-rouge">false</code> <br />
-  <span style="color:grey">如果设置为true，则在插入操作期间从传入数据帧中过滤掉所有重复记录。</span></p>
+  <span style="color:grey">如果设置为true，则在插入操作期间从传入DataFrame中过滤掉所有重复记录。</span></p>
 
 <h5 id="HIVE_SYNC_ENABLED_OPT_KEY">HIVE_SYNC_ENABLED_OPT_KEY</h5>
 <p>属性：<code class="highlighter-rouge">hoodie.datasource.hive_sync.enable</code>, 默认值：<code class="highlighter-rouge">false</code> <br />

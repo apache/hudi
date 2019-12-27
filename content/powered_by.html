@@ -179,7 +179,11 @@
                 <li>
                     <!--start search-->
                     <div id="search-demo-container">
+
+                        
                         <input type="text" id="search-input" placeholder="search...">
+                        
+
                         <ul id="results-container"></ul>
                     </div>
                     <script src="/js/jekyll-search.js" type="text/javascript"></script>
@@ -339,9 +343,13 @@
 
 <h4 id="uber">Uber</h4>
 
-<p>Hudi was originally developed at <a href="https://uber.com">Uber</a>, to achieve <a href="http://www.slideshare.net/vinothchandar/hadoop-strata-talk-uber-your-hadoop-has-arrived/32">low latency database ingestion, with high efficiency</a>.
-It has been in production since Aug 2016, powering ~100 highly business critical tables on Hadoop, worth 100s of TBs(including top 10 including trips,riders,partners).
-It also powers several incremental Hive ETL pipelines and being currently integrated into Uber’s data dispersal system.</p>
+<p>Apache Hudi was originally developed at <a href="https://uber.com">Uber</a>, to achieve <a href="http://www.slideshare.net/vinothchandar/hadoop-strata-talk-uber-your-hadoop-has-arrived/32">low latency database ingestion, with high efficiency</a>.
+It has been in production since Aug 2016, powering the massive <a href="https://eng.uber.com/uber-big-data-platform/">100PB data lake</a>, including highly business critical tables like core trips,riders,partners. It also 
+powers several incremental Hive ETL pipelines and being currently integrated into Uber’s data dispersal system.</p>
+
+<h4 id="amazon-web-services">Amazon Web Services</h4>
+<p>Amazon Web Services is the World’s leading cloud services provider. Apache Hudi is <a href="https://aws.amazon.com/emr/features/hudi/">pre-installed</a> with the AWS Elastic Map Reduce 
+offering, providing means for AWS users to perform record-level updates/deletes and manage storage efficiently.</p>
 
 <h4 id="emis-health">EMIS Health</h4>
 
@@ -388,6 +396,10 @@ June 2019, SF Big Analytics Meetup, San Mateo, CA</p>
   <li>
     <p><a href="https://docs.google.com/presentation/d/1FHhsvh70ZP6xXlHdVsAI0g__B_6Mpto5KQFlZ0b8-mM">“Apache Hudi (Incubating) - The Past, Present and Future Of Efficient Data Lake Architectures”</a> - By Vinoth Chandar &amp; Balaji Varadarajan
 September 2019, ApacheCon NA 19, Las Vegas, NV, USA</p>
+  </li>
+  <li>
+    <p><a href="https://www.portal.reinvent.awsevents.com/connect/sessionDetail.ww?SESSION_ID=98662&amp;csrftkn=YS67-AG7B-QIAV-ZZBK-E6TT-MD4Q-1HEP-747P">“Insert, upsert, and delete data in Amazon S3 using Amazon EMR”</a> - By Paul Codding &amp; Vinoth Chandar
+December 2019, AWS re:Invent 2019, Las Vegas, NV, USA</p>
   </li>
 </ol>
 
