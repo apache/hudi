@@ -26,9 +26,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -39,7 +39,7 @@ import java.io.Serializable;
  */
 public abstract class AbstractHoodieClient implements Serializable, AutoCloseable {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractHoodieClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractHoodieClient.class);
 
   protected final transient FileSystem fs;
   protected final transient JavaSparkContext jsc;
