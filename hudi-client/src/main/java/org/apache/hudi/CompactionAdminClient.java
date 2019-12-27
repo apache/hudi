@@ -364,8 +364,8 @@ public class CompactionAdminClient extends AbstractHoodieClient {
             return new RenameOpResult(lfPair, true, Option.empty());
           } catch (IOException e) {
             LOG.error("Error renaming log file", e);
-            LOG.error("\n\n\n***NOTE Compaction is in inconsistent state. " +
-                    "Try running \"compaction repair {} \" to recover from failure ***\n\n\n",
+            LOG.error("\n\n\n***NOTE Compaction is in inconsistent state. "
+                            + "Try running \"compaction repair {} \" to recover from failure ***\n\n\n",
                     lfPair.getLeft().getBaseCommitTime());
             return new RenameOpResult(lfPair, false, Option.of(e));
           }

@@ -648,8 +648,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
             }
 
             int insertBuckets = (int) Math.ceil((1.0 * totalUnassignedInserts) / insertRecordsPerBucket);
-            LOG.info("After small file assignment: unassignedInserts => {}, totalInsertBuckets => {}, " +
-                    "recordsPerBucket => {}", totalUnassignedInserts, insertBuckets, insertRecordsPerBucket);
+            LOG.info("After small file assignment: unassignedInserts => {}, totalInsertBuckets => {}, "
+                    + "recordsPerBucket => {}", totalUnassignedInserts, insertBuckets, insertRecordsPerBucket);
             for (int b = 0; b < insertBuckets; b++) {
               bucketNumbers.add(totalBuckets);
               recordsPerBucket.add(totalUnassignedInserts / insertBuckets);

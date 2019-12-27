@@ -211,8 +211,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       // NOTE: Once Records are added to map (spillable-map), DO NOT change it as they won't persist
       keyToNewRecords.put(record.getRecordKey(), record);
     }
-    LOG.info("Number of entries in MemoryBasedMap => {}. Total size in bytes of MemoryBasedMap => {}. " +
-            "Number of entries in DiskBasedMap => {}. Size of file spilled to disk => {}",
+    LOG.info("Number of entries in MemoryBasedMap => {}. Total size in bytes of MemoryBasedMap => {}. "
+                    + "Number of entries in DiskBasedMap => {}. Size of file spilled to disk => {}",
             ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries(), ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize(),
             ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries(), ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
     return partitionPath;
