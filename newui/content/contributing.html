@@ -292,10 +292,10 @@ and more importantly also try to improve the process along the way as well.</p>
 <h3 id="filing-jiras">Filing JIRAs</h3>
 
 <ul>
-  <li>Hudi uses JIRA to manage issues. First familiarize yourself with the various <a href="https://issues.apache.org/jira/projects/HUDI/components">components</a> against which issues are filed in Hudi.</li>
-  <li>Make an attempt to find an existing JIRA, that may solve the same issue you are reporting. When in doubt, you can always email the mailing list so that community can provide early feedback, 
+  <li>Hudi uses JIRA to manage issues. First, familiarize yourself with the various <a href="https://issues.apache.org/jira/projects/HUDI/components">components</a> against which issues are filed in Hudi.</li>
+  <li>Make an attempt to find an existing JIRA, that may solve the same issue you are reporting. When in doubt, you can always email the mailing list so that the community can provide early feedback, 
 point out any similar JIRAs or RFCs.</li>
-  <li>Try to gauge whether this JIRA needs an <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+Process">RFC</a>. As always, email the mailing list if unsure. If you need a RFC since the change is
+  <li>Try to gauge whether this JIRA needs an <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+Process">RFC</a>. As always, email the mailing list if unsure. If you need an RFC since the change is
 large in scope, then please follow the wiki instructions to get the process rolling along.</li>
   <li>While raising a new JIRA or updating an existing one, please make sure to do the following
     <ul>
@@ -303,12 +303,12 @@ large in scope, then please follow the wiki instructions to get the process roll
       <li>If you intend to target the JIRA for a specific release, please fill in the <code class="highlighter-rouge">fix version(s)</code> field, with the <a href="https://issues.apache.org/jira/projects/HUDI/releases">release number</a>.</li>
       <li>Summary should be descriptive enough to catch the essence of the problem/ feature</li>
       <li>Where necessary, capture the version of Hudi/Spark/Hive/Hadoop/Cloud environments in the ticket</li>
-      <li>Whenever possible, provide steps to reproduce via sample code or on the <a href="/docs/docker_demo.html">docker setup</a></li>
+      <li>Whenever possible, provide steps to reproduce via sample code or on the <a href="https://hudi.apache.org/docker_demo.html">docker setup</a></li>
     </ul>
   </li>
-  <li>All newly filed JIRAs are placed in the <code class="highlighter-rouge">NEW</code> state. If you sure about this JIRA representing valid, scoped piece of work, please click <code class="highlighter-rouge">Accept Issue</code> to move it <code class="highlighter-rouge">OPEN</code> state</li>
+  <li>All newly filed JIRAs are placed in the <code class="highlighter-rouge">NEW</code> state. If you are sure about this JIRA representing valid, scoped piece of work, please click <code class="highlighter-rouge">Accept Issue</code> to move it <code class="highlighter-rouge">OPEN</code> state</li>
   <li>If you are not sure, please wait for a PMC/Committer to confirm/triage the issue and accept it. This process avoids contributors spending time on JIRAs with unclear scope.</li>
-  <li>Whenever possible, break down large JIRAs (e.g JIRAs resulting from a <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+Process">RFC</a>) into <code class="highlighter-rouge">sub tasks</code> by clicking <code class="highlighter-rouge">More &gt; create sub-task</code> from the parent JIRA , 
+  <li>Whenever possible, break down large JIRAs (e.g JIRAs resulting from an <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+Process">RFC</a>) into <code class="highlighter-rouge">sub tasks</code> by clicking <code class="highlighter-rouge">More &gt; create sub-task</code> from the parent JIRA , 
 so that the community can contribute at large and help implement it much quickly. We recommend prefixing such JIRA titles with <code class="highlighter-rouge">[UMBRELLA]</code></li>
 </ul>
 
@@ -338,14 +338,14 @@ so that the community can contribute at large and help implement it much quickly
   <li>Once you finalize on a project/task, please open a new JIRA or assign an existing one to yourself.
     <ul>
       <li>Almost all PRs should be linked to a JIRA. It’s always good to have a JIRA upfront to avoid duplicating efforts.</li>
-      <li>If they changes are minor, then <code class="highlighter-rouge">[MINOR]</code> prefix can be added to Pull Request title without a JIRA.</li>
+      <li>If the changes are minor, then <code class="highlighter-rouge">[MINOR]</code> prefix can be added to Pull Request title without a JIRA.</li>
       <li>But, you may be asked to file a JIRA, if reviewer deems it necessary</li>
     </ul>
   </li>
   <li>Before you begin work,
     <ul>
       <li>Claim the JIRA using the process above and assign the JIRA to yourself.</li>
-      <li>click “Start Progress” on the JIRA, which tells everyone that you are working on the issue actively.</li>
+      <li>Click “Start Progress” on the JIRA, which tells everyone that you are working on the issue actively.</li>
     </ul>
   </li>
   <li>[Optional] Familiarize yourself with internals of Hudi using content on this page, as well as <a href="https://cwiki.apache.org/confluence/display/HUDI">wiki</a></li>
@@ -354,13 +354,13 @@ so that the community can contribute at large and help implement it much quickly
       <li>Every source file needs to include the Apache license header. Every new dependency needs to have an 
 open source license <a href="https://www.apache.org/legal/resolved.html#criteria">compatible</a> with Apache.</li>
       <li>If you are re-using code from another apache/open-source project, licensing needs to be compatible and attribution added to <code class="highlighter-rouge">LICENSE</code> file</li>
-      <li>Please DO NOT copy paste any code from stackoverflow or other online sources, since their license attribution would be unclear. Author them yourself!</li>
+      <li>Please DO NOT copy paste any code from StackOverflow or other online sources, since their license attribution would be unclear. Author them yourself!</li>
       <li>Get existing tests to pass using <code class="highlighter-rouge">mvn clean install -DskipITs</code></li>
       <li>Add adequate tests for your new functionality</li>
-      <li>For involved changes, its best to also run the entire integration test suite using <code class="highlighter-rouge">mvn clean install</code></li>
+      <li>For involved changes, it’s best to also run the entire integration test suite using <code class="highlighter-rouge">mvn clean install</code></li>
       <li>For website changes, please build the site locally &amp; test navigation, formatting &amp; links thoroughly</li>
       <li>If your code change changes some aspect of documentation (e.g new config, default value change), 
-please ensure there is a another PR to <a href="https://github.com/apache/incubator-hudi/blob/asf-site/docs/README.md">update the docs</a> as well.</li>
+please ensure there is another PR to <a href="https://github.com/apache/incubator-hudi/blob/asf-site/docs/README.md">update the docs</a> as well.</li>
     </ul>
   </li>
   <li>Sending a Pull Request
@@ -369,7 +369,7 @@ please ensure there is a another PR to <a href="https://github.com/apache/incuba
 where you replace <code class="highlighter-rouge">HUDI-XXX</code> with the appropriate JIRA issue.</li>
       <li>Please ensure your commit message body is descriptive of the change. Bulleted summary would be appreciated.</li>
       <li>Push your commit to your own fork/branch &amp; create a pull request (PR) against the Hudi repo.</li>
-      <li>If you don’t hear back within 3 days on the PR, please send an email to dev @ mailing list.</li>
+      <li>If you don’t hear back within 3 days on the PR, please send an email to the dev @ mailing list.</li>
       <li>Address code review comments &amp; keep pushing changes to your fork/branch, which automatically updates the PR</li>
       <li>Before your change can be merged, it should be squashed into a single commit for cleaner commit history.</li>
     </ul>
@@ -382,7 +382,7 @@ where you replace <code class="highlighter-rouge">HUDI-XXX</code> with the appro
 <ul>
   <li>All pull requests would be subject to code reviews, from one or more of the PMC/Committers.</li>
   <li>Typically, each PR will get an “Assignee” based on their area of expertise, who will work with you to land the PR.</li>
-  <li>Code reviews are vital, but also often time consuming for everyone involved. Below are some principles which could help align us better.
+  <li>Code reviews are vital, but also often time-consuming for everyone involved. Below are some principles which could help align us better.
     <ul>
       <li>Reviewers need to provide actionable, concrete feedback that states what needs to be done to get the PR closer to landing.</li>
       <li>Reviewers need to make it explicit, which of the requested changes would block the PR vs good-to-dos.</li>
@@ -397,21 +397,21 @@ where you replace <code class="highlighter-rouge">HUDI-XXX</code> with the appro
 
 <p>We welcome new ideas and suggestions to improve the project, along any dimensions - management, processes, technical vision/direction. To kick start a discussion on the mailing thread
 to effect change and source feedback, start a new email thread with the <code class="highlighter-rouge">[DISCUSS]</code> prefix and share your thoughts. If your proposal leads to a larger change, then it may be followed up
-by a <a href="https://www.apache.org/foundation/voting.html">vote</a> by a PMC member or others (depending on specific scenario). 
+by a <a href="https://www.apache.org/foundation/voting.html">vote</a> by a PMC member or others (depending on the specific scenario). 
 For technical suggestions, you can also leverage <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+Process">our RFC Process</a> to outline your ideas in greater detail.</p>
 
 <h2 id="releases">Releases</h2>
 
 <ul>
   <li>Apache Hudi community plans to do minor version releases every 6 weeks or so.</li>
-  <li>If your contribution merged onto <code class="highlighter-rouge">master</code> branch after the last release, it will become part of next release.</li>
+  <li>If your contribution merged onto the <code class="highlighter-rouge">master</code> branch after the last release, it will become part of the next release.</li>
   <li>Website changes are regenerated on-demand basis (until automation in place to reflect immediately)</li>
 </ul>
 
 <h2 id="communication">Communication</h2>
 
 <p>All communication is expected to align with the <a href="https://www.apache.org/foundation/policies/conduct">Code of Conduct</a>.
-Discussion about contributing code to Hudi happens on the <a href="/community.html">dev@ mailing list</a>. Introduce yourself!</p>
+Discussion about contributing code to Hudi happens on the <a href="community.html">dev@ mailing list</a>. Introduce yourself!</p>
 
 <h2 id="code--project-structure">Code &amp; Project Structure</h2>
 
