@@ -24,6 +24,7 @@ host                     : 0.0.0.0
 atom_feed:
   path                   : # blank (default) uses feed.xml
 
+
 # Site QuickLinks
 author:
   name             : "Quick Links"
@@ -32,12 +33,12 @@ author:
     - label: "Documentation"
       icon: "fa fa-book"
       url: "/docs/quick-start-guide"
-    - label: "Contribute Guide"
-      icon: "fa fa-thumbs-o-up"
-      url: "/contributing"
     - label: "Technical Wiki"
       icon: "fa fa-wikipedia-w"
       url: "https://cwiki.apache.org/confluence/display/HUDI"
+    - label: "Contribute Guide"
+      icon: "fa fa-thumbs-o-up"
+      url: "/contributing"
     - label: "Join on Slack"
       icon: "fa fa-slack"
       url: "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"
