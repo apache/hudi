@@ -249,7 +249,6 @@ public class HoodieCommitArchiveLog {
       LOG.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
-
         try {
           records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
           if (records.size() >= this.config.getCommitArchivalBatchSize()) {
@@ -291,7 +290,7 @@ public class HoodieCommitArchiveLog {
       case HoodieTimeline.CLEAN_ACTION: {
         if (hoodieInstant.isCompleted()) {
           archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(metaClient, hoodieInstant));
-        } else if (HoodieInstant.State.REQUESTED != hoodieInstant.getState()) {
+        } else {
           archivedMetaWrapper.setHoodieCleanerPlan(CleanerUtils.getCleanerPlan(metaClient, hoodieInstant));
         }
         archivedMetaWrapper.setActionType(ActionType.clean.name());
@@ -317,11 +316,9 @@ public class HoodieCommitArchiveLog {
         break;
       }
       case HoodieTimeline.DELTA_COMMIT_ACTION: {
-        if (HoodieInstant.State.REQUESTED != hoodieInstant.getState()) {
-          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-              .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
-          archivedMetaWrapper.setHoodieCommitMetadata(commitMetadataConverter(commitMetadata));
-        }
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
+        archivedMetaWrapper.setHoodieCommitMetadata(commitMetadataConverter(commitMetadata));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
         break;
       }
