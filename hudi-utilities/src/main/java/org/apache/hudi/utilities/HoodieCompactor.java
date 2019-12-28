@@ -69,7 +69,7 @@ public class HoodieCompactor {
     public int retry = 0;
     @Parameter(names = {"--schedule", "-sc"}, description = "Schedule compaction", required = false)
     public Boolean runSchedule = false;
-    @Parameter(names = {"--strategy", "-st"}, description = "Stratgey Class", required = false)
+    @Parameter(names = {"--strategy", "-st"}, description = "Strategy Class", required = false)
     public String strategyClassName = null;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;

@@ -24,8 +24,7 @@ import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.utilities.HDFSParquetImporter.FormatValidator;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.core.CommandMarker;
@@ -40,8 +39,6 @@ import scala.collection.JavaConverters;
  */
 @Component
 public class HDFSParquetImportCommand implements CommandMarker {
-
-  private static final Logger LOG = LogManager.getLogger(HDFSParquetImportCommand.class);
 
   @CliCommand(value = "hdfsparquetimport", help = "Imports Parquet dataset to a hoodie dataset")
   public String convert(
@@ -61,7 +58,11 @@ public class HDFSParquetImportCommand implements CommandMarker {
           help = "Path for Avro schema file") final String schemaFilePath,
       @CliOption(key = "format", mandatory = true, help = "Format for the input data") final String format,
       @CliOption(key = "sparkMemory", mandatory = true, help = "Spark executor memory") final String sparkMemory,
-      @CliOption(key = "retry", mandatory = true, help = "Number of retries") final String retry) throws Exception {
+      @CliOption(key = "retry", mandatory = true, help = "Number of retries") final String retry,
+      @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for importing",
+        unspecifiedDefaultValue = "") final String propsFilePath,
+      @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
+        unspecifiedDefaultValue = "") final String[] configs) throws Exception {
 
     (new FormatValidator()).validate("format", format);
 
@@ -78,7 +79,8 @@ public class HDFSParquetImportCommand implements CommandMarker {
     }
 
     sparkLauncher.addAppArgs(cmd, srcPath, targetPath, tableName, tableType, rowKeyField, partitionPathField,
-        parallelism, schemaFilePath, sparkMemory, retry);
+        parallelism, schemaFilePath, sparkMemory, retry, propsFilePath);
+    UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

@@ -43,6 +43,7 @@ import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.sql.SparkSession;
 
 import java.io.BufferedReader;
@@ -50,6 +51,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -114,12 +116,16 @@ public class UtilHelpers {
 
   public static TypedProperties buildProperties(List<String> props) {
     TypedProperties properties = new TypedProperties();
-    props.stream().forEach(x -> {
+    props.forEach(x -> {
       String[] kv = x.split("=");
       Preconditions.checkArgument(kv.length == 2);
       properties.setProperty(kv[0], kv[1]);
     });
     return properties;
+  }
+
+  public static void validateAndAddProperties(String[] configs, SparkLauncher sparkLauncher) {
+    Arrays.stream(configs).filter(config -> config.contains("=") && config.split("=").length == 2).forEach(sparkLauncher::addAppArgs);
   }
 
   /**
