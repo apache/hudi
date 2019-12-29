@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -31,7 +30,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 @SuppressWarnings("unchecked")
 /**
@@ -93,7 +92,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
       JavaRDD<HoodieRecord> filteredRDD = readClient.filterExists(recordsRDD);
 
       // Should not find any files
-      assertTrue(filteredRDD.collect().size() == 100);
+      assertEquals(100, filteredRDD.collect().size());
 
       JavaRDD<HoodieRecord> smallRecordsRDD = jsc.parallelize(records.subList(0, 75), 1);
       // We create three parquet file, each having one record. (3 different partitions)
@@ -105,7 +104,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
         filteredRDD = anotherReadClient.filterExists(recordsRDD);
         List<HoodieRecord> result = filteredRDD.collect();
         // Check results
-        Assert.assertEquals(25, result.size());
+        assertEquals(25, result.size());
       }
     }
   }

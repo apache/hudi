@@ -56,7 +56,7 @@ public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testExecutor() throws Exception {
+  public void testExecutor() {
 
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(commitTime, 100);
 

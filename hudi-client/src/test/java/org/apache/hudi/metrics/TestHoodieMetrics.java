@@ -24,7 +24,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import static org.apache.hudi.metrics.Metrics.registerGauge;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -41,6 +41,6 @@ public class TestHoodieMetrics {
   @Test
   public void testRegisterGauge() {
     registerGauge("metric1", 123L);
-    assertTrue(Metrics.getInstance().getRegistry().getGauges().get("metric1").getValue().toString().equals("123"));
+    assertEquals("123", Metrics.getInstance().getRegistry().getGauges().get("metric1").getValue().toString());
   }
 }

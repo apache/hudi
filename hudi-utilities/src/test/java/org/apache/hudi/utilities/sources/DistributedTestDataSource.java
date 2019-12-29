@@ -30,7 +30,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
-import java.util.Iterator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -77,8 +76,7 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
               if (!dataGeneratorMap.containsKey(p)) {
                 initDataGen(newProps, p);
               }
-              Iterator<GenericRecord> itr = fetchNextBatch(newProps, perPartitionSourceLimit, commitTime, p).iterator();
-              return itr;
+              return fetchNextBatch(newProps, perPartitionSourceLimit, commitTime, p).iterator();
             }, true);
     return new InputBatch<>(Option.of(avroRDD), commitTime);
   }

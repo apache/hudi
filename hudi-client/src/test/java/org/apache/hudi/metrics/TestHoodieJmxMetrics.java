@@ -24,7 +24,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.junit.Test;
 
 import static org.apache.hudi.metrics.Metrics.registerGauge;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -46,7 +46,7 @@ public class TestHoodieJmxMetrics extends TestHoodieMetrics {
   @Test
   public void testRegisterGauge() {
     registerGauge("jmx_metric", 123L);
-    assertTrue(Metrics.getInstance().getRegistry().getGauges()
-        .get("jmx_metric").getValue().toString().equals("123"));
+    assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
+        .get("jmx_metric").getValue().toString());
   }
 }

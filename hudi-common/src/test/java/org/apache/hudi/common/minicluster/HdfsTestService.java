@@ -79,7 +79,7 @@ public class HdfsTestService {
 
     // Configure and start the HDFS cluster
     // boolean format = shouldFormatDFSCluster(localDFSLocation, clean);
-    hadoopConf = configureDFSCluster(hadoopConf, localDFSLocation, bindIP, namenodeRpcPort, namenodeHttpPort,
+    hadoopConf = configureDFSCluster(hadoopConf, localDFSLocation, bindIP, namenodeRpcPort,
         datanodePort, datanodeIpcPort, datanodeHttpPort);
     miniDfsCluster = new MiniDFSCluster.Builder(hadoopConf).numDataNodes(1).format(format).checkDataNodeAddrConfig(true)
         .checkDataNodeHostConfig(true).build();
@@ -87,7 +87,7 @@ public class HdfsTestService {
     return miniDfsCluster;
   }
 
-  public void stop() throws IOException {
+  public void stop() {
     LOG.info("HDFS Minicluster service being shut down.");
     miniDfsCluster.shutdown();
     miniDfsCluster = null;
@@ -105,23 +105,6 @@ public class HdfsTestService {
   }
 
   /**
-   * Returns true if we should format the DFS Cluster. We'll format if clean is true, or if the dfsFsLocation does not
-   * exist.
-   *
-   * @param localDFSLocation The location on the local FS to hold the HDFS metadata and block data
-   * @param clean Specifies if we want to start a clean cluster
-   * @return Returns true if we should format a DFSCluster, otherwise false
-   */
-  private static boolean shouldFormatDFSCluster(String localDFSLocation, boolean clean) {
-    boolean format = true;
-    File f = new File(localDFSLocation);
-    if (f.exists() && f.isDirectory() && !clean) {
-      format = false;
-    }
-    return format;
-  }
-
-  /**
    * Configure the DFS Cluster before launching it.
    *
    * @param config The already created Hadoop configuration we'll further configure for HDFS
@@ -130,7 +113,7 @@ public class HdfsTestService {
    * @return The updated Configuration object.
    */
   private static Configuration configureDFSCluster(Configuration config, String localDFSLocation, String bindIP,
-      int namenodeRpcPort, int namenodeHttpPort, int datanodePort, int datanodeIpcPort, int datanodeHttpPort) {
+      int namenodeRpcPort, int datanodePort, int datanodeIpcPort, int datanodeHttpPort) {
 
     LOG.info("HDFS force binding to ip: " + bindIP);
     config.set(DFSConfigKeys.FS_DEFAULT_NAME_KEY, "hdfs://" + bindIP + ":" + namenodeRpcPort);

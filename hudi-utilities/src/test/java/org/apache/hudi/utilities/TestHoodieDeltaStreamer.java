@@ -291,7 +291,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   @Test
-  public void testProps() throws IOException {
+  public void testProps() {
     TypedProperties props =
         new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getConfig();
     assertEquals(2, props.getInteger("hoodie.upsert.shuffle.parallelism"));
@@ -547,7 +547,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   @Test
-  public void testDistributedTestDataSource() throws Exception {
+  public void testDistributedTestDataSource() {
     TypedProperties props = new TypedProperties();
     props.setProperty(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, "1000");
     props.setProperty(TestSourceConfig.NUM_SOURCE_PARTITIONS_PROP, "1");
