@@ -24,7 +24,6 @@ import org.apache.hudi.cli.commands.SparkMain;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.StringUtils;
 
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
@@ -38,7 +37,6 @@ import java.util.Map;
  */
 public class SparkUtil {
 
-  private static final Logger LOG = Logger.getLogger(SparkUtil.class);
   public static final String DEFUALT_SPARK_MASTER = "yarn-client";
 
   /**
