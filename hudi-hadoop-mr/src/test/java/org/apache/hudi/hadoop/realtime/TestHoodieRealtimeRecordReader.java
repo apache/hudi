@@ -75,6 +75,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -89,7 +90,7 @@ public class TestHoodieRealtimeRecordReader {
   @Before
   public void setUp() {
     jobConf = new JobConf();
-    jobConf.set(AbstractRealtimeRecordReader.MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(1 * 1024 * 1024));
+    jobConf.set(AbstractRealtimeRecordReader.MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(1024 * 1024));
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     fs = FSUtils.getFs(basePath.getRoot().getAbsolutePath(), hadoopConf);
   }
@@ -198,7 +199,7 @@ public class TestHoodieRealtimeRecordReader {
     FileSlice fileSlice =
         new FileSlice(partitioned ? FSUtils.getRelativePartitionPath(new Path(basePath.getRoot().getAbsolutePath()),
             new Path(partitionDir.getAbsolutePath())) : "default", baseInstant, "fileid0");
-    logVersionsWithAction.stream().forEach(logVersionWithAction -> {
+    logVersionsWithAction.forEach(logVersionWithAction -> {
       try {
         // update files or generate new log file
         int logVersion = logVersionWithAction.getRight();
@@ -246,7 +247,7 @@ public class TestHoodieRealtimeRecordReader {
         while (recordReader.next(key, value)) {
           Writable[] values = value.get();
           // check if the record written is with latest commit, here "101"
-          Assert.assertEquals(latestInstant, values[0].toString());
+          assertEquals(latestInstant, values[0].toString());
           key = recordReader.createKey();
           value = recordReader.createValue();
         }
@@ -306,17 +307,17 @@ public class TestHoodieRealtimeRecordReader {
     int numRecordsAtCommit1 = 0;
     int numRecordsAtCommit2 = 0;
     Set<Integer> seenKeys = new HashSet<>();
-    Integer lastSeenKeyFromLog = firstBatchLastRecordKey;
+    int lastSeenKeyFromLog = firstBatchLastRecordKey;
     while (recordReader.next(key, value)) {
       Writable[] values = value.get();
       String gotCommit = values[0].toString();
       String keyStr = values[2].toString();
-      Integer gotKey = Integer.parseInt(keyStr.substring("key".length()));
+      int gotKey = Integer.parseInt(keyStr.substring("key".length()));
       if (gotCommit.equals(newCommitTime)) {
         numRecordsAtCommit2++;
         Assert.assertTrue(gotKey > firstBatchLastRecordKey);
         Assert.assertTrue(gotKey <= secondBatchLastRecordKey);
-        Assert.assertEquals(gotKey.intValue(), lastSeenKeyFromLog + 1);
+        assertEquals((int) gotKey, lastSeenKeyFromLog + 1);
         lastSeenKeyFromLog++;
       } else {
         numRecordsAtCommit1++;
@@ -329,9 +330,9 @@ public class TestHoodieRealtimeRecordReader {
       key = recordReader.createKey();
       value = recordReader.createValue();
     }
-    Assert.assertEquals(numRecords, numRecordsAtCommit1);
-    Assert.assertEquals(numRecords, numRecordsAtCommit2);
-    Assert.assertEquals(2 * numRecords, seenKeys.size());
+    assertEquals(numRecords, numRecordsAtCommit1);
+    assertEquals(numRecords, numRecordsAtCommit2);
+    assertEquals(2 * numRecords, seenKeys.size());
   }
 
   @Test
@@ -390,34 +391,34 @@ public class TestHoodieRealtimeRecordReader {
       }
       String recordCommitTimeSuffix = "@" + recordCommitTime;
 
-      Assert.assertEquals(values[0].toString(), recordCommitTime);
+      assertEquals(values[0].toString(), recordCommitTime);
       key = recordReader.createKey();
       value = recordReader.createValue();
 
       // Assert type STRING
-      Assert.assertEquals("test value for field: field1", values[5].toString(), "field" + currentRecordNo);
-      Assert.assertEquals("test value for field: field2", values[6].toString(),
+      assertEquals("test value for field: field1", values[5].toString(), "field" + currentRecordNo);
+      assertEquals("test value for field: field2", values[6].toString(),
           "field" + currentRecordNo + recordCommitTimeSuffix);
-      Assert.assertEquals("test value for field: name", values[7].toString(), "name" + currentRecordNo);
+      assertEquals("test value for field: name", values[7].toString(), "name" + currentRecordNo);
 
       // Assert type INT
       IntWritable intWritable = (IntWritable) values[8];
-      Assert.assertEquals("test value for field: favoriteIntNumber", intWritable.get(),
+      assertEquals("test value for field: favoriteIntNumber", intWritable.get(),
           currentRecordNo + recordCommitTime.hashCode());
 
       // Assert type LONG
       LongWritable longWritable = (LongWritable) values[9];
-      Assert.assertEquals("test value for field: favoriteNumber", longWritable.get(),
+      assertEquals("test value for field: favoriteNumber", longWritable.get(),
           currentRecordNo + recordCommitTime.hashCode());
 
       // Assert type FLOAT
       FloatWritable floatWritable = (FloatWritable) values[10];
-      Assert.assertEquals("test value for field: favoriteFloatNumber", floatWritable.get(),
+      assertEquals("test value for field: favoriteFloatNumber", floatWritable.get(),
           (float) ((currentRecordNo + recordCommitTime.hashCode()) / 1024.0), 0);
 
       // Assert type DOUBLE
       DoubleWritable doubleWritable = (DoubleWritable) values[11];
-      Assert.assertEquals("test value for field: favoriteDoubleNumber", doubleWritable.get(),
+      assertEquals("test value for field: favoriteDoubleNumber", doubleWritable.get(),
           (currentRecordNo + recordCommitTime.hashCode()) / 1024.0, 0);
 
       // Assert type MAP
@@ -425,36 +426,35 @@ public class TestHoodieRealtimeRecordReader {
       Writable mapItemValue1 = mapItem.get()[0];
       Writable mapItemValue2 = mapItem.get()[1];
 
-      Assert.assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue1).get()[0].toString(),
+      assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue1).get()[0].toString(),
           "mapItem1");
-      Assert.assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue2).get()[0].toString(),
+      assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue2).get()[0].toString(),
           "mapItem2");
-      Assert.assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue1).get().length, 2);
-      Assert.assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue2).get().length, 2);
+      assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue1).get().length, 2);
+      assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue2).get().length, 2);
       Writable mapItemValue1value = ((ArrayWritable) mapItemValue1).get()[1];
       Writable mapItemValue2value = ((ArrayWritable) mapItemValue2).get()[1];
-      Assert.assertEquals("test value for field: tags[\"mapItem1\"].item1",
+      assertEquals("test value for field: tags[\"mapItem1\"].item1",
           ((ArrayWritable) mapItemValue1value).get()[0].toString(), "item" + currentRecordNo);
-      Assert.assertEquals("test value for field: tags[\"mapItem2\"].item1",
+      assertEquals("test value for field: tags[\"mapItem2\"].item1",
           ((ArrayWritable) mapItemValue2value).get()[0].toString(), "item2" + currentRecordNo);
-      Assert.assertEquals("test value for field: tags[\"mapItem1\"].item2",
+      assertEquals("test value for field: tags[\"mapItem1\"].item2",
           ((ArrayWritable) mapItemValue1value).get()[1].toString(), "item" + currentRecordNo + recordCommitTimeSuffix);
-      Assert.assertEquals("test value for field: tags[\"mapItem2\"].item2",
+      assertEquals("test value for field: tags[\"mapItem2\"].item2",
           ((ArrayWritable) mapItemValue2value).get()[1].toString(), "item2" + currentRecordNo + recordCommitTimeSuffix);
 
       // Assert type RECORD
       ArrayWritable recordItem = (ArrayWritable) values[13];
       Writable[] nestedRecord = recordItem.get();
-      Assert.assertEquals("test value for field: testNestedRecord.isAdmin", ((BooleanWritable) nestedRecord[0]).get(),
-          false);
-      Assert.assertEquals("test value for field: testNestedRecord.userId", nestedRecord[1].toString(),
+      assertFalse("test value for field: testNestedRecord.isAdmin", ((BooleanWritable) nestedRecord[0]).get());
+      assertEquals("test value for field: testNestedRecord.userId", nestedRecord[1].toString(),
           "UserId" + currentRecordNo + recordCommitTimeSuffix);
 
       // Assert type ARRAY
       ArrayWritable arrayValue = (ArrayWritable) values[14];
       Writable[] arrayValues = arrayValue.get();
       for (int i = 0; i < arrayValues.length; i++) {
-        Assert.assertEquals("test value for field: stringArray", "stringArray" + i + recordCommitTimeSuffix,
+        assertEquals("test value for field: stringArray", "stringArray" + i + recordCommitTimeSuffix,
             arrayValues[i].toString());
       }
     }
@@ -510,7 +510,7 @@ public class TestHoodieRealtimeRecordReader {
     // Try to read all the fields passed by the new schema
     setHiveColumnNameProps(fields, jobConf, true);
 
-    HoodieRealtimeRecordReader recordReader = null;
+    HoodieRealtimeRecordReader recordReader;
     try {
       // validate record reader compaction
       recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);

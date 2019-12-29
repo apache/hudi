@@ -20,7 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.junit.Test;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Tests numeric utils.
@@ -29,14 +29,14 @@ public class TestNumericUtils {
 
   @Test
   public void testHumanReadableByteCount() {
-    assertTrue(NumericUtils.humanReadableByteCount(0).equals("0.0 B"));
-    assertTrue(NumericUtils.humanReadableByteCount(27).equals("27.0 B"));
-    assertTrue(NumericUtils.humanReadableByteCount(1023).equals("1023.0 B"));
-    assertTrue(NumericUtils.humanReadableByteCount(1024).equals("1.0 KB"));
-    assertTrue(NumericUtils.humanReadableByteCount(110592).equals("108.0 KB"));
-    assertTrue(NumericUtils.humanReadableByteCount(28991029248L).equals("27.0 GB"));
-    assertTrue(NumericUtils.humanReadableByteCount(1855425871872L).equals("1.7 TB"));
-    assertTrue(NumericUtils.humanReadableByteCount(9223372036854775807L).equals("8.0 EB"));
+    assertEquals("0.0 B", NumericUtils.humanReadableByteCount(0));
+    assertEquals("27.0 B", NumericUtils.humanReadableByteCount(27));
+    assertEquals("1023.0 B", NumericUtils.humanReadableByteCount(1023));
+    assertEquals("1.0 KB", NumericUtils.humanReadableByteCount(1024));
+    assertEquals("108.0 KB", NumericUtils.humanReadableByteCount(110592));
+    assertEquals("27.0 GB", NumericUtils.humanReadableByteCount(28991029248L));
+    assertEquals("1.7 TB", NumericUtils.humanReadableByteCount(1855425871872L));
+    assertEquals("8.0 EB", NumericUtils.humanReadableByteCount(9223372036854775807L));
 
   }
 }

@@ -165,8 +165,7 @@ public abstract class ITTestBase {
     LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
 
     if (expectedToSucceed) {
-      Assert.assertTrue("Command (" + Arrays.toString(command) + ") expected to succeed. Exit (" + exitCode + ")",
-          exitCode == 0);
+      Assert.assertEquals("Command (" + Arrays.toString(command) + ") expected to succeed. Exit (" + exitCode + ")", 0, exitCode);
     } else {
       Assert.assertTrue("Command (" + Arrays.toString(command) + ") expected to fail. Exit (" + exitCode + ")",
           exitCode != 0);

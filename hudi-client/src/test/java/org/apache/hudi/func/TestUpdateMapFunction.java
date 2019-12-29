@@ -35,7 +35,6 @@ import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -102,7 +101,6 @@ public class TestUpdateMapFunction extends HoodieClientTestHarness {
     // Now try an update with an evolved schema
     // Evolved schema does not have guarantee on preserving the original field ordering
     final HoodieWriteConfig config2 = makeHoodieClientConfig("/exampleEvolvedSchema.txt");
-    final Schema schema = new Schema.Parser().parse(config2.getSchema());
     final WriteStatus insertResult = statuses.get(0);
     String fileId = insertResult.getFileId();
 

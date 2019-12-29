@@ -87,7 +87,6 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   public void testSimpleUpsert() throws IOException, URISyntaxException {
 
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
@@ -110,7 +109,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     assertTrue(records.getDiskBasedMapNumEntries() > 0);
 
     // iterate over the updated records and compare the value from Map
-    updatedRecords.stream().forEach(record -> {
+    updatedRecords.forEach(record -> {
       HoodieRecord rec = records.get(((GenericRecord) record).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
       try {
         assertEquals(rec.getData().getInsertValue(schema).get(), record);
@@ -196,7 +195,6 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   public void testDataCorrectnessWithUpsertsToDataInMapAndOnDisk() throws IOException, URISyntaxException {
 
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
@@ -248,7 +246,6 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   public void testDataCorrectnessWithoutHoodieMetadata() throws IOException, URISyntaxException {
 
     Schema schema = SchemaTestUtil.getSimpleSchema();
-    String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
@@ -278,7 +275,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
         SchemaTestUtil.updateHoodieTestRecordsWithoutHoodieMetadata(recordsToUpdate, schema, fieldName, newValue);
 
     // Upsert this updated record
-    updatedRecords.stream().forEach(r -> {
+    updatedRecords.forEach(r -> {
       records.put(r.getRecordKey(), r);
     });
     GenericRecord gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
@@ -300,7 +297,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
         SchemaTestUtil.updateHoodieTestRecordsWithoutHoodieMetadata(recordsToUpdate, schema, fieldName, newValue);
 
     // Upsert this updated record
-    updatedRecords.stream().forEach(r -> {
+    updatedRecords.forEach(r -> {
       records.put(r.getRecordKey(), r);
     });
     gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();

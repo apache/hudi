@@ -229,7 +229,7 @@ public class UtilitiesTestBase {
       }
     }
 
-    public static String[] jsonifyRecords(List<HoodieRecord> records) throws IOException {
+    public static String[] jsonifyRecords(List<HoodieRecord> records) {
       return records.stream().map(Helpers::toJsonString).toArray(String[]::new);
     }
   }

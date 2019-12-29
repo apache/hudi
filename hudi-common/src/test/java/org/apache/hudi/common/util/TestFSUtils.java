@@ -39,11 +39,10 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  * Tests file system utils.
@@ -63,18 +62,15 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Test
   public void testMakeDataFileName() {
     String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-    int taskPartitionId = 2;
     String fileName = UUID.randomUUID().toString();
-    assertTrue(FSUtils.makeDataFileName(commitTime, TEST_WRITE_TOKEN, fileName)
-        .equals(fileName + "_" + TEST_WRITE_TOKEN + "_" + commitTime + ".parquet"));
+    assertEquals(FSUtils.makeDataFileName(commitTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + commitTime + ".parquet");
   }
 
   @Test
   public void testMaskFileName() {
     String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     int taskPartitionId = 2;
-    assertTrue(FSUtils.maskWithoutFileId(commitTime, taskPartitionId)
-        .equals("*_" + taskPartitionId + "_" + commitTime + ".parquet"));
+    assertEquals(FSUtils.maskWithoutFileId(commitTime, taskPartitionId), "*_" + taskPartitionId + "_" + commitTime + ".parquet");
   }
 
   @Test
@@ -89,7 +85,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     // All directories including marker dirs.
     List<String> folders =
         Arrays.asList("2016/04/15", "2016/05/16", ".hoodie/.temp/2/2016/04/15", ".hoodie/.temp/2/2016/05/16");
-    folders.stream().forEach(f -> {
+    folders.forEach(f -> {
       try {
         metaClient.getFs().mkdirs(new Path(new Path(basePath), f));
       } catch (IOException e) {
@@ -102,7 +98,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         "2016/05/16/2_1-0-1_20190528120000.parquet", ".hoodie/.temp/2/2016/05/16/2_1-0-1_20190528120000.parquet",
         ".hoodie/.temp/2/2016/04/15/1_1-0-1_20190528120000.parquet");
 
-    files.stream().forEach(f -> {
+    files.forEach(f -> {
       try {
         metaClient.getFs().create(new Path(new Path(basePath), f));
       } catch (IOException e) {
@@ -138,19 +134,17 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Test
   public void testGetCommitTime() {
     String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-    int taskPartitionId = 2;
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeDataFileName(commitTime, TEST_WRITE_TOKEN, fileName);
-    assertTrue(FSUtils.getCommitTime(fullFileName).equals(commitTime));
+    assertEquals(FSUtils.getCommitTime(fullFileName), commitTime);
   }
 
   @Test
   public void testGetFileNameWithoutMeta() {
     String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-    int taskPartitionId = 2;
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeDataFileName(commitTime, TEST_WRITE_TOKEN, fileName);
-    assertTrue(FSUtils.getFileId(fullFileName).equals(fileName));
+    assertEquals(FSUtils.getFileId(fullFileName), fileName);
   }
 
   @Test
@@ -234,7 +228,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String log1Ver0 = makeOldLogFileName("file1", ".log", "1", 0);
     String log1Ver1 = makeOldLogFileName("file1", ".log", "1", 1);
     String log1base2 = makeOldLogFileName("file1", ".log", "2", 0);
-    List<HoodieLogFile> logFiles = Arrays.asList(log1base2, log1Ver1, log1Ver0).stream().map(f -> new HoodieLogFile(f))
+    List<HoodieLogFile> logFiles = Stream.of(log1base2, log1Ver1, log1Ver0).map(HoodieLogFile::new)
         .collect(Collectors.toList());
     logFiles.sort(HoodieLogFile.getLogFileComparator());
     assertEquals(log1Ver0, logFiles.get(0).getFileName());
@@ -255,8 +249,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String log1base2W1 = FSUtils.makeLogFileName("file1", ".log", "2", 0, "1-1-1");
 
     List<HoodieLogFile> logFiles =
-        Arrays.asList(log1Ver1W1, log1base2W0, log1base2W1, log1Ver1W0, log1Ver0W1, log1Ver0W0).stream()
-            .map(f -> new HoodieLogFile(f)).collect(Collectors.toList());
+        Stream.of(log1Ver1W1, log1base2W0, log1base2W1, log1Ver1W0, log1Ver0W1, log1Ver0W0)
+            .map(HoodieLogFile::new).collect(Collectors.toList());
     logFiles.sort(HoodieLogFile.getLogFileComparator());
     assertEquals(log1Ver0W0, logFiles.get(0).getFileName());
     assertEquals(log1Ver0W1, logFiles.get(1).getFileName());
@@ -267,7 +261,6 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   }
 
   public static String makeOldLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version) {
-    Pattern oldLogFilePattern = Pattern.compile("\\.(.*)_(.*)\\.(.*)\\.([0-9]*)(\\.([0-9]*))");
     return "." + String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
   }
 }

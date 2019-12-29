@@ -33,7 +33,7 @@ public class TestHoodieCommitMetadata {
 
     List<HoodieWriteStat> fakeHoodieWriteStats = HoodieTestUtils.generateFakeHoodieWriteStat(100);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    fakeHoodieWriteStats.stream().forEach(stat -> commitMetadata.addWriteStat(stat.getPartitionPath(), stat));
+    fakeHoodieWriteStats.forEach(stat -> commitMetadata.addWriteStat(stat.getPartitionPath(), stat));
     Assert.assertTrue(commitMetadata.getTotalCreateTime() > 0);
     Assert.assertTrue(commitMetadata.getTotalUpsertTime() > 0);
     Assert.assertTrue(commitMetadata.getTotalScanTime() > 0);
@@ -43,7 +43,7 @@ public class TestHoodieCommitMetadata {
     HoodieCommitMetadata metadata =
         HoodieCommitMetadata.fromJsonString(serializedCommitMetadata, HoodieCommitMetadata.class);
     // Make sure timing metrics are not written to instant file
-    Assert.assertTrue(metadata.getTotalScanTime() == 0);
+    Assert.assertEquals(0, (long) metadata.getTotalScanTime());
     Assert.assertTrue(metadata.getTotalLogFilesCompacted() > 0);
   }
 }

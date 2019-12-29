@@ -69,7 +69,7 @@ public class TestHiveSyncTool {
   }
 
   @After
-  public void teardown() throws IOException, InterruptedException {
+  public void teardown() throws IOException {
     TestUtil.clear();
   }
 
