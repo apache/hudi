@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -98,16 +97,6 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
         ParquetUtils.readBloomFilterFromParquetMetadata(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath));
     for (String rowKey : rowKeys) {
       assertTrue("key should be found in bloom filter", filterInFile.mightContain(rowKey));
-    }
-  }
-
-  private Configuration getConfiguration() {
-    if (bloomFilterTypeToTest.equalsIgnoreCase(BloomFilterTypeCode.SIMPLE.name())) {
-      return HoodieTestUtils.getDefaultHadoopConf();
-    } else {
-      org.apache.hadoop.conf.Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
-      // conf.set();
-      return conf;
     }
   }
 

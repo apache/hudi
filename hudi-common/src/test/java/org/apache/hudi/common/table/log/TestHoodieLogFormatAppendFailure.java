@@ -137,7 +137,7 @@ public class TestHoodieLogFormatAppendFailure {
         .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive")
         .overBaseCommit("").withFs(fs).build();
     // The log version should be different for this new writer
-    Assert.assertFalse(writer.getLogFile().getLogVersion() == logFileVersion);
+    Assert.assertNotEquals(writer.getLogFile().getLogVersion(), logFileVersion);
   }
 
 }

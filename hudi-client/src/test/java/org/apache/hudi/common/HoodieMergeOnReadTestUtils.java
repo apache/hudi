@@ -45,8 +45,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieMergeOnReadTestUtils {
 
-  public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths, String basePath)
-      throws IOException {
+  public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths, String basePath) {
     JobConf jobConf = new JobConf();
     Schema schema = HoodieAvroUtils.addMetadataFields(
         new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));

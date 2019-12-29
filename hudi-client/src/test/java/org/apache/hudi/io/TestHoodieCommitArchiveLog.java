@@ -147,7 +147,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "103", dfs.getConf());
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "104", dfs.getConf());
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "105", dfs.getConf());
-    HoodieTestUtils.createPendingCleanFiles(metaClient, dfs.getConf(), "106", "107");
+    HoodieTestUtils.createPendingCleanFiles(metaClient, "106", "107");
 
     // reload the timeline and get all the commmits before archive
     timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
