@@ -473,7 +473,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     Preconditions.checkArgument(instant.getState().equals(State.REQUESTED));
     // Write workload to auxiliary folder
     createFileInAuxiliaryFolder(instant, content);
-    // Plan is only stored in auxiliary folder, here stored in meta path
+    // Plan is stored in meta path
     createFileInMetaPath(instant.getFileName(), content, false);
   }
 
