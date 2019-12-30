@@ -28,7 +28,6 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
 
-import com.google.common.collect.ImmutableMap;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.file.FileReader;
@@ -42,6 +41,7 @@ import org.apache.avro.specific.SpecificRecordBase;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -54,18 +54,18 @@ public class AvroUtils {
 
   public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime, Option<Long> durationInMs,
       List<String> commits, Map<String, List<HoodieRollbackStat>> commitToStats) {
-    ImmutableMap.Builder<String, List<HoodieRollbackMetadata>> commitToStatBuilder = ImmutableMap.builder();
+    Map<String, List<HoodieRollbackMetadata>> commitToStatsMap = new HashMap<>();
     for (Map.Entry<String, List<HoodieRollbackStat>> commitToStat : commitToStats.entrySet()) {
-      commitToStatBuilder.put(commitToStat.getKey(),
+      commitToStatsMap.put(commitToStat.getKey(),
           Collections.singletonList(convertRollbackMetadata(startRestoreTime, durationInMs, commits, commitToStat.getValue())));
     }
     return new HoodieRestoreMetadata(startRestoreTime, durationInMs.orElseGet(() -> -1L), commits,
-        commitToStatBuilder.build(), DEFAULT_VERSION);
+      Collections.unmodifiableMap(commitToStatsMap), DEFAULT_VERSION);
   }
 
   public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime, Option<Long> durationInMs,
       List<String> commits, List<HoodieRollbackStat> rollbackStats) {
-    ImmutableMap.Builder<String, HoodieRollbackPartitionMetadata> partitionMetadataBuilder = ImmutableMap.builder();
+    Map<String, HoodieRollbackPartitionMetadata> partitionMetadataBuilder = new HashMap<>();
     int totalDeleted = 0;
     for (HoodieRollbackStat stat : rollbackStats) {
       HoodieRollbackPartitionMetadata metadata = new HoodieRollbackPartitionMetadata(stat.getPartitionPath(),
@@ -75,18 +75,18 @@ public class AvroUtils {
     }
 
     return new HoodieRollbackMetadata(startRollbackTime, durationInMs.orElseGet(() -> -1L), totalDeleted, commits,
-        partitionMetadataBuilder.build(), DEFAULT_VERSION);
+      Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
   }
 
   public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,
       Map<String, List<String>> latestFiles) {
-    ImmutableMap.Builder<String, HoodieSavepointPartitionMetadata> partitionMetadataBuilder = ImmutableMap.builder();
+    Map<String, HoodieSavepointPartitionMetadata> partitionMetadataBuilder = new HashMap<>();
     for (Map.Entry<String, List<String>> stat : latestFiles.entrySet()) {
       HoodieSavepointPartitionMetadata metadata = new HoodieSavepointPartitionMetadata(stat.getKey(), stat.getValue());
       partitionMetadataBuilder.put(stat.getKey(), metadata);
     }
-    return new HoodieSavepointMetadata(user, System.currentTimeMillis(), comment, partitionMetadataBuilder.build(),
-        DEFAULT_VERSION);
+    return new HoodieSavepointMetadata(user, System.currentTimeMillis(), comment,
+      Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
   }
 
   public static Option<byte[]> serializeCompactionPlan(HoodieCompactionPlan compactionWorkload) throws IOException {

@@ -27,9 +27,9 @@ import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -41,6 +41,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.AvroUtils;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
@@ -48,8 +49,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterators;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -135,8 +134,11 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     // Clean first slice
     testCleans(view, Collections.singletonList("21"),
-        new ImmutableMap.Builder<String, List<String>>().put("11", Arrays.asList("12", "13", "15")).build(),
-        instantsToFiles, Collections.singletonList("11"));
+        new HashMap<String, List<String>>() {
+          {
+            put("11", Arrays.asList("12", "13", "15"));
+          }
+        }, instantsToFiles, Collections.singletonList("11"));
 
     // Add one more ingestion instant. This should be 2nd slice now
     instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("22"), true, "19", 2));
@@ -251,7 +253,11 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
      * Case where a clean happened and then rounds of ingestion and compaction happened
      */
     testCleans(view2, Collections.singletonList("19"),
-        new ImmutableMap.Builder<String, List<String>>().put("11", Arrays.asList("12", "13", "14")).build(),
+        new HashMap<String, List<String>>() {
+            {
+              put("11", Arrays.asList("12", "13", "14"));
+            }
+        },
         instantsToFiles, Collections.singletonList("11"));
     scheduleCompaction(view2, "20");
     instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("21", "22"), true, "20", 2));
@@ -439,7 +445,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
       List<HoodieRollbackMetadata> rollbackM = new ArrayList<>();
       rollbackM.add(rollbackMetadata);
-      metadata.setHoodieRestoreMetadata(new ImmutableMap.Builder().put(rollbackInstant, rollbackM).build());
+      metadata.setHoodieRestoreMetadata(CollectionUtils.createImmutableMap(rollbackInstant, rollbackM));
       List<String> rollbackInstants = new ArrayList<>();
       rollbackInstants.add(rollbackInstant);
       metadata.setInstantsToRollback(rollbackInstants);
@@ -646,7 +652,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieTimeline timeline1 = view1.getTimeline();
     HoodieTimeline timeline2 = view2.getTimeline();
     Assert.assertEquals(view1.getLastInstant(), view2.getLastInstant());
-    Iterators.elementsEqual(timeline1.getInstants().iterator(), timeline2.getInstants().iterator());
+    CollectionUtils.elementsEqual(timeline1.getInstants().iterator(), timeline2.getInstants().iterator());
 
     // View Checks
     Map<HoodieFileGroupId, HoodieFileGroup> fileGroupsMap1 = partitions.stream().flatMap(view1::getAllFileGroups)

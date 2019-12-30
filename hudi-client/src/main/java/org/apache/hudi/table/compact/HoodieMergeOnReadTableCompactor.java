@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.TableFileSystemView.SliceView;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.HoodieAvroUtils;
@@ -42,7 +43,6 @@ import org.apache.hudi.table.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;
 import org.apache.hudi.table.HoodieTable;
 
-import com.google.common.collect.Sets;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -112,7 +112,7 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
     // loaded and load it using CompositeAvroLogReader
     // Since a DeltaCommit is not defined yet, reading all the records. revisit this soon.
     String maxInstantTime = metaClient
-        .getActiveTimeline().getTimelineOfActions(Sets.newHashSet(HoodieTimeline.COMMIT_ACTION,
+        .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
             HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
         .filterCompletedInstants().lastInstant().get().getTimestamp();
     LOG.info("MaxMemoryPerCompaction => " + config.getMaxMemoryPerCompaction());

@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
-import com.google.common.collect.ImmutableSet;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
@@ -38,8 +37,10 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -106,13 +107,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public HoodieActiveTimeline(HoodieTableMetaClient metaClient) {
-    this(metaClient, new ImmutableSet.Builder<String>().addAll(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE).build());
+    this(metaClient, Collections.unmodifiableSet(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE));
   }
 
   public HoodieActiveTimeline(HoodieTableMetaClient metaClient, boolean applyLayoutFilter) {
-    this(metaClient,
-        new ImmutableSet.Builder<String>()
-            .addAll(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE).build(), applyLayoutFilter);
+    this(metaClient, Collections.unmodifiableSet(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE), applyLayoutFilter);
   }
 
   /**
@@ -166,7 +165,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void deleteCompactionRequested(HoodieInstant instant) {
     ValidationUtils.checkArgument(instant.isRequested());
-    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
+    ValidationUtils.checkArgument(Objects.equals(instant.getAction(), HoodieTimeline.COMPACTION_ACTION));
     deleteInstantFile(instant);
   }
 
