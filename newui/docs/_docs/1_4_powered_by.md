@@ -18,7 +18,7 @@ offering, providing means for AWS users to perform record-level updates/deletes 
 
 ### EMIS Health
 
-[EMIS Health][https://www.emishealth.com/] is the largest provider of Primary Care IT software in the UK with datasets including more than 500Bn healthcare records. HUDI is used to manage their analytics dataset in production and keeping them up-to-date with their upstream source. Presto is being used to query the data written in HUDI format.
+[EMIS Health](https://www.emishealth.com/) is the largest provider of Primary Care IT software in the UK with datasets including more than 500Bn healthcare records. HUDI is used to manage their analytics dataset in production and keeping them up-to-date with their upstream source. Presto is being used to query the data written in HUDI format.
 
 ### Yields.io
 
