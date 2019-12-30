@@ -3,6 +3,7 @@ title: GCS Filesystem
 keywords: hudi, hive, google cloud, storage, spark, presto
 permalink: /docs/gcs_hoodie.html
 summary: In this page, we go over how to configure hudi with Google Cloud Storage.
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 For Hudi storage on GCS, **regional** buckets provide an DFS API with strong consistency.
 

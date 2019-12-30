@@ -3,6 +3,7 @@ title: Docker Demo
 keywords: hudi, docker, demo
 permalink: /docs/docker_demo.html
 toc: true
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 ## A Demo using docker containers

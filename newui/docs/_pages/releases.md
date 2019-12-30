@@ -3,6 +3,7 @@ title: "Releases"
 permalink: /releases
 layout: releases
 toc: true
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 ## [Release 0.5.0-incubating](https://github.com/apache/incubator-hudi/releases/tag/release-0.5.0-incubating)

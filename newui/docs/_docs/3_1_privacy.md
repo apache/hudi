@@ -2,6 +2,7 @@
 title: Privacy Policy
 keywords: hudi, privacy
 permalink: /docs/privacy.html
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 Information about your use of this website is collected using server access logs and a tracking cookie.

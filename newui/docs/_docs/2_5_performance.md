@@ -3,6 +3,7 @@ title: Performance
 keywords: hudi, index, storage, compaction, cleaning, implementation
 permalink: /docs/performance.html
 toc: false
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 In this section, we go over some real world performance numbers for Hudi upserts, incremental pull and compare them against

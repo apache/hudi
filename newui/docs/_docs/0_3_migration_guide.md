@@ -3,6 +3,7 @@ title: Migration Guide
 keywords: hudi, migration, use case
 permalink: /docs/migration_guide.html
 summary: In this page, we will discuss some available tools for migrating your existing dataset into a Hudi dataset
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 Hudi maintains metadata such as commit timeline and indexes to manage a dataset. The commit timelines helps to understand the actions happening on a dataset as well as the current state of a dataset. Indexes are used by Hudi to maintain a record key to file id mapping to efficiently locate a record. At the moment, Hudi supports writing only parquet columnar formats.

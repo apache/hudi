@@ -2,6 +2,7 @@
 title: "Quick-Start Guide"
 permalink: /docs/quick-start-guide.html
 toc: true
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 This guide provides a quick peek at Hudi's capabilities using spark-shell. Using Spark datasources, we will walk through 

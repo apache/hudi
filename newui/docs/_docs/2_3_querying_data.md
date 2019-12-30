@@ -4,6 +4,7 @@ keywords: hudi, hive, spark, sql, presto
 permalink: /docs/querying_data.html
 summary: In this page, we go over how to enable SQL queries on Hudi built tables.
 toc: true
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 Conceptually, Hudi stores data physically once on DFS, while providing 3 logical views on top, as explained [before](concepts.html#views). 

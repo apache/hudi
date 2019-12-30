@@ -4,6 +4,7 @@ keywords: hudi, administration, operation, devops
 permalink: /docs/admin_guide.html
 summary: This section offers an overview of tools available to operate an ecosystem of Hudi datasets
 toc: true
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 Admins/ops can gain visibility into Hudi datasets/pipelines in the following ways

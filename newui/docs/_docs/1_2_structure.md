@@ -3,6 +3,7 @@ title: Structure
 keywords: big data, stream processing, cloud, hdfs, storage, upserts, change capture
 permalink: /docs/structure.html
 summary: "Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing."
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 Hudi (pronounced “Hoodie”) ingests & manages storage of large analytical datasets over DFS ([HDFS](http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html) or cloud stores) and provides three logical views for query access.

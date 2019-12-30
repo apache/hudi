@@ -2,6 +2,7 @@
 title: "Comparison"
 keywords: apache, hudi, kafka, kudu, hive, hbase, stream processing
 permalink: /docs/comparison.html
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 Apache Hudi fills a big void for processing data on top of DFS, and thus mostly co-exists nicely with these technologies. However,

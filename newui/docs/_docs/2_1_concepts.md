@@ -4,6 +4,7 @@ keywords: hudi, design, storage, views, timeline
 permalink: /docs/concepts.html
 summary: "Here we introduce some basic concepts & give a broad technical overview of Hudi"
 toc: true
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 Apache Hudi (pronounced “Hudi”) provides the following streaming primitives over datasets on DFS

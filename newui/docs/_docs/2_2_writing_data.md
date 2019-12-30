@@ -4,6 +4,7 @@ keywords: hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL
 permalink: /docs/writing_data.html
 summary: In this page, we will discuss some available tools for incrementally ingesting & storing data.
 toc: true
+last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 In this section, we will cover ways to ingest new changes from external sources or even other Hudi datasets using the [DeltaStreamer](#deltastreamer) tool, as well as 
