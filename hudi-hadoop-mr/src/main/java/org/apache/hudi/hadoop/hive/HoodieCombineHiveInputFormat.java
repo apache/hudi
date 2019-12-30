@@ -890,7 +890,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
 
     @Override
     public RecordReader getRecordReader(JobConf job, CombineFileSplit split, Reporter reporter,
-                                        Class<RecordReader<K, V>> rrClass) throws IOException {
+        Class<RecordReader<K, V>> rrClass) throws IOException {
       return new HadoopShimsSecure.CombineFileRecordReader(job, split, reporter, rrClass);
     }
 
