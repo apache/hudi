@@ -115,6 +115,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
 
     private void addShutdownHook() {
       Runtime.getRuntime().addShutdownHook(new Thread() {
+        @Override
         public void run() {
           close();
         }

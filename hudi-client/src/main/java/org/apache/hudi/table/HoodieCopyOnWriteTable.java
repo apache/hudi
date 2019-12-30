@@ -279,6 +279,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
    * @param jsc JavaSparkContext
    * @return Cleaner Plan
    */
+  @Override
   public HoodieCleanerPlan scheduleClean(JavaSparkContext jsc) {
     try {
       HoodieCleanHelper cleaner = new HoodieCleanHelper(this, config);

@@ -94,6 +94,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
   /**
    * Perform the actual writing of the given record into the backing file.
    */
+  @Override
   public void write(HoodieRecord record, Option<IndexedRecord> avroRecord) {
     Option recordMetadata = record.getData().getMetadata();
     try {

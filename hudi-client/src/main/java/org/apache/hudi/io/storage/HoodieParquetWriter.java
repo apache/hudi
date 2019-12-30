@@ -93,6 +93,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     writeSupport.add(record.getRecordKey());
   }
 
+  @Override
   public boolean canWrite() {
     return fs.getBytesWritten(file) < maxFileSize;
   }

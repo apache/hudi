@@ -154,6 +154,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
    */
   private void addShutDownHook() {
     Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
       public void run() {
         try {
           hbaseConnection.close();
@@ -167,6 +168,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   /**
    * Ensure that any resources used for indexing are released here.
    */
+  @Override
   public void close() {
     this.hBaseIndexQPSResourceAllocator.releaseQPSResources();
   }

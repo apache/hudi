@@ -973,6 +973,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   /**
    * Releases any resources used by the client.
    */
+  @Override
   public void close() {
     // Stop timeline-server if running
     super.close();

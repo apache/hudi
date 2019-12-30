@@ -72,6 +72,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   /**
    * Releases any resources used by the client.
    */
+  @Override
   public void close() {
     stopEmbeddedServerView(true);
   }
