@@ -43,8 +43,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -71,7 +71,7 @@ import static org.junit.Assert.assertTrue;
 @SuppressWarnings("ResultOfMethodCallIgnored")
 public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(TestHoodieTableFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieTableFileSystemView.class);
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
@@ -489,7 +489,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     roView.getAllDataFiles(partitionPath);
 
     fileSliceList = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
-    LOG.info("FILESLICE LIST=" + fileSliceList);
+    LOG.info("FILESLICE LIST={}", fileSliceList);
     dataFiles = fileSliceList.stream().map(FileSlice::getDataFile).filter(Option::isPresent).map(Option::get)
         .collect(Collectors.toList());
     assertEquals("Expect only one data-files in latest view as there is only one file-group", 1, dataFiles.size());

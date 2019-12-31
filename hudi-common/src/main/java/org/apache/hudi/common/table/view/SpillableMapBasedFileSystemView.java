@@ -28,8 +28,8 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,7 +42,7 @@ import java.util.stream.Stream;
  */
 public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
 
-  private static final Logger LOG = LogManager.getLogger(SpillableMapBasedFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SpillableMapBasedFileSystemView.class);
 
   private final long maxMemoryForFileGroupMap;
   private final long maxMemoryForPendingCompaction;
@@ -66,8 +66,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   @Override
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
     try {
-      LOG.info("Creating Partition To File groups map using external spillable Map. Max Mem=" + maxMemoryForFileGroupMap
-          + ", BaseDir=" + baseStoreDir);
+      LOG.info("Creating Partition To File groups map using external spillable Map.  Max Mem={}, BaseDir={}",
+              maxMemoryForPendingCompaction, baseStoreDir);
       new File(baseStoreDir).mkdirs();
       return (Map<String, List<HoodieFileGroup>>) (new ExternalSpillableMap<>(maxMemoryForFileGroupMap, baseStoreDir,
           new DefaultSizeEstimator(), new DefaultSizeEstimator<>()));
@@ -80,8 +80,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction) {
     try {
-      LOG.info("Creating Pending Compaction map using external spillable Map. Max Mem=" + maxMemoryForPendingCompaction
-          + ", BaseDir=" + baseStoreDir);
+      LOG.info("Creating Pending Compaction map using external spillable Map. Max Mem={}, BaseDir={}",
+              maxMemoryForPendingCompaction, baseStoreDir);
       new File(baseStoreDir).mkdirs();
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> pendingMap = new ExternalSpillableMap<>(
           maxMemoryForPendingCompaction, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>());

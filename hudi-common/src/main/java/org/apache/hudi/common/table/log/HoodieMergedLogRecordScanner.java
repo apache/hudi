@@ -30,8 +30,8 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -54,7 +54,7 @@ import java.util.Map;
 public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     implements Iterable<HoodieRecord<? extends HoodieRecordPayload>> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMergedLogRecordScanner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordScanner.class);
 
   // Final map of compacted/merged records
   private final ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records;
@@ -81,12 +81,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       scan();
       this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
       this.numMergedRecordsInLog = records.size();
-      LOG.info("MaxMemoryInBytes allowed for compaction => " + maxMemorySizeInBytes);
-      LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records.getInMemoryMapNumEntries());
+      LOG.info("MaxMemoryInBytes allowed for compaction => {}", maxMemorySizeInBytes);
+      LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => {}", records.getInMemoryMapNumEntries());
       LOG.info(
-          "Total size in bytes of MemoryBasedMap in ExternalSpillableMap => " + records.getCurrentInMemoryMapSize());
-      LOG.info("Number of entries in DiskBasedMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
-      LOG.info("Size of file spilled to disk => " + records.getSizeOfFileOnDiskInBytes());
+          "Total size in bytes of MemoryBasedMap in ExternalSpillableMap => {}", records.getCurrentInMemoryMapSize());
+      LOG.info("Number of entries in DiskBasedMap in ExternalSpillableMap => {}", records.getDiskBasedMapNumEntries());
+      LOG.info("Size of file spilled to disk => {}", records.getSizeOfFileOnDiskInBytes());
     } catch (IOException e) {
       throw new HoodieIOException("IOException when reading log file ");
     }

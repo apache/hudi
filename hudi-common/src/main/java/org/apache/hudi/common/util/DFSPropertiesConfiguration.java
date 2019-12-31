@@ -20,8 +20,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -41,7 +41,7 @@ import java.util.Set;
  */
 public class DFSPropertiesConfiguration {
 
-  private static final Logger LOG = LogManager.getLogger(DFSPropertiesConfiguration.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DFSPropertiesConfiguration.class);
 
   private final FileSystem fs;
 
@@ -87,7 +87,7 @@ public class DFSPropertiesConfiguration {
       BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(file)));
       addProperties(reader);
     } catch (IOException ioe) {
-      LOG.error("Error reading in properies from dfs", ioe);
+      LOG.error("Error reading in properties from dfs", ioe);
       throw new IllegalArgumentException("Cannot read properties from dfs", ioe);
     }
   }

@@ -27,8 +27,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -104,7 +104,7 @@ public interface HoodieLogFormat {
    */
   class WriterBuilder {
 
-    private static final Logger LOG = LogManager.getLogger(WriterBuilder.class);
+    private static final Logger LOG = LoggerFactory.getLogger(WriterBuilder.class);
     // Default max log file size 512 MB
     public static final long DEFAULT_SIZE_THRESHOLD = 512 * 1024 * 1024L;
 
@@ -210,7 +210,7 @@ public interface HoodieLogFormat {
       }
 
       if (logVersion == null) {
-        LOG.info("Computing the next log version for " + logFileId + " in " + parentPath);
+        LOG.info("Computing the next log version for {} in {}", logFileId, parentPath);
         Option<Pair<Integer, String>> versionAndWriteToken =
             FSUtils.getLatestLogVersion(fs, parentPath, logFileId, fileExtension, commitTime);
         if (versionAndWriteToken.isPresent()) {
@@ -222,8 +222,8 @@ public interface HoodieLogFormat {
           // Use rollover write token as write token to create new log file with tokens
           logWriteToken = rolloverLogWriteToken;
         }
-        LOG.info("Computed the next log version for " + logFileId + " in " + parentPath + " as " + logVersion
-            + " with write-token " + logWriteToken);
+        LOG.info("Computed the next log version for {} in {} as {} with write-token {}",
+                logFileId, parentPath, logVersion , logWriteToken);
       }
 
       if (logWriteToken == null) {
@@ -234,7 +234,7 @@ public interface HoodieLogFormat {
 
       Path logPath = new Path(parentPath,
           FSUtils.makeLogFileName(logFileId, fileExtension, commitTime, logVersion, logWriteToken));
-      LOG.info("HoodieLogFile on path " + logPath);
+      LOG.info("HoodieLogFile on path {}", logPath);
       HoodieLogFile logFile = new HoodieLogFile(logPath);
 
       if (bufferSize == null) {

@@ -24,8 +24,8 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.util.Functions.Function2;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -51,7 +51,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * clients for querying.
  */
 public class FileSystemViewManager {
-  private static final Logger LOG = LogManager.getLogger(FileSystemViewManager.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileSystemViewManager.class);
 
   private final SerializableConfiguration conf;
   // The View Storage config used to store file-system views
@@ -126,7 +126,7 @@ public class FileSystemViewManager {
    */
   private static SpillableMapBasedFileSystemView createSpillableMapBasedFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, String basePath) {
-    LOG.info("Creating SpillableMap based view for basePath " + basePath);
+    LOG.info("Creating SpillableMap based view for basePath {}", basePath);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.newCopy(), basePath, true);
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     return new SpillableMapBasedFileSystemView(metaClient, timeline, viewConf);
@@ -142,7 +142,7 @@ public class FileSystemViewManager {
    */
   private static HoodieTableFileSystemView createInMemoryFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, String basePath) {
-    LOG.info("Creating InMemory based view for basePath " + basePath);
+    LOG.info("Creating InMemory based view for basePath {}", basePath);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.newCopy(), basePath, true);
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
@@ -158,8 +158,8 @@ public class FileSystemViewManager {
    */
   private static RemoteHoodieTableFileSystemView createRemoteFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, HoodieTableMetaClient metaClient) {
-    LOG.info("Creating remote view for basePath " + metaClient.getBasePath() + ". Server="
-        + viewConf.getRemoteViewServerHost() + ":" + viewConf.getRemoteViewServerPort());
+    LOG.info("Creating remote view for basePath {}. Server={}:{}",
+            metaClient.getBasePath(), viewConf.getRemoteViewServerHost(), viewConf.getRemoteViewServerPort());
     return new RemoteHoodieTableFileSystemView(viewConf.getRemoteViewServerHost(), viewConf.getRemoteViewServerPort(),
         metaClient);
   }
@@ -173,7 +173,7 @@ public class FileSystemViewManager {
    */
   public static FileSystemViewManager createViewManager(final SerializableConfiguration conf,
       final FileSystemViewStorageConfig config) {
-    LOG.info("Creating View Manager with storage type :" + config.getStorageType());
+    LOG.info("Creating View Manager with storage type :{}", config.getStorageType());
     switch (config.getStorageType()) {
       case EMBEDDED_KV_STORE:
         LOG.info("Creating embedded rocks-db based Table View");

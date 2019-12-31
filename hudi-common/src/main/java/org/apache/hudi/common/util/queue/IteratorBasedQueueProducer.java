@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 
@@ -30,7 +30,7 @@ import java.util.Iterator;
  */
 public class IteratorBasedQueueProducer<I> implements BoundedInMemoryQueueProducer<I> {
 
-  private static final Logger LOG = LogManager.getLogger(IteratorBasedQueueProducer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(IteratorBasedQueueProducer.class);
 
   // input iterator for producing items in the buffer.
   private final Iterator<I> inputIterator;

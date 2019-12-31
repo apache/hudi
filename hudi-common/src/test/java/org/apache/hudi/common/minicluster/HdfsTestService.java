@@ -27,8 +27,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,7 +38,7 @@ import java.io.IOException;
  */
 public class HdfsTestService {
 
-  private static final Logger LOG = LogManager.getLogger(HdfsTestService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HdfsTestService.class);
 
   /**
    * Configuration settings.
@@ -72,7 +72,7 @@ public class HdfsTestService {
     // If clean, then remove the work dir so we can start fresh.
     String localDFSLocation = getDFSLocation(workDir);
     if (format) {
-      LOG.info("Cleaning HDFS cluster data at: " + localDFSLocation + " and starting fresh.");
+      LOG.info("Cleaning HDFS cluster data at: {} and starting fresh.", localDFSLocation);
       File file = new File(localDFSLocation);
       FileIOUtils.deleteDirectory(file);
     }
@@ -115,7 +115,7 @@ public class HdfsTestService {
   private static Configuration configureDFSCluster(Configuration config, String localDFSLocation, String bindIP,
       int namenodeRpcPort, int datanodePort, int datanodeIpcPort, int datanodeHttpPort) {
 
-    LOG.info("HDFS force binding to ip: " + bindIP);
+    LOG.info("HDFS force binding to ip: {}", bindIP);
     config.set(DFSConfigKeys.FS_DEFAULT_NAME_KEY, "hdfs://" + bindIP + ":" + namenodeRpcPort);
     config.set(DFSConfigKeys.DFS_DATANODE_ADDRESS_KEY, bindIP + ":" + datanodePort);
     config.set(DFSConfigKeys.DFS_DATANODE_IPC_ADDRESS_KEY, bindIP + ":" + datanodeIpcPort);

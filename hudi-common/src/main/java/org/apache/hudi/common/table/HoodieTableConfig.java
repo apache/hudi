@@ -28,8 +28,8 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -48,7 +48,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieTableConfig implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableConfig.class);
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_TABLE_NAME_PROP_NAME = "hoodie.table.name";
@@ -71,7 +71,7 @@ public class HoodieTableConfig implements Serializable {
   public HoodieTableConfig(FileSystem fs, String metaPath) {
     Properties props = new Properties();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
-    LOG.info("Loading dataset properties from " + propertyPath);
+    LOG.info("Loading dataset properties from {}", propertyPath);
     try {
       try (FSDataInputStream inputStream = fs.open(propertyPath)) {
         props.load(inputStream);

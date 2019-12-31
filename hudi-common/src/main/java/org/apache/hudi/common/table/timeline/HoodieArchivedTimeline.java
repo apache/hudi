@@ -26,8 +26,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -53,8 +53,6 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE = "commits";
   private HoodieTableMetaClient metaClient;
   private Map<String, byte[]> readCommits = new HashMap<>();
-
-  private static final Logger LOG = LogManager.getLogger(HoodieArchivedTimeline.class);
 
   public HoodieArchivedTimeline(HoodieTableMetaClient metaClient) {
     // Read back the commits to make sure

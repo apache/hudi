@@ -34,8 +34,8 @@ import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
 import org.apache.hadoop.hdfs.protocol.RecoveryInProgressException;
 import org.apache.hadoop.ipc.RemoteException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -44,7 +44,7 @@ import java.io.IOException;
  */
 public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieLogFormatWriter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFormatWriter.class);
 
   private HoodieLogFile logFile;
   private final FileSystem fs;
@@ -76,7 +76,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     if (fs.exists(path)) {
       boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
       if (isAppendSupported) {
-        LOG.info(logFile + " exists. Appending to existing file");
+        LOG.info("{} exists. Appending to existing file", logFile);
         try {
           this.output = fs.append(path, bufferSize);
         } catch (RemoteException e) {
@@ -93,11 +93,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       }
       if (!isAppendSupported) {
         this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
-        LOG.info("Append not supported.. Rolling over to " + logFile);
+        LOG.info("Append not supported.. Rolling over to {}", logFile);
         createNewFile();
       }
     } else {
-      LOG.info(logFile + " does not exist. Create a new file");
+      LOG.info("{} does not exist. Create a new file", logFile.getPath() );
       // Block size does not matter as we will always manually autoflush
       createNewFile();
     }
@@ -180,8 +180,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     if (getCurrentSize() > sizeThreshold) {
       // TODO - make an end marker which seals the old log file (no more appends possible to that
       // file).
-      LOG.info("CurrentSize " + getCurrentSize() + " has reached threshold " + sizeThreshold
-          + ". Rolling over to the next version");
+      LOG.info("CurrentSize {} has reached threshold {}. Rolling over to the next version",
+              getCurrentSize(), sizeThreshold);
       HoodieLogFile newLogFile = logFile.rollOver(fs, rolloverLogWriteToken);
       // close this writer and return the new writer
       close();
@@ -237,7 +237,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
       createNewFile();
     } else if (e.getClassName().contentEquals(AlreadyBeingCreatedException.class.getName())) {
-      LOG.warn("Another task executor writing to the same log file(" + logFile + ". Rolling over");
+      LOG.warn("Another task executor writing to the same log file({}. Rolling over", logFile);
       // Rollover the current log file (since cannot get a stream handle) and create new one
       this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
       createNewFile();
@@ -246,13 +246,13 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       // this happens when either another task executor writing to this file died or
       // data node is going down. Note that we can only try to recover lease for a DistributedFileSystem.
       // ViewFileSystem unfortunately does not support this operation
-      LOG.warn("Trying to recover log on path " + path);
+      LOG.warn("Trying to recover log on path {}", path);
       if (FSUtils.recoverDFSFileLease((DistributedFileSystem) fs, path)) {
-        LOG.warn("Recovered lease on path " + path);
+        LOG.warn("Recovered lease on path {}", path);
         // try again
         this.output = fs.append(path, bufferSize);
       } else {
-        LOG.warn("Failed to recover lease on path " + path);
+        LOG.warn("Failed to recover lease on path {}", path);
         throw new HoodieException(e);
       }
     } else {

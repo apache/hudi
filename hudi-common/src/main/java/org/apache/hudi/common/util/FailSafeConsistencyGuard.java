@@ -22,8 +22,8 @@ import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  */
 public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
-  private static final Logger LOG = LogManager.getLogger(FailSafeConsistencyGuard.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FailSafeConsistencyGuard.class);
 
   private final FileSystem fs;
   private final ConsistencyGuardConfig consistencyGuardConfig;
@@ -86,7 +86,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
     retryTillSuccess((retryNum) -> {
       try {
-        LOG.info("Trying " + retryNum);
+        LOG.info("Trying {}", retryNum);
         FileStatus[] entries = fs.listStatus(dir);
         List<String> gotFiles = Arrays.stream(entries).map(e -> Path.getPathWithoutSchemeAndAuthority(e.getPath()))
             .map(p -> p.toString()).collect(Collectors.toList());
@@ -95,7 +95,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
         switch (event) {
           case DISAPPEAR:
-            LOG.info("Following files are visible" + candidateFiles);
+            LOG.info("Following files are visible{}", candidateFiles);
             // If no candidate files gets removed, it means all of them have disappeared
             return !altered;
           case APPEAR:
@@ -104,7 +104,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
             return candidateFiles.isEmpty();
         }
       } catch (IOException ioe) {
-        LOG.warn("Got IOException waiting for file event. Have tried " + retryNum + " time(s)", ioe);
+        LOG.warn(String.format("Got IOException waiting for file event. Have tried %s time(s)", retryNum), ioe);
       }
       return false;
     }, "Timed out waiting for files to become visible");
@@ -176,7 +176,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   private void retryTillSuccess(Function<Integer, Boolean> predicate, String timedOutMessage) throws TimeoutException {
     long waitMs = consistencyGuardConfig.getInitialConsistencyCheckIntervalMs();
     int attempt = 0;
-    LOG.info("Max Attempts=" + consistencyGuardConfig.getMaxConsistencyChecks());
+    LOG.info("Max Attempts={}", consistencyGuardConfig.getMaxConsistencyChecks());
     while (attempt < consistencyGuardConfig.getMaxConsistencyChecks()) {
       boolean success = predicate.apply(attempt);
       if (success) {

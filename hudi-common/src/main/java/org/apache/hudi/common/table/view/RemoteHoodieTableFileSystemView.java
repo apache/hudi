@@ -43,8 +43,8 @@ import com.google.common.base.Preconditions;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -108,7 +108,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
 
 
-  private static final Logger LOG = LogManager.getLogger(RemoteHoodieTableFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RemoteHoodieTableFileSystemView.class);
 
   private final String serverHost;
   private final int serverPort;
@@ -148,7 +148,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     builder.addParameter(TIMELINE_HASH, timeline.getTimelineHash());
 
     String url = builder.toString();
-    LOG.info("Sending request : (" + url + ")");
+    LOG.info("Sending request : ({})", url);
     Response response = null;
     int timeout = 1000 * 300; // 5 min timeout
     switch (method) {

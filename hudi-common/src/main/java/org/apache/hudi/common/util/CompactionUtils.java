@@ -32,9 +32,6 @@ import org.apache.hudi.common.versioning.compaction.CompactionV1MigrationHandler
 import org.apache.hudi.common.versioning.compaction.CompactionV2MigrationHandler;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -47,8 +44,6 @@ import java.util.stream.Stream;
  * Helper class to generate compaction plan from FileGroup/FileSlice abstraction.
  */
 public class CompactionUtils {
-
-  private static final Logger LOG = LogManager.getLogger(CompactionUtils.class);
 
   public static final Integer COMPACTION_METADATA_VERSION_1 = CompactionV1MigrationHandler.VERSION;
   public static final Integer COMPACTION_METADATA_VERSION_2 = CompactionV2MigrationHandler.VERSION;

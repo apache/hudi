@@ -22,8 +22,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.io.Files;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileUtil;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.zookeeper.server.NIOServerCnxnFactory;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.apache.zookeeper.server.persistence.FileTxnLog;
@@ -53,7 +53,7 @@ import java.net.Socket;
  */
 public class ZookeeperTestService {
 
-  private static final Logger LOG = LogManager.getLogger(ZookeeperTestService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ZookeeperTestService.class);
 
   private static final int TICK_TIME = 2000;
   private static final int CONNECTION_TIMEOUT = 30000;
@@ -103,7 +103,7 @@ public class ZookeeperTestService {
 
     // NOTE: Changed from the original, where InetSocketAddress was
     // originally created to bind to the wildcard IP, we now configure it.
-    LOG.info("Zookeeper force binding to: " + this.bindIP);
+    LOG.info("Zookeeper force binding to: {}", this.bindIP);
     standaloneServerFactory.configure(new InetSocketAddress(bindIP, clientPort), 1000);
 
     // Start up this ZK server
@@ -120,7 +120,7 @@ public class ZookeeperTestService {
     }
 
     started = true;
-    LOG.info("Zookeeper Minicluster service started on client port: " + clientPort);
+    LOG.info("Zookeeper Minicluster service started on client port: {}", clientPort);
     return zooKeeperServer;
   }
 

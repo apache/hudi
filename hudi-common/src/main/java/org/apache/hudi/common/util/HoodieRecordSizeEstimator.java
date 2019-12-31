@@ -23,8 +23,8 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Size Estimator for Hoodie record payload.
@@ -33,7 +33,7 @@ import org.apache.log4j.Logger;
  */
 public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload> implements SizeEstimator<HoodieRecord<T>> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieRecordSizeEstimator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRecordSizeEstimator.class);
 
   // Schema used to get GenericRecord from HoodieRecordPayload then convert to bytes and vice-versa
   private final Schema schema;
@@ -50,7 +50,7 @@ public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload> implements
     /** {@link ExternalSpillableMap} **/
     long sizeOfRecord = ObjectSizeCalculator.getObjectSize(hoodieRecord);
     long sizeOfSchema = ObjectSizeCalculator.getObjectSize(schema);
-    LOG.info("SizeOfRecord => " + sizeOfRecord + " SizeOfSchema => " + sizeOfSchema);
+    LOG.info("SizeOfRecord => {} SizeOfSchema => {}", sizeOfRecord, sizeOfSchema);
     return sizeOfRecord;
   }
 }

@@ -36,8 +36,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -66,7 +66,7 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlo
  */
 public abstract class AbstractHoodieLogRecordScanner {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractHoodieLogRecordScanner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractHoodieLogRecordScanner.class);
 
   // Reader schema for the records
   protected final Schema readerSchema;
@@ -131,7 +131,7 @@ public abstract class AbstractHoodieLogRecordScanner {
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
-        LOG.info("Scanning log file " + logFile);
+        LOG.info("Scanning log file {}", logFile);
         scannedLogFiles.add(logFile);
         totalLogFiles.set(scannedLogFiles.size());
         // Use the HoodieLogFileReader to iterate through the blocks in the log file
@@ -145,7 +145,7 @@ public abstract class AbstractHoodieLogRecordScanner {
         }
         switch (r.getBlockType()) {
           case AVRO_DATA_BLOCK:
-            LOG.info("Reading a data block from file " + logFile.getPath());
+            LOG.info("Reading a data block from file {}", logFile.getPath());
             if (isNewInstantBlock(r) && !readBlocksLazily) {
               // If this is an avro data block belonging to a different commit/instant,
               // then merge the last blocks and records into the main result
@@ -155,7 +155,7 @@ public abstract class AbstractHoodieLogRecordScanner {
             currentInstantLogBlocks.push(r);
             break;
           case DELETE_BLOCK:
-            LOG.info("Reading a delete block from file " + logFile.getPath());
+            LOG.info("Reading a delete block from file {}", logFile.getPath());
             if (isNewInstantBlock(r) && !readBlocksLazily) {
               // If this is a delete data block belonging to a different commit/instant,
               // then merge the last blocks and records into the main result
@@ -177,7 +177,7 @@ public abstract class AbstractHoodieLogRecordScanner {
             // written per ingestion batch for a file but in reality we need to rollback (B1 & B2)
             // The following code ensures the same rollback block (R1) is used to rollback
             // both B1 & B2
-            LOG.info("Reading a command block from file " + logFile.getPath());
+            LOG.info("Reading a command block from file {}", logFile.getPath());
             // This is a command block - take appropriate action based on the command
             HoodieCommandBlock commandBlock = (HoodieCommandBlock) r;
             String targetInstantForCommandBlock =
@@ -196,34 +196,34 @@ public abstract class AbstractHoodieLogRecordScanner {
                   HoodieLogBlock lastBlock = currentInstantLogBlocks.peek();
                   // handle corrupt blocks separately since they may not have metadata
                   if (lastBlock.getBlockType() == CORRUPT_BLOCK) {
-                    LOG.info("Rolling back the last corrupted log block read in " + logFile.getPath());
+                    LOG.info("Rolling back the last corrupted log block read in {}", logFile.getPath());
                     currentInstantLogBlocks.pop();
                     numBlocksRolledBack++;
                   } else if (lastBlock.getBlockType() != CORRUPT_BLOCK
                       && targetInstantForCommandBlock.contentEquals(lastBlock.getLogBlockHeader().get(INSTANT_TIME))) {
                     // rollback last data block or delete block
-                    LOG.info("Rolling back the last log block read in " + logFile.getPath());
+                    LOG.info("Rolling back the last log block read in {}", logFile.getPath());
                     currentInstantLogBlocks.pop();
                     numBlocksRolledBack++;
                   } else if (!targetInstantForCommandBlock
                       .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME))) {
                     // invalid or extra rollback block
-                    LOG.warn("TargetInstantTime " + targetInstantForCommandBlock
-                        + " invalid or extra rollback command block in " + logFile.getPath());
+                    LOG.warn("TargetInstantTime {} invalid or extra rollback command block in {}",
+                            targetInstantForCommandBlock, logFile.getPath());
                     break;
                   } else {
                     // this should not happen ideally
-                    LOG.warn("Unable to apply rollback command block in " + logFile.getPath());
+                    LOG.warn("Unable to apply rollback command block in {}", logFile.getPath());
                   }
                 }
-                LOG.info("Number of applied rollback blocks " + numBlocksRolledBack);
+                LOG.info("Number of applied rollback blocks {}", numBlocksRolledBack);
                 break;
               default:
                 throw new UnsupportedOperationException("Command type not yet supported.");
             }
             break;
           case CORRUPT_BLOCK:
-            LOG.info("Found a corrupt block in " + logFile.getPath());
+            LOG.info("Found a corrupt block in {}", logFile.getPath());
             totalCorruptBlocks.incrementAndGet();
             // If there is a corrupt block - we will assume that this was the next data block
             currentInstantLogBlocks.push(r);
@@ -297,7 +297,7 @@ public abstract class AbstractHoodieLogRecordScanner {
    */
   private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> lastBlocks, int numLogFilesSeen) throws Exception {
     while (!lastBlocks.isEmpty()) {
-      LOG.info("Number of remaining logblocks to merge " + lastBlocks.size());
+      LOG.info("Number of remaining logblocks to merge {}", lastBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted
       HoodieLogBlock lastBlock = lastBlocks.pollLast();
       switch (lastBlock.getBlockType()) {

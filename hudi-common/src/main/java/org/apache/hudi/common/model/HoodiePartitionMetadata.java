@@ -24,8 +24,8 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -51,7 +51,7 @@ public class HoodiePartitionMetadata {
 
   private final FileSystem fs;
 
-  private static final Logger LOG = LogManager.getLogger(HoodiePartitionMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodiePartitionMetadata.class);
 
   /**
    * Construct metadata from existing partition.
@@ -101,8 +101,8 @@ public class HoodiePartitionMetadata {
         fs.rename(tmpMetaPath, metaPath);
       }
     } catch (IOException ioe) {
-      LOG.warn("Error trying to save partition metadata (this is okay, as long as atleast 1 of these succced), "
-          + partitionPath, ioe);
+      LOG.warn(String.format("Error trying to save partition metadata (this is okay, as long as atleast 1 of these " +
+              "succced), %s", partitionPath), ioe);
     } finally {
       if (!metafileExists) {
         try {
@@ -111,7 +111,7 @@ public class HoodiePartitionMetadata {
             fs.delete(tmpMetaPath, false);
           }
         } catch (IOException ioe) {
-          LOG.warn("Error trying to clean up temporary files for " + partitionPath, ioe);
+          LOG.warn(String.format("Error trying to clean up temporary files for %s", partitionPath), ioe);
         }
       }
     }
