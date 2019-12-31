@@ -20,12 +20,12 @@ package org.apache.hudi.index.hbase;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DefaultHBaseQPSResourceAllocator implements HBaseIndexQPSResourceAllocator {
   private HoodieWriteConfig hoodieWriteConfig;
-  private static final Logger LOG = LogManager.getLogger(DefaultHBaseQPSResourceAllocator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DefaultHBaseQPSResourceAllocator.class);
 
   public DefaultHBaseQPSResourceAllocator(HoodieWriteConfig hoodieWriteConfig) {
     this.hoodieWriteConfig = hoodieWriteConfig;
@@ -46,7 +46,7 @@ public class DefaultHBaseQPSResourceAllocator implements HBaseIndexQPSResourceAl
   @Override
   public void releaseQPSResources() {
     // Do nothing, as there are no resources locked in default implementation
-    LOG.info(String.format("Release QPS resources called for %s with default implementation, do nothing",
-        this.hoodieWriteConfig.getHbaseTableName()));
+    LOG.info("Release QPS resources called for {} with default implementation, do nothing",
+        this.hoodieWriteConfig.getHbaseTableName());
   }
 }
