@@ -2,7 +2,7 @@
 title: "Talks & Powered By"
 keywords: hudi, talks, presentation
 permalink: /docs/powered_by.html
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2019-12-31T15:59:57-04:00
 ---
 
 ## Adoption
@@ -29,6 +29,9 @@ Yields.io is the first FinTech platform that uses AI for automated model validat
 
 Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in their open source ETL framework https://github.com/YotpoLtd/metorikku and using as an output writer for a CDC pipeline, with events that are being generated from a database binlog streams to Kafka and then are written to S3. 
  
+### Tathastu.ai
+
+[Tathastu.ai](https://www.tathastu.ai) offers the largest AI/ML playground of consumer data for data scientists, AI experts and technologists to build upon. They have built a CDC pipeline using Apache Hudi and Debezium. Data from Hudi datasets is being queried using Hive, Presto and Spark.
 
 ## Talks & Presentations
 
@@ -54,9 +57,11 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 8. ["Apache Hudi (Incubating) - The Past, Present and Future Of Efficient Data Lake Architectures"](https://docs.google.com/presentation/d/1FHhsvh70ZP6xXlHdVsAI0g__B_6Mpto5KQFlZ0b8-mM) - By Vinoth Chandar & Balaji Varadarajan
    September 2019, ApacheCon NA 19, Las Vegas, NV, USA
-   
+  
 9. ["Insert, upsert, and delete data in Amazon S3 using Amazon EMR"](https://www.portal.reinvent.awsevents.com/connect/sessionDetail.ww?SESSION_ID=98662&csrftkn=YS67-AG7B-QIAV-ZZBK-E6TT-MD4Q-1HEP-747P) - By Paul Codding & Vinoth Chandar
-   December 2019, AWS re:Invent 2019, Las Vegas, NV, USA 
+   December 2019, AWS re:Invent 2019, Las Vegas, NV, USA  
+       
+10. ["Building Robust CDC Pipeline With Apache Hudi And Debezium"](https://www.slideshare.net/SyedKather/building-robust-cdc-pipeline-with-apache-hudi-and-debezium) - By Pratyaksh, Purushotham, Syed and Shaik December 2019, Hadoop Summit Bangalore, India
 
 ## Articles
 
