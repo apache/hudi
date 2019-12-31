@@ -554,6 +554,7 @@ public class HoodieDeltaStreamer implements Serializable {
     /**
      * Start Compaction Service.
      */
+    @Override
     protected Pair<CompletableFuture, ExecutorService> startService() {
       ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentCompaction);
       List<CompletableFuture<Boolean>> compactionFutures =

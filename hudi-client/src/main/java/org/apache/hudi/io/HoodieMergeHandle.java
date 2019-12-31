@@ -92,6 +92,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     return HoodieAvroUtils.addMetadataFields(originalSchema);
   }
 
+  @Override
   public Path makeNewPath(String partitionPath) {
     Path path = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
     try {
@@ -103,6 +104,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     return new Path(path.toString(), FSUtils.makeDataFileName(instantTime, writeToken, fileId));
   }
 
+  @Override
   public Schema getWriterSchema() {
     return writerSchema;
   }
@@ -113,6 +115,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
    * - Whether it belongs to the same partitionPath as existing records - Whether the current file written bytes lt max
    * file size
    */
+  @Override
   public boolean canWrite(HoodieRecord record) {
     return false;
   }
@@ -120,6 +123,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   /**
    * Perform the actual writing of the given record into the backing file.
    */
+  @Override
   public void write(HoodieRecord record, Option<IndexedRecord> insertValue) {
     // NO_OP
   }
@@ -127,6 +131,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   /**
    * Perform the actual writing of the given record into the backing file.
    */
+  @Override
   public void write(HoodieRecord record, Option<IndexedRecord> avroRecord, Option<Exception> exception) {
     Option recordMetadata = record.getData().getMetadata();
     if (exception.isPresent() && exception.get() instanceof Throwable) {
@@ -141,6 +146,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   /**
    * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
    */
+  @Override
   protected GenericRecord rewriteRecord(GenericRecord record) {
     return HoodieAvroUtils.rewriteRecord(record, writerSchema);
   }

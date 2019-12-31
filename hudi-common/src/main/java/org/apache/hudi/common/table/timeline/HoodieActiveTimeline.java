@@ -145,6 +145,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * timeline * With Async compaction a requested/inflight compaction-instant is a valid baseInstant for a file-slice as
    * there could be delta-commits with that baseInstant.
    */
+  @Override
   public HoodieTimeline getCommitsAndCompactionTimeline() {
     return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION));
   }

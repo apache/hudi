@@ -805,6 +805,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
 
     public HoodieCombineFileInputFormatShim() {}
 
+    @Override
     public Path[] getInputPathsShim(JobConf conf) {
       try {
         return FileInputFormat.getInputPaths(conf);
@@ -813,6 +814,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       }
     }
 
+    @Override
     public void createPool(JobConf conf, PathFilter... filters) {
       super.createPool(conf, filters);
     }
@@ -822,6 +824,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       throw new IOException("CombineFileInputFormat.getRecordReader not needed.");
     }
 
+    @Override
     protected List<FileStatus> listStatus(JobContext job) throws IOException {
       LOG.info("Listing status in HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim");
       List<FileStatus> result;
@@ -851,6 +854,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       return result;
     }
 
+    @Override
     public CombineFileSplit[] getSplits(JobConf job, int numSplits) throws IOException {
       long minSize = job.getLong(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MINSIZE, 0L);
       if (job.getLong("mapreduce.input.fileinputformat.split.minsize.per.node", 0L) == 0L) {
@@ -879,10 +883,12 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       return (CombineFileSplit[]) inputSplitShims.toArray(new HadoopShimsSecure.InputSplitShim[inputSplitShims.size()]);
     }
 
+    @Override
     public HadoopShimsSecure.InputSplitShim getInputSplitShim() throws IOException {
       return new HadoopShimsSecure.InputSplitShim();
     }
 
+    @Override
     public RecordReader getRecordReader(JobConf job, CombineFileSplit split, Reporter reporter,
         Class<RecordReader<K, V>> rrClass) throws IOException {
       return new HadoopShimsSecure.CombineFileRecordReader(job, split, reporter, rrClass);
