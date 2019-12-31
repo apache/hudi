@@ -80,9 +80,9 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
       + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},"
       + "{\"name\":\"fare\",\"type\": \"double\"},"
-      + "{\"name\": \"_hoodie_delete_marker\", \"type\": \"boolean\", \"default\": false} ]}";
+      + "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false} ]}";
   public static String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
-  public static String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,double,string";
+  public static String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,double,boolean";
   public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
   public static Schema avroSchemaWithMetadataFields = HoodieAvroUtils.addMetadataFields(avroSchema);
 
@@ -154,9 +154,9 @@ public class HoodieTestDataGenerator {
     rec.put("end_lon", rand.nextDouble());
     rec.put("fare", rand.nextDouble() * 100);
     if (isDeleteRecord) {
-      rec.put("_hoodie_delete_marker", true);
+      rec.put("_hoodie_is_deleted", true);
     } else {
-      rec.put("_hoodie_delete_marker", false);
+      rec.put("_hoodie_is_deleted", false);
     }
     return rec;
   }
