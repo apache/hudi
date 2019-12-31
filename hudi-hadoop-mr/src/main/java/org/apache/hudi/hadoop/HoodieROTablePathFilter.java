@@ -108,7 +108,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
 
       if (hoodiePathCache.containsKey(folder.toString())) {
         if (LOG.isDebugEnabled()) {
-          LOG.debug(String.format("%s Hoodie path checked against cache, accept => %s \n", path,
+          LOG.debug(String.format("%s Hoodie path checked against cache, accept => %s %n", path,
               hoodiePathCache.get(folder.toString()).contains(path)));
         }
         return hoodiePathCache.get(folder.toString()).contains(path);
@@ -119,7 +119,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
       if (filePath.contains("/" + HoodieTableMetaClient.METAFOLDER_NAME + "/")
           || filePath.endsWith("/" + HoodieTableMetaClient.METAFOLDER_NAME)) {
         if (LOG.isDebugEnabled()) {
-          LOG.debug(String.format("Skipping Hoodie Metadata file  %s \n", filePath));
+          LOG.debug(String.format("Skipping Hoodie Metadata file  %s %n", filePath));
         }
         return false;
       }
@@ -152,14 +152,14 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
 
           // accept the path, if its among the latest files.
           if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("%s checked after cache population, accept => %s \n", path,
+            LOG.debug(String.format("%s checked after cache population, accept => %s %n", path,
                 hoodiePathCache.get(folder.toString()).contains(path)));
           }
           return hoodiePathCache.get(folder.toString()).contains(path);
         } catch (DatasetNotFoundException e) {
           // Non-hoodie path, accept it.
           if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("(1) Caching non-hoodie path under %s \n", folder.toString()));
+            LOG.debug(String.format("(1) Caching non-hoodie path under %s %n", folder.toString()));
           }
           nonHoodiePathCache.add(folder.toString());
           return true;
@@ -167,7 +167,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
       } else {
         // files is at < 3 level depth in FS tree, can't be hoodie dataset
         if (LOG.isDebugEnabled()) {
-          LOG.debug(String.format("(2) Caching non-hoodie path under %s \n", folder.toString()));
+          LOG.debug(String.format("(2) Caching non-hoodie path under %s %n", folder.toString()));
         }
         nonHoodiePathCache.add(folder.toString());
         return true;
