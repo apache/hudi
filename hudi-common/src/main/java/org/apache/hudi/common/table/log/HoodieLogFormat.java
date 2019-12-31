@@ -223,7 +223,7 @@ public interface HoodieLogFormat {
           logWriteToken = rolloverLogWriteToken;
         }
         LOG.info("Computed the next log version for {} in {} as {} with write-token {}",
-                logFileId, parentPath, logVersion , logWriteToken);
+                logFileId, parentPath, logVersion, logWriteToken);
       }
 
       if (logWriteToken == null) {

@@ -97,7 +97,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
         createNewFile();
       }
     } else {
-      LOG.info("{} does not exist. Create a new file", logFile.getPath() );
+      LOG.info("{} does not exist. Create a new file", logFile.getPath());
       // Block size does not matter as we will always manually autoflush
       createNewFile();
     }
