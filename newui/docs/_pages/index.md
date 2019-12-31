@@ -9,9 +9,9 @@ power_items:
   - img_path: /assets/images/powers/aws.jpg
   - img_path: /assets/images/powers/emis.jpg
   - img_path: /assets/images/powers/uber.png
+  - img_path: /assets/images/powers/yield.png
   - img_path: /assets/images/powers/qq.png
   - img_path: /assets/images/powers/tongcheng.png
-  - img_path: /assets/images/powers/yield.png
   - img_path: /assets/images/powers/alibaba.png
   - img_path: /assets/images/powers/yotpo.png
   - img_path: /assets/images/powers/kyligence.png
