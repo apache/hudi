@@ -27,18 +27,18 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class HoodieCleaner {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCleaner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCleaner.class);
 
   /**
    * Config for Cleaner.
@@ -66,7 +66,7 @@ public class HoodieCleaner {
     this.fs = FSUtils.getFs(cfg.basePath, jssc.hadoopConfiguration());
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
         : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
-    LOG.info("Creating Cleaner with configs : " + props.toString());
+    LOG.info("Creating Cleaner with configs : {}", props.toString());
   }
 
   public void run() throws Exception {

@@ -33,8 +33,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.NullWritable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -46,6 +44,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Source to read deltas produced by {@link HiveIncrementalPuller}, commit by commit and apply to the target table
@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
  */
 public class HiveIncrPullSource extends AvroSource {
 
-  private static final Logger LOG = LogManager.getLogger(HiveIncrPullSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveIncrPullSource.class);
 
   private final transient FileSystem fs;
 
@@ -95,7 +95,7 @@ public class HiveIncrPullSource extends AvroSource {
       commitTimes.add(splits[splits.length - 1]);
     }
     Collections.sort(commitTimes);
-    LOG.info("Retrieved commit times " + commitTimes);
+    LOG.info("Retrieved commit times {}", commitTimes);
 
     if (!latestTargetCommit.isPresent()) {
       // start from the beginning
