@@ -3,7 +3,7 @@ layout: home
 permalink: /
 title: Welcome to Apache Hudi
 excerpt: >
-  Apache Hudi Stands for Hadoop Upserts and Incrementals to manage the storage of large analytical datasets on HDFS.<br />
+  Apache Hudi ingests & manages storage of large analytical datasets over DFS (HDFS or cloud stores).<br />
   <small><a href="https://github.com/apache/incubator-hudi/releases/tag/release-0.5.0-incubating" target="_blank">Latest release 0.5.0-incubating</a></small>
 power_items:
   - img_path: /assets/images/powers/aws.jpg
