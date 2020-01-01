@@ -20,9 +20,6 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import java.io.Serializable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -30,13 +27,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Base Class for running delta-sync/compaction in separate thread and controlling their life-cyle.
  */
 public abstract class AbstractDeltaStreamerService implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractDeltaStreamerService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractDeltaStreamerService.class);
 
   // Flag to track if the service is started.
   private boolean started;

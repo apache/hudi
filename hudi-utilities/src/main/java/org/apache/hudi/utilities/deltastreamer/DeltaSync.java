@@ -56,8 +56,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -73,6 +71,8 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.collection.JavaConversions;
 
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
@@ -83,7 +83,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
  */
 public class DeltaSync implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DeltaSync.class);
   public static String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
   public static String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
@@ -168,7 +168,7 @@ public class DeltaSync implements Serializable {
     this.tableType = tableType;
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
     this.props = props;
-    LOG.info("Creating delta streamer with configs : " + props.toString());
+    LOG.info("Creating delta streamer with configs : {}", props.toString());
     this.schemaProvider = schemaProvider;
 
     refreshTimeline();
@@ -266,7 +266,7 @@ public class DeltaSync implements Serializable {
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
       resumeCheckpointStr = Option.of(cfg.checkpoint);
     }
-    LOG.info("Checkpoint to resume from : " + resumeCheckpointStr);
+    LOG.info("Checkpoint to resume from : {}", resumeCheckpointStr);
 
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
@@ -300,8 +300,7 @@ public class DeltaSync implements Serializable {
     }
 
     if (Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
-      LOG.info("No new data, source checkpoint has not changed. Nothing to commit. Old checkpoint=("
-          + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
+      LOG.info("No new data, source checkpoint has not changed. Nothing to commit. Old checkpoint=({}). New Checkpoint=({})",resumeCheckpointStr,checkpointStr);
       return null;
     }
 
@@ -342,7 +341,7 @@ public class DeltaSync implements Serializable {
     boolean isEmpty = records.isEmpty();
 
     String commitTime = startCommit();
-    LOG.info("Starting commit  : " + commitTime);
+    LOG.info("Starting commit  : {}", commitTime);
 
     JavaRDD<WriteStatus> writeStatusRDD;
     if (cfg.operation == Operation.INSERT) {
@@ -367,13 +366,14 @@ public class DeltaSync implements Serializable {
       }
 
       if (hasErrors) {
-        LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
-            + totalErrorRecords + "/" + totalRecords);
+        LOG.warn(
+            "Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total={}/{}",
+            totalErrorRecords, totalRecords);
       }
 
       boolean success = writeClient.commit(commitTime, writeStatusRDD, Option.of(checkpointCommitMetadata));
       if (success) {
-        LOG.info("Commit " + commitTime + " successful!");
+        LOG.info("Commit {} successful!", commitTime);
 
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
@@ -387,16 +387,18 @@ public class DeltaSync implements Serializable {
           hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
         }
       } else {
-        LOG.info("Commit " + commitTime + " failed!");
+        LOG.info("Commit {} failed!", commitTime);
         throw new HoodieException("Commit " + commitTime + " failed!");
       }
     } else {
-      LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
+      LOG.error("Delta Sync found errors when writing. Errors/Total={}/{}", totalErrorRecords,
+          totalRecords);
       LOG.error("Printing out the top 100 errors");
       writeStatusRDD.filter(ws -> ws.hasErrors()).take(100).forEach(ws -> {
-        LOG.error("Global error :", ws.getGlobalError());
+        LOG.error("Global error :{}", ws.getGlobalError());
         if (ws.getErrors().size() > 0) {
-          ws.getErrors().entrySet().forEach(r -> LOG.trace("Error for key:" + r.getKey() + " is " + r.getValue()));
+          ws.getErrors().entrySet()
+              .forEach(r -> LOG.trace("Error for key:{} is {}", r.getKey(), r.getValue()));
         }
       });
       // Rolling back instant
@@ -438,8 +440,9 @@ public class DeltaSync implements Serializable {
   private void syncHive() throws ClassNotFoundException {
     if (cfg.enableHiveSync) {
       HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath);
-      LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
-          + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
+      LOG.info(
+          "Syncing target hoodie table with hive table({}). Hive metastore URL :{}, basePath :{}",
+          hiveSyncConfig.tableName, hiveSyncConfig.jdbcUrl, cfg.targetBasePath);
 
       new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
     }
@@ -503,7 +506,7 @@ public class DeltaSync implements Serializable {
         schemas.add(schemaProvider.getTargetSchema());
       }
 
-      LOG.info("Registering Schema :" + schemas);
+      LOG.info("Registering Schema :{}", schemas);
       jssc.sc().getConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
     }
   }

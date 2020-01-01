@@ -21,8 +21,6 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 
 import java.io.BufferedWriter;
@@ -32,6 +30,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Utility Class to generate Spark Scheduling allocation file. This kicks in only when user sets
@@ -39,7 +39,7 @@ import java.util.UUID;
  */
 public class SchedulerConfGenerator {
 
-  private static final Logger LOG = LogManager.getLogger(SchedulerConfGenerator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SchedulerConfGenerator.class);
 
   public static final String DELTASYNC_POOL_NAME = "hoodiedeltasync";
   public static final String COMPACT_POOL_NAME = "hoodiecompact";
@@ -88,7 +88,7 @@ public class SchedulerConfGenerator {
     BufferedWriter bw = new BufferedWriter(new FileWriter(tempConfigFile));
     bw.write(generateConfig(deltaSyncWeight, compactionWeight, deltaSyncMinShare, compactionMinShare));
     bw.close();
-    LOG.info("Configs written to file" + tempConfigFile.getAbsolutePath());
+    LOG.info("Configs written to file {}", tempConfigFile.getAbsolutePath());
     return tempConfigFile.getAbsolutePath();
   }
 }
