@@ -7,6 +7,20 @@ mkdir -p versions/0.5.1-incubating
 
 
 
+cd /Users/dcadmin/Desktop/hudi-work/incubator-hudi-doc
+mkdir content/assets
+mkdir content/newsite-content
+
+\cp -rf docs-new/_site/assets/* content/assets
+
+
+
+
+
+
+
+
+
 
 
 
