@@ -211,7 +211,6 @@ private[hudi] object HoodieSparkSqlWriter {
       HIVE_URL_OPT_KEY -> DEFAULT_HIVE_URL_OPT_VAL,
       HIVE_PARTITION_FIELDS_OPT_KEY -> DEFAULT_HIVE_PARTITION_FIELDS_OPT_VAL,
       HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY -> DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL,
-      HIVE_ASSUME_DATE_PARTITION_OPT_KEY -> DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL,
       HIVE_STYLE_PARTITIONING_OPT_KEY -> DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL
     ) ++ parameters
   }
@@ -235,8 +234,6 @@ private[hudi] object HoodieSparkSqlWriter {
     hiveSyncConfig.basePath = basePath.toString
     hiveSyncConfig.usePreApacheInputFormat =
       parameters.get(HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY).exists(r => r.toBoolean)
-    hiveSyncConfig.assumeDatePartitioning =
-      parameters.get(HIVE_ASSUME_DATE_PARTITION_OPT_KEY).exists(r => r.toBoolean)
     hiveSyncConfig.databaseName = parameters(HIVE_DATABASE_OPT_KEY)
     hiveSyncConfig.tableName = parameters(HIVE_TABLE_OPT_KEY)
     hiveSyncConfig.hiveUser = parameters(HIVE_USER_OPT_KEY)
