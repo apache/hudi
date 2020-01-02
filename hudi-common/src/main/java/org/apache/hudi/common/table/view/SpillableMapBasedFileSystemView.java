@@ -66,8 +66,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   @Override
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
     try {
-      LOG.info("Creating Partition To File groups map using external spillable Map.  Max Mem={}, BaseDir={}",
-              maxMemoryForPendingCompaction, baseStoreDir);
+      LOG.info("Creating Partition To File groups map using external spillable Map.  Max Mem={}, BaseDir={}", maxMemoryForPendingCompaction, baseStoreDir);
       new File(baseStoreDir).mkdirs();
       return (Map<String, List<HoodieFileGroup>>) (new ExternalSpillableMap<>(maxMemoryForFileGroupMap, baseStoreDir,
           new DefaultSizeEstimator(), new DefaultSizeEstimator<>()));
@@ -80,8 +79,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction) {
     try {
-      LOG.info("Creating Pending Compaction map using external spillable Map. Max Mem={}, BaseDir={}",
-              maxMemoryForPendingCompaction, baseStoreDir);
+      LOG.info("Creating Pending Compaction map using external spillable Map. Max Mem={}, BaseDir={}", maxMemoryForPendingCompaction, baseStoreDir);
       new File(baseStoreDir).mkdirs();
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> pendingMap = new ExternalSpillableMap<>(
           maxMemoryForPendingCompaction, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>());

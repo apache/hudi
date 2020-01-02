@@ -97,7 +97,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
         createNewFile();
       }
     } else {
-      LOG.info("{} does not exist. Create a new file", logFile.getPath());
+      LOG.info("{} does not exist. Create a new file", logFile);
       // Block size does not matter as we will always manually autoflush
       createNewFile();
     }
@@ -180,8 +180,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     if (getCurrentSize() > sizeThreshold) {
       // TODO - make an end marker which seals the old log file (no more appends possible to that
       // file).
-      LOG.info("CurrentSize {} has reached threshold {}. Rolling over to the next version",
-              getCurrentSize(), sizeThreshold);
+      LOG.info("CurrentSize {} has reached threshold {}. Rolling over to the next version", getCurrentSize(), sizeThreshold);
       HoodieLogFile newLogFile = logFile.rollOver(fs, rolloverLogWriteToken);
       // close this writer and return the new writer
       close();

@@ -208,8 +208,7 @@ public abstract class AbstractHoodieLogRecordScanner {
                   } else if (!targetInstantForCommandBlock
                       .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME))) {
                     // invalid or extra rollback block
-                    LOG.warn("TargetInstantTime {} invalid or extra rollback command block in {}",
-                            targetInstantForCommandBlock, logFile.getPath());
+                    LOG.warn("TargetInstantTime {} invalid or extra rollback command block in {}", targetInstantForCommandBlock, logFile.getPath());
                     break;
                   } else {
                     // this should not happen ideally

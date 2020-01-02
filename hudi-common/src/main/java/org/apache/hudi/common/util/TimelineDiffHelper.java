@@ -64,8 +64,7 @@ public class TimelineDiffHelper {
       if (!lostPendingCompactions.isEmpty()) {
         // If a compaction is unscheduled, fall back to complete refresh of fs view since some log files could have been
         // moved. Its unsafe to incrementally sync in that case.
-        LOG.warn("Some pending compactions are no longer in new timeline (unscheduled ?). They are :{}",
-                lostPendingCompactions);
+        LOG.warn("Some pending compactions are no longer in new timeline (unscheduled ?). They are :{}", lostPendingCompactions);
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
       List<HoodieInstant> finishedCompactionInstants = compactionInstants.stream()

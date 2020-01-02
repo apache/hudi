@@ -113,7 +113,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
         try {
           close();
         } catch (Exception e) {
-          LOG.warn(String.format("unable to close input stream for log file %s", logFile), e);
+          LOG.warn("unable to close input stream for log file {}", logFile, e);
           // fail silently for any sort of exception
         }
       }

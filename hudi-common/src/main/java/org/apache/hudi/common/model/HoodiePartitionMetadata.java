@@ -101,8 +101,8 @@ public class HoodiePartitionMetadata {
         fs.rename(tmpMetaPath, metaPath);
       }
     } catch (IOException ioe) {
-      LOG.warn(String.format("Error trying to save partition metadata (this is okay, as long as atleast 1 of these "
-              + "succced), %s", partitionPath), ioe);
+      LOG.warn("Error trying to save partition metadata (this is okay, as long as atleast 1 of these succced), {}",
+              partitionPath, ioe);
     } finally {
       if (!metafileExists) {
         try {
@@ -111,7 +111,7 @@ public class HoodiePartitionMetadata {
             fs.delete(tmpMetaPath, false);
           }
         } catch (IOException ioe) {
-          LOG.warn(String.format("Error trying to clean up temporary files for %s", partitionPath), ioe);
+          LOG.warn("Error trying to clean up temporary files for {}", partitionPath, ioe);
         }
       }
     }

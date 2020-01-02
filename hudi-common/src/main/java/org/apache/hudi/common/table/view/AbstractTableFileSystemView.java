@@ -123,8 +123,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       }
     });
     long storePartitionsTs = timer.endTimer();
-    LOG.info("addFilesToView: NumFiles={}, FileGroupsCreationTime={}, StoreTimeTaken={}",
-            statuses.length, fgBuildTimeTakenMs, storePartitionsTs);
+    LOG.info("addFilesToView: NumFiles={}, FileGroupsCreationTime={}, StoreTimeTaken={}", statuses.length, fgBuildTimeTakenMs, storePartitionsTs);
     return fileGroups;
   }
 

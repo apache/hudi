@@ -104,7 +104,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
             return candidateFiles.isEmpty();
         }
       } catch (IOException ioe) {
-        LOG.warn(String.format("Got IOException waiting for file event. Have tried %s time(s)", retryNum), ioe);
+        LOG.warn("Got IOException waiting for file event. Have tried {} time(s)", retryNum, ioe);
       }
       return false;
     }, "Timed out waiting for files to become visible");

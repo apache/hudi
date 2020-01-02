@@ -158,8 +158,7 @@ public class FileSystemViewManager {
    */
   private static RemoteHoodieTableFileSystemView createRemoteFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, HoodieTableMetaClient metaClient) {
-    LOG.info("Creating remote view for basePath {}. Server={}:{}",
-            metaClient.getBasePath(), viewConf.getRemoteViewServerHost(), viewConf.getRemoteViewServerPort());
+    LOG.info("Creating remote view for basePath {}. Server={}:{}", metaClient.getBasePath(), viewConf.getRemoteViewServerHost(), viewConf.getRemoteViewServerPort());
     return new RemoteHoodieTableFileSystemView(viewConf.getRemoteViewServerHost(), viewConf.getRemoteViewServerPort(),
         metaClient);
   }
