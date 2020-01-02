@@ -42,7 +42,7 @@ docs:
         url: /docs/performance.html
       - title: "Administering"
         url: /docs/admin_guide.html
-  - title: Meta INFO
+  - title: INFO
     children:
       - title: "Docs Versions"
         url: /docs/docs-versions.html
