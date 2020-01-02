@@ -222,8 +222,7 @@ public interface HoodieLogFormat {
           // Use rollover write token as write token to create new log file with tokens
           logWriteToken = rolloverLogWriteToken;
         }
-        LOG.info("Computed the next log version for {} in {} as {} with write-token {}",
-                logFileId, parentPath, logVersion, logWriteToken);
+        LOG.info("Computed the next log version for {} in {} as {} with write-token {}", logFileId, parentPath, logVersion, logWriteToken);
       }
 
       if (logWriteToken == null) {

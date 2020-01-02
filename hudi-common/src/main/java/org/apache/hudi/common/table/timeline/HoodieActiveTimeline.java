@@ -229,7 +229,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public void saveAsComplete(HoodieInstant instant, Option<byte[]> data) {
     LOG.info("Marking instant complete {}", instant);
     Preconditions.checkArgument(instant.isInflight(),
-        "Could not mark an already completed instant as complete again {}", instant);
+            "Could not mark an already completed instant as complete again " + instant);
     transitionState(instant, HoodieTimeline.getCompletedInstant(instant), data);
     LOG.info("Completed {}", instant);
   }
