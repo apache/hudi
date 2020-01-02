@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Performance - Apache Hudi (Incubating)</title>
+<meta name="description" content="In this section, we go over some real world performance numbers for Hudi upserts, incremental pull and compare them againstthe conventional alternatives for achieving these tasks.">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="Apache Hudi">
+<meta property="og:title" content="Performance">
+<meta property="og:url" content="https://hudi.apache.org/docs/performance.html">
+
+
+  <meta property="og:description" content="In this section, we go over some real world performance numbers for Hudi upserts, incremental pull and compare them againstthe conventional alternatives for achieving these tasks.">
+
+
+
+
+
+  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title="Apache Hudi Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    
+
+<div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/"><img src="/assets/images/hudi.png" alt=""></a>
+        
+        <a class="site-title" href="/">
+          Apache Hudi (Incubating)
+          <span class="site-subtitle">0.5.0-incubating</span>
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/activity.html" target="_self" >Activities</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+  <div class="sidebar sticky">
+
+  
+
+  
+    
+      
+      
+      
+      
+    
+
+
+    
+      
+
+<nav class="nav__list">
+  
+  <input id="ac-toc" name="accordion-toc" type="checkbox" />
+  <label for="ac-toc">Toggle menu</label>
+  <ul class="nav__items">
+    
+      <li>
+        
+          <span class="nav__sub-title">Getting Started</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/quick-start-guide.html" class="">Quick Start</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/structure.html" class="">Structure</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/use_cases.html" class="">Use Cases</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/powered_by.html" class="">Talks & Powered By</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/comparison.html" class="">Comparison</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">Documentation</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/concepts.html" class="">Concepts</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/writing_data.html" class="">Writing Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/querying_data.html" class="">Querying Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/configurations.html" class="">Configuration</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/performance.html" class="active">Performance</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/admin_guide.html" class="">Administering</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">Meta INFO</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/docs-versions.html" class="">Docs Versions</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/versions/0.5.0-incubating/docs/privacy.html" class="">Privacy Policy</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+  </ul>
+</nav>
+    
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Performance
+</h1>
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+          <style>
+            .page {
+              padding-right: 0 !important;
+            }
+          </style>
+        
+        <p>In this section, we go over some real world performance numbers for Hudi upserts, incremental pull and compare them against
+the conventional alternatives for achieving these tasks.</p>
+
+<h2 id="upserts">Upserts</h2>
+
+<p>Following shows the speed up obtained for NoSQL database ingestion, from incrementally upserting on a Hudi dataset on the copy-on-write storage,
+on 5 tables ranging from small to huge (as opposed to bulk loading the tables)</p>
+
+<figure>
+    <img class="docimage" src="/assets/images/hudi_upsert_perf1.png" alt="hudi_upsert_perf1.png" style="max-width: 1000px" />
+</figure>
+
+<p>Given Hudi can build the dataset incrementally, it opens doors for also scheduling ingesting more frequently thus reducing latency, with
+significant savings on the overall compute cost.</p>
+
+<figure>
+    <img class="docimage" src="/assets/images/hudi_upsert_perf2.png" alt="hudi_upsert_perf2.png" style="max-width: 1000px" />
+</figure>
+
+<p>Hudi upserts have been stress tested upto 4TB in a single commit across the t1 table. 
+See <a href="https://cwiki.apache.org/confluence/display/HUDI/Tuning+Guide">here</a> for some tuning tips.</p>
+
+<h2 id="indexing">Indexing</h2>
+
+<p>In order to efficiently upsert data, Hudi needs to classify records in a write batch into inserts &amp; updates (tagged with the file group 
+it belongs to). In order to speed this operation, Hudi employs a pluggable index mechanism that stores a mapping between recordKey and 
+the file group id it belongs to. By default, Hudi uses a built in index that uses file ranges and bloom filters to accomplish this, with
+upto 10x speed up over a spark join to do the same.</p>
+
+<p>Hudi provides best indexing performance when you model the recordKey to be monotonically increasing (e.g timestamp prefix), leading to range pruning filtering
+out a lot of files for comparison. Even for UUID based keys, there are <a href="https://www.percona.com/blog/2014/12/19/store-uuid-optimized-way/">known techniques</a> to achieve this.
+For e.g , with 100M timestamp prefixed keys (5% updates, 95% inserts) on a event table with 80B keys/3 partitions/11416 files/10TB data, Hudi index achieves a 
+<strong>~7X (2880 secs vs 440 secs) speed up</strong> over vanilla spark join. Even for a challenging workload like an ‘100% update’ database ingestion workload spanning 
+3.25B UUID keys/30 partitions/6180 files using 300 cores, Hudi indexing offers a <strong>80-100% speedup</strong>.</p>
+
+<h2 id="read-optimized-queries">Read Optimized Queries</h2>
+
+<p>The major design goal for read optimized view is to achieve the latency reduction &amp; efficiency gains in previous section,
+with no impact on queries. Following charts compare the Hudi vs non-Hudi datasets across Hive/Presto/Spark queries and demonstrate this.</p>
+
+<p><strong>Hive</strong></p>
+
+<figure>
+    <img class="docimage" src="/assets/images/hudi_query_perf_hive.png" alt="hudi_query_perf_hive.png" style="max-width: 800px" />
+</figure>
+
+<p><strong>Spark</strong></p>
+
+<figure>
+    <img class="docimage" src="/assets/images/hudi_query_perf_spark.png" alt="hudi_query_perf_spark.png" style="max-width: 1000px" />
+</figure>
+
+<p><strong>Presto</strong></p>
+
+<figure>
+    <img class="docimage" src="/assets/images/hudi_query_perf_presto.png" alt="hudi_query_perf_presto.png" style="max-width: 1000px" />
+</figure>
+
+        
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <a class="footer-link-img" href="https://apache.org">
+        <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+      </a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the Apache License, Version 2.0.
+      Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+      <br>
+      Apache Hudi is an effort undergoing incubation at The Apache Software Foundation (ASF), sponsored by the <a href="http://incubator.apache.org/">Apache Incubator</a>.
+      Incubation is required of all newly accepted projects until a further review indicates that the infrastructure, communications, and decision making process have
+      stabilized in a manner consistent with other successful ASF projects. While incubation status is not necessarily a
+      reflection of the completeness or stability of the code, it does indicate that the project has yet to be fully endorsed by the ASF.
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+
+  </body>
+</html>

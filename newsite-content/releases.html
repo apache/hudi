@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Releases - Apache Hudi (Incubating)</title>
+<meta name="description" content="Apache Hudi ingests &amp; manages storage of large analytical datasets over DFS (HDFS or cloud stores).">
+
+<meta property="og:type" content="website">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="Apache Hudi (Incubating)">
+<meta property="og:title" content="Releases">
+<meta property="og:url" content="https://hudi.apache.org/releases">
+
+
+
+
+
+
+  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title="Apache Hudi (Incubating) Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+
+  </head>
+
+  <body class="layout--releases">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    
+
+<div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/"><img src="/assets/images/hudi.png" alt=""></a>
+        
+        <a class="site-title" href="/">
+          Apache Hudi (Incubating)
+          <span class="site-subtitle">0.5.1-SNAPSHOT</span>
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/activity.html" target="_self" >Activities</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+  <div class="sidebar sticky">
+
+  
+    
+
+
+<div itemscope itemtype="https://schema.org/Person">
+
+  <div class="author__content">
+    
+      <h3 class="author__name" itemprop="name">Quick Links</h3>
+    
+    
+      <div class="author__bio" itemprop="description">
+        <p>Apache Hudi <em>ingests</em> &amp; <em>manages</em> storage of large analytical datasets over DFS.</p>
+
+      </div>
+    
+  </div>
+
+  <div class="author__urls-wrapper">
+    <ul class="author__urls social-icons">
+      
+        
+          <li><a href="/docs/quick-start-guide" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-book" aria-hidden="true"></i> Documentation</a></li>
+
+          
+        
+          <li><a href="https://cwiki.apache.org/confluence/display/HUDI" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-wikipedia-w" aria-hidden="true"></i> Technical Wiki</a></li>
+
+          
+        
+          <li><a href="/contributing" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-thumbs-o-up" aria-hidden="true"></i> Contribution Guide</a></li>
+
+          
+        
+          <li><a href="https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-slack" aria-hidden="true"></i> Join on Slack</a></li>
+
+          
+        
+          <li><a href="https://github.com/apache/incubator-hudi" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-github" aria-hidden="true"></i> Fork on GitHub</a></li>
+
+          
+        
+          <li><a href="https://issues.apache.org/jira/projects/HUDI/summary" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Issues</a></li>
+
+          
+        
+      
+    </ul>
+  </div>
+</div>
+
+  
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Releases
+</h1>
+        </header>
+      
+
+      <section class="page__content releases" itemprop="text">
+        
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> In this page</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#release-050-incubating">Release 0.5.0-incubating</a>
+    <ul>
+      <li><a href="#download-information">Download Information</a></li>
+      <li><a href="#release-highlights">Release Highlights</a></li>
+      <li><a href="#migration-guide-for-this-release">Migration Guide for this release</a></li>
+      <li><a href="#raw-release-notes">Raw Release Notes</a></li>
+    </ul>
+  </li>
+  <li><a href="#release-047">Release 0.4.7</a>
+    <ul>
+      <li><a href="#release-highlights-1">Release Highlights</a></li>
+      <li><a href="#pr-list">PR LIST</a></li>
+    </ul>
+  </li>
+</ul>
+          </nav>
+        </aside>
+        
+        <h2 id="release-050-incubating"><a href="https://github.com/apache/incubator-hudi/releases/tag/release-0.5.0-incubating">Release 0.5.0-incubating</a></h2>
+
+<h3 id="download-information">Download Information</h3>
+<ul>
+  <li>Source Release : <a href="https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz">Apache Hudi(incubating) 0.5.0-incubating Source Release</a> (<a href="https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc">asc</a>, <a href="https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Apache Hudi (incubating) jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
+</ul>
+
+<h3 id="release-highlights">Release Highlights</h3>
+<ul>
+  <li>Package and format renaming from com.uber.hoodie to org.apache.hudi (See migration guide section below)</li>
+  <li>Major redo of Hudi bundles to address class and jar version mismatches in different environments</li>
+  <li>Upgrade from Hive 1.x to Hive 2.x for compile time dependencies - Hive 1.x runtime integration still works with a patch : See <a href="https://lists.apache.org/thread.html/48b3f0553f47c576fd7072f56bb0d8a24fb47d4003880d179c7f88a3@%3Cdev.hudi.apache.org%3E">the discussion thread</a></li>
+  <li>DeltaStreamer now supports continuous running mode with managed concurrent compaction</li>
+  <li>Support for Composite Keys as record key</li>
+  <li>HoodieCombinedInputFormat to scale huge hive queries running on Hoodie tables</li>
+</ul>
+
+<h3 id="migration-guide-for-this-release">Migration Guide for this release</h3>
+<p>This is the first Apache release for Hudi (incubating). Prior to this release, Hudi Jars were published using “com.uber.hoodie” maven co-ordinates. We have a <a href="https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi">migration guide</a></p>
+
+<h3 id="raw-release-notes">Raw Release Notes</h3>
+<p>The raw release notes are available <a href="https://jira.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346087">here</a></p>
+
+<h2 id="release-047"><a href="https://github.com/apache/incubator-hudi/releases/tag/hoodie-0.4.7">Release 0.4.7</a></h2>
+
+<h3 id="release-highlights-1">Release Highlights</h3>
+
+<ul>
+  <li>Major releases with fundamental changes to filesystem listing &amp; write failure handling</li>
+  <li>Introduced the first version of HoodieTimelineServer that runs embedded on the driver</li>
+  <li>With all executors fetching filesystem listing via RPC to timeline server, drastically reduced filesystem listing!</li>
+  <li>Failing concurrent write tasks are now handled differently to be robust against spark stage retries</li>
+  <li>Bug fixes/clean up around indexing, compaction</li>
+</ul>
+
+<h3 id="pr-list">PR LIST</h3>
+
+<ul>
+  <li>Skip Meta folder when looking for partitions. <a href="https://github.com/apache/incubator-hudi/pull/698">#698</a></li>
+  <li>HUDI-134 - Disable inline compaction for Hoodie Demo. <a href="https://github.com/apache/incubator-hudi/pull/696">#696</a></li>
+  <li>Default implementation for HBase index qps allocator. <a href="https://github.com/apache/incubator-hudi/pull/685">#685</a></li>
+  <li>Handle duplicate record keys across partitions. <a href="https://github.com/apache/incubator-hudi/pull/687">#687</a></li>
+  <li>Fix up offsets not available on leader exception. <a href="https://github.com/apache/incubator-hudi/pull/650">#650</a></li>
+</ul>
+
+        
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+      
+
+    </div>
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <a class="footer-link-img" href="https://apache.org">
+        <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+      </a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the Apache License, Version 2.0.
+      Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+      <br>
+      Apache Hudi is an effort undergoing incubation at The Apache Software Foundation (ASF), sponsored by the <a href="http://incubator.apache.org/">Apache Incubator</a>.
+      Incubation is required of all newly accepted projects until a further review indicates that the infrastructure, communications, and decision making process have
+      stabilized in a manner consistent with other successful ASF projects. While incubation status is not necessarily a
+      reflection of the completeness or stability of the code, it does indicate that the project has yet to be fully endorsed by the ASF.
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+
+  </body>
+</html>
