@@ -17,9 +17,9 @@ previous_docs:
 
 # Site Settings
 locale                   : "en-US"
-title                    : "Apache Hudi (Incubating)"
+title                    : # "Apache Hudi (Incubating)"
 title_separator          : "-"
-subtitle                 : *version
+subtitle                 : "Incubating" # *version
 description              : "Apache Hudi ingests & manages storage of large analytical datasets over DFS (HDFS or cloud stores)."
 url                      : https://hudi.apache.org # the base hostname & protocol for your site e.g. "https://github.com/apache/incubator-hudi.git"
 repository               : "apache/incubator-hudi"
