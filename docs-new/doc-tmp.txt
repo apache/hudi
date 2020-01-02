@@ -12,8 +12,10 @@ mkdir content/assets
 mkdir content/newsite-content
 
 \cp -rf docs-new/_site/assets/* content/assets
+\cp -rf docs-new/_site/* content/newsite-content
 
-
+cd content
+python -m SimpleHTTPServer
 
 
 
