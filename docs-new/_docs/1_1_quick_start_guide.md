@@ -7,7 +7,7 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 
 This guide provides a quick peek at Hudi's capabilities using spark-shell. Using Spark datasources, we will walk through 
 code snippets that allows you to insert and update a Hudi dataset of default storage type: 
-[Copy on Write](/newsite-content/docs/concepts.html#copy-on-write-storage). 
+[Copy on Write](/docs/concepts.html#copy-on-write-storage). 
 After each write operation we will also show how to read the data both snapshot and incrementally.
 
 ## Setup spark-shell
@@ -62,9 +62,9 @@ You can check the data generated under `/tmp/hudi_cow_table/<region>/<country>/<
 (`uuid` in [schema](#sample-schema)), partition field (`region/county/city`) and combine logic (`ts` in 
 [schema](#sample-schema)) to ensure trip records are unique within each partition. For more info, refer to 
 [Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#Frequentlyaskedquestions(FAQ)-HowdoImodelthedatastoredinHudi?)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Datasets](/newsite-content/docs/writing_data.html).
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Datasets](/docs/writing_data.html).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
-`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/newsite-content/docs/writing_data#write-operations)
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
 {: .notice--info}
  
 ## Query data 
@@ -83,7 +83,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 This query provides a read optimized view of the ingested data. Since our partition path (`region/country/city`) is 3 levels nested 
 from base path we ve used `load(basePath + "/*/*/*/*")`. 
-Refer to [Storage Types and Views](/newsite-content/docs/concepts#storage-types--views) for more info on all storage types and views supported.
+Refer to [Storage Types and Views](/docs/concepts#storage-types--views) for more info on all storage types and views supported.
 {: .notice--info}
 
 ## Update data
@@ -170,5 +170,5 @@ Also, we used Spark here to show case the capabilities of Hudi. However, Hudi ca
 Hudi datasets can be queried from query engines like Hive, Spark, Presto and much more. We have put together a 
 [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that show cases all of this on a docker based setup with all 
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
-steps [here](/newsite-content/docs/docker_demo.html) to get a taste for it. Also, if you are looking for ways to migrate your existing data 
-to Hudi, refer to [migration guide](/newsite-content/docs/migration_guide.html). 
+steps [here](/docs/docker_demo.html) to get a taste for it. Also, if you are looking for ways to migrate your existing data 
+to Hudi, refer to [migration guide](/docs/migration_guide.html). 

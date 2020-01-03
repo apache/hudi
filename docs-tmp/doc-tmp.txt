@@ -1,0 +1,87 @@
+
+
+
+
+docker rm -f hudi-web-tmp
+
+docker run -itd \
+    --name hudi-web-tmp \
+    -p 5000:4000 \
+    --privileged=true \
+    -v $PWD:/opt \
+    jekyll/jekyll:3.8 \
+    bash
+
+docker exec -it hudi-web-tmp /bin/bash
+cd /opt/
+
+gem sources -l
+gem sources --add https://gems.ruby-china.com/
+gem sources --remove https://rubygems.org/
+gem sources -u
+bundle config mirror.https://rubygems.org https://gems.ruby-china.com
+sed -i "s/rubygems.org/gems.ruby-china.com/" Gemfile
+sed -i "s/rubygems.org/gems.ruby-china.com/" Gemfile.lock
+
+bundle install
+bundle update --bundler
+
+bundle exec jekyll serve
+
+##
+
+
+docker restart hudi-web-tmp
+docker exec -it hudi-web-tmp /bin/bash
+cd /opt/
+bundle exec jekyll serve
+
+
+
+mkdir -p versions/0.5.0-incubating
+mkdir -p versions/0.5.1-incubating
+
+\cp -rf docs versions/0.5.0-incubating
+
+
+
+cd /Users/dcadmin/Desktop/hudi-work/incubator-hudi-doc
+mkdir -p content/assets
+mkdir -p content/newsite-content
+rm -rf content/newsite-content/*
+
+\cp -rf docs-tmp/_site/assets/* content/assets
+\cp -rf docs-tmp/_site/* content/newsite-content
+
+cd content
+python -m SimpleHTTPServer
+
+
+
+
+
+
+cd /Users/dcadmin/Desktop/hudi-work/incubator-hudi-doc
+
+
+
+cd /Users/dcadmin/Desktop/hudi-docs/incubator-hudi-doc
+
+
+mkdir -p docs/assets
+mkdir -p docs/newsite-content
+rm -rf docs/assets/*
+rm -rf docs/newsite-content/*
+
+\cp -rf docs-new/_site/assets/* docs/assets
+\cp -rf docs-new/_site/* docs/newsite-content
+
+cd docs/_site
+python -m SimpleHTTPServer
+
+
+
+
+
+
+

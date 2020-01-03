@@ -9,11 +9,11 @@ mkdir -p versions/0.5.1-incubating
 
 cd /Users/dcadmin/Desktop/hudi-work/incubator-hudi-doc
 mkdir -p content/assets
-mkdir -p content/newsite-content
-rm -rf content/newsite-content/*
+mkdir -p content
+rm -rf content/*
 
 \cp -rf docs-new/_site/assets/* content/assets
-\cp -rf docs-new/_site/* content/newsite-content
+\cp -rf docs-new/_site/* content
 
 cd content
 python -m SimpleHTTPServer
@@ -31,12 +31,12 @@ cd /Users/dcadmin/Desktop/hudi-docs/incubator-hudi-doc
 
 
 mkdir -p docs/assets
-mkdir -p docs/newsite-content
+mkdir -p docs
 rm -rf docs/assets/*
-rm -rf docs/newsite-content/*
+rm -rf docs/*
 
 \cp -rf docs-new/_site/assets/* docs/assets
-\cp -rf docs-new/_site/* docs/newsite-content
+\cp -rf docs-new/_site/* docs
 
 cd docs/_site
 python -m SimpleHTTPServer

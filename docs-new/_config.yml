@@ -11,7 +11,7 @@ hudi_style_skin          : "hudi"
 version : &version "0.5.1-SNAPSHOT"
 
 previous_docs:
-  latest: /newsite-content/docs/quick-start-guide.html
+  latest: /docs/quick-start-guide.html
 #  0.5.0-incubating: /versions/0.5.0-incubating/docs/quick-start-guide.html
 
 
@@ -36,13 +36,13 @@ author:
   links:
     - label: "Documentation"
       icon: "fa fa-book"
-      url: "/newsite-content/docs/quick-start-guide"
+      url: "/docs/quick-start-guide"
     - label: "Technical Wiki"
       icon: "fa fa-wikipedia-w"
       url: "https://cwiki.apache.org/confluence/display/HUDI"
     - label: "Contribution Guide"
       icon: "fa fa-thumbs-o-up"
-      url: "/newsite-content/contributing"
+      url: "/contributing"
     - label: "Join on Slack"
       icon: "fa fa-slack"
       url: "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"

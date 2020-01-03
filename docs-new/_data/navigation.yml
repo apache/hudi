@@ -2,15 +2,15 @@
 # main links
 main:
   - title: "Documentation"
-    url: /newsite-content/docs/quick-start-guide.html
+    url: /docs/quick-start-guide.html
   - title: "Community"
-    url: /newsite-content/community.html
+    url: /community.html
   - title: "Activities"
-    url: /newsite-content/activity.html
+    url: /activity.html
   - title: "FAQ"
     url: https://cwiki.apache.org/confluence/display/HUDI/FAQ
   - title: "Releases"
-    url: /newsite-content/releases.html
+    url: /releases.html
 #  - title: "Roadmap"
 #    url: /roadmap.html
 
@@ -19,35 +19,35 @@ docs:
   - title: Getting Started
     children:
       - title: "Quick Start"
-        url: /newsite-content/docs/quick-start-guide.html
+        url: /docs/quick-start-guide.html
 #      - title: "Structure"
       #        url: /docs/structure.html
       - title: "Use Cases"
-        url: /newsite-content/docs/use_cases.html
+        url: /docs/use_cases.html
       - title: "Talks & Powered By"
-        url: /newsite-content/docs/powered_by.html
+        url: /docs/powered_by.html
       - title: "Comparison"
-        url: /newsite-content/docs/comparison.html
+        url: /docs/comparison.html
       - title: "Docker Demo"
-        url: /newsite-content/docs/docker_demo.html
+        url: /docs/docker_demo.html
   - title: Documentation
     children:
       - title: "Concepts"
-        url: /newsite-content/docs/concepts.html
+        url: /docs/concepts.html
       - title: "Writing Data"
-        url: /newsite-content/docs/writing_data.html
+        url: /docs/writing_data.html
       - title: "Querying Data"
-        url: /newsite-content/docs/querying_data.html
+        url: /docs/querying_data.html
       - title: "Configuration"
-        url: /newsite-content/docs/configurations.html
+        url: /docs/configurations.html
       - title: "Performance"
-        url: /newsite-content/docs/performance.html
+        url: /docs/performance.html
       - title: "Administering"
-        url: /newsite-content/docs/admin_guide.html
+        url: /docs/admin_guide.html
   - title: INFO
     children:
       - title: "Docs Versions"
-        url: /newsite-content/docs/docs-versions.html
+        url: /docs/docs-versions.html
       - title: "Privacy Policy"
-        url: /newsite-content/docs/privacy.html
+        url: /docs/privacy.html
 
