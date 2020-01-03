@@ -81,7 +81,10 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public HoodieKey getKey(GenericRecord record) {
-    Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathField);
+    Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathField, true);
+    if (partitionVal == null) {
+      partitionVal = 1L;
+    }
     SimpleDateFormat partitionPathFormat = new SimpleDateFormat(outputDateFormat);
     partitionPathFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
 
@@ -97,11 +100,11 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
         unixTime = inputDateFormat.parse(partitionVal.toString()).getTime() / 1000;
       } else {
         throw new HoodieNotSupportedException(
-            "Unexpected type for partition field: " + partitionVal.getClass().getName());
+          "Unexpected type for partition field: " + partitionVal.getClass().getName());
       }
       Date timestamp = this.timestampType == TimestampType.EPOCHMILLISECONDS ? new Date(unixTime) : new Date(unixTime * 1000);
 
-      String recordKey = DataSourceUtils.getNullableNestedFieldValAsString(record, recordKeyField);
+      String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
       if (recordKey == null || recordKey.isEmpty()) {
         throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
       }
