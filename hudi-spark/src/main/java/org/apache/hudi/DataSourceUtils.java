@@ -53,28 +53,17 @@ import java.util.stream.Collectors;
 public class DataSourceUtils {
 
   /**
-   * Obtain value of the provided nullable field as string, denoted by dot notation. e.g: a.b.c
-   */
-  public static String getNullableNestedFieldValAsString(GenericRecord record, String fieldName) {
-    try {
-      return getNestedFieldValAsString(record, fieldName);
-    } catch (HoodieException e) {
-      return null;
-    }
-  }
-
-  /**
    * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
    */
-  public static String getNestedFieldValAsString(GenericRecord record, String fieldName) {
-    Object obj = getNestedFieldVal(record, fieldName);
-    return obj.toString();
+  public static String getNestedFieldValAsString(GenericRecord record, String fieldName, boolean returnNullIfNotFound) {
+    Object obj = getNestedFieldVal(record, fieldName, returnNullIfNotFound);
+    return (obj == null) ? null : obj.toString();
   }
 
   /**
    * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c
    */
-  public static Object getNestedFieldVal(GenericRecord record, String fieldName) {
+  public static Object getNestedFieldVal(GenericRecord record, String fieldName, boolean returnNullIfNotFound) {
     String[] parts = fieldName.split("\\.");
     GenericRecord valueNode = record;
     int i = 0;
@@ -96,9 +85,14 @@ public class DataSourceUtils {
         valueNode = (GenericRecord) val;
       }
     }
-    throw new HoodieException(
+
+    if (returnNullIfNotFound) {
+      return null;
+    } else {
+      throw new HoodieException(
         fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
-            + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+          + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+    }
   }
 
   /**
