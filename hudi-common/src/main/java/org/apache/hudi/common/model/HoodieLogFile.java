@@ -36,12 +36,29 @@ import java.util.Objects;
  * Also contains logic to roll-over the log file
  */
 public class HoodieLogFile implements Serializable {
-
+  /**
+   *log file extension
+   */
   public static final String DELTA_EXTENSION = ".log";
+
+  /**
+   * log version
+   */
   public static final Integer LOGFILE_BASE_VERSION = 1;
 
+  /**
+   * file status
+   */
   private transient FileStatus fileStatus;
+
+  /**
+   * file path
+   */
   private final String pathStr;
+
+  /**
+   * file length
+   */
   private long fileLen;
 
   public HoodieLogFile(FileStatus fileStatus) {
