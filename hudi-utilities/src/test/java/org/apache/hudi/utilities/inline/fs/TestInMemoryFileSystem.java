@@ -18,23 +18,21 @@
 
 package org.apache.hudi.utilities.inline.fs;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.util.Random;
 
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.FILE_SCHEME;
 import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.getRandomOuterInMemPath;
 
+/**
+ * Unit tests {@link InMemoryFileSystem}.
+ */
 public class TestInMemoryFileSystem {
 
   private Configuration conf;
@@ -42,14 +40,6 @@ public class TestInMemoryFileSystem {
   public TestInMemoryFileSystem() {
     conf = new Configuration();
     conf.set("fs." + InMemoryFileSystem.SCHEME + ".impl", InMemoryFileSystem.class.getName());
-  }
-
-  @After
-  public void teardown() throws IOException {
-    File dir = new File(FILE_SCHEME);
-    if (dir.exists()) {
-      FileUtils.cleanDirectory(dir);
-    }
   }
 
   @Test

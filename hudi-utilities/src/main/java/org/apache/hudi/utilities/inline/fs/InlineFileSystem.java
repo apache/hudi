@@ -31,7 +31,8 @@ import java.io.IOException;
 import java.net.URI;
 
 /**
- * Enables reading any inline file at a given offset and length
+ * Enables reading any inline file at a given offset and length. This {@link FileSystem} is used only in read path and does not support
+ * any write apis.
  * <p>
  * - Reading an inlined file at a given offset, length, read it out as if it were an independent file of that length
  * - Inlined path is of the form "inlinefs:///path/to/outer/file/<outer_file_scheme>/inline_file/?start_offset=<start_offset>&length=<length>

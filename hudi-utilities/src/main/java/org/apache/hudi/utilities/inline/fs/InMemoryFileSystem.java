@@ -15,7 +15,7 @@ import java.io.IOException;
 import java.net.URI;
 
 /**
- * A FileSystem which stores all content in memory and returns as byte[] when {@link #getFileAsBytes()} is called
+ * A FileSystem which stores all content in memory and returns a byte[] when {@link #getFileAsBytes()} is called
  * This FileSystem is used only in write path. Does not support any read apis except {@link #getFileAsBytes()}.
  */
 public class InMemoryFileSystem extends FileSystem {

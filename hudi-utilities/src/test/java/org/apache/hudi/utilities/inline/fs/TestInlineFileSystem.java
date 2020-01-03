@@ -20,7 +20,6 @@ package org.apache.hudi.utilities.inline.fs;
 
 import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -38,33 +37,39 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
 
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.FILE_SCHEME;
 import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.getRandomOuterFSPath;
 
+/**
+ * Tests {@link InlineFileSystem}.
+ */
 public class TestInlineFileSystem {
   private Configuration conf;
+  private List<Path> listOfGeneratedPaths;
 
   public TestInlineFileSystem() {
     conf = new Configuration();
     conf.set("fs." + InlineFileSystem.SCHEME + ".impl", InlineFileSystem.class.getName());
+    this.listOfGeneratedPaths = new ArrayList<>();
   }
 
   @After
   public void teardown() throws IOException {
-    File dir = new File(FILE_SCHEME);
-    if (dir.exists()) {
-      FileUtils.cleanDirectory(dir);
+    for (Path pathToDelete : listOfGeneratedPaths) {
+      File filePath = new File(pathToDelete.toString().substring(pathToDelete.toString().indexOf(':') + 1));
+      if (filePath.exists()) {
+        FileSystemTestUtils.deleteFile(filePath);
+      }
     }
   }
 
   @Test
   public void testReadInlineFile() throws IOException {
     Path outerPath = getRandomOuterFSPath();
+    listOfGeneratedPaths.add(outerPath);
 
-    int totalSlices = 5; // embed n slices so that we can test N inline paths
+    int totalSlices = 5; // embed n slices so that we can test N inline seqPaths
     List<Pair<Long, Integer>> startOffsetLengthPairs = new ArrayList<>();
     List<byte[]> expectedByteArrays = new ArrayList<>();
 
@@ -209,6 +214,7 @@ public class TestInlineFileSystem {
   private OuterPathInfo generateOuterFileAndGetInfo(int inlineContentSize) throws IOException {
     OuterPathInfo toReturn = new OuterPathInfo();
     Path outerPath = getRandomOuterFSPath();
+    listOfGeneratedPaths.add(outerPath);
     toReturn.outerPath = outerPath;
     FSDataOutputStream wrappedOut = outerPath.getFileSystem(conf).create(outerPath, true);
     // append random bytes
@@ -317,6 +323,7 @@ public class TestInlineFileSystem {
 
   private Path getRandomInlinePath() {
     Path outerPath = getRandomOuterFSPath();
+    listOfGeneratedPaths.add(outerPath);
     return FileSystemTestUtils.getPhantomFile(outerPath, 100, 100);
   }
 

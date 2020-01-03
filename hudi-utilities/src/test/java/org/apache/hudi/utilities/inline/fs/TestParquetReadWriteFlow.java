@@ -22,7 +22,6 @@ import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
@@ -45,10 +44,14 @@ import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.FILE_SCHEM
 import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.getPhantomFile;
 import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.getRandomOuterInMemPath;
 
+/**
+ * Tests {@link InlineFileSystem} with Parquet writer and reader.
+ */
 public class TestParquetReadWriteFlow {
 
   private final Configuration inMemoryConf;
   private final Configuration inlineConf;
+  private Path generatedPath;
 
   public TestParquetReadWriteFlow() {
     inMemoryConf = new Configuration();
@@ -59,9 +62,11 @@ public class TestParquetReadWriteFlow {
 
   @After
   public void teardown() throws IOException {
-    File dir = new File(FILE_SCHEME);
-    if (dir.exists()) {
-      FileUtils.cleanDirectory(dir);
+    if (generatedPath != null) {
+      File filePath = new File(generatedPath.toString().substring(generatedPath.toString().indexOf(':') + 1));
+      if (filePath.exists()) {
+        FileSystemTestUtils.deleteFile(filePath);
+      }
     }
   }
 
@@ -69,7 +74,7 @@ public class TestParquetReadWriteFlow {
   public void testSimpleInlineFileSystem() throws IOException {
     Path outerInMemFSPath = getRandomOuterInMemPath();
     Path outerPath = new Path(FILE_SCHEME + outerInMemFSPath.toString().substring(outerInMemFSPath.toString().indexOf(':')));
-
+    generatedPath = outerPath;
     ParquetWriter inlineWriter = new AvroParquetWriter(outerInMemFSPath, HoodieTestDataGenerator.avroSchema,
         CompressionCodecName.GZIP, 100 * 1024 * 1024, 1024 * 1024, true, inMemoryConf);
     // write few records

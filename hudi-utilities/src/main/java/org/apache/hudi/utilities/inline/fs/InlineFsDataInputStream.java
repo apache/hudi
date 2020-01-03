@@ -27,6 +27,10 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.EnumSet;
 
+/**
+ * Inline {@link FSDataInputStream}. A startOffset that is passed in is assumed to be the start of the InputStream.
+ * All operations are handled having the {@code startOffset} as starting point.
+ */
 public class InlineFsDataInputStream extends FSDataInputStream {
 
   private final int startOffset;

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.inline.fs;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -48,13 +47,17 @@ import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.getPhantomFile;
 import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.getRandomOuterInMemPath;
 
+/**
+ * Tests {@link InlineFileSystem} using HFile writer and reader.
+ */
 public class TestHFileReadWriteFlow {
 
   private final Configuration inMemoryConf;
   private final Configuration inlineConf;
   private final int minBlockSize = 1024;
-  private static final String localFormatter = "%010d";
+  private static final String LOCAL_FORMATTER = "%010d";
   private int maxRows = 100 + RANDOM.nextInt(1000);
+  private Path generatedPath;
 
   public TestHFileReadWriteFlow() {
     inMemoryConf = new Configuration();
@@ -65,9 +68,11 @@ public class TestHFileReadWriteFlow {
 
   @After
   public void teardown() throws IOException {
-    File dir = new File(FILE_SCHEME);
-    if (dir.exists()) {
-      FileUtils.cleanDirectory(dir);
+    if (generatedPath != null) {
+      File filePath = new File(generatedPath.toString().substring(generatedPath.toString().indexOf(':') + 1));
+      if (filePath.exists()) {
+        FileSystemTestUtils.deleteFile(filePath);
+      }
     }
   }
 
@@ -75,7 +80,7 @@ public class TestHFileReadWriteFlow {
   public void testSimpleInlineFileSystem() throws IOException {
     Path outerInMemFSPath = getRandomOuterInMemPath();
     Path outerPath = new Path(FILE_SCHEME + outerInMemFSPath.toString().substring(outerInMemFSPath.toString().indexOf(':')));
-
+    generatedPath = outerPath;
     CacheConfig cacheConf = new CacheConfig(inMemoryConf);
     FSDataOutputStream fout = createFSOutput(outerInMemFSPath, inMemoryConf);
     HFileContext meta = new HFileContextBuilder()
@@ -147,7 +152,7 @@ public class TestHFileReadWriteFlow {
   }
 
   private byte[] getSomeKey(int rowId) {
-    KeyValue kv = new KeyValue(String.format(localFormatter, Integer.valueOf(rowId)).getBytes(),
+    KeyValue kv = new KeyValue(String.format(LOCAL_FORMATTER, Integer.valueOf(rowId)).getBytes(),
         Bytes.toBytes("family"), Bytes.toBytes("qual"), HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put);
     return kv.getKey();
   }
@@ -168,7 +173,7 @@ public class TestHFileReadWriteFlow {
     String value = "value";
     KeyValue kv;
     for (int i = 0; i < (maxRows); i++) {
-      String key = String.format(localFormatter, Integer.valueOf(i));
+      String key = String.format(LOCAL_FORMATTER, Integer.valueOf(i));
       kv = new KeyValue(Bytes.toBytes(key), Bytes.toBytes("family"), Bytes.toBytes("qual"),
           Bytes.toBytes(value + key));
       writer.append(kv);
@@ -188,7 +193,7 @@ public class TestHFileReadWriteFlow {
     for (; i < (start + n); i++) {
       ByteBuffer key = scanner.getKey();
       ByteBuffer val = scanner.getValue();
-      String keyStr = String.format(localFormatter, Integer.valueOf(i));
+      String keyStr = String.format(LOCAL_FORMATTER, Integer.valueOf(i));
       String valStr = value + keyStr;
       KeyValue kv = new KeyValue(Bytes.toBytes(keyStr), Bytes.toBytes("family"),
           Bytes.toBytes("qual"), Bytes.toBytes(valStr));
