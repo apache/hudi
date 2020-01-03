@@ -507,6 +507,9 @@
   -webkit-box-shadow: $box-shadow;
   box-shadow: $box-shadow;
 
+  max-height: 520px;
+  overflow-y: auto;
+
   .nav__title {
     color: #fff;
     font-size: $type-size-6;

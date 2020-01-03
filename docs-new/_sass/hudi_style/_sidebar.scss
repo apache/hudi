@@ -85,9 +85,6 @@
 
     &.sticky {
 
-      height: 520px;
-      overflow-y: auto;
-
       @include clearfix();
       position: -webkit-sticky;
       position: sticky;

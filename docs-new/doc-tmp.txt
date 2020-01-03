@@ -28,6 +28,8 @@ cd /Users/dcadmin/Desktop/hudi-work/incubator-hudi-doc
 
 
 cd /Users/dcadmin/Desktop/hudi-docs/incubator-hudi-doc
+
+
 mkdir -p docs/assets
 mkdir -p docs/newsite-content
 rm -rf docs/assets/*

@@ -21,13 +21,15 @@ docs:
       - title: "Quick Start"
         url: /newsite-content/docs/quick-start-guide.html
 #      - title: "Structure"
-#        url: /docs/structure.html
+      #        url: /docs/structure.html
       - title: "Use Cases"
         url: /newsite-content/docs/use_cases.html
       - title: "Talks & Powered By"
         url: /newsite-content/docs/powered_by.html
       - title: "Comparison"
         url: /newsite-content/docs/comparison.html
+      - title: "Docker Demo"
+        url: /newsite-content/docs/docker_demo.html
   - title: Documentation
     children:
       - title: "Concepts"
