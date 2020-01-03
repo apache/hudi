@@ -132,6 +132,11 @@ public class HoodieCommitArchiveLog {
     }
   }
 
+  /**
+   * Get everything to archive.
+   * @param jsc
+   * @return
+   */
   private Stream<HoodieInstant> getInstantsToArchive(JavaSparkContext jsc) {
 
     // TODO : rename to max/minInstantsToKeep
@@ -188,6 +193,12 @@ public class HoodieCommitArchiveLog {
             HoodieInstant.getComparableAction(hoodieInstant.getAction()))).stream());
   }
 
+  /**
+   * After the archive, remove the Timeline of the filed instant
+   * @param archivedInstants
+   * @return
+   * @throws IOException
+   */
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants) throws IOException {
     LOG.info("Deleting instants {}", archivedInstants);
     boolean success = true;
@@ -242,6 +253,11 @@ public class HoodieCommitArchiveLog {
     return success;
   }
 
+  /**
+   * After obtaining the Instant that is to be archived,begin archiving.
+   * @param instants
+   * @throws HoodieCommitException
+   */
   public void archive(List<HoodieInstant> instants) throws HoodieCommitException {
     try {
       HoodieTimeline commitTimeline = metaClient.getActiveTimeline().getAllCommitsTimeline().filterCompletedInstants();
