@@ -1,5 +1,5 @@
 GEM
-  remote: https://gems.ruby-china.com/
+  remote: https://rubygems.org/
   specs:
     activesupport (3.2.22.5)
       i18n (~> 0.6, >= 0.6.4)
