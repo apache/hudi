@@ -79,10 +79,12 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
       + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
       + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},"
-      + "{\"name\":\"fare\",\"type\": \"double\"},"
+      + "{\"name\": \"fare\",\"type\": {\"type\":\"record\", \"name\":\"fare\",\"fields\": ["
+      + "{\"name\": \"amount\",\"type\": \"double\"},{\"name\": \"currency\", \"type\": \"string\"}]}},"
       + "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false} ]}";
   public static String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
-  public static String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,double,boolean";
+  public static String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,"
+                                                  + "struct<amount:double,currency:string>,boolean";
   public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
   public static Schema avroSchemaWithMetadataFields = HoodieAvroUtils.addMetadataFields(avroSchema);
 
@@ -152,7 +154,12 @@ public class HoodieTestDataGenerator {
     rec.put("begin_lon", rand.nextDouble());
     rec.put("end_lat", rand.nextDouble());
     rec.put("end_lon", rand.nextDouble());
-    rec.put("fare", rand.nextDouble() * 100);
+
+    GenericRecord fareRecord = new GenericData.Record(avroSchema.getField("fare").schema());
+    fareRecord.put("amount", rand.nextDouble() * 100);
+    fareRecord.put("currency", "USD");
+    rec.put("fare", fareRecord);
+
     if (isDeleteRecord) {
       rec.put("_hoodie_is_deleted", true);
     } else {

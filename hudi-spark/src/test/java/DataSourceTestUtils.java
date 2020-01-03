@@ -34,7 +34,9 @@ public class DataSourceTestUtils {
     try {
       String str = ((TestRawTripPayload) record.getData()).getJsonData();
       str = "{" + str.substring(str.indexOf("\"timestamp\":"));
-      return Option.of(str.replaceAll("}", ", \"partition\": \"" + record.getPartitionPath() + "\"}"));
+      // Remove the last } bracket
+      str = str.substring(0, str.length() - 1);
+      return Option.of(str + ", \"partition\": \"" + record.getPartitionPath() + "\"}");
     } catch (IOException e) {
       return Option.empty();
     }
