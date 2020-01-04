@@ -67,11 +67,11 @@ public class CommitsCommand implements CommandMarker {
     List<Comparable[]> rows = new ArrayList<>();
     for (HoodieInstant commit : commits) {
       HoodieCommitMetadata commitMetadata =
-              HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
-      rows.add(new Comparable[]{commit.getTimestamp(), commitMetadata.fetchTotalBytesWritten(),
-              commitMetadata.fetchTotalFilesInsert(), commitMetadata.fetchTotalFilesUpdated(),
-              commitMetadata.fetchTotalPartitionsWritten(), commitMetadata.fetchTotalRecordsWritten(),
-              commitMetadata.fetchTotalUpdateRecordsWritten(), commitMetadata.fetchTotalWriteErrors()});
+          HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
+      rows.add(new Comparable[] {commit.getTimestamp(), commitMetadata.fetchTotalBytesWritten(),
+          commitMetadata.fetchTotalFilesInsert(), commitMetadata.fetchTotalFilesUpdated(),
+          commitMetadata.fetchTotalPartitionsWritten(), commitMetadata.fetchTotalRecordsWritten(),
+          commitMetadata.fetchTotalUpdateRecordsWritten(), commitMetadata.fetchTotalWriteErrors()});
     }
 
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();

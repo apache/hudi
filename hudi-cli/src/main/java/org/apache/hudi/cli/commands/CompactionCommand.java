@@ -107,8 +107,8 @@ public class CompactionCommand implements CommandMarker {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
           compactionPlan = AvroUtils.deserializeCompactionPlan(
-                  activeTimeline.readPlanAsBytes(
-                          HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
+              activeTimeline.readPlanAsBytes(
+                  HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
         } catch (HoodieIOException ioe) {
           // SKIP
         }
@@ -123,12 +123,12 @@ public class CompactionCommand implements CommandMarker {
           state = State.COMPLETED;
         }
         if (includeExtraMetadata) {
-          rows.add(new Comparable[]{instant.getTimestamp(), state.toString(),
-                  compactionPlan.getOperations() == null ? 0 : compactionPlan.getOperations().size(),
-                  compactionPlan.getExtraMetadata().toString()});
+          rows.add(new Comparable[] {instant.getTimestamp(), state.toString(),
+              compactionPlan.getOperations() == null ? 0 : compactionPlan.getOperations().size(),
+              compactionPlan.getExtraMetadata().toString()});
         } else {
-          rows.add(new Comparable[]{instant.getTimestamp(), state.toString(),
-                  compactionPlan.getOperations() == null ? 0 : compactionPlan.getOperations().size()});
+          rows.add(new Comparable[] {instant.getTimestamp(), state.toString(),
+              compactionPlan.getOperations() == null ? 0 : compactionPlan.getOperations().size()});
         }
       }
     }
@@ -212,8 +212,7 @@ public class CompactionCommand implements CommandMarker {
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory,
       @CliOption(key = "retry", unspecifiedDefaultValue = "1", help = "Number of retries") final String retry,
-      @CliOption(key = "compactionInstant", mandatory = false,
-          help = "Base path for the target hoodie dataset") String compactionInstantTime,
+      @CliOption(key = "compactionInstant", help = "Base path for the target hoodie dataset") String compactionInstantTime,
       @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
         unspecifiedDefaultValue = "") final String propsFilePath,
       @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
