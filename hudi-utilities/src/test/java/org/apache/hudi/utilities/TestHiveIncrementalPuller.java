@@ -19,7 +19,7 @@ public class TestHiveIncrementalPuller {
     try {
       new HiveIncrementalPuller(config);
     } catch (Exception e) {
-      Assert.fail("Unexpected exception while init HiveIncrementalPuller, msg: " + e.getMessage());
+      Assert.fail("Unexpected exception while initing HiveIncrementalPuller, msg: " + e.getMessage());
     }
 
   }
