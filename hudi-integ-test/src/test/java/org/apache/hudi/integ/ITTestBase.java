@@ -31,10 +31,10 @@ import com.github.dockerjava.core.DockerClientBuilder;
 import com.github.dockerjava.core.DockerClientConfig;
 import com.github.dockerjava.core.command.ExecStartResultCallback;
 import com.github.dockerjava.jaxrs.JerseyDockerCmdExecFactory;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -49,7 +49,7 @@ import static org.awaitility.Awaitility.await;
 
 public abstract class ITTestBase {
 
-  public static final Logger LOG = LogManager.getLogger(ITTestBase.class);
+  public static final Logger LOG = LoggerFactory.getLogger(ITTestBase.class);
   protected static final String SPARK_WORKER_CONTAINER = "/spark-worker-1";
   protected static final String ADHOC_1_CONTAINER = "/adhoc-1";
   protected static final String ADHOC_2_CONTAINER = "/adhoc-2";
@@ -135,7 +135,7 @@ public abstract class ITTestBase {
     List<Container> containerList = dockerClient.listContainersCmd().exec();
     for (Container c : containerList) {
       if (!c.getState().equalsIgnoreCase("running")) {
-        LOG.info("Container : " + Arrays.toString(c.getNames()) + "not in running state,  Curr State :" + c.getState());
+        LOG.info("Container : {} not in running state, Curr State : {}", Arrays.toString(c.getNames()), c.getState());
         return false;
       }
     }
@@ -160,9 +160,9 @@ public abstract class ITTestBase {
     dockerClient.execStartCmd(createCmdResponse.getId()).withDetach(false).withTty(false).exec(callback)
         .awaitCompletion();
     int exitCode = dockerClient.inspectExecCmd(createCmdResponse.getId()).exec().getExitCode();
-    LOG.info("Exit code for command : " + exitCode);
-    LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
-    LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
+    LOG.info("Exit code for command : {}", exitCode);
+    LOG.error("\n\n ###### Stdout #######\n{}", callback.getStdout());
+    LOG.error("\n\n ###### Stderr #######\n{}", callback.getStderr());
 
     if (expectedToSucceed) {
       Assert.assertEquals("Command (" + Arrays.toString(command) + ") expected to succeed. Exit (" + exitCode + ")", 0, exitCode);
@@ -183,7 +183,7 @@ public abstract class ITTestBase {
   TestExecStartResultCallback executeCommandStringInDocker(String containerName, String cmd, boolean expectedToSucceed)
       throws Exception {
     LOG.info("\n\n#################################################################################################");
-    LOG.info("Container : " + containerName + ", Running command :" + cmd);
+    LOG.info("Container : {}, Running command : {}", containerName, cmd);
     LOG.info("\n#################################################################################################");
 
     String[] cmdSplits = singleSpace(cmd).split(" ");
@@ -193,7 +193,7 @@ public abstract class ITTestBase {
   Pair<String, String> executeHiveCommand(String hiveCommand) throws Exception {
 
     LOG.info("\n\n#################################################################################################");
-    LOG.info("Running hive command :" + hiveCommand);
+    LOG.info("Running hive command : {}", hiveCommand);
     LOG.info("\n#################################################################################################");
 
     String[] hiveCmd = getHiveConsoleCommand(hiveCommand);
@@ -239,9 +239,9 @@ public abstract class ITTestBase {
           executeCommandStringInDocker(HIVESERVER, "cat /tmp/root/hive.log", true).getStdout().toString();
       String filePath = System.getProperty("java.io.tmpdir") + "/" + System.currentTimeMillis() + "-hive.log";
       FileIOUtils.writeStringToFile(hiveLogStr, filePath);
-      LOG.info("Hive log saved up at  : " + filePath);
+      LOG.info("Hive log saved up at : {}", filePath);
     } catch (Exception e) {
-      LOG.error("Unable to save up logs..", e);
+      LOG.error("Unable to save up logs.. {}", e);
     }
   }
 
