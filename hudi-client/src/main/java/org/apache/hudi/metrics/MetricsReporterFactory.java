@@ -21,15 +21,15 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.MetricRegistry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * Factory class for creating MetricsReporter.
  */
 public class MetricsReporterFactory {
 
-  private static final Logger LOG = LoggerFactory.getLogger(MetricsReporterFactory.class);
+  private static final Logger LOG = LogManager.getLogger(MetricsReporterFactory.class);
 
   public static MetricsReporter createReporter(HoodieWriteConfig config, MetricRegistry registry) {
     MetricsReporterType type = config.getMetricsReporterType();
@@ -45,7 +45,7 @@ public class MetricsReporterFactory {
         reporter = new JmxMetricsReporter(config);
         break;
       default:
-        LOG.error("Reporter type[{}] is not supported.", type);
+        LOG.error("Reporter type[" + type + "] is not supported.");
         break;
     }
     return reporter;

@@ -36,9 +36,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -47,7 +47,7 @@ import java.io.IOException;
  */
 public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends HoodieIOHandle {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteHandle.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
   protected final Schema originalSchema;
   protected final Schema writerSchema;
   protected HoodieTimer timer;
@@ -97,7 +97,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
   protected void createMarkerFile(String partitionPath) {
     Path markerPath = makeNewMarkerPath(partitionPath);
     try {
-      LOG.info("Creating Marker Path={}", markerPath);
+      LOG.info("Creating Marker Path=" + markerPath);
       fs.create(markerPath, false).close();
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
@@ -147,7 +147,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
     if (exception.isPresent() && exception.get() instanceof Throwable) {
       // Not throwing exception from here, since we don't want to fail the entire job for a single record
       writeStatus.markFailure(record, exception.get(), recordMetadata);
-      LOG.error("Error writing record {}", record, exception.get());
+      LOG.error("Error writing record " + record, exception.get());
     } else {
       write(record, avroRecord);
     }
