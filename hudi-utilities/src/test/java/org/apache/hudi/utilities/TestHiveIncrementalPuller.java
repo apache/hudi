@@ -9,15 +9,18 @@ public class TestHiveIncrementalPuller {
   private HiveIncrementalPuller.Config config;
 
   @Before
-  public void init() {
+  public void setup() {
     config = new HiveIncrementalPuller.Config();
   }
 
   @Test
   public void testInitHiveIncrementalPuller() throws Exception {
 
-    HiveIncrementalPuller puller = new HiveIncrementalPuller(config);
-    Assert.assertNotNull(puller);
+    try {
+      new HiveIncrementalPuller(config);
+    } catch (Exception e) {
+      Assert.fail("Unexpected exception while init HiveIncrementalPuller, msg: " + e.getMessage());
+    }
 
   }
 
