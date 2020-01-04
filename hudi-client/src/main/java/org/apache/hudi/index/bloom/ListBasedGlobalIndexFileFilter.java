@@ -39,13 +39,11 @@ class ListBasedGlobalIndexFileFilter extends ListBasedIndexFileFilter {
   @Override
   public Set<Pair<String, String>> getMatchingFilesAndPartition(String partitionPath, String recordKey) {
     Set<Pair<String, String>> toReturn = new HashSet<>();
-    partitionToFileIndexInfo.forEach((partition, bloomIndexFileInfoList) -> {
-      bloomIndexFileInfoList.forEach(file -> {
-        if (shouldCompareWithFile(file, recordKey)) {
-          toReturn.add(Pair.of(partition, file.getFileId()));
-        }
-      });
-    });
+    partitionToFileIndexInfo.forEach((partition, bloomIndexFileInfoList) -> bloomIndexFileInfoList.forEach(file -> {
+      if (shouldCompareWithFile(file, recordKey)) {
+        toReturn.add(Pair.of(partition, file.getFileId()));
+      }
+    }));
     return toReturn;
   }
 }

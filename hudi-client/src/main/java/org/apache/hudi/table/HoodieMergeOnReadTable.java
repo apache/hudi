@@ -167,7 +167,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   @Override
   public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, HoodieInstant instant,
       boolean deleteInstants) throws IOException {
-    Long startTime = System.currentTimeMillis();
+    long startTime = System.currentTimeMillis();
 
     String commit = instant.getTimestamp();
     LOG.error("Rolling back instant {}", instant);
@@ -344,14 +344,9 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
           // TODO : choose last N small files since there can be multiple small files written to a single partition
           // by different spark partitions in a single batch
           Option<FileSlice> smallFileSlice = Option.fromJavaOptional(getRTFileSystemView()
-              .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), false)
-              .filter(fileSlice -> fileSlice.getLogFiles().count() < 1
-                  && fileSlice.getDataFile().get().getFileSize() < config.getParquetSmallFileLimit())
-              .sorted((FileSlice left,
-                  FileSlice right) -> left.getDataFile().get().getFileSize() < right.getDataFile().get().getFileSize()
-                      ? -1
-                      : 1)
-              .findFirst());
+                  .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), false)
+                  .filter(fileSlice -> fileSlice.getLogFiles().count() < 1 && fileSlice.getDataFile().get().getFileSize() < config.getParquetSmallFileLimit())
+                  .min((FileSlice left, FileSlice right) -> left.getDataFile().get().getFileSize() < right.getDataFile().get().getFileSize() ? -1 : 1));
           if (smallFileSlice.isPresent()) {
             allSmallFileSlices.add(smallFileSlice.get());
           }
@@ -362,7 +357,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
               getRTFileSystemView().getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
                   .collect(Collectors.toList());
           for (FileSlice fileSlice : allFileSlices) {
-            if (isSmallFile(partitionPath, fileSlice)) {
+            if (isSmallFile(fileSlice)) {
               allSmallFileSlices.add(fileSlice);
             }
           }
@@ -374,7 +369,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
             // TODO : Move logic of file name, file id, base commit time handling inside file slice
             String filename = smallFileSlice.getDataFile().get().getFileName();
             sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
-            sf.sizeBytes = getTotalFileSize(partitionPath, smallFileSlice);
+            sf.sizeBytes = getTotalFileSize(smallFileSlice);
             smallFileLocations.add(sf);
             // Update the global small files list
             smallFiles.add(sf);
@@ -382,7 +377,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
             HoodieLogFile logFile = smallFileSlice.getLogFiles().findFirst().get();
             sf.location = new HoodieRecordLocation(FSUtils.getBaseCommitTimeFromLogPath(logFile.getPath()),
                 FSUtils.getFileIdFromLogPath(logFile.getPath()));
-            sf.sizeBytes = getTotalFileSize(partitionPath, smallFileSlice);
+            sf.sizeBytes = getTotalFileSize(smallFileSlice);
             smallFileLocations.add(sf);
             // Update the global small files list
             smallFiles.add(sf);
@@ -397,7 +392,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
           .collect(Collectors.toList());
     }
 
-    private long getTotalFileSize(String partitionPath, FileSlice fileSlice) {
+    private long getTotalFileSize(FileSlice fileSlice) {
       if (!fileSlice.getDataFile().isPresent()) {
         return convertLogFilesSizeToExpectedParquetSize(fileSlice.getLogFiles().collect(Collectors.toList()));
       } else {
@@ -406,22 +401,20 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
       }
     }
 
-    private boolean isSmallFile(String partitionPath, FileSlice fileSlice) {
-      long totalSize = getTotalFileSize(partitionPath, fileSlice);
+    private boolean isSmallFile(FileSlice fileSlice) {
+      long totalSize = getTotalFileSize(fileSlice);
       return totalSize < config.getParquetMaxFileSize();
     }
 
     // TODO (NA) : Make this static part of utility
     @VisibleForTesting
     public long convertLogFilesSizeToExpectedParquetSize(List<HoodieLogFile> hoodieLogFiles) {
-      long totalSizeOfLogFiles = hoodieLogFiles.stream().map(hoodieLogFile -> hoodieLogFile.getFileSize())
-          .filter(size -> size > 0).reduce((a, b) -> (a + b)).orElse(0L);
+      long totalSizeOfLogFiles = hoodieLogFiles.stream().map(HoodieLogFile::getFileSize)
+          .filter(size -> size > 0).reduce(Long::sum).orElse(0L);
       // Here we assume that if there is no base parquet file, all log files contain only inserts.
       // We can then just get the parquet equivalent size of these log files, compare that with
       // {@link config.getParquetMaxFileSize()} and decide if there is scope to insert more rows
-      long logFilesEquivalentParquetFileSize =
-          (long) (totalSizeOfLogFiles * config.getLogFileToParquetCompressionRatio());
-      return logFilesEquivalentParquetFileSize;
+      return (long) (totalSizeOfLogFiles * config.getLogFileToParquetCompressionRatio());
     }
   }
 
@@ -439,7 +432,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     return commitMetadata.getPartitionToWriteStats().get(partitionPath).stream().filter(wStat -> {
 
       // Filter out stats without prevCommit since they are all inserts
-      boolean validForRollback = (wStat != null) && (wStat.getPrevCommit() != HoodieWriteStat.NULL_COMMIT)
+      boolean validForRollback = (wStat != null) && (!wStat.getPrevCommit().equals(HoodieWriteStat.NULL_COMMIT))
           && (wStat.getPrevCommit() != null) && fileIdToBaseCommitTimeForLogMap.containsKey(wStat.getFileId());
 
       if (validForRollback) {

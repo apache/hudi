@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTimeline;
@@ -101,19 +102,16 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
             && (cleanMetadata.getEarliestCommitToRetain().length() > 0)) {
           LOG.warn("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
                   + "since last cleaned at {}. New Instant to retain : {}", cleanMetadata.getEarliestCommitToRetain(), newInstantToRetain);
-          return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(instant -> {
-            return HoodieTimeline.compareTimestamps(instant.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
-                HoodieTimeline.GREATER_OR_EQUAL) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
-                newInstantToRetain.get().getTimestamp(), HoodieTimeline.LESSER);
-          }).flatMap(instant -> {
-            try {
-              HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                  hoodieTable.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-              return commitMetadata.getPartitionToWriteStats().keySet().stream();
-            } catch (IOException e) {
-              throw new HoodieIOException(e.getMessage(), e);
-            }
-          }).distinct().collect(Collectors.toList());
+          return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
+              HoodieTimeline.GREATER_OR_EQUAL) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
+              newInstantToRetain.get().getTimestamp(), HoodieTimeline.LESSER)).flatMap(instant -> {
+                try {
+                  HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(hoodieTable.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+                  return commitMetadata.getPartitionToWriteStats().keySet().stream();
+                } catch (IOException e) {
+                  throw new HoodieIOException(e.getMessage(), e);
+                }
+              }).distinct().collect(Collectors.toList());
         }
       }
     }
@@ -127,7 +125,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
    * policy is useful, if you are simply interested in querying the table, and you don't want too many versions for a
    * single file (i.e run it with versionsRetained = 1)
    */
-  private List<String> getFilesToCleanKeepingLatestVersions(String partitionPath) throws IOException {
+  private List<String> getFilesToCleanKeepingLatestVersions(String partitionPath) {
     LOG.info("Cleaning {}, retaining latest {} file versions. ", partitionPath, config.getCleanerFileVersionsRetained());
     List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     List<String> deletePaths = new ArrayList<>();
@@ -164,7 +162,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
         }
         if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
           // If merge on read, then clean the log files for the commits as well
-          deletePaths.addAll(nextSlice.getLogFiles().map(file -> file.getFileName()).collect(Collectors.toList()));
+          deletePaths.addAll(nextSlice.getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList()));
         }
       }
     }
@@ -185,7 +183,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
    * <p>
    * This policy is the default.
    */
-  private List<String> getFilesToCleanKeepingLatestCommits(String partitionPath) throws IOException {
+  private List<String> getFilesToCleanKeepingLatestCommits(String partitionPath) {
     int commitsRetained = config.getCleanerCommitsRetained();
     LOG.info("Cleaning {}, retaining latest {} commits. ", partitionPath, commitsRetained);
     List<String> deletePaths = new ArrayList<>();
@@ -235,7 +233,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
             aFile.ifPresent(hoodieDataFile -> deletePaths.add(hoodieDataFile.getFileName()));
             if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
               // If merge on read, then clean the log files for the commits as well
-              deletePaths.addAll(aSlice.getLogFiles().map(file -> file.getFileName()).collect(Collectors.toList()));
+              deletePaths.addAll(aSlice.getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList()));
             }
           }
         }
@@ -264,7 +262,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
   /**
    * Returns files to be cleaned for the given partitionPath based on cleaning policy.
    */
-  public List<String> getDeletePaths(String partitionPath) throws IOException {
+  public List<String> getDeletePaths(String partitionPath) {
     HoodieCleaningPolicy policy = config.getCleanerPolicy();
     List<String> deletePaths;
     if (policy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS) {

@@ -219,10 +219,9 @@ public class CompactionAdminClient extends AbstractHoodieClient {
    */
   private static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
       throws IOException {
-    HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
-        metaClient.getActiveTimeline().readPlanAsBytes(
-            HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
-    return compactionPlan;
+    return AvroUtils.deserializeCompactionPlan(
+            metaClient.getActiveTimeline().readPlanAsBytes(
+                    HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
   }
 
   /**
