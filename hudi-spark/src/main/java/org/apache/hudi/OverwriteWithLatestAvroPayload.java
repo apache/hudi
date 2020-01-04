@@ -38,8 +38,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
   /**
-   * @param record
-   * @param orderingVal
+   *
    */
   public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -61,8 +60,15 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+
+    GenericRecord genericRecord = (GenericRecord) getInsertValue(schema).get();
     // combining strategy here trivially ignores currentValue on disk and writes this record
-    return getInsertValue(schema);
+    Object deleteMarker = genericRecord.get("_hoodie_is_deleted");
+    if (deleteMarker instanceof Boolean && (boolean) deleteMarker) {
+      return Option.empty();
+    } else {
+      return Option.of(genericRecord);
+    }
   }
 
   @Override
