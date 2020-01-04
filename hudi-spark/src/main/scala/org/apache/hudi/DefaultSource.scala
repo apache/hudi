@@ -20,7 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
-import org.apache.log4j.LogManager
+import org.slf4j.{Logger, LoggerFactory}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.sources._
@@ -39,7 +39,7 @@ class DefaultSource extends RelationProvider
   with StreamSinkProvider
   with Serializable {
 
-  private val log = LogManager.getLogger(classOf[DefaultSource])
+  private val log: Logger = LoggerFactory.getLogger(classOf[DefaultSource])
 
   override def createRelation(sqlContext: SQLContext,
                               parameters: Map[String, String]): BaseRelation = {
@@ -71,7 +71,7 @@ class DefaultSource extends RelationProvider
         classOf[HoodieROTablePathFilter],
         classOf[org.apache.hadoop.fs.PathFilter]);
 
-      log.info("Constructing hoodie (as parquet) data source with options :" + parameters)
+      log.info("Constructing hoodie (as parquet) data source with options :{}", parameters)
       // simply return as a regular parquet relation
       DataSource.apply(
         sparkSession = sqlContext.sparkSession,

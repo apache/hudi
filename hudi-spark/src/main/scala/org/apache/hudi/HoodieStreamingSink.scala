@@ -17,7 +17,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.exception.HoodieCorruptedDataException
-import org.apache.log4j.LogManager
+import org.slf4j.{Logger, LoggerFactory}
 import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
@@ -30,9 +30,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
                           outputMode: OutputMode)
   extends Sink
     with Serializable {
-  @volatile private var latestBatchId = -1L
 
-  private val log = LogManager.getLogger(classOf[HoodieStreamingSink])
+  private val log: Logger = LoggerFactory.getLogger(classOf[HoodieStreamingSink])
 
   private val retryCnt = options(DataSourceWriteOptions.STREAMING_RETRY_CNT_OPT_KEY).toInt
   private val retryIntervalMs = options(DataSourceWriteOptions.STREAMING_RETRY_INTERVAL_MS_OPT_KEY).toLong

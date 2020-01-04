@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.{FSUtils, TypedProperties}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
-import org.apache.log4j.LogManager
+import org.slf4j.{Logger, LoggerFactory}
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
@@ -40,7 +40,7 @@ import scala.collection.mutable.ListBuffer
 
 private[hudi] object HoodieSparkSqlWriter {
 
-  private val log = LogManager.getLogger(getClass)
+  private val log: Logger = LoggerFactory.getLogger(getClass)
 
   def write(sqlContext: SQLContext,
             mode: SaveMode,
@@ -171,7 +171,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
           val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
           val syncHiveSucess = if (hiveSyncEnabled) {
-            log.info("Syncing to Hive Metastore (URL: " + parameters(HIVE_URL_OPT_KEY) + ")")
+            log.info(s"Syncing to Hive Metastore (URL: ${parameters(HIVE_URL_OPT_KEY)} )")
             val fs = FSUtils.getFs(basePath.toString, jsc.hadoopConfiguration)
             syncHive(basePath, fs, parameters)
           } else {
@@ -240,15 +240,15 @@ private[hudi] object HoodieSparkSqlWriter {
           }
 
           if (commitSuccess) {
-            log.info("Commit " + commitTime + " successful!")
+            log.info(s"Commit ${commitTime} successful!")
           }
           else {
-            log.info("Commit " + commitTime + " failed!")
+            log.info(s"Commit ${commitTime}  failed!")
           }
 
           val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
           val syncHiveSucess = if (hiveSyncEnabled) {
-            log.info("Syncing to Hive Metastore (URL: " + parameters(HIVE_URL_OPT_KEY) + ")")
+            log.info(s"Syncing to Hive Metastore (URL: ${parameters(HIVE_URL_OPT_KEY)} )")
             val fs = FSUtils.getFs(basePath.toString, jsc.hadoopConfiguration)
             syncHive(basePath, fs, parameters)
           } else {
@@ -278,11 +278,11 @@ private[hudi] object HoodieSparkSqlWriter {
   }
 
   /**
-    * Add default options for unspecified write options keys.
-    *
-    * @param parameters
-    * @return
-    */
+   * Add default options for unspecified write options keys.
+   *
+   * @param parameters
+   * @return
+   */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
     Map(OPERATION_OPT_KEY -> DEFAULT_OPERATION_OPT_VAL,
       STORAGE_TYPE_OPT_KEY -> DEFAULT_STORAGE_TYPE_OPT_VAL,
