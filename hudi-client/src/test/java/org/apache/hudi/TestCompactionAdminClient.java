@@ -49,6 +49,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.CompactionAdminClient.getRenamingActionsToAlignWithCompactionOperation;
+import static org.apache.hudi.CompactionAdminClient.renameLogFile;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 
 public class TestCompactionAdminClient extends TestHoodieClientBase {
@@ -139,10 +141,10 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     }
     // Now repair
     List<Pair<HoodieLogFile, HoodieLogFile>> undoFiles =
-        result.stream().flatMap(r -> client.getRenamingActionsToAlignWithCompactionOperation(metaClient,
+        result.stream().flatMap(r -> getRenamingActionsToAlignWithCompactionOperation(metaClient,
             compactionInstant, r.getOperation(), Option.empty()).stream()).map(rn -> {
               try {
-                client.renameLogFile(metaClient, rn.getKey(), rn.getValue());
+                renameLogFile(metaClient, rn.getKey(), rn.getValue());
               } catch (IOException e) {
                 throw new HoodieIOException(e.getMessage(), e);
               }
@@ -248,7 +250,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
       // Do the renaming only but do not touch the compaction plan - Needed for repair tests
       renameFiles.forEach(lfPair -> {
         try {
-          client.renameLogFile(metaClient, lfPair.getLeft(), lfPair.getRight());
+          renameLogFile(metaClient, lfPair.getLeft(), lfPair.getRight());
         } catch (IOException e) {
           throw new HoodieIOException(e.getMessage(), e);
         }

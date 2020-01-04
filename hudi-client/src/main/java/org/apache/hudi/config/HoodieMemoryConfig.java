@@ -76,12 +76,9 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
     private final Properties props = new Properties();
 
     public Builder fromFile(File propertiesFile) throws IOException {
-      FileReader reader = new FileReader(propertiesFile);
-      try {
+      try (FileReader reader = new FileReader(propertiesFile)) {
         this.props.load(reader);
         return this;
-      } finally {
-        reader.close();
       }
     }
 
@@ -141,9 +138,9 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
         // 0.6 is the default value used by Spark,
         // look at {@link
         // https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/SparkConf.scala#L507}
-        double memoryFraction = Double.valueOf(
+        double memoryFraction = Double.parseDouble(
             SparkEnv.get().conf().get(SPARK_EXECUTOR_MEMORY_FRACTION_PROP, DEFAULT_SPARK_EXECUTOR_MEMORY_FRACTION));
-        double maxMemoryFractionForMerge = Double.valueOf(maxMemoryFraction);
+        double maxMemoryFractionForMerge = Double.parseDouble(maxMemoryFraction);
         double userAvailableMemory = executorMemoryInBytes * (1 - memoryFraction);
         long maxMemoryForMerge = (long) Math.floor(userAvailableMemory * maxMemoryFractionForMerge);
         return Math.max(DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES, maxMemoryForMerge);

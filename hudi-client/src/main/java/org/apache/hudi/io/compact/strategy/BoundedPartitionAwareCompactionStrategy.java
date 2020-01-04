@@ -50,13 +50,11 @@ public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionS
     String earliestPartitionPathToCompact =
         dateFormat.format(getDateAtOffsetFromToday(-1 * writeConfig.getTargetPartitionsPerDayBasedCompaction()));
     // Filter out all partitions greater than earliestPartitionPathToCompact
-    List<HoodieCompactionOperation> eligibleCompactionOperations =
-        operations.stream().collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet()
-            .stream().sorted(Map.Entry.comparingByKey(comparator))
-            .filter(e -> comparator.compare(earliestPartitionPathToCompact, e.getKey()) >= 0)
-            .flatMap(e -> e.getValue().stream()).collect(Collectors.toList());
 
-    return eligibleCompactionOperations;
+    return operations.stream().collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet()
+        .stream().sorted(Map.Entry.comparingByKey(comparator))
+        .filter(e -> comparator.compare(earliestPartitionPathToCompact, e.getKey()) >= 0)
+        .flatMap(e -> e.getValue().stream()).collect(Collectors.toList());
   }
 
   @Override
@@ -65,10 +63,9 @@ public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionS
     String earliestPartitionPathToCompact =
         dateFormat.format(getDateAtOffsetFromToday(-1 * writeConfig.getTargetPartitionsPerDayBasedCompaction()));
     // Get all partitions and sort them
-    List<String> filteredPartitionPaths = partitionPaths.stream().map(partition -> partition.replace("/", "-"))
+    return partitionPaths.stream().map(partition -> partition.replace("/", "-"))
         .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
         .filter(e -> comparator.compare(earliestPartitionPathToCompact, e) >= 0).collect(Collectors.toList());
-    return filteredPartitionPaths;
   }
 
   @VisibleForTesting

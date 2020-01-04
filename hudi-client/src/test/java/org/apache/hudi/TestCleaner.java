@@ -72,7 +72,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Predicate;
@@ -436,8 +435,7 @@ public class TestCleaner extends TestHoodieClientBase {
       final HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
       HoodieCleanMetadata cleanMetadata2 = writeClient.runClean(table,
           HoodieTimeline.getCleanInflightInstant(cleanInstantTs));
-      Assert.assertTrue(
-          Objects.equals(cleanMetadata1.getEarliestCommitToRetain(), cleanMetadata2.getEarliestCommitToRetain()));
+      Assert.assertEquals(cleanMetadata1.getEarliestCommitToRetain(), cleanMetadata2.getEarliestCommitToRetain());
       Assert.assertEquals(new Integer(0), cleanMetadata2.getTotalFilesDeleted());
       Assert.assertEquals(cleanMetadata1.getPartitionMetadata().keySet(),
           cleanMetadata2.getPartitionMetadata().keySet());

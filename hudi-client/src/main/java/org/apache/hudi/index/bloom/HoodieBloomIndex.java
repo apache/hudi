@@ -180,10 +180,10 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
           .mapToPair(t -> t).countByKey();
     } else {
       fileToComparisons = new HashMap<>();
-      partitionToFileInfo.entrySet().stream().forEach(e -> {
-        for (BloomIndexFileInfo fileInfo : e.getValue()) {
+      partitionToFileInfo.forEach((key, value) -> {
+        for (BloomIndexFileInfo fileInfo : value) {
           // each file needs to be compared against all the records coming into the partition
-          fileToComparisons.put(fileInfo.getFileId(), recordsPerPartition.get(e.getKey()));
+          fileToComparisons.put(fileInfo.getFileId(), recordsPerPartition.get(key));
         }
       });
     }
