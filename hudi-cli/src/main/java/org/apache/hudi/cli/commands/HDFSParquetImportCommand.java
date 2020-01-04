@@ -23,8 +23,8 @@ import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.utilities.HDFSParquetImporter.FormatValidator;
-
 import org.apache.hudi.utilities.UtilHelpers;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.core.CommandMarker;
@@ -42,7 +42,7 @@ public class HDFSParquetImportCommand implements CommandMarker {
 
   @CliCommand(value = "hdfsparquetimport", help = "Imports Parquet dataset to a hoodie dataset")
   public String convert(
-      @CliOption(key = "upsert", mandatory = false, unspecifiedDefaultValue = "false",
+      @CliOption(key = "upsert", unspecifiedDefaultValue = "false",
           help = "Uses upsert API instead of the default insert API of WriteClient") boolean useUpsert,
       @CliOption(key = "srcPath", mandatory = true, help = "Base path for the input dataset") final String srcPath,
       @CliOption(key = "targetPath", mandatory = true,

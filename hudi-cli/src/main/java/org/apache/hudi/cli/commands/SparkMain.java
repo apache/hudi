@@ -124,19 +124,19 @@ public class SparkMain {
       case COMPACT_REPAIR:
         assert (args.length == 8);
         doCompactRepair(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
-            Boolean.valueOf(args[7]));
+            Boolean.parseBoolean(args[7]));
         returnCode = 0;
         break;
       case COMPACT_UNSCHEDULE_FILE:
         assert (args.length == 9);
         doCompactUnscheduleFile(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
-            Boolean.valueOf(args[7]), Boolean.valueOf(args[8]));
+            Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
         returnCode = 0;
         break;
       case COMPACT_UNSCHEDULE_PLAN:
         assert (args.length == 9);
         doCompactUnschedule(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
-            Boolean.valueOf(args[7]), Boolean.valueOf(args[8]));
+            Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
         returnCode = 0;
         break;
       case CLEAN:
