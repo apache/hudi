@@ -93,7 +93,7 @@ public class SavepointsCommand implements CommandMarker {
   @CliCommand(value = "savepoint rollback", help = "Savepoint a commit")
   public String rollbackToSavepoint(
       @CliOption(key = {"savepoint"}, help = "Savepoint to rollback") final String commitTime,
-      @CliOption(key = {"sparkProperties"}, help = "Spark Properites File Path") final String sparkPropertiesPath)
+      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath)
       throws Exception {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     if (metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants().empty()) {
@@ -122,7 +122,7 @@ public class SavepointsCommand implements CommandMarker {
   }
 
   @CliCommand(value = "savepoints refresh", help = "Refresh the savepoints")
-  public String refreshMetaClient() throws IOException {
+  public String refreshMetaClient() {
     HoodieCLI.refreshTableMetadata();
     return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
   }

@@ -66,12 +66,11 @@ public class CleansCommand implements CommandMarker {
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
     List<HoodieInstant> cleans = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
-    for (int i = 0; i < cleans.size(); i++) {
-      HoodieInstant clean = cleans.get(i);
+    for (HoodieInstant clean : cleans) {
       HoodieCleanMetadata cleanMetadata =
-          AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
-      rows.add(new Comparable[] {clean.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
-          cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
+              AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
+      rows.add(new Comparable[]{clean.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
+              cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
     }
 
     TableHeader header =
@@ -110,8 +109,8 @@ public class CleansCommand implements CommandMarker {
       String path = entry.getKey();
       HoodieCleanPartitionMetadata stats = entry.getValue();
       String policy = stats.getPolicy();
-      Integer totalSuccessDeletedFiles = stats.getSuccessDeleteFiles().size();
-      Integer totalFailedDeletedFiles = stats.getFailedDeleteFiles().size();
+      int totalSuccessDeletedFiles = stats.getSuccessDeleteFiles().size();
+      int totalFailedDeletedFiles = stats.getFailedDeleteFiles().size();
       rows.add(new Comparable[] {path, policy, totalSuccessDeletedFiles, totalFailedDeletedFiles});
     }
 
