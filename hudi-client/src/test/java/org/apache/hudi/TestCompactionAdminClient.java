@@ -49,6 +49,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.CompactionAdminClient.getRenamingActionsToAlignWithCompactionOperation;
 import static org.apache.hudi.CompactionAdminClient.renameLogFile;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 
@@ -140,7 +141,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     }
     // Now repair
     List<Pair<HoodieLogFile, HoodieLogFile>> undoFiles =
-        result.stream().flatMap(r -> client.getRenamingActionsToAlignWithCompactionOperation(metaClient,
+        result.stream().flatMap(r -> getRenamingActionsToAlignWithCompactionOperation(metaClient,
             compactionInstant, r.getOperation(), Option.empty()).stream()).map(rn -> {
               try {
                 renameLogFile(metaClient, rn.getKey(), rn.getValue());
