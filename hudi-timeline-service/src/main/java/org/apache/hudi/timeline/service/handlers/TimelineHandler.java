@@ -40,7 +40,7 @@ public class TimelineHandler extends Handler {
 
   public List<InstantDTO> getLastInstant(String basePath) {
     return viewManager.getFileSystemView(basePath).getLastInstant().map(InstantDTO::fromInstant)
-        .map(dto -> Arrays.asList(dto)).orElse(new ArrayList<>());
+        .map(Arrays::asList).orElse(new ArrayList<>());
   }
 
   public TimelineDTO getTimeline(String basePath) {

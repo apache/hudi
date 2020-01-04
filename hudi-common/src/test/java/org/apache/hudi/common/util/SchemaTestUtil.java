@@ -124,7 +124,7 @@ public class SchemaTestUtil {
   }
 
   public static List<IndexedRecord> updateHoodieTestRecords(List<String> oldRecordKeys, List<IndexedRecord> newRecords,
-      String commitTime) throws IOException, URISyntaxException {
+      String commitTime) {
 
     return newRecords.stream().map(p -> {
       ((GenericRecord) p).put(HoodieRecord.RECORD_KEY_METADATA_FIELD, oldRecordKeys.remove(0));
@@ -144,7 +144,7 @@ public class SchemaTestUtil {
   }
 
   public static List<HoodieRecord> updateHoodieTestRecordsWithoutHoodieMetadata(List<HoodieRecord> oldRecords,
-      Schema schema, String fieldNameToUpdate, String newValue) throws IOException, URISyntaxException {
+      Schema schema, String fieldNameToUpdate, String newValue) {
     return oldRecords.stream().map(r -> {
       try {
         GenericRecord rec = (GenericRecord) r.getData().getInsertValue(schema).get();

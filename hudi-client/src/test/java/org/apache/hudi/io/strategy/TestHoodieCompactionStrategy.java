@@ -87,7 +87,7 @@ public class TestHoodieCompactionStrategy {
     assertEquals("BoundedIOCompaction should have resulted in 2 compactions being chosen", 2, returned.size());
     // Total size of all the log files
     Long returnedSize = returned.stream().map(s -> s.getMetrics().get(BoundedIOCompactionStrategy.TOTAL_IO_MB))
-        .map(s -> s.longValue()).reduce((size1, size2) -> size1 + size2).orElse(0L);
+        .map(Double::longValue).reduce(Long::sum).orElse(0L);
     assertEquals("Should chose the first 2 compactions which should result in a total IO of 690 MB", 610,
         (long) returnedSize);
   }
@@ -111,7 +111,7 @@ public class TestHoodieCompactionStrategy {
     assertEquals("LogFileSizeBasedCompactionStrategy should have resulted in 1 compaction", 1, returned.size());
     // Total size of all the log files
     Long returnedSize = returned.stream().map(s -> s.getMetrics().get(BoundedIOCompactionStrategy.TOTAL_IO_MB))
-        .map(s -> s.longValue()).reduce((size1, size2) -> size1 + size2).orElse(0L);
+        .map(Double::longValue).reduce(Long::sum).orElse(0L);
     assertEquals("Should chose the first 2 compactions which should result in a total IO of 690 MB", 1204,
         (long) returnedSize);
   }
@@ -227,8 +227,8 @@ public class TestHoodieCompactionStrategy {
 
   private List<HoodieCompactionOperation> createCompactionOperations(HoodieWriteConfig config,
       Map<Long, List<Long>> sizesMap) {
-    Map<Long, String> keyToPartitionMap = sizesMap.entrySet().stream()
-        .map(e -> Pair.of(e.getKey(), partitionPaths[new Random().nextInt(partitionPaths.length - 1)]))
+    Map<Long, String> keyToPartitionMap = sizesMap.keySet().stream()
+        .map(e -> Pair.of(e, partitionPaths[new Random().nextInt(partitionPaths.length - 1)]))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     return createCompactionOperations(config, sizesMap, keyToPartitionMap);
   }

@@ -139,15 +139,7 @@ public class HoodieTestUtils {
     }
   }
 
-  public static final void createDeltaCommitFiles(String basePath, String... commitTimes) throws IOException {
-    for (String commitTime : commitTimes) {
-      new File(
-          basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeDeltaFileName(commitTime))
-              .createNewFile();
-    }
-  }
-
-  public static final void createMetadataFolder(String basePath) throws IOException {
+  public static final void createMetadataFolder(String basePath) {
     new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME).mkdirs();
   }
 
@@ -161,8 +153,7 @@ public class HoodieTestUtils {
     }
   }
 
-  public static final void createPendingCleanFiles(HoodieTableMetaClient metaClient, Configuration configuration,
-      String... commitTimes) throws IOException {
+  public static final void createPendingCleanFiles(HoodieTableMetaClient metaClient, String... commitTimes) {
     for (String commitTime : commitTimes) {
       Arrays.asList(HoodieTimeline.makeRequestedCleanerFileName(commitTime),
           HoodieTimeline.makeInflightCleanerFileName(commitTime)).forEach(f -> {
@@ -303,7 +294,7 @@ public class HoodieTestUtils {
   public static void createCleanFiles(HoodieTableMetaClient metaClient, String basePath,
       String commitTime, Configuration configuration)
       throws IOException {
-    createPendingCleanFiles(metaClient, configuration, commitTime);
+    createPendingCleanFiles(metaClient, commitTime);
     Path commitFile = new Path(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCleanerFileName(commitTime));
     FileSystem fs = FSUtils.getFs(basePath, configuration);
@@ -323,19 +314,6 @@ public class HoodieTestUtils {
     }
   }
 
-  public static void createCleanFiles(HoodieTableMetaClient metaClient,
-      String basePath, String commitTime) throws IOException {
-    createCleanFiles(metaClient, basePath, commitTime, HoodieTestUtils.getDefaultHadoopConf());
-  }
-
-  public static String makeTestFileName(String instant) {
-    return instant + TEST_EXTENSION;
-  }
-
-  public static String makeCommitFileName(String instant) {
-    return instant + ".commit";
-  }
-
   public static void assertStreamEquals(String message, Stream<?> expected, Stream<?> actual) {
     Iterator<?> iter1 = expected.iterator();
     Iterator<?> iter2 = actual.iterator();
@@ -345,8 +323,7 @@ public class HoodieTestUtils {
     assert !iter1.hasNext() && !iter2.hasNext();
   }
 
-  public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz)
-      throws IOException, ClassNotFoundException {
+  public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {
     // Using Kyro as the default serializer in Spark Jobs
     Kryo kryo = new Kryo();
     kryo.register(HoodieTableMetaClient.class, new JavaSerializer());
@@ -367,20 +344,19 @@ public class HoodieTestUtils {
     Map<HoodieRecordLocation, List<HoodieRecord>> groupedUpdated =
         updatedRecords.stream().collect(Collectors.groupingBy(HoodieRecord::getCurrentLocation));
 
-    groupedUpdated.entrySet().forEach(s -> {
-      HoodieRecordLocation location = s.getKey();
-      String partitionPath = s.getValue().get(0).getPartitionPath();
+    groupedUpdated.forEach((location, value) -> {
+      String partitionPath = value.get(0).getPartitionPath();
 
       Writer logWriter;
       try {
         logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
-            .overBaseCommit(location.getInstantTime()).withFs(fs).build();
+          .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
+          .overBaseCommit(location.getInstantTime()).withFs(fs).build();
 
         Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
         header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, location.getInstantTime());
         header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-        logWriter.appendBlock(new HoodieAvroDataBlock(s.getValue().stream().map(r -> {
+        logWriter.appendBlock(new HoodieAvroDataBlock(value.stream().map(r -> {
           try {
             GenericRecord val = (GenericRecord) r.getData().getInsertValue(schema).get();
             HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");

@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl"?>
+<rdf:RDF xml:lang="en"
+         xmlns="http://usefulinc.com/ns/doap#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:asfext="http://projects.apache.org/ns/asfext#"
+         xmlns:foaf="http://xmlns.com/foaf/0.1/">
+<!--
+    Licensed to the Apache Software Foundation (ASF) under one or more
+    contributor license agreements.  See the NOTICE file distributed with
+    this work for additional information regarding copyright ownership.
+    The ASF licenses this file to You under the Apache License, Version 2.0
+    (the "License"); you may not use this file except in compliance with
+    the License.  You may obtain a copy of the License at
+
+         http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+-->
+  <Project rdf:about="https://hudi.apache.org">
+    <created>2019-12-31</created>
+    <license rdf:resource="http://usefulinc.com/doap/licenses/asl20" />
+    <name>Apache Hudi</name>
+    <homepage rdf:resource="https://hudi.apache.org" />
+    <asfext:pmc rdf:resource="https://hudi.apache.org" />
+    <shortdesc>Ingests and Manages storage of large analytical datasets</shortdesc>
+    <description>Hudi (pronounced “Hoodie”) ingests and manages storage of large analytical datasets over DFS
+     (HDFS or cloud stores) and provides three logical views for query access.</description>
+    <bug-database rdf:resource="https://issues.apache.org/jira/browse/HUDI" />
+    <mailing-list rdf:resource="https://hudi.apache.org/community.html" />
+    <download-page rdf:resource="https://hudi.apache.org/community.html" />
+    <programming-language>Java</programming-language>
+    <programming-language>Scala</programming-language>
+    <category rdf:resource="http://projects.apache.org/category/library" />
+    <release>
+      <Version>
+        <name>Apache Hudi-incubating 0.5.0</name>
+        <created>2019-10-24</created>
+        <revision>0.5.0</revision>
+      </Version>
+    </release>
+    <repository>
+      <GitRepository>
+        <location rdf:resource="https://github.com/apache/incubator-hudi.git"/>
+        <browse rdf:resource="https://github.com/apache/incubator-hudi"/>
+      </GitRepository>
+    </repository>
+    <maintainer>
+      <foaf:Person>
+        <foaf:name>Apache Hudi-incubating PPMC</foaf:name>
+          <foaf:mbox rdf:resource="mailto:dev@hudi.apache.org"/>
+      </foaf:Person>
+    </maintainer>
+  </Project>
+</rdf:RDF>

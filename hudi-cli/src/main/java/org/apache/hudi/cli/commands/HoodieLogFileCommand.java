@@ -196,10 +196,9 @@ public class HoodieLogFileCommand implements CommandMarker {
                   HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
       for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : scanner) {
         Option<IndexedRecord> record = hoodieRecord.getData().getInsertValue(readerSchema);
-        if (allRecords.size() >= limit) {
-          break;
+        if (allRecords.size() < limit) {
+          allRecords.add(record.get());
         }
-        allRecords.add(record.get());
       }
     } else {
       for (String logFile : logFilePaths) {
@@ -213,9 +212,10 @@ public class HoodieLogFileCommand implements CommandMarker {
           if (n instanceof HoodieAvroDataBlock) {
             HoodieAvroDataBlock blk = (HoodieAvroDataBlock) n;
             List<IndexedRecord> records = blk.getRecords();
-            allRecords.addAll(records);
-            if (allRecords.size() >= limit) {
-              break;
+            for (IndexedRecord record : records) {
+              if (allRecords.size() < limit) {
+                allRecords.add(record);
+              }
             }
           }
         }
@@ -225,7 +225,7 @@ public class HoodieLogFileCommand implements CommandMarker {
         }
       }
     }
-    String[][] rows = new String[allRecords.size() + 1][];
+    String[][] rows = new String[allRecords.size()][];
     int i = 0;
     for (IndexedRecord record : allRecords) {
       String[] data = new String[1];

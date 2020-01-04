@@ -76,6 +76,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     }
   }
 
+  @Override
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction) {
     try {
@@ -91,6 +92,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     }
   }
 
+  @Override
   public Stream<HoodieFileGroup> getAllFileGroups() {
     return ((ExternalSpillableMap) partitionToFileGroupsMap).valueStream()
         .flatMap(fg -> ((List<HoodieFileGroup>) fg).stream());

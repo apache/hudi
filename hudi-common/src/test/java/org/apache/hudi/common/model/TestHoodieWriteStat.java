@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
 
 import org.apache.hadoop.fs.Path;
@@ -46,7 +45,6 @@ public class TestHoodieWriteStat {
 
     Path basePath = new Path(basePathString);
     Path partitionPath = new Path(basePath, partitionPathString);
-    Path tempPath = new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME);
 
     Path finalizeFilePath = new Path(partitionPath, FSUtils.makeDataFileName(commitTime, writeToken, fileName));
     HoodieWriteStat writeStat = new HoodieWriteStat();

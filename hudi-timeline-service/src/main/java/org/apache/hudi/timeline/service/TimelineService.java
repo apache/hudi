@@ -74,7 +74,7 @@ public class TimelineService {
     @Parameter(names = {"--server-port", "-p"}, description = " Server Port")
     public Integer serverPort = 26754;
 
-    @Parameter(names = {"--view-storage", "-st"}, description = "View Storage Type. Defaut - SPILLABLE_DISK")
+    @Parameter(names = {"--view-storage", "-st"}, description = "View Storage Type. Default - SPILLABLE_DISK")
     public FileSystemViewStorageType viewStorageType = FileSystemViewStorageType.SPILLABLE_DISK;
 
     @Parameter(names = {"--max-view-mem-per-table", "-mv"},

@@ -173,10 +173,12 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     return grouped;
   }
 
+  @Override
   public void setConf(Configuration conf) {
     this.conf = conf;
   }
 
+  @Override
   public Configuration getConf() {
     return conf;
   }

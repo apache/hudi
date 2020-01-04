@@ -38,11 +38,12 @@ import org.apache.hudi.common.util.AvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.func.OperationResult;
+import org.apache.hudi.utilities.UtilHelpers;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.func.OperationResult;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
@@ -175,7 +176,11 @@ public class CompactionCommand implements CommandMarker {
 
   @CliCommand(value = "compaction schedule", help = "Schedule Compaction")
   public String scheduleCompact(@CliOption(key = "sparkMemory", unspecifiedDefaultValue = "1G",
-      help = "Spark executor memory") final String sparkMemory) throws Exception {
+      help = "Spark executor memory") final String sparkMemory,
+                                @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
+                                  unspecifiedDefaultValue = "") final String propsFilePath,
+                                @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
+                                  unspecifiedDefaultValue = "") final String[] configs) throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
@@ -187,7 +192,8 @@ public class CompactionCommand implements CommandMarker {
         Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkCommand.COMPACT_SCHEDULE.toString(), client.getBasePath(),
-        client.getTableConfig().getTableName(), compactionInstantTime, sparkMemory);
+        client.getTableConfig().getTableName(), compactionInstantTime, sparkMemory, propsFilePath);
+    UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -206,8 +212,12 @@ public class CompactionCommand implements CommandMarker {
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory,
       @CliOption(key = "retry", unspecifiedDefaultValue = "1", help = "Number of retries") final String retry,
-      @CliOption(key = "compactionInstant",
-              help = "Base path for the target hoodie dataset") String compactionInstantTime)
+      @CliOption(key = "compactionInstant", mandatory = false,
+          help = "Base path for the target hoodie dataset") String compactionInstantTime,
+      @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
+        unspecifiedDefaultValue = "") final String propsFilePath,
+      @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
+        unspecifiedDefaultValue = "") final String[] configs)
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
@@ -224,13 +234,13 @@ public class CompactionCommand implements CommandMarker {
       }
       compactionInstantTime = firstPendingInstant.get();
     }
-
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkCommand.COMPACT_RUN.toString(), client.getBasePath(),
         client.getTableConfig().getTableName(), compactionInstantTime, parallelism, schemaFilePath,
-        sparkMemory, retry);
+        sparkMemory, retry, propsFilePath);
+    UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

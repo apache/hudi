@@ -28,7 +28,6 @@ import java.util.Random;
 import java.util.UUID;
 
 import static junit.framework.TestCase.assertEquals;
-import static junit.framework.TestCase.assertTrue;
 
 /**
  * Tests {@link KeyRangeLookupTree}.
@@ -152,7 +151,7 @@ public class TestKeyRangeLookupTree {
       if (!expectedMatches.containsKey(iStr)) {
         assertEquals(Collections.EMPTY_SET, keyRangeLookupTree.getMatchingIndexFiles(iStr));
       } else {
-        assertTrue(expectedMatches.get(iStr).equals(keyRangeLookupTree.getMatchingIndexFiles(iStr)));
+        assertEquals(expectedMatches.get(iStr), keyRangeLookupTree.getMatchingIndexFiles(iStr));
       }
     }
   }

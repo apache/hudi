@@ -61,7 +61,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void checkSerDe() throws IOException, ClassNotFoundException {
+  public void checkSerDe() {
     // check if this object is serialized and de-serialized, we are able to read from the file system
     HoodieTableMetaClient deseralizedMetaClient =
         HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
@@ -78,7 +78,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void checkCommitTimeline() throws IOException {
+  public void checkCommitTimeline() {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertTrue("Should be empty commit timeline", activeCommitTimeline.empty());

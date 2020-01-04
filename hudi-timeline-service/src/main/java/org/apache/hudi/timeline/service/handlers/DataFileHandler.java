@@ -45,7 +45,7 @@ public class DataFileHandler extends Handler {
 
   public List<DataFileDTO> getLatestDataFile(String basePath, String partitionPath, String fileId) {
     return viewManager.getFileSystemView(basePath).getLatestDataFile(partitionPath, fileId)
-        .map(DataFileDTO::fromHoodieDataFile).map(dto -> Arrays.asList(dto)).orElse(new ArrayList<>());
+        .map(DataFileDTO::fromHoodieDataFile).map(Arrays::asList).orElse(new ArrayList<>());
   }
 
   public List<DataFileDTO> getLatestDataFiles(String basePath) {

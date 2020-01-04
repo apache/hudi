@@ -77,7 +77,7 @@ public class RepairsCommand implements CommandMarker {
     List<String> partitionPaths =
         FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.fs, client.getBasePath());
     Path basePath = new Path(client.getBasePath());
-    String[][] rows = new String[partitionPaths.size() + 1][];
+    String[][] rows = new String[partitionPaths.size()][];
 
     int ind = 0;
     for (String partition : partitionPaths) {
