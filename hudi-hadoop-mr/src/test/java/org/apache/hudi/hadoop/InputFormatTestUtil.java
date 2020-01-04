@@ -20,7 +20,6 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.SchemaTestUtil;
@@ -159,7 +158,6 @@ public class InputFormatTestUtil {
       parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema);
       try {
         List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, numberOfRecords);
-        String commitTime = HoodieActiveTimeline.createNewInstantTime();
         Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(schema);
         for (IndexedRecord record : records) {
           GenericRecord p = HoodieAvroUtils.rewriteRecord((GenericRecord) record, hoodieFieldsSchema);

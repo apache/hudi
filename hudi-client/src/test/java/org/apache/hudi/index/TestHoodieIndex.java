@@ -49,7 +49,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testCreateIndex() throws Exception {
+  public void testCreateIndex() {
     HoodieWriteConfig.Builder clientConfigBuilder = HoodieWriteConfig.newBuilder();
     HoodieIndexConfig.Builder indexConfigBuilder = HoodieIndexConfig.newBuilder();
     // Different types

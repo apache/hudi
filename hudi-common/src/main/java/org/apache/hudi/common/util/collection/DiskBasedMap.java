@@ -125,6 +125,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
    */
   private void addShutDownHook() {
     Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
       public void run() {
         try {
           if (writeOnlyFileHandle != null) {

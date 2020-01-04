@@ -74,7 +74,7 @@ import java.util.stream.IntStream;
  *
  * In continuous mode, DeltaStreamer runs in loop-mode going through the below operations (a) pull-from-source (b)
  * write-to-sink (c) Schedule Compactions if needed (d) Conditionally Sync to Hive each cycle. For MOR table with
- * continuous mode enabled, a seperate compactor thread is allocated to execute compactions
+ * continuous mode enabled, a separate compactor thread is allocated to execute compactions
  */
 public class HoodieDeltaStreamer implements Serializable {
 
@@ -554,6 +554,7 @@ public class HoodieDeltaStreamer implements Serializable {
     /**
      * Start Compaction Service.
      */
+    @Override
     protected Pair<CompletableFuture, ExecutorService> startService() {
       ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentCompaction);
       List<CompletableFuture<Boolean>> compactionFutures =

@@ -221,7 +221,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
         new BoundedInMemoryQueue(memoryLimitInBytes, getTransformFunction(HoodieTestDataGenerator.avroSchema));
 
     // Produce
-    Future<Boolean> resFuture = executorService.submit(() -> {
+    executorService.submit(() -> {
       new IteratorBasedQueueProducer<>(hoodieRecords.iterator()).produce(queue);
       return true;
     });

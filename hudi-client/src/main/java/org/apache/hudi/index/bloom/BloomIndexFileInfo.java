@@ -90,6 +90,7 @@ public class BloomIndexFileInfo implements Serializable {
     return Objects.hashCode(fileId, minRecordKey, maxRecordKey);
   }
 
+  @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("BloomIndexFileInfo {");
     sb.append(" fileId=").append(fileId);

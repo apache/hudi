@@ -34,7 +34,6 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
@@ -250,7 +249,6 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
 
       // Update all the 100 records
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
       newCommitTime = "101";
       writeClient.startCommitWithTime(newCommitTime);

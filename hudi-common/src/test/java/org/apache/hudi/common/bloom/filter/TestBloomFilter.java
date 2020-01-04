@@ -24,7 +24,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -55,7 +54,7 @@ public class TestBloomFilter {
 
   @Test
   public void testAddKey() {
-    List<String> inputs = new ArrayList<>();
+    List<String> inputs;
     int[] sizes = {100, 1000, 10000};
     for (int size : sizes) {
       inputs = new ArrayList<>();
@@ -78,9 +77,9 @@ public class TestBloomFilter {
   }
 
   @Test
-  public void testSerialize() throws IOException, ClassNotFoundException {
+  public void testSerialize() {
 
-    List<String> inputs = new ArrayList<>();
+    List<String> inputs;
     int[] sizes = {100, 1000, 10000};
     for (int size : sizes) {
       inputs = new ArrayList<>();

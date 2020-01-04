@@ -59,7 +59,7 @@ public class TestRocksDBManager {
   }
 
   @Test
-  public void testRocksDBManager() throws Exception {
+  public void testRocksDBManager() {
     String prefix1 = "prefix1_";
     String prefix2 = "prefix2_";
     String prefix3 = "prefix3_";
@@ -77,11 +77,11 @@ public class TestRocksDBManager {
       return new Payload(prefix, key, val, family);
     }).collect(Collectors.toList());
 
-    colFamilies.stream().forEach(family -> dbManager.dropColumnFamily(family));
-    colFamilies.stream().forEach(family -> dbManager.addColumnFamily(family));
+    colFamilies.forEach(family -> dbManager.dropColumnFamily(family));
+    colFamilies.forEach(family -> dbManager.addColumnFamily(family));
 
     Map<String, Map<String, Integer>> countsMap = new HashMap<>();
-    payloads.stream().forEach(payload -> {
+    payloads.forEach(payload -> {
       dbManager.put(payload.getFamily(), payload.getKey(), payload);
 
       if (!countsMap.containsKey(payload.family)) {
@@ -95,21 +95,21 @@ public class TestRocksDBManager {
       c.put(payload.prefix, currCount + 1);
     });
 
-    colFamilies.stream().forEach(family -> {
-      prefixes.stream().forEach(prefix -> {
+    colFamilies.forEach(family -> {
+      prefixes.forEach(prefix -> {
         List<Pair<String, Payload>> gotPayloads =
             dbManager.<Payload>prefixSearch(family, prefix).collect(Collectors.toList());
         Integer expCount = countsMap.get(family).get(prefix);
         Assert.assertEquals("Size check for prefix (" + prefix + ") and family (" + family + ")",
             expCount == null ? 0L : expCount.longValue(), gotPayloads.size());
-        gotPayloads.stream().forEach(p -> {
+        gotPayloads.forEach(p -> {
           Assert.assertEquals(p.getRight().getFamily(), family);
           Assert.assertTrue(p.getRight().getKey().startsWith(prefix));
         });
       });
     });
 
-    payloads.stream().forEach(payload -> {
+    payloads.forEach(payload -> {
       Payload p = dbManager.get(payload.getFamily(), payload.getKey());
       Assert.assertEquals("Retrieved correct payload for key :" + payload.getKey(), payload, p);
 
@@ -122,8 +122,8 @@ public class TestRocksDBManager {
     });
 
     // Now do a prefix search
-    colFamilies.stream().forEach(family -> {
-      prefixes.stream().forEach(prefix -> {
+    colFamilies.forEach(family -> {
+      prefixes.forEach(prefix -> {
         List<Pair<String, Payload>> gotPayloads =
             dbManager.<Payload>prefixSearch(family, prefix).collect(Collectors.toList());
         Assert.assertEquals("Size check for prefix (" + prefix + ") and family (" + family + ")", 0,

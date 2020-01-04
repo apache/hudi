@@ -40,8 +40,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -62,7 +62,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCleanHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCleanHelper.class);
 
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
@@ -96,12 +96,12 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
       Option<HoodieInstant> lastClean =
           hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
       if (lastClean.isPresent()) {
-        HoodieCleanMetadata cleanMetadata = AvroUtils.deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
+        HoodieCleanMetadata cleanMetadata = AvroUtils
+            .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
         if ((cleanMetadata.getEarliestCommitToRetain() != null)
-                && (cleanMetadata.getEarliestCommitToRetain().length() > 0)) {
+            && (cleanMetadata.getEarliestCommitToRetain().length() > 0)) {
           LOG.warn("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
-              + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
-              + ". New Instant to retain : " + newInstantToRetain);
+                  + "since last cleaned at {}. New Instant to retain : {}", cleanMetadata.getEarliestCommitToRetain(), newInstantToRetain);
           return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
               HoodieTimeline.GREATER_OR_EQUAL) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
               newInstantToRetain.get().getTimestamp(), HoodieTimeline.LESSER)).flatMap(instant -> {
@@ -126,8 +126,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
    * single file (i.e run it with versionsRetained = 1)
    */
   private List<String> getFilesToCleanKeepingLatestVersions(String partitionPath) {
-    LOG.info("Cleaning " + partitionPath + ", retaining latest " + config.getCleanerFileVersionsRetained()
-        + " file versions. ");
+    LOG.info("Cleaning {}, retaining latest {} file versions. ", partitionPath, config.getCleanerFileVersionsRetained());
     List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     List<String> deletePaths = new ArrayList<>();
     // Collect all the datafiles savepointed by all the savepoints
@@ -186,7 +185,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
    */
   private List<String> getFilesToCleanKeepingLatestCommits(String partitionPath) {
     int commitsRetained = config.getCleanerCommitsRetained();
-    LOG.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");
+    LOG.info("Cleaning {}, retaining latest {} commits. ", partitionPath, commitsRetained);
     List<String> deletePaths = new ArrayList<>();
 
     // Collect all the datafiles savepointed by all the savepoints
@@ -273,7 +272,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
     } else {
       throw new IllegalArgumentException("Unknown cleaning policy : " + policy.name());
     }
-    LOG.info(deletePaths.size() + " patterns used to delete in partition path:" + partitionPath);
+    LOG.info("{} patterns used to delete in partition path: {}", deletePaths.size(), partitionPath);
 
     return deletePaths;
   }

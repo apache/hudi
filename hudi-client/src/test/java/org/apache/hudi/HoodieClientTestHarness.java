@@ -190,18 +190,16 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   /**
    * Initializes a test data generator which used to generate test datas.
    *
-   * @throws IOException
    */
-  protected void initTestDataGenerator() throws IOException {
+  protected void initTestDataGenerator() {
     dataGen = new HoodieTestDataGenerator();
   }
 
   /**
    * Cleanups test data generator.
    *
-   * @throws IOException
    */
-  protected void cleanupTestDataGenerator() throws IOException {
+  protected void cleanupTestDataGenerator() {
     dataGen = null;
   }
 

@@ -237,7 +237,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
    * @return Hoodie Write Client
    * @throws Exception in case of error
    */
-  private HoodieWriteClient getWriteClientWithDummyIndex(final boolean isGlobal) throws Exception {
+  private HoodieWriteClient getWriteClientWithDummyIndex(final boolean isGlobal) {
     HoodieIndex index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(isGlobal);
     return getHoodieWriteClient(getConfigBuilder().build(), false, index);
@@ -637,7 +637,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   public void testDeletesWithDeleteApi() throws Exception {
     final String testPartitionPath = "2016/09/26";
     final int insertSplitLimit = 100;
-    List<String> keysSoFar = new ArrayList<>();
     // setup the small file handling params
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
@@ -649,7 +648,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     client.startCommitWithTime(commitTime1);
     List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, insertSplitLimit); // this writes ~500kb
     Set<String> keys1 = HoodieClientTestUtils.getRecordKeys(inserts1);
-    keysSoFar.addAll(keys1);
+    List<String> keysSoFar = new ArrayList<>(keys1);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
     List<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime1).collect();
 
@@ -763,7 +762,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
    * Test delete with delete api.
    */
   @Test
-  public void testDeletesWithoutInserts() throws Exception {
+  public void testDeletesWithoutInserts() {
     final String testPartitionPath = "2016/09/26";
     final int insertSplitLimit = 100;
     // setup the small file handling params
@@ -844,7 +843,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
 
     String commitTime = "000";
     client.startCommitWithTime(commitTime);

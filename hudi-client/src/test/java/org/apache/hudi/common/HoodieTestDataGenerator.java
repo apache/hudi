@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -121,7 +120,7 @@ public class HoodieTestDataGenerator {
   /**
    * Generates a new avro record of the above schema format, retaining the key if optionally provided.
    */
-  public static HoodieAvroPayload generateAvroPayload(HoodieKey key, String commitTime) throws IOException {
+  public static HoodieAvroPayload generateAvroPayload(HoodieKey key, String commitTime) {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
     return new HoodieAvroPayload(Option.of(rec));
   }
@@ -139,10 +138,6 @@ public class HoodieTestDataGenerator {
     rec.put("end_lon", rand.nextDouble());
     rec.put("fare", rand.nextDouble() * 100);
     return rec;
-  }
-
-  public static void createCommitFile(String basePath, String commitTime) throws IOException {
-    createCommitFile(basePath, commitTime, HoodieTestUtils.getDefaultHadoopConf());
   }
 
   public static void createCommitFile(String basePath, String commitTime, Configuration configuration) {
@@ -213,7 +208,7 @@ public class HoodieTestDataGenerator {
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
-  public List<HoodieRecord> generateInserts(String commitTime, Integer n) throws IOException {
+  public List<HoodieRecord> generateInserts(String commitTime, Integer n) {
     return generateInsertsStream(commitTime, n).collect(Collectors.toList());
   }
 
@@ -249,7 +244,7 @@ public class HoodieTestDataGenerator {
     return copy;
   }
 
-  public List<HoodieRecord> generateInsertsWithHoodieAvroPayload(String commitTime, int limit) throws IOException {
+  public List<HoodieRecord> generateInsertsWithHoodieAvroPayload(String commitTime, int limit) {
     List<HoodieRecord> inserts = new ArrayList<>();
     int currSize = getNumExistingKeys();
     for (int i = 0; i < limit; i++) {
@@ -267,8 +262,7 @@ public class HoodieTestDataGenerator {
     return inserts;
   }
 
-  public List<HoodieRecord> generateUpdatesWithHoodieAvroPayload(String commitTime, List<HoodieRecord> baseRecords)
-      throws IOException {
+  public List<HoodieRecord> generateUpdatesWithHoodieAvroPayload(String commitTime, List<HoodieRecord> baseRecords) {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
       HoodieRecord record = new HoodieRecord(baseRecord.getKey(), generateAvroPayload(baseRecord.getKey(), commitTime));
@@ -365,12 +359,11 @@ public class HoodieTestDataGenerator {
   /**
    * Generates deduped delete of keys previously inserted, randomly distributed across the keys above.
    *
-   * @param commitTime Commit Timestamp
    * @param n Number of unique records
    * @return list of hoodie record updates
    */
-  public List<HoodieKey> generateUniqueDeletes(String commitTime, Integer n) {
-    return generateUniqueDeleteStream(commitTime, n).collect(Collectors.toList());
+  public List<HoodieKey> generateUniqueDeletes(Integer n) {
+    return generateUniqueDeleteStream(n).collect(Collectors.toList());
   }
 
   /**
@@ -407,11 +400,10 @@ public class HoodieTestDataGenerator {
   /**
    * Generates deduped delete of keys previously inserted, randomly distributed across the keys above.
    *
-   * @param commitTime Commit Timestamp
    * @param n Number of unique records
    * @return stream of hoodie record updates
    */
-  public Stream<HoodieKey> generateUniqueDeleteStream(String commitTime, Integer n) {
+  public Stream<HoodieKey> generateUniqueDeleteStream(Integer n) {
     final Set<KeyPartition> used = new HashSet<>();
 
     if (n > numExistingKeys) {

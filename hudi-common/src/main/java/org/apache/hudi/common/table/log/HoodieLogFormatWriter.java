@@ -107,6 +107,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     return fs;
   }
 
+  @Override
   public HoodieLogFile getLogFile() {
     return logFile;
   }
@@ -212,6 +213,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     output.hsync();
   }
 
+  @Override
   public long getCurrentSize() throws IOException {
     if (output == null) {
       throw new IllegalStateException("Cannot get current size as the underlying stream has been closed already");
