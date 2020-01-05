@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+
 /**
  * Type of the Hoodie Table.
  * <p>
@@ -32,5 +36,62 @@ package org.apache.hudi.common.model;
  * SIMPLE_LSM - A simple 2 level LSM tree.
  */
 public enum HoodieTableType {
-  COPY_ON_WRITE, MERGE_ON_READ
+
+  COPY_ON_WRITE {
+
+    @Override
+    public HoodieTimeline getCommitsTimeline(HoodieTableMetaClient metaClient) {
+      return metaClient.getActiveTimeline().getCommitTimeline();
+    }
+
+    @Override
+    public HoodieTimeline getCommitsAndCompactionTimeline(HoodieTableMetaClient metaClient) {
+      return metaClient.getActiveTimeline().getCommitTimeline();
+    }
+
+    @Override
+    public HoodieTimeline getCommitTimeline(HoodieTableMetaClient metaClient) {
+      return metaClient.getActiveTimeline().getCommitTimeline();
+    }
+
+    @Override
+    public String getCommitActionType() {
+      return HoodieActiveTimeline.COMMIT_ACTION;
+    }
+  },
+
+  MERGE_ON_READ {
+
+    @Override
+    public HoodieTimeline getCommitsTimeline(HoodieTableMetaClient metaClient) {
+      // We need to include the parquet files written out in delta commits
+      // Include commit action to be able to start doing a MOR over a COW dataset - no
+      // migration required
+      return metaClient.getActiveTimeline().getCommitsTimeline();
+    }
+
+    @Override
+    public HoodieTimeline getCommitsAndCompactionTimeline(HoodieTableMetaClient metaClient) {
+      return metaClient.getActiveTimeline().getCommitsAndCompactionTimeline();
+    }
+
+    @Override
+    public HoodieTimeline getCommitTimeline(HoodieTableMetaClient metaClient) {
+      // We need to include the parquet files written out in delta commits in tagging
+      return metaClient.getActiveTimeline().getCommitTimeline();
+    }
+
+    @Override
+    public String getCommitActionType() {
+      return HoodieActiveTimeline.DELTA_COMMIT_ACTION;
+    }
+  };
+
+  public abstract HoodieTimeline getCommitsTimeline(HoodieTableMetaClient metaClient);
+
+  public abstract HoodieTimeline getCommitsAndCompactionTimeline(HoodieTableMetaClient metaClient);
+
+  public abstract HoodieTimeline getCommitTimeline(HoodieTableMetaClient metaClient);
+
+  public abstract String getCommitActionType();
 }

@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.FailSafeConsistencyGuard;
 import org.apache.hudi.common.util.NoOpConsistencyGuard;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.DatasetNotFoundException;
-import org.apache.hudi.exception.HoodieException;
 
 import com.google.common.base.Preconditions;
 import org.apache.hadoop.conf.Configuration;
@@ -374,17 +373,7 @@ public class HoodieTableMetaClient implements Serializable {
    * Get the commit timeline visible for this table.
    */
   public HoodieTimeline getCommitsTimeline() {
-    switch (this.getTableType()) {
-      case COPY_ON_WRITE:
-        return getActiveTimeline().getCommitTimeline();
-      case MERGE_ON_READ:
-        // We need to include the parquet files written out in delta commits
-        // Include commit action to be able to start doing a MOR over a COW dataset - no
-        // migration required
-        return getActiveTimeline().getCommitsTimeline();
-      default:
-        throw new HoodieException("Unsupported table type :" + this.getTableType());
-    }
+    return this.getTableType().getCommitsTimeline(this);
   }
 
   /**
@@ -394,42 +383,21 @@ public class HoodieTableMetaClient implements Serializable {
    * all delta-commits are read.
    */
   public HoodieTimeline getCommitsAndCompactionTimeline() {
-    switch (this.getTableType()) {
-      case COPY_ON_WRITE:
-        return getActiveTimeline().getCommitTimeline();
-      case MERGE_ON_READ:
-        return getActiveTimeline().getCommitsAndCompactionTimeline();
-      default:
-        throw new HoodieException("Unsupported table type :" + this.getTableType());
-    }
+    return this.getTableType().getCommitsAndCompactionTimeline(this);
   }
 
   /**
    * Get the compacted commit timeline visible for this table.
    */
   public HoodieTimeline getCommitTimeline() {
-    switch (this.getTableType()) {
-      case COPY_ON_WRITE:
-      case MERGE_ON_READ:
-        // We need to include the parquet files written out in delta commits in tagging
-        return getActiveTimeline().getCommitTimeline();
-      default:
-        throw new HoodieException("Unsupported table type :" + this.getTableType());
-    }
+    return this.getTableType().getCommitTimeline(this);
   }
 
   /**
    * Gets the commit action type.
    */
   public String getCommitActionType() {
-    switch (this.getTableType()) {
-      case COPY_ON_WRITE:
-        return HoodieActiveTimeline.COMMIT_ACTION;
-      case MERGE_ON_READ:
-        return HoodieActiveTimeline.DELTA_COMMIT_ACTION;
-      default:
-        throw new HoodieException("Could not commit on unknown storage type " + this.getTableType());
-    }
+    return this.getTableType().getCommitActionType();
   }
 
   /**
