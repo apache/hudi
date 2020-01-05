@@ -14,7 +14,7 @@ public class TestHiveIncrementalPuller {
   }
 
   @Test
-  public void testInitHiveIncrementalPuller() throws Exception {
+  public void testInitHiveIncrementalPuller() {
 
     try {
       new HiveIncrementalPuller(config);
