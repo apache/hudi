@@ -300,7 +300,9 @@ public class DeltaSync implements Serializable {
     }
 
     if (Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
-      LOG.info("No new data, source checkpoint has not changed. Nothing to commit. Old checkpoint=({}). New Checkpoint=({})",resumeCheckpointStr,checkpointStr);
+      LOG.info(
+          "No new data, source checkpoint has not changed. Nothing to commit. Old checkpoint=({}). New Checkpoint=({})",
+          resumeCheckpointStr, checkpointStr);
       return null;
     }
 

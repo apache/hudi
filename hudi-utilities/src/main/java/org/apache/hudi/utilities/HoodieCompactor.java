@@ -110,7 +110,7 @@ public class HoodieCompactor {
         }
       } while (ret != 0 && retry-- > 0);
     } catch (Throwable t) {
-      LOG.error("The compact err:", t);
+      LOG.error("The compact error:", t);
     }
     return ret;
   }

@@ -385,8 +385,7 @@ public class HoodieDeltaStreamer implements Serializable {
         boolean error = false;
         if (cfg.isAsyncCompactionEnabled()) {
           // set Scheduler Pool.
-          LOG.info("Setting Spark Pool name for delta-sync to {}",
-              SchedulerConfGenerator.DELTASYNC_POOL_NAME);
+          LOG.info("Setting Spark Pool name for delta-sync to {}", SchedulerConfGenerator.DELTASYNC_POOL_NAME);
           jssc.setLocalProperty("spark.scheduler.pool", SchedulerConfGenerator.DELTASYNC_POOL_NAME);
         }
         try {
@@ -395,8 +394,7 @@ public class HoodieDeltaStreamer implements Serializable {
               long start = System.currentTimeMillis();
               Option<String> scheduledCompactionInstant = deltaSync.syncOnce();
               if (scheduledCompactionInstant.isPresent()) {
-                LOG.info("Enqueuing new pending compaction instant ({})",
-                    scheduledCompactionInstant);
+                LOG.info("Enqueuing new pending compaction instant ({})", scheduledCompactionInstant);
                 asyncCompactService.enqueuePendingCompaction(new HoodieInstant(State.REQUESTED,
                     HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstant.get()));
                 asyncCompactService.waitTillPendingCompactionsReducesTo(cfg.maxPendingCompactions);
