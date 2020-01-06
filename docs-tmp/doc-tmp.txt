@@ -45,7 +45,6 @@ mkdir -p versions/0.5.1-incubating
 
 
 
-cd /Users/dcadmin/Desktop/hudi-work/incubator-hudi-doc
 mkdir -p content/assets
 mkdir -p content/newsite-content
 rm -rf content/newsite-content/*
