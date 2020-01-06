@@ -51,6 +51,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   private final String outputDateFormat;
 
+  private TimeZone timeZone;
+
   /**
    * Supported configs.
    */
@@ -62,6 +64,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
         "hoodie.deltastreamer.keygen.timebased.input.dateformat";
     private static final String TIMESTAMP_OUTPUT_DATE_FORMAT_PROP =
         "hoodie.deltastreamer.keygen.timebased.output.dateformat";
+    private static final String TIMESTAMP_TIMEZONE_FORMAT_PROP =
+            "hoodie.deltastreamer.keygen.timebased.timezone";
   }
 
   public TimestampBasedKeyGenerator(TypedProperties config) {
@@ -75,7 +79,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
       DataSourceUtils.checkRequiredProperties(config,
           Collections.singletonList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
       this.inputDateFormat = new SimpleDateFormat(config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
-      this.inputDateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
+      this.timeZone = TimeZone.getTimeZone(config.getString(Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, "GMT"));
+      this.inputDateFormat.setTimeZone(timeZone);
     }
   }
 
@@ -83,7 +88,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   public HoodieKey getKey(GenericRecord record) {
     Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathField);
     SimpleDateFormat partitionPathFormat = new SimpleDateFormat(outputDateFormat);
-    partitionPathFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
+    partitionPathFormat.setTimeZone(timeZone);
 
     try {
       long unixTime;
