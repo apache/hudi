@@ -49,14 +49,14 @@ public class DatasetsCommand implements CommandMarker {
   @CliCommand(value = "connect", help = "Connect to a hoodie dataset")
   public String connect(
       @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the dataset") final String path,
-      @CliOption(key = {"layoutVersion"}, mandatory = false, help = "Timeline Layout version") Integer layoutVersion,
-      @CliOption(key = {"eventuallyConsistent"}, mandatory = false, unspecifiedDefaultValue = "false",
+      @CliOption(key = {"layoutVersion"}, help = "Timeline Layout version") Integer layoutVersion,
+      @CliOption(key = {"eventuallyConsistent"}, unspecifiedDefaultValue = "false",
           help = "Enable eventual consistency") final boolean eventuallyConsistent,
-      @CliOption(key = {"initialCheckIntervalMs"}, mandatory = false, unspecifiedDefaultValue = "2000",
+      @CliOption(key = {"initialCheckIntervalMs"}, unspecifiedDefaultValue = "2000",
           help = "Initial wait time for eventual consistency") final Integer initialConsistencyIntervalMs,
-      @CliOption(key = {"maxCheckIntervalMs"}, mandatory = false, unspecifiedDefaultValue = "300000",
+      @CliOption(key = {"maxCheckIntervalMs"}, unspecifiedDefaultValue = "300000",
           help = "Max wait time for eventual consistency") final Integer maxConsistencyIntervalMs,
-      @CliOption(key = {"maxCheckIntervalMs"}, mandatory = false, unspecifiedDefaultValue = "7",
+      @CliOption(key = {"maxCheckIntervalMs"}, unspecifiedDefaultValue = "7",
           help = "Max checks for eventual consistency") final Integer maxConsistencyChecks)
       throws IOException {
     HoodieCLI
@@ -118,7 +118,7 @@ public class DatasetsCommand implements CommandMarker {
   /**
    * Describes table properties.
    */
-  @CliCommand(value = "desc", help = "Describle Hoodie Table properties")
+  @CliCommand(value = "desc", help = "Describe Hoodie Table properties")
   public String descTable() {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     TableHeader header = new TableHeader().addTableHeaderField("Property").addTableHeaderField("Value");

@@ -223,7 +223,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
           "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
     }
     HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
-    HoodieSavepointMetadata metadata = null;
+    HoodieSavepointMetadata metadata;
     try {
       metadata = AvroUtils.deserializeHoodieSavepointMetadata(getActiveTimeline().getInstantDetails(instant).get());
     } catch (IOException e) {

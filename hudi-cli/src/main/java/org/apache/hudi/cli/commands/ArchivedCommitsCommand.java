@@ -89,29 +89,27 @@ public class ArchivedCommitsCommand implements CommandMarker {
                 .deepCopy(HoodieCommitMetadata.SCHEMA$, r.get("hoodieCommitMetadata"));
             final String instantTime = r.get("commitTime").toString();
             final String action = r.get("actionType").toString();
-            return metadata.getPartitionToWriteStats().values().stream().flatMap(hoodieWriteStats -> {
-              return hoodieWriteStats.stream().map(hoodieWriteStat -> {
-                List<Comparable> row = new ArrayList<>();
-                row.add(action);
-                row.add(instantTime);
-                row.add(hoodieWriteStat.getPartitionPath());
-                row.add(hoodieWriteStat.getFileId());
-                row.add(hoodieWriteStat.getPrevCommit());
-                row.add(hoodieWriteStat.getNumWrites());
-                row.add(hoodieWriteStat.getNumInserts());
-                row.add(hoodieWriteStat.getNumDeletes());
-                row.add(hoodieWriteStat.getNumUpdateWrites());
-                row.add(hoodieWriteStat.getTotalLogFiles());
-                row.add(hoodieWriteStat.getTotalLogBlocks());
-                row.add(hoodieWriteStat.getTotalCorruptLogBlock());
-                row.add(hoodieWriteStat.getTotalRollbackBlocks());
-                row.add(hoodieWriteStat.getTotalLogRecords());
-                row.add(hoodieWriteStat.getTotalUpdatedRecordsCompacted());
-                row.add(hoodieWriteStat.getTotalWriteBytes());
-                row.add(hoodieWriteStat.getTotalWriteErrors());
-                return row;
-              });
-            }).map(rowList -> rowList.toArray(new Comparable[0]));
+            return metadata.getPartitionToWriteStats().values().stream().flatMap(hoodieWriteStats -> hoodieWriteStats.stream().map(hoodieWriteStat -> {
+              List<Comparable> row = new ArrayList<>();
+              row.add(action);
+              row.add(instantTime);
+              row.add(hoodieWriteStat.getPartitionPath());
+              row.add(hoodieWriteStat.getFileId());
+              row.add(hoodieWriteStat.getPrevCommit());
+              row.add(hoodieWriteStat.getNumWrites());
+              row.add(hoodieWriteStat.getNumInserts());
+              row.add(hoodieWriteStat.getNumDeletes());
+              row.add(hoodieWriteStat.getNumUpdateWrites());
+              row.add(hoodieWriteStat.getTotalLogFiles());
+              row.add(hoodieWriteStat.getTotalLogBlocks());
+              row.add(hoodieWriteStat.getTotalCorruptLogBlock());
+              row.add(hoodieWriteStat.getTotalRollbackBlocks());
+              row.add(hoodieWriteStat.getTotalLogRecords());
+              row.add(hoodieWriteStat.getTotalUpdatedRecordsCompacted());
+              row.add(hoodieWriteStat.getTotalWriteBytes());
+              row.add(hoodieWriteStat.getTotalWriteErrors());
+              return row;
+            })).map(rowList -> rowList.toArray(new Comparable[0]));
           }).collect(Collectors.toList());
       allStats.addAll(readCommits);
       reader.close();
@@ -183,14 +181,7 @@ public class ArchivedCommitsCommand implements CommandMarker {
           }
           break;
         }
-        case HoodieTimeline.COMMIT_ACTION: {
-          commitDetails.add(record.get("commitTime"));
-          commitDetails.add(record.get("actionType").toString());
-          if (!skipMetadata) {
-            commitDetails.add(record.get("hoodieCommitMetadata").toString());
-          }
-          break;
-        }
+        case HoodieTimeline.COMMIT_ACTION:
         case HoodieTimeline.DELTA_COMMIT_ACTION: {
           commitDetails.add(record.get("commitTime"));
           commitDetails.add(record.get("actionType").toString());

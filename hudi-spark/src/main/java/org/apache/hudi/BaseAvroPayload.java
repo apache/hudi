@@ -31,7 +31,6 @@ import java.io.Serializable;
  * Base class for all AVRO record based payloads, that can be ordered based on a field.
  */
 public abstract class BaseAvroPayload implements Serializable {
-
   /**
    * Avro data extracted from the source converted to bytes.
    */
@@ -43,8 +42,10 @@ public abstract class BaseAvroPayload implements Serializable {
   protected final Comparable orderingVal;
 
   /**
-   * @param record
-   * @param orderingVal
+   * Instantiate {@link BaseAvroPayload}.
+   *
+   * @param record      Generic record for the payload.
+   * @param orderingVal {@link Comparable} to be used in pre combine.
    */
   public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
     try {

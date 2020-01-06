@@ -99,20 +99,18 @@ public class RollbacksCommand implements CommandMarker {
     HoodieRollbackMetadata metadata = AvroUtils.deserializeAvroMetadata(
         activeTimeline.getInstantDetails(new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
         HoodieRollbackMetadata.class);
-    metadata.getPartitionMetadata().entrySet().forEach(e -> {
-      Stream
-          .concat(e.getValue().getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),
-              e.getValue().getFailedDeleteFiles().stream().map(f -> Pair.of(f, false)))
-          .forEach(fileWithDeleteStatus -> {
-            Comparable[] row = new Comparable[5];
-            row[0] = metadata.getStartRollbackTime();
-            row[1] = metadata.getCommitsRollback().toString();
-            row[2] = e.getKey();
-            row[3] = fileWithDeleteStatus.getLeft();
-            row[4] = fileWithDeleteStatus.getRight();
-            rows.add(row);
-          });
-    });
+    metadata.getPartitionMetadata().forEach((key, value) -> Stream
+            .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),
+                    value.getFailedDeleteFiles().stream().map(f -> Pair.of(f, false)))
+            .forEach(fileWithDeleteStatus -> {
+              Comparable[] row = new Comparable[5];
+              row[0] = metadata.getStartRollbackTime();
+              row[1] = metadata.getCommitsRollback().toString();
+              row[2] = key;
+              row[3] = fileWithDeleteStatus.getLeft();
+              row[4] = fileWithDeleteStatus.getRight();
+              rows.add(row);
+            }));
 
     TableHeader header = new TableHeader().addTableHeaderField("Instant").addTableHeaderField("Rolledback Instants")
         .addTableHeaderField("Partition").addTableHeaderField("Deleted File").addTableHeaderField("Succeeded");

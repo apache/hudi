@@ -46,12 +46,10 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
   IntervalTreeBasedGlobalIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
     List<BloomIndexFileInfo> allIndexFiles = new ArrayList<>();
 
-    partitionToFileIndexInfo.forEach((parition, bloomIndexFileInfoList) -> {
-      bloomIndexFileInfoList.forEach(file -> {
-        fileIdToPartitionPathMap.put(file.getFileId(), parition);
-        allIndexFiles.add(file);
-      });
-    });
+    partitionToFileIndexInfo.forEach((parition, bloomIndexFileInfoList) -> bloomIndexFileInfoList.forEach(file -> {
+      fileIdToPartitionPathMap.put(file.getFileId(), parition);
+      allIndexFiles.add(file);
+    }));
 
     // Note that the interval tree implementation doesn't have auto-balancing to ensure logN search time.
     // So, we are shuffling the input here hoping the tree will not have any skewness. If not, the tree could be skewed

@@ -79,7 +79,7 @@ import org.apache.spark.storage.StorageLevel;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -347,7 +347,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       // perform index loop up to get existing location of records
       JavaRDD<HoodieRecord<T>> taggedRecords = index.tagLocation(dedupedRecords, jsc, table);
       // filter out non existant keys/records
-      JavaRDD<HoodieRecord<T>> taggedValidRecords = taggedRecords.filter(record -> record.isCurrentLocationKnown());
+      JavaRDD<HoodieRecord<T>> taggedValidRecords = taggedRecords.filter(HoodieRecord::isCurrentLocationKnown);
       if (!taggedValidRecords.isEmpty()) {
         metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
         indexTimer = null;
@@ -392,7 +392,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
     JavaRDD<WriteStatus> writeStatusRDD = repartitionedRecords
         .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(commitTime, config, table, fileIDPrefixes), true)
-        .flatMap(writeStatuses -> writeStatuses.iterator());
+        .flatMap(List::iterator);
 
     return updateIndexAndCommitIfNeeded(writeStatusRDD, table, commitTime);
   }
@@ -424,14 +424,14 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       throws HoodieCommitException {
     try {
       HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-      profile.getPartitionPaths().stream().forEach(path -> {
+      profile.getPartitionPaths().forEach(path -> {
         WorkloadStat partitionStat = profile.getWorkloadStat(path.toString());
-        partitionStat.getUpdateLocationToCount().entrySet().stream().forEach(entry -> {
+        partitionStat.getUpdateLocationToCount().forEach((key, value) -> {
           HoodieWriteStat writeStat = new HoodieWriteStat();
-          writeStat.setFileId(entry.getKey());
+          writeStat.setFileId(key);
           // TODO : Write baseCommitTime is possible here ?
-          writeStat.setPrevCommit(entry.getValue().getKey());
-          writeStat.setNumUpdateWrites(entry.getValue().getValue());
+          writeStat.setPrevCommit(value.getKey());
+          writeStat.setNumUpdateWrites(value.getValue());
           metadata.addWriteStat(path.toString(), writeStat);
         });
       });
@@ -804,7 +804,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     ImmutableMap.Builder<String, List<HoodieRollbackStat>> instantsToStats = ImmutableMap.builder();
     table.getActiveTimeline().createNewInstant(
         new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, startRollbackInstant));
-    instantsToRollback.stream().forEach(instant -> {
+    instantsToRollback.forEach(instant -> {
       try {
         switch (instant.getAction()) {
           case HoodieTimeline.COMMIT_ACTION:
@@ -850,7 +850,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     // Check if any of the commits is a savepoint - do not allow rollback on those commits
     List<String> savepoints = table.getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
-    savepoints.stream().forEach(s -> {
+    savepoints.forEach(s -> {
       if (s.contains(commitToRollback)) {
         throw new HoodieRollbackException(
             "Could not rollback a savepointed commit. Delete savepoint first before rolling back" + s);
@@ -864,19 +864,18 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
     // Make sure only the last n commits are being rolled back
     // If there is a commit in-between or after that is not rolled back, then abort
-    String lastCommit = commitToRollback;
 
-    if ((lastCommit != null) && !commitTimeline.empty()
-        && !commitTimeline.findInstantsAfter(lastCommit, Integer.MAX_VALUE).empty()) {
+    if ((commitToRollback != null) && !commitTimeline.empty()
+        && !commitTimeline.findInstantsAfter(commitToRollback, Integer.MAX_VALUE).empty()) {
       throw new HoodieRollbackException(
-          "Found commits after time :" + lastCommit + ", please rollback greater commits first");
+          "Found commits after time :" + commitToRollback + ", please rollback greater commits first");
     }
 
     List<String> inflights = inflightAndRequestedCommitTimeline.getInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
-    if ((lastCommit != null) && !inflights.isEmpty() && (inflights.indexOf(lastCommit) != inflights.size() - 1)) {
+    if ((commitToRollback != null) && !inflights.isEmpty() && (inflights.indexOf(commitToRollback) != inflights.size() - 1)) {
       throw new HoodieRollbackException(
-          "Found in-flight commits after time :" + lastCommit + ", please rollback greater commits first");
+          "Found in-flight commits after time :" + commitToRollback + ", please rollback greater commits first");
     }
 
     List<HoodieRollbackStat> stats = table.rollback(jsc, instantToRollback, true);
@@ -895,7 +894,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       List<String> commitsToRollback, final String startRollbackTime) throws IOException {
     HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
     Option<Long> durationInMs = Option.empty();
-    Long numFilesDeleted = rollbackStats.stream().mapToLong(stat -> stat.getSuccessDeleteFiles().size()).sum();
+    long numFilesDeleted = rollbackStats.stream().mapToLong(stat -> stat.getSuccessDeleteFiles().size()).sum();
     if (context != null) {
       durationInMs = Option.of(metrics.getDurationInMs(context.stop()));
       metrics.updateRollbackMetrics(durationInMs.get(), numFilesDeleted);
@@ -923,7 +922,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       List<String> commitsToRollback, final String startRestoreTime, final String restoreToInstant) throws IOException {
     HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
     Option<Long> durationInMs = Option.empty();
-    Long numFilesDeleted = 0L;
+    long numFilesDeleted = 0L;
     for (Map.Entry<String, List<HoodieRollbackStat>> commitToStat : commitToStats.entrySet()) {
       List<HoodieRollbackStat> stats = commitToStat.getValue();
       numFilesDeleted = stats.stream().mapToLong(stat -> stat.getSuccessDeleteFiles().size()).sum();
@@ -962,7 +961,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
       if (rollbackInstantOpt.isPresent()) {
         List<HoodieRollbackStat> stats = doRollbackAndGetStats(rollbackInstantOpt.get());
-        finishRollback(context, stats, Arrays.asList(commitToRollback), startRollbackTime);
+        finishRollback(context, stats, Collections.singletonList(commitToRollback), startRollbackTime);
       }
     } catch (IOException e) {
       throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitToRollback,
@@ -1124,7 +1123,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Deduplicate Hoodie records, using the given deduplication funciton.
+   * Deduplicate Hoodie records, using the given deduplication function.
    */
   JavaRDD<HoodieRecord<T>> deduplicateRecords(JavaRDD<HoodieRecord<T>> records, int parallelism) {
     boolean isIndexingGlobal = index.isGlobal();
@@ -1144,7 +1143,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Deduplicate Hoodie records, using the given deduplication funciton.
+   * Deduplicate Hoodie records, using the given deduplication function.
    */
   JavaRDD<HoodieKey> deduplicateKeys(JavaRDD<HoodieKey> keys, int parallelism) {
     boolean isIndexingGlobal = index.isGlobal();
@@ -1342,9 +1341,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
     // Copy extraMetadata
     extraMetadata.ifPresent(m -> {
-      m.entrySet().stream().forEach(e -> {
-        metadata.addMetadata(e.getKey(), e.getValue());
-      });
+      m.forEach(metadata::addMetadata);
     });
 
     LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);

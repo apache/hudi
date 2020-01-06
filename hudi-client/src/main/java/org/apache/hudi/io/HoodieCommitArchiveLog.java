@@ -60,6 +60,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -152,7 +153,7 @@ public class HoodieCommitArchiveLog {
           } else {
             return new ArrayList<HoodieInstant>();
           }
-        }).flatMap(i -> i.stream());
+        }).flatMap(Collection::stream);
 
     // TODO (na) : Add a way to return actions associated with a timeline and then merge/unify
     // with logic above to avoid Stream.concats
@@ -171,9 +172,7 @@ public class HoodieCommitArchiveLog {
             s.getTimestamp(), HoodieTimeline.LESSER_OR_EQUAL));
       }).filter(s -> {
         // Ensure commits >= oldest pending compaction commit is retained
-        return oldestPendingCompactionInstant.map(instant -> {
-          return HoodieTimeline.compareTimestamps(instant.getTimestamp(), s.getTimestamp(), HoodieTimeline.GREATER);
-        }).orElse(true);
+        return oldestPendingCompactionInstant.map(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), s.getTimestamp(), HoodieTimeline.GREATER)).orElse(true);
       }).limit(commitTimeline.countInstants() - minCommitsToKeep));
     }
 
@@ -204,10 +203,8 @@ public class HoodieCommitArchiveLog {
     }
 
     // Remove older meta-data from auxiliary path too
-    Option<HoodieInstant> latestCommitted = Option.fromJavaOptional(archivedInstants.stream().filter(i -> {
-      return i.isCompleted() && (i.getAction().equals(HoodieTimeline.COMMIT_ACTION)
-          || (i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)));
-    }).max(Comparator.comparing(HoodieInstant::getTimestamp)));
+    Option<HoodieInstant> latestCommitted = Option.fromJavaOptional(archivedInstants.stream().filter(i -> i.isCompleted() && (i.getAction().equals(HoodieTimeline.COMMIT_ACTION)
+        || (i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)))).max(Comparator.comparing(HoodieInstant::getTimestamp)));
     LOG.info("Latest Committed Instant=" + latestCommitted);
     if (latestCommitted.isPresent()) {
       success &= deleteAllInstantsOlderorEqualsInAuxMetaFolder(latestCommitted.get());

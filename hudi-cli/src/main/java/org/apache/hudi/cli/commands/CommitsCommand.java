@@ -53,7 +53,7 @@ public class CommitsCommand implements CommandMarker {
 
   @CliCommand(value = "commits show", help = "Show the commits")
   public String showCommits(
-      @CliOption(key = {"limit"}, mandatory = false, help = "Limit commits",
+      @CliOption(key = {"limit"}, help = "Limit commits",
           unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
@@ -65,8 +65,7 @@ public class CommitsCommand implements CommandMarker {
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
     List<HoodieInstant> commits = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
-    for (int i = 0; i < commits.size(); i++) {
-      HoodieInstant commit = commits.get(i);
+    for (HoodieInstant commit : commits) {
       HoodieCommitMetadata commitMetadata =
           HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get(), HoodieCommitMetadata.class);
       rows.add(new Comparable[] {commit.getTimestamp(), commitMetadata.fetchTotalBytesWritten(),
@@ -76,9 +75,7 @@ public class CommitsCommand implements CommandMarker {
     }
 
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put("Total Bytes Written", entry -> {
-      return NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
-    });
+    fieldNameToConverterMap.put("Total Bytes Written", entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString()))));
 
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("Total Bytes Written")
         .addTableHeaderField("Total Files Added").addTableHeaderField("Total Files Updated")
@@ -95,7 +92,7 @@ public class CommitsCommand implements CommandMarker {
 
   @CliCommand(value = "commit rollback", help = "Rollback a commit")
   public String rollbackCommit(@CliOption(key = {"commit"}, help = "Commit to rollback") final String commitTime,
-      @CliOption(key = {"sparkProperties"}, help = "Spark Properites File Path") final String sparkPropertiesPath)
+      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
@@ -163,9 +160,7 @@ public class CommitsCommand implements CommandMarker {
     }
 
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put("Total Bytes Written", entry -> {
-      return NumericUtils.humanReadableByteCount((Long.valueOf(entry.toString())));
-    });
+    fieldNameToConverterMap.put("Total Bytes Written", entry -> NumericUtils.humanReadableByteCount((Long.parseLong(entry.toString()))));
 
     TableHeader header = new TableHeader().addTableHeaderField("Partition Path")
         .addTableHeaderField("Total Files Added").addTableHeaderField("Total Files Updated")
@@ -240,8 +235,7 @@ public class CommitsCommand implements CommandMarker {
   }
 
   @CliCommand(value = "commits sync", help = "Compare commits with another Hoodie dataset")
-  public String syncCommits(@CliOption(key = {"path"}, help = "Path of the dataset to compare to") final String path)
-      throws Exception {
+  public String syncCommits(@CliOption(key = {"path"}, help = "Path of the dataset to compare to") final String path) {
     HoodieCLI.syncTableMetadata = new HoodieTableMetaClient(HoodieCLI.conf, path);
     HoodieCLI.state = HoodieCLI.CLIState.SYNC;
     return "Load sync state between " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " and "
