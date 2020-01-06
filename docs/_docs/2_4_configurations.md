@@ -274,7 +274,11 @@ Property: `hoodie.index.hbase.zknode.path` <br/>
 Property: `hoodie.index.hbase.table` <br/>
 <span style="color:grey">Only applies if index type is HBASE. HBase Table name to use as the index. Hudi stores the row_key and [partition_path, fileID, commitTime] mapping in the table.</span>
 
-    
+##### bloomIndexUpdatePartitionPath(updatePartitionPath = false) {#bloomIndexUpdatePartitionPath}
+Property: `hoodie.bloom.index.update.partition.path` <br/>
+<span style="color:grey">Only applies if index type is GLOBAL_BLOOM. <br/>When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition.</span>
+
+
 ### Storage configs
 Controls aspects around sizing parquet and log files.
 
