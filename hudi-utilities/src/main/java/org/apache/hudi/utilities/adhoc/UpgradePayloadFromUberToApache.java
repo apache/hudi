@@ -28,8 +28,6 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -38,15 +36,18 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * This is an one-time use class meant for migrating the configuration for "hoodie.compaction.payload.class" in
- * .hoodie/hoodie.properties from com.uber.hoodie to org.apache.hudi . It takes in a file containing base-paths for a set
- * of hudi datasets and does the migration
+ * This is an one-time use class meant for migrating the configuration for
+ * "hoodie.compaction.payload.class" in .hoodie/hoodie.properties from com.uber.hoodie to
+ * org.apache.hudi . It takes in a file containing base-paths for a set of hudi datasets and does
+ * the migration.
  */
 public class UpgradePayloadFromUberToApache implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(UpgradePayloadFromUberToApache.class);
+  private static final Logger LOG = LoggerFactory.getLogger(UpgradePayloadFromUberToApache.class);
 
   private final Config cfg;
 
@@ -59,36 +60,37 @@ public class UpgradePayloadFromUberToApache implements Serializable {
     try (BufferedReader reader = new BufferedReader(new FileReader(cfg.inputPath))) {
       basePath = reader.readLine();
     } catch (IOException e) {
-      LOG.error("Read from path: " + cfg.inputPath + " error.", e);
+      LOG.error("Read from path: {} error.", cfg.inputPath, e);
     }
 
     while (basePath != null) {
       basePath = basePath.trim();
       if (!basePath.startsWith("#")) {
-        LOG.info("Performing upgrade for " + basePath);
+        LOG.info("Performing upgrade for {}", basePath);
         String metaPath = String.format("%s/.hoodie", basePath);
         HoodieTableMetaClient metaClient =
-            new HoodieTableMetaClient(FSUtils.prepareHadoopConf(new Configuration()), basePath, false);
+            new HoodieTableMetaClient(FSUtils.prepareHadoopConf(new Configuration()), basePath,
+                false);
         HoodieTableConfig tableConfig = metaClient.getTableConfig();
         if (tableConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
           Map<String, String> propsMap = tableConfig.getProps();
           if (propsMap.containsKey(HoodieCompactionConfig.PAYLOAD_CLASS_PROP)) {
             String payloadClass = propsMap.get(HoodieCompactionConfig.PAYLOAD_CLASS_PROP);
-            LOG.info("Found payload class=" + payloadClass);
+            LOG.info("Found payload class={}", payloadClass);
             if (payloadClass.startsWith("com.uber.hoodie")) {
               String newPayloadClass = payloadClass.replace("com.uber.hoodie", "org.apache.hudi");
-              LOG.info("Replacing payload class (" + payloadClass + ") with (" + newPayloadClass + ")");
+              LOG.info("Replacing payload class ({}) with ({})", payloadClass, newPayloadClass);
               Map<String, String> newPropsMap = new HashMap<>(propsMap);
               newPropsMap.put(HoodieCompactionConfig.PAYLOAD_CLASS_PROP, newPayloadClass);
               Properties props = new Properties();
               props.putAll(newPropsMap);
-              HoodieTableConfig.createHoodieProperties(metaClient.getFs(), new Path(metaPath), props);
-              LOG.info("Finished upgrade for " + basePath);
+              HoodieTableConfig
+                  .createHoodieProperties(metaClient.getFs(), new Path(metaPath), props);
+              LOG.info("Finished upgrade for {}", basePath);
             }
           }
         } else {
-          LOG.info("Skipping as this table is COW table. BasePath=" + basePath);
-
+          LOG.info("Skipping as this table is COW table. BasePath={}", basePath);
         }
       }
     }

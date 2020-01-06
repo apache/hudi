@@ -28,18 +28,18 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class HoodieCompactor {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
   private final Config cfg;
   private transient FileSystem fs;
   private TypedProperties props;
@@ -110,7 +110,7 @@ public class HoodieCompactor {
         }
       } while (ret != 0 && retry-- > 0);
     } catch (Throwable t) {
-      LOG.error(t);
+      LOG.error("The compact error:", t);
     }
     return ret;
   }

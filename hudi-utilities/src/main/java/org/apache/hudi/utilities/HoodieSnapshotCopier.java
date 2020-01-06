@@ -36,8 +36,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -47,6 +45,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Tuple2;
 
 /**
@@ -54,7 +54,7 @@ import scala.Tuple2;
  */
 public class HoodieSnapshotCopier implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieSnapshotCopier.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSnapshotCopier.class);
 
   static class Config implements Serializable {
 

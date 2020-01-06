@@ -28,8 +28,6 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
@@ -37,10 +35,12 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
 import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class HoodieIncrSource extends RowSource {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieIncrSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieIncrSource.class);
 
   protected static class Config {
 
@@ -109,7 +109,7 @@ public class HoodieIncrSource extends RowSource {
         numInstantsPerFetch, beginInstant, readLatestOnMissingCkpt);
 
     if (instantEndpts.getKey().equals(instantEndpts.getValue())) {
-      LOG.warn("Already caught up. Begin Checkpoint was :" + instantEndpts.getKey());
+      LOG.warn("Already caught up. Begin Checkpoint was :{}", instantEndpts.getKey());
       return Pair.of(Option.empty(), instantEndpts.getKey());
     }
 
