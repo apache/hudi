@@ -87,10 +87,10 @@ var store = [{
         "title": "Connect with us at Strata San Jose March 2017",
         "excerpt":"We will be presenting Hudi &amp; general concepts around how incremental processing works at Uber. Catch our talk “Incremental Processing on Hadoop At Uber”   ","categories": [],
         "tags": [],
-        "url": "http://0.0.0.0:4000/strata-talk-2017/",
+        "url": "http://0.0.0.0:4000/blog/strata.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "Hudi entered Apache Incubator",
         "excerpt":"In the coming weeks, we will be moving in our new home on the Apache Incubator.   ","categories": [],
         "tags": [],
-        "url": "http://0.0.0.0:4000/asf-incubation/",
+        "url": "http://0.0.0.0:4000/blog/asf.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},]

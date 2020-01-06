@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
 
-<!-- begin _includes/seo.html --><title>Quick-Start Guide -</title>
+<!-- begin _includes/seo.html --><title>Quick-Start Guide - Apache Hudi</title>
 <meta name="description" content="This guide provides a quick peek at Hudi’s capabilities using spark-shell. Using Spark datasources, we will walk through code snippets that allows you to insert and update a Hudi dataset of default storage type: Copy on Write. After each write operation we will also show how to read the data both snapshot and incrementally.">
 
 <meta property="og:type" content="article">
@@ -111,7 +111,7 @@
     </div>
   </div>
 </div>
-<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/incubator-hudi/issues">Report on Issue</a>.
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://issues.apache.org/jira/projects/HUDI/summary">file a jira</a>.
   Click <a href="/"> here</a> back to old site.</p>
 
     <div class="initial-content">
@@ -443,7 +443,7 @@ and write DataFrame into the hudi dataset.</p>
 </code></pre></div></div>
 
 <p class="notice--info">Notice that the save mode is now <code class="highlighter-rouge">Append</code>. In general, always use append mode unless you are trying to create the dataset for the first time.
-<a href="#query-data">Querying</a> the data again will now show updated trips. Each write operation generates a new <a href="http://hudi.incubator.apache.org/concepts.html">commit</a> 
+<a href="#query-data">Querying</a> the data again will now show updated trips. Each write operation generates a new <a href="/newsite-content/docs/concepts.html">commit</a> 
 denoted by the timestamp. Look for changes in <code class="highlighter-rouge">_hoodie_commit_time</code>, <code class="highlighter-rouge">rider</code>, <code class="highlighter-rouge">driver</code> fields for the same <code class="highlighter-rouge">_hoodie_record_key</code>s in previous commit.</p>
 
 <h2 id="incremental-query">Incremental query</h2>
@@ -507,7 +507,6 @@ dependent systems running locally. We recommend you replicate the same setup and
 steps <a href="/newsite-content/docs/docker_demo.html">here</a> to get a taste for it. Also, if you are looking for ways to migrate your existing data 
 to Hudi, refer to <a href="/newsite-content/docs/migration_guide.html">migration guide</a>.</p>
 
-        
       </section>
 
       <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>

@@ -24,7 +24,7 @@ To contribute code, you need
 
 To contribute, you would need to do the following
  
- - Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [quickstart](/docs/quick-start-guide.html)
+ - Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [quickstart](/newsite-content/docs/quick-start-guide.html)
  - [Recommended] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please setup your IDE with style files from [here](https://github.com/apache/incubator-hudi/tree/master/style).
 These instructions have been tested on IntelliJ. 
  - [Recommended] Set up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.
@@ -65,7 +65,7 @@ and more importantly also try to improve the process along the way as well.
       - If you intend to target the JIRA for a specific release, please fill in the `fix version(s)` field, with the [release number](https://issues.apache.org/jira/projects/HUDI/releases).
       - Summary should be descriptive enough to catch the essence of the problem/ feature
       - Where necessary, capture the version of Hudi/Spark/Hive/Hadoop/Cloud environments in the ticket
-      - Whenever possible, provide steps to reproduce via sample code or on the [docker setup](https://hudi.apache.org/docker_demo.html)
+      - Whenever possible, provide steps to reproduce via sample code or on the [docker setup](/newsite-content/docs/docker_demo.html)
  - All newly filed JIRAs are placed in the `NEW` state. If you are sure about this JIRA representing valid, scoped piece of work, please click `Accept Issue` to move it `OPEN` state
  - If you are not sure, please wait for a PMC/Committer to confirm/triage the issue and accept it. This process avoids contributors spending time on JIRAs with unclear scope.
  - Whenever possible, break down large JIRAs (e.g JIRAs resulting from an [RFC](https://cwiki.apache.org/confluence/display/HUDI/RFC+Process)) into `sub tasks` by clicking `More > create sub-task` from the parent JIRA , 

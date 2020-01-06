@@ -69,7 +69,7 @@ Committers are chosen by a majority vote of the Apache Hudi [PMC](https://www.ap
 
 ## Code Contributions
 
-Useful resources for contributing can be found under the "Developers" top menu.
+Useful resources for contributing can be found under the "Quick Links" left menu.
 Specifically, please refer to the detailed [contribution guide](contributing.html).
 
 ## Accounts

@@ -22,9 +22,9 @@ At a high level, you can control behaviour at few levels.
 Immaterial of whether RDD/WriteClient APIs or Datasource is used, the following information helps configure access
 to cloud stores.
 
- * [AWS S3](/docs/s3_hoodie) <br/>
+ * [AWS S3](/newsite-content/docs/s3_hoodie) <br/>
    Configurations required for S3 and Hudi co-operability.
- * [Google Cloud Storage](/docs/gcs_hoodie) <br/>
+ * [Google Cloud Storage](/newsite-content/docs/gcs_hoodie) <br/>
    Configurations required for GCS and Hudi co-operability.
 
 ### Spark Datasource Configs {#spark-datasource}
