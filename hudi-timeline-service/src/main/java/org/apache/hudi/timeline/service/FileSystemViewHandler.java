@@ -39,14 +39,14 @@ import io.javalin.Context;
 import io.javalin.Handler;
 import io.javalin.Javalin;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Main REST Handler class that handles local view staleness and delegates calls to slice/data-file/timeline handlers.
@@ -54,7 +54,7 @@ import java.util.stream.Collectors;
 public class FileSystemViewHandler {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  private static final Logger LOG = LogManager.getLogger(FileSystemViewHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileSystemViewHandler.class);
 
   private final FileSystemViewManager viewManager;
   private final Javalin app;
@@ -87,8 +87,9 @@ public class FileSystemViewHandler {
     HoodieTimeline localTimeline =
         viewManager.getFileSystemView(basePath).getTimeline().filterCompletedAndCompactionInstants();
     if (LOG.isDebugEnabled()) {
-      LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
-          + "], localTimeline=" + localTimeline.getInstants().collect(Collectors.toList()));
+      LOG.debug("Client [ LastTs={}, TimelineHash={}], localTimeline={}",
+          lastKnownInstantFromClient, timelineHashFromClient,
+          localTimeline.getInstants().collect(Collectors.toList()));
     }
 
     if ((localTimeline.getInstants().count() == 0)
@@ -117,9 +118,9 @@ public class FileSystemViewHandler {
       synchronized (view) {
         if (isLocalViewBehind(ctx)) {
           HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-          LOG.warn("Syncing view as client passed last known instant " + lastKnownInstantFromClient
-              + " as last known instant but server has the folling timeline :"
-              + localTimeline.getInstants().collect(Collectors.toList()));
+          LOG.warn(
+              "Syncing view as client passed last known instant {} as last known instant but server has the folling timeline :{}",
+              lastKnownInstantFromClient, localTimeline.getInstants().collect(Collectors.toList()));
           view.sync();
           return true;
         }
@@ -134,7 +135,7 @@ public class FileSystemViewHandler {
     String result =
         prettyPrint ? OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj) : OBJECT_MAPPER.writeValueAsString(obj);
     long endJsonTs = System.currentTimeMillis();
-    LOG.debug("Jsonify TimeTaken=" + (endJsonTs - beginJsonTs));
+    LOG.debug("Jsonify TimeTaken={}", (endJsonTs - beginJsonTs));
     ctx.result(result);
   }
 
@@ -345,7 +346,7 @@ public class FileSystemViewHandler {
         }
       } catch (RuntimeException re) {
         success = false;
-        LOG.error("Got runtime exception servicing request " + context.queryString(), re);
+        LOG.error("Got runtime exception servicing request {}", context.queryString(), re);
         throw re;
       } finally {
         long endTs = System.currentTimeMillis();
