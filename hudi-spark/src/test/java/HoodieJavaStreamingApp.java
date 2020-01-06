@@ -28,8 +28,8 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -94,7 +94,7 @@ public class HoodieJavaStreamingApp {
   public Boolean help = false;
 
 
-  private static final Logger LOG = LogManager.getLogger(HoodieJavaStreamingApp.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaStreamingApp.class);
 
   public static void main(String[] args) throws Exception {
     HoodieJavaStreamingApp cli = new HoodieJavaStreamingApp();
@@ -178,13 +178,13 @@ public class HoodieJavaStreamingApp {
     // wait for spark streaming to process one microbatch
     Thread.sleep(3000);
     String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-    LOG.info("First commit at instant time :" + commitInstantTime1);
+    LOG.info("First commit at instant time :{}", commitInstantTime1);
 
     inputDF2.write().mode(SaveMode.Append).json(streamingSourcePath);
     // wait for spark streaming to process one microbatch
     Thread.sleep(3000);
     String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-    LOG.info("Second commit at instant time :" + commitInstantTime2);
+    LOG.info("Second commit at instant time :{}", commitInstantTime2);
 
     /**
      * Read & do some queries
@@ -209,7 +209,7 @@ public class HoodieJavaStreamingApp {
           // For incremental view, pass in the root/base path of dataset
           .load(tablePath);
 
-      LOG.info("You will only see records from : " + commitInstantTime2);
+      LOG.info("You will only see records from : {}", commitInstantTime2);
       hoodieIncViewDF.groupBy(hoodieIncViewDF.col("_hoodie_commit_time")).count().show();
     }
   }
@@ -243,7 +243,7 @@ public class HoodieJavaStreamingApp {
    */
   private DataStreamWriter<Row> updateHiveSyncConfig(DataStreamWriter<Row> writer) {
     if (enableHiveSync) {
-      LOG.info("Enabling Hive sync to " + hiveJdbcUrl);
+      LOG.info("Enabling Hive sync to {}", hiveJdbcUrl);
       writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), hiveTable)
           .option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), hiveDB)
           .option(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), hiveJdbcUrl)
