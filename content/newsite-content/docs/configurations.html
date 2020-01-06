@@ -337,11 +337,29 @@
 
       <section class="page__content" itemprop="text">
         
-          <style>
-            .page {
-              padding-right: 0 !important;
-            }
-          </style>
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> In this page</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#talking-to-cloud-storage">Talking to Cloud Storage</a></li>
+  <li><a href="#spark-datasource">Spark Datasource Configs</a>
+    <ul>
+      <li><a href="#write-options">Write Options</a></li>
+      <li><a href="#read-options">Read Options</a></li>
+    </ul>
+  </li>
+  <li><a href="#writeclient-configs">WriteClient Configs</a>
+    <ul>
+      <li><a href="#index-configs">Index configs</a></li>
+      <li><a href="#storage-configs">Storage configs</a></li>
+      <li><a href="#compaction-configs">Compaction configs</a></li>
+      <li><a href="#metrics-configs">Metrics configs</a></li>
+      <li><a href="#memory-configs">Memory configs</a></li>
+    </ul>
+  </li>
+</ul>
+          </nav>
+        </aside>
         
         <p>This page covers the different ways of configuring your job to write/read Hudi datasets. 
 At a high level, you can control behaviour at few levels.</p>

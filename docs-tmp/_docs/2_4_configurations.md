@@ -3,7 +3,7 @@ title: Configurations
 keywords: garbage collection, hudi, jvm, configs, tuning
 permalink: /docs/configurations.html
 summary: "Here we list all possible configurations and what they mean"
-toc: false
+toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
