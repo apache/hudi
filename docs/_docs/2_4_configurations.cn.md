@@ -291,7 +291,11 @@ Hudi将有关提交、保存点、清理审核日志等的所有主要元数据�
 属性：`hoodie.index.hbase.table` <br/>
 <span style="color:grey">仅在索引类型为HBASE时适用。HBase表名称，用作索引。Hudi将row_key和[partition_path, fileID, commitTime]映射存储在表中。</span>
 
-    
+##### bloomIndexUpdatePartitionPath(updatePartitionPath = false) {#bloomIndexUpdatePartitionPath}
+属性：`hoodie.bloom.index.update.partition.path` <br/>
+<span style="color:grey">仅在索引类型为GLOBAL_BLOOM时适用。<br/>为true时，当对一个已有记录执行包含分区路径的更新操作时，将会导致把新记录插入到新分区，而把原有记录从旧分区里删除。为false时，只对旧分区的原有记录进行更新。</span>
+
+
 ### 存储选项
 控制有关调整parquet和日志文件大小的方面。
 
