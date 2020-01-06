@@ -1,4 +1,4 @@
-source 'https://gems.ruby-china.com'
+source 'https://rubygems.org'
 
 gem 'jekyll', '3.7.2'
 gem 'addressable', '2.4.0'

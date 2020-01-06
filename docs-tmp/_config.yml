@@ -32,7 +32,7 @@ site_url                 : https://hudi.apache.org
 # Site QuickLinks
 author:
   name             : "Quick Links"
-  bio              : "Apache Hudi *ingests* & *manages* storage of large analytical datasets over DFS (hdfs or cloud stores)."
+  bio              : "Hudi *ingests* & *manages* storage of large analytical datasets over DFS."
   links:
     - label: "Documentation"
       icon: "fa fa-book"

@@ -72,8 +72,11 @@ mkdir -p docs/newsite-content
 rm -rf docs/assets/*
 rm -rf docs/newsite-content/*
 
-\cp -rf docs-new/_site/assets/* docs/assets
-\cp -rf docs-new/_site/* docs/newsite-content
+\cp -rf docs-tmp/_site/assets/* docs/assets
+\cp -rf docs-tmp/_site/* docs/newsite-content
+
+
+
 
 cd docs/_site
 python -m SimpleHTTPServer
