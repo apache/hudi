@@ -353,7 +353,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    * @param isDeltaCommit is Delta Commit ?
    * @param instantsToFiles List of files associated with each instant
    * @param rolledBackInstants List of rolled-back instants
-   * @param emptyRestoreInstant Restore instant at which dataset becomes empty
+   * @param emptyRestoreInstant Restore instant at which table becomes empty
    */
   private void testRestore(SyncableFileSystemView view, List<String> newRestoreInstants, boolean isDeltaCommit,
       Map<String, List<String>> instantsToFiles, List<String> rolledBackInstants, String emptyRestoreInstant,

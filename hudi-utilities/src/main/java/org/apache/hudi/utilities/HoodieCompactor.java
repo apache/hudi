@@ -51,7 +51,7 @@ public class HoodieCompactor {
   }
 
   public static class Config implements Serializable {
-    @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the dataset", required = true)
+    @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
     public String tableName = null;

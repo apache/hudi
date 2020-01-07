@@ -224,7 +224,7 @@ public class UtilHelpers {
       }
     });
     if (errors.value() == 0) {
-      LOG.info(String.format("Dataset imported into hoodie dataset with %s instant time.", instantTime));
+      LOG.info(String.format("Table imported into hoodie with %s instant time.", instantTime));
       return 0;
     }
     LOG.error(String.format("Import failed with %d errors.", errors.value()));

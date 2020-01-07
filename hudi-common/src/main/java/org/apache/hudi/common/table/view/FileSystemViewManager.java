@@ -30,16 +30,16 @@ import org.apache.log4j.Logger;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * A container that can potentially hold one or more dataset's file-system views. There is one view for each dataset.
+ * A container that can potentially hold one or more table's file-system views. There is one view for each table.
  * This is a view built against a timeline containing completed actions. In an embedded timeline-server mode, this
- * typically holds only one dataset's view. In a stand-alone server mode, this can hold more than one dataset's views.
+ * typically holds only one table's view. In a stand-alone server mode, this can hold more than one table's views.
  *
  * FileSystemView can be stored "locally" using the following storage mechanisms: a. In Memory b. Spillable Map c.
  * RocksDB
  *
  * But there can be cases where the file-system view is managed remoted. For example : Embedded Timeline Server). In
  * this case, the clients will configure a remote filesystem view client (RemoteHoodieTableFileSystemView) for the
- * dataset which can connect to the remote file system view and fetch views. THere are 2 modes here : REMOTE_FIRST and
+ * table which can connect to the remote file system view and fetch views. THere are 2 modes here : REMOTE_FIRST and
  * REMOTE_ONLY REMOTE_FIRST : The file-system view implementation on client side will act as a remote proxy. In case, if
  * there is problem (or exceptions) querying remote file-system view, a backup local file-system view(using either one
  * of in-memory, spillable, rocksDB) is used to server file-system view queries REMOTE_ONLY : In this case, there is no
@@ -102,11 +102,11 @@ public class FileSystemViewManager {
   // FACTORY METHODS FOR CREATING FILE-SYSTEM VIEWS
 
   /**
-   * Create RocksDB based file System view for a dataset.
+   * Create RocksDB based file System view for a table.
    * 
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
-   * @param basePath Base Path of dataset
+   * @param basePath Base Path of table
    * @return
    */
   private static RocksDbBasedFileSystemView createRocksDBBasedFileSystemView(SerializableConfiguration conf,
@@ -117,11 +117,11 @@ public class FileSystemViewManager {
   }
 
   /**
-   * Create a spillable Map based file System view for a dataset.
+   * Create a spillable Map based file System view for a table.
    * 
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
-   * @param basePath Base Path of dataset
+   * @param basePath Base Path of table
    * @return
    */
   private static SpillableMapBasedFileSystemView createSpillableMapBasedFileSystemView(SerializableConfiguration conf,
@@ -133,11 +133,11 @@ public class FileSystemViewManager {
   }
 
   /**
-   * Create an in-memory file System view for a dataset.
+   * Create an in-memory file System view for a table.
    * 
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
-   * @param basePath Base Path of dataset
+   * @param basePath Base Path of table
    * @return
    */
   private static HoodieTableFileSystemView createInMemoryFileSystemView(SerializableConfiguration conf,
@@ -149,11 +149,11 @@ public class FileSystemViewManager {
   }
 
   /**
-   * Create a remote file System view for a dataset.
+   * Create a remote file System view for a table.
    * 
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
-   * @param metaClient Hoodie Table MetaClient for the dataset.
+   * @param metaClient Hoodie Table MetaClient for the table.
    * @return
    */
   private static RemoteHoodieTableFileSystemView createRemoteFileSystemView(SerializableConfiguration conf,

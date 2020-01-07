@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 /**
  * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are
  * loaded from hoodie.properties, these properties are usually set during initializing a path as hoodie base path and
- * never changes during the lifetime of a hoodie dataset.
+ * never changes during the lifetime of a hoodie table.
  *
  * @see HoodieTableMetaClient
  * @since 0.3.0
@@ -71,7 +71,7 @@ public class HoodieTableConfig implements Serializable {
   public HoodieTableConfig(FileSystem fs, String metaPath) {
     Properties props = new Properties();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
-    LOG.info("Loading dataset properties from " + propertyPath);
+    LOG.info("Loading table properties from " + propertyPath);
     try {
       try (FSDataInputStream inputStream = fs.open(propertyPath)) {
         props.load(inputStream);
@@ -144,7 +144,7 @@ public class HoodieTableConfig implements Serializable {
    * Read the payload class for HoodieRecords from the table properties.
    */
   public String getPayloadClass() {
-    // There could be datasets written with payload class from com.uber.hoodie. Need to transparently
+    // There could be tables written with payload class from com.uber.hoodie. Need to transparently
     // change to org.apache.hudi
     return props.getProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS).replace("com.uber.hoodie",
         "org.apache.hudi");
@@ -182,7 +182,7 @@ public class HoodieTableConfig implements Serializable {
   }
 
   /**
-   * Get the relative path of archive log folder under metafolder, for this dataset.
+   * Get the relative path of archive log folder under metafolder, for this table.
    */
   public String getArchivelogFolder() {
     return props.getProperty(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, DEFAULT_ARCHIVELOG_FOLDER);

@@ -26,7 +26,7 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
   */
 
 /**
-  * Options supported for reading hoodie datasets.
+  * Options supported for reading hoodie tables.
   */
 object DataSourceReadOptions {
   /**
@@ -73,7 +73,7 @@ object DataSourceReadOptions {
 }
 
 /**
-  * Options supported for writing hoodie datasets.
+  * Options supported for writing hoodie tables.
   */
 object DataSourceWriteOptions {
   /**
@@ -100,7 +100,7 @@ object DataSourceWriteOptions {
   val DEFAULT_STORAGE_TYPE_OPT_VAL = COW_STORAGE_TYPE_OPT_VAL
 
   /**
-    * Hive table name, to register the dataset into.
+    * Hive table name, to register the table into.
     *
     * Default:  None (mandatory)
     */

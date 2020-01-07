@@ -35,18 +35,18 @@ import org.springframework.stereotype.Component;
 import scala.collection.JavaConverters;
 
 /**
- * CLI command for importing parquet dataset to hudi dataset.
+ * CLI command for importing parquet table to hudi table.
  */
 @Component
 public class HDFSParquetImportCommand implements CommandMarker {
 
-  @CliCommand(value = "hdfsparquetimport", help = "Imports Parquet dataset to a hoodie dataset")
+  @CliCommand(value = "hdfsparquetimport", help = "Imports Parquet table to a hoodie table")
   public String convert(
       @CliOption(key = "upsert", unspecifiedDefaultValue = "false",
           help = "Uses upsert API instead of the default insert API of WriteClient") boolean useUpsert,
-      @CliOption(key = "srcPath", mandatory = true, help = "Base path for the input dataset") final String srcPath,
+      @CliOption(key = "srcPath", mandatory = true, help = "Base path for the input table") final String srcPath,
       @CliOption(key = "targetPath", mandatory = true,
-          help = "Base path for the target hoodie dataset") final String targetPath,
+          help = "Base path for the target hoodie table") final String targetPath,
       @CliOption(key = "tableName", mandatory = true, help = "Table name") final String tableName,
       @CliOption(key = "tableType", mandatory = true, help = "Table type") final String tableType,
       @CliOption(key = "rowKeyField", mandatory = true, help = "Row key field name") final String rowKeyField,
@@ -85,8 +85,8 @@ public class HDFSParquetImportCommand implements CommandMarker {
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
     if (exitCode != 0) {
-      return "Failed to import dataset to hoodie format";
+      return "Failed to import table to hoodie format";
     }
-    return "Dataset imported to hoodie format";
+    return "Table imported to hoodie format";
   }
 }

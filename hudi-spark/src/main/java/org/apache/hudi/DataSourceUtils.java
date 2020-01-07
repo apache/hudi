@@ -28,7 +28,7 @@ import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.DatasetNotFoundException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -186,8 +186,8 @@ public class DataSourceUtils {
       client = new HoodieReadClient<>(jssc, writeConfig, timelineService);
       return client.tagLocation(incomingHoodieRecords)
           .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
-    } catch (DatasetNotFoundException e) {
-      // this will be executed when there is no hoodie dataset yet
+    } catch (TableNotFoundException e) {
+      // this will be executed when there is no hoodie table yet
       // so no dups to drop
       return incomingHoodieRecords;
     } finally {

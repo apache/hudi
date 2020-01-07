@@ -37,7 +37,7 @@ public class HoodiePrompt extends DefaultPromptProvider {
       switch (HoodieCLI.state) {
         case INIT:
           return "hudi->";
-        case DATASET:
+        case TABLE:
           return "hudi:" + tableName + "->";
         case SYNC:
           return "hudi:" + tableName + " <==> " + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->";

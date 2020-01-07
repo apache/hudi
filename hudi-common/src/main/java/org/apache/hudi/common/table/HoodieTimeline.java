@@ -31,7 +31,7 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
- * HoodieTimeline is a view of meta-data instants in the hoodie dataset. Instants are specific points in time
+ * HoodieTimeline is a view of meta-data instants in the hoodie table. Instants are specific points in time
  * represented as HoodieInstant.
  * <p>
  * Timelines are immutable once created and operations create new instance of timelines which filter on the instants and

@@ -185,8 +185,8 @@ public class TestHoodieRealtimeRecordReader {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
-    File partitionDir = partitioned ? InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, 100, baseInstant)
-        : InputFormatTestUtil.prepareNonPartitionedParquetDataset(basePath, schema, 1, 100, baseInstant);
+    File partitionDir = partitioned ? InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant)
+        : InputFormatTestUtil.prepareNonPartitionedParquetTable(basePath, schema, 1, 100, baseInstant);
     InputFormatTestUtil.commit(basePath, baseInstant);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -269,7 +269,7 @@ public class TestHoodieRealtimeRecordReader {
     final int numRecords = 1000;
     final int firstBatchLastRecordKey = numRecords - 1;
     final int secondBatchLastRecordKey = 2 * numRecords - 1;
-    File partitionDir = InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, numRecords, commitTime);
+    File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, numRecords, commitTime);
     InputFormatTestUtil.commit(basePath, commitTime);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -343,7 +343,7 @@ public class TestHoodieRealtimeRecordReader {
     String commitTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
-    File partitionDir = InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, numberOfRecords, commitTime);
+    File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, numberOfRecords, commitTime);
     InputFormatTestUtil.commit(basePath, commitTime);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -470,7 +470,7 @@ public class TestHoodieRealtimeRecordReader {
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
     File partitionDir =
-        InputFormatTestUtil.prepareSimpleParquetDataset(basePath, schema, 1, numberOfRecords, commitTime);
+        InputFormatTestUtil.prepareSimpleParquetTable(basePath, schema, 1, numberOfRecords, commitTime);
     InputFormatTestUtil.commit(basePath, commitTime);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());

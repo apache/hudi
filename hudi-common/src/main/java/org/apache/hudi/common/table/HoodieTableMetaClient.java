@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.FailSafeConsistencyGuard;
 import org.apache.hudi.common.util.NoOpConsistencyGuard;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.DatasetNotFoundException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.exception.HoodieException;
 
 import com.google.common.base.Preconditions;
@@ -84,7 +84,7 @@ public class HoodieTableMetaClient implements Serializable {
   private HoodieArchivedTimeline archivedTimeline;
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
 
-  public HoodieTableMetaClient(Configuration conf, String basePath) throws DatasetNotFoundException {
+  public HoodieTableMetaClient(Configuration conf, String basePath) throws TableNotFoundException {
     // Do not load any timeline by default
     this(conf, basePath, false);
   }
@@ -96,7 +96,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
       ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion)
-      throws DatasetNotFoundException {
+      throws TableNotFoundException {
     LOG.info("Loading HoodieTableMetaClient from " + basePath);
     this.basePath = basePath;
     this.consistencyGuardConfig = consistencyGuardConfig;
@@ -105,7 +105,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.metaPath = new Path(basePath, METAFOLDER_NAME).toString();
     Path metaPathDir = new Path(this.metaPath);
     this.fs = getFs();
-    DatasetNotFoundException.checkValidDataset(fs, basePathDir, metaPathDir);
+    TableNotFoundException.checkTableValidity(fs, basePathDir, metaPathDir);
     this.tableConfig = new HoodieTableConfig(fs, metaPath);
     this.tableType = tableConfig.getTableType();
     this.timelineLayoutVersion = layoutVersion.orElse(tableConfig.getTimelineLayoutVersion());
@@ -281,7 +281,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to initialize a dataset, with given basePath, tableType, name, archiveFolder.
+   * Helper method to initialize a table, with given basePath, tableType, name, archiveFolder.
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, String tableType,
       String tableName, String archiveLogFolder) throws IOException {
@@ -314,17 +314,17 @@ public class HoodieTableMetaClient implements Serializable {
     if (null != timelineLayoutVersion) {
       properties.put(HoodieTableConfig.HOODIE_TIMELINE_LAYOUT_VERSION, String.valueOf(timelineLayoutVersion));
     }
-    return HoodieTableMetaClient.initDatasetAndGetMetaClient(hadoopConf, basePath, properties);
+    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 
   /**
-   * Helper method to initialize a given path as a hoodie dataset with configs passed in as as Properties.
+   * Helper method to initialize a given path as a hoodie table with configs passed in as as Properties.
    *
    * @return Instance of HoodieTableMetaClient
    */
-  public static HoodieTableMetaClient initDatasetAndGetMetaClient(Configuration hadoopConf, String basePath,
+  public static HoodieTableMetaClient initTableAndGetMetaClient(Configuration hadoopConf, String basePath,
       Properties props) throws IOException {
-    LOG.info("Initializing " + basePath + " as hoodie dataset " + basePath);
+    LOG.info("Initializing " + basePath + " as hoodie table " + basePath);
     Path basePathDir = new Path(basePath);
     final FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
     if (!fs.exists(basePathDir)) {
@@ -379,7 +379,7 @@ public class HoodieTableMetaClient implements Serializable {
         return getActiveTimeline().getCommitTimeline();
       case MERGE_ON_READ:
         // We need to include the parquet files written out in delta commits
-        // Include commit action to be able to start doing a MOR over a COW dataset - no
+        // Include commit action to be able to start doing a MOR over a COW table - no
         // migration required
         return getActiveTimeline().getCommitsTimeline();
       default:
