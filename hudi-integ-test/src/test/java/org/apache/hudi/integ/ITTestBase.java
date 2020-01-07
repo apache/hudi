@@ -241,7 +241,7 @@ public abstract class ITTestBase {
       FileIOUtils.writeStringToFile(hiveLogStr, filePath);
       LOG.info("Hive log saved up at : {}", filePath);
     } catch (Exception e) {
-      LOG.error("Unable to save up logs.. {}", e);
+      LOG.error("Unable to save up logs..", e);
     }
   }
 
