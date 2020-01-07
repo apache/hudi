@@ -76,7 +76,7 @@ AWS hadoop libraries to add to our classpath
  - com.amazonaws:aws-java-sdk:1.10.34
  - org.apache.hadoop:hadoop-aws:2.7.3
 
-如果用到了AWS Glue的话，还需要添加相应的库
+AWS glue data libraries are needed if AWS glue data is used
 
  - com.amazonaws.glue:aws-glue-datacatalog-hive2-client:1.11.0
  - com.amazonaws:aws-java-sdk-glue:1.11.475
