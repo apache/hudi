@@ -1,0 +1,13 @@
+version: '3.3'
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hudi_docs/latest
+    ports:
+      - '4000:4000'
+    volumes:
+      - ".:/src"
+networks:
+  default:

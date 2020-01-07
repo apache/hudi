@@ -1,0 +1,53 @@
+
+# main links
+main:
+  - title: "Documentation"
+    url: /docs/quick-start-guide.html
+  - title: "Community"
+    url: /community.html
+  - title: "Activities"
+    url: /activity.html
+  - title: "FAQ"
+    url: https://cwiki.apache.org/confluence/display/HUDI/FAQ
+  - title: "Releases"
+    url: /releases.html
+#  - title: "Roadmap"
+#    url: /roadmap.html
+
+# doc links
+docs:
+  - title: Getting Started
+    children:
+      - title: "Quick Start"
+        url: /docs/quick-start-guide.html
+#      - title: "Structure"
+      #        url: /docs/structure.html
+      - title: "Use Cases"
+        url: /docs/use_cases.html
+      - title: "Talks & Powered By"
+        url: /docs/powered_by.html
+      - title: "Comparison"
+        url: /docs/comparison.html
+      - title: "Docker Demo"
+        url: /docs/docker_demo.html
+  - title: Documentation
+    children:
+      - title: "Concepts"
+        url: /docs/concepts.html
+      - title: "Writing Data"
+        url: /docs/writing_data.html
+      - title: "Querying Data"
+        url: /docs/querying_data.html
+      - title: "Configuration"
+        url: /docs/configurations.html
+      - title: "Performance"
+        url: /docs/performance.html
+      - title: "Administering"
+        url: /docs/admin_guide.html
+  - title: INFO
+    children:
+      - title: "Docs Versions"
+        url: /docs/docs-versions.html
+      - title: "Privacy Policy"
+        url: /docs/privacy.html
+
