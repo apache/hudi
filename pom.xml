@@ -83,6 +83,7 @@
     <hadoop.version>2.7.3</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.1</hive.version>
+    <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <spark.version>2.1.0</spark.version>
     <avro.version>1.7.7</avro.version>
@@ -783,6 +784,7 @@
         <artifactId>hive-exec</artifactId>
         <version>${hive.version}</version>
         <scope>provided</scope>
+        <classifier>${hive.exec.classifier}</classifier>
         <exclusions>
           <exclusion>
             <groupId>javax.mail</groupId>
