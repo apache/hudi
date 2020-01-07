@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.table.HoodieTable
-import org.apache.log4j.LogManager
+import org.slf4j.{Logger, LoggerFactory}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
@@ -44,7 +44,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
                           val optParams: Map[String, String],
                           val userSchema: StructType) extends BaseRelation with TableScan {
 
-  private val log = LogManager.getLogger(classOf[IncrementalRelation])
+  private val log: Logger = LoggerFactory.getLogger(classOf[IncrementalRelation])
 
   val fs = new Path(basePath).getFileSystem(sqlContext.sparkContext.hadoopConfiguration)
   val metaClient = new HoodieTableMetaClient(sqlContext.sparkContext.hadoopConfiguration, basePath, true)
@@ -107,7 +107,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     if (fileIdToFullPath.isEmpty) {
       sqlContext.sparkContext.emptyRDD[Row]
     } else {
-      log.info("Additional Filters to be applied to incremental source are :" + filters)
+      log.info(s"Additional Filters to be applied to incremental source are : $filters")
       filters.foldLeft(sqlContext.read.options(sOpts)
         .schema(latestSchema)
         .parquet(fileIdToFullPath.values.toList: _*)

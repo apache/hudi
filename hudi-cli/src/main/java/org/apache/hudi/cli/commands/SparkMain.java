@@ -32,16 +32,17 @@ import org.apache.hudi.utilities.HoodieCompactionAdminTool;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool.Operation;
 import org.apache.hudi.utilities.HoodieCompactor;
 
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class deals with initializing spark context based on command entered to hudi-cli.
  */
 public class SparkMain {
 
-  private static final Logger LOG = Logger.getLogger(SparkMain.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkMain.class);
 
   /**
    * Commands.
@@ -52,7 +53,7 @@ public class SparkMain {
 
   public static void main(String[] args) throws Exception {
     String command = args[0];
-    LOG.info("Invoking SparkMain:" + command);
+    LOG.info("Invoking SparkMain:{}", command);
 
     SparkCommand cmd = SparkCommand.valueOf(command);
 

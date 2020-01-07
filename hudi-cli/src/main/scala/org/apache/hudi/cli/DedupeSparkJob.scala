@@ -25,8 +25,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.FSUtils
 import org.apache.hudi.exception.HoodieException
-import org.apache.log4j.Logger
 import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable._
@@ -43,7 +43,7 @@ class DedupeSparkJob(basePath: String,
 
 
   val sparkHelper = new SparkHelper(sqlContext, fs)
-  val LOG = Logger.getLogger(this.getClass)
+  val LOG: Logger = LoggerFactory.getLogger(this.getClass)
 
 
   /**
@@ -150,7 +150,7 @@ class DedupeSparkJob(basePath: String,
       val commitTime = FSUtils.getCommitTime(fileNameToPathMap(fileName).getName)
       val badFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}.bad")
       val newFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}")
-      LOG.info(" Skipping and writing new file for : " + fileName)
+      LOG.info(" Skipping and writing new file for : {}", fileName)
       SparkHelpers.skipKeysAndWriteNewFile(commitTime, fs, badFilePath, newFilePath, dupeFixPlan(fileName))
       fs.delete(badFilePath, false)
     }
