@@ -24,327 +24,385 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.util.Arrays;
+import java.nio.ByteBuffer;
 
 /**
- * This product includes code from Apache Cassandra.
- *   - adopted from org.apache.cassandra.io
- *     Copyright: 2015-2019 The Apache Software Foundation
- *     Home page: http://cassandra.apache.org/
- *     License: http://www.apache.org/licenses/LICENSE-2.0
- * -----------
- * A <code>BufferedRandomAccessFile</code> is like a
- * <code>RandomAccessFile</code>, but it uses a private buffer so that most
- * operations do not require a disk access.
- * <P>
+ * Use a private buffer for the read/write/seek operations of the RandomAccessFile
+ * to reduce the number of disk operations.
  *
- * Note: The operations on this class are unmonitored. Also, the correct
- * functioning of the <code>RandomAccessFile</code> methods that are not
- * overridden here relies on the implementation of those methods in the
- * superclass.
- * Author : Avinash Lakshman ( alakshman@facebook.com) & Prashant Malik ( pmalik@facebook.com )
+ *                S    C   L/E
+ * Buffer:        |----+---|
+ *  File:  +---------------D-------------------+
+ *     S. startPosition - file position of start of the buffer.
+ *     C. currentPosition - file position of current pointer in the buffer.
+ *     L. validLastPosition - file position of the last byte in the buffer. (This is same as
+ *        endPosition of the buffer. Except for the last file block).
+ *                                              S-C--L--E
+ *                                                    (A)
+ *        Buffer:                               |-+--+--|
+ *        File:  +-----------------------------------D
+ *     E. endPosition() - end file position of the current buffer.
+ *     D. DiskPosition - Position in the file pointed by underlying RandomAccessFile.
+ *        When reading from the file, diskPosition aligns with startPosition.  When writing to
+ *        the file, diskPosition(D) aligns with validLastPosition(L/E).
+ *
+ *     A. AvailableSpace - Space between validLastPosition(L) and EndPosition(E)
+ *        is the available space in buffer, when writing/appending records
+ *        into the buffer/file.
+ *
+ *  Note: Based on BufferedRandomAccessFile implementation in Apache/Cassandra.
+ *  Author: Balajee Nagasubramaniam.
  */
-
 public final class BufferedRandomAccessFile extends RandomAccessFile {
-  private static final Logger LOGGER = Logger.getLogger(BufferedRandomAccessFile.class);
-  static final int LOG_BUFF_SZ = 13; // 8K buffer
-  public static final int BUFF_SZ = (1 << LOG_BUFF_SZ);
-  static final long BUFF_MASK = ~(((long) BUFF_SZ) - 1L);
+  private static final Logger LOG = Logger.getLogger(BufferedRandomAccessFile.class);
+  static final int DEFAULT_BUFFER_SIZE = (1 << 16); // 64K buffer
+  static final int BUFFER_BOUNDARY_MASK = ~(DEFAULT_BUFFER_SIZE - 1);
 
-  /*
-   * This implementation is based on the buffer implementation in Modula-3's
-   * "Rd", "Wr", "RdClass", and "WrClass" interfaces.
-   */
-  private boolean dirty; // true iff unflushed bytes exist
-  private boolean closed; // true iff the file is closed
-  private long curr; // current position in file
-  private long lo;
-  private long hi; // bounds on characters in "buff"
-  private byte[] buff; // local buffer
-  private long maxHi; // this.lo + this.buff.length
-  private boolean hitEOF; // buffer contains last file block?
-  private long diskPos; // disk position
-
-  /*
-   * To describe the above fields, we introduce the following abstractions for
-   * the file "f":
-   *
-   * len(f) the length of the file curr(f) the current position in the file
-   * c(f) the abstract contents of the file disk(f) the contents of f's
-   * backing disk file closed(f) true iff the file is closed
-   *
-   * "curr(f)" is an index in the closed interval [0, len(f)]. "c(f)" is a
-   * character sequence of length "len(f)". "c(f)" and "disk(f)" may differ if
-   * "c(f)" contains unflushed writes not reflected in "disk(f)". The flush
-   * operation has the effect of making "disk(f)" identical to "c(f)".
-   *
-   * A file is said to be *valid* if the following conditions hold:
-   *
-   * V1. The "closed" and "curr" fields are correct:
-   *
-   * f.closed == closed(f) f.curr == curr(f)
-   *
-   * V2. The current position is either contained in the buffer, or just past
-   * the buffer:
-   *
-   * f.lo <= f.curr <= f.hi
-   *
-   * V3. Any (possibly) unflushed characters are stored in "f.buff":
-   *
-   * (forall i in [f.lo, f.curr): c(f)[i] == f.buff[i - f.lo])
-   *
-   * V4. For all characters not covered by V3, c(f) and disk(f) agree:
-   *
-   * (forall i in [f.lo, len(f)): i not in [f.lo, f.curr) => c(f)[i] ==
-   * disk(f)[i])
-   *
-   * V5. "f.dirty" is true iff the buffer contains bytes that should be
-   * flushed to the file; by V3 and V4, only part of the buffer can be dirty.
-   *
-   * f.dirty == (exists i in [f.lo, f.curr): c(f)[i] != f.buff[i - f.lo])
-   *
-   * V6. this.maxHi == this.lo + this.buff.length
-   *
-   * Note that "f.buff" can be "null" in a valid file, since the range of
-   * characters in V3 is empty when "f.lo == f.curr".
-   *
-   * A file is said to be *ready* if the buffer contains the current position,
-   * i.e., when:
-   *
-   * R1. !f.closed && f.buff != null && f.lo <= f.curr && f.curr < f.hi
-   *
-   * When a file is ready, reading or writing a single byte can be performed
-   * by reading or writing the in-memory buffer without performing a disk
-   * operation.
-   */
+  private int capacity;
+  private ByteBuffer dataBuffer;
+  private long startPosition = 0L;
+  private long currentPosition = 0L;
+  private long validLastPosition = 0L;
+  private long diskPosition = 0L;
+  private boolean isDirty = false;
+  private boolean isClosed = false;
+  private boolean isEOF = false;
 
   /**
-   * Open a new <code>BufferedRandomAccessFile</code> on <code>file</code>
-   * in mode <code>mode</code>, which should be "r" for reading only, or
-   * "rw" for reading and writing.
+   *
+   * @param file  - file name
+   * @param mode - "r" for read only; "rw" for read write
+   * @throws IOException
    */
   public BufferedRandomAccessFile(File file, String mode) throws IOException {
     super(file, mode);
     this.init(0);
   }
 
+  /**
+   *
+   * @param file  - file name
+   * @param mode - "r" for read only; "rw" for read write
+   * @param size - size/capacity of the buffer.
+   * @throws IOException
+   */
   public BufferedRandomAccessFile(File file, String mode, int size) throws IOException {
     super(file, mode);
     this.init(size);
   }
 
   /**
-   * Open a new <code>BufferedRandomAccessFile</code> on the file named
-   * <code>name</code> in mode <code>mode</code>, which should be "r" for
-   * reading only, or "rw" for reading and writing.
+   *
+   * @param name - name of the file
+   * @param mode - "r" for read only; "rw" for read write
+   * @throws IOException
    */
   public BufferedRandomAccessFile(String name, String mode) throws IOException {
     super(name, mode);
     this.init(0);
   }
 
+  /**
+   *
+   * @param name - name of the file
+   * @param mode - "r" for read only; "rw" for read write
+   * @param size - size/capacity of the buffer
+   * @throws FileNotFoundException
+   */
   public BufferedRandomAccessFile(String name, String mode, int size) throws FileNotFoundException {
     super(name, mode);
     this.init(size);
   }
 
+  /**
+   *
+   * @param size - capacity of the buffer
+   */
   private void init(int size) {
-    this.dirty = this.closed = false;
-    this.lo = this.curr = this.hi = 0;
-    this.buff = (size > BUFF_SZ) ? new byte[size] : new byte[BUFF_SZ];
-    this.maxHi = (long) BUFF_SZ;
-    this.hitEOF = false;
-    this.diskPos = 0L;
-  }
-
-  public void close() throws IOException {
-    this.flush();
-    this.closed = true;
-    super.close();
+    this.capacity = Math.max(DEFAULT_BUFFER_SIZE, size);
+    this.dataBuffer = ByteBuffer.wrap(new byte[this.capacity]);
   }
 
   /**
-   * Flush any bytes in the file's buffer that have not yet been written to
-   * disk. If the file was created read-only, this method is a no-op.
+   * Close the file, after flushing data in the buffer.
+   * @throws IOException
+   */
+  public void close() throws IOException {
+    if (!isClosed) {
+      this.flush();
+      super.close();
+      this.isClosed = true;
+    }
+  }
+
+  /**
+   * If the file is writable, flush any bytes in the buffer that have not yet been written to disk.
+   * @throws IOException
    */
   public void flush() throws IOException {
     this.flushBuffer();
   }
 
-  /* Flush any dirty bytes in the buffer to disk. */
+  /**
+   * Flush any dirty bytes in the buffer to disk.
+   * @throws IOException
+   */
   private void flushBuffer() throws IOException {
-    if (this.dirty) {
-      if (this.diskPos != this.lo) {
-        super.seek(this.lo);
-      }
-      int len = (int) (this.curr - this.lo);
-      super.write(this.buff, 0, len);
-      this.diskPos = this.curr;
-      this.dirty = false;
+    if (this.isDirty) {
+      alignDiskPositionToBufferStartIfNeeded();
+      int len = (int) (this.currentPosition - this.startPosition);
+      super.write(this.dataBuffer.array(), 0, len);
+      this.diskPosition = this.currentPosition;
+      this.isDirty = false;
     }
   }
 
-  /*
-   * Read at most "this.buff.length" bytes into "this.buff", returning the
-   * number of bytes read. If the return result is less than
-   * "this.buff.length", then EOF was read.
+  /**
+   * read ahead file contents to buffer.
+   * @return number of bytes filled
+   * @throws IOException
    */
   private int fillBuffer() throws IOException {
     int cnt = 0;
-    int rem = this.buff.length;
-    while (rem > 0) {
-      int n = super.read(this.buff, cnt, rem);
+    int bytesToRead = this.capacity;
+    /** blocking read, until buffer is filled or EOF reached */
+    while (bytesToRead > 0) {
+      int n = super.read(this.dataBuffer.array(), cnt, bytesToRead);
       if (n < 0) {
         break;
       }
       cnt += n;
-      rem -= n;
+      bytesToRead -= n;
     }
-    if ((cnt < 0) && (this.hitEOF = (cnt < this.buff.length))) {
-      // make sure buffer that wasn't read is initialized with -1
-      Arrays.fill(this.buff, cnt, this.buff.length, (byte) 0xff);
-    }
-    this.diskPos += cnt;
+    this.isEOF = (cnt < this.dataBuffer.array().length);
+    this.diskPosition += cnt;
     return cnt;
   }
 
-  /*
-   * This method positions <code>this.curr</code> at position <code>pos</code>.
-   * If <code>pos</code> does not fall in the current buffer, it flushes the
-   * current buffer and loads the correct one.<p>
+  /**
+   * If the diskPosition differs from the startPosition, flush the data in the buffer
+   * and realign/fill the buffer at startPosition.
+   * @throws IOException
+   */
+  private void alignDiskPositionToBufferStartIfNeeded() throws IOException {
+    if (this.diskPosition != this.startPosition) {
+      super.seek(this.startPosition);
+      this.diskPosition = this.startPosition;
+    }
+  }
+
+  /**
+   * If the new seek position is in the buffer, adjust the currentPostion.
+   * If the new seek position is outside of the buffer, flush the contents to
+   * the file and reload the buffer corresponding to the position.
    *
-   * On exit from this routine <code>this.curr == this.hi</code> iff <code>pos</code>
-   * is at or past the end-of-file, which can only happen if the file was
-   * opened in read-only mode.
+   * We logically view the file as group blocks, where each block will perfectly
+   * fit into the buffer (except for the last block).  Given a position to seek,
+   * we identify the block to be loaded using BUFFER_BOUNDARY_MASK.
+   *
+   * When dealing with the last block, we will have extra space between validLastPosition
+   * and endPosition of the buffer.
+   *
+   * @param pos  - position in the file to be loaded to the buffer.
+   * @throws IOException
    */
   public void seek(long pos) throws IOException {
-    if (pos >= this.hi || pos < this.lo) {
+    if (pos >= this.validLastPosition || pos < this.startPosition) {
       // seeking outside of current buffer -- flush and read
       this.flushBuffer();
-      this.lo = pos & BUFF_MASK; // start at BUFF_SZ boundary
-      this.maxHi = this.lo + (long) this.buff.length;
-      if (this.diskPos != this.lo) {
-        super.seek(this.lo);
-        this.diskPos = this.lo;
-      }
+      this.startPosition = pos & BUFFER_BOUNDARY_MASK; // start at BuffSz boundary
+      alignDiskPositionToBufferStartIfNeeded();
       int n = this.fillBuffer();
-      this.hi = this.lo + (long) n;
+      this.validLastPosition = this.startPosition + (long) n;
     } else {
       // seeking inside current buffer -- no read required
-      if (pos < this.curr) {
-        // if seeking backwards, we must flush to maintain V4
+      if (pos < this.currentPosition) {
+        // if seeking backwards, flush buffer.
         this.flushBuffer();
       }
     }
-    this.curr = pos;
+    this.currentPosition = pos;
   }
 
+  /**
+   * @return current file position
+   */
   public long getFilePointer() {
-    return this.curr;
+    return this.currentPosition;
   }
 
+  /**
+   * Returns the length of the file, depending on whether buffer has more data (to be flushed).
+   * @return - length of the file (including data yet to be flushed to the file).
+   * @throws IOException
+   */
   public long length() throws IOException {
-    return Math.max(this.curr, super.length());
+    return Math.max(this.currentPosition, super.length());
   }
 
-  public int read() throws IOException {
-    if (this.curr >= this.hi) {
-      // test for EOF
-      // if (this.hi < this.maxHi) return -1;
-      if (this.hitEOF) {
-        return -1;
-      }
+  /**
+   * @return whether currentPosition has reached the end of valid buffer.
+   */
+  private boolean endOfBufferReached() {
+    return this.currentPosition >= this.validLastPosition;
+  }
 
-      // slow path -- read another buffer
-      this.seek(this.curr);
-      if (this.curr == this.hi) {
+  /**
+   * Load a new data block.  Returns false, when EOF is reached.
+   * @return - whether new data block was loaded or not
+   * @throws IOException
+   */
+  private boolean loadNewBlockToBuffer() throws IOException {
+    if (this.isEOF) {
+      return false;
+    }
+
+    // read next block into buffer
+    this.seek(this.currentPosition);
+
+    // if currentPosition is at start, EOF has been reached
+    if (this.currentPosition == this.validLastPosition) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * @return - returns a byte as an integer.
+   * @throws IOException
+   */
+  public int read() throws IOException {
+    if (endOfBufferReached()) {
+      if (!loadNewBlockToBuffer()) {
         return -1;
       }
     }
-    byte res = this.buff[(int) (this.curr - this.lo)];
-    this.curr++;
+    byte res = this.dataBuffer.array()[(int) (this.currentPosition - this.startPosition)];
+    this.currentPosition++;
     return ((int) res) & 0xFF; // convert byte -> int
   }
 
+  /**
+   * @param b - byte array into which to read data.
+   * @return  - returns number of bytes read.
+   * @throws IOException
+   */
   public int read(byte[] b) throws IOException {
     return this.read(b, 0, b.length);
   }
 
+  /**
+   * Read specified number of bytes into given array starting at given offset.
+   * @param b  - byte array
+   * @param off - start offset
+   * @param len  - length of bytes to be read
+   * @return - number of bytes read.
+   * @throws IOException
+   */
   public int read(byte[] b, int off, int len) throws IOException {
-    if (this.curr >= this.hi) {
-      // test for EOF
-      // if (this.hi < this.maxHi) return -1;
-      if (this.hitEOF) {
-        return -1;
-      }
-
-      // slow path -- read another buffer
-      this.seek(this.curr);
-      if (this.curr == this.hi) {
+    if (endOfBufferReached()) {
+      if (!loadNewBlockToBuffer()) {
         return -1;
       }
     }
-    len = Math.min(len, (int) (this.hi - this.curr));
-    int buffOff = (int) (this.curr - this.lo);
-    System.arraycopy(this.buff, buffOff, b, off, len);
-    this.curr += len;
+
+    // copy data from buffer
+    len = Math.min(len, (int) (this.validLastPosition - this.currentPosition));
+    int buffOff = (int) (this.currentPosition - this.startPosition);
+    System.arraycopy(this.dataBuffer.array(), buffOff, b, off, len);
+    this.currentPosition += len;
     return len;
   }
 
-  public void write(int b) throws IOException {
-    if (this.curr >= this.hi) {
-      if (this.hitEOF && this.hi < this.maxHi) {
-        // at EOF -- bump "hi"
-        this.hi++;
-      } else {
-        // slow path -- write current buffer; read next one
-        this.seek(this.curr);
-        if (this.curr == this.hi) {
-          // appending to EOF -- bump "hi"
-          this.hi++;
-        }
-      }
-    }
-    this.buff[(int) (this.curr - this.lo)] = (byte) b;
-    this.curr++;
-    this.dirty = true;
+  /**
+   * @return endPosition of the buffer.  For the last file block, this may not be a valid position.
+   */
+  private long endPosition() {
+    return this.startPosition + this.capacity;
   }
 
+  /**
+   * @return - whether space is available at the end of the buffer.
+   */
+  private boolean spaceAvailableInBuffer() {
+    return (this.isEOF && (this.validLastPosition < this.endPosition()));
+  }
+
+  /**
+   * write a byte to the buffer/file.
+   * @param v - value to be written
+   * @throws IOException
+   */
+  public void write(int v) throws IOException {
+    byte [] b = new byte[1];
+    b[0] = (byte) v;
+    this.write(b, 0, b.length);
+  }
+
+  /**
+   * write an array of bytes to the buffer/file.
+   * @param b - byte array with data to be written
+   * @throws IOException
+   */
   public void write(byte[] b) throws IOException {
     this.write(b, 0, b.length);
   }
 
+  /**
+   * Write specified number of bytes into buffer/file, with given starting offset and length.
+   * @param b - byte array with data to be written
+   * @param off - starting offset.
+   * @param len - length of bytes to be written
+   * @throws IOException
+   */
   public void write(byte[] b, int off, int len) throws IOException {
+    // As all data may not fit into the buffer, more than one write would be required.
     while (len > 0) {
       int n = this.writeAtMost(b, off, len);
       off += n;
       len -= n;
-      this.dirty = true;
+      this.isDirty = true;
     }
   }
 
-  /*
-   * Write at most "len" bytes to "b" starting at position "off", and return
-   * the number of bytes written.
+  /**
+   * If space is available at the end of the buffer, start using it. Otherwise,
+   * flush the unwritten data into the file and load the buffer corresponding to startPosition.
+   * @throws IOException
    */
-  private int writeAtMost(byte[] b, int off, int len) throws IOException {
-    if (this.curr >= this.hi) {
-      if (this.hitEOF && this.hi < this.maxHi) {
-        // at EOF -- bump "hi"
-        this.hi = this.maxHi;
-      } else {
-        // slow path -- write current buffer; read next one
-        this.seek(this.curr);
-        if (this.curr == this.hi) {
-          // appending to EOF -- bump "hi"
-          this.hi = this.maxHi;
-        }
+  private void expandBufferToCapacityIfNeeded() throws IOException {
+    if (spaceAvailableInBuffer()) {
+      // space available at end of buffer -- adjust validLastPosition
+      this.validLastPosition = this.endPosition();
+    } else {
+      loadNewBlockToBuffer();
+      // appending to EOF, adjust validLastPosition.
+      if (this.currentPosition == this.validLastPosition) {
+        this.validLastPosition = this.endPosition();
       }
     }
-    len = Math.min(len, (int) (this.hi - this.curr));
-    int buffOff = (int) (this.curr - this.lo);
-    System.arraycopy(b, off, this.buff, buffOff, len);
-    this.curr += len;
+  }
+
+  /**
+   * Given a byte array, offset in the array and length of bytes to be written,
+   * update the buffer/file.
+   * @param b - byte array of data to be written
+   * @param off - starting offset.
+   * @param len - length of bytes to be written
+   * @return - number of bytes written
+   * @throws IOException
+   */
+  private int writeAtMost(byte[] b, int off, int len) throws IOException {
+    if (endOfBufferReached()) {
+      expandBufferToCapacityIfNeeded();
+    }
+
+    // copy data to buffer, until all data is copied or to buffer capacity.
+    len = Math.min(len, (int) (this.validLastPosition - this.currentPosition));
+    int buffOff = (int) (this.currentPosition - this.startPosition);
+    System.arraycopy(b, off, this.dataBuffer.array(), buffOff, len);
+    this.currentPosition += len;
     return len;
   }
 }
