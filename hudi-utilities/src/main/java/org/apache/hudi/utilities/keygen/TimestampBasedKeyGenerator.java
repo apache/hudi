@@ -51,7 +51,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   private final String outputDateFormat;
 
-  private TimeZone timeZone;
+  private final TimeZone timeZone;
 
   /**
    * Supported configs.
@@ -80,7 +80,6 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
       DataSourceUtils.checkRequiredProperties(config,
           Collections.singletonList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
       this.inputDateFormat = new SimpleDateFormat(config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
-      this.timeZone = TimeZone.getTimeZone(config.getString(Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, "GMT"));
       this.inputDateFormat.setTimeZone(timeZone);
     }
   }
