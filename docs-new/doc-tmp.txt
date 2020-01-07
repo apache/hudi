@@ -1,0 +1,49 @@
+
+
+mkdir -p versions/0.5.0-incubating
+mkdir -p versions/0.5.1-incubating
+
+\cp -rf docs versions/0.5.0-incubating
+
+
+
+cd /Users/dcadmin/Desktop/hudi-work/incubator-hudi-doc
+mkdir -p content/assets
+mkdir -p content
+rm -rf content/*
+
+\cp -rf docs-new/_site/assets/* content/assets
+\cp -rf docs-new/_site/* content
+
+cd content
+python -m SimpleHTTPServer
+
+
+
+
+
+
+cd /Users/dcadmin/Desktop/hudi-work/incubator-hudi-doc
+
+
+
+cd /Users/dcadmin/Desktop/hudi-docs/incubator-hudi-doc
+
+
+mkdir -p docs/assets
+mkdir -p docs
+rm -rf docs/assets/*
+rm -rf docs/*
+
+\cp -rf docs-new/_site/assets/* docs/assets
+\cp -rf docs-new/_site/* docs
+
+cd docs/_site
+python -m SimpleHTTPServer
+
+
+
+
+
+
+
