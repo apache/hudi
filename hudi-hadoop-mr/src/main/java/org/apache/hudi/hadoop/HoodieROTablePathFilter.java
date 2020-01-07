@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.exception.DatasetNotFoundException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.conf.Configuration;
@@ -39,11 +39,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Given a path is a part of - Hoodie dataset = accepts ONLY the latest version of each path - Non-Hoodie dataset = then
+ * Given a path is a part of - Hoodie table = accepts ONLY the latest version of each path - Non-Hoodie table = then
  * always accept
  * <p>
  * We can set this filter, on a query engine's Hadoop Config and if it respects path filters, then you should be able to
- * query both hoodie and non-hoodie datasets as you would normally do.
+ * query both hoodie and non-hoodie tables as you would normally do.
  * <p>
  * hadoopConf.setClass("mapreduce.input.pathFilter.class", org.apache.hudi.hadoop .HoodieROTablePathFilter.class,
  * org.apache.hadoop.fs.PathFilter.class)
@@ -59,7 +59,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
   private HashMap<String, HashSet<Path>> hoodiePathCache;
 
   /**
-   * Paths that are known to be non-hoodie datasets.
+   * Paths that are known to be non-hoodie tables.
    */
   private HashSet<String> nonHoodiePathCache;
 
@@ -156,7 +156,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
                 hoodiePathCache.get(folder.toString()).contains(path)));
           }
           return hoodiePathCache.get(folder.toString()).contains(path);
-        } catch (DatasetNotFoundException e) {
+        } catch (TableNotFoundException e) {
           // Non-hoodie path, accept it.
           if (LOG.isDebugEnabled()) {
             LOG.debug(String.format("(1) Caching non-hoodie path under %s \n", folder.toString()));

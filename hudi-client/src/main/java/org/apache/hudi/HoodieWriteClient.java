@@ -85,10 +85,10 @@ import java.util.stream.IntStream;
 import scala.Tuple2;
 
 /**
- * Hoodie Write Client helps you build datasets on HDFS [insert()] and then perform efficient mutations on an HDFS
- * dataset [upsert()]
+ * Hoodie Write Client helps you build tables on HDFS [insert()] and then perform efficient mutations on an HDFS
+ * table [upsert()]
  * <p>
- * Note that, at any given time, there can only be one Spark job performing these operations on a Hoodie dataset.
+ * Note that, at any given time, there can only be one Spark job performing these operations on a Hoodie table.
  */
 public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHoodieWriteClient<T> {
 
@@ -242,7 +242,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Loads the given HoodieRecords, as inserts into the table. This is suitable for doing big bulk loads into a Hoodie
-   * table for the very first time (e.g: converting an existing dataset to Hoodie).
+   * table for the very first time (e.g: converting an existing table to Hoodie).
    * <p>
    * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and attempts to control
    * the numbers of files with less memory compared to the {@link HoodieWriteClient#insert(JavaRDD, String)}
@@ -257,7 +257,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Loads the given HoodieRecords, as inserts into the table. This is suitable for doing big bulk loads into a Hoodie
-   * table for the very first time (e.g: converting an existing dataset to Hoodie).
+   * table for the very first time (e.g: converting an existing table to Hoodie).
    * <p>
    * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and attempts to control
    * the numbers of files with less memory compared to the {@link HoodieWriteClient#insert(JavaRDD, String)}. Optionally
@@ -289,7 +289,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Loads the given HoodieRecords, as inserts into the table. This is suitable for doing big bulk loads into a Hoodie
-   * table for the very first time (e.g: converting an existing dataset to Hoodie). The input records should contain no
+   * table for the very first time (e.g: converting an existing table to Hoodie). The input records should contain no
    * duplicates if needed.
    * <p>
    * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and attempts to control
@@ -393,7 +393,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Save the workload profile in an intermediate file (here re-using commit files) This is useful when performing
-   * rollback for MOR datasets. Only updates are recorded in the workload profile metadata since updates to log blocks
+   * rollback for MOR tables. Only updates are recorded in the workload profile metadata since updates to log blocks
    * are unknown across batches Inserts (which are new parquet files) are rolled back based on commit time. // TODO :
    * Create a new WorkloadProfile metadata file instead of using HoodieCommitMetadata
    */
@@ -691,7 +691,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * NOTE : This action requires all writers (ingest and compact) to a dataset to be stopped before proceeding. Revert
+   * NOTE : This action requires all writers (ingest and compact) to a table to be stopped before proceeding. Revert
    * the (inflight/committed) record changes for all commits after the provided @param. Three steps: (1) Atomically
    * unpublish this commit (2) clean indexing data, (3) clean new generated parquet/log files and/or append rollback to
    * existing log files. (4) Finally delete .commit, .inflight, .compaction.inflight or .compaction.requested file
@@ -765,7 +765,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
         AvroUtils.convertRestoreMetadata(startRestoreTime, durationInMs, commitsToRollback, commitToStats);
     table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, startRestoreTime),
         AvroUtils.serializeRestoreMetadata(restoreMetadata));
-    LOG.info("Commits " + commitsToRollback + " rollback is complete. Restored dataset to " + restoreToInstant);
+    LOG.info("Commits " + commitsToRollback + " rollback is complete. Restored table to " + restoreToInstant);
 
     if (!table.getActiveTimeline().getCleanerTimeline().empty()) {
       LOG.info("Cleaning up older restore meta files");
@@ -1108,7 +1108,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Performs a compaction operation on a dataset, serially before or after an insert/upsert action.
+   * Performs a compaction operation on a table, serially before or after an insert/upsert action.
    */
   private Option<String> forceCompact(Option<Map<String, String>> extraMetadata) throws IOException {
     Option<String> compactionInstantTimeOpt = scheduleCompaction(extraMetadata);

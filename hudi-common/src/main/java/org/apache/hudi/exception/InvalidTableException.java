@@ -19,15 +19,15 @@
 package org.apache.hudi.exception;
 
 /**
- * Exception thrown to indicate that a hoodie dataset is invalid.
+ * Exception thrown to indicate that a hoodie table is invalid.
  */
-public class InvalidDatasetException extends HoodieException {
+public class InvalidTableException extends HoodieException {
 
-  public InvalidDatasetException(String basePath) {
+  public InvalidTableException(String basePath) {
     super(getErrorMessage(basePath));
   }
 
   private static String getErrorMessage(String basePath) {
-    return "Invalid Hoodie Dataset. " + basePath;
+    return "Invalid Hoodie Table. " + basePath;
   }
 }

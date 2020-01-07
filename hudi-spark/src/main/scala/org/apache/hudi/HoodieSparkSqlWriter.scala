@@ -105,19 +105,19 @@ private[hudi] object HoodieSparkSqlWriter {
 
       // Handle various save modes
       if (mode == SaveMode.ErrorIfExists && exists) {
-        throw new HoodieException(s"hoodie dataset at $basePath already exists.")
+        throw new HoodieException(s"hoodie table at $basePath already exists.")
       }
       if (mode == SaveMode.Ignore && exists) {
-        log.warn(s"hoodie dataset at $basePath already exists. Ignoring & not performing actual writes.")
+        log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
         (true, common.util.Option.empty())
       }
       if (mode == SaveMode.Overwrite && exists) {
-        log.warn(s"hoodie dataset at $basePath already exists. Deleting existing data & overwriting with new data.")
+        log.warn(s"hoodie table at $basePath already exists. Deleting existing data & overwriting with new data.")
         fs.delete(basePath, true)
         exists = false
       }
 
-      // Create the dataset if not present
+      // Create the table if not present
       if (!exists) {
         HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get, storageType,
           tblName.get, "archived")
@@ -164,7 +164,7 @@ private[hudi] object HoodieSparkSqlWriter {
       val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
 
       if (!exists) {
-        throw new HoodieException(s"hoodie dataset at $basePath does not exist")
+        throw new HoodieException(s"hoodie table at $basePath does not exist")
       }
 
       // Create a HoodieWriteClient & issue the delete.

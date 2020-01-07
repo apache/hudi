@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 public class HoodieDataSourceHelpers {
 
   /**
-   * Checks if the Hoodie dataset has new data since given timestamp. This can be subsequently fed to an incremental
+   * Checks if the Hoodie table has new data since given timestamp. This can be subsequently fed to an incremental
    * view read, to perform incremental processing.
    */
   public static boolean hasNewCommits(FileSystem fs, String basePath, String commitTimestamp) {

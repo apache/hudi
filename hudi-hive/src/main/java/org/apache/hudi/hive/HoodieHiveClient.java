@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.InvalidDatasetException;
+import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hive.util.SchemaUtil;
 
 import com.google.common.base.Preconditions;
@@ -337,10 +337,10 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Gets the schema for a hoodie dataset. Depending on the type of table, read from any file written in the latest
+   * Gets the schema for a hoodie table. Depending on the type of table, read from any file written in the latest
    * commit. We will assume that the schema has not changed within a single atomic write.
    *
-   * @return Parquet schema for this dataset
+   * @return Parquet schema for this table
    */
   @SuppressWarnings("WeakerAccess")
   public MessageType getDataSchema() {
@@ -350,12 +350,12 @@ public class HoodieHiveClient {
           // If this is COW, get the last commit and read the schema from a file written in the
           // last commit
           HoodieInstant lastCommit =
-              activeTimeline.lastInstant().orElseThrow(() -> new InvalidDatasetException(syncConfig.basePath));
+              activeTimeline.lastInstant().orElseThrow(() -> new InvalidTableException(syncConfig.basePath));
           HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
               .fromBytes(activeTimeline.getInstantDetails(lastCommit).get(), HoodieCommitMetadata.class);
           String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
               .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for commit "
-                  + lastCommit + ", could not get schema for dataset " + metaClient.getBasePath() + ", Metadata :"
+                  + lastCommit + ", could not get schema for table " + metaClient.getBasePath() + ", Metadata :"
                   + commitMetadata));
           return readSchemaFromDataFile(new Path(filePath));
         case MERGE_ON_READ:
@@ -390,7 +390,7 @@ public class HoodieHiveClient {
                           .filter(s -> s.contains((metaClient.getTableConfig().getROFileFormat().getFileExtension())))
                           .findAny().map(f -> Pair.of(f, HoodieFileFormat.PARQUET)).orElseThrow(() -> {
                             return new IllegalArgumentException("Could not find any data file written for commit "
-                                + lastDeltaInstant + ", could not get schema for dataset " + metaClient.getBasePath()
+                                + lastDeltaInstant + ", could not get schema for table " + metaClient.getBasePath()
                                 + ", CommitMetadata :" + commitMetadata);
                           });
                     });
@@ -408,10 +408,10 @@ public class HoodieHiveClient {
           }
         default:
           LOG.error("Unknown table type " + tableType);
-          throw new InvalidDatasetException(syncConfig.basePath);
+          throw new InvalidTableException(syncConfig.basePath);
       }
     } catch (IOException e) {
-      throw new HoodieHiveSyncException("Failed to get dataset schema for " + syncConfig.tableName, e);
+      throw new HoodieHiveSyncException("Failed to get table schema for " + syncConfig.tableName, e);
     }
   }
 
@@ -428,7 +428,7 @@ public class HoodieHiveClient {
         .fromBytes(activeTimeline.getInstantDetails(lastCompactionCommit).get(), HoodieCommitMetadata.class);
     String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
         .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for compaction "
-            + lastCompactionCommit + ", could not get schema for dataset " + metaClient.getBasePath()));
+            + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath()));
     return readSchemaFromDataFile(new Path(filePath));
   }
 

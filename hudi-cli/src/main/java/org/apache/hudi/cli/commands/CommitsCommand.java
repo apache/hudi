@@ -206,8 +206,8 @@ public class CommitsCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  @CliCommand(value = "commits compare", help = "Compare commits with another Hoodie dataset")
-  public String compareCommits(@CliOption(key = {"path"}, help = "Path of the dataset to compare to") final String path)
+  @CliCommand(value = "commits compare", help = "Compare commits with another Hoodie table")
+  public String compareCommits(@CliOption(key = {"path"}, help = "Path of the table to compare to") final String path)
       throws Exception {
 
     HoodieTableMetaClient source = HoodieCLI.getTableMetaClient();
@@ -234,8 +234,8 @@ public class CommitsCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "commits sync", help = "Compare commits with another Hoodie dataset")
-  public String syncCommits(@CliOption(key = {"path"}, help = "Path of the dataset to compare to") final String path) {
+  @CliCommand(value = "commits sync", help = "Compare commits with another Hoodie table")
+  public String syncCommits(@CliOption(key = {"path"}, help = "Path of the table to compare to") final String path) {
     HoodieCLI.syncTableMetadata = new HoodieTableMetaClient(HoodieCLI.conf, path);
     HoodieCLI.state = HoodieCLI.CLIState.SYNC;
     return "Load sync state between " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " and "

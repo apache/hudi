@@ -45,7 +45,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * Sample program that writes & reads hoodie datasets via the Spark datasource streaming.
+ * Sample program that writes & reads hoodie tables via the Spark datasource streaming.
  */
 public class HoodieJavaStreamingApp {
 

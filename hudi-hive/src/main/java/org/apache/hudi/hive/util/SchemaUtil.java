@@ -95,7 +95,7 @@ public class SchemaUtil {
         expectedType = expectedType.replaceAll("`", "");
 
         if (!tableColumnType.equalsIgnoreCase(expectedType)) {
-          // check for incremental datasets, the schema type change is allowed as per evolution
+          // check for incremental queries, the schema type change is allowed as per evolution
           // rules
           if (!isSchemaTypeUpdateAllowed(tableColumnType, expectedType)) {
             throw new HoodieHiveSyncException("Could not convert field Type from " + tableColumnType + " to "

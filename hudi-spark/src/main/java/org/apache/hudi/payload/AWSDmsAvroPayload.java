@@ -38,7 +38,7 @@ import java.io.IOException;
  * - For updates against the source table, records contain full after image with `Op=U`
  * - For deletes against the source table, records contain full before image with `Op=D`
  *
- * This payload implementation will issue matching insert, delete, updates against the hudi dataset
+ * This payload implementation will issue matching insert, delete, updates against the hudi table
  *
  */
 public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {

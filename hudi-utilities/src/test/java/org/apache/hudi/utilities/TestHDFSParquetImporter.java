@@ -85,7 +85,7 @@ public class TestHDFSParquetImporter implements Serializable {
    * Test successful data import with retries.
    */
   @Test
-  public void testDatasetImportWithRetries() throws Exception {
+  public void testImportWithRetries() throws Exception {
     JavaSparkContext jsc = null;
     try {
       jsc = getJavaSparkContext();

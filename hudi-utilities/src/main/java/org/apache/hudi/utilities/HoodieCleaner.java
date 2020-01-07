@@ -82,7 +82,7 @@ public class HoodieCleaner {
 
   public static class Config implements Serializable {
 
-    @Parameter(names = {"--target-base-path"}, description = "base path for the hoodie dataset to be cleaner.",
+    @Parameter(names = {"--target-base-path"}, description = "base path for the hoodie table to be cleaner.",
         required = true)
     public String basePath;
 

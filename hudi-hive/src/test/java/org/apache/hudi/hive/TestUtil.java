@@ -152,7 +152,7 @@ public class TestUtil {
     }
   }
 
-  static void createCOWDataset(String commitTime, int numberOfPartitions)
+  static void createCOWTable(String commitTime, int numberOfPartitions)
       throws IOException, InitializationError, URISyntaxException {
     Path path = new Path(hiveSyncConfig.basePath);
     FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
@@ -166,7 +166,7 @@ public class TestUtil {
     createCommitFile(commitMetadata, commitTime);
   }
 
-  static void createMORDataset(String commitTime, String deltaCommitTime, int numberOfPartitions)
+  static void createMORTable(String commitTime, String deltaCommitTime, int numberOfPartitions)
       throws IOException, InitializationError, URISyntaxException, InterruptedException {
     Path path = new Path(hiveSyncConfig.basePath);
     FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));

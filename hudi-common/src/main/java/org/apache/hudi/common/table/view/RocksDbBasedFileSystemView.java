@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * A file-system view implementation on top of embedded Rocks DB store. For each DataSet : 3 column Family is added for
+ * A file-system view implementation on top of embedded Rocks DB store. For each table : 3 column Family is added for
  * storing (1) File-Slices and Data Files for View lookups (2) Pending compaction operations (3) Partitions tracked
  *
  * Fine-grained retrieval API to fetch latest file-slice and data-file which are common operations for
@@ -135,7 +135,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   protected void resetViewState() {
-    LOG.info("Deleting all rocksdb data associated with dataset filesystem view");
+    LOG.info("Deleting all rocksdb data associated with table filesystem view");
     rocksDB.close();
     rocksDB = new RocksDBDAO(metaClient.getBasePath(), config.getRocksdbBasePath());
   }

@@ -79,7 +79,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
 /**
- * Sync's one batch of data to hoodie dataset.
+ * Sync's one batch of data to hoodie table.
  */
 public class DeltaSync implements Serializable {
 
@@ -103,12 +103,12 @@ public class DeltaSync implements Serializable {
   private transient SchemaProvider schemaProvider;
 
   /**
-   * Allows transforming source to target dataset before writing.
+   * Allows transforming source to target table before writing.
    */
   private transient Transformer transformer;
 
   /**
-   * Extract the key for the target dataset.
+   * Extract the key for the target table.
    */
   private KeyGenerator keyGenerator;
 

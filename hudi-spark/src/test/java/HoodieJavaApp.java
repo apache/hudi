@@ -45,7 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Sample program that writes & reads hoodie datasets via the Spark datasource.
+ * Sample program that writes & reads hoodie tables via the Spark datasource.
  */
 public class HoodieJavaApp {
 

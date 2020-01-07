@@ -132,7 +132,7 @@ public class HoodieClientExample {
     client.delete(deleteRecords, newCommitTime);
 
     /**
-     * Schedule a compaction and also perform compaction on a MOR dataset
+     * Schedule a compaction and also perform compaction on a MOR table
      */
     if (HoodieTableType.valueOf(tableType) == HoodieTableType.MERGE_ON_READ) {
       Option<String> instant = client.scheduleCompaction(Option.empty());
