@@ -16,8 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.keygen;
 
+import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieKeyException;
@@ -34,8 +36,9 @@ public class ComplexKeyGenerator extends KeyGenerator {
 
   private static final String DEFAULT_PARTITION_PATH = "default";
   private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
-  private static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
-  private static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
+
+  protected static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
+  protected static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
 
   protected final List<String> recordKeyFields;
 
