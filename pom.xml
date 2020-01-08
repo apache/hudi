@@ -941,7 +941,7 @@
       </properties>
     </profile>
     <profile>
-      <id>unijavadoc</id>
+      <id>javadocs</id>
       <build>
         <plugins>
           <plugin>
@@ -1021,6 +1021,20 @@
               -->
               <doclint>none</doclint>
               <detectLinks>true</detectLinks>
+              <links>
+                <link>https://avro.apache.org/docs/${avro.version}/api/java</link>
+                <link>https://docs.spring.io/spring-shell/docs/1.2.0.RELEASE</link>
+                <link>https://fasterxml.github.io/jackson-databind/javadoc/2.6</link>
+                <link>https://hadoop.apache.org/docs/r${hadoop.version}/api</link>
+                <link>https://hbase.apache.org/1.2/apidocs</link>
+                <link>https://hive.apache.org/javadocs/r2.3.6/api</link>
+                <link>https://javadoc.io/static/io.javalin/javalin/2.3.0</link>
+                <link>https://javadoc.io/doc/org.apache.parquet/parquet-avro/${parquet.version}</link>
+                <link>https://javadoc.io/static/org.apache.parquet/parquet-hadoop/${parquet.version}</link>
+                <link>https://logging.apache.org/log4j/1.2/apidocs</link>
+                <link>https://metrics.dropwizard.io/4.1.0/apidocs</link>
+                <link>https://spark.apache.org/docs/${spark.version}/api/java</link>
+              </links>
               <sourceFileExcludes>
                 <!--
                     Exclude the generated java files with the static reference to
