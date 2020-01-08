@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities.keygen;
 
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.SimpleKeyGenerator;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieKeyException;

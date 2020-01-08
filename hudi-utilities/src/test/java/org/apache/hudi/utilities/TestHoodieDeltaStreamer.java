@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.SimpleKeyGenerator;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
