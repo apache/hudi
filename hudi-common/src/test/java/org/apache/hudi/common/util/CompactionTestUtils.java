@@ -128,7 +128,7 @@ public class CompactionTestUtils {
         AvroUtils.serializeCompactionPlan(compactionPlan));
   }
 
-  public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) throws IOException {
+  public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) {
     HoodieInstant requested = new HoodieInstant(State.REQUESTED, DELTA_COMMIT_ACTION, instantTime);
     metaClient.getActiveTimeline().createNewInstant(requested);
     metaClient.getActiveTimeline().transitionRequestedToInflight(requested, Option.empty());

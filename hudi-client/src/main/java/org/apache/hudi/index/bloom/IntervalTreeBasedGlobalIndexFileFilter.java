@@ -18,13 +18,15 @@
 
 package org.apache.hudi.index.bloom;
 
-import java.util.Collection;
+import org.apache.hudi.common.util.collection.Pair;
+
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Interval Tree based index look up for Global Index. Builds an {@link KeyRangeLookupTree} for all index files (across
@@ -34,6 +36,7 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
 
   private final KeyRangeLookupTree indexLookUpTree = new KeyRangeLookupTree();
   private final Set<String> filesWithNoRanges = new HashSet<>();
+  private final Map<String, String> fileIdToPartitionPathMap = new HashMap<>();
 
   /**
    * Instantiates {@link IntervalTreeBasedGlobalIndexFileFilter}.
@@ -41,8 +44,13 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}s
    */
   IntervalTreeBasedGlobalIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
-    List<BloomIndexFileInfo> allIndexFiles =
-        partitionToFileIndexInfo.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
+    List<BloomIndexFileInfo> allIndexFiles = new ArrayList<>();
+
+    partitionToFileIndexInfo.forEach((parition, bloomIndexFileInfoList) -> bloomIndexFileInfoList.forEach(file -> {
+      fileIdToPartitionPathMap.put(file.getFileId(), parition);
+      allIndexFiles.add(file);
+    }));
+
     // Note that the interval tree implementation doesn't have auto-balancing to ensure logN search time.
     // So, we are shuffling the input here hoping the tree will not have any skewness. If not, the tree could be skewed
     // which could result in N search time instead of NlogN.
@@ -58,10 +66,12 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
   }
 
   @Override
-  public Set<String> getMatchingFiles(String partitionPath, String recordKey) {
-    Set<String> toReturn = new HashSet<>();
-    toReturn.addAll(indexLookUpTree.getMatchingIndexFiles(recordKey));
-    toReturn.addAll(filesWithNoRanges);
+  public Set<Pair<String, String>> getMatchingFilesAndPartition(String partitionPath, String recordKey) {
+    Set<String> matchingFiles = new HashSet<>();
+    matchingFiles.addAll(indexLookUpTree.getMatchingIndexFiles(recordKey));
+    matchingFiles.addAll(filesWithNoRanges);
+    Set<Pair<String, String>> toReturn = new HashSet<>();
+    matchingFiles.forEach(file -> toReturn.add(Pair.of(fileIdToPartitionPathMap.get(file), file)));
     return toReturn;
   }
 }

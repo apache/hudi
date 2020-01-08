@@ -134,7 +134,7 @@ public class HDFSParquetImporter implements Serializable {
       Properties properties = new Properties();
       properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, cfg.tableName);
       properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, cfg.tableType);
-      HoodieTableMetaClient.initDatasetAndGetMetaClient(jsc.hadoopConfiguration(), cfg.targetPath, properties);
+      HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), cfg.targetPath, properties);
 
       HoodieWriteClient client =
           UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr, cfg.parallelism, Option.empty(), props);
@@ -190,7 +190,7 @@ public class HDFSParquetImporter implements Serializable {
   }
 
   /**
-   * Imports records to Hoodie dataset.
+   * Imports records to Hoodie table.
    *
    * @param client Hoodie Client
    * @param instantTime Instant Time
@@ -243,9 +243,9 @@ public class HDFSParquetImporter implements Serializable {
     @Parameter(names = {"--command", "-c"}, description = "Write command Valid values are insert(default)/upsert/bulkinsert",
         required = false, validateValueWith = CommandValidator.class)
     public String command = "INSERT";
-    @Parameter(names = {"--src-path", "-sp"}, description = "Base path for the input dataset", required = true)
+    @Parameter(names = {"--src-path", "-sp"}, description = "Base path for the input table", required = true)
     public String srcPath = null;
-    @Parameter(names = {"--target-path", "-tp"}, description = "Base path for the target hoodie dataset",
+    @Parameter(names = {"--target-path", "-tp"}, description = "Base path for the target hoodie table",
         required = true)
     public String targetPath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)

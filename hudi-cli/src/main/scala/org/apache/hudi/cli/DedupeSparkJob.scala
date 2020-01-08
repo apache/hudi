@@ -60,7 +60,7 @@ class DedupeSparkJob(basePath: String,
       group by `${HoodieRecord.RECORD_KEY_METADATA_FIELD}`
       having dupe_cnt > 1
       """
-    return sqlContext.sql(dupeSql)
+    sqlContext.sql(dupeSql)
   }
 
 
@@ -122,7 +122,7 @@ class DedupeSparkJob(basePath: String,
         }
       })
     })
-    return fileToDeleteKeyMap
+    fileToDeleteKeyMap
   }
 
 

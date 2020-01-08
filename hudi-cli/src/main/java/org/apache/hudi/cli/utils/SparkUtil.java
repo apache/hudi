@@ -24,7 +24,8 @@ import org.apache.hudi.cli.commands.SparkMain;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.StringUtils;
 
-import org.apache.log4j.Logger;
+import com.google.common.base.Preconditions;
+
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
@@ -38,8 +39,7 @@ import java.util.Map;
  */
 public class SparkUtil {
 
-  private static final Logger LOG = Logger.getLogger(SparkUtil.class);
-  public static final String DEFUALT_SPARK_MASTER = "yarn-client";
+  public static final String DEFAULT_SPARK_MASTER = "yarn-client";
 
   /**
    * TODO: Need to fix a bunch of hardcoded stuff here eg: history server, spark distro.
@@ -55,7 +55,7 @@ public class SparkUtil {
       sparkLauncher.setPropertiesFile(propertiesFile);
     }
     File libDirectory = new File(new File(currentJar).getParent(), "lib");
-    for (String library : libDirectory.list()) {
+    for (String library : Preconditions.checkNotNull(libDirectory.list())) {
       sparkLauncher.addJar(new File(libDirectory, library).getAbsolutePath());
     }
     return sparkLauncher;
@@ -66,7 +66,7 @@ public class SparkUtil {
 
     String defMasterFromEnv = sparkConf.getenv("SPARK_MASTER");
     if ((null == defMasterFromEnv) || (defMasterFromEnv.isEmpty())) {
-      sparkConf.setMaster(DEFUALT_SPARK_MASTER);
+      sparkConf.setMaster(DEFAULT_SPARK_MASTER);
     } else {
       sparkConf.setMaster(defMasterFromEnv);
     }
@@ -82,7 +82,7 @@ public class SparkUtil {
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
 
-    sparkConf = HoodieWriteClient.registerClasses(sparkConf);
+    HoodieWriteClient.registerClasses(sparkConf);
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     jsc.hadoopConfiguration().setBoolean("parquet.enable.summary-metadata", false);
     FSUtils.prepareHadoopConf(jsc.hadoopConfiguration());

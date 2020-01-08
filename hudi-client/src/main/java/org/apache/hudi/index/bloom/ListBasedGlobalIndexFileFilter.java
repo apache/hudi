@@ -18,6 +18,8 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.util.collection.Pair;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -35,18 +37,13 @@ class ListBasedGlobalIndexFileFilter extends ListBasedIndexFileFilter {
   }
 
   @Override
-  public Set<String> getMatchingFiles(String partitionPath, String recordKey) {
-    Set<String> toReturn = new HashSet<>();
-    partitionToFileIndexInfo.values().forEach(indexInfos -> {
-      if (indexInfos != null) { // could be null, if there are no files in a given partition yet.
-        // for each candidate file in partition, that needs to be compared.
-        for (BloomIndexFileInfo indexInfo : indexInfos) {
-          if (shouldCompareWithFile(indexInfo, recordKey)) {
-            toReturn.add(indexInfo.getFileId());
-          }
-        }
+  public Set<Pair<String, String>> getMatchingFilesAndPartition(String partitionPath, String recordKey) {
+    Set<Pair<String, String>> toReturn = new HashSet<>();
+    partitionToFileIndexInfo.forEach((partition, bloomIndexFileInfoList) -> bloomIndexFileInfoList.forEach(file -> {
+      if (shouldCompareWithFile(file, recordKey)) {
+        toReturn.add(Pair.of(partition, file.getFileId()));
       }
-    });
+    }));
     return toReturn;
   }
 }

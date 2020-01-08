@@ -95,7 +95,7 @@ public class HoodieClientExample {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 3).build()).build();
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(20, 30).build()).build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
     List<HoodieRecord> recordsSoFar = new ArrayList<>();
@@ -132,7 +132,7 @@ public class HoodieClientExample {
     client.delete(deleteRecords, newCommitTime);
 
     /**
-     * Schedule a compaction and also perform compaction on a MOR dataset
+     * Schedule a compaction and also perform compaction on a MOR table
      */
     if (HoodieTableType.valueOf(tableType) == HoodieTableType.MERGE_ON_READ) {
       Option<String> instant = client.scheduleCompaction(Option.empty());

@@ -22,9 +22,7 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 
-import java.io.IOException;
 import java.util.Comparator;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -33,16 +31,11 @@ import java.util.stream.Stream;
  */
 public class MockHoodieTimeline extends HoodieActiveTimeline {
 
-  public MockHoodieTimeline(Stream<String> completed, Stream<String> inflights) throws IOException {
+  public MockHoodieTimeline(Stream<String> completed, Stream<String> inflights) {
     super();
     this.setInstants(Stream
         .concat(completed.map(s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)),
             inflights.map(s -> new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, s)))
-        .sorted(Comparator.comparing(new Function<HoodieInstant, String>() {
-          @Override
-          public String apply(HoodieInstant hoodieInstant) {
-            return hoodieInstant.getFileName();
-          }
-        })).collect(Collectors.toList()));
+        .sorted(Comparator.comparing(HoodieInstant::getFileName)).collect(Collectors.toList()));
   }
 }

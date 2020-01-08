@@ -18,6 +18,8 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.util.collection.Pair;
+
 import java.io.Serializable;
 import java.util.Set;
 
@@ -27,12 +29,13 @@ import java.util.Set;
 public interface IndexFileFilter extends Serializable {
 
   /**
-   * Fetches all matching files for a given record key and partition.
+   * Fetches all matching files and partition pair for a given record key and partition path.
    *
    * @param partitionPath the partition path of interest
-   * @param recordKey the record key to be looked up
-   * @return the {@link Set} of matching file names where the record could potentially be present.
+   * @param recordKey     the record key to be looked up
+   * @return the {@link Set} of matching <Partition path, file name> pairs where the record could potentially be
+   * present.
    */
-  Set<String> getMatchingFiles(String partitionPath, String recordKey);
+  Set<Pair<String, String>> getMatchingFilesAndPartition(String partitionPath, String recordKey);
 
 }

@@ -47,7 +47,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Represents the Active Timeline for the HoodieDataset. Instants for the last 12 hours (configurable) is in the
+ * Represents the Active Timeline for the Hoodie table. Instants for the last 12 hours (configurable) is in the
  * ActiveTimeline and the rest are Archived. ActiveTimeline is a special timeline that allows for creation of instants
  * on the timeline.
  * <p>
@@ -77,14 +77,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
    */
   public static String createNewInstantTime() {
-    lastInstantTime.updateAndGet((oldVal) -> {
+    return lastInstantTime.updateAndGet((oldVal) -> {
       String newCommitTime = null;
       do {
         newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
       } while (HoodieTimeline.compareTimestamps(newCommitTime, oldVal, LESSER_OR_EQUAL));
       return newCommitTime;
     });
-    return lastInstantTime.get();
   }
 
   protected HoodieActiveTimeline(HoodieTableMetaClient metaClient, Set<String> includedExtensions) {
@@ -146,6 +145,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * timeline * With Async compaction a requested/inflight compaction-instant is a valid baseInstant for a file-slice as
    * there could be delta-commits with that baseInstant.
    */
+  @Override
   public HoodieTimeline getCommitsAndCompactionTimeline() {
     return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION));
   }
@@ -473,8 +473,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     Preconditions.checkArgument(instant.getState().equals(State.REQUESTED));
     // Write workload to auxiliary folder
     createFileInAuxiliaryFolder(instant, content);
-    // Plan is only stored in auxiliary folder
-    createFileInMetaPath(instant.getFileName(), Option.empty(), false);
+    // Plan is stored in meta path
+    createFileInMetaPath(instant.getFileName(), content, false);
   }
 
   private void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {

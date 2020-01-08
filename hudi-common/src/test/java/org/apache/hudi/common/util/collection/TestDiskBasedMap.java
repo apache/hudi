@@ -87,7 +87,7 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
     List<HoodieRecord> hoodieRecords = SchemaTestUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 1000);
     Set<String> recordKeys = new HashSet<>();
     // insert generated records into the map
-    hoodieRecords.stream().forEach(r -> {
+    hoodieRecords.forEach(r -> {
       records.put(r.getRecordKey(), r);
       recordKeys.add(r.getRecordKey());
     });

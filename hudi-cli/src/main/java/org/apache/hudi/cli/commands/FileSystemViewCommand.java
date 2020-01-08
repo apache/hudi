@@ -22,6 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
@@ -90,13 +91,13 @@ public class FileSystemViewCommand implements CommandMarker {
       row[idx++] = fs.getDataFile().isPresent() ? fs.getDataFile().get().getFileSize() : -1;
       if (!readOptimizedOnly) {
         row[idx++] = fs.getLogFiles().count();
-        row[idx++] = fs.getLogFiles().mapToLong(lf -> lf.getFileSize()).sum();
+        row[idx++] = fs.getLogFiles().mapToLong(HoodieLogFile::getFileSize).sum();
         row[idx++] = fs.getLogFiles().collect(Collectors.toList()).toString();
       }
       rows.add(row);
     }));
     Function<Object, String> converterFunction =
-        entry -> NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
+        entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString())));
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
     fieldNameToConverterMap.put("Total Delta File Size", converterFunction);
     fieldNameToConverterMap.put("Data-File Size", converterFunction);
@@ -141,7 +142,7 @@ public class FileSystemViewCommand implements CommandMarker {
       fileSliceStream = fsView.getLatestFileSlices(partition);
     } else {
       if (maxInstant.isEmpty()) {
-        maxInstant = HoodieCLI.tableMetadata.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
+        maxInstant = HoodieCLI.getTableMetaClient().getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
             .get().getTimestamp();
       }
       fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, maxInstant);
@@ -160,15 +161,15 @@ public class FileSystemViewCommand implements CommandMarker {
 
       if (!readOptimizedOnly) {
         row[idx++] = fs.getLogFiles().count();
-        row[idx++] = fs.getLogFiles().mapToLong(lf -> lf.getFileSize()).sum();
+        row[idx++] = fs.getLogFiles().mapToLong(HoodieLogFile::getFileSize).sum();
         long logFilesScheduledForCompactionTotalSize =
             fs.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
-                .mapToLong(lf -> lf.getFileSize()).sum();
+                .mapToLong(HoodieLogFile::getFileSize).sum();
         row[idx++] = logFilesScheduledForCompactionTotalSize;
 
         long logFilesUnscheduledTotalSize =
             fs.getLogFiles().filter(lf -> !lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
-                .mapToLong(lf -> lf.getFileSize()).sum();
+                .mapToLong(HoodieLogFile::getFileSize).sum();
         row[idx++] = logFilesUnscheduledTotalSize;
 
         double logSelectedForCompactionToBaseRatio =
@@ -186,7 +187,7 @@ public class FileSystemViewCommand implements CommandMarker {
     });
 
     Function<Object, String> converterFunction =
-        entry -> NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
+        entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString())));
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
     fieldNameToConverterMap.put("Data-File Size", converterFunction);
     if (!readOptimizedOnly) {
@@ -224,14 +225,15 @@ public class FileSystemViewCommand implements CommandMarker {
    */
   private HoodieTableFileSystemView buildFileSystemView(String globRegex, String maxInstant, boolean readOptimizedOnly,
       boolean includeMaxInstant, boolean includeInflight, boolean excludeCompaction) throws IOException {
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     HoodieTableMetaClient metaClient =
-        new HoodieTableMetaClient(HoodieCLI.tableMetadata.getHadoopConf(), HoodieCLI.tableMetadata.getBasePath(), true);
+        new HoodieTableMetaClient(client.getHadoopConf(), client.getBasePath(), true);
     FileSystem fs = HoodieCLI.fs;
-    String globPath = String.format("%s/%s/*", HoodieCLI.tableMetadata.getBasePath(), globRegex);
+    String globPath = String.format("%s/%s/*", client.getBasePath(), globRegex);
     FileStatus[] statuses = fs.globStatus(new Path(globPath));
-    Stream<HoodieInstant> instantsStream = null;
+    Stream<HoodieInstant> instantsStream;
 
-    HoodieTimeline timeline = null;
+    HoodieTimeline timeline;
     if (readOptimizedOnly) {
       timeline = metaClient.getActiveTimeline().getCommitTimeline();
     } else if (excludeCompaction) {

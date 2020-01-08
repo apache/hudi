@@ -144,7 +144,7 @@ public class HoodieCompactionAdminTool {
 
     @Parameter(names = {"--operation", "-op"}, description = "Operation", required = true)
     public Operation operation = Operation.VALIDATE;
-    @Parameter(names = {"--base-path", "-bp"}, description = "Base path for the dataset", required = true)
+    @Parameter(names = {"--base-path", "-bp"}, description = "Base path for the table", required = true)
     public String basePath = null;
     @Parameter(names = {"--instant-time", "-in"}, description = "Compaction Instant time", required = false)
     public String compactionInstantTime = null;

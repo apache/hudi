@@ -94,7 +94,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String TIMELINE = String.format("%s/%s", BASE_URL, "timeline/instants/all");
 
   // POST Requests
-  public static final String REFRESH_DATASET = String.format("%s/%s", BASE_URL, "refresh/");
+  public static final String REFRESH_TABLE = String.format("%s/%s", BASE_URL, "refresh/");
 
   public static final String PARTITION_PARAM = "partition";
   public static final String BASEPATH_PARAM = "basepath";
@@ -381,7 +381,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public boolean refresh() {
     Map<String, String> paramsMap = getParams();
     try {
-      return executeRequest(REFRESH_DATASET, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
+      return executeRequest(REFRESH_TABLE, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }

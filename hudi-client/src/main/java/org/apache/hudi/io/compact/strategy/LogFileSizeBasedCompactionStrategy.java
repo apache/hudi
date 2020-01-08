@@ -49,7 +49,7 @@ public class LogFileSizeBasedCompactionStrategy extends BoundedIOCompactionStrat
 
     // Total size of all the log files
     Long totalLogFileSize = logFiles.stream().map(HoodieLogFile::getFileSize).filter(size -> size >= 0)
-        .reduce((size1, size2) -> size1 + size2).orElse(0L);
+        .reduce(Long::sum).orElse(0L);
     // save the metrics needed during the order
     metrics.put(TOTAL_LOG_FILE_SIZE, totalLogFileSize.doubleValue());
     return metrics;

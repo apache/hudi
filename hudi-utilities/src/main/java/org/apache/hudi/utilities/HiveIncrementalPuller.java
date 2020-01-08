@@ -112,7 +112,7 @@ public class HiveIncrementalPuller {
     this.config = config;
     validateConfig(config);
     String templateContent =
-        FileIOUtils.readAsUTFString(this.getClass().getResourceAsStream("IncrementalPull.sqltemplate"));
+        FileIOUtils.readAsUTFString(this.getClass().getResourceAsStream("/IncrementalPull.sqltemplate"));
     incrementalPullSQLtemplate = new ST(templateContent);
   }
 
@@ -234,7 +234,7 @@ public class HiveIncrementalPuller {
   }
 
   private String inferCommitTime(FileSystem fs) throws SQLException, IOException {
-    LOG.info("FromCommitTime not specified. Trying to infer it from Hoodie dataset " + config.targetDb + "."
+    LOG.info("FromCommitTime not specified. Trying to infer it from Hoodie table " + config.targetDb + "."
         + config.targetTable);
     String targetDataLocation = getTableLocation(config.targetDb, config.targetTable);
     return scanForCommitTime(fs, targetDataLocation);

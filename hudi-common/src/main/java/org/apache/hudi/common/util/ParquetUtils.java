@@ -19,7 +19,9 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.BloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
+import org.apache.hudi.common.bloom.filter.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -54,7 +56,7 @@ public class ParquetUtils {
   /**
    * Read the rowKey list from the given parquet file.
    *
-   * @param filePath The parquet file path.
+   * @param filePath      The parquet file path.
    * @param configuration configuration to build fs object
    * @return Set Set of row keys
    */
@@ -66,9 +68,9 @@ public class ParquetUtils {
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
    * return all the rowkeys.
    *
-   * @param filePath The parquet file path.
+   * @param filePath      The parquet file path.
    * @param configuration configuration to build fs object
-   * @param filter record keys filter
+   * @param filter        record keys filter
    * @return Set Set of row keys matching candidateRecordKeys
    */
   public static Set<String> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
@@ -120,7 +122,7 @@ public class ParquetUtils {
   }
 
   private static Map<String, String> readParquetFooter(Configuration configuration, boolean required,
-      Path parquetFilePath, String... footerNames) {
+                                                       Path parquetFilePath, String... footerNames) {
     Map<String, String> footerVals = new HashMap<>();
     ParquetMetadata footer = readMetadata(configuration, parquetFilePath);
     Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
@@ -143,15 +145,26 @@ public class ParquetUtils {
    * Read out the bloom filter from the parquet file meta data.
    */
   public static BloomFilter readBloomFilterFromParquetMetadata(Configuration configuration, Path parquetFilePath) {
-    Map<String, String> footerVals = readParquetFooter(configuration, false, parquetFilePath,
-        HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-        HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
+    Map<String, String> footerVals =
+        readParquetFooter(configuration, false, parquetFilePath,
+            HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
+            HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
+            HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE);
     String footerVal = footerVals.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     if (null == footerVal) {
       // We use old style key "com.uber.hoodie.bloomfilter"
       footerVal = footerVals.get(HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     }
-    return footerVal != null ? new BloomFilter(footerVal) : null;
+    BloomFilter toReturn = null;
+    if (footerVal != null) {
+      if (footerVals.containsKey(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE)) {
+        toReturn = BloomFilterFactory.fromString(footerVal,
+            footerVals.get(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE));
+      } else {
+        toReturn = BloomFilterFactory.fromString(footerVal, BloomFilterTypeCode.SIMPLE.name());
+      }
+    }
+    return toReturn;
   }
 
   public static String[] readMinMaxRecordKeys(Configuration configuration, Path parquetFilePath) {
@@ -197,6 +210,7 @@ public class ParquetUtils {
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {
+
     private final Set<String> candidateKeys;
 
     RecordKeysFilterFunction(Set<String> candidateKeys) {

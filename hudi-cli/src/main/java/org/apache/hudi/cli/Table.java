@@ -22,7 +22,6 @@ import org.apache.hudi.common.util.Option;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -85,11 +84,11 @@ public class Table implements Iterable<List<String>> {
   /**
    * Add all rows.
    * 
-   * @param rows Rows to be aded
+   * @param rows Rows to be added
    * @return
    */
   public Table addAll(List<List<Comparable>> rows) {
-    rows.forEach(r -> add(r));
+    rows.forEach(this::add);
     return this;
   }
 
@@ -120,16 +119,11 @@ public class Table implements Iterable<List<String>> {
    */
   private List<List<Comparable>> orderRows() {
     return orderingFieldNameOptional.map(orderingColumnName -> {
-      return rawRows.stream().sorted(new Comparator<List<Comparable>>() {
-        @Override
-        public int compare(List<Comparable> row1, List<Comparable> row2) {
-          Comparable fieldForRow1 = row1.get(rowHeader.indexOf(orderingColumnName));
-          Comparable fieldForRow2 = row2.get(rowHeader.indexOf(orderingColumnName));
-          int cmpRawResult = fieldForRow1.compareTo(fieldForRow2);
-          return isDescendingOptional.map(isDescending -> {
-            return isDescending ? -1 * cmpRawResult : cmpRawResult;
-          }).orElse(cmpRawResult);
-        }
+      return rawRows.stream().sorted((row1, row2) -> {
+        Comparable fieldForRow1 = row1.get(rowHeader.indexOf(orderingColumnName));
+        Comparable fieldForRow2 = row2.get(rowHeader.indexOf(orderingColumnName));
+        int cmpRawResult = fieldForRow1.compareTo(fieldForRow2);
+        return isDescendingOptional.map(isDescending -> isDescending ? -1 * cmpRawResult : cmpRawResult).orElse(cmpRawResult);
       }).collect(Collectors.toList());
     }).orElse(rawRows);
   }
@@ -141,16 +135,14 @@ public class Table implements Iterable<List<String>> {
     this.renderRows = new ArrayList<>();
     final int limit = this.limitOptional.orElse(rawRows.size());
     final List<List<Comparable>> orderedRows = orderRows();
-    renderRows = orderedRows.stream().limit(limit).map(row -> {
-      return IntStream.range(0, rowHeader.getNumFields()).mapToObj(idx -> {
-        String fieldName = rowHeader.get(idx);
-        if (fieldNameToConverterMap.containsKey(fieldName)) {
-          return fieldNameToConverterMap.get(fieldName).apply(row.get(idx));
-        }
-        Object v = row.get(idx);
-        return v == null ? "null" : v.toString();
-      }).collect(Collectors.toList());
-    }).collect(Collectors.toList());
+    renderRows = orderedRows.stream().limit(limit).map(row -> IntStream.range(0, rowHeader.getNumFields()).mapToObj(idx -> {
+      String fieldName = rowHeader.get(idx);
+      if (fieldNameToConverterMap.containsKey(fieldName)) {
+        return fieldNameToConverterMap.get(fieldName).apply(row.get(idx));
+      }
+      Object v = row.get(idx);
+      return v == null ? "null" : v.toString();
+    }).collect(Collectors.toList())).collect(Collectors.toList());
   }
 
   @Override

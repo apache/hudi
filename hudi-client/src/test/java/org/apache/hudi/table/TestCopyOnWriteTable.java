@@ -20,11 +20,11 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.WriteStatus;
-import org.apache.hudi.common.BloomFilter;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.TestRawTripPayload.MetadataMergeWriteStatus;
+import org.apache.hudi.common.bloom.filter.BloomFilter;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -64,6 +64,7 @@ import java.util.UUID;
 import scala.Tuple2;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -224,7 +225,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
         }
       }
     }
-    assertTrue(updatedParquetFile != null);
+    assertNotNull(updatedParquetFile);
     // Check whether the record has been updated
     Path updatedParquetFilePath = new Path(updatedParquetFile.getAbsolutePath());
     BloomFilter updatedFilter =
@@ -240,16 +241,16 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     ParquetReader updatedReader = ParquetReader.builder(new AvroReadSupport<>(), updatedParquetFilePath).build();
     index = 0;
     while ((newRecord = (GenericRecord) updatedReader.read()) != null) {
-      assertTrue(newRecord.get("_row_key").toString().equals(records.get(index).getRecordKey()));
+      assertEquals(newRecord.get("_row_key").toString(), records.get(index).getRecordKey());
       if (index == 0) {
-        assertTrue(newRecord.get("number").toString().equals("15"));
+        assertEquals("15", newRecord.get("number").toString());
       }
       index++;
     }
     updatedReader.close();
     // Also check the numRecordsWritten
     WriteStatus writeStatus = statuses.get(0);
-    assertTrue("Should be only one file generated", statuses.size() == 1);
+    assertEquals("Should be only one file generated", 1, statuses.size());
     assertEquals(4, writeStatus.getStat().getNumWrites());// 3 rewritten records + 1 new record
   }
 

@@ -19,7 +19,8 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.BloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -51,7 +52,10 @@ public class HoodieStorageWriterFactory {
   private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(
       String commitTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable)
       throws IOException {
-    BloomFilter filter = new BloomFilter(config.getBloomFilterNumEntries(), config.getBloomFilterFPP());
+    BloomFilter filter = BloomFilterFactory
+        .createBloomFilter(config.getBloomFilterNumEntries(), config.getBloomFilterFPP(),
+            config.getDynamicBloomFilterMaxNumEntries(),
+            config.getBloomFilterType());
     HoodieAvroWriteSupport writeSupport =
         new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
 

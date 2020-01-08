@@ -90,19 +90,18 @@ public class RollbackExecutor implements Serializable {
         case DELETE_DATA_FILES_ONLY: {
           deleteCleanedFiles(metaClient, config, filesToDeletedStatus, instantToRollback.getTimestamp(),
               rollbackRequest.getPartitionPath());
-          return new Tuple2<String, HoodieRollbackStat>(rollbackRequest.getPartitionPath(),
-              HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                  .withDeletedFileResults(filesToDeletedStatus).build());
+          return new Tuple2<>(rollbackRequest.getPartitionPath(),
+                  HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
+                          .withDeletedFileResults(filesToDeletedStatus).build());
         }
         case DELETE_DATA_AND_LOG_FILES: {
           deleteCleanedFiles(metaClient, config, filesToDeletedStatus, rollbackRequest.getPartitionPath(), filter);
-          return new Tuple2<String, HoodieRollbackStat>(rollbackRequest.getPartitionPath(),
-              HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                  .withDeletedFileResults(filesToDeletedStatus).build());
+          return new Tuple2<>(rollbackRequest.getPartitionPath(),
+                  HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
+                          .withDeletedFileResults(filesToDeletedStatus).build());
         }
         case APPEND_ROLLBACK_BLOCK: {
           Writer writer = null;
-          boolean success = false;
           try {
             writer = HoodieLogFormat.newWriterBuilder()
                 .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
@@ -114,7 +113,6 @@ public class RollbackExecutor implements Serializable {
             Map<HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
             // if update belongs to an existing log file
             writer = writer.appendBlock(new HoodieCommandBlock(header));
-            success = true;
           } catch (IOException | InterruptedException io) {
             throw new HoodieRollbackException("Failed to rollback for instant " + instantToRollback, io);
           } finally {
@@ -131,10 +129,10 @@ public class RollbackExecutor implements Serializable {
           // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
           // cloud-storage : HUDI-168
           Map<FileStatus, Long> filesToNumBlocksRollback = new HashMap<>();
-          filesToNumBlocksRollback.put(metaClient.getFs().getFileStatus(writer.getLogFile().getPath()), 1L);
-          return new Tuple2<String, HoodieRollbackStat>(rollbackRequest.getPartitionPath(),
-              HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                  .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
+          filesToNumBlocksRollback.put(metaClient.getFs().getFileStatus(Preconditions.checkNotNull(writer).getLogFile().getPath()), 1L);
+          return new Tuple2<>(rollbackRequest.getPartitionPath(),
+                  HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
+                          .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
         }
         default:
           throw new IllegalStateException("Unknown Rollback action " + rollbackRequest);

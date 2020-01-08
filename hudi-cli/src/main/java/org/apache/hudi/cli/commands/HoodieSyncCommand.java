@@ -24,13 +24,14 @@ import org.apache.hudi.cli.utils.HiveUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.exception.HoodieException;
 
 import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -39,11 +40,6 @@ import java.util.stream.Collectors;
  */
 @Component
 public class HoodieSyncCommand implements CommandMarker {
-
-  @CliAvailabilityIndicator({"sync validate"})
-  public boolean isSyncVerificationAvailable() {
-    return HoodieCLI.tableMetadata != null && HoodieCLI.syncTableMetadata != null;
-  }
 
   @CliCommand(value = "sync validate", help = "Validate the sync by counting the number of records")
   public String validateSync(
@@ -55,14 +51,17 @@ public class HoodieSyncCommand implements CommandMarker {
           help = "total number of recent partitions to validate") final int partitionCount,
       @CliOption(key = {"hiveServerUrl"}, mandatory = true,
           help = "hiveServerURL to connect to") final String hiveServerUrl,
-      @CliOption(key = {"hiveUser"}, mandatory = false, unspecifiedDefaultValue = "",
+      @CliOption(key = {"hiveUser"}, unspecifiedDefaultValue = "",
           help = "hive username to connect to") final String hiveUser,
       @CliOption(key = {"hivePass"}, mandatory = true, unspecifiedDefaultValue = "",
           help = "hive password to connect to") final String hivePass)
       throws Exception {
+    if (HoodieCLI.syncTableMetadata == null) {
+      throw new HoodieException("Sync validate request target table not null.");
+    }
     HoodieTableMetaClient target = HoodieCLI.syncTableMetadata;
     HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsTimeline();
-    HoodieTableMetaClient source = HoodieCLI.tableMetadata;
+    HoodieTableMetaClient source = HoodieCLI.getTableMetaClient();
     HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsTimeline();
     long sourceCount = 0;
     long targetCount = 0;
@@ -82,32 +81,26 @@ public class HoodieSyncCommand implements CommandMarker {
     if (sourceLatestCommit != null
         && HoodieTimeline.compareTimestamps(targetLatestCommit, sourceLatestCommit, HoodieTimeline.GREATER)) {
       // source is behind the target
-      List<HoodieInstant> commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)
-          .getInstants().collect(Collectors.toList());
-      if (commitsToCatchup.isEmpty()) {
-        return "Count difference now is (count(" + target.getTableConfig().getTableName() + ") - count("
-            + source.getTableConfig().getTableName() + ") == " + (targetCount - sourceCount);
-      } else {
-        long newInserts = CommitUtil.countNewRecords(target,
-            commitsToCatchup.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()));
-        return "Count difference now is (count(" + target.getTableConfig().getTableName() + ") - count("
-            + source.getTableConfig().getTableName() + ") == " + (targetCount - sourceCount) + ". Catch up count is "
-            + newInserts;
-      }
+      return getString(target, targetTimeline, source, sourceCount, targetCount, sourceLatestCommit);
     } else {
-      List<HoodieInstant> commitsToCatchup = sourceTimeline.findInstantsAfter(targetLatestCommit, Integer.MAX_VALUE)
-          .getInstants().collect(Collectors.toList());
-      if (commitsToCatchup.isEmpty()) {
-        return "Count difference now is (count(" + source.getTableConfig().getTableName() + ") - count("
-            + target.getTableConfig().getTableName() + ") == " + (sourceCount - targetCount);
-      } else {
-        long newInserts = CommitUtil.countNewRecords(source,
-            commitsToCatchup.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()));
-        return "Count difference now is (count(" + source.getTableConfig().getTableName() + ") - count("
-            + target.getTableConfig().getTableName() + ") == " + (sourceCount - targetCount) + ". Catch up count is "
-            + newInserts;
-      }
+      return getString(source, sourceTimeline, target, targetCount, sourceCount, targetLatestCommit);
 
+    }
+  }
+
+  private String getString(HoodieTableMetaClient target, HoodieTimeline targetTimeline, HoodieTableMetaClient source, long sourceCount, long targetCount, String sourceLatestCommit)
+          throws IOException {
+    List<HoodieInstant> commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)
+        .getInstants().collect(Collectors.toList());
+    if (commitsToCatchup.isEmpty()) {
+      return "Count difference now is (count(" + target.getTableConfig().getTableName() + ") - count("
+          + source.getTableConfig().getTableName() + ") == " + (targetCount - sourceCount);
+    } else {
+      long newInserts = CommitUtil.countNewRecords(target,
+          commitsToCatchup.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()));
+      return "Count difference now is (count(" + target.getTableConfig().getTableName() + ") - count("
+          + source.getTableConfig().getTableName() + ") == " + (targetCount - sourceCount) + ". Catch up count is "
+          + newInserts;
     }
   }
 

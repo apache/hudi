@@ -56,7 +56,7 @@ public class TestHoodieInputFormat {
   @Test
   public void testInputFormatLoad() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareDataset(basePath, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
     InputFormatTestUtil.commit(basePath, "100");
 
     // Add the paths
@@ -72,7 +72,7 @@ public class TestHoodieInputFormat {
   @Test
   public void testInputFormatUpdates() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareDataset(basePath, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
     InputFormatTestUtil.commit(basePath, "100");
 
     // Add the paths
@@ -99,7 +99,7 @@ public class TestHoodieInputFormat {
   @Test
   public void testIncrementalSimple() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareDataset(basePath, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
     InputFormatTestUtil.commit(basePath, "100");
 
     // Add the paths
@@ -115,7 +115,7 @@ public class TestHoodieInputFormat {
   @Test
   public void testIncrementalWithMultipleCommits() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareDataset(basePath, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
     InputFormatTestUtil.commit(basePath, "100");
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -166,7 +166,7 @@ public class TestHoodieInputFormat {
     // initial commit
     Schema schema = InputFormatTestUtil.readSchema("/sample1.avsc");
     String commit1 = "20160628071126";
-    File partitionDir = InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, 10, commit1);
+    File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 10, commit1);
     InputFormatTestUtil.commit(basePath, commit1);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());

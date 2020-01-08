@@ -16,20 +16,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.sources;
+package org.apache.hudi.exception;
 
-import org.apache.hudi.common.util.TypedProperties;
-import org.apache.hudi.utilities.schema.SchemaProvider;
+/**
+ * Exception thrown to indicate that a hoodie table is invalid.
+ */
+public class InvalidTableException extends HoodieException {
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.SparkSession;
+  public InvalidTableException(String basePath) {
+    super(getErrorMessage(basePath));
+  }
 
-public abstract class ParquetSource extends Source<JavaRDD<GenericRecord>> {
-
-  public ParquetSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-      SchemaProvider schemaProvider) {
-    super(props, sparkContext, sparkSession, schemaProvider, SourceType.PARQUET);
+  private static String getErrorMessage(String basePath) {
+    return "Invalid Hoodie Table. " + basePath;
   }
 }

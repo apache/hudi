@@ -40,7 +40,7 @@ public class HoodieCLI {
   public static FileSystem fs;
   public static CLIState state = CLIState.INIT;
   public static String basePath;
-  public static HoodieTableMetaClient tableMetadata;
+  protected static HoodieTableMetaClient tableMetadata;
   public static HoodieTableMetaClient syncTableMetadata;
   public static TimelineLayoutVersion layoutVersion;
 
@@ -48,7 +48,7 @@ public class HoodieCLI {
    * Enum for CLI state.
    */
   public enum CLIState {
-    INIT, DATASET, SYNC
+    INIT, TABLE, SYNC
   }
 
   public static void setConsistencyGuardConfig(ConsistencyGuardConfig config) {
@@ -92,4 +92,17 @@ public class HoodieCLI {
     setLayoutVersion(layoutVersion);
     refreshTableMetadata();
   }
+
+  /**
+   * Get tableMetadata, throw NullPointerException when it is null.
+   *
+   * @return tableMetadata which is instance of HoodieTableMetaClient
+   */
+  public static HoodieTableMetaClient getTableMetaClient() {
+    if (tableMetadata == null) {
+      throw new NullPointerException("There is no hudi table. Please use connect command to set table first");
+    }
+    return tableMetadata;
+  }
+
 }

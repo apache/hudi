@@ -139,7 +139,7 @@ public class TestDFSSource extends UtilitiesTestBase {
 
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsBasePath + "/parquetFiles");
-    ParquetSource parquetDFSSource = new ParquetDFSSource(props, jsc, sparkSession, schemaProvider);
+    ParquetDFSSource parquetDFSSource = new ParquetDFSSource(props, jsc, sparkSession, schemaProvider);
     SourceFormatAdapter parquetSource = new SourceFormatAdapter(parquetDFSSource);
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit

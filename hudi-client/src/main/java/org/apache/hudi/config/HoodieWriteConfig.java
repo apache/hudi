@@ -96,6 +96,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String MAX_CONSISTENCY_CHECKS_PROP = "hoodie.consistency.check.max_checks";
   private static int DEFAULT_MAX_CONSISTENCY_CHECKS = 7;
 
+
   private ConsistencyGuardConfig consistencyGuardConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
@@ -334,11 +335,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getHbaseIndexGetBatchSize() {
-    return Integer.valueOf(props.getProperty(HoodieHBaseIndexConfig.HBASE_GET_BATCH_SIZE_PROP));
+    return Integer.parseInt(props.getProperty(HoodieHBaseIndexConfig.HBASE_GET_BATCH_SIZE_PROP));
   }
 
   public int getHbaseIndexPutBatchSize() {
-    return Integer.valueOf(props.getProperty(HoodieHBaseIndexConfig.HBASE_PUT_BATCH_SIZE_PROP));
+    return Integer.parseInt(props.getProperty(HoodieHBaseIndexConfig.HBASE_PUT_BATCH_SIZE_PROP));
   }
 
   public Boolean getHbaseIndexPutBatchSizeAutoCompute() {
@@ -362,11 +363,19 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public boolean getHBaseIndexShouldComputeQPSDynamically() {
-    return Boolean.valueOf(props.getProperty(HoodieHBaseIndexConfig.HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY));
+    return Boolean.parseBoolean(props.getProperty(HoodieHBaseIndexConfig.HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY));
   }
 
   public int getHBaseIndexDesiredPutsTime() {
-    return Integer.valueOf(props.getProperty(HoodieHBaseIndexConfig.HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS));
+    return Integer.parseInt(props.getProperty(HoodieHBaseIndexConfig.HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS));
+  }
+
+  public String getBloomFilterType() {
+    return props.getProperty(HoodieIndexConfig.BLOOM_INDEX_FILTER_TYPE);
+  }
+
+  public int getDynamicBloomFilterMaxNumEntries() {
+    return Integer.parseInt(props.getProperty(HoodieIndexConfig.HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES));
   }
 
   /**
@@ -446,7 +455,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public double getParquetCompressionRatio() {
-    return Double.valueOf(props.getProperty(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO));
+    return Double.parseDouble(props.getProperty(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO));
   }
 
   public CompressionCodecName getParquetCompressionCodec() {
@@ -454,7 +463,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public double getLogFileToParquetCompressionRatio() {
-    return Double.valueOf(props.getProperty(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO));
+    return Double.parseDouble(props.getProperty(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO));
   }
 
   /**
@@ -508,7 +517,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getMaxDFSStreamBufferSize() {
-    return Integer.valueOf(props.getProperty(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP));
+    return Integer.parseInt(props.getProperty(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP));
   }
 
   public String getSpillableMapBasePath() {
@@ -516,7 +525,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public double getWriteStatusFailureFraction() {
-    return Double.valueOf(props.getProperty(HoodieMemoryConfig.WRITESTATUS_FAILURE_FRACTION_PROP));
+    return Double.parseDouble(props.getProperty(HoodieMemoryConfig.WRITESTATUS_FAILURE_FRACTION_PROP));
   }
 
   public ConsistencyGuardConfig getConsistencyGuardConfig() {
@@ -555,12 +564,9 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isConsistencyGuardSet = false;
 
     public Builder fromFile(File propertiesFile) throws IOException {
-      FileReader reader = new FileReader(propertiesFile);
-      try {
+      try (FileReader reader = new FileReader(propertiesFile)) {
         this.props.load(reader);
         return this;
-      } finally {
-        reader.close();
       }
     }
 

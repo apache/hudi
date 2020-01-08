@@ -69,12 +69,12 @@ import java.util.stream.IntStream;
 
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
- * dataset. Does not maintain any state, queries at runtime to see how far behind the target dataset is from the source
- * dataset. This can be overriden to force sync from a timestamp.
+ * table. Does not maintain any state, queries at runtime to see how far behind the target table is from the source
+ * table. This can be overriden to force sync from a timestamp.
  *
  * In continuous mode, DeltaStreamer runs in loop-mode going through the below operations (a) pull-from-source (b)
  * write-to-sink (c) Schedule Compactions if needed (d) Conditionally Sync to Hive each cycle. For MOR table with
- * continuous mode enabled, a seperate compactor thread is allocated to execute compactions
+ * continuous mode enabled, a separate compactor thread is allocated to execute compactions
  */
 public class HoodieDeltaStreamer implements Serializable {
 
@@ -151,8 +151,8 @@ public class HoodieDeltaStreamer implements Serializable {
   public static class Config implements Serializable {
 
     @Parameter(names = {"--target-base-path"},
-        description = "base path for the target hoodie dataset. "
-            + "(Will be created if did not exist first time around. If exists, expected to be a hoodie dataset)",
+        description = "base path for the target hoodie table. "
+            + "(Will be created if did not exist first time around. If exists, expected to be a hoodie table)",
         required = true)
     public String targetBasePath;
 
@@ -199,7 +199,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--transformer-class"},
         description = "subclass of org.apache.hudi.utilities.transform.Transformer"
-            + ". Allows transforming raw source dataset to a target dataset (conforming to target schema) before "
+            + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
             + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
             + "allows a SQL query templated to be passed as a transformation function)")
     public String transformerClassName = null;
@@ -554,6 +554,7 @@ public class HoodieDeltaStreamer implements Serializable {
     /**
      * Start Compaction Service.
      */
+    @Override
     protected Pair<CompletableFuture, ExecutorService> startService() {
       ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentCompaction);
       List<CompletableFuture<Boolean>> compactionFutures =

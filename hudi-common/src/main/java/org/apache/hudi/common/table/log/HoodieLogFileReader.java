@@ -108,6 +108,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
    */
   private void addShutDownHook() {
     Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
       public void run() {
         try {
           close();

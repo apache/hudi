@@ -44,7 +44,7 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url", required = true)
   public String jdbcUrl;
 
-  @Parameter(names = {"--base-path"}, description = "Basepath of hoodie dataset to sync", required = true)
+  @Parameter(names = {"--base-path"}, description = "Basepath of hoodie table to sync", required = true)
   public String basePath;
 
   @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by")

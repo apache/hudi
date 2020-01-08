@@ -42,7 +42,7 @@ public class SpillableMapTestUtils {
   public static List<String> upsertRecords(List<IndexedRecord> iRecords,
       Map<String, HoodieRecord<? extends HoodieRecordPayload>> records) {
     List<String> recordKeys = new ArrayList<>();
-    iRecords.stream().forEach(r -> {
+    iRecords.forEach(r -> {
       String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
       recordKeys.add(key);

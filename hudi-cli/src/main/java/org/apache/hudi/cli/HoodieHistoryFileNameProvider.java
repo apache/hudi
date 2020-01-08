@@ -30,6 +30,7 @@ import org.springframework.stereotype.Component;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class HoodieHistoryFileNameProvider extends DefaultHistoryFileNameProvider {
 
+  @Override
   public String getHistoryFileName() {
     return "hoodie-cmd.log";
   }

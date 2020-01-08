@@ -41,7 +41,7 @@ public class DataSourceTestUtils {
   }
 
   public static List<String> convertToStringList(List<HoodieRecord> records) {
-    return records.stream().map(hr -> convertToString(hr)).filter(os -> os.isPresent()).map(os -> os.get())
+    return records.stream().map(DataSourceTestUtils::convertToString).filter(Option::isPresent).map(Option::get)
         .collect(Collectors.toList());
   }
 

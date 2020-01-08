@@ -16,18 +16,30 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.exception;
+package org.apache.hudi.common.bloom.filter;
 
 /**
- * Exception thrown to indicate that a hoodie dataset is invalid.
+ * Bloom filter utils.
  */
-public class InvalidDatasetException extends HoodieException {
+class BloomFilterUtils {
 
-  public InvalidDatasetException(String basePath) {
-    super(getErrorMessage(basePath));
+  /**
+   * Used in computing the optimal Bloom filter size. This approximately equals 0.480453.
+   */
+  private static final double LOG2_SQUARED = Math.log(2) * Math.log(2);
+
+  /**
+   * @return the bitsize given the total number of entries and error rate.
+   */
+  static int getBitSize(int numEntries, double errorRate) {
+    return (int) Math.ceil(numEntries * (-Math.log(errorRate) / LOG2_SQUARED));
   }
 
-  private static String getErrorMessage(String basePath) {
-    return "Invalid Hoodie Dataset. " + basePath;
+  /**
+   * @return the number of hashes given the bitsize and total number of entries.
+   */
+  static int getNumHashes(int bitSize, int numEntries) {
+    // Number of the hash functions
+    return (int) Math.ceil(Math.log(2) * bitSize / numEntries);
   }
 }

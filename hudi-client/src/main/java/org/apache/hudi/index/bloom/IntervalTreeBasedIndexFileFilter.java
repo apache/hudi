@@ -18,6 +18,8 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.util.collection.Pair;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -62,14 +64,16 @@ class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
   }
 
   @Override
-  public Set<String> getMatchingFiles(String partitionPath, String recordKey) {
-    Set<String> toReturn = new HashSet<>();
+  public Set<Pair<String, String>> getMatchingFilesAndPartition(String partitionPath, String recordKey) {
+    Set<Pair<String, String>> toReturn = new HashSet<>();
     // could be null, if there are no files in a given partition yet or if all index files have no ranges
     if (partitionToFileIndexLookUpTree.containsKey(partitionPath)) {
-      toReturn.addAll(partitionToFileIndexLookUpTree.get(partitionPath).getMatchingIndexFiles(recordKey));
+      partitionToFileIndexLookUpTree.get(partitionPath).getMatchingIndexFiles(recordKey).forEach(file ->
+          toReturn.add(Pair.of(partitionPath, file)));
     }
     if (partitionToFilesWithNoRanges.containsKey(partitionPath)) {
-      toReturn.addAll(partitionToFilesWithNoRanges.get(partitionPath));
+      partitionToFilesWithNoRanges.get(partitionPath).forEach(file ->
+          toReturn.add(Pair.of(partitionPath, file)));
     }
     return toReturn;
   }

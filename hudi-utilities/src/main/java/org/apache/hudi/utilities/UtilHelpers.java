@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
@@ -43,6 +43,7 @@ import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.sql.SparkSession;
 
 import java.io.BufferedReader;
@@ -50,6 +51,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,26 +94,38 @@ public class UtilHelpers {
   /**
    */
   public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
+    DFSPropertiesConfiguration conf;
     try {
-      DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(cfgPath.getFileSystem(fs.getConf()), cfgPath);
+      conf = new DFSPropertiesConfiguration(cfgPath.getFileSystem(fs.getConf()), cfgPath);
+    } catch (Exception e) {
+      conf = new DFSPropertiesConfiguration();
+      LOG.warn("Unexpected error read props file at :" + cfgPath, e);
+    }
+
+    try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
         conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
       }
-      return conf;
-    } catch (Exception e) {
-      throw new HoodieException("Unable to read props file at :" + cfgPath, e);
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Unexpected error adding config overrides", ioe);
     }
+
+    return conf;
   }
 
   public static TypedProperties buildProperties(List<String> props) {
     TypedProperties properties = new TypedProperties();
-    props.stream().forEach(x -> {
+    props.forEach(x -> {
       String[] kv = x.split("=");
       Preconditions.checkArgument(kv.length == 2);
       properties.setProperty(kv[0], kv[1]);
     });
     return properties;
+  }
+
+  public static void validateAndAddProperties(String[] configs, SparkLauncher sparkLauncher) {
+    Arrays.stream(configs).filter(config -> config.contains("=") && config.split("=").length == 2).forEach(sparkLauncher::addAppArgs);
   }
 
   /**
@@ -210,7 +224,7 @@ public class UtilHelpers {
       }
     });
     if (errors.value() == 0) {
-      LOG.info(String.format("Dataset imported into hoodie dataset with %s instant time.", instantTime));
+      LOG.info(String.format("Table imported into hoodie with %s instant time.", instantTime));
       return 0;
     }
     LOG.error(String.format("Import failed with %d errors.", errors.value()));

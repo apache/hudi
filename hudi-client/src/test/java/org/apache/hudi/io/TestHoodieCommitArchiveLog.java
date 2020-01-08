@@ -76,7 +76,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testArchiveEmptyDataset() throws IOException {
+  public void testArchiveEmptyTable() throws IOException {
     HoodieWriteConfig cfg =
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table").build();
@@ -87,7 +87,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testArchiveDatasetWithArchival() throws IOException {
+  public void testArchiveTableWithArchival() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 4).build())
@@ -147,7 +147,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "103", dfs.getConf());
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "104", dfs.getConf());
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "105", dfs.getConf());
-    HoodieTestUtils.createPendingCleanFiles(metaClient, dfs.getConf(), "106", "107");
+    HoodieTestUtils.createPendingCleanFiles(metaClient, "106", "107");
 
     // reload the timeline and get all the commmits before archive
     timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
@@ -229,7 +229,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testArchiveDatasetWithNoArchival() throws IOException {
+  public void testArchiveTableWithNoArchival() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())

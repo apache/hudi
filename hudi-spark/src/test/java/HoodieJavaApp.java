@@ -45,7 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Sample program that writes & reads hoodie datasets via the Spark datasource.
+ * Sample program that writes & reads hoodie tables via the Spark datasource.
  */
 public class HoodieJavaApp {
 
@@ -114,13 +114,12 @@ public class HoodieJavaApp {
     } else {
       dataGen = new HoodieTestDataGenerator();
     }
-    List<HoodieRecord> recordsSoFar = new ArrayList<>();
 
     /**
      * Commit with only inserts
      */
     // Generate some input..
-    recordsSoFar.addAll(dataGen.generateInserts("001"/* ignore */, 100));
+    List<HoodieRecord> recordsSoFar = new ArrayList<>(dataGen.generateInserts("001"/* ignore */, 100));
     List<String> records1 = DataSourceTestUtils.convertToStringList(recordsSoFar);
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));
 

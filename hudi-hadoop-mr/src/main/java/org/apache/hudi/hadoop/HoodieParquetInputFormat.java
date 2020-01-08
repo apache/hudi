@@ -25,9 +25,9 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.TableFileSystemView.ReadOptimizedView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.exception.DatasetNotFoundException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.InvalidDatasetException;
+import org.apache.hudi.exception.InvalidTableException;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
@@ -54,8 +54,8 @@ import java.util.stream.Collectors;
 
 /**
  * HoodieInputFormat which understands the Hoodie File Structure and filters files based on the Hoodie Mode. If paths
- * that does not correspond to a hoodie dataset then they are passed in as is (as what FileInputFormat.listStatus()
- * would do). The JobConf could have paths from multipe Hoodie/Non-Hoodie datasets
+ * that does not correspond to a hoodie table then they are passed in as is (as what FileInputFormat.listStatus()
+ * would do). The JobConf could have paths from multipe Hoodie/Non-Hoodie tables
  */
 @UseFileSplitsFromInputFormat
 public class HoodieParquetInputFormat extends MapredParquetInputFormat implements Configurable {
@@ -159,7 +159,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
         try {
           metadata = getTableMetaClient(status.getPath().getFileSystem(conf), status.getPath().getParent());
           nonHoodieBasePath = null;
-        } catch (DatasetNotFoundException | InvalidDatasetException e) {
+        } catch (TableNotFoundException | InvalidTableException e) {
           LOG.info("Handling a non-hoodie path " + status.getPath());
           metadata = null;
           nonHoodieBasePath = status.getPath().getParent().toString();
@@ -173,10 +173,12 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     return grouped;
   }
 
+  @Override
   public void setConf(Configuration conf) {
     this.conf = conf;
   }
 
+  @Override
   public Configuration getConf() {
     return conf;
   }
