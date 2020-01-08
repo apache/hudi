@@ -73,6 +73,7 @@
     <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
     <genjavadoc-plugin.version>0.15</genjavadoc-plugin.version>
 
+    <java.version>1.8</java.version>
     <fasterxml.version>2.6.7</fasterxml.version>
     <glassfish.version>2.17</glassfish.version>
     <parquet.version>1.8.1</parquet.version>
@@ -210,8 +211,8 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
-          <source>1.8</source>
-          <target>1.8</target>
+          <source>${java.version}</source>
+          <target>${java.version}</target>
         </configuration>
       </plugin>
       <plugin>
@@ -948,8 +949,8 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-compiler-plugin</artifactId>
             <configuration>
-              <source>1.8</source>
-              <target>1.8</target>
+              <source>${java.version}</source>
+              <target>${java.version}</target>
             </configuration>
           </plugin>
           <plugin>
