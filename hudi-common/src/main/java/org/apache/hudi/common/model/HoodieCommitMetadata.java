@@ -30,7 +30,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -326,7 +326,7 @@ public class HoodieCommitMetadata implements Serializable {
 
   public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
     try {
-      return fromJsonString(new String(bytes, Charset.forName("utf-8")), clazz);
+      return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
     } catch (Exception e) {
       throw new IOException("unable to read commit metadata", e);
     }
