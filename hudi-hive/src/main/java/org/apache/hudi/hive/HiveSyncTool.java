@@ -34,8 +34,8 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.parquet.schema.MessageType;
 
 import java.util.List;
@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
 @SuppressWarnings("WeakerAccess")
 public class HiveSyncTool {
 
-  private static final Logger LOG = LogManager.getLogger(HiveSyncTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveSyncTool.class);
   private final HoodieHiveClient hoodieHiveClient;
   public static final String SUFFIX_REALTIME_TABLE = "_rt";
   private final HiveSyncConfig cfg;
@@ -79,7 +79,7 @@ public class HiveSyncTool {
           cfg.tableName = originalTableName;
           break;
         default:
-          LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
+          LOG.error("Unknown table type {}", hoodieHiveClient.getTableType());
           throw new InvalidDatasetException(hoodieHiveClient.getBasePath());
       }
     } catch (RuntimeException re) {
@@ -90,8 +90,8 @@ public class HiveSyncTool {
   }
 
   private void syncHoodieTable(boolean isRealTime) throws ClassNotFoundException {
-    LOG.info("Trying to sync hoodie table " + cfg.tableName + " with base path " + hoodieHiveClient.getBasePath()
-        + " of type " + hoodieHiveClient.getTableType());
+    LOG.info("Trying to sync hoodie table {} with base path {} of type {}",
+            cfg.tableName, hoodieHiveClient.getBasePath(), hoodieHiveClient.getTableType());
 
     // Check if the necessary table exists
     boolean tableExists = hoodieHiveClient.doesTableExist();
@@ -100,20 +100,20 @@ public class HiveSyncTool {
     // Sync schema if needed
     syncSchema(tableExists, isRealTime, schema);
 
-    LOG.info("Schema sync complete. Syncing partitions for " + cfg.tableName);
+    LOG.info("Schema sync complete. Syncing partitions for {}", cfg.tableName);
     // Get the last time we successfully synced partitions
     Option<String> lastCommitTimeSynced = Option.empty();
     if (tableExists) {
       lastCommitTimeSynced = hoodieHiveClient.getLastCommitTimeSynced();
     }
-    LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
+    LOG.info("Last commit time synced was found to be {}", lastCommitTimeSynced.orElse("null"));
     List<String> writtenPartitionsSince = hoodieHiveClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
-    LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
+    LOG.info("Storage partitions scan complete. Found {}", writtenPartitionsSince.size());
     // Sync the partitions if needed
     syncPartitions(writtenPartitionsSince);
 
     hoodieHiveClient.updateLastCommitTimeSynced();
-    LOG.info("Sync complete for " + cfg.tableName);
+    LOG.info("Sync complete for {}", cfg.tableName);
   }
 
   /**
@@ -126,7 +126,7 @@ public class HiveSyncTool {
   private void syncSchema(boolean tableExists, boolean isRealTime, MessageType schema) throws ClassNotFoundException {
     // Check and sync schema
     if (!tableExists) {
-      LOG.info("Table " + cfg.tableName + " is not found. Creating it");
+      LOG.info("Table {} is not found. Creating it", cfg.tableName);
       if (!isRealTime) {
         // TODO - RO Table for MOR only after major compaction (UnboundedCompaction is default
         // for now)
@@ -150,10 +150,10 @@ public class HiveSyncTool {
       Map<String, String> tableSchema = hoodieHiveClient.getTableSchema();
       SchemaDifference schemaDiff = SchemaUtil.getSchemaDifference(schema, tableSchema, cfg.partitionFields);
       if (!schemaDiff.isEmpty()) {
-        LOG.info("Schema difference found for " + cfg.tableName);
+        LOG.info("Schema difference found for {}", cfg.tableName);
         hoodieHiveClient.updateTableDefinition(schema);
       } else {
-        LOG.info("No Schema difference for " + cfg.tableName);
+        LOG.info("No Schema difference for {}", cfg.tableName);
       }
     }
   }
@@ -168,10 +168,10 @@ public class HiveSyncTool {
       List<PartitionEvent> partitionEvents =
           hoodieHiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince);
       List<String> newPartitions = filterPartitions(partitionEvents, PartitionEventType.ADD);
-      LOG.info("New Partitions " + newPartitions);
+      LOG.info("New Partitions {}", newPartitions);
       hoodieHiveClient.addPartitionsToTable(newPartitions);
       List<String> updatePartitions = filterPartitions(partitionEvents, PartitionEventType.UPDATE);
-      LOG.info("Changed Partitions " + updatePartitions);
+      LOG.info("Changed Partitions {}", updatePartitions);
       hoodieHiveClient.updatePartitionsToTable(updatePartitions);
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to sync partitions for table " + cfg.tableName, e);

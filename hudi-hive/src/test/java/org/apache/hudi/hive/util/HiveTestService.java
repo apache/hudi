@@ -35,8 +35,8 @@ import org.apache.hadoop.hive.metastore.TUGIBasedProcessor;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.thrift.TUGIContainingTransport;
 import org.apache.hive.service.server.HiveServer2;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.server.TServer;
@@ -59,7 +59,7 @@ import java.util.concurrent.Executors;
 
 public class HiveTestService {
 
-  private static final Logger LOG = LogManager.getLogger(HiveTestService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveTestService.class);
 
   private static final int CONNECTION_TIMEOUT = 30000;
 
@@ -95,7 +95,7 @@ public class HiveTestService {
 
     String localHiveLocation = getHiveLocation(workDir);
     if (clean) {
-      LOG.info("Cleaning Hive cluster data at: " + localHiveLocation + " and starting fresh.");
+      LOG.info("Cleaning Hive cluster data at: {} and starting fresh.", localHiveLocation);
       File file = new File(localHiveLocation);
       FileIOUtils.deleteDirectory(file);
     }
@@ -155,7 +155,7 @@ public class HiveTestService {
         return true;
       } catch (MetaException e) {
         // ignore as this is expected
-        LOG.info("server " + hostname + ":" + port + " not up " + e);
+        LOG.error("server {}:{} not up ", hostname, port, e);
       }
 
       if (System.currentTimeMillis() > start + timeout) {

@@ -48,8 +48,8 @@ import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hive.jdbc.HiveDriver;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
@@ -87,7 +87,7 @@ public class HoodieHiveClient {
     }
   }
 
-  private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieHiveClient.class);
   private final HoodieTableMetaClient metaClient;
   private final HoodieTableType tableType;
   private final PartitionValueExtractor partitionValueExtractor;
@@ -108,7 +108,7 @@ public class HoodieHiveClient {
     // Support both JDBC and metastore based implementations for backwards compatiblity. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
     if (cfg.useJdbc) {
-      LOG.info("Creating hive connection " + cfg.jdbcUrl);
+      LOG.info("Creating hive connection {}", cfg.jdbcUrl);
       createHiveConnection();
     }
     try {
@@ -137,10 +137,10 @@ public class HoodieHiveClient {
    */
   void addPartitionsToTable(List<String> partitionsToAdd) {
     if (partitionsToAdd.isEmpty()) {
-      LOG.info("No partitions to add for " + syncConfig.tableName);
+      LOG.info("No partitions to add for {}", syncConfig.tableName);
       return;
     }
-    LOG.info("Adding partitions " + partitionsToAdd.size() + " to table " + syncConfig.tableName);
+    LOG.info("Adding partitions {} to table {}", partitionsToAdd.size(), syncConfig.tableName);
     String sql = constructAddPartitions(partitionsToAdd);
     updateHiveSQL(sql);
   }
@@ -150,10 +150,10 @@ public class HoodieHiveClient {
    */
   void updatePartitionsToTable(List<String> changedPartitions) {
     if (changedPartitions.isEmpty()) {
-      LOG.info("No partitions to change for " + syncConfig.tableName);
+      LOG.info("No partitions to change for {}", syncConfig.tableName);
       return;
     }
-    LOG.info("Changing partitions " + changedPartitions.size() + " on " + syncConfig.tableName);
+    LOG.info("Changing partitions {} on {}", changedPartitions.size(), syncConfig.tableName);
     List<String> sqls = constructChangePartitions(changedPartitions);
     for (String sql : sqls) {
       updateHiveSQL(sql);
@@ -260,7 +260,7 @@ public class HoodieHiveClient {
               .append(HIVE_ESCAPE_CHARACTER).append(syncConfig.tableName)
               .append(HIVE_ESCAPE_CHARACTER).append(" REPLACE COLUMNS(")
               .append(newSchemaStr).append(" )").append(cascadeClause);
-      LOG.info("Updating table definition with " + sqlBuilder);
+      LOG.info("Updating table definition with {}", sqlBuilder);
       updateHiveSQL(sqlBuilder.toString());
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to update table for " + syncConfig.tableName, e);
@@ -271,7 +271,7 @@ public class HoodieHiveClient {
     try {
       String createSQLQuery =
           SchemaUtil.generateCreateDDL(storageSchema, syncConfig, inputFormatClass, outputFormatClass, serdeClass);
-      LOG.info("Creating table with " + createSQLQuery);
+      LOG.info("Creating table with {}", createSQLQuery);
       updateHiveSQL(createSQLQuery);
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to create table " + syncConfig.tableName, e);
@@ -329,7 +329,7 @@ public class HoodieHiveClient {
       schema.putAll(columnsMap);
       schema.putAll(partitionKeysMap);
       final long end = System.currentTimeMillis();
-      LOG.info(String.format("Time taken to getTableSchema: %s ms", (end - start)));
+      LOG.info("Time taken to getTableSchema: {} ms", (end - start));
       return schema;
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get table schema for : " + syncConfig.tableName, e);
@@ -364,7 +364,7 @@ public class HoodieHiveClient {
           // Get a datafile written and get the schema from that file
           Option<HoodieInstant> lastCompactionCommit =
               metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
-          LOG.info("Found the last compaction commit as " + lastCompactionCommit);
+          LOG.info("Found the last compaction commit as {}", lastCompactionCommit);
 
           Option<HoodieInstant> lastDeltaCommit;
           if (lastCompactionCommit.isPresent()) {
@@ -374,7 +374,7 @@ public class HoodieHiveClient {
             lastDeltaCommit =
                 metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant();
           }
-          LOG.info("Found the last delta commit " + lastDeltaCommit);
+          LOG.info("Found the last delta commit {}", lastDeltaCommit);
 
           if (lastDeltaCommit.isPresent()) {
             HoodieInstant lastDeltaInstant = lastDeltaCommit.get();
@@ -407,7 +407,7 @@ public class HoodieHiveClient {
             return readSchemaFromLastCompaction(lastCompactionCommit);
           }
         default:
-          LOG.error("Unknown table type " + tableType);
+          LOG.error("Unknown table type {}", tableType);
           throw new InvalidDatasetException(syncConfig.basePath);
       }
     } catch (IOException e) {
@@ -441,7 +441,7 @@ public class HoodieHiveClient {
     MessageType messageType = SchemaUtil.readSchemaFromLogFile(fs, path);
     // Fall back to read the schema from last compaction
     if (messageType == null) {
-      LOG.info("Falling back to read the schema from last compaction " + lastCompactionCommitOpt);
+      LOG.info("Falling back to read the schema from last compaction {}", lastCompactionCommitOpt);
       return readSchemaFromLastCompaction(lastCompactionCommitOpt);
     }
     return messageType;
@@ -451,7 +451,7 @@ public class HoodieHiveClient {
    * Read the parquet schema from a parquet File.
    */
   private MessageType readSchemaFromDataFile(Path parquetFilePath) throws IOException {
-    LOG.info("Reading schema from " + parquetFilePath);
+    LOG.info("Reading schema from {}", parquetFilePath);
     if (!fs.exists(parquetFilePath)) {
       throw new IllegalArgumentException(
           "Failed to read schema from data file " + parquetFilePath + ". File does not exist.");
@@ -482,7 +482,7 @@ public class HoodieHiveClient {
       Statement stmt = null;
       try {
         stmt = connection.createStatement();
-        LOG.info("Executing SQL " + s);
+        LOG.info("Executing SQL {}", s);
         stmt.execute(s);
       } catch (SQLException e) {
         throw new HoodieHiveSyncException("Failed in executing SQL " + s, e);
@@ -513,12 +513,12 @@ public class HoodieHiveClient {
       ss = SessionState.start(configuration);
       hiveDriver = new org.apache.hadoop.hive.ql.Driver(configuration);
       final long endTime = System.currentTimeMillis();
-      LOG.info(String.format("Time taken to start SessionState and create Driver: %s ms", (endTime - startTime)));
+      LOG.info("Time taken to start SessionState and create Driver: {} ms", (endTime - startTime));
       for (String sql : sqls) {
         final long start = System.currentTimeMillis();
         responses.add(hiveDriver.run(sql));
         final long end = System.currentTimeMillis();
-        LOG.info(String.format("Time taken to execute [%s]: %s ms", sql, (end - start)));
+        LOG.info("Time taken to execute [{}]: {} ms", sql, (end - start));
       }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL", e);
@@ -552,7 +552,7 @@ public class HoodieHiveClient {
 
       try {
         this.connection = DriverManager.getConnection(syncConfig.jdbcUrl, syncConfig.hiveUser, syncConfig.hivePass);
-        LOG.info("Successfully established Hive connection to  " + syncConfig.jdbcUrl);
+        LOG.info("Successfully established Hive connection to {}", syncConfig.jdbcUrl);
       } catch (SQLException e) {
         throw new HoodieHiveSyncException("Cannot create hive connection " + getHiveJdbcUrlWithDefaultDBName(), e);
       }
@@ -630,14 +630,14 @@ public class HoodieHiveClient {
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
     if (!lastCommitTimeSynced.isPresent()) {
-      LOG.info("Last commit time synced is not known, listing all partitions in " + syncConfig.basePath + ",FS :" + fs);
+      LOG.info("Last commit time synced is not known, listing all partitions in {}, FS :{}", syncConfig.basePath, fs);
       try {
         return FSUtils.getAllPartitionPaths(fs, syncConfig.basePath, syncConfig.assumeDatePartitioning);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to list all partitions in " + syncConfig.basePath, e);
       }
     } else {
-      LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
+      LOG.info("Last commit time synced is {}, Getting commits since then", lastCommitTimeSynced.get());
 
       HoodieTimeline timelineToSync = activeTimeline.findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE);
       return timelineToSync.getInstants().map(s -> {
