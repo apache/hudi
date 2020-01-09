@@ -352,8 +352,8 @@ public class RocksDBDAO {
       }
     }
 
-    LOG.info("Prefix Search for (query={}) on {}. Total Time Taken (msec)={}. Serialization Time taken(micro)={}," +
-        " num entries={}", prefix, columnFamilyName, timer.endTimer(), timeTakenMicro, results.size());
+    LOG.info("Prefix Search for (query={}) on {}. Total Time Taken (msec)={}. Serialization Time taken(micro)={},"
+        + " num entries={}", prefix, columnFamilyName, timer.endTimer(), timeTakenMicro, results.size());
     return results.stream();
   }
 
