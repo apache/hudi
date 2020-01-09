@@ -89,13 +89,22 @@ public class HoodieTableMetaClient implements Serializable {
     this(conf, basePath, false);
   }
 
-  public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad) {
-    this(conf, basePath, loadActiveTimelineOnLoad, ConsistencyGuardConfig.newBuilder().build(),
-        Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
+  public HoodieTableMetaClient(Configuration conf, String basePath, String payloadClassName) {
+    this(conf, basePath, false, ConsistencyGuardConfig.newBuilder().build(), Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
+        payloadClassName);
   }
 
   public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
-      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion)
+                               ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion) {
+    this(conf, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, null);
+  }
+
+  public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad) {
+    this(conf, basePath, loadActiveTimelineOnLoad, ConsistencyGuardConfig.newBuilder().build(), Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION), null);
+  }
+
+  public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
+      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion, String payloadClassName)
       throws TableNotFoundException {
     LOG.info("Loading HoodieTableMetaClient from " + basePath);
     this.basePath = basePath;
@@ -106,7 +115,7 @@ public class HoodieTableMetaClient implements Serializable {
     Path metaPathDir = new Path(this.metaPath);
     this.fs = getFs();
     TableNotFoundException.checkTableValidity(fs, basePathDir, metaPathDir);
-    this.tableConfig = new HoodieTableConfig(fs, metaPath);
+    this.tableConfig = new HoodieTableConfig(fs, metaPath, payloadClassName);
     this.tableType = tableConfig.getTableType();
     this.timelineLayoutVersion = layoutVersion.orElse(tableConfig.getTimelineLayoutVersion());
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
@@ -127,7 +136,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
     return new HoodieTableMetaClient(oldMetaClient.hadoopConf.get(), oldMetaClient.basePath,
         oldMetaClient.loadActiveTimelineOnLoad, oldMetaClient.consistencyGuardConfig,
-        Option.of(oldMetaClient.timelineLayoutVersion));
+        Option.of(oldMetaClient.timelineLayoutVersion), null);
   }
 
   /**
@@ -284,9 +293,9 @@ public class HoodieTableMetaClient implements Serializable {
    * Helper method to initialize a table, with given basePath, tableType, name, archiveFolder.
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, String tableType,
-      String tableName, String archiveLogFolder) throws IOException {
+      String tableName, String archiveLogFolder, String payloadClassName) throws IOException {
     return initTableType(hadoopConf, basePath, HoodieTableType.valueOf(tableType), tableName,
-        archiveLogFolder, null, null);
+        archiveLogFolder, payloadClassName, null);
   }
 
   /**

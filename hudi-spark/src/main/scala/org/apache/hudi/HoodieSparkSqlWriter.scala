@@ -120,7 +120,7 @@ private[hudi] object HoodieSparkSqlWriter {
       // Create the table if not present
       if (!exists) {
         HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get, storageType,
-          tblName.get, "archived")
+          tblName.get, "archived", parameters(PAYLOAD_CLASS_OPT_KEY))
       }
 
       // Create a HoodieWriteClient & issue the write.
