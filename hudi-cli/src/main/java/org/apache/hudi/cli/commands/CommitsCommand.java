@@ -95,11 +95,10 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
-
-    if (!timeline.containsInstant(commitInstant)) {
-      return "Commit " + commitTime + " not found in Commits " + timeline;
+    HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline filteredTimeline = completedTimeline.filter(instant -> instant.getTimestamp().equals(commitTime));
+    if (filteredTimeline.empty()) {
+      return "Commit " + commitTime + " not found in Commits " + completedTimeline;
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
