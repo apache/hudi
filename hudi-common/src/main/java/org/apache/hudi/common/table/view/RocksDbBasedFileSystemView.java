@@ -157,7 +157,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   protected void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups) {
-    LOG.info("Resetting and adding new partition ({}) to ROCKSDB based file-system view at {}, Total file-groups={}", partitionPath, config.getRocksdbBasePath(), fileGroups.size());
+    LOG.info("Resetting and adding new partition ({}) to ROCKSDB based file-system view at {}, Total file-groups={}",
+        partitionPath, config.getRocksdbBasePath(), fileGroups.size());
 
     String lookupKey = schemaHelper.getKeyForPartitionLookup(partitionPath);
     rocksDB.delete(schemaHelper.getColFamilyForStoredPartitions(), lookupKey);
@@ -183,7 +184,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
     // record that partition is loaded.
     rocksDB.put(schemaHelper.getColFamilyForStoredPartitions(), lookupKey, Boolean.TRUE);
-    LOG.info("Finished adding new partition ({}) to ROCKSDB based file-system view at {}, Total file-groups={}", partitionPath, config.getRocksdbBasePath(), fileGroups.size());
+    LOG.info("Finished adding new partition ({}) to ROCKSDB based file-system view at {}, Total file-groups={}", partitionPath,
+        config.getRocksdbBasePath(), fileGroups.size());
   }
 
   @Override

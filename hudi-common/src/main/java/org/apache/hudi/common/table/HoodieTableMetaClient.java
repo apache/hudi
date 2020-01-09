@@ -324,7 +324,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public static HoodieTableMetaClient initDatasetAndGetMetaClient(Configuration hadoopConf, String basePath,
       Properties props) throws IOException {
-    LOG.info("Initializing {} as hoodie dataset {}", basePath, basePath);
+    LOG.info("Initializing {} as hoodie dataset", basePath);
     Path basePathDir = new Path(basePath);
     final FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
     if (!fs.exists(basePathDir)) {
