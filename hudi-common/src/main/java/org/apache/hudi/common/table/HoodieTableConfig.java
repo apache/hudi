@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -62,19 +62,25 @@ public class HoodieTableConfig implements Serializable {
   public static final HoodieTableType DEFAULT_TABLE_TYPE = HoodieTableType.COPY_ON_WRITE;
   public static final HoodieFileFormat DEFAULT_RO_FILE_FORMAT = HoodieFileFormat.PARQUET;
   public static final HoodieFileFormat DEFAULT_RT_FILE_FORMAT = HoodieFileFormat.HOODIE_LOG;
+  public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
   public static final Integer DEFAULT_TIMELINE_LAYOUT_VERSION = TimelineLayoutVersion.VERSION_0;
-
-  public static final String DEFAULT_PAYLOAD_CLASS = HoodieAvroPayload.class.getName();
   public static final String DEFAULT_ARCHIVELOG_FOLDER = "";
   private Properties props;
 
-  public HoodieTableConfig(FileSystem fs, String metaPath) {
+  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
     Properties props = new Properties();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
       try (FSDataInputStream inputStream = fs.open(propertyPath)) {
         props.load(inputStream);
+      }
+      if (props.containsKey(HOODIE_PAYLOAD_CLASS_PROP_NAME) && payloadClassName != null
+          && !props.getProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME).equals(payloadClassName)) {
+        props.setProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, payloadClassName);
+        try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
+          props.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
+        }
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not load Hoodie properties from " + propertyPath, e);
@@ -109,7 +115,7 @@ public class HoodieTableConfig implements Serializable {
       if (!properties.containsKey(HOODIE_TABLE_TYPE_PROP_NAME)) {
         properties.setProperty(HOODIE_TABLE_TYPE_PROP_NAME, DEFAULT_TABLE_TYPE.name());
       }
-      if (properties.getProperty(HOODIE_TABLE_TYPE_PROP_NAME) == HoodieTableType.MERGE_ON_READ.name()
+      if (properties.getProperty(HOODIE_TABLE_TYPE_PROP_NAME).equals(HoodieTableType.MERGE_ON_READ.name())
           && !properties.containsKey(HOODIE_PAYLOAD_CLASS_PROP_NAME)) {
         properties.setProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS);
       }

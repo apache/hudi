@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 
 /**

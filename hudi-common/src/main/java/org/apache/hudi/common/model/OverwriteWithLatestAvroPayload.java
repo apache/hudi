@@ -16,9 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -45,7 +44,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   }
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
-    this(record.get(), (record1) -> 0); // natural order
+    this(record.isPresent() ? record.get() : null, (record1) -> 0); // natural order
   }
 
   @Override
@@ -61,7 +60,12 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
 
-    GenericRecord genericRecord = (GenericRecord) getInsertValue(schema).get();
+    Option<IndexedRecord> recordOption = getInsertValue(schema);
+    if (!recordOption.isPresent()) {
+      return Option.empty();
+    }
+
+    GenericRecord genericRecord = (GenericRecord) recordOption.get();
     // combining strategy here trivially ignores currentValue on disk and writes this record
     Object deleteMarker = genericRecord.get("_hoodie_is_deleted");
     if (deleteMarker instanceof Boolean && (boolean) deleteMarker) {
@@ -73,6 +77,6 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    return recordBytes.length == 0 ? Option.empty() : Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 }

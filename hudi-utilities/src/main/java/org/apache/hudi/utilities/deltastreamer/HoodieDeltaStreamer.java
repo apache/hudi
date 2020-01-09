@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
