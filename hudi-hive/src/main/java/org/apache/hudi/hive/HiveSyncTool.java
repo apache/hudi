@@ -91,7 +91,7 @@ public class HiveSyncTool {
 
   private void syncHoodieTable(boolean isRealTime) throws ClassNotFoundException {
     LOG.info("Trying to sync hoodie table {} with base path {} of type {}",
-            cfg.tableName, hoodieHiveClient.getBasePath(), hoodieHiveClient.getTableType());
+        cfg.tableName, hoodieHiveClient.getBasePath(), hoodieHiveClient.getTableType());
 
     // Check if the necessary table exists
     boolean tableExists = hoodieHiveClient.doesTableExist();
