@@ -51,6 +51,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   private final String outputDateFormat;
 
+  // TimeZone detailed settings reference
+  // https://docs.oracle.com/javase/8/docs/api/java/util/TimeZone.html
   private final TimeZone timeZone;
 
   /**
