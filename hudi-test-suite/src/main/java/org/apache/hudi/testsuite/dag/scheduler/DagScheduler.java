@@ -25,8 +25,8 @@ import org.apache.hudi.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.testsuite.generator.DeltaGenerator;
 import org.apache.hudi.testsuite.writer.DeltaWriter;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -41,7 +41,7 @@ import java.util.concurrent.TimeUnit;
 
 public class DagScheduler {
 
-  private static Logger log = LogManager.getLogger(DagScheduler.class);
+  private static Logger log = LoggerFactory.getLogger(DagScheduler.class);
   private WorkflowDag workflowDag;
   private ExecutionContext executionContext;
 
@@ -66,7 +66,7 @@ public class DagScheduler {
   private void execute(ExecutorService service, List<DagNode> nodes) throws Exception {
     // Nodes at the same level are executed in parallel
     Queue<DagNode> queue = new PriorityQueue<>(nodes);
-    log.info("----------- Running workloads ----------");
+    log.info("Running workloads...");
     do {
       List<Future> futures = new ArrayList<>();
       Set<DagNode> childNodes = new HashSet<>();
@@ -83,7 +83,7 @@ public class DagScheduler {
         future.get(1, TimeUnit.HOURS);
       }
     } while (queue.size() > 0);
-    log.info("----------- Finished workloads ----------");
+    log.info("Finished workloads");
   }
 
   private void executeNode(DagNode node) {
@@ -93,7 +93,7 @@ public class DagScheduler {
     try {
       node.execute(executionContext);
       node.setCompleted(true);
-      log.info("Finished executing => " + node.getName());
+      log.info("Finished executing => {}", node.getName());
     } catch (Exception e) {
       log.error("Exception executing node");
       throw new HoodieException(e);

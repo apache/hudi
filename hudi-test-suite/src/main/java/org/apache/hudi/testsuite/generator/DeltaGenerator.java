@@ -35,8 +35,6 @@ import org.apache.hudi.utilities.converter.Converter;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -54,6 +52,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.StreamSupport;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Tuple2;
 
 /**
@@ -61,7 +61,7 @@ import scala.Tuple2;
  */
 public class DeltaGenerator implements Serializable {
 
-  private static Logger log = LogManager.getLogger(DFSHoodieDatasetInputReader.class);
+  private static Logger log = LoggerFactory.getLogger(DFSHoodieDatasetInputReader.class);
 
   private DeltaConfig deltaOutputConfig;
   private transient JavaSparkContext jsc;

@@ -34,7 +34,7 @@ public class BulkInsertNode extends InsertNode {
   @Override
   protected JavaRDD<WriteStatus> ingest(DeltaWriter deltaWriter, Option<String> commitTime)
       throws Exception {
-    log.info("Execute bulk ingest node " + this.getName());
+    log.info("Execute bulk ingest node {}", this.getName());
     return deltaWriter.bulkInsert(commitTime);
   }
 

@@ -33,7 +33,7 @@ public class ScheduleCompactNode extends DagNode<Option<String>> {
 
   @Override
   public void execute(ExecutionContext executionContext) throws Exception {
-    log.info("Executing schedule compact node " + this.getName());
+    log.info("Executing schedule compact node {}", this.getName());
     // Can only be done with an instantiation of a new WriteClient hence cannot be done during DeltaStreamer
     // testing for now
     // Find the last commit and extra the extra metadata to be passed to the schedule compaction. This is
@@ -47,7 +47,7 @@ public class ScheduleCompactNode extends DagNode<Option<String>> {
       Option<String> scheduledInstant = executionContext.getDeltaWriter().getWriteClient()
           .scheduleCompaction(Option.of(metadata
               .getExtraMetadata()));
-      log.info("Scheduling compaction instant => " + scheduledInstant.get());
+      log.info("Scheduling compaction instant => {}", scheduledInstant.get());
       this.result = scheduledInstant;
     }
   }

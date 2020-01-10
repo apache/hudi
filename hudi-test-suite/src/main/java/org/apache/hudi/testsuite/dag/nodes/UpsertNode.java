@@ -35,7 +35,7 @@ public class UpsertNode extends InsertNode {
   @Override
   protected void generate(DeltaGenerator deltaGenerator) throws Exception {
     if (!config.isDisableGenerate()) {
-      log.info(String.format("----------------- generating input data %s ------------------", this.getName()));
+      log.info("Generating input data {}", this.getName());
       deltaGenerator.writeRecords(deltaGenerator.generateUpdates(config)).count();
     }
   }
@@ -44,7 +44,7 @@ public class UpsertNode extends InsertNode {
   protected JavaRDD<WriteStatus> ingest(DeltaWriter deltaWriter, Option<String> commitTime)
       throws Exception {
     if (!config.isDisableIngest()) {
-      log.info(String.format("----------------- upserting input data %s ------------------", this.getName()));
+      log.info("Upserting input data {}", this.getName());
       this.result = deltaWriter.upsert(commitTime);
     }
     return this.result;

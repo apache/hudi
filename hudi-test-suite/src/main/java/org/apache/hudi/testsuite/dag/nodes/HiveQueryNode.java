@@ -42,7 +42,7 @@ public class HiveQueryNode extends DagNode<Boolean> {
 
   @Override
   public void execute(ExecutionContext executionContext) throws Exception {
-    log.info("Executing hive query node..." + this.getName());
+    log.info("Executing hive query node...{}", this.getName());
     this.hiveServiceProvider.startLocalHiveServiceIfNeeded(executionContext.getDeltaWriter().getConfiguration());
     // this.hiveServiceProvider.syncToLocalHiveIfNeeded(writer);
     HiveSyncConfig hiveSyncConfig = DataSourceUtils
@@ -58,7 +58,7 @@ public class HiveQueryNode extends DagNode<Boolean> {
       executeStatement(hiveProperty, stmt);
     }
     for (Pair<String, Integer> queryAndResult : this.config.getHiveQueries()) {
-      log.info("Running => " + queryAndResult.getLeft());
+      log.info("Running => {}", queryAndResult.getLeft());
       ResultSet res = stmt.executeQuery(queryAndResult.getLeft());
       if (res.getRow() == 0) {
         assert 0 == queryAndResult.getRight();
@@ -71,7 +71,7 @@ public class HiveQueryNode extends DagNode<Boolean> {
   }
 
   private void executeStatement(String query, Statement stmt) throws SQLException {
-    log.info("Executing statement " + stmt.toString());
+    log.info("Executing statement {}", stmt.toString());
     stmt.execute(query);
   }
 

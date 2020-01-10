@@ -38,8 +38,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -58,6 +56,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Tuple2;
 
 import static java.util.Map.Entry.comparingByValue;
@@ -69,7 +69,7 @@ import static java.util.stream.Collectors.toMap;
  */
 public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
 
-  private static Logger log = LogManager.getLogger(DFSHoodieDatasetInputReader.class);
+  private static Logger log = LoggerFactory.getLogger(DFSHoodieDatasetInputReader.class);
 
   private transient JavaSparkContext jsc;
   private String schemaStr;
@@ -134,8 +134,8 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
 
   private JavaRDD<GenericRecord> fetchRecordsFromDataset(Option<Integer> numPartitions, Option<Integer> numFiles,
       Option<Long> numRecordsToUpdate, Option<Double> percentageRecordsPerFile) throws IOException {
-    log.info("NumPartitions " + numPartitions + ", NumFiles " + numFiles + " numRecordsToUpdate "
-        + numRecordsToUpdate + " percentageRecordsPerFile " + percentageRecordsPerFile);
+    log.info("NumPartitions {}, NumFiles {}, numRecordsToUpdate {}, percentageRecordsPerFile {}",
+            numPartitions, numFiles, numRecordsToUpdate, percentageRecordsPerFile);
     List<String> partitionPaths = getPartitions(numPartitions);
     // Read all file slices in the partition
     JavaPairRDD<String, Iterator<FileSlice>> partitionToFileSlice = getPartitionToFileSlice(metaClient,
@@ -149,7 +149,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
       // If num files are not passed, find the number of files to update based on total records to update and records
       // per file
       numFilesToUpdate = (int) (numRecordsToUpdate.get() / recordsInSingleFile);
-      log.info("Files to Update " + numFilesToUpdate);
+      log.info("Files to Update {}", numFilesToUpdate);
       numRecordsToUpdatePerFile = recordsInSingleFile;
     } else {
       // If num files is passed, find the number of records per file based on either percentage or total records to

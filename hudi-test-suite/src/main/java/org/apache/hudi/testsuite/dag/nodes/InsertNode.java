@@ -36,9 +36,9 @@ public class InsertNode extends DagNode<JavaRDD<WriteStatus>> {
   @Override
   public void execute(ExecutionContext executionContext) throws Exception {
     generate(executionContext.getDeltaGenerator());
-    log.info("Configs => " + this.config);
+    log.info("Configs => {}", this.config);
     if (!config.isDisableIngest()) {
-      log.info(String.format("----------------- inserting input data %s ------------------", this.getName()));
+      log.info("Inserting input data {}", this.getName());
       Option<String> commitTime = executionContext.getDeltaWriter().startCommit();
       JavaRDD<WriteStatus> writeStatus = ingest(executionContext.getDeltaWriter(), commitTime);
       executionContext.getDeltaWriter().commit(writeStatus, commitTime);
@@ -49,7 +49,7 @@ public class InsertNode extends DagNode<JavaRDD<WriteStatus>> {
 
   protected void generate(DeltaGenerator deltaGenerator) throws Exception {
     if (!config.isDisableGenerate()) {
-      log.info(String.format("----------------- generating input data for node %s ------------------", this.getName()));
+      log.info("Generating input data for node {}", this.getName());
       deltaGenerator.writeRecords(deltaGenerator.generateInserts(config)).count();
     }
   }

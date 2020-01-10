@@ -40,7 +40,7 @@ public class CompactNode extends DagNode<JavaRDD<WriteStatus>> {
     Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline()
         .getCommitsAndCompactionTimeline().filterPendingCompactionTimeline().lastInstant();
     if (lastInstant.isPresent()) {
-      log.info("Compacting instant => " + lastInstant.get());
+      log.info("Compacting instant => {}", lastInstant.get());
       this.result = executionContext.getDeltaWriter().compact(Option.of(lastInstant.get().getTimestamp()));
     }
   }
