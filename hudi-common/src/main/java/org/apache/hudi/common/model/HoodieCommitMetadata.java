@@ -175,7 +175,8 @@ public class HoodieCommitMetadata implements Serializable {
     long totalInsertRecordsWritten = 0;
     for (List<HoodieWriteStat> stats : partitionToWriteStats.values()) {
       for (HoodieWriteStat stat : stats) {
-        if (stat.getPrevCommit() != null && stat.getPrevCommit().equalsIgnoreCase("null")) {
+        // determine insert rows in every file
+        if (stat.getPrevCommit() != null) {
           totalInsertRecordsWritten += stat.getNumInserts();
         }
       }
