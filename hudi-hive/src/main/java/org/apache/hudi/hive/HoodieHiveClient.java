@@ -133,7 +133,7 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Add the (NEW) partitons to the table.
+   * Add the (NEW) partitions to the table.
    */
   void addPartitionsToTable(List<String> partitionsToAdd) {
     if (partitionsToAdd.isEmpty()) {
