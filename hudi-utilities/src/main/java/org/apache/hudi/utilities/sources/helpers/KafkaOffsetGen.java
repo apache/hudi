@@ -233,10 +233,12 @@ public class KafkaOffsetGen {
         new HashMap(ScalaHelpers.toJavaMap(cluster.getLatestLeaderOffsets(topicPartitions).right().get()));
 
     // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
-    long maxEventsToReadFromKafka = props.getLong(Config.MAX_EVENTS_FROM_KAFKA_SOURCE_PROP,
-        Config.maxEventsFromKafkaSource);
-    maxEventsToReadFromKafka = (maxEventsToReadFromKafka == Long.MAX_VALUE || maxEventsToReadFromKafka == Integer.MAX_VALUE)
-        ? Config.maxEventsFromKafkaSource : maxEventsToReadFromKafka;
+    long maxEventsToReadFromKafka =
+        props.getLong(Config.MAX_EVENTS_FROM_KAFKA_SOURCE_PROP, Config.maxEventsFromKafkaSource);
+    maxEventsToReadFromKafka =
+        (maxEventsToReadFromKafka == Long.MAX_VALUE || maxEventsToReadFromKafka == Integer.MAX_VALUE)
+            ? Config.maxEventsFromKafkaSource
+            : maxEventsToReadFromKafka;
     long numEvents = sourceLimit == Long.MAX_VALUE ? maxEventsToReadFromKafka : sourceLimit;
     OffsetRange[] offsetRanges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
 

@@ -38,8 +38,8 @@ public class CleanerUtils {
   public static final Integer CLEAN_METADATA_VERSION_2 = CleanV2MigrationHandler.VERSION;
   public static final Integer LATEST_CLEAN_METADATA_VERSION = CLEAN_METADATA_VERSION_2;
 
-  public static HoodieCleanMetadata convertCleanMetadata(HoodieTableMetaClient metaClient,
-      String startCleanTime, Option<Long> durationInMs, List<HoodieCleanStat> cleanStats) {
+  public static HoodieCleanMetadata convertCleanMetadata(HoodieTableMetaClient metaClient, String startCleanTime,
+      Option<Long> durationInMs, List<HoodieCleanStat> cleanStats) {
     ImmutableMap.Builder<String, HoodieCleanPartitionMetadata> partitionMetadataBuilder = ImmutableMap.builder();
     int totalDeleted = 0;
     String earliestCommitToRetain = null;
@@ -55,14 +55,14 @@ public class CleanerUtils {
       }
     }
 
-    HoodieCleanMetadata metadata = new HoodieCleanMetadata(startCleanTime,
-        durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
-        partitionMetadataBuilder.build(), CLEAN_METADATA_VERSION_2);
+    HoodieCleanMetadata metadata = new HoodieCleanMetadata(startCleanTime, durationInMs.orElseGet(() -> -1L),
+        totalDeleted, earliestCommitToRetain, partitionMetadataBuilder.build(), CLEAN_METADATA_VERSION_2);
     return metadata;
   }
 
   /**
    * Get Latest Version of Hoodie Cleaner Metadata - Output of cleaner operation.
+   * 
    * @param metaClient Hoodie Table Meta Client
    * @param cleanInstant Instant referring to clean action
    * @return Latest version of Clean metadata corresponding to clean instant
@@ -71,14 +71,15 @@ public class CleanerUtils {
   public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
     CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    HoodieCleanMetadata cleanMetadata = AvroUtils.deserializeHoodieCleanMetadata(
-        metaClient.getActiveTimeline().readPlanAsBytes(cleanInstant).get());
+    HoodieCleanMetadata cleanMetadata =
+        AvroUtils.deserializeHoodieCleanMetadata(metaClient.getActiveTimeline().readPlanAsBytes(cleanInstant).get());
     return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
   }
 
   /**
    * Get Cleaner Plan corresponding to a clean instant.
-   * @param metaClient  Hoodie Table Meta Client
+   * 
+   * @param metaClient Hoodie Table Meta Client
    * @param cleanInstant Instant referring to clean action
    * @return Cleaner plan corresponding to clean instant
    * @throws IOException

@@ -164,8 +164,7 @@ public class HoodieMetrics {
 
   public void updateCleanMetrics(long durationInMs, int numFilesDeleted) {
     if (config.isMetricsOn()) {
-      LOG.info(
-          String.format("Sending clean metrics (duration=%d, numFilesDeleted=%d)", durationInMs, numFilesDeleted));
+      LOG.info(String.format("Sending clean metrics (duration=%d, numFilesDeleted=%d)", durationInMs, numFilesDeleted));
       Metrics.registerGauge(getMetricsName("clean", "duration"), durationInMs);
       Metrics.registerGauge(getMetricsName("clean", "numFilesDeleted"), numFilesDeleted);
     }

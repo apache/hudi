@@ -91,14 +91,14 @@ public class RollbackExecutor implements Serializable {
           deleteCleanedFiles(metaClient, config, filesToDeletedStatus, instantToRollback.getTimestamp(),
               rollbackRequest.getPartitionPath());
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
-                  HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                          .withDeletedFileResults(filesToDeletedStatus).build());
+              HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
+                  .withDeletedFileResults(filesToDeletedStatus).build());
         }
         case DELETE_DATA_AND_LOG_FILES: {
           deleteCleanedFiles(metaClient, config, filesToDeletedStatus, rollbackRequest.getPartitionPath(), filter);
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
-                  HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                          .withDeletedFileResults(filesToDeletedStatus).build());
+              HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
+                  .withDeletedFileResults(filesToDeletedStatus).build());
         }
         case APPEND_ROLLBACK_BLOCK: {
           Writer writer = null;
@@ -129,10 +129,11 @@ public class RollbackExecutor implements Serializable {
           // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
           // cloud-storage : HUDI-168
           Map<FileStatus, Long> filesToNumBlocksRollback = new HashMap<>();
-          filesToNumBlocksRollback.put(metaClient.getFs().getFileStatus(Preconditions.checkNotNull(writer).getLogFile().getPath()), 1L);
+          filesToNumBlocksRollback
+              .put(metaClient.getFs().getFileStatus(Preconditions.checkNotNull(writer).getLogFile().getPath()), 1L);
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
-                  HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                          .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
+              HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
+                  .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
         }
         default:
           throw new IllegalStateException("Unknown Rollback action " + rollbackRequest);

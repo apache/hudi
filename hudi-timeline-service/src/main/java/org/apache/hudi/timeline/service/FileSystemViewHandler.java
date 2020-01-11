@@ -131,8 +131,8 @@ public class FileSystemViewHandler {
   private void writeValueAsString(Context ctx, Object obj) throws JsonProcessingException {
     boolean prettyPrint = ctx.queryParam("pretty") != null;
     long beginJsonTs = System.currentTimeMillis();
-    String result =
-        prettyPrint ? OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj) : OBJECT_MAPPER.writeValueAsString(obj);
+    String result = prettyPrint ? OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj)
+        : OBJECT_MAPPER.writeValueAsString(obj);
     long endJsonTs = System.currentTimeMillis();
     LOG.debug("Jsonify TimeTaken=" + (endJsonTs - beginJsonTs));
     ctx.result(result);
@@ -350,8 +350,8 @@ public class FileSystemViewHandler {
       } finally {
         long endTs = System.currentTimeMillis();
         long timeTakenMillis = endTs - beginTs;
-        LOG
-            .info(String.format(
+        LOG.info(
+            String.format(
                 "TimeTakenMillis[Total=%d, Refresh=%d, handle=%d, Check=%d], "
                     + "Success=%s, Query=%s, Host=%s, synced=%s",
                 timeTakenMillis, refreshCheckTimeTaken, handleTimeTaken, finalCheckTimeTaken, success,

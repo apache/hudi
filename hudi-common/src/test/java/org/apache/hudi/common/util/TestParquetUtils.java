@@ -61,10 +61,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
   @Parameters()
   public static Collection<Object[]> data() {
-    return Arrays.asList(new Object[][] {
-        {BloomFilterTypeCode.SIMPLE.name()},
-        {BloomFilterTypeCode.DYNAMIC_V0.name()}
-    });
+    return Arrays.asList(new Object[][] {{BloomFilterTypeCode.SIMPLE.name()}, {BloomFilterTypeCode.DYNAMIC_V0.name()}});
   }
 
   public TestParquetUtils(String bloomFilterTypeToTest) {
@@ -129,8 +126,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   private void writeParquetFile(String filePath, List<String> rowKeys) throws Exception {
     // Write out a parquet file
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
-    BloomFilter filter = BloomFilterFactory
-        .createBloomFilter(1000, 0.0001, 10000, bloomFilterTypeToTest);
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, bloomFilterTypeToTest);
     HoodieAvroWriteSupport writeSupport =
         new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,

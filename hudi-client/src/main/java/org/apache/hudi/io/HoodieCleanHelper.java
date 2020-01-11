@@ -93,21 +93,24 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
   public List<String> getPartitionPathsToClean(Option<HoodieInstant> newInstantToRetain) throws IOException {
     if (config.incrementalCleanerModeEnabled() && newInstantToRetain.isPresent()
         && (HoodieCleaningPolicy.KEEP_LATEST_COMMITS == config.getCleanerPolicy())) {
-      Option<HoodieInstant> lastClean =
-          hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
+      Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
       if (lastClean.isPresent()) {
         HoodieCleanMetadata cleanMetadata = AvroUtils
             .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
         if ((cleanMetadata.getEarliestCommitToRetain() != null)
             && (cleanMetadata.getEarliestCommitToRetain().length() > 0)) {
           LOG.warn("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
-              + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
-              + ". New Instant to retain : " + newInstantToRetain);
-          return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
-              HoodieTimeline.GREATER_OR_EQUAL) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
-              newInstantToRetain.get().getTimestamp(), HoodieTimeline.LESSER)).flatMap(instant -> {
+              + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain() + ". New Instant to retain : "
+              + newInstantToRetain);
+          return hoodieTable.getCompletedCommitsTimeline().getInstants()
+              .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(),
+                  cleanMetadata.getEarliestCommitToRetain(), HoodieTimeline.GREATER_OR_EQUAL)
+                  && HoodieTimeline.compareTimestamps(instant.getTimestamp(), newInstantToRetain.get().getTimestamp(),
+                      HoodieTimeline.LESSER))
+              .flatMap(instant -> {
                 try {
-                  HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(hoodieTable.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+                  HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+                      hoodieTable.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
                   return commitMetadata.getPartitionToWriteStats().keySet().stream();
                 } catch (IOException e) {
                   throw new HoodieIOException(e.getMessage(), e);
@@ -117,8 +120,8 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
       }
     }
     // Otherwise go to brute force mode of scanning all partitions
-    return FSUtils.getAllPartitionPaths(hoodieTable.getMetaClient().getFs(),
-        hoodieTable.getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning());
+    return FSUtils.getAllPartitionPaths(hoodieTable.getMetaClient().getFs(), hoodieTable.getMetaClient().getBasePath(),
+        config.shouldAssumeDatePartitioning());
   }
 
   /**

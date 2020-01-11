@@ -89,8 +89,8 @@ public class TestKafkaSource extends UtilitiesTestBase {
     props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
     props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
     props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
-        maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
-            String.valueOf(Config.maxEventsFromKafkaSource));
+        maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource)
+            : String.valueOf(Config.maxEventsFromKafkaSource));
     return props;
   }
 
@@ -154,8 +154,8 @@ public class TestKafkaSource extends UtilitiesTestBase {
     Config.maxEventsFromKafkaSource = 500;
 
     /*
-    1. Extract without any checkpoint => get all the data, respecting default upper cap since both sourceLimit and
-    maxEventsFromKafkaSourceProp are set to Long.MAX_VALUE
+     * 1. Extract without any checkpoint => get all the data, respecting default upper cap since both sourceLimit and
+     * maxEventsFromKafkaSourceProp are set to Long.MAX_VALUE
      */
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
@@ -167,7 +167,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
         kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), 1500);
     assertEquals(1500, fetch2.getBatch().get().count());
 
-    //reset the value back since it is a static variable
+    // reset the value back since it is a static variable
     Config.maxEventsFromKafkaSource = Config.DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE;
   }
 
@@ -192,12 +192,12 @@ public class TestKafkaSource extends UtilitiesTestBase {
         kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(500, fetch2.getBatch().get().count());
 
-    //fetch data respecting source limit where upper cap > sourceLimit
+    // fetch data respecting source limit where upper cap > sourceLimit
     InputBatch<JavaRDD<GenericRecord>> fetch3 =
         kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), 400);
     assertEquals(400, fetch3.getBatch().get().count());
 
-    //fetch data respecting source limit where upper cap < sourceLimit
+    // fetch data respecting source limit where upper cap < sourceLimit
     InputBatch<JavaRDD<GenericRecord>> fetch4 =
         kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch2.getCheckpointForNextBatch()), 600);
     assertEquals(600, fetch4.getBatch().get().count());

@@ -47,8 +47,7 @@ public class TableCommand implements CommandMarker {
   }
 
   @CliCommand(value = "connect", help = "Connect to a hoodie table")
-  public String connect(
-      @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the table") final String path,
+  public String connect(@CliOption(key = {"path"}, mandatory = true, help = "Base Path of the table") final String path,
       @CliOption(key = {"layoutVersion"}, help = "Timeline Layout version") Integer layoutVersion,
       @CliOption(key = {"eventuallyConsistent"}, unspecifiedDefaultValue = "false",
           help = "Enable eventual consistency") final boolean eventuallyConsistent,
@@ -108,8 +107,8 @@ public class TableCommand implements CommandMarker {
     }
 
     final HoodieTableType tableType = HoodieTableType.valueOf(tableTypeStr);
-    HoodieTableMetaClient.initTableType(HoodieCLI.conf, path, tableType, name, archiveFolder,
-        payloadClass, layoutVersion);
+    HoodieTableMetaClient.initTableType(HoodieCLI.conf, path, tableType, name, archiveFolder, payloadClass,
+        layoutVersion);
 
     // Now connect to ensure loading works
     return connect(path, layoutVersion, false, 0, 0, 0);

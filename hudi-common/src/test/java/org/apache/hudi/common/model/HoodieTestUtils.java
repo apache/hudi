@@ -127,12 +127,10 @@ public class HoodieTestUtils {
 
   public static final void createCommitFiles(String basePath, String... commitTimes) throws IOException {
     for (String commitTime : commitTimes) {
-      new File(
-          basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-              + HoodieTimeline.makeRequestedCommitFileName(commitTime)).createNewFile();
-      new File(
-          basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-              + HoodieTimeline.makeInflightCommitFileName(commitTime)).createNewFile();
+      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+          + HoodieTimeline.makeRequestedCommitFileName(commitTime)).createNewFile();
+      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+          + HoodieTimeline.makeInflightCommitFileName(commitTime)).createNewFile();
       new File(
           basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCommitFileName(commitTime))
               .createNewFile();
@@ -148,8 +146,8 @@ public class HoodieTestUtils {
     for (String commitTime : commitTimes) {
       new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
           + HoodieTimeline.makeRequestedCommitFileName(commitTime)).createNewFile();
-      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeInflightCommitFileName(
-          commitTime)).createNewFile();
+      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+          + HoodieTimeline.makeInflightCommitFileName(commitTime)).createNewFile();
     }
   }
 
@@ -159,8 +157,8 @@ public class HoodieTestUtils {
           HoodieTimeline.makeInflightCleanerFileName(commitTime)).forEach(f -> {
             FSDataOutputStream os = null;
             try {
-              Path commitFile = new Path(
-                  metaClient.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
+              Path commitFile =
+                  new Path(metaClient.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
               os = metaClient.getFs().create(commitFile, true);
               // Write empty clean metadata
               os.write(AvroUtils.serializeCleanerPlan(
@@ -291,9 +289,8 @@ public class HoodieTestUtils {
             .exists();
   }
 
-  public static void createCleanFiles(HoodieTableMetaClient metaClient, String basePath,
-      String commitTime, Configuration configuration)
-      throws IOException {
+  public static void createCleanFiles(HoodieTableMetaClient metaClient, String basePath, String commitTime,
+      Configuration configuration) throws IOException {
     createPendingCleanFiles(metaClient, commitTime);
     Path commitFile = new Path(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCleanerFileName(commitTime));
@@ -350,8 +347,8 @@ public class HoodieTestUtils {
       Writer logWriter;
       try {
         logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
-          .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
-          .overBaseCommit(location.getInstantTime()).withFs(fs).build();
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
+            .overBaseCommit(location.getInstantTime()).withFs(fs).build();
 
         Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
         header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, location.getInstantTime());

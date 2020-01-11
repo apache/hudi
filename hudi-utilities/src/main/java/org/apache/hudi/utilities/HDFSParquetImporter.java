@@ -68,8 +68,8 @@ public class HDFSParquetImporter implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HDFSParquetImporter.class);
 
-  private static final DateTimeFormatter PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd")
-      .withZone(ZoneId.systemDefault());
+  private static final DateTimeFormatter PARTITION_FORMATTER =
+      DateTimeFormatter.ofPattern("yyyy/MM/dd").withZone(ZoneId.systemDefault());
   private final Config cfg;
   private transient FileSystem fs;
   /**
@@ -240,13 +240,13 @@ public class HDFSParquetImporter implements Serializable {
 
   public static class Config implements Serializable {
 
-    @Parameter(names = {"--command", "-c"}, description = "Write command Valid values are insert(default)/upsert/bulkinsert",
-        required = false, validateValueWith = CommandValidator.class)
+    @Parameter(names = {"--command", "-c"},
+        description = "Write command Valid values are insert(default)/upsert/bulkinsert", required = false,
+        validateValueWith = CommandValidator.class)
     public String command = "INSERT";
     @Parameter(names = {"--src-path", "-sp"}, description = "Base path for the input table", required = true)
     public String srcPath = null;
-    @Parameter(names = {"--target-path", "-tp"}, description = "Base path for the target hoodie table",
-        required = true)
+    @Parameter(names = {"--target-path", "-tp"}, description = "Base path for the target hoodie table", required = true)
     public String targetPath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
     public String tableName = null;
@@ -256,7 +256,8 @@ public class HDFSParquetImporter implements Serializable {
     public String rowKey = null;
     @Parameter(names = {"--partition-key-field", "-pk"}, description = "Partition key field name", required = true)
     public String partitionKey = null;
-    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert(default)/upsert/bulkinsert", required = true)
+    @Parameter(names = {"--parallelism", "-pl"},
+        description = "Parallelism for hoodie insert(default)/upsert/bulkinsert", required = true)
     public int parallelism = 1;
     @Parameter(names = {"--schema-file", "-sf"}, description = "path for Avro schema file", required = true)
     public String schemaFile = null;

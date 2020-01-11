@@ -66,8 +66,7 @@ public class HoodieBloomIndexCheckFunction
     }
 
     @Override
-    protected void start() {
-    }
+    protected void start() {}
 
     @Override
     protected List<HoodieKeyLookupHandle.KeyLookupResult> computeNext() {
@@ -114,7 +113,6 @@ public class HoodieBloomIndexCheckFunction
     }
 
     @Override
-    protected void end() {
-    }
+    protected void end() {}
   }
 }

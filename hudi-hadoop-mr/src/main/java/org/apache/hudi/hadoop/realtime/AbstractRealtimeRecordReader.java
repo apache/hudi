@@ -159,8 +159,8 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   /**
-   * Given a comma separated list of field names and positions at which they appear on Hive, return
-   * an ordered list of field names, that can be passed onto storage.
+   * Given a comma separated list of field names and positions at which they appear on Hive, return an ordered list of
+   * field names, that can be passed onto storage.
    */
   private static List<String> orderFields(String fieldNameCsv, String fieldOrderCsv, List<String> partitioningFields) {
     // Need to convert the following to Set first since Hive does not handle duplicate field names correctly but
@@ -176,16 +176,16 @@ public abstract class AbstractRealtimeRecordReader {
       fieldOrdersSet.add(fieldOrder);
     }
     String[] fieldOrders = fieldOrdersSet.toArray(new String[fieldOrdersSet.size()]);
-    List<String> fieldNames = Arrays.stream(fieldNameCsv.split(","))
-        .filter(fn -> !partitioningFields.contains(fn)).collect(Collectors.toList());
+    List<String> fieldNames = Arrays.stream(fieldNameCsv.split(",")).filter(fn -> !partitioningFields.contains(fn))
+        .collect(Collectors.toList());
     Set<String> fieldNamesSet = new LinkedHashSet<>();
     for (String fieldName : fieldNames) {
       fieldNamesSet.add(fieldName);
     }
     // Hive does not provide ids for partitioning fields, so check for lengths excluding that.
     if (fieldNamesSet.size() != fieldOrders.length) {
-      throw new HoodieException(String
-          .format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
+      throw new HoodieException(
+          String.format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
               fieldNames.size(), fieldOrders.length));
     }
     TreeMap<Integer, String> orderedFieldMap = new TreeMap<>();

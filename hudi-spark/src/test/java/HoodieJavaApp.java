@@ -111,7 +111,7 @@ public class HoodieJavaApp {
     HoodieTestDataGenerator dataGen = null;
     if (nonPartitionedTable) {
       // All data goes to base-path
-      dataGen = new HoodieTestDataGenerator(new String[]{""});
+      dataGen = new HoodieTestDataGenerator(new String[] {""});
     } else {
       dataGen = new HoodieTestDataGenerator();
     }
@@ -183,8 +183,7 @@ public class HoodieJavaApp {
      * Commit that Deletes some records
      */
     List<String> deletes = DataSourceTestUtils.convertKeysToStringList(
-        HoodieClientTestUtils
-            .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(recordsSoFar), 20));
+        HoodieClientTestUtils.getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(recordsSoFar), 20));
     Dataset<Row> inputDF3 = spark.read().json(jssc.parallelize(deletes, 2));
     writer = inputDF3.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")

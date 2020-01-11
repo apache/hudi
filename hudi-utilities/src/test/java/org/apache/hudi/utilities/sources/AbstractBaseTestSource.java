@@ -76,12 +76,12 @@ public abstract class AbstractBaseTestSource extends AvroSource {
   }
 
   protected AbstractBaseTestSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-                                   SchemaProvider schemaProvider) {
+      SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
   }
 
   protected static Stream<GenericRecord> fetchNextBatch(TypedProperties props, int sourceLimit, String commitTime,
-                                                        int partition) {
+      int partition) {
     int maxUniqueKeys =
         props.getInteger(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, TestSourceConfig.DEFAULT_MAX_UNIQUE_RECORDS);
 
@@ -113,13 +113,17 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     LOG.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
         + ", Free Memory=" + Runtime.getRuntime().freeMemory());
     if (!reachedMax && numUpdates >= 50) {
-      LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + (numUpdates - 50) + ", NumDeletes=50, maxUniqueRecords="
-          + maxUniqueKeys);
-      // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
-      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(commitTime, 50).map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
-      updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates - 50).map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+      LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + (numUpdates - 50)
+          + ", NumDeletes=50, maxUniqueRecords=" + maxUniqueKeys);
+      // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence
+      // generating delete batch followed by updates
+      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(commitTime, 50)
+          .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+      updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates - 50)
+          .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
     } else {
-      LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
+      LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords="
+          + maxUniqueKeys);
       updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates)
           .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
     }

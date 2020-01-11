@@ -28,13 +28,13 @@ public class BloomFilterFactory {
   /**
    * Creates a new {@link BloomFilter} with the given args.
    *
-   * @param numEntries          total number of entries
-   * @param errorRate           max allowed error rate
+   * @param numEntries total number of entries
+   * @param errorRate max allowed error rate
    * @param bloomFilterTypeCode bloom filter type code
    * @return the {@link BloomFilter} thus created
    */
   public static BloomFilter createBloomFilter(int numEntries, double errorRate, int maxNumberOfEntries,
-                                              String bloomFilterTypeCode) {
+      String bloomFilterTypeCode) {
     if (bloomFilterTypeCode.equalsIgnoreCase(BloomFilterTypeCode.SIMPLE.name())) {
       return new SimpleBloomFilter(numEntries, errorRate, Hash.MURMUR_HASH);
     } else if (bloomFilterTypeCode.equalsIgnoreCase(BloomFilterTypeCode.DYNAMIC_V0.name())) {
@@ -47,7 +47,7 @@ public class BloomFilterFactory {
   /**
    * Generate {@link BloomFilter} from serialized String.
    *
-   * @param serString           the serialized string of the {@link BloomFilter}
+   * @param serString the serialized string of the {@link BloomFilter}
    * @param bloomFilterTypeCode bloom filter type code as string
    * @return the {@link BloomFilter} thus generated from the passed in serialized string
    */

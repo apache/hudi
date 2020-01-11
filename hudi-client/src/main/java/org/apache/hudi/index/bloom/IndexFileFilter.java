@@ -32,9 +32,9 @@ public interface IndexFileFilter extends Serializable {
    * Fetches all matching files and partition pair for a given record key and partition path.
    *
    * @param partitionPath the partition path of interest
-   * @param recordKey     the record key to be looked up
+   * @param recordKey the record key to be looked up
    * @return the {@link Set} of matching <Partition path, file name> pairs where the record could potentially be
-   * present.
+   *         present.
    */
   Set<Pair<String, String>> getMatchingFilesAndPartition(String partitionPath, String recordKey);
 

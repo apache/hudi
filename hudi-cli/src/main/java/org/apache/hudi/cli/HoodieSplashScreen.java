@@ -35,20 +35,21 @@ public class HoodieSplashScreen extends DefaultBannerProvider {
     System.out.println("HoodieSplashScreen loaded");
   }
 
-  private static String screen = "===================================================================" + OsUtils.LINE_SEPARATOR
-      + "*         ___                          ___                        *" + OsUtils.LINE_SEPARATOR
-      + "*        /\\__\\          ___           /\\  \\           ___         *" + OsUtils.LINE_SEPARATOR
-      + "*       / /  /         /\\__\\         /  \\  \\         /\\  \\        *" + OsUtils.LINE_SEPARATOR
-      + "*      / /__/         / /  /        / /\\ \\  \\        \\ \\  \\       *" + OsUtils.LINE_SEPARATOR
-      + "*     /  \\  \\ ___    / /  /        / /  \\ \\__\\       /  \\__\\      *" + OsUtils.LINE_SEPARATOR
-      + "*    / /\\ \\  /\\__\\  / /__/  ___   / /__/ \\ |__|     / /\\/__/      *" + OsUtils.LINE_SEPARATOR
-      + "*    \\/  \\ \\/ /  /  \\ \\  \\ /\\__\\  \\ \\  \\ / /  /  /\\/ /  /         *" + OsUtils.LINE_SEPARATOR
-      + "*         \\  /  /    \\ \\  / /  /   \\ \\  / /  /   \\  /__/          *" + OsUtils.LINE_SEPARATOR
-      + "*         / /  /      \\ \\/ /  /     \\ \\/ /  /     \\ \\__\\          *" + OsUtils.LINE_SEPARATOR
-      + "*        / /  /        \\  /  /       \\  /  /       \\/__/          *" + OsUtils.LINE_SEPARATOR
-      + "*        \\/__/          \\/__/         \\/__/    Apache Hudi CLI    *" + OsUtils.LINE_SEPARATOR
-      + "*                                                                 *" + OsUtils.LINE_SEPARATOR
-      + "===================================================================" + OsUtils.LINE_SEPARATOR;
+  private static String screen =
+      "===================================================================" + OsUtils.LINE_SEPARATOR
+          + "*         ___                          ___                        *" + OsUtils.LINE_SEPARATOR
+          + "*        /\\__\\          ___           /\\  \\           ___         *" + OsUtils.LINE_SEPARATOR
+          + "*       / /  /         /\\__\\         /  \\  \\         /\\  \\        *" + OsUtils.LINE_SEPARATOR
+          + "*      / /__/         / /  /        / /\\ \\  \\        \\ \\  \\       *" + OsUtils.LINE_SEPARATOR
+          + "*     /  \\  \\ ___    / /  /        / /  \\ \\__\\       /  \\__\\      *" + OsUtils.LINE_SEPARATOR
+          + "*    / /\\ \\  /\\__\\  / /__/  ___   / /__/ \\ |__|     / /\\/__/      *" + OsUtils.LINE_SEPARATOR
+          + "*    \\/  \\ \\/ /  /  \\ \\  \\ /\\__\\  \\ \\  \\ / /  /  /\\/ /  /         *" + OsUtils.LINE_SEPARATOR
+          + "*         \\  /  /    \\ \\  / /  /   \\ \\  / /  /   \\  /__/          *" + OsUtils.LINE_SEPARATOR
+          + "*         / /  /      \\ \\/ /  /     \\ \\/ /  /     \\ \\__\\          *" + OsUtils.LINE_SEPARATOR
+          + "*        / /  /        \\  /  /       \\  /  /       \\/__/          *" + OsUtils.LINE_SEPARATOR
+          + "*        \\/__/          \\/__/         \\/__/    Apache Hudi CLI    *" + OsUtils.LINE_SEPARATOR
+          + "*                                                                 *" + OsUtils.LINE_SEPARATOR
+          + "===================================================================" + OsUtils.LINE_SEPARATOR;
 
   @Override
   public String getBanner() {

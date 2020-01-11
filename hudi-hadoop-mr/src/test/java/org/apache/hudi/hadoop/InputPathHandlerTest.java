@@ -131,8 +131,8 @@ public class InputPathHandlerTest {
     incrementalTables.add(MODEL_TRIPS_TEST_NAME);
   }
 
-  static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
-                                             String tableName, HoodieTableType tableType) throws IOException {
+  static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, String tableName,
+      HoodieTableType tableType) throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
@@ -140,15 +140,14 @@ public class InputPathHandlerTest {
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 
-  static List<Path> generatePartitions(DistributedFileSystem dfs, String basePath)
-      throws IOException {
+  static List<Path> generatePartitions(DistributedFileSystem dfs, String basePath) throws IOException {
     List<Path> paths = new ArrayList<>();
     paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/21"));
     paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/22"));
     paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/23"));
     paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/24"));
     paths.add(new Path(basePath + Path.SEPARATOR + "2019/05/25"));
-    for (Path path: paths) {
+    for (Path path : paths) {
       dfs.mkdirs(path);
     }
     return paths;
@@ -156,10 +155,10 @@ public class InputPathHandlerTest {
 
   @Test
   public void testInputPathHandler() throws IOException {
-    inputPathHandler = new InputPathHandler(dfs.getConf(), inputPaths.toArray(
-        new Path[inputPaths.size()]), incrementalTables);
-    List<Path> actualPaths = inputPathHandler.getGroupedIncrementalPaths().values().stream()
-        .flatMap(List::stream).collect(Collectors.toList());
+    inputPathHandler =
+        new InputPathHandler(dfs.getConf(), inputPaths.toArray(new Path[inputPaths.size()]), incrementalTables);
+    List<Path> actualPaths = inputPathHandler.getGroupedIncrementalPaths().values().stream().flatMap(List::stream)
+        .collect(Collectors.toList());
     assertTrue(actualComparesToExpected(actualPaths, incrementalPaths));
     actualPaths = inputPathHandler.getSnapshotPaths();
     assertTrue(actualComparesToExpected(actualPaths, snapshotPaths));
@@ -171,7 +170,7 @@ public class InputPathHandlerTest {
     if (actualPaths.size() != expectedPaths.size()) {
       return false;
     }
-    for (Path path: actualPaths) {
+    for (Path path : actualPaths) {
       if (!expectedPaths.contains(path)) {
         return false;
       }

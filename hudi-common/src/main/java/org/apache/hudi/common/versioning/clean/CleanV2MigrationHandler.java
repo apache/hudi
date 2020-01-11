@@ -46,8 +46,7 @@ public class CleanV2MigrationHandler extends AbstractMigratorBase<HoodieCleanMet
 
   @Override
   public HoodieCleanMetadata upgradeFrom(HoodieCleanMetadata input) {
-    Preconditions.checkArgument(input.getVersion() == 1,
-        "Input version is " + input.getVersion() + ". Must be 1");
+    Preconditions.checkArgument(input.getVersion() == 1, "Input version is " + input.getVersion() + ". Must be 1");
     HoodieCleanMetadata metadata = new HoodieCleanMetadata();
     metadata.setEarliestCommitToRetain(input.getEarliestCommitToRetain());
     metadata.setTimeTakenInMillis(input.getTimeTakenInMillis());
@@ -55,45 +54,35 @@ public class CleanV2MigrationHandler extends AbstractMigratorBase<HoodieCleanMet
     metadata.setTotalFilesDeleted(input.getTotalFilesDeleted());
     metadata.setVersion(getManagedVersion());
 
-    Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = input.getPartitionMetadata()
-        .entrySet()
-        .stream().map(entry -> {
+    Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap =
+        input.getPartitionMetadata().entrySet().stream().map(entry -> {
           final String partitionPath = entry.getKey();
           final HoodieCleanPartitionMetadata partitionMetadata = entry.getValue();
 
-          final List<String> deletePathPatterns = convertToV2Path(
-              partitionMetadata.getDeletePathPatterns());
-          final List<String> successDeleteFiles = convertToV2Path(
-              partitionMetadata.getSuccessDeleteFiles());
-          final List<String> failedDeleteFiles = convertToV2Path(
-              partitionMetadata.getFailedDeleteFiles());
+          final List<String> deletePathPatterns = convertToV2Path(partitionMetadata.getDeletePathPatterns());
+          final List<String> successDeleteFiles = convertToV2Path(partitionMetadata.getSuccessDeleteFiles());
+          final List<String> failedDeleteFiles = convertToV2Path(partitionMetadata.getFailedDeleteFiles());
 
-          final HoodieCleanPartitionMetadata cleanPartitionMetadata = HoodieCleanPartitionMetadata
-              .newBuilder().setPolicy(partitionMetadata.getPolicy())
-              .setPartitionPath(partitionMetadata.getPartitionPath())
-              .setDeletePathPatterns(deletePathPatterns)
-              .setSuccessDeleteFiles(successDeleteFiles)
-              .setFailedDeleteFiles(failedDeleteFiles).build();
+          final HoodieCleanPartitionMetadata cleanPartitionMetadata =
+              HoodieCleanPartitionMetadata.newBuilder().setPolicy(partitionMetadata.getPolicy())
+                  .setPartitionPath(partitionMetadata.getPartitionPath()).setDeletePathPatterns(deletePathPatterns)
+                  .setSuccessDeleteFiles(successDeleteFiles).setFailedDeleteFiles(failedDeleteFiles).build();
 
           return Pair.of(partitionPath, cleanPartitionMetadata);
         }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    return HoodieCleanMetadata.newBuilder()
-        .setEarliestCommitToRetain(input.getEarliestCommitToRetain())
-        .setStartCleanTime(input.getStartCleanTime())
-        .setTimeTakenInMillis(input.getTimeTakenInMillis())
-        .setTotalFilesDeleted(input.getTotalFilesDeleted())
-        .setPartitionMetadata(partitionMetadataMap).setVersion(getManagedVersion()).build();
+    return HoodieCleanMetadata.newBuilder().setEarliestCommitToRetain(input.getEarliestCommitToRetain())
+        .setStartCleanTime(input.getStartCleanTime()).setTimeTakenInMillis(input.getTimeTakenInMillis())
+        .setTotalFilesDeleted(input.getTotalFilesDeleted()).setPartitionMetadata(partitionMetadataMap)
+        .setVersion(getManagedVersion()).build();
   }
 
   @Override
   public HoodieCleanMetadata downgradeFrom(HoodieCleanMetadata input) {
-    throw new IllegalArgumentException(
-        "This is the current highest version. Input cannot be any higher version");
+    throw new IllegalArgumentException("This is the current highest version. Input cannot be any higher version");
   }
 
   private List<String> convertToV2Path(List<String> paths) {
-    return paths.stream().map(path -> new Path(path).getName())
-        .collect(Collectors.toList());
+    return paths.stream().map(path -> new Path(path).getName()).collect(Collectors.toList());
   }
 }

@@ -90,22 +90,23 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public HoodieTableMetaClient(Configuration conf, String basePath, String payloadClassName) {
-    this(conf, basePath, false, ConsistencyGuardConfig.newBuilder().build(), Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
-        payloadClassName);
+    this(conf, basePath, false, ConsistencyGuardConfig.newBuilder().build(),
+        Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION), payloadClassName);
   }
 
   public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
-                               ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion) {
+      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion) {
     this(conf, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, null);
   }
 
   public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad) {
-    this(conf, basePath, loadActiveTimelineOnLoad, ConsistencyGuardConfig.newBuilder().build(), Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION), null);
+    this(conf, basePath, loadActiveTimelineOnLoad, ConsistencyGuardConfig.newBuilder().build(),
+        Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION), null);
   }
 
   public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
-      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion, String payloadClassName)
-      throws TableNotFoundException {
+      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
+      String payloadClassName) throws TableNotFoundException {
     LOG.info("Loading HoodieTableMetaClient from " + basePath);
     this.basePath = basePath;
     this.consistencyGuardConfig = consistencyGuardConfig;
@@ -119,7 +120,8 @@ public class HoodieTableMetaClient implements Serializable {
     this.tableType = tableConfig.getTableType();
     this.timelineLayoutVersion = layoutVersion.orElse(tableConfig.getTimelineLayoutVersion());
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
-    LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
+    LOG.info(
+        "Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
       LOG.info("Loading Active commit timeline for " + basePath);
       getActiveTimeline();
@@ -294,8 +296,8 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, String tableType,
       String tableName, String archiveLogFolder, String payloadClassName) throws IOException {
-    return initTableType(hadoopConf, basePath, HoodieTableType.valueOf(tableType), tableName,
-        archiveLogFolder, payloadClassName, null);
+    return initTableType(hadoopConf, basePath, HoodieTableType.valueOf(tableType), tableName, archiveLogFolder,
+        payloadClassName, null);
   }
 
   /**
@@ -446,7 +448,7 @@ public class HoodieTableMetaClient implements Serializable {
    *
    * @param includedExtensions Included hoodie extensions
    * @param applyLayoutVersionFilters Depending on Timeline layout version, if there are multiple states for the same
-   * action instant, only include the highest state
+   *        action instant, only include the highest state
    * @return List of Hoodie Instants generated
    * @throws IOException in case of failure
    */
@@ -461,19 +463,17 @@ public class HoodieTableMetaClient implements Serializable {
    * @param timelinePath MetaPath where instant files are stored
    * @param includedExtensions Included hoodie extensions
    * @param applyLayoutVersionFilters Depending on Timeline layout version, if there are multiple states for the same
-   * action instant, only include the highest state
+   *        action instant, only include the highest state
    * @return List of Hoodie Instants generated
    * @throws IOException in case of failure
    */
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Path timelinePath, Set<String> includedExtensions,
       boolean applyLayoutVersionFilters) throws IOException {
-    Stream<HoodieInstant> instantStream = Arrays.stream(
-        HoodieTableMetaClient
-            .scanFiles(getFs(), timelinePath, path -> {
-              // Include only the meta files with extensions that needs to be included
-              String extension = FSUtils.getFileExtension(path.getName());
-              return includedExtensions.contains(extension);
-            })).map(HoodieInstant::new);
+    Stream<HoodieInstant> instantStream = Arrays.stream(HoodieTableMetaClient.scanFiles(getFs(), timelinePath, path -> {
+      // Include only the meta files with extensions that needs to be included
+      String extension = FSUtils.getFileExtension(path.getName());
+      return includedExtensions.contains(extension);
+    })).map(HoodieInstant::new);
 
     if (applyLayoutVersionFilters) {
       instantStream = TimelineLayout.getLayout(getTimelineLayoutVersion()).filterHoodieInstants(instantStream);

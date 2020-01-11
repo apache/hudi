@@ -61,8 +61,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   private String schemaStr;
   private Schema schema;
 
-  public TestHoodieGlobalBloomIndex() {
-  }
+  public TestHoodieGlobalBloomIndex() {}
 
   @Before
   public void setUp() throws Exception {

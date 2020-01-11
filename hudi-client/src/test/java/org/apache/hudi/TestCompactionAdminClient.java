@@ -95,16 +95,15 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     int numEntriesPerInstant = 10;
     CompactionTestUtils.setupAndValidateCompactionOperations(metaClient, false, numEntriesPerInstant,
         numEntriesPerInstant, numEntriesPerInstant, numEntriesPerInstant);
-    Map<String, CompactionOperation> instantsWithOp =
-        Stream.of("001", "003", "005", "007").map(instant -> {
-          try {
-            return Pair.of(instant, CompactionUtils.getCompactionPlan(metaClient, instant));
-          } catch (IOException ioe) {
-            throw new HoodieException(ioe);
-          }
-        }).map(instantWithPlan -> instantWithPlan.getRight().getOperations().stream()
-            .map(op -> Pair.of(instantWithPlan.getLeft(), CompactionOperation.convertFromAvroRecordInstance(op)))
-            .findFirst().get()).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+    Map<String, CompactionOperation> instantsWithOp = Stream.of("001", "003", "005", "007").map(instant -> {
+      try {
+        return Pair.of(instant, CompactionUtils.getCompactionPlan(metaClient, instant));
+      } catch (IOException ioe) {
+        throw new HoodieException(ioe);
+      }
+    }).map(instantWithPlan -> instantWithPlan.getRight().getOperations().stream()
+        .map(op -> Pair.of(instantWithPlan.getLeft(), CompactionOperation.convertFromAvroRecordInstance(op)))
+        .findFirst().get()).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
     // THere are delta-commits after compaction instant
     validateUnScheduleFileId(client, "000", "001", instantsWithOp.get("001"), 2);
     // THere are delta-commits after compaction instant
@@ -141,8 +140,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     }
     // Now repair
     List<Pair<HoodieLogFile, HoodieLogFile>> undoFiles =
-        result.stream().flatMap(r -> getRenamingActionsToAlignWithCompactionOperation(metaClient,
-            compactionInstant, r.getOperation(), Option.empty()).stream()).map(rn -> {
+        result.stream().flatMap(r -> getRenamingActionsToAlignWithCompactionOperation(metaClient, compactionInstant,
+            r.getOperation(), Option.empty()).stream()).map(rn -> {
               try {
                 renameLogFile(metaClient, rn.getKey(), rn.getValue());
               } catch (IOException e) {
@@ -159,8 +158,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     } else {
       Assert.assertTrue("Rename Files must be empty", renameFiles.isEmpty());
     }
-    expRenameFiles.forEach((key, value) -> LOG.info("Key :" + key + " renamed to " + value + " rolled back to "
-        + renameFilesFromUndo.get(key)));
+    expRenameFiles.forEach((key, value) -> LOG
+        .info("Key :" + key + " renamed to " + value + " rolled back to " + renameFilesFromUndo.get(key)));
 
     Assert.assertEquals("Undo must completely rollback renames", expRenameFiles, renameFilesFromUndo);
     // Now expect validation to succeed
@@ -178,8 +177,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
     // Ensure compaction-plan is good to begin with
     List<ValidationOpResult> validationResults = client.validateCompactionPlan(metaClient, compactionInstant, 1);
-    Assert.assertFalse("Some validations failed",
-        validationResults.stream().anyMatch(v -> !v.isSuccess()));
+    Assert.assertFalse("Some validations failed", validationResults.stream().anyMatch(v -> !v.isSuccess()));
   }
 
   private void validateRenameFiles(List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles, String ingestionInstant,
@@ -281,8 +279,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
 
     // Ensure same number of log-files before and after renaming per fileId
     Map<String, Long> fileIdToCountsAfterRenaming =
-        newFsView.getAllFileGroups(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0]).flatMap(HoodieFileGroup::getAllFileSlices)
-            .filter(fs -> fs.getBaseInstantTime().equals(ingestionInstant))
+        newFsView.getAllFileGroups(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0])
+            .flatMap(HoodieFileGroup::getAllFileSlices).filter(fs -> fs.getBaseInstantTime().equals(ingestionInstant))
             .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().count()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
@@ -342,8 +340,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
 
     // Ensure same number of log-files before and after renaming per fileId
     Map<String, Long> fileIdToCountsAfterRenaming =
-        newFsView.getAllFileGroups(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0]).flatMap(HoodieFileGroup::getAllFileSlices)
-            .filter(fs -> fs.getBaseInstantTime().equals(ingestionInstant))
+        newFsView.getAllFileGroups(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0])
+            .flatMap(HoodieFileGroup::getAllFileSlices).filter(fs -> fs.getBaseInstantTime().equals(ingestionInstant))
             .filter(fs -> fs.getFileId().equals(op.getFileId()))
             .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().count()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));

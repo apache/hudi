@@ -62,19 +62,19 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat("yyyyMMddHHmmss");
 
-  public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
-      new String[]{COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
-          INFLIGHT_DELTA_COMMIT_EXTENSION, REQUESTED_DELTA_COMMIT_EXTENSION, SAVEPOINT_EXTENSION,
-          INFLIGHT_SAVEPOINT_EXTENSION, CLEAN_EXTENSION, REQUESTED_CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION,
-          INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION}));
+  public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(new String[] {
+      COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
+      INFLIGHT_DELTA_COMMIT_EXTENSION, REQUESTED_DELTA_COMMIT_EXTENSION, SAVEPOINT_EXTENSION,
+      INFLIGHT_SAVEPOINT_EXTENSION, CLEAN_EXTENSION, REQUESTED_CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION,
+      INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION}));
 
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
   private static AtomicReference<String> lastInstantTime = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
 
   /**
-   * Returns next instant time in the {@link #COMMIT_FORMATTER} format.
-   * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
+   * Returns next instant time in the {@link #COMMIT_FORMATTER} format. Ensures each instant time is atleast 1 second
+   * apart since we create instant times at second granularity
    */
   public static String createNewInstantTime() {
     return lastInstantTime.updateAndGet((oldVal) -> {
@@ -111,9 +111,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public HoodieActiveTimeline(HoodieTableMetaClient metaClient, boolean applyLayoutFilter) {
-    this(metaClient,
-        new ImmutableSet.Builder<String>()
-            .addAll(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE).build(), applyLayoutFilter);
+    this(metaClient, new ImmutableSet.Builder<String>().addAll(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE).build(),
+        applyLayoutFilter);
   }
 
   /**
@@ -121,8 +120,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    *
    * @deprecated
    */
-  public HoodieActiveTimeline() {
-  }
+  public HoodieActiveTimeline() {}
 
   /**
    * This method is only used when this object is deserialized in a spark executor.
@@ -279,9 +277,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return readDataFromPath(detailPath);
   }
 
-  //-----------------------------------------------------------------
-  //      BEGIN - COMPACTION RELATED META-DATA MANAGEMENT.
-  //-----------------------------------------------------------------
+  // -----------------------------------------------------------------
+  // BEGIN - COMPACTION RELATED META-DATA MANAGEMENT.
+  // -----------------------------------------------------------------
 
   public Option<byte[]> readPlanAsBytes(HoodieInstant instant) {
     Path detailPath = null;
@@ -346,17 +344,17 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   private void createFileInAuxiliaryFolder(HoodieInstant instant, Option<byte[]> data) {
     if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
       /**
-       *  For latest version, since we write immutable files directly in timeline directory, there is no need to write
-       *  additional immutable files in .aux folder
+       * For latest version, since we write immutable files directly in timeline directory, there is no need to write
+       * additional immutable files in .aux folder
        */
       Path fullPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
       createFileInPath(fullPath, data);
     }
   }
 
-  //-----------------------------------------------------------------
-  //      END - COMPACTION RELATED META-DATA MANAGEMENT
-  //-----------------------------------------------------------------
+  // -----------------------------------------------------------------
+  // END - COMPACTION RELATED META-DATA MANAGEMENT
+  // -----------------------------------------------------------------
 
   /**
    * Transition Clean State from inflight to Committed.
@@ -406,8 +404,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       } else {
         // Ensures old state exists in timeline
         LOG.info("Checking for file exists ?" + new Path(metaClient.getMetaPath(), fromInstant.getFileName()));
-        Preconditions.checkArgument(metaClient.getFs().exists(new Path(metaClient.getMetaPath(),
-            fromInstant.getFileName())));
+        Preconditions
+            .checkArgument(metaClient.getFs().exists(new Path(metaClient.getMetaPath(), fromInstant.getFileName())));
         // Use Write Once to create Target File
         createImmutableFileInPath(new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
         LOG.info("Create new file for toInstant ?" + new Path(metaClient.getMetaPath(), toInstant.getFileName()));
@@ -426,8 +424,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         if (!metaClient.getFs().exists(inFlightCommitFilePath)) {
           boolean success = metaClient.getFs().rename(commitFilePath, inFlightCommitFilePath);
           if (!success) {
-            throw new HoodieIOException(
-                "Could not rename " + commitFilePath + " to " + inFlightCommitFilePath);
+            throw new HoodieIOException("Could not rename " + commitFilePath + " to " + inFlightCommitFilePath);
           }
         }
       } else {
@@ -508,8 +505,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Creates a new file in timeline with overwrite set to false. This ensures
-   * files are created only once and never rewritten
+   * Creates a new file in timeline with overwrite set to false. This ensures files are created only once and never
+   * rewritten
+   * 
    * @param fullPath File Path
    * @param content Content to be stored
    */

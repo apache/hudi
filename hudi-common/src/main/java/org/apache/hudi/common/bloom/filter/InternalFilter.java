@@ -41,15 +41,14 @@ abstract class InternalFilter implements Writable {
   protected int nbHash;
   protected int hashType;
 
-  protected InternalFilter() {
-  }
+  protected InternalFilter() {}
 
   /**
    * Constructor.
    *
    * @param vectorSize The vector size of <i>this</i> filter.
-   * @param nbHash     The number of hash functions to consider.
-   * @param hashType   type of the hashing function (see {@link Hash}).
+   * @param nbHash The number of hash functions to consider.
+   * @param hashType type of the hashing function (see {@link Hash}).
    */
   protected InternalFilter(int vectorSize, int nbHash, int hashType) {
     this.vectorSize = vectorSize;
@@ -120,7 +119,7 @@ abstract class InternalFilter implements Writable {
     for (Key key : keys) {
       add(key);
     }
-  } //end add()
+  } // end add()
 
   /**
    * Adds a collection of keys to <i>this</i> filter.
@@ -134,7 +133,7 @@ abstract class InternalFilter implements Writable {
     for (Key key : keys) {
       add(key);
     }
-  } //end add()
+  } // end add()
 
   /**
    * Adds an array of keys to <i>this</i> filter.
@@ -148,7 +147,7 @@ abstract class InternalFilter implements Writable {
     for (int i = 0; i < keys.length; i++) {
       add(keys[i]);
     }
-  } //end add()
+  } // end add()
 
   // Writable interface
 
@@ -175,4 +174,4 @@ abstract class InternalFilter implements Writable {
     this.vectorSize = in.readInt();
     this.hash = new HashFunction(this.vectorSize, this.nbHash, this.hashType);
   }
-} //end class
+} // end class

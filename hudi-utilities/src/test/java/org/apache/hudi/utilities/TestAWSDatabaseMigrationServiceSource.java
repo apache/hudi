@@ -59,11 +59,10 @@ public class TestAWSDatabaseMigrationServiceSource {
 
   @Test
   public void testPayload() throws IOException {
-    final Schema schema = Schema.createRecord(Arrays.asList(
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
-        new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
-        new Schema.Field(AWSDmsAvroPayload.OP_FIELD, Schema.create(Schema.Type.STRING), "", null)
-    ));
+    final Schema schema =
+        Schema.createRecord(Arrays.asList(new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
+            new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
+            new Schema.Field(AWSDmsAvroPayload.OP_FIELD, Schema.create(Schema.Type.STRING), "", null)));
     final GenericRecord record = new GenericData.Record(schema);
 
     record.put("id", "1");
@@ -94,13 +93,12 @@ public class TestAWSDatabaseMigrationServiceSource {
   @Test
   public void testTransformer() {
     AWSDmsTransformer transformer = new AWSDmsTransformer();
-    Dataset<Row> inputFrame = spark.createDataFrame(Arrays.asList(
-        new Record("1", 3433L),
-        new Record("2", 3433L)), Record.class);
+    Dataset<Row> inputFrame =
+        spark.createDataFrame(Arrays.asList(new Record("1", 3433L), new Record("2", 3433L)), Record.class);
 
     Dataset<Row> outputFrame = transformer.apply(jsc, spark, inputFrame, null);
-    assertTrue(Arrays.asList(outputFrame.schema().fields()).stream()
-        .map(f -> f.name()).anyMatch(n -> n.equals(AWSDmsAvroPayload.OP_FIELD)));
+    assertTrue(Arrays.asList(outputFrame.schema().fields()).stream().map(f -> f.name())
+        .anyMatch(n -> n.equals(AWSDmsAvroPayload.OP_FIELD)));
     assertTrue(outputFrame.select(AWSDmsAvroPayload.OP_FIELD).collectAsList().stream()
         .allMatch(r -> r.getString(0).equals("")));
   }

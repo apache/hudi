@@ -139,7 +139,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
    * @throws Exception in case of failure
    */
   private void testAutoCommit(Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
-                              boolean isPrepped) throws Exception {
+      boolean isPrepped) throws Exception {
     // Set autoCommit false
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
@@ -262,16 +262,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   /**
    * Test one of HoodieWriteClient upsert(Prepped) APIs.
    *
-   * @param config  Write Config
+   * @param config Write Config
    * @param writeFn One of Hoodie Write Function API
    * @throws Exception in case of error
    */
   private void testUpsertsInternal(HoodieWriteConfig config,
-                                   Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPrepped)
+      Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPrepped)
       throws Exception {
     // Force using older timeline layout
-    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
-        TimelineLayoutVersion.VERSION_0).build();
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder().withProps(config.getProps())
+        .withTimelineLayoutVersion(TimelineLayoutVersion.VERSION_0).build();
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     // Write 1 (only inserts)
@@ -295,13 +295,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     newCommitTime = "005";
     numRecords = 50;
 
-    deleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
-        initCommitTime, numRecords, HoodieWriteClient::delete, isPrepped, true,
-        0, 150);
+    deleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecords,
+        HoodieWriteClient::delete, isPrepped, true, 0, 150);
 
     // Now simulate an upgrade and perform a restore operation
-    HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
-        TimelineLayoutVersion.CURR_VERSION).build();
+    HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps())
+        .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION).build();
     client = getHoodieWriteClient(newConfig, false);
     client.restoreToInstant("004");
 
@@ -318,9 +317,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     newCommitTime = "006";
     numRecords = 50;
 
-    deleteBatch(newConfig, client, newCommitTime, prevCommitTime,
-        initCommitTime, numRecords, HoodieWriteClient::delete, isPrepped, true,
-        0, 150);
+    deleteBatch(newConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecords, HoodieWriteClient::delete,
+        isPrepped, true, 0, 150);
 
     HoodieActiveTimeline activeTimeline = new HoodieActiveTimeline(metaClient, false);
     List<HoodieInstant> instants = activeTimeline.getCommitTimeline().getInstants().collect(Collectors.toList());
@@ -680,8 +678,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     client.startCommitWithTime(commitTime6);
 
     List<HoodieRecord> dummyInserts3 = dataGen.generateInserts(commitTime6, 20);
-    List<HoodieKey> hoodieKeysToDelete3 = HoodieClientTestUtils
-        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(dummyInserts3), 20);
+    List<HoodieKey> hoodieKeysToDelete3 =
+        HoodieClientTestUtils.getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(dummyInserts3), 20);
     JavaRDD<HoodieKey> deleteKeys3 = jsc.parallelize(hoodieKeysToDelete3, 1);
     statuses = client.delete(deleteKeys3, commitTime6).collect();
     assertNoWriteErrors(statuses);
@@ -701,8 +699,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   private Pair<Set<String>, List<HoodieRecord>> testUpdates(String commitTime, HoodieWriteClient client,
-                                                            int sizeToInsertAndUpdate, int expectedTotalRecords)
-      throws IOException {
+      int sizeToInsertAndUpdate, int expectedTotalRecords) throws IOException {
     client.startCommitWithTime(commitTime);
     List<HoodieRecord> inserts = dataGen.generateInserts(commitTime, sizeToInsertAndUpdate);
     Set<String> keys = HoodieClientTestUtils.getRecordKeys(inserts);
@@ -725,11 +722,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   private void testDeletes(HoodieWriteClient client, List<HoodieRecord> previousRecords, int sizeToDelete,
-                           String existingFile, String commitTime, int exepctedRecords, List<String> keys) {
+      String existingFile, String commitTime, int exepctedRecords, List<String> keys) {
     client.startCommitWithTime(commitTime);
 
-    List<HoodieKey> hoodieKeysToDelete = HoodieClientTestUtils
-        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(previousRecords), sizeToDelete);
+    List<HoodieKey> hoodieKeysToDelete =
+        HoodieClientTestUtils.getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(previousRecords), sizeToDelete);
     JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(hoodieKeysToDelete, 1);
     List<WriteStatus> statuses = client.delete(deleteKeys, commitTime).collect();
 
@@ -776,8 +773,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     client.startCommitWithTime(commitTime1);
 
     List<HoodieRecord> dummyInserts = dataGen.generateInserts(commitTime1, 20);
-    List<HoodieKey> hoodieKeysToDelete = HoodieClientTestUtils
-        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(dummyInserts), 20);
+    List<HoodieKey> hoodieKeysToDelete =
+        HoodieClientTestUtils.getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(dummyInserts), 20);
     JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(hoodieKeysToDelete, 1);
     try {
       client.delete(deleteKeys, commitTime1).collect();

@@ -61,10 +61,11 @@
             <property name="allowByTailComment" value="true"/>
             <property name="allowNonPrintableEscapes" value="true"/>
         </module>
+        <!-- when use mvn spotless:apply to format code, the length would be more than 120, even 200.
         <module name="LineLength">
-            <property name="max" value="200"/>
+            <property name="max" value="120"/>
             <property name="ignorePattern" value="^ *\* *[^ ]+$"/>
-        </module>
+        </module>-->
         <module name="OneTopLevelClass"/>
         <module name="NoLineWrap"/>
         <module name="EmptyBlock">

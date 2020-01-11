@@ -126,8 +126,8 @@ public class HoodieClientExample {
      */
     newCommitTime = client.startCommit();
     LOG.info("Starting commit " + newCommitTime);
-    List<HoodieKey> toBeDeleted = HoodieClientTestUtils
-        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(recordsSoFar), 10);
+    List<HoodieKey> toBeDeleted =
+        HoodieClientTestUtils.getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(recordsSoFar), 10);
     JavaRDD<HoodieKey> deleteRecords = jsc.<HoodieKey>parallelize(toBeDeleted, 1);
     client.delete(deleteRecords, newCommitTime);
 

@@ -172,19 +172,19 @@ public class HoodieCommitArchiveLog {
             s.getTimestamp(), HoodieTimeline.LESSER_OR_EQUAL));
       }).filter(s -> {
         // Ensure commits >= oldest pending compaction commit is retained
-        return oldestPendingCompactionInstant.map(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), s.getTimestamp(), HoodieTimeline.GREATER)).orElse(true);
+        return oldestPendingCompactionInstant.map(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(),
+            s.getTimestamp(), HoodieTimeline.GREATER)).orElse(true);
       }).limit(commitTimeline.countInstants() - minCommitsToKeep));
     }
 
     // For archiving and cleaning instants, we need to include intermediate state files if they exist
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
-    Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstants()
-        .collect(Collectors.groupingBy(i -> Pair.of(i.getTimestamp(),
-            HoodieInstant.getComparableAction(i.getAction()))));
+    Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstants().collect(
+        Collectors.groupingBy(i -> Pair.of(i.getTimestamp(), HoodieInstant.getComparableAction(i.getAction()))));
 
-    return instants.flatMap(hoodieInstant ->
-        groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
-            HoodieInstant.getComparableAction(hoodieInstant.getAction()))).stream());
+    return instants.flatMap(hoodieInstant -> groupByTsAction
+        .get(Pair.of(hoodieInstant.getTimestamp(), HoodieInstant.getComparableAction(hoodieInstant.getAction())))
+        .stream());
   }
 
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants) throws IOException {
@@ -203,8 +203,10 @@ public class HoodieCommitArchiveLog {
     }
 
     // Remove older meta-data from auxiliary path too
-    Option<HoodieInstant> latestCommitted = Option.fromJavaOptional(archivedInstants.stream().filter(i -> i.isCompleted() && (i.getAction().equals(HoodieTimeline.COMMIT_ACTION)
-        || (i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)))).max(Comparator.comparing(HoodieInstant::getTimestamp)));
+    Option<HoodieInstant> latestCommitted = Option.fromJavaOptional(archivedInstants.stream()
+        .filter(i -> i.isCompleted() && (i.getAction().equals(HoodieTimeline.COMMIT_ACTION)
+            || (i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))))
+        .max(Comparator.comparing(HoodieInstant::getTimestamp)));
     LOG.info("Latest Committed Instant=" + latestCommitted);
     if (latestCommitted.isPresent()) {
       success &= deleteAllInstantsOlderorEqualsInAuxMetaFolder(latestCommitted.get());

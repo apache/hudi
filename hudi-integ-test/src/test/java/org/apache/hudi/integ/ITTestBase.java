@@ -112,8 +112,7 @@ public abstract class ITTestBase {
 
   static String getPrestoConsoleCommand(String commandFile) {
     StringBuilder builder = new StringBuilder().append("presto --server " + PRESTO_COORDINATOR_URL)
-        .append(" --catalog hive --schema default")
-        .append(" -f " + commandFile );
+        .append(" --catalog hive --schema default").append(" -f " + commandFile);
     System.out.println("Presto comamnd " + builder.toString());
     return builder.toString();
   }
@@ -165,7 +164,8 @@ public abstract class ITTestBase {
     LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
 
     if (expectedToSucceed) {
-      Assert.assertEquals("Command (" + Arrays.toString(command) + ") expected to succeed. Exit (" + exitCode + ")", 0, exitCode);
+      Assert.assertEquals("Command (" + Arrays.toString(command) + ") expected to succeed. Exit (" + exitCode + ")", 0,
+          exitCode);
     } else {
       Assert.assertTrue("Command (" + Arrays.toString(command) + ") expected to fail. Exit (" + exitCode + ")",
           exitCode != 0);
@@ -224,12 +224,10 @@ public abstract class ITTestBase {
     return Pair.of(callback.getStdout().toString().trim(), callback.getStderr().toString().trim());
   }
 
-  void executePrestoCopyCommand(String fromFile, String remotePath){
+  void executePrestoCopyCommand(String fromFile, String remotePath) {
     Container sparkWorkerContainer = runningContainers.get(PRESTO_COORDINATOR);
-    dockerClient.copyArchiveToContainerCmd(sparkWorkerContainer.getId())
-        .withHostResource(fromFile)
-        .withRemotePath(remotePath)
-        .exec();
+    dockerClient.copyArchiveToContainerCmd(sparkWorkerContainer.getId()).withHostResource(fromFile)
+        .withRemotePath(remotePath).exec();
   }
 
   private void saveUpLogs() {

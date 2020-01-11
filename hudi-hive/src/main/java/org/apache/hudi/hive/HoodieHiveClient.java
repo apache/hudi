@@ -162,9 +162,9 @@ public class HoodieHiveClient {
 
   private String constructAddPartitions(List<String> partitions) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
-    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(syncConfig.databaseName)
-            .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
-            .append(syncConfig.tableName).append(HIVE_ESCAPE_CHARACTER).append(" ADD IF NOT EXISTS ");
+    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(syncConfig.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
+        .append(HIVE_ESCAPE_CHARACTER).append(syncConfig.tableName).append(HIVE_ESCAPE_CHARACTER)
+        .append(" ADD IF NOT EXISTS ");
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
       String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
@@ -202,7 +202,8 @@ public class HoodieHiveClient {
       String partitionClause = getPartitionClause(partition);
       Path partitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition);
       String fullPartitionPath = partitionPath.toUri().getScheme().equals(StorageSchemes.HDFS.getScheme())
-              ? FSUtils.getDFSFullPartitionPath(fs, partitionPath) : partitionPath.toString();
+          ? FSUtils.getDFSFullPartitionPath(fs, partitionPath)
+          : partitionPath.toString();
       String changePartition =
           alterTable + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'";
       changePartitions.add(changePartition);
@@ -256,10 +257,9 @@ public class HoodieHiveClient {
       // Cascade clause should not be present for non-partitioned tables
       String cascadeClause = syncConfig.partitionFields.size() > 0 ? " cascade" : "";
       StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
-              .append(syncConfig.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
-              .append(HIVE_ESCAPE_CHARACTER).append(syncConfig.tableName)
-              .append(HIVE_ESCAPE_CHARACTER).append(" REPLACE COLUMNS(")
-              .append(newSchemaStr).append(" )").append(cascadeClause);
+          .append(syncConfig.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
+          .append(syncConfig.tableName).append(HIVE_ESCAPE_CHARACTER).append(" REPLACE COLUMNS(").append(newSchemaStr)
+          .append(" )").append(cascadeClause);
       LOG.info("Updating table definition with " + sqlBuilder);
       updateHiveSQL(sqlBuilder.toString());
     } catch (IOException e) {
@@ -353,10 +353,11 @@ public class HoodieHiveClient {
               activeTimeline.lastInstant().orElseThrow(() -> new InvalidTableException(syncConfig.basePath));
           HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
               .fromBytes(activeTimeline.getInstantDetails(lastCommit).get(), HoodieCommitMetadata.class);
-          String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
-              .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for commit "
-                  + lastCommit + ", could not get schema for table " + metaClient.getBasePath() + ", Metadata :"
-                  + commitMetadata));
+          String filePath =
+              commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
+                  .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for commit "
+                      + lastCommit + ", could not get schema for table " + metaClient.getBasePath() + ", Metadata :"
+                      + commitMetadata));
           return readSchemaFromDataFile(new Path(filePath));
         case MERGE_ON_READ:
           // If this is MOR, depending on whether the latest commit is a delta commit or

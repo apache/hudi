@@ -63,14 +63,16 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testMakeDataFileName() {
     String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     String fileName = UUID.randomUUID().toString();
-    assertEquals(FSUtils.makeDataFileName(commitTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + commitTime + ".parquet");
+    assertEquals(FSUtils.makeDataFileName(commitTime, TEST_WRITE_TOKEN, fileName),
+        fileName + "_" + TEST_WRITE_TOKEN + "_" + commitTime + ".parquet");
   }
 
   @Test
   public void testMaskFileName() {
     String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     int taskPartitionId = 2;
-    assertEquals(FSUtils.maskWithoutFileId(commitTime, taskPartitionId), "*_" + taskPartitionId + "_" + commitTime + ".parquet");
+    assertEquals(FSUtils.maskWithoutFileId(commitTime, taskPartitionId),
+        "*_" + taskPartitionId + "_" + commitTime + ".parquet");
   }
 
   @Test
@@ -228,8 +230,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String log1Ver0 = makeOldLogFileName("file1", ".log", "1", 0);
     String log1Ver1 = makeOldLogFileName("file1", ".log", "1", 1);
     String log1base2 = makeOldLogFileName("file1", ".log", "2", 0);
-    List<HoodieLogFile> logFiles = Stream.of(log1base2, log1Ver1, log1Ver0).map(HoodieLogFile::new)
-        .collect(Collectors.toList());
+    List<HoodieLogFile> logFiles =
+        Stream.of(log1base2, log1Ver1, log1Ver0).map(HoodieLogFile::new).collect(Collectors.toList());
     logFiles.sort(HoodieLogFile.getLogFileComparator());
     assertEquals(log1Ver0, logFiles.get(0).getFileName());
     assertEquals(log1Ver1, logFiles.get(1).getFileName());
@@ -248,9 +250,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String log1base2W0 = FSUtils.makeLogFileName("file1", ".log", "2", 0, "0-0-1");
     String log1base2W1 = FSUtils.makeLogFileName("file1", ".log", "2", 0, "1-1-1");
 
-    List<HoodieLogFile> logFiles =
-        Stream.of(log1Ver1W1, log1base2W0, log1base2W1, log1Ver1W0, log1Ver0W1, log1Ver0W0)
-            .map(HoodieLogFile::new).collect(Collectors.toList());
+    List<HoodieLogFile> logFiles = Stream.of(log1Ver1W1, log1base2W0, log1base2W1, log1Ver1W0, log1Ver0W1, log1Ver0W0)
+        .map(HoodieLogFile::new).collect(Collectors.toList());
     logFiles.sort(HoodieLogFile.getLogFileComparator());
     assertEquals(log1Ver0W0, logFiles.get(0).getFileName());
     assertEquals(log1Ver0W1, logFiles.get(1).getFileName());

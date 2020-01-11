@@ -79,8 +79,8 @@ public class HdfsTestService {
 
     // Configure and start the HDFS cluster
     // boolean format = shouldFormatDFSCluster(localDFSLocation, clean);
-    hadoopConf = configureDFSCluster(hadoopConf, localDFSLocation, bindIP, namenodeRpcPort,
-        datanodePort, datanodeIpcPort, datanodeHttpPort);
+    hadoopConf = configureDFSCluster(hadoopConf, localDFSLocation, bindIP, namenodeRpcPort, datanodePort,
+        datanodeIpcPort, datanodeHttpPort);
     miniDfsCluster = new MiniDFSCluster.Builder(hadoopConf).numDataNodes(1).format(format).checkDataNodeAddrConfig(true)
         .checkDataNodeHostConfig(true).build();
     LOG.info("HDFS Minicluster service started.");

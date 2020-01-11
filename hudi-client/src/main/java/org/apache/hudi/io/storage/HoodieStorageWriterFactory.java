@@ -52,10 +52,8 @@ public class HoodieStorageWriterFactory {
   private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(
       String commitTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable)
       throws IOException {
-    BloomFilter filter = BloomFilterFactory
-        .createBloomFilter(config.getBloomFilterNumEntries(), config.getBloomFilterFPP(),
-            config.getDynamicBloomFilterMaxNumEntries(),
-            config.getBloomFilterType());
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(config.getBloomFilterNumEntries(),
+        config.getBloomFilterFPP(), config.getDynamicBloomFilterMaxNumEntries(), config.getBloomFilterType());
     HoodieAvroWriteSupport writeSupport =
         new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
 

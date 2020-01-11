@@ -413,8 +413,8 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
         secondClient.rollback(commitTime1);
         allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
         // After rollback, there should be no parquet file with the failed commit time
-        Assert.assertEquals(Arrays.stream(allFiles)
-            .filter(file -> file.getPath().getName().contains(commitTime1)).count(), 0);
+        Assert.assertEquals(
+            Arrays.stream(allFiles).filter(file -> file.getPath().getName().contains(commitTime1)).count(), 0);
         dataFiles = roView.getLatestDataFiles().map(HoodieDataFile::getPath).collect(Collectors.toList());
         recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(dataFiles, basePath);
         assertEquals(recordsRead.size(), 200);
@@ -446,8 +446,8 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
         thirdClient.rollback(commitTime2);
         allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
         // After rollback, there should be no parquet file with the failed commit time
-        Assert.assertEquals(Arrays.stream(allFiles)
-            .filter(file -> file.getPath().getName().contains(commitTime2)).count(), 0);
+        Assert.assertEquals(
+            Arrays.stream(allFiles).filter(file -> file.getPath().getName().contains(commitTime2)).count(), 0);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
         hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
@@ -645,8 +645,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
 
       // make sure there are no log files remaining
       assertEquals(0L, ((HoodieTableFileSystemView) rtView).getAllFileGroups()
-          .filter(fileGroup -> fileGroup.getAllRawFileSlices().noneMatch(f -> f.getLogFiles().count() == 0))
-          .count());
+          .filter(fileGroup -> fileGroup.getAllRawFileSlices().noneMatch(f -> f.getLogFiles().count() == 0)).count());
 
     }
   }
@@ -730,7 +729,8 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       Map<String, Long> parquetFileIdToNewSize =
           newDataFilesList.stream().collect(Collectors.toMap(HoodieDataFile::getFileId, HoodieDataFile::getFileSize));
 
-      assertTrue(parquetFileIdToNewSize.entrySet().stream().anyMatch(entry -> parquetFileIdToSize.get(entry.getKey()) < entry.getValue()));
+      assertTrue(parquetFileIdToNewSize.entrySet().stream()
+          .anyMatch(entry -> parquetFileIdToSize.get(entry.getKey()) < entry.getValue()));
 
       List<String> dataFiles = roView.getLatestDataFiles().map(HoodieDataFile::getPath).collect(Collectors.toList());
       List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(dataFiles, basePath);
@@ -781,8 +781,8 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
         }
 
         // Mark 2nd delta-instant as completed
-        metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(State.INFLIGHT,
-            HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime));
+        metaClient.getActiveTimeline()
+            .createNewInstant(new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime));
         metaClient.getActiveTimeline().saveAsComplete(
             new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
@@ -802,10 +802,12 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
           List<FileSlice> groupedLogFiles =
               table.getRTFileSystemView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
           for (FileSlice slice : groupedLogFiles) {
-            assertEquals("After compaction there should be no log files visiable on a Realtime view", 0, slice.getLogFiles().count());
+            assertEquals("After compaction there should be no log files visiable on a Realtime view", 0,
+                slice.getLogFiles().count());
           }
           List<WriteStatus> writeStatuses = result.collect();
-          assertTrue(writeStatuses.stream().anyMatch(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath)));
+          assertTrue(writeStatuses.stream()
+              .anyMatch(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath)));
         }
       }
     }
@@ -833,7 +835,8 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       for (String partitionPath : dataGen.getPartitionPaths()) {
         assertEquals(0, tableRTFileSystemView.getLatestFileSlices(partitionPath)
             .filter(fileSlice -> fileSlice.getDataFile().isPresent()).count());
-        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).anyMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));
+        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath)
+            .anyMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));
         numLogFiles += tableRTFileSystemView.getLatestFileSlices(partitionPath)
             .filter(fileSlice -> fileSlice.getLogFiles().count() > 0).count();
       }
@@ -866,8 +869,8 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       // Ensure that inserts are written to only log files
       Assert.assertEquals(
           writeStatuses.stream().filter(writeStatus -> !writeStatus.getStat().getPath().contains("log")).count(), 0);
-      Assert.assertTrue(
-          writeStatuses.stream().anyMatch(writeStatus -> writeStatus.getStat().getPath().contains("log")));
+      Assert
+          .assertTrue(writeStatuses.stream().anyMatch(writeStatus -> writeStatus.getStat().getPath().contains("log")));
 
       // rollback a failed commit
       boolean rollback = writeClient.rollback(newCommitTime);
@@ -907,8 +910,10 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
 
       long numLogFiles = 0;
       for (String partitionPath : dataGen.getPartitionPaths()) {
-        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).noneMatch(fileSlice -> fileSlice.getDataFile().isPresent()));
-        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).noneMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));
+        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath)
+            .noneMatch(fileSlice -> fileSlice.getDataFile().isPresent()));
+        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath)
+            .noneMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));
         numLogFiles += tableRTFileSystemView.getLatestFileSlices(partitionPath)
             .filter(fileSlice -> fileSlice.getLogFiles().count() > 0).count();
       }
@@ -944,8 +949,10 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
 
       long numLogFiles = 0;
       for (String partitionPath : dataGen.getPartitionPaths()) {
-        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).noneMatch(fileSlice -> fileSlice.getDataFile().isPresent()));
-        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).anyMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));
+        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath)
+            .noneMatch(fileSlice -> fileSlice.getDataFile().isPresent()));
+        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath)
+            .anyMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));
         numLogFiles += tableRTFileSystemView.getLatestFileSlices(partitionPath)
             .filter(fileSlice -> fileSlice.getLogFiles().count() > 0).count();
       }
@@ -966,8 +973,10 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       Option<HoodieInstant> lastInstant = ((SyncableFileSystemView) tableRTFileSystemView).getLastInstant();
       System.out.println("Last Instant =" + lastInstant);
       for (String partitionPath : dataGen.getPartitionPaths()) {
-        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).noneMatch(fileSlice -> fileSlice.getDataFile().isPresent()));
-        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).anyMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));
+        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath)
+            .noneMatch(fileSlice -> fileSlice.getDataFile().isPresent()));
+        Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath)
+            .anyMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));
       }
     }
   }

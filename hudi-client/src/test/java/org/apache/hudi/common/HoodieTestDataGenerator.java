@@ -125,8 +125,8 @@ public class HoodieTestDataGenerator {
    * Generates a new avro record of the above schema format for a delete.
    */
   public static TestRawTripPayload generateRandomDeleteValue(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0,
-        true);
+    GenericRecord rec =
+        generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0, true);
     return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
 
@@ -139,12 +139,12 @@ public class HoodieTestDataGenerator {
   }
 
   public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
-                                                    double timestamp) {
+      double timestamp) {
     return generateGenericRecord(rowKey, riderName, driverName, timestamp, false);
   }
 
   public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
-                                                    double timestamp, boolean isDeleteRecord) {
+      double timestamp, boolean isDeleteRecord) {
     GenericRecord rec = new GenericData.Record(avroSchema);
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
@@ -170,10 +170,8 @@ public class HoodieTestDataGenerator {
 
   public static void createCommitFile(String basePath, String commitTime, Configuration configuration) {
     Arrays.asList(HoodieTimeline.makeCommitFileName(commitTime), HoodieTimeline.makeInflightCommitFileName(commitTime),
-        HoodieTimeline.makeRequestedCommitFileName(commitTime))
-        .forEach(f -> {
-          Path commitFile = new Path(
-              basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
+        HoodieTimeline.makeRequestedCommitFileName(commitTime)).forEach(f -> {
+          Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
           FSDataOutputStream os = null;
           try {
             FileSystem fs = FSUtils.getFs(basePath, configuration);
@@ -205,7 +203,7 @@ public class HoodieTestDataGenerator {
   }
 
   public static void createCompactionAuxiliaryMetadata(String basePath, HoodieInstant instant,
-                                                       Configuration configuration) throws IOException {
+      Configuration configuration) throws IOException {
     Path commitFile =
         new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
     FileSystem fs = FSUtils.getFs(basePath, configuration);
@@ -357,11 +355,10 @@ public class HoodieTestDataGenerator {
   }
 
   /**
-   * Generates new updates, randomly distributed across the keys above. There can be duplicates within the returned
-   * list
+   * Generates new updates, randomly distributed across the keys above. There can be duplicates within the returned list
    *
    * @param commitTime Commit Timestamp
-   * @param n          Number of updates (including dups)
+   * @param n Number of updates (including dups)
    * @return list of hoodie record updates
    */
   public List<HoodieRecord> generateUpdates(String commitTime, Integer n) throws IOException {
@@ -378,7 +375,7 @@ public class HoodieTestDataGenerator {
    * Generates deduped updates of keys previously inserted, randomly distributed across the keys above.
    *
    * @param commitTime Commit Timestamp
-   * @param n          Number of unique records
+   * @param n Number of unique records
    * @return list of hoodie record updates
    */
   public List<HoodieRecord> generateUniqueUpdates(String commitTime, Integer n) {
@@ -399,7 +396,7 @@ public class HoodieTestDataGenerator {
    * Generates deduped updates of keys previously inserted, randomly distributed across the keys above.
    *
    * @param commitTime Commit Timestamp
-   * @param n          Number of unique records
+   * @param n Number of unique records
    * @return stream of hoodie record updates
    */
   public Stream<HoodieRecord> generateUniqueUpdatesStream(String commitTime, Integer n) {
@@ -458,7 +455,7 @@ public class HoodieTestDataGenerator {
    * Generates deduped delete records previously inserted, randomly distributed across the keys above.
    *
    * @param commitTime Commit Timestamp
-   * @param n          Number of unique records
+   * @param n Number of unique records
    * @return stream of hoodie records for delete
    */
   public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String commitTime, Integer n) {

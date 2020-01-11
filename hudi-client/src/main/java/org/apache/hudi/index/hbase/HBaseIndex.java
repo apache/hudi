@@ -118,8 +118,8 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   public HBaseIndexQPSResourceAllocator createQPSResourceAllocator(HoodieWriteConfig config) {
     try {
       LOG.info("createQPSResourceAllocator :" + config.getHBaseQPSResourceAllocatorClass());
-      return (HBaseIndexQPSResourceAllocator) ReflectionUtils
-              .loadClass(config.getHBaseQPSResourceAllocatorClass(), config);
+      return (HBaseIndexQPSResourceAllocator) ReflectionUtils.loadClass(config.getHBaseQPSResourceAllocatorClass(),
+          config);
     } catch (Exception e) {
       LOG.warn("error while instantiating HBaseIndexQPSResourceAllocator", e);
     }
@@ -469,8 +469,8 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     if (numRegionServersForTable == null) {
       try (Connection conn = getHBaseConnection()) {
         RegionLocator regionLocator = conn.getRegionLocator(TableName.valueOf(tableName));
-        numRegionServersForTable = Math
-            .toIntExact(regionLocator.getAllRegionLocations().stream().map(HRegionLocation::getServerName).distinct().count());
+        numRegionServersForTable = Math.toIntExact(
+            regionLocator.getAllRegionLocations().stream().map(HRegionLocation::getServerName).distinct().count());
         return numRegionServersForTable;
       } catch (IOException e) {
         LOG.error(e);

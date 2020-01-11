@@ -46,7 +46,6 @@ public class TestHoodieJmxMetrics extends TestHoodieMetrics {
   @Test
   public void testRegisterGauge() {
     registerGauge("jmx_metric", 123L);
-    assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
-        .get("jmx_metric").getValue().toString());
+    assertEquals("123", Metrics.getInstance().getRegistry().getGauges().get("jmx_metric").getValue().toString());
   }
 }

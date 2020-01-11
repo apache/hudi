@@ -152,8 +152,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
    */
   @Override
   public WriteStatus close() {
-    LOG
-        .info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
+    LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
 
       storageWriter.close();

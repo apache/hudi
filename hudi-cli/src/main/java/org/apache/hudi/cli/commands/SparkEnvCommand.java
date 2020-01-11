@@ -41,7 +41,8 @@ public class SparkEnvCommand implements CommandMarker {
       throws IllegalArgumentException {
     String[] map = confMap.split("=");
     if (map.length != 2) {
-      throw new IllegalArgumentException("Illegal set parameter, please use like [set --conf SPARK_HOME=/usr/etc/spark]");
+      throw new IllegalArgumentException(
+          "Illegal set parameter, please use like [set --conf SPARK_HOME=/usr/etc/spark]");
     }
     env.put(map[0].trim(), map[1].trim());
   }
@@ -50,8 +51,8 @@ public class SparkEnvCommand implements CommandMarker {
   public String showAllEnv() {
     String[][] rows = new String[env.size()][2];
     int i = 0;
-    for (String key: env.keySet()) {
-      rows[i] = new String[]{key, env.get(key)};
+    for (String key : env.keySet()) {
+      rows[i] = new String[] {key, env.get(key)};
       i++;
     }
     return HoodiePrintHelper.print(new String[] {"key", "value"}, rows);
@@ -62,7 +63,7 @@ public class SparkEnvCommand implements CommandMarker {
     if (key == null || key.isEmpty()) {
       return showAllEnv();
     } else {
-      return HoodiePrintHelper.print(new String[] {"key", "value"}, new String[][]{new String[]{key, env.get(key)}});
+      return HoodiePrintHelper.print(new String[] {"key", "value"}, new String[][] {new String[] {key, env.get(key)}});
     }
   }
 }

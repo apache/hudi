@@ -42,10 +42,7 @@ public class TestBloomFilter {
   // multiple parameters, uses Collection<Object[]>
   @Parameters()
   public static Collection<Object[]> data() {
-    return Arrays.asList(new Object[][] {
-        {BloomFilterTypeCode.SIMPLE.name()},
-        {BloomFilterTypeCode.DYNAMIC_V0.name()}
-    });
+    return Arrays.asList(new Object[][] {{BloomFilterTypeCode.SIMPLE.name()}, {BloomFilterTypeCode.DYNAMIC_V0.name()}});
   }
 
   public TestBloomFilter(String versionToTest) {
@@ -91,8 +88,7 @@ public class TestBloomFilter {
       }
 
       String serString = filter.serializeToString();
-      BloomFilter recreatedBloomFilter = BloomFilterFactory
-          .fromString(serString, versionToTest);
+      BloomFilter recreatedBloomFilter = BloomFilterFactory.fromString(serString, versionToTest);
       for (String key : inputs) {
         Assert.assertTrue("Filter should have returned true for " + key, recreatedBloomFilter.mightContain(key));
       }

@@ -57,8 +57,9 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Abstract Write Client providing functionality for performing commit, index updates and rollback
- *  Reused for regular write operations like upsert/insert/bulk-insert.. as well as bootstrap
+ * Abstract Write Client providing functionality for performing commit, index updates and rollback Reused for regular
+ * write operations like upsert/insert/bulk-insert.. as well as bootstrap
+ * 
  * @param <T> Sub type of HoodieRecordPayload
  */
 public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
@@ -174,8 +175,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
 
   /**
    * Post Commit Hook. Derived classes use this method to perform post-commit processing
-   * @param metadata      Commit Metadata corresponding to committed instant
-   * @param instantTime   Instant Time
+   * 
+   * @param metadata Commit Metadata corresponding to committed instant
+   * @param instantTime Instant Time
    * @param extraMetadata Additional Metadata passed by user
    * @throws IOException in case of error
    */
@@ -184,7 +186,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
 
   /**
    * Finalize Write operation.
-   * @param table  HoodieTable
+   * 
+   * @param table HoodieTable
    * @param instantTime Instant Time
    * @param stats Hoodie Write Stat
    */
@@ -275,12 +278,11 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
   private void setWriteSchemaFromLastInstant(HoodieTableMetaClient metaClient) {
     try {
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-      Option<HoodieInstant> lastInstant =
-          activeTimeline.filterCompletedInstants().filter(s -> s.getAction().equals(metaClient.getCommitActionType()))
-              .lastInstant();
+      Option<HoodieInstant> lastInstant = activeTimeline.filterCompletedInstants()
+          .filter(s -> s.getAction().equals(metaClient.getCommitActionType())).lastInstant();
       if (lastInstant.isPresent()) {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            activeTimeline.getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(activeTimeline.getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
         if (commitMetadata.getExtraMetadata().containsKey(HoodieCommitMetadata.SCHEMA_KEY)) {
           config.setSchema(commitMetadata.getExtraMetadata().get(HoodieCommitMetadata.SCHEMA_KEY));
         } else {
@@ -309,12 +311,10 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     // Create a Hoodie table which encapsulated the commits and files visible
     try {
       // Create a Hoodie table which encapsulated the commits and files visible
-      HoodieTable<T> table = HoodieTable.getHoodieTable(
-          createMetaClient(true), config, jsc);
-      Option<HoodieInstant> rollbackInstantOpt =
-          Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstants()
-              .filter(instant -> HoodieActiveTimeline.EQUAL.test(instant.getTimestamp(), commitToRollback))
-              .findFirst());
+      HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
+      Option<HoodieInstant> rollbackInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline()
+          .getInstants().filter(instant -> HoodieActiveTimeline.EQUAL.test(instant.getTimestamp(), commitToRollback))
+          .findFirst());
 
       if (rollbackInstantOpt.isPresent()) {
         List<HoodieRollbackStat> stats = doRollbackAndGetStats(rollbackInstantOpt.get());
@@ -326,11 +326,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     }
   }
 
-  protected List<HoodieRollbackStat> doRollbackAndGetStats(final HoodieInstant instantToRollback) throws
-      IOException {
+  protected List<HoodieRollbackStat> doRollbackAndGetStats(final HoodieInstant instantToRollback) throws IOException {
     final String commitToRollback = instantToRollback.getTimestamp();
-    HoodieTable<T> table = HoodieTable.getHoodieTable(
-        createMetaClient(true), config, jsc);
+    HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
     HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
     // Check if any of the commits is a savepoint - do not allow rollback on those commits
@@ -357,8 +355,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
           "Found commits after time :" + commitToRollback + ", please rollback greater commits first");
     }
 
-    List<String> inflights = inflightAndRequestedCommitTimeline.getInstants().map(HoodieInstant::getTimestamp)
-        .collect(Collectors.toList());
+    List<String> inflights =
+        inflightAndRequestedCommitTimeline.getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     if ((commitToRollback != null) && !inflights.isEmpty()
         && (inflights.indexOf(commitToRollback) != inflights.size() - 1)) {
       throw new HoodieRollbackException(
@@ -386,13 +384,12 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       durationInMs = Option.of(metrics.getDurationInMs(context.stop()));
       metrics.updateRollbackMetrics(durationInMs.get(), numFilesDeleted);
     }
-    HoodieRollbackMetadata rollbackMetadata = AvroUtils
-        .convertRollbackMetadata(startRollbackTime, durationInMs, commitsToRollback, rollbackStats);
-    //TODO: varadarb - This will be fixed when Rollback transition mimics that of commit
-    table.getActiveTimeline().createNewInstant(new HoodieInstant(State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION,
-        startRollbackTime));
-    table.getActiveTimeline().saveAsComplete(
-        new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime),
+    HoodieRollbackMetadata rollbackMetadata =
+        AvroUtils.convertRollbackMetadata(startRollbackTime, durationInMs, commitsToRollback, rollbackStats);
+    // TODO: varadarb - This will be fixed when Rollback transition mimics that of commit
+    table.getActiveTimeline()
+        .createNewInstant(new HoodieInstant(State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime));
+    table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime),
         AvroUtils.serializeRollbackMetadata(rollbackMetadata));
     LOG.info("Rollback of Commits " + commitsToRollback + " is complete");
 
@@ -409,13 +406,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
    * Refers to different operation types.
    */
   enum OperationType {
-    INSERT,
-    INSERT_PREPPED,
-    UPSERT,
-    UPSERT_PREPPED,
-    DELETE,
-    BULK_INSERT,
-    BULK_INSERT_PREPPED,
-    BOOTSTRAP
+    INSERT, INSERT_PREPPED, UPSERT, UPSERT_PREPPED, DELETE, BULK_INSERT, BULK_INSERT_PREPPED, BOOTSTRAP
   }
 }

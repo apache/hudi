@@ -131,13 +131,9 @@ public class HoodieCleanStat implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieCleanStat{"
-        + "policy=" + policy
-        + ", partitionPath='" + partitionPath + '\''
-        + ", deletePathPatterns=" + deletePathPatterns
-        + ", successDeleteFiles=" + successDeleteFiles
-        + ", failedDeleteFiles=" + failedDeleteFiles
-        + ", earliestCommitToRetain='" + earliestCommitToRetain + '\''
+    return "HoodieCleanStat{" + "policy=" + policy + ", partitionPath='" + partitionPath + '\''
+        + ", deletePathPatterns=" + deletePathPatterns + ", successDeleteFiles=" + successDeleteFiles
+        + ", failedDeleteFiles=" + failedDeleteFiles + ", earliestCommitToRetain='" + earliestCommitToRetain + '\''
         + '}';
   }
 }

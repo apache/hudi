@@ -315,14 +315,15 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
    */
   @Override
   public List<HoodieCleanStat> clean(JavaSparkContext jsc, HoodieInstant cleanInstant, HoodieCleanerPlan cleanerPlan) {
-    int cleanerParallelism = Math.min(
-        (int) (cleanerPlan.getFilesToBeDeletedPerPartition().values().stream().mapToInt(List::size).count()),
-        config.getCleanerParallelism());
+    int cleanerParallelism =
+        Math.min((int) (cleanerPlan.getFilesToBeDeletedPerPartition().values().stream().mapToInt(List::size).count()),
+            config.getCleanerParallelism());
     LOG.info("Using cleanerParallelism: " + cleanerParallelism);
     List<Tuple2<String, PartitionCleanStat>> partitionCleanStats = jsc
-        .parallelize(cleanerPlan.getFilesToBeDeletedPerPartition().entrySet().stream()
-            .flatMap(x -> x.getValue().stream().map(y -> new Tuple2<>(x.getKey(), y)))
-            .collect(Collectors.toList()), cleanerParallelism)
+        .parallelize(
+            cleanerPlan.getFilesToBeDeletedPerPartition().entrySet().stream()
+                .flatMap(x -> x.getValue().stream().map(y -> new Tuple2<>(x.getKey(), y))).collect(Collectors.toList()),
+            cleanerParallelism)
         .mapPartitionsToPair(deleteFilesFunc(this)).reduceByKey(PartitionCleanStat::merge).collect();
 
     Map<String, PartitionCleanStat> partitionCleanStatsMap =
@@ -337,8 +338,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       return HoodieCleanStat.newBuilder().withPolicy(config.getCleanerPolicy()).withPartitionPath(partitionPath)
           .withEarliestCommitRetained(Option.ofNullable(
               actionInstant != null
-                  ? new HoodieInstant(State.valueOf(actionInstant.getState()),
-                      actionInstant.getAction(), actionInstant.getTimestamp())
+                  ? new HoodieInstant(State.valueOf(actionInstant.getState()), actionInstant.getAction(),
+                      actionInstant.getTimestamp())
                   : null))
           .withDeletePathPattern(partitionCleanStat.deletePathPatterns)
           .withSuccessfulDeletes(partitionCleanStat.successDeleteFiles)
@@ -367,7 +368,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       LOG.info("Clean out all parquet files generated for commit: " + commit);
       List<RollbackRequest> rollbackRequests = generateRollbackRequests(instant);
 
-      //TODO: We need to persist this as rollback workload and use it in case of partial failures
+      // TODO: We need to persist this as rollback workload and use it in case of partial failures
       stats = new RollbackExecutor(metaClient, config).performRollback(jsc, instant, rollbackRequests);
     }
     // Delete Inflight instant if enabled
@@ -376,11 +377,13 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     return stats;
   }
 
-  private List<RollbackRequest> generateRollbackRequests(HoodieInstant instantToRollback)
-      throws IOException {
-    return FSUtils.getAllPartitionPaths(this.metaClient.getFs(), this.getMetaClient().getBasePath(),
-        config.shouldAssumeDatePartitioning()).stream().map(partitionPath -> RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback))
-            .collect(Collectors.toList());
+  private List<RollbackRequest> generateRollbackRequests(HoodieInstant instantToRollback) throws IOException {
+    return FSUtils
+        .getAllPartitionPaths(this.metaClient.getFs(), this.getMetaClient().getBasePath(),
+            config.shouldAssumeDatePartitioning())
+        .stream().map(partitionPath -> RollbackRequest
+            .createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback))
+        .collect(Collectors.toList());
   }
 
 
@@ -402,8 +405,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       activeTimeline.deletePending(instantToBeDeleted);
       if (instantToBeDeleted.isInflight() && !metaClient.getTimelineLayoutVersion().isNullVersion()) {
         // Delete corresponding requested instant
-        instantToBeDeleted = new HoodieInstant(State.REQUESTED, instantToBeDeleted.getAction(),
-            instantToBeDeleted.getTimestamp());
+        instantToBeDeleted =
+            new HoodieInstant(State.REQUESTED, instantToBeDeleted.getAction(), instantToBeDeleted.getTimestamp());
         activeTimeline.deletePending(instantToBeDeleted);
       }
       LOG.info("Deleted pending commit " + instantToBeDeleted);

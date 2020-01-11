@@ -32,8 +32,7 @@ import java.util.Arrays;
 import static org.apache.spark.sql.functions.lit;
 
 /**
- * A Simple transformer that adds `Op` field with value `I`, for AWS DMS data, if the field is not
- * present.
+ * A Simple transformer that adds `Op` field with value `I`, for AWS DMS data, if the field is not present.
  */
 public class AWSDmsTransformer implements Transformer {
 

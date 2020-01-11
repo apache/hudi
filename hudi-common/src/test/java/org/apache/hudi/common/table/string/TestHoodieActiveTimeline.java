@@ -67,20 +67,16 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.createNewInstant(instant1);
     timeline.transitionRequestedToInflight(instant1, Option.empty());
-    timeline.saveAsComplete(new HoodieInstant(true, instant1.getAction(), instant1.getTimestamp()),
-        Option.empty());
+    timeline.saveAsComplete(new HoodieInstant(true, instant1.getAction(), instant1.getTimestamp()), Option.empty());
     timeline.createNewInstant(instant2);
     timeline.transitionRequestedToInflight(instant2, Option.empty());
-    timeline.saveAsComplete(new HoodieInstant(true, instant2.getAction(), instant2.getTimestamp()),
-        Option.empty());
+    timeline.saveAsComplete(new HoodieInstant(true, instant2.getAction(), instant2.getTimestamp()), Option.empty());
     timeline.createNewInstant(instant3);
     timeline.transitionRequestedToInflight(instant3, Option.empty());
-    timeline.saveAsComplete(new HoodieInstant(true, instant3.getAction(), instant3.getTimestamp()),
-        Option.empty());
+    timeline.saveAsComplete(new HoodieInstant(true, instant3.getAction(), instant3.getTimestamp()), Option.empty());
     timeline.createNewInstant(instant4);
     timeline.transitionRequestedToInflight(instant4, Option.empty());
-    timeline.saveAsComplete(new HoodieInstant(true, instant4.getAction(), instant4.getTimestamp()),
-        Option.empty());
+    timeline.saveAsComplete(new HoodieInstant(true, instant4.getAction(), instant4.getTimestamp()), Option.empty());
     timeline.createNewInstant(instant5);
     timeline = timeline.reload();
 

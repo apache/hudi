@@ -119,8 +119,8 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
           LOG.error("Got exception when doing array copy", re);
           LOG.error("Base record :" + arrayWritableToString(arrayWritable));
           LOG.error("Log record :" + arrayWritableToString(aWritable));
-          String errMsg = "Base-record :" + arrayWritableToString(arrayWritable)
-              + " ,Log-record :" + arrayWritableToString(aWritable) + " ,Error :" + re.getMessage();
+          String errMsg = "Base-record :" + arrayWritableToString(arrayWritable) + " ,Log-record :"
+              + arrayWritableToString(aWritable) + " ,Error :" + re.getMessage();
           throw new RuntimeException(errMsg, re);
         }
       }

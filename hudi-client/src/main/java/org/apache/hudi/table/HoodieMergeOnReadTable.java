@@ -166,8 +166,8 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, HoodieInstant instant,
-      boolean deleteInstants) throws IOException {
+  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, HoodieInstant instant, boolean deleteInstants)
+      throws IOException {
     long startTime = System.currentTimeMillis();
 
     String commit = instant.getTimestamp();
@@ -225,8 +225,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
       List<RollbackRequest> partitionRollbackRequests = new ArrayList<>();
       switch (instantToRollback.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:
-          LOG.info(
-              "Rolling back commit action. There are higher delta commits. So only rolling back this instant");
+          LOG.info("Rolling back commit action. There are higher delta commits. So only rolling back this instant");
           partitionRollbackRequests.add(
               RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback));
           break;
@@ -345,9 +344,13 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
           // TODO : choose last N small files since there can be multiple small files written to a single partition
           // by different spark partitions in a single batch
           Option<FileSlice> smallFileSlice = Option.fromJavaOptional(getRTFileSystemView()
-                  .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), false)
-                  .filter(fileSlice -> fileSlice.getLogFiles().count() < 1 && fileSlice.getDataFile().get().getFileSize() < config.getParquetSmallFileLimit())
-                  .min((FileSlice left, FileSlice right) -> left.getDataFile().get().getFileSize() < right.getDataFile().get().getFileSize() ? -1 : 1));
+              .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), false)
+              .filter(fileSlice -> fileSlice.getLogFiles().count() < 1
+                  && fileSlice.getDataFile().get().getFileSize() < config.getParquetSmallFileLimit())
+              .min((FileSlice left,
+                  FileSlice right) -> left.getDataFile().get().getFileSize() < right.getDataFile().get().getFileSize()
+                      ? -1
+                      : 1));
           if (smallFileSlice.isPresent()) {
             allSmallFileSlices.add(smallFileSlice.get());
           }
@@ -410,8 +413,8 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     // TODO (NA) : Make this static part of utility
     @VisibleForTesting
     public long convertLogFilesSizeToExpectedParquetSize(List<HoodieLogFile> hoodieLogFiles) {
-      long totalSizeOfLogFiles = hoodieLogFiles.stream().map(HoodieLogFile::getFileSize)
-          .filter(size -> size > 0).reduce(Long::sum).orElse(0L);
+      long totalSizeOfLogFiles =
+          hoodieLogFiles.stream().map(HoodieLogFile::getFileSize).filter(size -> size > 0).reduce(Long::sum).orElse(0L);
       // Here we assume that if there is no base parquet file, all log files contain only inserts.
       // We can then just get the parquet equivalent size of these log files, compare that with
       // {@link config.getParquetMaxFileSize()} and decide if there is scope to insert more rows

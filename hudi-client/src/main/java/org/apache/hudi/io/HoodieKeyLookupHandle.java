@@ -55,7 +55,7 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
   private long totalKeysChecked;
 
   public HoodieKeyLookupHandle(HoodieWriteConfig config, HoodieTable<T> hoodieTable,
-                               Pair<String, String> partitionPathFilePair) {
+      Pair<String, String> partitionPathFilePair) {
     super(config, null, hoodieTable, partitionPathFilePair);
     this.tableType = hoodieTable.getMetaClient().getTableType();
     this.candidateRecordKeys = new ArrayList<>();
@@ -70,7 +70,7 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
    * Given a list of row keys and one file, return only row keys existing in that file.
    */
   public static List<String> checkCandidatesAgainstFile(Configuration configuration, List<String> candidateRecordKeys,
-                                                        Path filePath) throws HoodieIndexException {
+      Path filePath) throws HoodieIndexException {
     List<String> foundRecordKeys = new ArrayList<>();
     try {
       // Load all rowKeys from the file, to double-confirm
@@ -134,7 +134,7 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
     private final String partitionPath;
 
     public KeyLookupResult(String fileId, String partitionPath, String baseInstantTime,
-                           List<String> matchingRecordKeys) {
+        List<String> matchingRecordKeys) {
       this.fileId = fileId;
       this.partitionPath = partitionPath;
       this.baseInstantTime = baseInstantTime;

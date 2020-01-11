@@ -26,9 +26,9 @@ import java.io.DataOutput;
 import java.io.IOException;
 
 /**
- * Hoodie's internal dynamic Bloom Filter. This is largely based of {@link org.apache.hadoop.util.bloom.DynamicBloomFilter}
- * with bounds on maximum number of entries. Once the max entries is reached, false positive gaurantees are not
- * honored.
+ * Hoodie's internal dynamic Bloom Filter. This is largely based of
+ * {@link org.apache.hadoop.util.bloom.DynamicBloomFilter} with bounds on maximum number of entries. Once the max
+ * entries is reached, false positive gaurantees are not honored.
  */
 class InternalDynamicBloomFilter extends InternalFilter {
 
@@ -53,8 +53,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
   /**
    * Zero-args constructor for the serialization.
    */
-  public InternalDynamicBloomFilter() {
-  }
+  public InternalDynamicBloomFilter() {}
 
   /**
    * Constructor.
@@ -62,9 +61,9 @@ class InternalDynamicBloomFilter extends InternalFilter {
    * Builds an empty Dynamic Bloom filter.
    *
    * @param vectorSize The number of bits in the vector.
-   * @param nbHash     The number of hash function to consider.
-   * @param hashType   type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
-   * @param nr         The threshold for the maximum number of keys to record in a dynamic Bloom filter row.
+   * @param nbHash The number of hash function to consider.
+   * @param hashType type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
+   * @param nr The threshold for the maximum number of keys to record in a dynamic Bloom filter row.
    */
   public InternalDynamicBloomFilter(int vectorSize, int nbHash, int hashType, int nr, int maxNr) {
     super(vectorSize, nbHash, hashType);
@@ -98,9 +97,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
 
   @Override
   public void and(InternalFilter filter) {
-    if (filter == null
-        || !(filter instanceof InternalDynamicBloomFilter)
-        || filter.vectorSize != this.vectorSize
+    if (filter == null || !(filter instanceof InternalDynamicBloomFilter) || filter.vectorSize != this.vectorSize
         || filter.nbHash != this.nbHash) {
       throw new IllegalArgumentException("filters cannot be and-ed");
     }
@@ -140,9 +137,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
 
   @Override
   public void or(InternalFilter filter) {
-    if (filter == null
-        || !(filter instanceof InternalDynamicBloomFilter)
-        || filter.vectorSize != this.vectorSize
+    if (filter == null || !(filter instanceof InternalDynamicBloomFilter) || filter.vectorSize != this.vectorSize
         || filter.nbHash != this.nbHash) {
       throw new IllegalArgumentException("filters cannot be or-ed");
     }
@@ -159,9 +154,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
 
   @Override
   public void xor(InternalFilter filter) {
-    if (filter == null
-        || !(filter instanceof InternalDynamicBloomFilter)
-        || filter.vectorSize != this.vectorSize
+    if (filter == null || !(filter instanceof InternalDynamicBloomFilter) || filter.vectorSize != this.vectorSize
         || filter.nbHash != this.nbHash) {
       throw new IllegalArgumentException("filters cannot be xor-ed");
     }
@@ -230,8 +223,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
   /**
    * Returns the active standard Bloom filter in <i>this</i> dynamic Bloom filter.
    *
-   * @return BloomFilter The active standard Bloom filter.
-   * <code>Null</code> otherwise.
+   * @return BloomFilter The active standard Bloom filter. <code>Null</code> otherwise.
    */
   private BloomFilter getActiveStandardBF() {
     if (reachedMax) {

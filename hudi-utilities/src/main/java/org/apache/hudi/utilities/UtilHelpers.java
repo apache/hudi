@@ -125,7 +125,8 @@ public class UtilHelpers {
   }
 
   public static void validateAndAddProperties(String[] configs, SparkLauncher sparkLauncher) {
-    Arrays.stream(configs).filter(config -> config.contains("=") && config.split("=").length == 2).forEach(sparkLauncher::addAppArgs);
+    Arrays.stream(configs).filter(config -> config.contains("=") && config.split("=").length == 2)
+        .forEach(sparkLauncher::addAppArgs);
   }
 
   /**
@@ -205,13 +206,11 @@ public class UtilHelpers {
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
         .orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
-    HoodieWriteConfig config =
-        HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withParallelism(parallelism, parallelism)
-            .withBulkInsertParallelism(parallelism)
-            .withSchema(schemaStr).combineInput(true, true).withCompactionConfig(compactionConfig)
-            .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-            .withProps(properties).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withParallelism(parallelism, parallelism).withBulkInsertParallelism(parallelism).withSchema(schemaStr)
+        .combineInput(true, true).withCompactionConfig(compactionConfig)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .withProps(properties).build();
     return new HoodieWriteClient(jsc, config);
   }
 

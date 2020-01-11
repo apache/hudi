@@ -68,9 +68,9 @@ public class CleansCommand implements CommandMarker {
     List<Comparable[]> rows = new ArrayList<>();
     for (HoodieInstant clean : cleans) {
       HoodieCleanMetadata cleanMetadata =
-              AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
-      rows.add(new Comparable[]{clean.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
-              cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
+          AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
+      rows.add(new Comparable[] {clean.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
+          cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
     }
 
     TableHeader header =
@@ -121,13 +121,17 @@ public class CleansCommand implements CommandMarker {
   }
 
   @CliCommand(value = "cleans run", help = "run clean")
-  public String runClean(@CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
-      help = "Spark executor memory") final String sparkMemory,
-                         @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for cleaning",
-                           unspecifiedDefaultValue = "") final String propsFilePath,
-                         @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
-                           unspecifiedDefaultValue = "") final String[] configs,
-                         @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master ") String master) throws IOException, InterruptedException, URISyntaxException {
+  public String runClean(
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+          help = "Spark executor memory") final String sparkMemory,
+      @CliOption(key = "propsFilePath",
+          help = "path to properties file on localfs or dfs with configurations for hoodie client for cleaning",
+          unspecifiedDefaultValue = "") final String propsFilePath,
+      @CliOption(key = "hoodieConfigs",
+          help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
+          unspecifiedDefaultValue = "") final String[] configs,
+      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master ") String master)
+      throws IOException, InterruptedException, URISyntaxException {
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();

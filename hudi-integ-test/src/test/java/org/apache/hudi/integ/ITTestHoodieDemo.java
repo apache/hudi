@@ -97,22 +97,22 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void setupDemo() throws Exception {
-    List<String> cmds = new ImmutableList.Builder<String>()
-        .add("hdfs dfsadmin -safemode wait") // handle NN going into safe mode at times
+    List<String> cmds = new ImmutableList.Builder<String>().add("hdfs dfsadmin -safemode wait") // handle NN going into
+                                                                                                // safe mode at times
         .add("hdfs dfs -mkdir -p " + HDFS_DATA_DIR)
         .add("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH1 + " " + HDFS_BATCH_PATH1)
         .add("/bin/bash " + DEMO_CONTAINER_SCRIPT).build();
     executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
 
     // create input dir in presto coordinator
-    cmds = new ImmutableList.Builder<String>()
-        .add("mkdir -p " + HDFS_DATA_DIR).build();
+    cmds = new ImmutableList.Builder<String>().add("mkdir -p " + HDFS_DATA_DIR).build();
     executeCommandStringsInDocker(PRESTO_COORDINATOR, cmds);
 
     // copy presto sql files to presto coordinator
-    executePrestoCopyCommand( System.getProperty("user.dir") + "/.." + PRESTO_INPUT_TABLE_CHECK_RELATIVE_PATH, HDFS_DATA_DIR);
-    executePrestoCopyCommand( System.getProperty("user.dir") + "/.." + PRESTO_INPUT_BATCH1_RELATIVE_PATH, HDFS_DATA_DIR);
-    executePrestoCopyCommand( System.getProperty("user.dir") + "/.." + PRESTO_INPUT_BATCH2_RELATIVE_PATH, HDFS_DATA_DIR);
+    executePrestoCopyCommand(System.getProperty("user.dir") + "/.." + PRESTO_INPUT_TABLE_CHECK_RELATIVE_PATH,
+        HDFS_DATA_DIR);
+    executePrestoCopyCommand(System.getProperty("user.dir") + "/.." + PRESTO_INPUT_BATCH1_RELATIVE_PATH, HDFS_DATA_DIR);
+    executePrestoCopyCommand(System.getProperty("user.dir") + "/.." + PRESTO_INPUT_BATCH2_RELATIVE_PATH, HDFS_DATA_DIR);
   }
 
   private void ingestFirstBatchAndHiveSync() throws Exception {
@@ -190,15 +190,12 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testPrestoAfterFirstBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_TABLE_CHECK_PATH);
     assertStdOutContains(stdOutErrPair, "stock_ticks_cow");
-    assertStdOutContains(stdOutErrPair, "stock_ticks_mor",2);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_mor", 2);
 
     stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH1_PATH);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:29:00\"", 4);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 2);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"", 2);
+    assertStdOutContains(stdOutErrPair, "\"GOOG\",\"2018-08-31 10:29:00\"", 4);
+    assertStdOutContains(stdOutErrPair, "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 2);
+    assertStdOutContains(stdOutErrPair, "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"", 2);
   }
 
   private void testHiveAfterSecondBatch() throws Exception {
@@ -222,16 +219,11 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void testPrestoAfterSecondBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH1_PATH);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:29:00\"", 2);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"",2);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"");
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"");
+    assertStdOutContains(stdOutErrPair, "\"GOOG\",\"2018-08-31 10:29:00\"", 2);
+    assertStdOutContains(stdOutErrPair, "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
+    assertStdOutContains(stdOutErrPair, "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 2);
+    assertStdOutContains(stdOutErrPair, "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"");
+    assertStdOutContains(stdOutErrPair, "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"");
   }
 
   private void testHiveAfterSecondBatchAfterCompaction() throws Exception {
@@ -248,12 +240,9 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void testPrestoAfterSecondBatchAfterCompaction() throws Exception {
     Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH2_PATH);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"");
-    assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"");
+    assertStdOutContains(stdOutErrPair, "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
+    assertStdOutContains(stdOutErrPair, "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"");
+    assertStdOutContains(stdOutErrPair, "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"");
   }
 
   private void testSparkSQLAfterSecondBatch() throws Exception {
@@ -290,10 +279,11 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testIncrementalSparkSQLQuery() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_INCREMENTAL_COMMANDS, true);
     assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:59:00|9021  |1227.1993|1227.215|");
-    assertStdOutContains(stdOutErrPair, "|default |stock_ticks_cow           |false      |\n"
-        + "|default |stock_ticks_derived_mor   |false      |\n|default |stock_ticks_derived_mor_rt|false      |\n"
-        + "|default |stock_ticks_mor           |false      |\n|default |stock_ticks_mor_rt        |false      |\n"
-        + "|        |stock_ticks_cow_incr      |true       |");
+    assertStdOutContains(stdOutErrPair,
+        "|default |stock_ticks_cow           |false      |\n"
+            + "|default |stock_ticks_derived_mor   |false      |\n|default |stock_ticks_derived_mor_rt|false      |\n"
+            + "|default |stock_ticks_mor           |false      |\n|default |stock_ticks_mor_rt        |false      |\n"
+            + "|        |stock_ticks_cow_incr      |true       |");
     assertStdOutContains(stdOutErrPair, "|count(1)|\n+--------+\n|99     |", 2);
   }
 

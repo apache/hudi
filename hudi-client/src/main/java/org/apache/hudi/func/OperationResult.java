@@ -67,7 +67,7 @@ public class OperationResult<T> implements Serializable {
 
   @Override
   public String toString() {
-    return "OperationResult{operation=" + operation + ", executed=" + executed + ", success=" + success
-        + ", exception=" + exception + '}';
+    return "OperationResult{operation=" + operation + ", executed=" + executed + ", success=" + success + ", exception="
+        + exception + '}';
   }
 }

@@ -211,9 +211,9 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
     deflate();
   }
 
-  //----------------------------------------------------------------------------------------
-  //                                  DEPRECATED METHODS
-  //----------------------------------------------------------------------------------------
+  // ----------------------------------------------------------------------------------------
+  // DEPRECATED METHODS
+  // ----------------------------------------------------------------------------------------
 
   /**
    * This constructor is retained to provide backwards compatibility to HoodieArchivedLogs which were written using

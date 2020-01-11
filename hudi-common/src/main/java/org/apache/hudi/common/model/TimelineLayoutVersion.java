@@ -28,7 +28,7 @@ import java.util.Objects;
  */
 public class TimelineLayoutVersion implements Serializable, Comparable<TimelineLayoutVersion> {
 
-  public static final Integer VERSION_0 = 0; // pre 0.5.1  version format
+  public static final Integer VERSION_0 = 0; // pre 0.5.1 version format
   public static final Integer VERSION_1 = 1; // current version with no renames
 
   public static final Integer CURR_VERSION = VERSION_1;
@@ -43,8 +43,8 @@ public class TimelineLayoutVersion implements Serializable, Comparable<TimelineL
   }
 
   /**
-   * For Pre 0.5.1 release, there was no metadata version. This method is used to detect
-   * this case.
+   * For Pre 0.5.1 release, there was no metadata version. This method is used to detect this case.
+   * 
    * @return
    */
   public boolean isNullVersion() {

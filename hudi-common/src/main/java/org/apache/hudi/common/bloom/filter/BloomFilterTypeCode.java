@@ -19,10 +19,8 @@
 package org.apache.hudi.common.bloom.filter;
 
 /**
- * Bloom filter type codes.
- * Please do not change the order of the entries.
+ * Bloom filter type codes. Please do not change the order of the entries.
  */
 public enum BloomFilterTypeCode {
-  SIMPLE,
-  DYNAMIC_V0
+  SIMPLE, DYNAMIC_V0
 }

@@ -19,8 +19,8 @@
 package org.apache.hudi.common.table;
 
 /**
- * A consolidated file-system view interface exposing both realtime and read-optimized views along with
- * update operations.
+ * A consolidated file-system view interface exposing both realtime and read-optimized views along with update
+ * operations.
  */
 public interface SyncableFileSystemView
     extends TableFileSystemView, TableFileSystemView.ReadOptimizedView, TableFileSystemView.RealtimeView {

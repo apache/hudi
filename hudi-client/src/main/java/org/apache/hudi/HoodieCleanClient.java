@@ -180,7 +180,8 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
       // Create the metadata and save it
       HoodieCleanMetadata metadata =
           CleanerUtils.convertCleanMetadata(metaClient, cleanInstant.getTimestamp(), durationInMs, cleanStats);
-      LOG.info("Cleaned " + metadata.getTotalFilesDeleted() + " files. Earliest Retained :" + metadata.getEarliestCommitToRetain());
+      LOG.info("Cleaned " + metadata.getTotalFilesDeleted() + " files. Earliest Retained :"
+          + metadata.getEarliestCommitToRetain());
       metrics.updateCleanMetrics(durationInMs.orElseGet(() -> -1L), metadata.getTotalFilesDeleted());
 
       table.getActiveTimeline().transitionCleanInflightToComplete(

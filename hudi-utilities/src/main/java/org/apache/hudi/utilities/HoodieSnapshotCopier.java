@@ -144,8 +144,7 @@ public class HoodieSnapshotCopier implements Serializable {
           fs.mkdirs(targetFilePath.getParent());
         }
         if (fs.exists(targetFilePath)) {
-          LOG.error(
-              String.format("The target output commit file (%s targetBasePath) already exists.", targetFilePath));
+          LOG.error(String.format("The target output commit file (%s targetBasePath) already exists.", targetFilePath));
         }
         FileUtil.copy(fs, commitStatus.getPath(), fs, targetFilePath, false, fs.getConf());
       }

@@ -109,7 +109,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
           metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
       assertEquals("Pending Compaction instant has expected instant time", pendingCompactionInstant.getTimestamp(),
           compactionInstantTime);
-      assertEquals("Pending Compaction instant has expected state", pendingCompactionInstant.getState(), State.REQUESTED);
+      assertEquals("Pending Compaction instant has expected state", pendingCompactionInstant.getState(),
+          State.REQUESTED);
 
       moveCompactionFromRequestedToInflight(compactionInstantTime, cfg);
 
@@ -117,7 +118,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
       HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
       // hoodieTable.rollback(jsc,
-      //    new HoodieInstant(true, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), false);
+      // new HoodieInstant(true, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), false);
 
       client.rollbackInflightCompaction(
           new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), hoodieTable);
@@ -177,9 +178,10 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       // Validate
       metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
       inflightInstant = metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
-      assertEquals("inflight instant has expected instant time", inflightInstant.getTimestamp(), nextInflightInstantTime);
-      assertEquals("Expect only one inflight instant", 1, metaClient.getActiveTimeline()
-          .filterPendingExcludingCompaction().getInstants().count());
+      assertEquals("inflight instant has expected instant time", inflightInstant.getTimestamp(),
+          nextInflightInstantTime);
+      assertEquals("Expect only one inflight instant", 1,
+          metaClient.getActiveTimeline().filterPendingExcludingCompaction().getInstants().count());
       // Expect pending Compaction to be present
       pendingCompactionInstant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
       assertEquals("Pending Compaction instant has expected instant time", pendingCompactionInstant.getTimestamp(),
@@ -241,7 +243,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
     HoodieInstant pendingCompactionInstant =
         metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
-    assertEquals("Pending Compaction instant has expected instant time", pendingCompactionInstant.getTimestamp(), compactionInstantTime);
+    assertEquals("Pending Compaction instant has expected instant time", pendingCompactionInstant.getTimestamp(),
+        compactionInstantTime);
 
     boolean gotException = false;
     try {
@@ -484,8 +487,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     client.compact(compactionInstantTime);
     List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table);
     assertTrue("Ensure latest file-slices are not empty", fileSliceList.stream().findAny().isPresent());
-    assertFalse("Verify all file-slices have base-instant same as compaction instant", fileSliceList.stream()
-        .anyMatch(fs -> !fs.getBaseInstantTime().equals(compactionInstantTime)));
+    assertFalse("Verify all file-slices have base-instant same as compaction instant",
+        fileSliceList.stream().anyMatch(fs -> !fs.getBaseInstantTime().equals(compactionInstantTime)));
     assertFalse("Verify all file-slices have data-files",
         fileSliceList.stream().anyMatch(fs -> !fs.getDataFile().isPresent()));
 
@@ -543,8 +546,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   private List<FileSlice> getCurrentLatestFileSlices(HoodieTable table) {
     HoodieTableFileSystemView view = new HoodieTableFileSystemView(table.getMetaClient(),
         table.getMetaClient().getActiveTimeline().reload().getCommitsAndCompactionTimeline());
-    return Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS)
-        .flatMap(view::getLatestFileSlices).collect(Collectors.toList());
+    return Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS).flatMap(view::getLatestFileSlices)
+        .collect(Collectors.toList());
   }
 
   protected HoodieTableType getTableType() {

@@ -150,7 +150,7 @@ public class HoodieClientTestUtils {
   }
 
   public static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,
-                                                                   List<HoodieInstant> commitsToReturn) throws IOException {
+      List<HoodieInstant> commitsToReturn) throws IOException {
     HashMap<String, String> fileIdToFullPath = new HashMap<>();
     for (HoodieInstant commit : commitsToReturn) {
       HoodieCommitMetadata metadata =
@@ -161,7 +161,7 @@ public class HoodieClientTestUtils {
   }
 
   public static Dataset<Row> readCommit(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
-                                        String commitTime) {
+      String commitTime) {
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
     if (!commitTimeline.containsInstant(commitInstant)) {
       throw new HoodieException("No commit exists at " + commitTime);
@@ -181,7 +181,7 @@ public class HoodieClientTestUtils {
    * Obtain all new data written into the Hoodie table since the given timestamp.
    */
   public static Dataset<Row> readSince(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
-                                       String lastCommitTime) {
+      String lastCommitTime) {
     List<HoodieInstant> commitsToReturn =
         commitTimeline.findInstantsAfter(lastCommitTime, Integer.MAX_VALUE).getInstants().collect(Collectors.toList());
     try {
@@ -198,7 +198,7 @@ public class HoodieClientTestUtils {
    * Reads the paths under the a hoodie table out as a DataFrame.
    */
   public static Dataset<Row> read(JavaSparkContext jsc, String basePath, SQLContext sqlContext, FileSystem fs,
-                                  String... paths) {
+      String... paths) {
     List<String> filteredPaths = new ArrayList<>();
     try {
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
@@ -217,11 +217,10 @@ public class HoodieClientTestUtils {
   }
 
   public static String writeParquetFile(String basePath, String partitionPath, String filename,
-                                        List<HoodieRecord> records, Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException {
+      List<HoodieRecord> records, Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException {
 
     if (filter == null) {
-      filter = BloomFilterFactory
-          .createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
+      filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     }
     HoodieAvroWriteSupport writeSupport =
         new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
@@ -249,7 +248,7 @@ public class HoodieClientTestUtils {
   }
 
   public static String writeParquetFile(String basePath, String partitionPath, List<HoodieRecord> records,
-                                        Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException, InterruptedException {
+      Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException, InterruptedException {
     Thread.sleep(1000);
     String commitTime = HoodieTestUtils.makeNewCommitTime();
     String fileId = UUID.randomUUID().toString();

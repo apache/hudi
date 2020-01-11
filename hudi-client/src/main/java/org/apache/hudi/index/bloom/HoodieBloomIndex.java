@@ -225,9 +225,8 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     // take the max
     int indexParallelism = Math.max(inputParallelism, config.getBloomIndexParallelism());
     int joinParallelism = Math.max(totalSubPartitions, indexParallelism);
-    LOG.info("InputParallelism: ${" + inputParallelism + "}, IndexParallelism: ${"
-        + config.getBloomIndexParallelism() + "}, TotalSubParts: ${" + totalSubPartitions + "}, "
-        + "Join Parallelism set to : " + joinParallelism);
+    LOG.info("InputParallelism: ${" + inputParallelism + "}, IndexParallelism: ${" + config.getBloomIndexParallelism()
+        + "}, TotalSubParts: ${" + totalSubPartitions + "}, " + "Join Parallelism set to : " + joinParallelism);
     return joinParallelism;
   }
 
@@ -302,8 +301,8 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
   /**
    * For each incoming record, produce N output records, 1 each for each file against which the record's key needs to be
-   * checked. For tables, where the keys have a definite insert order (e.g: timestamp as prefix), the number of files
-   * to be compared gets cut down a lot from range pruning.
+   * checked. For tables, where the keys have a definite insert order (e.g: timestamp as prefix), the number of files to
+   * be compared gets cut down a lot from range pruning.
    *
    * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on
    * recordKey ranges in the index info.
@@ -320,9 +319,8 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
       String recordKey = partitionRecordKeyPair._2();
       String partitionPath = partitionRecordKeyPair._1();
 
-      return indexFileFilter.getMatchingFilesAndPartition(partitionPath, recordKey).stream()
-          .map(partitionFileIdPair -> new Tuple2<>(partitionFileIdPair.getRight(),
-              new HoodieKey(recordKey, partitionPath)))
+      return indexFileFilter.getMatchingFilesAndPartition(partitionPath, recordKey).stream().map(
+          partitionFileIdPair -> new Tuple2<>(partitionFileIdPair.getRight(), new HoodieKey(recordKey, partitionPath)))
           .collect(Collectors.toList());
     }).flatMap(List::iterator);
   }

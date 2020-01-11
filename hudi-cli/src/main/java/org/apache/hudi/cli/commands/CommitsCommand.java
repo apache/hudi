@@ -53,8 +53,7 @@ public class CommitsCommand implements CommandMarker {
 
   @CliCommand(value = "commits show", help = "Show the commits")
   public String showCommits(
-      @CliOption(key = {"limit"}, help = "Limit commits",
-          unspecifiedDefaultValue = "-1") final Integer limit,
+      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
@@ -75,7 +74,8 @@ public class CommitsCommand implements CommandMarker {
     }
 
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put("Total Bytes Written", entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString()))));
+    fieldNameToConverterMap.put("Total Bytes Written",
+        entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString()))));
 
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("Total Bytes Written")
         .addTableHeaderField("Total Files Added").addTableHeaderField("Total Files Updated")
@@ -159,7 +159,8 @@ public class CommitsCommand implements CommandMarker {
     }
 
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put("Total Bytes Written", entry -> NumericUtils.humanReadableByteCount((Long.parseLong(entry.toString()))));
+    fieldNameToConverterMap.put("Total Bytes Written",
+        entry -> NumericUtils.humanReadableByteCount((Long.parseLong(entry.toString()))));
 
     TableHeader header = new TableHeader().addTableHeaderField("Partition Path")
         .addTableHeaderField("Total Files Added").addTableHeaderField("Total Files Updated")

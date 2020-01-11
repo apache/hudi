@@ -107,17 +107,19 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
         unixTime = inputDateFormat.parse(partitionVal.toString()).getTime() / 1000;
       } else {
         throw new HoodieNotSupportedException(
-          "Unexpected type for partition field: " + partitionVal.getClass().getName());
+            "Unexpected type for partition field: " + partitionVal.getClass().getName());
       }
-      Date timestamp = this.timestampType == TimestampType.EPOCHMILLISECONDS ? new Date(unixTime) : new Date(unixTime * 1000);
+      Date timestamp =
+          this.timestampType == TimestampType.EPOCHMILLISECONDS ? new Date(unixTime) : new Date(unixTime * 1000);
 
       String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
       if (recordKey == null || recordKey.isEmpty()) {
-        throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
+        throw new HoodieKeyException(
+            "recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
       }
 
       String partitionPath = hiveStylePartitioning ? partitionPathField + "=" + partitionPathFormat.format(timestamp)
-              : partitionPathFormat.format(timestamp);
+          : partitionPathFormat.format(timestamp);
       return new HoodieKey(recordKey, partitionPath);
     } catch (ParseException pe) {
       throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, pe);

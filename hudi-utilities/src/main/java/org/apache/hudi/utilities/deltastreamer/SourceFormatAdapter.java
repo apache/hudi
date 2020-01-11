@@ -87,8 +87,7 @@ public final class SourceFormatAdapter {
                 .ofNullable(
                     r.getBatch()
                         .map(rdd -> AvroConversionUtils.createDataFrame(JavaRDD.toRDD(rdd), sourceSchema.toString(),
-                            source.getSparkSession())
-                        )
+                            source.getSparkSession()))
                         .orElse(null)),
             r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }

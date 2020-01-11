@@ -162,8 +162,7 @@ public class HoodieLogFileCommand implements CommandMarker {
 
   @CliCommand(value = "show logfile records", help = "Read records from log files")
   public String showLogFileRecords(
-      @CliOption(key = {"limit"}, help = "Limit commits",
-          unspecifiedDefaultValue = "10") final Integer limit,
+      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "10") final Integer limit,
       @CliOption(key = "logFilePathPattern", mandatory = true,
           help = "Fully qualified paths for the log files") final String logFilePathPattern,
       @CliOption(key = "mergeRecords", help = "If the records in the log files should be merged",
@@ -180,21 +179,19 @@ public class HoodieLogFileCommand implements CommandMarker {
     // TODO : readerSchema can change across blocks/log files, fix this inside Scanner
     AvroSchemaConverter converter = new AvroSchemaConverter();
     // get schema from last log file
-    Schema readerSchema =
-        converter.convert(Preconditions.checkNotNull(SchemaUtil.readSchemaFromLogFile(fs, new Path(logFilePaths.get(logFilePaths.size() - 1)))));
+    Schema readerSchema = converter.convert(Preconditions
+        .checkNotNull(SchemaUtil.readSchemaFromLogFile(fs, new Path(logFilePaths.get(logFilePaths.size() - 1)))));
 
     List<IndexedRecord> allRecords = new ArrayList<>();
 
     if (shouldMerge) {
       System.out.println("===========================> MERGING RECORDS <===================");
-      HoodieMergedLogRecordScanner scanner =
-          new HoodieMergedLogRecordScanner(fs, client.getBasePath(), logFilePaths, readerSchema,
-              client.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp(),
-                  HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES,
-                  Boolean.parseBoolean(HoodieCompactionConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED),
-                  Boolean.parseBoolean(HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED),
-                  HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE,
-                  HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
+      HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, client.getBasePath(), logFilePaths,
+          readerSchema, client.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp(),
+          HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES,
+          Boolean.parseBoolean(HoodieCompactionConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED),
+          Boolean.parseBoolean(HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED),
+          HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE, HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
       for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : scanner) {
         Option<IndexedRecord> record = hoodieRecord.getData().getInsertValue(readerSchema);
         if (allRecords.size() < limit) {

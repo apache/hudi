@@ -426,10 +426,8 @@ public class TestHoodieRealtimeRecordReader {
       Writable mapItemValue1 = mapItem.get()[0];
       Writable mapItemValue2 = mapItem.get()[1];
 
-      assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue1).get()[0].toString(),
-          "mapItem1");
-      assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue2).get()[0].toString(),
-          "mapItem2");
+      assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue1).get()[0].toString(), "mapItem1");
+      assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue2).get()[0].toString(), "mapItem2");
       assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue1).get().length, 2);
       assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue2).get().length, 2);
       Writable mapItemValue1value = ((ArrayWritable) mapItemValue1).get()[1];
@@ -469,8 +467,7 @@ public class TestHoodieRealtimeRecordReader {
     String commitTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
-    File partitionDir =
-        InputFormatTestUtil.prepareSimpleParquetTable(basePath, schema, 1, numberOfRecords, commitTime);
+    File partitionDir = InputFormatTestUtil.prepareSimpleParquetTable(basePath, schema, 1, numberOfRecords, commitTime);
     InputFormatTestUtil.commit(basePath, commitTime);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());

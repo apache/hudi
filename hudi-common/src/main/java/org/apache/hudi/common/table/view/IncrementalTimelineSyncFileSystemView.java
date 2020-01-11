@@ -264,9 +264,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     cleanMetadata.getPartitionMetadata().entrySet().stream().forEach(entry -> {
       final String basePath = metaClient.getBasePath();
       final String partitionPath = entry.getValue().getPartitionPath();
-      List<String> fullPathList = entry.getValue().getSuccessDeleteFiles()
-          .stream().map(fileName -> new Path(FSUtils
-              .getPartitionPath(basePath, partitionPath), fileName).toString())
+      List<String> fullPathList = entry.getValue().getSuccessDeleteFiles().stream()
+          .map(fileName -> new Path(FSUtils.getPartitionPath(basePath, partitionPath), fileName).toString())
           .collect(Collectors.toList());
       removeFileSlicesForPartition(timeline, instant, entry.getKey(), fullPathList);
     });

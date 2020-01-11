@@ -103,8 +103,8 @@ public class TestHoodieLogFormatAppendFailure {
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
 
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
-        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive")
-        .overBaseCommit("").withFs(fs).build();
+        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive").overBaseCommit("")
+        .withFs(fs).build();
 
     writer = writer.appendBlock(dataBlock);
     // get the current log file version to compare later
@@ -134,8 +134,8 @@ public class TestHoodieLogFormatAppendFailure {
     // Opening a new Writer right now will throw IOException. The code should handle this, rollover the logfile and
     // return a new writer with a bumped up logVersion
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
-        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive")
-        .overBaseCommit("").withFs(fs).build();
+        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive").overBaseCommit("")
+        .withFs(fs).build();
     // The log version should be different for this new writer
     Assert.assertNotEquals(writer.getLogFile().getLogVersion(), logFileVersion);
   }

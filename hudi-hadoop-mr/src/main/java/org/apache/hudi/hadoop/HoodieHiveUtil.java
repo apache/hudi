@@ -76,16 +76,15 @@ public class HoodieHiveUtil {
   }
 
   public static List<String> getIncrementalTableNames(JobContext job) {
-    Map<String, String> tablesModeMap = job.getConfiguration()
-        .getValByRegex(HOODIE_CONSUME_MODE_PATTERN_STRING.pattern());
+    Map<String, String> tablesModeMap =
+        job.getConfiguration().getValByRegex(HOODIE_CONSUME_MODE_PATTERN_STRING.pattern());
     List<String> result = tablesModeMap.entrySet().stream().map(s -> {
       if (s.getValue().trim().equals(INCREMENTAL_SCAN_MODE)) {
         Matcher matcher = HOODIE_CONSUME_MODE_PATTERN_STRING.matcher(s.getKey());
         return (!matcher.find() ? null : matcher.group(1));
       }
       return null;
-    }).filter(s -> s != null)
-        .collect(Collectors.toList());
+    }).filter(s -> s != null).collect(Collectors.toList());
     if (result == null) {
       // Returns an empty list instead of null.
       result = new ArrayList<>();

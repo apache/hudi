@@ -38,8 +38,8 @@ import java.util.Objects;
 public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   /**
-   * A COMPACTION action eventually becomes COMMIT when completed. So, when grouping instants
-   * for state transitions, this needs to be taken into account
+   * A COMPACTION action eventually becomes COMMIT when completed. So, when grouping instants for state transitions,
+   * this needs to be taken into account
    */
   private static final Map<String, String> COMPARABLE_ACTIONS = new ImmutableMap.Builder<String, String>()
       .put(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION).build();

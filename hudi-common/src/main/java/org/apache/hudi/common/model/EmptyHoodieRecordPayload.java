@@ -29,11 +29,9 @@ import org.apache.avro.generic.IndexedRecord;
  */
 public class EmptyHoodieRecordPayload implements HoodieRecordPayload<EmptyHoodieRecordPayload> {
 
-  public EmptyHoodieRecordPayload() {
-  }
+  public EmptyHoodieRecordPayload() {}
 
-  public EmptyHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
-  }
+  public EmptyHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {}
 
   @Override
   public EmptyHoodieRecordPayload preCombine(EmptyHoodieRecordPayload another) {

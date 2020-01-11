@@ -27,9 +27,6 @@ import java.util.Arrays;
 public class CleanMetadataMigrator extends MetadataMigrator<HoodieCleanMetadata> {
 
   public CleanMetadataMigrator(HoodieTableMetaClient metaClient) {
-    super(metaClient,
-        Arrays
-            .asList(new CleanV1MigrationHandler(metaClient),
-                new CleanV2MigrationHandler(metaClient)));
+    super(metaClient, Arrays.asList(new CleanV1MigrationHandler(metaClient), new CleanV2MigrationHandler(metaClient)));
   }
 }

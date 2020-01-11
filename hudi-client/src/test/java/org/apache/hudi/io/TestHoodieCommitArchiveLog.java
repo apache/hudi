@@ -212,7 +212,8 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
       numBlocks++;
     }
     System.out.println("Read Records :" + readRecords.stream().map(r -> (GenericRecord) r)
-        .map(r -> r.get("actionType") + "_" + r.get("actionState") + "_" + r.get("commitTime")).collect(Collectors.toList()));
+        .map(r -> r.get("actionType") + "_" + r.get("actionState") + "_" + r.get("commitTime"))
+        .collect(Collectors.toList()));
     assertEquals("Total archived records and total read records are the same count", 24, archivedRecordsCount);
     assertTrue("Average Archived records per block is greater than 1", archivedRecordsCount / numBlocks > 1);
     // make sure the archived commits are the same as the (originalcommits - commitsleft)
@@ -340,9 +341,8 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     boolean result = archiveLog.archiveIfRequired(jsc);
     assertTrue(result);
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
-    assertEquals(
-        "Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)", 5,
-        timeline.countInstants());
+    assertEquals("Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)",
+        5, timeline.countInstants());
     assertTrue("Archived commits should always be safe",
         timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101")));
     assertTrue("Archived commits should always be safe",

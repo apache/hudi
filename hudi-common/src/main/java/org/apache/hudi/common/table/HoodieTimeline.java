@@ -31,8 +31,8 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
- * HoodieTimeline is a view of meta-data instants in the hoodie table. Instants are specific points in time
- * represented as HoodieInstant.
+ * HoodieTimeline is a view of meta-data instants in the hoodie table. Instants are specific points in time represented
+ * as HoodieInstant.
  * <p>
  * Timelines are immutable once created and operations create new instance of timelines which filter on the instants and
  * this can be chained.
@@ -257,6 +257,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
    * between inflight and completed instants (compaction <=> commit).
+   * 
    * @param instant Hoodie Instant
    * @param tableType Hoodie Table Type
    * @return Inflight Hoodie Instant

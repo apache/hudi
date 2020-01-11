@@ -72,10 +72,8 @@ public class RepairsCommand implements CommandMarker {
       throws IOException {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    String latestCommit =
-        client.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp();
-    List<String> partitionPaths =
-        FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.fs, client.getBasePath());
+    String latestCommit = client.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp();
+    List<String> partitionPaths = FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.fs, client.getBasePath());
     Path basePath = new Path(client.getBasePath());
     String[][] rows = new String[partitionPaths.size()][];
 

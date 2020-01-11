@@ -85,8 +85,8 @@ import java.util.stream.IntStream;
 import scala.Tuple2;
 
 /**
- * Hoodie Write Client helps you build tables on HDFS [insert()] and then perform efficient mutations on an HDFS
- * table [upsert()]
+ * Hoodie Write Client helps you build tables on HDFS [insert()] and then perform efficient mutations on an HDFS table
+ * [upsert()]
  * <p>
  * Note that, at any given time, there can only be one Spark job performing these operations on a Hoodie table.
  */
@@ -127,7 +127,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   *  Create a wirte client, allows to specify all parameters.
+   * Create a wirte client, allows to specify all parameters.
    *
    * @param jsc Java Spark Context
    * @param clientConfig instance of HoodieWriteConfig
@@ -149,7 +149,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return SparkConf
    */
   public static SparkConf registerClasses(SparkConf conf) {
-    conf.registerKryoClasses(new Class[]{HoodieWriteConfig.class, HoodieRecord.class, HoodieKey.class});
+    conf.registerKryoClasses(new Class[] {HoodieWriteConfig.class, HoodieRecord.class, HoodieKey.class});
     return conf;
   }
 
@@ -292,7 +292,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @param records HoodieRecords to insert
    * @param commitTime Instant time of the commit
    * @param bulkInsertPartitioner If specified then it will be used to partition input records before they are inserted
-   * into hoodie.
+   *        into hoodie.
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String commitTime,
@@ -325,7 +325,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @param preppedRecords HoodieRecords to insert
    * @param commitTime Instant time of the commit
    * @param bulkInsertPartitioner If specified then it will be used to partition input records before they are inserted
-   * into hoodie.
+   *        into hoodie.
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime,
@@ -353,8 +353,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(OperationType.DELETE);
     try {
       // De-dupe/merge if needed
-      JavaRDD<HoodieKey> dedupedKeys =
-          config.shouldCombineBeforeDelete() ? deduplicateKeys(keys) : keys;
+      JavaRDD<HoodieKey> dedupedKeys = config.shouldCombineBeforeDelete() ? deduplicateKeys(keys) : keys;
 
       JavaRDD<HoodieRecord<T>> dedupedRecords =
           dedupedKeys.map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
@@ -401,8 +400,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     final List<String> fileIDPrefixes =
         IntStream.range(0, parallelism).mapToObj(i -> FSUtils.createNewFileIdPfx()).collect(Collectors.toList());
 
-    table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
-        table.getMetaClient().getCommitActionType(), commitTime), Option.empty());
+    table.getActiveTimeline().transitionRequestedToInflight(
+        new HoodieInstant(State.REQUESTED, table.getMetaClient().getCommitActionType(), commitTime), Option.empty());
 
     JavaRDD<WriteStatus> writeStatusRDD = repartitionedRecords
         .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(commitTime, config, table, fileIDPrefixes), true)
@@ -418,9 +417,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Save the workload profile in an intermediate file (here re-using commit files) This is useful when performing
-   * rollback for MOR tables. Only updates are recorded in the workload profile metadata since updates to log blocks
-   * are unknown across batches Inserts (which are new parquet files) are rolled back based on commit time. // TODO :
-   * Create a new WorkloadProfile metadata file instead of using HoodieCommitMetadata
+   * rollback for MOR tables. Only updates are recorded in the workload profile metadata since updates to log blocks are
+   * unknown across batches Inserts (which are new parquet files) are rolled back based on commit time. // TODO : Create
+   * a new WorkloadProfile metadata file instead of using HoodieCommitMetadata
    */
   private void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, HoodieTable<T> table, String commitTime)
       throws HoodieCommitException {
@@ -600,11 +599,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
       HoodieSavepointMetadata metadata = AvroUtils.convertSavepointMetadata(user, comment, latestFilesMap);
       // Nothing to save in the savepoint
-      table.getActiveTimeline().createNewInstant(
-          new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, commitTime));
-      table.getActiveTimeline()
-          .saveAsComplete(new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, commitTime),
-              AvroUtils.serializeSavepointMetadata(metadata));
+      table.getActiveTimeline().createNewInstant(new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, commitTime));
+      table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, commitTime),
+          AvroUtils.serializeSavepointMetadata(metadata));
       LOG.info("Savepoint " + commitTime + " created");
       return true;
     } catch (IOException e) {
@@ -719,10 +716,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * NOTE : This action requires all writers (ingest and compact) to a table to be stopped before proceeding. Revert
-   * the (inflight/committed) record changes for all commits after the provided @param. Four steps: (1) Atomically
-   * unpublish this commit (2) clean indexing data, (3) clean new generated parquet/log files and/or append rollback to
-   * existing log files. (4) Finally delete .commit, .inflight, .compaction.inflight or .compaction.requested file
+   * NOTE : This action requires all writers (ingest and compact) to a table to be stopped before proceeding. Revert the
+   * (inflight/committed) record changes for all commits after the provided @param. Four steps: (1) Atomically unpublish
+   * this commit (2) clean indexing data, (3) clean new generated parquet/log files and/or append rollback to existing
+   * log files. (4) Finally delete .commit, .inflight, .compaction.inflight or .compaction.requested file
    *
    * @param instantTime Instant time to which restoration is requested
    */
@@ -731,17 +728,17 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
     // Get all the commits on the timeline after the provided commit time
-    List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getCommitsAndCompactionTimeline()
-        .getReverseOrderedInstants()
-        .filter(instant -> HoodieActiveTimeline.GREATER.test(instant.getTimestamp(), instantTime))
-        .collect(Collectors.toList());
+    List<HoodieInstant> instantsToRollback =
+        table.getActiveTimeline().getCommitsAndCompactionTimeline().getReverseOrderedInstants()
+            .filter(instant -> HoodieActiveTimeline.GREATER.test(instant.getTimestamp(), instantTime))
+            .collect(Collectors.toList());
     // Start a rollback instant for all commits to be rolled back
     String startRollbackInstant = HoodieActiveTimeline.createNewInstantTime();
     // Start the timer
     final Timer.Context context = startContext();
     ImmutableMap.Builder<String, List<HoodieRollbackStat>> instantsToStats = ImmutableMap.builder();
-    table.getActiveTimeline().createNewInstant(
-        new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, startRollbackInstant));
+    table.getActiveTimeline()
+        .createNewInstant(new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, startRollbackInstant));
     instantsToRollback.forEach(instant -> {
       try {
         switch (instant.getAction()) {
@@ -1001,9 +998,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   JavaRDD<HoodieKey> deduplicateKeys(JavaRDD<HoodieKey> keys) {
     boolean isIndexingGlobal = getIndex().isGlobal();
     if (isIndexingGlobal) {
-      return keys.keyBy(HoodieKey::getRecordKey)
-          .reduceByKey((key1, key2) -> key1)
-          .values();
+      return keys.keyBy(HoodieKey::getRecordKey).reduceByKey((key1, key2) -> key1).values();
     } else {
       return keys.distinct();
     }
@@ -1015,8 +1010,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private void rollbackPendingCommits() {
     HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
-    List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp)
-        .collect(Collectors.toList());
+    List<String> commits =
+        inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     for (String commit : commits) {
       rollback(commit);
     }

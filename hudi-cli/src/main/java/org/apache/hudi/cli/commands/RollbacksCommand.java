@@ -99,10 +99,9 @@ public class RollbacksCommand implements CommandMarker {
     HoodieRollbackMetadata metadata = AvroUtils.deserializeAvroMetadata(
         activeTimeline.getInstantDetails(new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
         HoodieRollbackMetadata.class);
-    metadata.getPartitionMetadata().forEach((key, value) -> Stream
-            .concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),
-                    value.getFailedDeleteFiles().stream().map(f -> Pair.of(f, false)))
-            .forEach(fileWithDeleteStatus -> {
+    metadata.getPartitionMetadata()
+        .forEach((key, value) -> Stream.concat(value.getSuccessDeleteFiles().stream().map(f -> Pair.of(f, true)),
+            value.getFailedDeleteFiles().stream().map(f -> Pair.of(f, false))).forEach(fileWithDeleteStatus -> {
               Comparable[] row = new Comparable[5];
               row[0] = metadata.getStartRollbackTime();
               row[1] = metadata.getCommitsRollback().toString();

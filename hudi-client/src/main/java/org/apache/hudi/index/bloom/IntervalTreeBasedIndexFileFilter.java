@@ -68,12 +68,11 @@ class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
     Set<Pair<String, String>> toReturn = new HashSet<>();
     // could be null, if there are no files in a given partition yet or if all index files have no ranges
     if (partitionToFileIndexLookUpTree.containsKey(partitionPath)) {
-      partitionToFileIndexLookUpTree.get(partitionPath).getMatchingIndexFiles(recordKey).forEach(file ->
-          toReturn.add(Pair.of(partitionPath, file)));
+      partitionToFileIndexLookUpTree.get(partitionPath).getMatchingIndexFiles(recordKey)
+          .forEach(file -> toReturn.add(Pair.of(partitionPath, file)));
     }
     if (partitionToFilesWithNoRanges.containsKey(partitionPath)) {
-      partitionToFilesWithNoRanges.get(partitionPath).forEach(file ->
-          toReturn.add(Pair.of(partitionPath, file)));
+      partitionToFilesWithNoRanges.get(partitionPath).forEach(file -> toReturn.add(Pair.of(partitionPath, file)));
     }
     return toReturn;
   }

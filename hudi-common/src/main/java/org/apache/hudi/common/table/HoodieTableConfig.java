@@ -141,8 +141,8 @@ public class HoodieTableConfig implements Serializable {
   }
 
   public TimelineLayoutVersion getTimelineLayoutVersion() {
-    return new TimelineLayoutVersion(Integer.valueOf(props.getProperty(HOODIE_TIMELINE_LAYOUT_VERSION,
-        String.valueOf(DEFAULT_TIMELINE_LAYOUT_VERSION))));
+    return new TimelineLayoutVersion(Integer
+        .valueOf(props.getProperty(HOODIE_TIMELINE_LAYOUT_VERSION, String.valueOf(DEFAULT_TIMELINE_LAYOUT_VERSION))));
 
   }
 

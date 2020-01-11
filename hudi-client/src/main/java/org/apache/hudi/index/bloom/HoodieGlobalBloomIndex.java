@@ -43,8 +43,8 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 /**
- * This filter will only work with hoodie table since it will only load partitions with .hoodie_partition_metadata
- * file in it.
+ * This filter will only work with hoodie table since it will only load partitions with .hoodie_partition_metadata file
+ * in it.
  */
 public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends HoodieBloomIndex<T> {
 
@@ -58,7 +58,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
   @Override
   @VisibleForTesting
   List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final JavaSparkContext jsc,
-                                                             final HoodieTable hoodieTable) {
+      final HoodieTable hoodieTable) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     try {
       List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(),
@@ -71,8 +71,8 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
 
   /**
    * For each incoming record, produce N output records, 1 each for each file against which the record's key needs to be
-   * checked. For tables, where the keys have a definite insert order (e.g: timestamp as prefix), the number of files
-   * to be compared gets cut down a lot from range pruning.
+   * checked. For tables, where the keys have a definite insert order (e.g: timestamp as prefix), the number of files to
+   * be compared gets cut down a lot from range pruning.
    * <p>
    * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on
    * recordKey ranges in the index info. the partition path of the incoming record (partitionRecordKeyPairRDD._2()) will
@@ -113,17 +113,20 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
     JavaPairRDD<String, Tuple2<HoodieRecordLocation, HoodieKey>> existingRecordKeyToRecordLocationHoodieKeyMap =
         keyLocationPairRDD.mapToPair(p -> new Tuple2<>(p._1.getRecordKey(), new Tuple2<>(p._2, p._1)));
 
-    // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null), so we do left outer join.
-    return incomingRowKeyRecordPairRDD.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().map(record -> {
-      final HoodieRecord<T> hoodieRecord = record._1;
-      final Optional<Tuple2<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record._2;
-      if (recordLocationHoodieKeyPair.isPresent()) {
-        // Record key matched to file
-        return getTaggedRecord(new HoodieRecord<>(recordLocationHoodieKeyPair.get()._2, hoodieRecord.getData()), Option.ofNullable(recordLocationHoodieKeyPair.get()._1));
-      } else {
-        return getTaggedRecord(hoodieRecord, Option.empty());
-      }
-    });
+    // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null), so we do left outer
+    // join.
+    return incomingRowKeyRecordPairRDD.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values()
+        .map(record -> {
+          final HoodieRecord<T> hoodieRecord = record._1;
+          final Optional<Tuple2<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record._2;
+          if (recordLocationHoodieKeyPair.isPresent()) {
+            // Record key matched to file
+            return getTaggedRecord(new HoodieRecord<>(recordLocationHoodieKeyPair.get()._2, hoodieRecord.getData()),
+                Option.ofNullable(recordLocationHoodieKeyPair.get()._1));
+          } else {
+            return getTaggedRecord(hoodieRecord, Option.empty());
+          }
+        });
   }
 
   @Override

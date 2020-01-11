@@ -94,6 +94,7 @@
     <scala.libversion>2.11</scala.libversion>
     <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
+    <spotless-maven-plugin.version>1.24.3</spotless-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
     <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
@@ -177,12 +178,10 @@
           </execution>
         </executions>
       </plugin>
-<!--
-      See https://jira.apache.org/jira/browse/HUDI-304
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
-        <version>1.24.3</version>
+        <version>${spotless-maven-plugin.version}</version>
         <configuration>
           <java>
             <eclipse>
@@ -204,7 +203,6 @@
           </execution>
         </executions>
       </plugin>
--->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>

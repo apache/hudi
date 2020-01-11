@@ -73,16 +73,16 @@ public class ComplexKeyGenerator extends KeyGenerator {
     }
     recordKey.deleteCharAt(recordKey.length() - 1);
     if (keyIsNullEmpty) {
-      throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
-          + recordKeyFields.toString() + " cannot be entirely null or empty.");
+      throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: " + recordKeyFields.toString()
+          + " cannot be entirely null or empty.");
     }
 
     StringBuilder partitionPath = new StringBuilder();
     for (String partitionPathField : partitionPathFields) {
       String fieldVal = DataSourceUtils.getNestedFieldValAsString(record, partitionPathField, true);
       if (fieldVal == null || fieldVal.isEmpty()) {
-        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + DEFAULT_PARTITION_PATH
-                : DEFAULT_PARTITION_PATH);
+        partitionPath
+            .append(hiveStylePartitioning ? partitionPathField + "=" + DEFAULT_PARTITION_PATH : DEFAULT_PARTITION_PATH);
       } else {
         partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + fieldVal : fieldVal);
       }

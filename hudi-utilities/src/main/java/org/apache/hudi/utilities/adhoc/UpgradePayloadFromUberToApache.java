@@ -41,8 +41,8 @@ import java.util.Properties;
 
 /**
  * This is an one-time use class meant for migrating the configuration for "hoodie.compaction.payload.class" in
- * .hoodie/hoodie.properties from com.uber.hoodie to org.apache.hudi . It takes in a file containing base-paths for a set
- * of hudi tables and does the migration
+ * .hoodie/hoodie.properties from com.uber.hoodie to org.apache.hudi . It takes in a file containing base-paths for a
+ * set of hudi tables and does the migration
  */
 public class UpgradePayloadFromUberToApache implements Serializable {
 

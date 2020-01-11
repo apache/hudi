@@ -30,13 +30,11 @@ import java.io.IOException;
 /**
  * Provides support for seamlessly applying changes captured via Amazon Database Migration Service onto S3.
  *
- * Typically, we get the following pattern of full change records corresponding to DML against the
- * source database
+ * Typically, we get the following pattern of full change records corresponding to DML against the source database
  *
- * - Full load records with no `Op` field
- * - For inserts against the source table, records contain full after image with `Op=I`
- * - For updates against the source table, records contain full after image with `Op=U`
- * - For deletes against the source table, records contain full before image with `Op=D`
+ * - Full load records with no `Op` field - For inserts against the source table, records contain full after image with
+ * `Op=I` - For updates against the source table, records contain full after image with `Op=U` - For deletes against the
+ * source table, records contain full before image with `Op=D`
  *
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  *
@@ -54,8 +52,7 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   }
 
   @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
-      throws IOException {
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
     IndexedRecord insertValue = getInsertValue(schema).get();
     boolean delete = false;
     if (insertValue instanceof GenericRecord) {

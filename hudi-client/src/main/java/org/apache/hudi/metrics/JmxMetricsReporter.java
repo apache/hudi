@@ -47,16 +47,13 @@ public class JmxMetricsReporter extends MetricsReporter {
       String host = config.getJmxHost();
       int port = config.getJmxPort();
       if (host == null || port == 0) {
-        throw new RuntimeException(
-            String.format("Jmx cannot be initialized with host[%s] and port[%s].",
-                    host, port));
+        throw new RuntimeException(String.format("Jmx cannot be initialized with host[%s] and port[%s].", host, port));
       }
       LocateRegistry.createRegistry(port);
-      String serviceUrl =
-          "service:jmx:rmi://" + host + ":" + port + "/jndi/rmi://" + host + ":" + port + "/jmxrmi";
+      String serviceUrl = "service:jmx:rmi://" + host + ":" + port + "/jndi/rmi://" + host + ":" + port + "/jmxrmi";
       JMXServiceURL url = new JMXServiceURL(serviceUrl);
-      this.connector = JMXConnectorServerFactory
-          .newJMXConnectorServer(url, null, ManagementFactory.getPlatformMBeanServer());
+      this.connector =
+          JMXConnectorServerFactory.newJMXConnectorServer(url, null, ManagementFactory.getPlatformMBeanServer());
     } catch (Exception e) {
       String msg = "Jmx initialize failed: ";
       LOG.error(msg, e);
@@ -75,8 +72,7 @@ public class JmxMetricsReporter extends MetricsReporter {
   }
 
   @Override
-  public void report() {
-  }
+  public void report() {}
 
   @Override
   public Closeable getReporter() {

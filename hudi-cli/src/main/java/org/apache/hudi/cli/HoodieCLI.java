@@ -64,8 +64,8 @@ public class HoodieCLI {
   }
 
   private static void setLayoutVersion(Integer layoutVersion) {
-    HoodieCLI.layoutVersion = new TimelineLayoutVersion(
-        (layoutVersion == null) ? TimelineLayoutVersion.CURR_VERSION : layoutVersion);
+    HoodieCLI.layoutVersion =
+        new TimelineLayoutVersion((layoutVersion == null) ? TimelineLayoutVersion.CURR_VERSION : layoutVersion);
   }
 
   public static boolean initConf() {

@@ -53,7 +53,8 @@ public class SimpleKeyGenerator extends KeyGenerator {
 
     String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
     if (recordKey == null || recordKey.isEmpty()) {
-      throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
+      throw new HoodieKeyException(
+          "recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
     }
 
     String partitionPath = DataSourceUtils.getNestedFieldValAsString(record, partitionPathField, true);

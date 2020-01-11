@@ -45,8 +45,7 @@ public class InputFormatTestUtil {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
-  public static File prepareTable(TemporaryFolder basePath, int numberOfFiles, String commitNumber)
-      throws IOException {
+  public static File prepareTable(TemporaryFolder basePath, int numberOfFiles, String commitNumber) throws IOException {
     basePath.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
     File partitionPath = basePath.newFolder("2016", "05", "01");

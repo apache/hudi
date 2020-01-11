@@ -158,8 +158,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     // Add an empty ingestion
     String firstEmptyInstantTs = "11";
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-    metaClient.getActiveTimeline().createNewInstant(
-        new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs));
+    metaClient.getActiveTimeline()
+        .createNewInstant(new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs));
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs),
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -400,17 +400,17 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    * @param files List of files to be deleted
    * @param cleanInstant Cleaner Instant
    */
-  private void performClean(String instant, List<String> files, String cleanInstant)
-      throws IOException {
+  private void performClean(String instant, List<String> files, String cleanInstant) throws IOException {
     Map<String, List<String>> partititonToFiles = deleteFiles(files);
-    List<HoodieCleanStat> cleanStats = partititonToFiles.entrySet().stream().map(e ->
-        new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, e.getKey(), e.getValue(), e.getValue(),
-        new ArrayList<>(), Integer.toString(Integer.parseInt(instant) + 1))).collect(Collectors.toList());
+    List<HoodieCleanStat> cleanStats = partititonToFiles
+        .entrySet().stream().map(e -> new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, e.getKey(),
+            e.getValue(), e.getValue(), new ArrayList<>(), Integer.toString(Integer.parseInt(instant) + 1)))
+        .collect(Collectors.toList());
 
     HoodieInstant cleanInflightInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant);
     metaClient.getActiveTimeline().createNewInstant(cleanInflightInstant);
-    HoodieCleanMetadata cleanMetadata = CleanerUtils
-        .convertCleanMetadata(metaClient, cleanInstant, Option.empty(), cleanStats);
+    HoodieCleanMetadata cleanMetadata =
+        CleanerUtils.convertCleanMetadata(metaClient, cleanInstant, Option.empty(), cleanStats);
     metaClient.getActiveTimeline().saveAsComplete(cleanInflightInstant,
         AvroUtils.serializeCleanMetadata(cleanMetadata));
   }
@@ -422,12 +422,12 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    * @param files List of files to be deleted as part of rollback
    * @param rollbackInstant Restore Instant
    */
-  private void performRestore(String instant, List<String> files, String rollbackInstant,
-      boolean isRestore) throws IOException {
+  private void performRestore(String instant, List<String> files, String rollbackInstant, boolean isRestore)
+      throws IOException {
     Map<String, List<String>> partititonToFiles = deleteFiles(files);
-    List<HoodieRollbackStat> rollbackStats = partititonToFiles.entrySet().stream().map(e ->
-        new HoodieRollbackStat(e.getKey(), e.getValue(), new ArrayList<>(), new HashMap<>())
-    ).collect(Collectors.toList());
+    List<HoodieRollbackStat> rollbackStats = partititonToFiles.entrySet().stream()
+        .map(e -> new HoodieRollbackStat(e.getKey(), e.getValue(), new ArrayList<>(), new HashMap<>()))
+        .collect(Collectors.toList());
 
     List<String> rollbacks = new ArrayList<>();
     rollbacks.add(instant);
@@ -449,8 +449,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       metaClient.getActiveTimeline().createNewInstant(restoreInstant);
       metaClient.getActiveTimeline().saveAsComplete(restoreInstant, AvroUtils.serializeRestoreMetadata(metadata));
     } else {
-      metaClient.getActiveTimeline().createNewInstant(
-          new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant));
+      metaClient.getActiveTimeline()
+          .createNewInstant(new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant));
       metaClient.getActiveTimeline().saveAsComplete(
           new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant),
           AvroUtils.serializeRollbackMetadata(rollbackMetadata));
@@ -730,9 +730,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     metaClient.getActiveTimeline().saveAsComplete(inflightInstant,
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
     /**
-    // Delete pending compaction if present
-    metaClient.getFs().delete(new Path(metaClient.getMetaPath(),
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instant).getFileName()));
+     * // Delete pending compaction if present metaClient.getFs().delete(new Path(metaClient.getMetaPath(), new
+     * HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instant).getFileName()));
      */
     return writeStats.stream().map(e -> e.getValue().getPath()).collect(Collectors.toList());
   }

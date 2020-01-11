@@ -65,17 +65,17 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // Iterate through the operations and accept operations as long as we are within the configured target partitions
     // limit
-    return operations.stream()
-        .collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet().stream()
-        .sorted(Map.Entry.comparingByKey(comparator)).limit(writeConfig.getTargetPartitionsPerDayBasedCompaction())
-        .flatMap(e -> e.getValue().stream()).collect(Collectors.toList());
+    return operations.stream().collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet()
+        .stream().sorted(Map.Entry.comparingByKey(comparator))
+        .limit(writeConfig.getTargetPartitionsPerDayBasedCompaction()).flatMap(e -> e.getValue().stream())
+        .collect(Collectors.toList());
   }
 
   @Override
   public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
-    return allPartitionPaths.stream().map(partition -> partition.replace("/", "-"))
-        .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
-        .collect(Collectors.toList()).subList(0, writeConfig.getTargetPartitionsPerDayBasedCompaction());
+    return allPartitionPaths.stream().map(partition -> partition.replace("/", "-")).sorted(Comparator.reverseOrder())
+        .map(partitionPath -> partitionPath.replace("-", "/")).collect(Collectors.toList())
+        .subList(0, writeConfig.getTargetPartitionsPerDayBasedCompaction());
   }
 
   /**

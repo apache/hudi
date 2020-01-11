@@ -123,7 +123,8 @@ public class Table implements Iterable<List<String>> {
         Comparable fieldForRow1 = row1.get(rowHeader.indexOf(orderingColumnName));
         Comparable fieldForRow2 = row2.get(rowHeader.indexOf(orderingColumnName));
         int cmpRawResult = fieldForRow1.compareTo(fieldForRow2);
-        return isDescendingOptional.map(isDescending -> isDescending ? -1 * cmpRawResult : cmpRawResult).orElse(cmpRawResult);
+        return isDescendingOptional.map(isDescending -> isDescending ? -1 * cmpRawResult : cmpRawResult)
+            .orElse(cmpRawResult);
       }).collect(Collectors.toList());
     }).orElse(rawRows);
   }
@@ -135,14 +136,15 @@ public class Table implements Iterable<List<String>> {
     this.renderRows = new ArrayList<>();
     final int limit = this.limitOptional.orElse(rawRows.size());
     final List<List<Comparable>> orderedRows = orderRows();
-    renderRows = orderedRows.stream().limit(limit).map(row -> IntStream.range(0, rowHeader.getNumFields()).mapToObj(idx -> {
-      String fieldName = rowHeader.get(idx);
-      if (fieldNameToConverterMap.containsKey(fieldName)) {
-        return fieldNameToConverterMap.get(fieldName).apply(row.get(idx));
-      }
-      Object v = row.get(idx);
-      return v == null ? "null" : v.toString();
-    }).collect(Collectors.toList())).collect(Collectors.toList());
+    renderRows =
+        orderedRows.stream().limit(limit).map(row -> IntStream.range(0, rowHeader.getNumFields()).mapToObj(idx -> {
+          String fieldName = rowHeader.get(idx);
+          if (fieldNameToConverterMap.containsKey(fieldName)) {
+            return fieldNameToConverterMap.get(fieldName).apply(row.get(idx));
+          }
+          Object v = row.get(idx);
+          return v == null ? "null" : v.toString();
+        }).collect(Collectors.toList())).collect(Collectors.toList());
   }
 
   @Override

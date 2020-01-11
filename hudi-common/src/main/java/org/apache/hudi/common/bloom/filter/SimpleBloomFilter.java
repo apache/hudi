@@ -47,8 +47,8 @@ public class SimpleBloomFilter implements BloomFilter {
    * Create a new Bloom filter with the given configurations.
    *
    * @param numEntries The total number of entries.
-   * @param errorRate  maximum allowable error rate.
-   * @param hashType   type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
+   * @param errorRate maximum allowable error rate.
+   * @param hashType type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
    */
   public SimpleBloomFilter(int numEntries, double errorRate, int hashType) {
     // Bit size
@@ -109,13 +109,11 @@ public class SimpleBloomFilter implements BloomFilter {
     }
   }
 
-  private void writeObject(ObjectOutputStream os)
-      throws IOException {
+  private void writeObject(ObjectOutputStream os) throws IOException {
     filter.write(os);
   }
 
-  private void readObject(ObjectInputStream is)
-      throws IOException, ClassNotFoundException {
+  private void readObject(ObjectInputStream is) throws IOException, ClassNotFoundException {
     filter = new org.apache.hadoop.util.bloom.BloomFilter();
     filter.readFields(is);
   }
@@ -125,7 +123,7 @@ public class SimpleBloomFilter implements BloomFilter {
     out.write(filter.toString().getBytes());
   }
 
-  //@Override
+  // @Override
   public void readFields(DataInput in) throws IOException {
     filter = new org.apache.hadoop.util.bloom.BloomFilter();
     filter.readFields(in);

@@ -172,8 +172,8 @@ public class TestHoodieParquetInputFormat {
     InputFormatTestUtil.setupIncremental(jobConf, "100", HoodieHiveUtil.MAX_COMMIT_ALL);
     files = inputFormat.listStatus(jobConf);
 
-    assertEquals("Pulling all commits from 100, should get us the 1 file from each of 200,300,400,500,400 commits",
-        5, files.length);
+    assertEquals("Pulling all commits from 100, should get us the 1 file from each of 200,300,400,500,400 commits", 5,
+        files.length);
     ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 600 commit", files, "600", 1);
     ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 500 commit", files, "500", 1);
     ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 400 commit", files, "400", 1);
@@ -217,7 +217,7 @@ public class TestHoodieParquetInputFormat {
     String incrementalMode1 = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, expectedincrTables[0]);
     conf.set(incrementalMode1, HoodieHiveUtil.INCREMENTAL_SCAN_MODE);
     String incrementalMode2 = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, expectedincrTables[1]);
-    conf.set(incrementalMode2,HoodieHiveUtil.INCREMENTAL_SCAN_MODE);
+    conf.set(incrementalMode2, HoodieHiveUtil.INCREMENTAL_SCAN_MODE);
     String defaultmode = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, "db3.first_trips");
     conf.set(defaultmode, HoodieHiveUtil.DEFAULT_SCAN_MODE);
     List<String> actualincrTables = HoodieHiveUtil.getIncrementalTableNames(Job.getInstance(conf));
@@ -226,8 +226,8 @@ public class TestHoodieParquetInputFormat {
     }
   }
 
-  private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit,
-      int totalExpected) throws IOException {
+  private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit, int totalExpected)
+      throws IOException {
     int actualCount = 0;
     int totalCount = 0;
     InputSplit[] splits = inputFormat.getSplits(jobConf, 1);

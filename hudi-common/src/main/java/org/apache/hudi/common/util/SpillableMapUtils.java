@@ -46,8 +46,8 @@ public class SpillableMapUtils {
   }
 
   /**
-   * Reads the given file with specific pattern(|crc|timestamp|sizeOfKey|SizeOfValue|key|value|) then
-   * returns an instance of {@link FileEntry}.
+   * Reads the given file with specific pattern(|crc|timestamp|sizeOfKey|SizeOfValue|key|value|) then returns an
+   * instance of {@link FileEntry}.
    */
   private static FileEntry readInternal(RandomAccessFile file, long valuePosition, int valueLength) throws IOException {
     file.seek(valuePosition);

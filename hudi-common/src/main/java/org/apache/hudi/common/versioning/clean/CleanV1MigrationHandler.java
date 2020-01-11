@@ -46,48 +46,38 @@ public class CleanV1MigrationHandler extends AbstractMigratorBase<HoodieCleanMet
 
   @Override
   public HoodieCleanMetadata upgradeFrom(HoodieCleanMetadata input) {
-    throw new IllegalArgumentException(
-        "This is the lowest version. Input cannot be any lower version");
+    throw new IllegalArgumentException("This is the lowest version. Input cannot be any lower version");
   }
 
   @Override
   public HoodieCleanMetadata downgradeFrom(HoodieCleanMetadata input) {
-    Preconditions.checkArgument(input.getVersion() == 2,
-        "Input version is " + input.getVersion() + ". Must be 2");
+    Preconditions.checkArgument(input.getVersion() == 2, "Input version is " + input.getVersion() + ". Must be 2");
     final Path basePath = new Path(metaClient.getBasePath());
 
-    final Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = input
-        .getPartitionMetadata()
-        .entrySet().stream().map(entry -> {
+    final Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap =
+        input.getPartitionMetadata().entrySet().stream().map(entry -> {
           final String partitionPath = entry.getKey();
           final HoodieCleanPartitionMetadata partitionMetadata = entry.getValue();
 
-          HoodieCleanPartitionMetadata cleanPartitionMetadata = HoodieCleanPartitionMetadata
-              .newBuilder()
+          HoodieCleanPartitionMetadata cleanPartitionMetadata = HoodieCleanPartitionMetadata.newBuilder()
               .setDeletePathPatterns(partitionMetadata.getDeletePathPatterns().stream()
-                  .map(
-                      path -> convertToV1Path(basePath, partitionMetadata.getPartitionPath(), path))
+                  .map(path -> convertToV1Path(basePath, partitionMetadata.getPartitionPath(), path))
                   .collect(Collectors.toList()))
               .setSuccessDeleteFiles(partitionMetadata.getSuccessDeleteFiles().stream()
-                  .map(
-                      path -> convertToV1Path(basePath, partitionMetadata.getPartitionPath(), path))
-                  .collect(Collectors.toList())).setPartitionPath(partitionPath)
-              .setFailedDeleteFiles(partitionMetadata.getFailedDeleteFiles().stream()
-                  .map(
-                      path -> convertToV1Path(basePath, partitionMetadata.getPartitionPath(), path))
+                  .map(path -> convertToV1Path(basePath, partitionMetadata.getPartitionPath(), path))
                   .collect(Collectors.toList()))
-              .setPolicy(partitionMetadata.getPolicy()).setPartitionPath(partitionPath)
-              .build();
+              .setPartitionPath(partitionPath)
+              .setFailedDeleteFiles(partitionMetadata.getFailedDeleteFiles().stream()
+                  .map(path -> convertToV1Path(basePath, partitionMetadata.getPartitionPath(), path))
+                  .collect(Collectors.toList()))
+              .setPolicy(partitionMetadata.getPolicy()).setPartitionPath(partitionPath).build();
           return Pair.of(partitionPath, cleanPartitionMetadata);
         }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     HoodieCleanMetadata metadata = HoodieCleanMetadata.newBuilder()
-        .setEarliestCommitToRetain(input.getEarliestCommitToRetain())
-        .setStartCleanTime(input.getStartCleanTime())
-        .setTimeTakenInMillis(input.getTimeTakenInMillis())
-        .setTotalFilesDeleted(input.getTotalFilesDeleted())
-        .setPartitionMetadata(partitionMetadataMap)
-        .setVersion(getManagedVersion()).build();
+        .setEarliestCommitToRetain(input.getEarliestCommitToRetain()).setStartCleanTime(input.getStartCleanTime())
+        .setTimeTakenInMillis(input.getTimeTakenInMillis()).setTotalFilesDeleted(input.getTotalFilesDeleted())
+        .setPartitionMetadata(partitionMetadataMap).setVersion(getManagedVersion()).build();
 
     return metadata;
 
