@@ -45,11 +45,11 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -84,7 +84,7 @@ public abstract class AbstractRealtimeRecordReader {
   // Default file path prefix for spillable file
   public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = "/tmp/";
 
-  private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractRealtimeRecordReader.class);
 
   protected final HoodieRealtimeFileSplit split;
   protected final JobConf jobConf;
@@ -98,12 +98,12 @@ public abstract class AbstractRealtimeRecordReader {
   public AbstractRealtimeRecordReader(HoodieRealtimeFileSplit split, JobConf job) {
     this.split = split;
     this.jobConf = job;
-    LOG.info("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
-    LOG.info("columnIds ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-    LOG.info("partitioningColumns ==> " + job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
+    LOG.info("cfg ==> {}", job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
+    LOG.info("columnIds ==> {}", job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+    LOG.info("partitioningColumns ==> {}", job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
     try {
       this.usesCustomPayload = usesCustomPayload();
-      LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
+      LOG.info("usesCustomPayload ==> {}", this.usesCustomPayload);
       baseFileSchema = readSchema(jobConf, split.getPath());
       init();
     } catch (IOException e) {
@@ -339,10 +339,10 @@ public abstract class AbstractRealtimeRecordReader {
         LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaFilePaths(), jobConf);
     if (schemaFromLogFile == null) {
       writerSchema = new AvroSchemaConverter().convert(baseFileSchema);
-      LOG.debug("Writer Schema From Parquet => " + writerSchema.getFields());
+      LOG.debug("Writer Schema From Parquet => {}", writerSchema.getFields());
     } else {
       writerSchema = schemaFromLogFile;
-      LOG.debug("Writer Schema From Log => " + writerSchema.getFields());
+      LOG.debug("Writer Schema From Log => {}", writerSchema.getFields());
     }
     // Add partitioning fields to writer schema for resulting row to contain null values for these fields
     String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
@@ -359,8 +359,8 @@ public abstract class AbstractRealtimeRecordReader {
     // to null out fields not present before
 
     readerSchema = generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
-    LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
-        split.getDeltaFilePaths(), split.getPath(), projectionFields));
+    LOG.info("About to read compacted logs {} for base split {}, projecting cols {}",
+        split.getDeltaFilePaths(), split.getPath(), projectionFields);
   }
 
   private Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap) {
@@ -377,7 +377,7 @@ public abstract class AbstractRealtimeRecordReader {
       } else {
         // Hive has some extra virtual columns like BLOCK__OFFSET__INSIDE__FILE which do not exist in table schema.
         // They will get skipped as they won't be found in the original schema.
-        LOG.debug("Skipping Hive Column => " + columnName);
+        LOG.debug("Skipping Hive Column => {}", columnName);
       }
     }
 
