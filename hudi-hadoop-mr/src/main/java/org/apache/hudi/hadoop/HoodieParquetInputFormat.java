@@ -42,8 +42,8 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -60,7 +60,7 @@ import java.util.stream.Collectors;
 @UseFileSplitsFromInputFormat
 public class HoodieParquetInputFormat extends MapredParquetInputFormat implements Configurable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieParquetInputFormat.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetInputFormat.class);
 
   protected Configuration conf;
 
@@ -69,7 +69,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     // Get all the file status from FileInputFormat and then do the filter
     FileStatus[] fileStatuses = super.listStatus(job);
     Map<HoodieTableMetaClient, List<FileStatus>> groupedFileStatus = groupFileStatus(fileStatuses);
-    LOG.info("Found a total of " + groupedFileStatus.size() + " groups");
+    LOG.info("Found a total of {} groups", groupedFileStatus.size());
     List<FileStatus> returns = new ArrayList<>();
     for (Map.Entry<HoodieTableMetaClient, List<FileStatus>> entry : groupedFileStatus.entrySet()) {
       HoodieTableMetaClient metadata = entry.getKey();
@@ -81,7 +81,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
 
       FileStatus[] statuses = entry.getValue().toArray(new FileStatus[entry.getValue().size()]);
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Hoodie Metadata initialized with completed commit Ts as :" + metadata);
+        LOG.debug("Hoodie Metadata initialized with completed commit Ts as : {}", metadata);
       }
       String tableName = metadata.getTableConfig().getTableName();
       String mode = HoodieHiveUtil.readMode(Job.getInstance(job), tableName);
@@ -95,24 +95,24 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
         String lastIncrementalTs = HoodieHiveUtil.readStartCommitTime(Job.getInstance(job), tableName);
         // Total number of commits to return in this batch. Set this to -1 to get all the commits.
         Integer maxCommits = HoodieHiveUtil.readMaxCommits(Job.getInstance(job), tableName);
-        LOG.info("Last Incremental timestamp was set as " + lastIncrementalTs);
+        LOG.info("Last Incremental timestamp was set as {}", lastIncrementalTs);
         List<String> commitsToReturn = timeline.findInstantsAfter(lastIncrementalTs, maxCommits).getInstants()
             .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
         List<HoodieDataFile> filteredFiles =
             roView.getLatestDataFilesInRange(commitsToReturn).collect(Collectors.toList());
         for (HoodieDataFile filteredFile : filteredFiles) {
-          LOG.info("Processing incremental hoodie file - " + filteredFile.getPath());
+          LOG.info("Processing incremental hoodie file - {}", filteredFile.getPath());
           filteredFile = checkFileStatus(filteredFile);
           returns.add(filteredFile.getFileStatus());
         }
-        LOG.info("Total paths to process after hoodie incremental filter " + filteredFiles.size());
+        LOG.info("Total paths to process after hoodie incremental filter {}", filteredFiles.size());
       } else {
         // filter files on the latest commit found
         List<HoodieDataFile> filteredFiles = roView.getLatestDataFiles().collect(Collectors.toList());
-        LOG.info("Total paths to process after hoodie filter " + filteredFiles.size());
+        LOG.info("Total paths to process after hoodie filter {}", filteredFiles.size());
         for (HoodieDataFile filteredFile : filteredFiles) {
           if (LOG.isDebugEnabled()) {
-            LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
+            LOG.debug("Processing latest hoodie file - {}", filteredFile.getPath());
           }
           filteredFile = checkFileStatus(filteredFile);
           returns.add(filteredFile.getFileStatus());
@@ -133,7 +133,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     try {
       if (dataFile.getFileSize() == 0) {
         FileSystem fs = dataPath.getFileSystem(conf);
-        LOG.info("Refreshing file status " + dataFile.getPath());
+        LOG.info("Refreshing file status {}", dataFile.getPath());
         return new HoodieDataFile(fs.getFileStatus(dataPath));
       }
       return dataFile;
@@ -160,7 +160,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
           metadata = getTableMetaClient(status.getPath().getFileSystem(conf), status.getPath().getParent());
           nonHoodieBasePath = null;
         } catch (DatasetNotFoundException | InvalidDatasetException e) {
-          LOG.info("Handling a non-hoodie path " + status.getPath());
+          LOG.info("Handling a non-hoodie path {}", status.getPath());
           metadata = null;
           nonHoodieBasePath = status.getPath().getParent().toString();
         }
@@ -213,7 +213,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
       levels = metadata.getPartitionDepth();
     }
     Path baseDir = HoodieHiveUtil.getNthParent(dataPath, levels);
-    LOG.info("Reading hoodie metadata from path " + baseDir.toString());
+    LOG.info("Reading hoodie metadata from path {}", baseDir.toString());
     return new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
   }
 }

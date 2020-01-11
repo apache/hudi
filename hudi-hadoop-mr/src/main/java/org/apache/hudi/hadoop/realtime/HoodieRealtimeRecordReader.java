@@ -24,8 +24,8 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -39,7 +39,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
   public static final String REALTIME_SKIP_MERGE_PROP = "hoodie.realtime.merge.skip";
   // By default, we do merged-reading
   public static final String DEFAULT_REALTIME_SKIP_MERGE = "false";
-  private static final Logger LOG = LogManager.getLogger(HoodieRealtimeRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReader.class);
   private final RecordReader<NullWritable, ArrayWritable> reader;
 
   public HoodieRealtimeRecordReader(HoodieRealtimeFileSplit split, JobConf job,

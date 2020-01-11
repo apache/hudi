@@ -20,12 +20,12 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.JobContext;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class HoodieHiveUtil {
 
-  public static final Logger LOG = LogManager.getLogger(HoodieHiveUtil.class);
+  public static final Logger LOG = LoggerFactory.getLogger(HoodieHiveUtil.class);
 
   public static final String HOODIE_CONSUME_MODE_PATTERN = "hoodie.%s.consume.mode";
   public static final String HOODIE_START_COMMIT_PATTERN = "hoodie.%s.consume.start.timestamp";
@@ -43,20 +43,20 @@ public class HoodieHiveUtil {
     if (maxCommits == MAX_COMMIT_ALL) {
       maxCommits = Integer.MAX_VALUE;
     }
-    LOG.info("Read max commits - " + maxCommits);
+    LOG.info("Read max commits - {}", maxCommits);
     return maxCommits;
   }
 
   public static String readStartCommitTime(JobContext job, String tableName) {
     String startCommitTimestampName = String.format(HOODIE_START_COMMIT_PATTERN, tableName);
-    LOG.info("Read start commit time - " + job.getConfiguration().get(startCommitTimestampName));
+    LOG.info("Read start commit time - {}", job.getConfiguration().get(startCommitTimestampName));
     return job.getConfiguration().get(startCommitTimestampName);
   }
 
   public static String readMode(JobContext job, String tableName) {
     String modePropertyName = String.format(HOODIE_CONSUME_MODE_PATTERN, tableName);
     String mode = job.getConfiguration().get(modePropertyName, DEFAULT_SCAN_MODE);
-    LOG.info(modePropertyName + ": " + mode);
+    LOG.info("{}: {}", modePropertyName,  mode);
     return mode;
   }
 
