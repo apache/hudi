@@ -329,7 +329,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         Assert.assertEquals(State.COMPLETED, view.getLastInstant().get().getState());
         Assert.assertEquals(HoodieTimeline.CLEAN_ACTION, view.getLastInstant().get().getAction());
         partitions.forEach(p -> {
-          LOG.info("PARTTITION : " + p);
+          LOG.info("PARTITION : " + p);
           LOG.info("\tFileSlices :" + view.getAllFileSlices(p).collect(Collectors.toList()));
         });
 
