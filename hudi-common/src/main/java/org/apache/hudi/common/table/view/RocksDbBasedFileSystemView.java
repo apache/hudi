@@ -20,7 +20,7 @@ package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -266,8 +266,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
-  Stream<HoodieDataFile> fetchAllDataFiles(String partitionPath) {
-    return rocksDB.<HoodieDataFile>prefixSearch(schemaHelper.getColFamilyForView(),
+  Stream<HoodieBaseFile> fetchAllDataFiles(String partitionPath) {
+    return rocksDB.<HoodieBaseFile>prefixSearch(schemaHelper.getColFamilyForView(),
         schemaHelper.getPrefixForDataFileViewByPartition(partitionPath)).map(Pair::getValue);
   }
 
@@ -298,11 +298,11 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
-  protected Option<HoodieDataFile> fetchLatestDataFile(String partitionPath, String fileId) {
+  protected Option<HoodieBaseFile> fetchLatestDataFile(String partitionPath, String fileId) {
     // Retries only file-slices of the file and filters for the latest
     return Option
         .ofNullable(rocksDB
-            .<HoodieDataFile>prefixSearch(schemaHelper.getColFamilyForView(),
+            .<HoodieBaseFile>prefixSearch(schemaHelper.getColFamilyForView(),
                 schemaHelper.getPrefixForDataFileViewByPartitionFile(partitionPath, fileId))
             .map(Pair::getValue).reduce(null,
                 (x, y) -> ((x == null) ? y

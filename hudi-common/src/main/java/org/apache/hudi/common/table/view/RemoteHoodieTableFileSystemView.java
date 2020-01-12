@@ -20,7 +20,7 @@ package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
@@ -205,7 +205,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<HoodieDataFile> getLatestDataFiles(String partitionPath) {
+  public Stream<HoodieBaseFile> getLatestDataFiles(String partitionPath) {
     Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
     try {
       List<DataFileDTO> dataFiles = executeRequest(LATEST_PARTITION_DATA_FILES_URL, paramsMap,
@@ -217,7 +217,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<HoodieDataFile> getLatestDataFiles() {
+  public Stream<HoodieBaseFile> getLatestDataFiles() {
     Map<String, String> paramsMap = getParams();
     try {
       List<DataFileDTO> dataFiles = executeRequest(LATEST_ALL_DATA_FILES, paramsMap,
@@ -229,7 +229,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
+  public Stream<HoodieBaseFile> getLatestDataFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxCommitTime);
     try {
       List<DataFileDTO> dataFiles = executeRequest(LATEST_DATA_FILES_BEFORE_ON_INSTANT_URL, paramsMap,
@@ -241,7 +241,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Option<HoodieDataFile> getDataFileOn(String partitionPath, String instantTime, String fileId) {
+  public Option<HoodieBaseFile> getDataFileOn(String partitionPath, String instantTime, String fileId) {
     Map<String, String> paramsMap = getParamsWithAdditionalParams(partitionPath,
         new String[] {INSTANT_PARAM, FILEID_PARAM}, new String[] {instantTime, fileId});
     try {
@@ -254,7 +254,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
+  public Stream<HoodieBaseFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
     Map<String, String> paramsMap =
         getParams(INSTANTS_PARAM, StringUtils.join(commitsToReturn.toArray(new String[0]), ","));
     try {
@@ -267,7 +267,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<HoodieDataFile> getAllDataFiles(String partitionPath) {
+  public Stream<HoodieBaseFile> getAllDataFiles(String partitionPath) {
     Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
     try {
       List<DataFileDTO> dataFiles =
@@ -439,7 +439,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Option<HoodieDataFile> getLatestDataFile(String partitionPath, String fileId) {
+  public Option<HoodieBaseFile> getLatestDataFile(String partitionPath, String fileId) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, FILEID_PARAM, fileId);
     try {
       List<DataFileDTO> dataFiles = executeRequest(LATEST_PARTITION_DATA_FILE_URL, paramsMap,

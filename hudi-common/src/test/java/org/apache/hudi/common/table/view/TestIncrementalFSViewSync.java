@@ -29,7 +29,7 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -678,8 +678,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
                 Assert.assertEquals(slice1.getFileId(), slice2.getFileId());
                 Assert.assertEquals(slice1.getDataFile().isPresent(), slice2.getDataFile().isPresent());
                 if (slice1.getDataFile().isPresent()) {
-                  HoodieDataFile df1 = slice1.getDataFile().get();
-                  HoodieDataFile df2 = slice2.getDataFile().get();
+                  HoodieBaseFile df1 = slice1.getDataFile().get();
+                  HoodieBaseFile df2 = slice2.getDataFile().get();
                   Assert.assertEquals(df1.getCommitTime(), df2.getCommitTime());
                   Assert.assertEquals(df1.getFileId(), df2.getFileId());
                   Assert.assertEquals(df1.getFileName(), df2.getFileName());

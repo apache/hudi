@@ -299,7 +299,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to initialize a given path, as a given storage type and table name.
+   * Helper method to initialize a given path, as a given type and table name.
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
       HoodieTableType tableType, String tableName, String payloadClassName) throws IOException {
@@ -437,7 +437,7 @@ public class HoodieTableMetaClient implements Serializable {
       case MERGE_ON_READ:
         return HoodieActiveTimeline.DELTA_COMMIT_ACTION;
       default:
-        throw new HoodieException("Could not commit on unknown storage type " + this.getTableType());
+        throw new HoodieException("Could not commit on unknown table type " + this.getTableType());
     }
   }
 

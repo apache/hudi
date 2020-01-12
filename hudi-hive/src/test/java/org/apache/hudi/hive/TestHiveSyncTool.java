@@ -294,19 +294,19 @@ public class TestHiveSyncTool {
     String commitTime = "100";
     String deltaCommitTime = "101";
     String roTablename = TestUtil.hiveSyncConfig.tableName;
-    TestUtil.hiveSyncConfig.tableName = TestUtil.hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_REALTIME_TABLE;
+    TestUtil.hiveSyncConfig.tableName = TestUtil.hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
     TestUtil.createMORTable(commitTime, deltaCommitTime, 5);
     HoodieHiveClient hiveClientRT =
         new HoodieHiveClient(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
 
-    assertFalse("Table " + TestUtil.hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_REALTIME_TABLE
+    assertFalse("Table " + TestUtil.hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE
         + " should not exist initially", hiveClientRT.doesTableExist());
 
     // Lets do the sync
     HiveSyncTool tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
     tool.syncHoodieTable();
 
-    assertTrue("Table " + TestUtil.hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_REALTIME_TABLE
+    assertTrue("Table " + TestUtil.hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE
         + " should exist after sync completes", hiveClientRT.doesTableExist());
 
     assertEquals("Hive Schema should match the table schema + partition field", hiveClientRT.getTableSchema().size(),

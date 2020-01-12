@@ -21,7 +21,7 @@ package org.apache.hudi;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRollingStat;
@@ -30,7 +30,7 @@ import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.TableFileSystemView.ReadOptimizedView;
+import org.apache.hudi.common.table.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
@@ -510,12 +510,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
 
     HoodieTable table = getHoodieTable(metadata, config);
-    ReadOptimizedView fileSystemView = table.getROFileSystemView();
-    List<HoodieDataFile> files =
+    BaseFileOnlyView fileSystemView = table.getBaseFileOnlyView();
+    List<HoodieBaseFile> files =
         fileSystemView.getLatestDataFilesBeforeOrOn(testPartitionPath, commitTime3).collect(Collectors.toList());
     int numTotalInsertsInCommit3 = 0;
     int numTotalUpdatesInCommit3 = 0;
-    for (HoodieDataFile file : files) {
+    for (HoodieBaseFile file : files) {
       if (file.getFileName().contains(file1)) {
         assertEquals("Existing file should be expanded", commitTime3, file.getCommitTime());
         records = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), new Path(file.getPath()));
@@ -616,12 +616,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = getHoodieTable(metaClient, config);
-    List<HoodieDataFile> files = table.getROFileSystemView()
+    List<HoodieBaseFile> files = table.getBaseFileOnlyView()
         .getLatestDataFilesBeforeOrOn(testPartitionPath, commitTime3).collect(Collectors.toList());
     assertEquals("Total of 2 valid data files", 2, files.size());
 
     int totalInserts = 0;
-    for (HoodieDataFile file : files) {
+    for (HoodieBaseFile file : files) {
       assertEquals("All files must be at commit 3", commitTime3, file.getCommitTime());
       records = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), new Path(file.getPath()));
       totalInserts += records.size();

@@ -25,7 +25,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTimeline;
@@ -318,12 +318,12 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
      * Note that while finding the new data/log files added/removed, the path stored in metadata will be missing the
      * base-path,scheme and authority. Ensure the matching process takes care of this discrepancy.
      */
-    Map<String, HoodieDataFile> viewDataFiles = fileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
+    Map<String, HoodieBaseFile> viewDataFiles = fileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
         .map(FileSlice::getDataFile).filter(Option::isPresent).map(Option::get)
         .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     // Note: Delta Log Files and Data FIles can be empty when adding/removing pending compactions
-    Map<String, HoodieDataFile> deltaDataFiles = deltaFileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
+    Map<String, HoodieBaseFile> deltaDataFiles = deltaFileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
         .map(FileSlice::getDataFile).filter(Option::isPresent).map(Option::get)
         .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));

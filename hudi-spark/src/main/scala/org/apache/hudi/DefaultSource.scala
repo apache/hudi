@@ -50,18 +50,19 @@ class DefaultSource extends RelationProvider
                               optParams: Map[String, String],
                               schema: StructType): BaseRelation = {
     // Add default options for unspecified read options keys.
-    val parameters = Map(VIEW_TYPE_OPT_KEY -> DEFAULT_VIEW_TYPE_OPT_VAL) ++ optParams
+    val parameters = Map(QUERY_TYPE_OPT_KEY -> DEFAULT_QUERY_TYPE_OPT_VAL) ++ optParams
 
     val path = parameters.get("path")
     if (path.isEmpty) {
       throw new HoodieException("'path' must be specified.")
     }
 
-    if (parameters(VIEW_TYPE_OPT_KEY).equals(VIEW_TYPE_REALTIME_OPT_VAL)) {
-      throw new HoodieException("Realtime view not supported yet via data source. Please use HiveContext route.")
+    if (parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_SNAPSHOT_OPT_VAL)) {
+      throw new HoodieException("Snapshot view not supported yet via data source. " +
+        "Please query the Hive table registered using Spark SQL.")
     }
 
-    if (parameters(VIEW_TYPE_OPT_KEY).equals(VIEW_TYPE_INCREMENTAL_OPT_VAL)) {
+    if (parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
       new IncrementalRelation(sqlContext, path.get, optParams, schema)
     } else {
       // this is just effectively RO view only, where `path` can contain a mix of

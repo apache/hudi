@@ -185,11 +185,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, String transformerClassName,
         String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass, boolean updatePayloadClass,
-                                                 String payloadClassName, String storageType) {
+                                                 String payloadClassName, String tableType) {
       HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
       cfg.targetBasePath = basePath;
       cfg.targetTableName = "hoodie_trips";
-      cfg.storageType = storageType == null ? "COPY_ON_WRITE" : storageType;
+      cfg.tableType = tableType == null ? "COPY_ON_WRITE" : tableType;
       cfg.sourceClassName = TestDataSource.class.getName();
       cfg.transformerClassName = transformerClassName;
       cfg.operation = op;
@@ -211,7 +211,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
       cfg.targetBasePath = basePath;
       cfg.targetTableName = "hoodie_trips_copy";
-      cfg.storageType = "COPY_ON_WRITE";
+      cfg.tableType = "COPY_ON_WRITE";
       cfg.sourceClassName = HoodieIncrSource.class.getName();
       cfg.operation = op;
       cfg.sourceOrderingField = "timestamp";
@@ -386,7 +386,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // Initial bulk insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.UPSERT);
     cfg.continuousMode = true;
-    cfg.storageType = tableType.name();
+    cfg.tableType = tableType.name();
     cfg.configs.add(String.format("%s=%d", TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfg.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN_PROP));
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);

@@ -208,7 +208,7 @@ public class DeltaSync implements Serializable {
     } else {
       this.commitTimelineOpt = Option.empty();
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
-          cfg.storageType, cfg.targetTableName, "archived", cfg.payloadClassName);
+          cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName);
     }
   }
 
@@ -270,7 +270,7 @@ public class DeltaSync implements Serializable {
       }
     } else {
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
-          cfg.storageType, cfg.targetTableName, "archived", cfg.payloadClassName);
+          cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName);
     }
 
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {

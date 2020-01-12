@@ -23,7 +23,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -439,8 +439,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       assertNoWriteErrors(statusList);
       metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
-      List<HoodieDataFile> dataFilesToRead = getCurrentLatestDataFiles(hoodieTable, cfg);
-      assertTrue("RealtimeTableView should list the parquet files we wrote in the delta commit",
+      List<HoodieBaseFile> dataFilesToRead = getCurrentLatestDataFiles(hoodieTable, cfg);
+      assertTrue("should list the parquet files we wrote in the delta commit",
           dataFilesToRead.stream().findAny().isPresent());
       validateDeltaCommit(firstInstant, fgIdToCompactionOperation, cfg);
     }
@@ -533,7 +533,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     return statusList;
   }
 
-  private List<HoodieDataFile> getCurrentLatestDataFiles(HoodieTable table, HoodieWriteConfig cfg) throws IOException {
+  private List<HoodieBaseFile> getCurrentLatestDataFiles(HoodieTable table, HoodieWriteConfig cfg) throws IOException {
     FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(table.getMetaClient().getFs(), cfg.getBasePath());
     HoodieTableFileSystemView view =
         new HoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(), allFiles);

@@ -26,7 +26,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -34,7 +34,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.TableFileSystemView.ReadOptimizedView;
+import org.apache.hudi.common.table.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -592,9 +592,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
           .mapToPair((PairFunction<String, String, List<String>>) partitionPath -> {
             // Scan all partitions files with this commit time
             LOG.info("Collecting latest files in partition path " + partitionPath);
-            ReadOptimizedView view = table.getROFileSystemView();
+            BaseFileOnlyView view = table.getBaseFileOnlyView();
             List<String> latestFiles = view.getLatestDataFilesBeforeOrOn(partitionPath, commitTime)
-                .map(HoodieDataFile::getFileName).collect(Collectors.toList());
+                .map(HoodieBaseFile::getFileName).collect(Collectors.toList());
             return new Tuple2<>(partitionPath, latestFiles);
           }).collectAsMap();
 

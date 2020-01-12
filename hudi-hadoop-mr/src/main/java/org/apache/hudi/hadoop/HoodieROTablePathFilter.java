@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -139,14 +139,14 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
           HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
           HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
               metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), fs.listStatus(folder));
-          List<HoodieDataFile> latestFiles = fsView.getLatestDataFiles().collect(Collectors.toList());
+          List<HoodieBaseFile> latestFiles = fsView.getLatestDataFiles().collect(Collectors.toList());
           // populate the cache
           if (!hoodiePathCache.containsKey(folder.toString())) {
             hoodiePathCache.put(folder.toString(), new HashSet<>());
           }
           LOG.info("Based on hoodie metadata from base path: " + baseDir.toString() + ", caching " + latestFiles.size()
               + " files under " + folder);
-          for (HoodieDataFile lfile : latestFiles) {
+          for (HoodieBaseFile lfile : latestFiles) {
             hoodiePathCache.get(folder.toString()).add(new Path(lfile.getPath()));
           }
 

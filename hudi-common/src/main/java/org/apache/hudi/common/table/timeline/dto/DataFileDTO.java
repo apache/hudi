@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table.timeline.dto;
 
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -36,22 +36,22 @@ public class DataFileDTO {
   @JsonProperty("fileLen")
   private long fileLen;
 
-  public static HoodieDataFile toHoodieDataFile(DataFileDTO dto) {
+  public static HoodieBaseFile toHoodieDataFile(DataFileDTO dto) {
     if (null == dto) {
       return null;
     }
 
-    HoodieDataFile dataFile = null;
+    HoodieBaseFile dataFile = null;
     if (null != dto.fileStatus) {
-      dataFile = new HoodieDataFile(FileStatusDTO.toFileStatus(dto.fileStatus));
+      dataFile = new HoodieBaseFile(FileStatusDTO.toFileStatus(dto.fileStatus));
     } else {
-      dataFile = new HoodieDataFile(dto.fullPath);
+      dataFile = new HoodieBaseFile(dto.fullPath);
       dataFile.setFileLen(dto.fileLen);
     }
     return dataFile;
   }
 
-  public static DataFileDTO fromHoodieDataFile(HoodieDataFile dataFile) {
+  public static DataFileDTO fromHoodieDataFile(HoodieBaseFile dataFile) {
     if (null == dataFile) {
       return null;
     }

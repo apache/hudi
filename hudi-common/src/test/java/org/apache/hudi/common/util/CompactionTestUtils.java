@@ -21,7 +21,7 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTestUtils;
@@ -157,7 +157,7 @@ public class CompactionTestUtils {
             instantId, fileId, Option.of(2));
         FileSlice slice = new FileSlice(DEFAULT_PARTITION_PATHS[0], instantId, fileId);
         if (createDataFile) {
-          slice.setDataFile(new TestHoodieDataFile(metaClient.getBasePath() + "/" + DEFAULT_PARTITION_PATHS[0] + "/"
+          slice.setDataFile(new TestHoodieBaseFile(metaClient.getBasePath() + "/" + DEFAULT_PARTITION_PATHS[0] + "/"
               + FSUtils.makeDataFileName(instantId, TEST_WRITE_TOKEN, fileId)));
         }
         String logFilePath1 = HoodieTestUtils.getLogFilePath(metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0],
@@ -186,11 +186,11 @@ public class CompactionTestUtils {
   /**
    * The hoodie data file for testing.
    */
-  public static class TestHoodieDataFile extends HoodieDataFile {
+  public static class TestHoodieBaseFile extends HoodieBaseFile {
 
     private final String path;
 
-    public TestHoodieDataFile(String path) {
+    public TestHoodieBaseFile(String path) {
       super(path);
       this.path = path;
     }

@@ -160,9 +160,9 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
     public String targetTableName;
 
-    @Parameter(names = {"--storage-type"}, description = "Type of Storage. COPY_ON_WRITE (or) MERGE_ON_READ",
+    @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ",
         required = true)
-    public String storageType;
+    public String tableType;
 
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
@@ -273,12 +273,12 @@ public class HoodieDeltaStreamer implements Serializable {
 
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
-          && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(storageType));
+          && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
     }
 
     public boolean isInlineCompactionEnabled() {
       return !continuousMode && !forceDisableCompaction
-          && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(storageType));
+          && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
     }
   }
 
@@ -356,10 +356,10 @@ public class HoodieDeltaStreamer implements Serializable {
             new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath, false);
         tableType = meta.getTableType();
         // This will guarantee there is no surprise with table type
-        Preconditions.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.storageType)),
-            "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.storageType);
+        Preconditions.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.tableType)),
+            "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.tableType);
       } else {
-        tableType = HoodieTableType.valueOf(cfg.storageType);
+        tableType = HoodieTableType.valueOf(cfg.tableType);
       }
 
       this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
@@ -502,7 +502,6 @@ public class HoodieDeltaStreamer implements Serializable {
     public AsyncCompactService(JavaSparkContext jssc, HoodieWriteClient client) {
       this.jssc = jssc;
       this.compactor = new Compactor(client, jssc);
-      // TODO: HUDI-157 : Only allow 1 compactor to run in parallel till Incremental View on MOR is fully implemented.
       this.maxConcurrentCompaction = 1;
     }
 

@@ -54,7 +54,8 @@ public class HiveSyncTool {
 
   private static final Logger LOG = LogManager.getLogger(HiveSyncTool.class);
   private final HoodieHiveClient hoodieHiveClient;
-  public static final String SUFFIX_REALTIME_TABLE = "_rt";
+  public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
+  public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
   private final HiveSyncConfig cfg;
 
   public HiveSyncTool(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
@@ -69,11 +70,11 @@ public class HiveSyncTool {
           syncHoodieTable(false);
           break;
         case MERGE_ON_READ:
-          // sync a RO table for MOR
-          syncHoodieTable(false);
           String originalTableName = cfg.tableName;
-          // TODO : Make realtime table registration optional using a config param
-          cfg.tableName = cfg.tableName + SUFFIX_REALTIME_TABLE;
+          // sync a RO table for MOR
+          cfg.tableName = cfg.tableName + SUFFIX_READ_OPTIMIZED_TABLE;
+          syncHoodieTable(false);
+          cfg.tableName = cfg.tableName + SUFFIX_SNAPSHOT_TABLE;
           // sync a RT table for MOR
           syncHoodieTable(true);
           cfg.tableName = originalTableName;
@@ -89,7 +90,7 @@ public class HiveSyncTool {
     }
   }
 
-  private void syncHoodieTable(boolean isRealTime) throws ClassNotFoundException {
+  private void syncHoodieTable(boolean useRealtimeInputFormat) throws ClassNotFoundException {
     LOG.info("Trying to sync hoodie table " + cfg.tableName + " with base path " + hoodieHiveClient.getBasePath()
         + " of type " + hoodieHiveClient.getTableType());
 
@@ -98,7 +99,7 @@ public class HiveSyncTool {
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = hoodieHiveClient.getDataSchema();
     // Sync schema if needed
-    syncSchema(tableExists, isRealTime, schema);
+    syncSchema(tableExists, useRealtimeInputFormat, schema);
 
     LOG.info("Schema sync complete. Syncing partitions for " + cfg.tableName);
     // Get the last time we successfully synced partitions
@@ -123,13 +124,11 @@ public class HiveSyncTool {
    * @param tableExists - does table exist
    * @param schema - extracted schema
    */
-  private void syncSchema(boolean tableExists, boolean isRealTime, MessageType schema) throws ClassNotFoundException {
+  private void syncSchema(boolean tableExists, boolean useRealTimeInputFormat, MessageType schema) throws ClassNotFoundException {
     // Check and sync schema
     if (!tableExists) {
       LOG.info("Table " + cfg.tableName + " is not found. Creating it");
-      if (!isRealTime) {
-        // TODO - RO Table for MOR only after major compaction (UnboundedCompaction is default
-        // for now)
+      if (!useRealTimeInputFormat) {
         String inputFormatClassName =
             cfg.usePreApacheInputFormat ? com.uber.hoodie.hadoop.HoodieInputFormat.class.getName()
                 : HoodieParquetInputFormat.class.getName();

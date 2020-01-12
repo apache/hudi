@@ -19,7 +19,7 @@
 package org.apache.hudi.io.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -239,7 +239,7 @@ public class TestHoodieCompactionStrategy {
     List<HoodieCompactionOperation> operations = new ArrayList<>(sizesMap.size());
 
     sizesMap.forEach((k, v) -> {
-      HoodieDataFile df = TestHoodieDataFile.newDataFile(k);
+      HoodieBaseFile df = TestHoodieBaseFile.newDataFile(k);
       String partitionPath = keyToPartitionMap.get(k);
       List<HoodieLogFile> logFiles = v.stream().map(TestHoodieLogFile::newLogFile).collect(Collectors.toList());
       operations.add(new HoodieCompactionOperation(df.getCommitTime(),

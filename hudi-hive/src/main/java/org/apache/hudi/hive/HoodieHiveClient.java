@@ -387,7 +387,7 @@ public class HoodieHiveClient {
                     .map(f -> Pair.of(f, HoodieFileFormat.HOODIE_LOG)).orElseGet(() -> {
                       // No Log files in Delta-Commit. Check if there are any parquet files
                       return commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream()
-                          .filter(s -> s.contains((metaClient.getTableConfig().getROFileFormat().getFileExtension())))
+                          .filter(s -> s.contains((metaClient.getTableConfig().getBaseFileFormat().getFileExtension())))
                           .findAny().map(f -> Pair.of(f, HoodieFileFormat.PARQUET)).orElseThrow(() -> {
                             return new IllegalArgumentException("Could not find any data file written for commit "
                                 + lastDeltaInstant + ", could not get schema for table " + metaClient.getBasePath()

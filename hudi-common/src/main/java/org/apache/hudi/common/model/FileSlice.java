@@ -44,7 +44,7 @@ public class FileSlice implements Serializable {
   /**
    * data file, with the compacted data, for this slice.
    */
-  private HoodieDataFile dataFile;
+  private HoodieBaseFile dataFile;
 
   /**
    * List of appendable log files with real time data - Sorted with greater log version first - Always empty for
@@ -63,7 +63,7 @@ public class FileSlice implements Serializable {
     this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
   }
 
-  public void setDataFile(HoodieDataFile dataFile) {
+  public void setDataFile(HoodieBaseFile dataFile) {
     this.dataFile = dataFile;
   }
 
@@ -91,7 +91,7 @@ public class FileSlice implements Serializable {
     return fileGroupId;
   }
 
-  public Option<HoodieDataFile> getDataFile() {
+  public Option<HoodieBaseFile> getDataFile() {
     return Option.ofNullable(dataFile);
   }
 

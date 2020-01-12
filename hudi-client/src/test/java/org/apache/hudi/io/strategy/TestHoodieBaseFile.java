@@ -18,21 +18,21 @@
 
 package org.apache.hudi.io.strategy;
 
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 
 import java.util.UUID;
 
-public class TestHoodieDataFile extends HoodieDataFile {
+public class TestHoodieBaseFile extends HoodieBaseFile {
 
   private final long size;
 
-  public TestHoodieDataFile(long size) {
+  public TestHoodieBaseFile(long size) {
     super("/tmp/XYXYXYXYXYYX_11_20180918020003.parquet");
     this.size = size;
   }
 
-  public static HoodieDataFile newDataFile(long size) {
-    return new TestHoodieDataFile(size);
+  public static HoodieBaseFile newDataFile(long size) {
+    return new TestHoodieBaseFile(size);
   }
 
   @Override

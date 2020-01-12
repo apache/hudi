@@ -118,14 +118,14 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void ingestFirstBatchAndHiveSync() throws Exception {
     List<String> cmds = new ImmutableList.Builder<String>()
         .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
-            + " --storage-type COPY_ON_WRITE "
+            + " --table-type COPY_ON_WRITE "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties "
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
             + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME))
         .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
-            + " --storage-type MERGE_ON_READ "
+            + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties "
@@ -170,14 +170,14 @@ public class ITTestHoodieDemo extends ITTestBase {
     List<String> cmds = new ImmutableList.Builder<String>()
         .add("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH2 + " " + HDFS_BATCH_PATH2)
         .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
-            + " --storage-type COPY_ON_WRITE "
+            + " --table-type COPY_ON_WRITE "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties "
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
             + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME))
         .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
-            + " --storage-type MERGE_ON_READ "
+            + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties "

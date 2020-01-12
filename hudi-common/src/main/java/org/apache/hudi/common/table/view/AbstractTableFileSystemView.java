@@ -20,7 +20,7 @@ package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -137,9 +137,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         addPendingCompactionFileSlice);
   }
 
-  protected List<HoodieFileGroup> buildFileGroups(Stream<HoodieDataFile> dataFileStream,
+  protected List<HoodieFileGroup> buildFileGroups(Stream<HoodieBaseFile> dataFileStream,
       Stream<HoodieLogFile> logFileStream, HoodieTimeline timeline, boolean addPendingCompactionFileSlice) {
-    Map<Pair<String, String>, List<HoodieDataFile>> dataFiles =
+    Map<Pair<String, String>, List<HoodieBaseFile>> dataFiles =
         dataFileStream.collect(Collectors.groupingBy((dataFile) -> {
           String partitionPathStr = getPartitionPathFromFilePath(dataFile.getPath());
           return Pair.of(partitionPathStr, dataFile.getFileId());
@@ -249,10 +249,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @param statuses List of File-Status
    */
-  private Stream<HoodieDataFile> convertFileStatusesToDataFiles(FileStatus[] statuses) {
+  private Stream<HoodieBaseFile> convertFileStatusesToDataFiles(FileStatus[] statuses) {
     Predicate<FileStatus> roFilePredicate = fileStatus -> fileStatus.getPath().getName()
-        .contains(metaClient.getTableConfig().getROFileFormat().getFileExtension());
-    return Arrays.stream(statuses).filter(roFilePredicate).map(HoodieDataFile::new);
+        .contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
+    return Arrays.stream(statuses).filter(roFilePredicate).map(HoodieBaseFile::new);
   }
 
   /**
@@ -262,7 +262,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
     Predicate<FileStatus> rtFilePredicate = fileStatus -> fileStatus.getPath().getName()
-        .contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension());
+        .contains(metaClient.getTableConfig().getLogFileFormat().getFileExtension());
     return Arrays.stream(statuses).filter(rtFilePredicate).map(HoodieLogFile::new);
   }
 
@@ -272,7 +272,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @param dataFile Data File
    */
-  protected boolean isDataFileDueToPendingCompaction(HoodieDataFile dataFile) {
+  protected boolean isDataFileDueToPendingCompaction(HoodieBaseFile dataFile) {
     final String partitionPath = getPartitionPathFromFilePath(dataFile.getPath());
 
     Option<Pair<String, CompactionOperation>> compactionWithInstantTime =
@@ -325,7 +325,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
-  public final Stream<HoodieDataFile> getLatestDataFiles(String partitionStr) {
+  public final Stream<HoodieBaseFile> getLatestDataFiles(String partitionStr) {
     try {
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
@@ -337,7 +337,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
-  public final Stream<HoodieDataFile> getLatestDataFiles() {
+  public final Stream<HoodieBaseFile> getLatestDataFiles() {
     try {
       readLock.lock();
       return fetchLatestDataFiles();
@@ -347,7 +347,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
-  public final Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionStr, String maxCommitTime) {
+  public final Stream<HoodieBaseFile> getLatestDataFilesBeforeOrOn(String partitionStr, String maxCommitTime) {
     try {
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
@@ -364,7 +364,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
-  public final Option<HoodieDataFile> getDataFileOn(String partitionStr, String instantTime, String fileId) {
+  public final Option<HoodieBaseFile> getDataFileOn(String partitionStr, String instantTime, String fileId) {
     try {
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
@@ -382,7 +382,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Get Latest data file for a partition and file-Id.
    */
   @Override
-  public final Option<HoodieDataFile> getLatestDataFile(String partitionStr, String fileId) {
+  public final Option<HoodieBaseFile> getLatestDataFile(String partitionStr, String fileId) {
     try {
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
@@ -394,7 +394,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
-  public final Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
+  public final Stream<HoodieBaseFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
     try {
       readLock.lock();
       return fetchAllStoredFileGroups().map(fileGroup -> {
@@ -408,7 +408,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
-  public final Stream<HoodieDataFile> getAllDataFiles(String partitionStr) {
+  public final Stream<HoodieBaseFile> getAllDataFiles(String partitionStr) {
     try {
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
@@ -655,12 +655,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Default implementation for fetching latest data-files for the partition-path.
    */
-  Stream<HoodieDataFile> fetchLatestDataFiles(final String partitionPath) {
+  Stream<HoodieBaseFile> fetchLatestDataFiles(final String partitionPath) {
     return fetchAllStoredFileGroups(partitionPath).map(this::getLatestDataFile).filter(Option::isPresent)
         .map(Option::get);
   }
 
-  protected Option<HoodieDataFile> getLatestDataFile(HoodieFileGroup fileGroup) {
+  protected Option<HoodieBaseFile> getLatestDataFile(HoodieFileGroup fileGroup) {
     return Option
         .fromJavaOptional(fileGroup.getAllDataFiles().filter(df -> !isDataFileDueToPendingCompaction(df)).findFirst());
   }
@@ -668,7 +668,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Default implementation for fetching latest data-files across all partitions.
    */
-  Stream<HoodieDataFile> fetchLatestDataFiles() {
+  Stream<HoodieBaseFile> fetchLatestDataFiles() {
     return fetchAllStoredFileGroups().map(this::getLatestDataFile).filter(Option::isPresent).map(Option::get);
   }
 
@@ -677,7 +677,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    *
    * @param partitionPath partition-path
    */
-  Stream<HoodieDataFile> fetchAllDataFiles(String partitionPath) {
+  Stream<HoodieBaseFile> fetchAllDataFiles(String partitionPath) {
     return fetchAllStoredFileGroups(partitionPath).map(HoodieFileGroup::getAllDataFiles)
         .flatMap(dataFileList -> dataFileList);
   }
@@ -758,7 +758,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param fileId File Id
    * @return Data File if present
    */
-  protected Option<HoodieDataFile> fetchLatestDataFile(String partitionPath, String fileId) {
+  protected Option<HoodieBaseFile> fetchLatestDataFile(String partitionPath, String fileId) {
     return Option
         .fromJavaOptional(fetchLatestDataFiles(partitionPath).filter(fs -> fs.getFileId().equals(fileId)).findFirst());
   }

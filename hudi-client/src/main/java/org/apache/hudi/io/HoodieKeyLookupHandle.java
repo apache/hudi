@@ -19,7 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.bloom.filter.BloomFilter;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -113,7 +113,7 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
       LOG.debug("#The candidate row keys for " + partitionPathFilePair + " => " + candidateRecordKeys);
     }
 
-    HoodieDataFile dataFile = getLatestDataFile();
+    HoodieBaseFile dataFile = getLatestDataFile();
     List<String> matchingKeys =
         checkCandidatesAgainstFile(hoodieTable.getHadoopConf(), candidateRecordKeys, new Path(dataFile.getPath()));
     LOG.info(

@@ -23,7 +23,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -293,7 +293,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
                 .filter(fs -> fs.getFileId().equals(operation.getFileId())).findFirst());
         if (fileSliceOptional.isPresent()) {
           FileSlice fs = fileSliceOptional.get();
-          Option<HoodieDataFile> df = fs.getDataFile();
+          Option<HoodieBaseFile> df = fs.getDataFile();
           if (operation.getDataFileName().isPresent()) {
             String expPath = metaClient.getFs()
                 .getFileStatus(

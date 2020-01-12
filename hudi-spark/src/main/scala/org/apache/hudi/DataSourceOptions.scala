@@ -33,18 +33,18 @@ import org.apache.hudi.keygen.SimpleKeyGenerator
 object DataSourceReadOptions {
   /**
     * Whether data needs to be read, in
-    * incremental mode (new data since an instantTime)
-    * (or) Read Optimized mode (obtain latest view, based on columnar data)
-    * (or) Real time mode (obtain latest view, based on row & columnar data)
     *
-    * Default: READ_OPTIMIZED
+    * 1) Snapshot mode (obtain latest view, based on row & columnar data)
+    * 2) incremental mode (new data since an instantTime)
+    * 3) Read Optimized mode (obtain latest view, based on columnar data)
+    *
+    * Default: snapshot
     */
-  val VIEW_TYPE_OPT_KEY = "hoodie.datasource.view.type"
-  val VIEW_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
-  val VIEW_TYPE_INCREMENTAL_OPT_VAL = "incremental"
-  val VIEW_TYPE_REALTIME_OPT_VAL = "realtime"
-  val DEFAULT_VIEW_TYPE_OPT_VAL = VIEW_TYPE_READ_OPTIMIZED_OPT_VAL
-  val DEFAULTPUSH_DOWN_FILTERS_OPT_VAL = ""
+  val QUERY_TYPE_OPT_KEY = "hoodie.datasource.query.type"
+  val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
+  val QUERY_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
+  val QUERY_TYPE_INCREMENTAL_OPT_VAL = "incremental"
+  val DEFAULT_QUERY_TYPE_OPT_VAL = QUERY_TYPE_SNAPSHOT_OPT_VAL
 
   /**
     * Instant time to start incrementally pulling data from. The instanttime here need not
@@ -79,7 +79,7 @@ object DataSourceReadOptions {
   */
 object DataSourceWriteOptions {
   /**
-    * The client operation, that this write should do
+    * The write operation, that this write should do
     *
     * Default: upsert()
     */
@@ -91,15 +91,15 @@ object DataSourceWriteOptions {
   val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL
 
   /**
-    * The storage type for the underlying data, for this write.
+    * The table type for the underlying data, for this write.
     * Note that this can't change across writes.
     *
     * Default: COPY_ON_WRITE
     */
-  val STORAGE_TYPE_OPT_KEY = "hoodie.datasource.write.storage.type"
-  val COW_STORAGE_TYPE_OPT_VAL = HoodieTableType.COPY_ON_WRITE.name
-  val MOR_STORAGE_TYPE_OPT_VAL = HoodieTableType.MERGE_ON_READ.name
-  val DEFAULT_STORAGE_TYPE_OPT_VAL = COW_STORAGE_TYPE_OPT_VAL
+  val TABLE_TYPE_OPT_KEY = "hoodie.datasource.write.table.type"
+  val COW_TABLE_TYPE_OPT_VAL = HoodieTableType.COPY_ON_WRITE.name
+  val MOR_TABLE_TYPE_OPT_VAL = HoodieTableType.MERGE_ON_READ.name
+  val DEFAULT_TABLE_TYPE_OPT_VAL = COW_TABLE_TYPE_OPT_VAL
 
   /**
     * Hive table name, to register the table into.
