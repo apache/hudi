@@ -45,5 +45,39 @@ python -m SimpleHTTPServer
 
 
 
+docker rm -f hudi-web
+
+docker run -itd \
+    --name hudi-web \
+    -p 4000:4000 \
+    --privileged=true \
+    -v $PWD:/opt \
+    jekyll/jekyll:3.8 \
+    bash
+
+docker exec -it hudi-web /bin/bash
+cd /opt/
+
+gem sources -l
+gem sources --add https://gems.ruby-china.com/
+gem sources --remove https://rubygems.org/
+gem sources -u
+bundle config mirror.https://rubygems.org https://gems.ruby-china.com
+sed -i "s/rubygems.org/gems.ruby-china.com/" Gemfile
+sed -i "s/rubygems.org/gems.ruby-china.com/" Gemfile.lock
+
+bundle install
+bundle update --bundler
+
+bundle exec jekyll serve
+
+##
+docker restart hudi-web
+docker exec -it hudi-web /bin/bash
+cd /opt/
+bundle exec jekyll serve
+
+
+
 
 

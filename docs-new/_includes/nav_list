@@ -1,9 +1,18 @@
+
 {% assign navigation = site.data.navigation[include.nav] %}
+{% assign menu_label = "Toggle Menu" %}
+
+{% if page.language %}
+    {% if page.language == "cn" %}
+        {% assign navigation = site.data.navigation["cn_docs"] %}
+        {% assign menu_label = "文档菜单" %}
+    {% endif %}
+{% endif %}
 
 <nav class="nav__list">
   {% if page.sidebar.title %}<h3 class="nav__title" style="padding-left: 0;">{{ page.sidebar.title }}</h3>{% endif %}
   <input id="ac-toc" name="accordion-toc" type="checkbox" />
-  <label for="ac-toc">{{ site.data.ui-text[site.locale].menu_label | default: "Toggle Menu" }}</label>
+  <label for="ac-toc">{{ menu_label }}</label>
   <ul class="nav__items">
     {% for nav in navigation %}
       <li>
@@ -13,7 +22,6 @@
           {% else %}
             {% assign nav_url = nav.url | relative_url %}
           {% endif %}
-          123
           <a href="{{ nav_url }}"><span class="nav__sub-title">{{ nav.title }}</span></a>
           <a href="{{ nav_url }}"><span class="nav__sub-title">{{ nav.title }}</span></a>
         {% else %}

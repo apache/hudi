@@ -1,5 +1,9 @@
-{% assign author = page.author | default: page.authors[0] | default: site.author %}
-{% assign author = site.data.authors[author] | default: author %}
+
+{%- if page.language == "cn" -%}
+  {%- assign author = site.cn_author -%}
+{%- else -%}
+  {%- assign author = site.author -%}
+{%- endif -%}
 
 <div itemscope itemtype="https://schema.org/Person">
 

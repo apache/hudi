@@ -7,11 +7,11 @@ toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
-Conceptually, Hudi stores data physically once on DFS, while providing 3 logical views on top, as explained [before](concepts.html#views). 
+Conceptually, Hudi stores data physically once on DFS, while providing 3 logical views on top, as explained [before](/docs/concepts.html#views). 
 Once the dataset is synced to the Hive metastore, it provides external Hive tables backed by Hudi's custom inputformats. Once the proper hudi
 bundle has been provided, the dataset can be queried by popular query engines like Hive, Spark and Presto.
 
-Specifically, there are two Hive tables named off [table name](configurations.html#TABLE_NAME_OPT_KEY) passed during write. 
+Specifically, there are two Hive tables named off [table name](/docs/configurations.html#TABLE_NAME_OPT_KEY) passed during write. 
 For e.g, if `table name = hudi_tbl`, then we get  
 
  - `hudi_tbl` realizes the read optimized view of the dataset backed by `HoodieParquetInputFormat`, exposing purely columnar data.
@@ -20,7 +20,7 @@ For e.g, if `table name = hudi_tbl`, then we get
 As discussed in the concepts section, the one key primitive needed for [incrementally processing](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop),
 is `incremental pulls` (to obtain a change stream/log from a dataset). Hudi datasets can be pulled incrementally, which means you can get ALL and ONLY the updated & new rows 
 since a specified instant time. This, together with upserts, are particularly useful for building data pipelines where 1 or more source Hudi tables are incrementally pulled (streams/facts),
-joined with other tables (datasets/dimensions), to [write out deltas](writing_data.html) to a target Hudi dataset. Incremental view is realized by querying one of the tables above, 
+joined with other tables (datasets/dimensions), to [write out deltas](/docs/writing_data.html) to a target Hudi dataset. Incremental view is realized by querying one of the tables above, 
 with special configurations that indicates to query planning that only incremental data needs to be fetched out of the dataset. 
 
 In sections, below we will discuss in detail how to access all the 3 views on each query engine.
@@ -50,6 +50,7 @@ e.g: `/app/incremental-hql/intermediate/{source_table_name}_temp/{last_commit_in
 The following are the configuration options for HiveIncrementalPuller
 
 | **Config** | **Description** | **Default** |
+|-------|--------|--------|
 |hiveUrl| Hive Server 2 URL to connect to |  |
 |hiveUser| Hive Server 2 Username |  |
 |hivePass| Hive Server 2 Password |  |
@@ -128,11 +129,12 @@ A sample incremental pull, that will obtain all records written since `beginInst
      .load(tablePath); // For incremental view, pass in the root/base path of dataset
 ```
 
-Please refer to [configurations](configurations.html#spark-datasource) section, to view all datasource options.
+Please refer to [configurations](/docs/configurations.html#spark-datasource) section, to view all datasource options.
 
 Additionally, `HoodieReadClient` offers the following functionality using Hudi's implicit indexing.
 
 | **API** | **Description** |
+|-------|--------|
 | read(keys) | Read out the data corresponding to the keys as a DataFrame, using Hudi's own index for faster lookup |
 | filterExists() | Filter out already existing records from the provided RDD[HoodieRecord]. Useful for de-duplication |
 | checkExists(keys) | Check if the provided keys exist in a Hudi dataset |

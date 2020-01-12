@@ -1,8 +1,9 @@
-{% if site.logo contains "://" %}
-  {% capture logo_path %}{{ site.logo }}{% endcapture %}
-{% else %}
-  {% capture logo_path %}{{ site.logo }}{% endcapture %}
-{% endif %}
+
+{%- if page.language == "cn" -%}
+  {%- assign mainmenu = site.data.navigation.cn_main -%}
+{%- else -%}
+  {%- assign mainmenu = site.data.navigation.main -%}
+{%- endif -%}
 
 <div class="masthead">
   <div class="masthead__inner-wrap" id="masthead__inner-wrap">
@@ -25,7 +26,7 @@
           {{ site.masthead_title | default: site.title }}
         </a>
         <ul class="visible-links">
-          {%- for link in site.data.navigation.main -%}
+          {%- for link in mainmenu -%}
             {%- if link.url contains '://' -%}
               {%- assign url = link.url -%}
               {%- assign target = "_blank" -%}

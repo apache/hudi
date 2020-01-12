@@ -212,11 +212,11 @@ column statistics etc. Even on some cloud data stores, there is often cost to li
 
 Here are some ways to efficiently manage the storage of your Hudi datasets.
 
- - The [small file handling feature](configurations.html#compactionSmallFileSize) in Hudi, profiles incoming workload 
+ - The [small file handling feature](/docs/configurations.html#compactionSmallFileSize) in Hudi, profiles incoming workload 
    and distributes inserts to existing file groups instead of creating new file groups, which can lead to small files. 
- - Cleaner can be [configured](configurations.html#retainCommits) to clean up older file slices, more or less aggressively depending on maximum time for queries to run & lookback needed for incremental pull
- - User can also tune the size of the [base/parquet file](configurations.html#limitFileSize), [log files](configurations.html#logFileMaxSize) & expected [compression ratio](configurations.html#parquetCompressionRatio), 
+ - Cleaner can be [configured](/docs/configurations.html#retainCommits) to clean up older file slices, more or less aggressively depending on maximum time for queries to run & lookback needed for incremental pull
+ - User can also tune the size of the [base/parquet file](/docs/configurations.html#limitFileSize), [log files](/docs/configurations.html#logFileMaxSize) & expected [compression ratio](/docs/configurations.html#parquetCompressionRatio), 
    such that sufficient number of inserts are grouped into the same file group, resulting in well sized base files ultimately.
- - Intelligently tuning the [bulk insert parallelism](configurations.html#withBulkInsertParallelism), can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
+ - Intelligently tuning the [bulk insert parallelism](/docs/configurations.html#withBulkInsertParallelism), can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
    once created cannot be deleted, but simply expanded as explained before.
- - For workloads with heavy updates, the [merge-on-read storage](concepts.html#merge-on-read-storage) provides a nice mechanism for ingesting quickly into smaller files and then later merging them into larger base files via compaction.
+ - For workloads with heavy updates, the [merge-on-read storage](/docs/concepts.html#merge-on-read-storage) provides a nice mechanism for ingesting quickly into smaller files and then later merging them into larger base files via compaction.
