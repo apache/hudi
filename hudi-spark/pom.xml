@@ -186,7 +186,7 @@
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.module</groupId>
-      <artifactId>jackson-module-scala_2.11</artifactId>
+      <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
     </dependency>
 
     <!-- Avro -->
@@ -204,18 +204,18 @@
     <!-- Spark -->
     <dependency>
       <groupId>org.apache.spark</groupId>
-      <artifactId>spark-core_2.11</artifactId>
+      <artifactId>spark-core_${scala.binary.version}</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>
-      <artifactId>spark-sql_2.11</artifactId>
+      <artifactId>spark-sql_${scala.binary.version}</artifactId>
     </dependency>
 
     <!-- Spark (Packages) -->
     <dependency>
-      <groupId>com.databricks</groupId>
-      <artifactId>spark-avro_2.11</artifactId>
-      <version>4.0.0</version>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-avro_${scala.binary.version}</artifactId>
+      <version>2.4.4</version>
     </dependency>
 
     <!-- Hadoop -->
@@ -278,7 +278,7 @@
 
     <dependency>
       <groupId>org.scalatest</groupId>
-      <artifactId>scalatest_2.11</artifactId>
+      <artifactId>scalatest_${scala.binary.version}</artifactId>
       <version>${scalatest.version}</version>
       <scope>test</scope>
     </dependency>

@@ -83,8 +83,8 @@
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
 
-                  <include>com.twitter:bijection-avro_2.11</include>
-                  <include>com.twitter:bijection-core_2.11</include>
+                  <include>com.twitter:bijection-avro_${scala.binary.version}</include>
+                  <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
                   <include>com.yammer.metrics:metrics-core</include>
@@ -95,7 +95,7 @@
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
 
-                  <include>com.databricks:spark-avro_2.11</include>
+                  <include>org.apache.spark:spark-avro_${scala.binary.version}</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -139,10 +139,10 @@
                   <pattern>org.apache.commons.codec.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
                 </relocation>
-                <relocation>
+<!--                <relocation>
                   <pattern>com.databricks.</pattern>
                   <shadedPattern>org.apache.hudi.com.databricks.</shadedPattern>
-                </relocation>
+                </relocation>-->
                 <!-- TODO: Revisit GH ISSUE #533 & PR#633-->
               </relocations>
              <filters>

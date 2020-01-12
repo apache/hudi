@@ -24,16 +24,15 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
-import io.confluent.kafka.serializers.KafkaAvroDecoder;
-import kafka.serializer.StringDecoder;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.streaming.kafka.KafkaUtils;
-import org.apache.spark.streaming.kafka.OffsetRange;
+import org.apache.spark.streaming.kafka010.KafkaUtils;
+import org.apache.spark.streaming.kafka010.LocationStrategies;
+import org.apache.spark.streaming.kafka010.OffsetRange;
 
 /**
  * Reads avro serialized Kafka data, based on the confluent schema-registry.
@@ -64,9 +63,7 @@ public class AvroKafkaSource extends AvroSource {
   }
 
   private JavaRDD<GenericRecord> toRDD(OffsetRange[] offsetRanges) {
-    JavaRDD<GenericRecord> recordRDD =
-        KafkaUtils.createRDD(sparkContext, String.class, Object.class, StringDecoder.class, KafkaAvroDecoder.class,
-            offsetGen.getKafkaParams(), offsetRanges).values().map(obj -> (GenericRecord) obj);
-    return recordRDD;
+    JavaRDD rdd = KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent());
+    return rdd;
   }
 }

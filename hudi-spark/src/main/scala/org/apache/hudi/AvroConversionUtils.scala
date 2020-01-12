@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import com.databricks.spark.avro.SchemaConverters
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{Schema, SchemaBuilder}
 import org.apache.hudi.common.model.HoodieKey
@@ -75,8 +75,7 @@ object AvroConversionUtils {
   def convertStructTypeToAvroSchema(structType: StructType,
                                     structName: String,
                                     recordNamespace: String): Schema = {
-    val builder = SchemaBuilder.record(structName).namespace(recordNamespace)
-    SchemaConverters.convertStructToAvro(structType, builder, recordNamespace)
+    SchemaConverters.toAvroType(structType, false, structName, recordNamespace)
   }
 
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
