@@ -174,6 +174,8 @@ public class SchemaUtil {
         final DecimalMetadata decimalMetadata = parquetType.asPrimitiveType().getDecimalMetadata();
         return field.append("DECIMAL(").append(decimalMetadata.getPrecision()).append(" , ")
             .append(decimalMetadata.getScale()).append(")").toString();
+      } else if (originalType == OriginalType.DATE) {
+        return field.append("DATE").toString();
       }
       // TODO - fix the method naming here
       return parquetPrimitiveTypeName.convert(new PrimitiveType.PrimitiveTypeNameConverter<String, RuntimeException>() {

@@ -213,9 +213,9 @@
 
     <!-- Spark (Packages) -->
     <dependency>
-      <groupId>com.databricks</groupId>
+      <groupId>org.apache.spark</groupId>
       <artifactId>spark-avro_2.11</artifactId>
-      <version>4.0.0</version>
+      <scope>provided</scope>
     </dependency>
 
     <!-- Hadoop -->
@@ -239,8 +239,19 @@
     <!-- Hive -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-service</artifactId>
+      <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
+      <classifier>${hive.exec.classifier}</classifier>
+      <exclusions>
+        <exclusion>
+          <groupId>javax.mail</groupId>
+          <artifactId>mail</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty.aggregate</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>

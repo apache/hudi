@@ -104,6 +104,7 @@ public class HoodieJavaApp {
     SparkSession spark = SparkSession.builder().appName("Hoodie Spark APP")
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
     JavaSparkContext jssc = new JavaSparkContext(spark.sparkContext());
+    spark.sparkContext().setLogLevel("WARN");
     FileSystem fs = FileSystem.get(jssc.hadoopConfiguration());
 
     // Generator of some records to be loaded in.
