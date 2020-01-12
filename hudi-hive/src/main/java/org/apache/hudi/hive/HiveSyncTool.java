@@ -186,7 +186,7 @@ public class HiveSyncTool {
   public static void main(String[] args) throws Exception {
     // parse the params
     final HiveSyncConfig cfg = new HiveSyncConfig();
-    JCommander cmd = new JCommander(cfg, args);
+    JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
       System.exit(1);
