@@ -337,7 +337,7 @@ public class HiveIncrementalPuller {
 
   public static void main(String[] args) throws IOException {
     final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, args);
+    JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
       System.exit(1);

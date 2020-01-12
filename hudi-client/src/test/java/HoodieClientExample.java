@@ -63,7 +63,7 @@ public class HoodieClientExample {
 
   public static void main(String[] args) throws Exception {
     HoodieClientExample cli = new HoodieClientExample();
-    JCommander cmd = new JCommander(cli, args);
+    JCommander cmd = new JCommander(cli, null, args);
 
     if (cli.help) {
       cmd.usage();
