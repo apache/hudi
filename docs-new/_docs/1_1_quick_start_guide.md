@@ -35,7 +35,7 @@ val basePath = "file:///tmp/hudi_cow_table"
 val dataGen = new DataGenerator
 ```
 
-The [DataGenerator](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java) 
+The [DataGenerator](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50) 
 can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
 {: .notice--info}
 
@@ -61,7 +61,7 @@ df.write.format("org.apache.hudi").
 You can check the data generated under `/tmp/hudi_cow_table/<region>/<country>/<city>/`. We provided a record key 
 (`uuid` in [schema](#sample-schema)), partition field (`region/county/city`) and combine logic (`ts` in 
 [schema](#sample-schema)) to ensure trip records are unique within each partition. For more info, refer to 
-[Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#Frequentlyaskedquestions(FAQ)-HowdoImodelthedatastoredinHudi?)
+[Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
 and for info on ways to ingest data into Hudi, refer to [Writing Hudi Datasets](/docs/writing_data.html).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)

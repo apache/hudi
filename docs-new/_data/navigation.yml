@@ -11,8 +11,6 @@ main:
     url: https://cwiki.apache.org/confluence/display/HUDI/FAQ
   - title: "Releases"
     url: /releases.html
-#  - title: "Roadmap"
-#    url: /roadmap.html
 
 # doc links
 docs:
@@ -20,8 +18,6 @@ docs:
     children:
       - title: "Quick Start"
         url: /docs/quick-start-guide.html
-#      - title: "Structure"
-      #        url: /docs/structure.html
       - title: "Use Cases"
         url: /docs/use_cases.html
       - title: "Talks & Powered By"
@@ -50,4 +46,55 @@ docs:
         url: /docs/docs-versions.html
       - title: "Privacy Policy"
         url: /docs/privacy.html
+
+cn_main:
+  - title: "文档"
+    url: /cn/docs/quick-start-guide.html
+  - title: "社区"
+    url: /cn/community.html
+  - title: "动态"
+    url: /cn/activity.html
+  - title: "FAQ"
+    url: https://cwiki.apache.org/confluence/display/HUDI/FAQ
+  - title: "发布"
+    url: /cn/releases.html
+
+# doc links
+cn_docs:
+  - title: 入门指南
+    children:
+      - title: "快速开始"
+        url: /cn/docs/quick-start-guide.html
+      - title: "使用案例"
+        url: /cn/docs/use_cases.html
+      - title: "演讲 & hudi 用户"
+        url: /cn/docs/powered_by.html
+      - title: "对比"
+        url: /cn/docs/comparison.html
+      - title: "Docker 示例"
+        url: /cn/docs/docker_demo.html
+  - title: 帮助文档
+    children:
+      - title: "概念"
+        url: /cn/docs/concepts.html
+      - title: "写入数据"
+        url: /cn/docs/writing_data.html
+      - title: "查询数据"
+        url: /cn/docs/querying_data.html
+      - title: "配置"
+        url: /cn/docs/configurations.html
+      - title: "性能"
+        url: /cn/docs/performance.html
+      - title: "管理"
+        url: /cn/docs/admin_guide.html
+  - title: 其他信息
+    children:
+      - title: "文档版本"
+        url: /cn/docs/docs-versions.html
+      - title: "版权信息"
+        url: /cn/docs/privacy.html
+
+
+
+
 

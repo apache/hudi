@@ -11,7 +11,10 @@ hudi_style_skin          : "hudi"
 version : &version "0.5.1-SNAPSHOT"
 
 previous_docs:
-  latest: /docs/quick-start-guide.html
+  - version: latest
+    en: /docs/quick-start-guide.html
+    cn: /cn/docs/quick-start-guide.html
+
 #  0.5.0-incubating: /versions/0.5.0-incubating/docs/quick-start-guide.html
 
 
@@ -43,6 +46,29 @@ author:
     - label: "Contribution Guide"
       icon: "fa fa-thumbs-o-up"
       url: "/contributing"
+    - label: "Join on Slack"
+      icon: "fa fa-slack"
+      url: "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"
+    - label: "Fork on GitHub"
+      icon: "fa fa-github"
+      url: "https://github.com/apache/incubator-hudi"
+    - label: "Report Issues"
+      icon: "fa fa-navicon"
+      url: "https://issues.apache.org/jira/projects/HUDI/summary"
+
+cn_author:
+  name             : "Quick Links"
+  bio              : "Hudi *ingests* & *manages* storage of large analytical datasets over DFS."
+  links:
+    - label: "Documentation"
+      icon: "fa fa-book"
+      url: "/cn/docs/quick-start-guide"
+    - label: "Technical Wiki"
+      icon: "fa fa-wikipedia-w"
+      url: "https://cwiki.apache.org/confluence/display/HUDI"
+    - label: "Contribution Guide"
+      icon: "fa fa-thumbs-o-up"
+      url: "/cn/contributing"
     - label: "Join on Slack"
       icon: "fa fa-slack"
       url: "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"
