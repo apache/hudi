@@ -1,85 +1,27 @@
-<!DOCTYPE html>
-<head>
+---
+---
+
+<!doctype html>
+<html lang="{{ site.locale | slice: 0,2 | default: "en" }}" class="no-js">
+  <head>
     {% include head.html %}
-    <script>
-        $(document).ready(function() {
-            // Initialize navgoco with default options
-            $("#mysidebar").navgoco({
-                caretHtml: '',
-                accordion: true,
-                openClass: 'active', // open
-                save: false, // leave false or nav highlighting doesn't work right
-                cookie: {
-                    name: 'navgoco',
-                    expires: false,
-                    path: '/'
-                },
-                slide: {
-                    duration: 400,
-                    easing: 'swing'
-                }
-            });
+  </head>
 
-            $("#collapseAll").click(function(e) {
-                e.preventDefault();
-                $("#mysidebar").navgoco('toggle', false);
-            });
+  <body class="layout--{{ page.layout | default: layout.layout }}{% if page.classes or layout.classes %}{{ page.classes | default: layout.classes | join: ' ' | prepend: ' ' }}{% endif %}">
+    {% include browser-upgrade.html %}
+    {% include masthead.html %}
 
-            $("#expandAll").click(function(e) {
-                e.preventDefault();
-                $("#mysidebar").navgoco('toggle', true);
-            });
-
-        });
-
-    </script>
-    <script>
-        $(function () {
-            $('[data-toggle="tooltip"]').tooltip()
-        })
-    </script>
-    {% if page.datatable == true %}
-    <link rel="stylesheet" type="text/css" href="//cdn.datatables.net/1.10.5/css/jquery.dataTables.css">
-    <script type="text/javascript" charset="utf8" src="//cdn.datatables.net/1.10.5/js/jquery.dataTables.js"></script>
-    <script>
-        $(document).ready(function(){
-
-            $('table.datatable').DataTable( {
-                        paging: false,
-                        stateSave: true
-                    }
-            );
-    </script>
-    {% endif %}
-
-</head>
-<body>
-{% include topnav.html %}
-<!-- Page Content -->
-<div class="container">
-    <div class="col-lg-12">&nbsp;</div>
-    <!-- Content Row -->
-    <div class="row">
-        <!-- Sidebar Column -->
-        <div class="col-md-2">
-          {% include sidebar.html %}
-        </div>
-        <!-- Content Column -->
-        <div class="col-md-8">
-            {{content}}
-        </div>
-        <div class="col-md-2">
-            {% unless page.toc == false %}
-            {% include toc.html %}
-            {% endunless %}
-        </div>
-    <!-- /.row -->
+    <div class="initial-content">
+      {{ content }}
     </div>
-<!-- /.container -->
-</div>
 
-</body>
-{% if site.google_analytics %}
-{% include google_analytics.html %}
-{% endif %}
+    <div class="page__footer">
+      <footer>
+        {% include footer.html %}
+      </footer>
+    </div>
+
+    {% include scripts.html %}
+
+  </body>
 </html>
