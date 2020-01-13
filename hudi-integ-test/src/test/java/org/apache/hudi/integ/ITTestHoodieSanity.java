@@ -18,6 +18,7 @@
 
 package org.apache.hudi.integ;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.model.HoodieTableType;
 
@@ -144,38 +145,46 @@ public class ITTestHoodieSanity extends ITTestBase {
     }
     executeCommandStringInDocker(ADHOC_1_CONTAINER, cmd, true);
 
+    String snapshotTableName = tableType.equals(HoodieTableType.MERGE_ON_READ.name()) ?
+        hiveTableName + "_rt" : hiveTableName;
+    Option<String> roTableName = tableType.equals(HoodieTableType.MERGE_ON_READ.name()) ?
+        Option.of(hiveTableName +"_ro") : Option.empty();
+
     // Ensure table does exist
-    stdOutErr = executeHiveCommand("show tables like '" + hiveTableName + "'");
-    Assert.assertEquals("Table exists", hiveTableName, stdOutErr.getLeft());
+    stdOutErr = executeHiveCommand("show tables like '" + snapshotTableName + "'");
+    Assert.assertEquals("Table exists", snapshotTableName, stdOutErr.getLeft());
 
     // Ensure row count is 80 (without duplicates) (100 - 20 deleted)
-    stdOutErr = executeHiveCommand("select count(1) from " + hiveTableName);
-    Assert.assertEquals("Expecting 100 rows to be present in the new table", 80,
+    stdOutErr = executeHiveCommand("select count(1) from " + snapshotTableName);
+    Assert.assertEquals("Expecting 80 rows to be present in the snapshot table", 80,
         Integer.parseInt(stdOutErr.getLeft().trim()));
 
-    // If is MOR table, ensure snapshot query row count is 100 - 20 = 80 (without duplicates)
-    if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
-      stdOutErr = executeHiveCommand("select count(1) from " + hiveTableName + "_rt");
-      Assert.assertEquals("Expecting 80 rows to be present in the snapshot query,", 80,
+    if (roTableName.isPresent()) {
+      stdOutErr = executeHiveCommand("select count(1) from " + roTableName.get());
+      Assert.assertEquals("Expecting 80 rows to be present in the snapshot table", 80,
           Integer.parseInt(stdOutErr.getLeft().trim()));
     }
 
-    // Make the HDFS dataset non-hoodie and run the same query
-    // Checks for interoperability with non-hoodie tables
-
+    // Make the HDFS dataset non-hoodie and run the same query; Checks for interoperability with non-hoodie tables
     // Delete Hoodie directory to make it non-hoodie dataset
     executeCommandStringInDocker(ADHOC_1_CONTAINER, "hdfs dfs -rm -r " + hdfsPath + "/.hoodie", true);
 
     // Run the count query again. Without Hoodie, all versions are included. So we get a wrong count
-    stdOutErr = executeHiveCommand("select count(1) from " + hiveTableName);
+    if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
+      stdOutErr = executeHiveCommand("select count(1) from " + roTableName.get());
+    } else {
+      stdOutErr = executeHiveCommand("select count(1) from " + snapshotTableName);
+    }
     Assert.assertEquals("Expecting 280 rows to be present in the new table", 280,
         Integer.parseInt(stdOutErr.getLeft().trim()));
   }
 
   private void dropHiveTables(String hiveTableName, String tableType) throws Exception {
-    executeHiveCommand("drop table if exists " + hiveTableName);
     if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       executeHiveCommand("drop table if exists " + hiveTableName + "_rt");
+      executeHiveCommand("drop table if exists " + hiveTableName + "_ro");
+    } else {
+      executeHiveCommand("drop table if exists " + hiveTableName);
     }
   }
 }

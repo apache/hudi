@@ -139,7 +139,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testHiveAfterFirstBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_TBLCHECK_COMMANDS);
     assertStdOutContains(stdOutErrPair, "| stock_ticks_cow     |");
-    assertStdOutContains(stdOutErrPair, "| stock_ticks_mor     |");
+    assertStdOutContains(stdOutErrPair, "| stock_ticks_mor_ro  |");
     assertStdOutContains(stdOutErrPair, "| stock_ticks_mor_rt  |");
 
     assertStdOutContains(stdOutErrPair,
@@ -159,7 +159,8 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testSparkSQLAfterFirstBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_BATCH1_COMMANDS, true);
     assertStdOutContains(stdOutErrPair, "|default |stock_ticks_cow   |false      |\n"
-        + "|default |stock_ticks_mor    |false      |\n|default |stock_ticks_mor_rt |false      |");
+                                                    + "|default |stock_ticks_mor_ro |false      |\n" +
+                                                      "|default |stock_ticks_mor_rt |false      |");
     assertStdOutContains(stdOutErrPair,
         "+------+-------------------+\n|GOOG  |2018-08-31 10:29:00|\n+------+-------------------+", 3);
     assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 09:59:00|6330  |1230.5   |1230.02 |", 3);
@@ -291,8 +292,10 @@ public class ITTestHoodieDemo extends ITTestBase {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_INCREMENTAL_COMMANDS, true);
     assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:59:00|9021  |1227.1993|1227.215|");
     assertStdOutContains(stdOutErrPair, "|default |stock_ticks_cow           |false      |\n"
-        + "|default |stock_ticks_derived_mor   |false      |\n|default |stock_ticks_derived_mor_rt|false      |\n"
-        + "|default |stock_ticks_mor           |false      |\n|default |stock_ticks_mor_rt        |false      |\n"
+        + "|default |stock_ticks_derived_mor_ro|false      |\n"
+        + "|default |stock_ticks_derived_mor_rt|false      |\n"
+        + "|default |stock_ticks_mor_ro        |false      |\n"
+        + "|default |stock_ticks_mor_rt        |false      |\n"
         + "|        |stock_ticks_cow_incr      |true       |");
     assertStdOutContains(stdOutErrPair, "|count(1)|\n+--------+\n|99     |", 2);
   }

@@ -53,7 +53,7 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     save("/user/hive/warehouse/stock_ticks_derived_mor");
 
 spark.sql("show tables").show(20, false)
-spark.sql("select count(*) from stock_ticks_derived_mor").show(20, false)
+spark.sql("select count(*) from stock_ticks_derived_mor_ro").show(20, false)
 spark.sql("select count(*) from stock_ticks_derived_mor_rt").show(20, false)
 
 System.exit(0);
