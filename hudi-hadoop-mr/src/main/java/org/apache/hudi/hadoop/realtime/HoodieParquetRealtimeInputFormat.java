@@ -210,7 +210,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     if (!columnIds.isEmpty() && columnIds.charAt(0) == ',') {
       conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, columnIds.substring(1));
       if (LOG.isDebugEnabled()) {
-        LOG.debug("The projection Ids: {{}} start with ','. First comma is removed", columnIds);
+        LOG.debug("The projection Ids: [{}] start with ','. First comma is removed", columnIds);
       }
     }
     return conf;

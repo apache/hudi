@@ -56,7 +56,7 @@ public class HoodieHiveUtil {
   public static String readMode(JobContext job, String tableName) {
     String modePropertyName = String.format(HOODIE_CONSUME_MODE_PATTERN, tableName);
     String mode = job.getConfiguration().get(modePropertyName, DEFAULT_SCAN_MODE);
-    LOG.info("{} : {}", modePropertyName, mode);
+    LOG.info("Hoodie consume mode pattern is : {}, mode is : {}", modePropertyName, mode);
     return mode;
   }
 
