@@ -37,6 +37,7 @@ import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Operation;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.JdbcbasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.DistributedTestDataSource;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
@@ -69,6 +70,10 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -109,6 +114,13 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
     props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
+    // H2 DataBase Configs for JdbcbasedSchemaProvider
+    props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.connection.url", "jdbc:h2:mem:test_mem");
+    props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.driver.type", "org.h2.Driver");
+    props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.username", "sa");
+    props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.password", "");
+    props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.dbtable", "triprec");
+    props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.timeout", "0");
     // Hive Configs
     props.setProperty(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), "jdbc:hive2://127.0.0.1:9999/");
     props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "testdb1");
@@ -503,6 +515,22 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   @Test
+  public void testJdbcbasedSchemaProvider() throws Exception {
+    initH2Database();
+    String dataSetBasePath = dfsBasePath + "/test_dataset";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, Operation.BULK_INSERT,
+        SqlQueryBasedTransformer.class.getName(), PROPS_FILENAME_TEST_SOURCE, true,
+        false);
+    try {
+      TypedProperties props = UtilHelpers.readConfig(dfs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+      Schema sourceSchema = UtilHelpers.createSchemaProvider(JdbcbasedSchemaProvider.class.getName(), props, jsc).getSourceSchema();
+      assertEquals(sourceSchema.toString(), new Schema.Parser().parse(UtilitiesTestBase.Helpers.readFile("delta-streamer-config/source-jdbc.avsc")).toString());
+    } catch (HoodieException e) {
+      LOG.error("Failed to get connection through jdbc. ", e);
+    }
+  }
+
+  @Test
   public void testFilterDupes() throws Exception {
     String datasetBasePath = dfsBasePath + "/test_dupes_dataset";
 
@@ -557,6 +585,12 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     batch.getBatch().get().cache();
     long c = batch.getBatch().get().count();
     Assert.assertEquals(1000, c);
+  }
+
+  private void initH2Database() throws SQLException, IOException {
+    Connection conn = DriverManager.getConnection("jdbc:h2:mem:test_mem", "sa", "");
+    PreparedStatement ps = conn.prepareStatement(UtilitiesTestBase.Helpers.readFile("delta-streamer-config/triprec.sql"));
+    ps.executeUpdate();
   }
 
   /**
