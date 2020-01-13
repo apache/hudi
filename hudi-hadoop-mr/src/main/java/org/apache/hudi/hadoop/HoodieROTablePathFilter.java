@@ -144,10 +144,8 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
           if (!hoodiePathCache.containsKey(folder.toString())) {
             hoodiePathCache.put(folder.toString(), new HashSet<>());
           }
-          LOG.info("Based on hoodie metadata from base path: {}, caching {} files under {}",
-                  baseDir,
-                  latestFiles.size(),
-                  folder);
+          LOG.info("Based on hoodie metadata from base path: {}, caching {} files under {}", baseDir,
+              latestFiles.size(), folder);
           for (HoodieDataFile lfile : latestFiles) {
             hoodiePathCache.get(folder.toString()).add(new Path(lfile.getPath()));
           }

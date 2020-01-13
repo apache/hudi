@@ -227,7 +227,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     if (job.get(HOODIE_READ_COLUMNS_PROP) == null) {
       synchronized (job) {
         LOG.info("Before adding Hoodie columns, Projections : {}, Ids : {}",
-                job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
+            job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
                 job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
         if (job.get(HOODIE_READ_COLUMNS_PROP) == null) {
           // Hive (across all versions) fails for queries like select count(`_hoodie_commit_time`) from table;
