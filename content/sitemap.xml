@@ -1,299 +1,182 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  
-
-
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/events/2016-12-30-strata-talk-2017.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/events/2016-12-30-strata-talk-2017.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/events/2019-01-18-asf-incubation.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/events/2019-01-18-asf-incubation.html</loc>
-  </url>
-  
-  
-  
-  
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/admin_guide.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/admin_guide.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/community.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/community.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/comparison.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/comparison.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/concepts.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/concepts.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/configurations.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/configurations.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/contributing.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/contributing.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/docker_demo.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/docker_demo.html</loc>
-  </url>
-  
-  
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/gcs_hoodie.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/gcs_hoodie.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/index.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/index.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/migration_guide.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/migration_guide.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/js/mydoc_scroll.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/news.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/news.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/news_archive.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/news_archive.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/performance.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/performance.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/powered_by.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/powered_by.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/privacy.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/privacy.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/querying_data.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/querying_data.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/quickstart.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/quickstart.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/releases.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/releases.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/s3_hoodie.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/s3_hoodie.html</loc>
-  </url>
-  
-  
-  
-  
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/use_cases.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/use_cases.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/writing_data.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/writing_data.html</loc>
-  </url>
-  
-  
+<urlset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd" xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/s3_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/s3_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/gcs_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/gcs_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/migration_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/migration_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/docker_demo.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/docker_demo.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/quick-start-guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/quick-start-guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/structure.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/use_cases.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/use_cases.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/powered_by.html</loc>
+<lastmod>2019-12-31T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/powered_by.html</loc>
+<lastmod>2019-12-31T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/comparison.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/comparison.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/concepts.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/concepts.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/writing_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/writing_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/querying_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/querying_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/configurations.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/configurations.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/performance.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/performance.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/admin_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/admin_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/privacy.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/privacy.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/docs/docs-versions.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/docs/docs-versions.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/strata.html</loc>
+<lastmod>2016-12-30T00:00:00-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/asf.html</loc>
+<lastmod>2019-01-18T00:00:00-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/activity</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/activity</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/community</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/community</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/contributing</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/contributing</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/</loc>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/cn/releases</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/releases</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>http://0.0.0.0:4000/roadmap</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
 </urlset>

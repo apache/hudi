@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Writing Hudi Datasets - Apache Hudi</title>
+<meta name="description" content="In this section, we will cover ways to ingest new changes from external sources or even other Hudi datasets using the DeltaStreamer tool, as well as speeding up large Spark jobs via upserts using the Hudi datasource. Such datasets can then be queried using various query engines.">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Writing Hudi Datasets">
+<meta property="og:url" content="https://hudi.apache.org/docs/writing_data.html">
+
+
+  <meta property="og:description" content="In this section, we will cover ways to ingest new changes from external sources or even other Hudi datasets using the DeltaStreamer tool, as well as speeding up large Spark jobs via upserts using the Hudi datasource. Such datasets can then be queried using various query engines.">
+
+
+
+
+
+  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+
+              </div>
+<!--            <img src="" alt="">-->
+<!--            -->
+<!--            <span class="site-subtitle" style="font-size: 0.8em !important;">-->
+<!--              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Incubating-->
+<!--            </span>-->
+<!--            -->
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/activity.html" target="_self" >Activities</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/incubator-hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+
+  
+
+    
+      
+
+
+
+
+
+<nav class="nav__list">
+  
+  <input id="ac-toc" name="accordion-toc" type="checkbox" />
+  <label for="ac-toc">Toggle Menu</label>
+  <ul class="nav__items">
+    
+      <li>
+        
+          <span class="nav__sub-title">Getting Started</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/quick-start-guide.html" class="">Quick Start</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/use_cases.html" class="">Use Cases</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/powered_by.html" class="">Talks & Powered By</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/comparison.html" class="">Comparison</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/docker_demo.html" class="">Docker Demo</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">Documentation</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/concepts.html" class="">Concepts</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/writing_data.html" class="active">Writing Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/querying_data.html" class="">Querying Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/configurations.html" class="">Configuration</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/performance.html" class="">Performance</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/admin_guide.html" class="">Administering</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">INFO</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/docs-versions.html" class="">Docs Versions</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/privacy.html" class="">Privacy Policy</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+  </ul>
+</nav>
+    
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Writing Hudi Datasets
+</h1>
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> In this page</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#write-operations">Write Operations</a></li>
+  <li><a href="#deltastreamer">DeltaStreamer</a></li>
+  <li><a href="#datasource-writer">Datasource Writer</a></li>
+  <li><a href="#syncing-to-hive">Syncing to Hive</a></li>
+  <li><a href="#deletes">Deletes</a></li>
+  <li><a href="#storage-management">Storage Management</a></li>
+</ul>
+          </nav>
+        </aside>
+        
+        <p>In this section, we will cover ways to ingest new changes from external sources or even other Hudi datasets using the <a href="#deltastreamer">DeltaStreamer</a> tool, as well as 
+speeding up large Spark jobs via upserts using the <a href="#datasource-writer">Hudi datasource</a>. Such datasets can then be <a href="querying_data.html">queried</a> using various query engines.</p>
+
+<h2 id="write-operations">Write Operations</h2>
+
+<p>Before that, it may be helpful to understand the 3 different write operations provided by Hudi datasource or the delta streamer tool and how best to leverage them. These operations
+can be chosen/changed across each commit/deltacommit issued against the dataset.</p>
+
+<ul>
+  <li><strong>UPSERT</strong> : This is the default operation where the input records are first tagged as inserts or updates by looking up the index and 
+ the records are ultimately written after heuristics are run to determine how best to pack them on storage to optimize for things like file sizing. 
+ This operation is recommended for use-cases like database change capture where the input almost certainly contains updates.</li>
+  <li><strong>INSERT</strong> : This operation is very similar to upsert in terms of heuristics/file sizing but completely skips the index lookup step. Thus, it can be a lot faster than upserts 
+ for use-cases like log de-duplication (in conjunction with options to filter duplicates mentioned below). This is also suitable for use-cases where the dataset can tolerate duplicates, but just 
+ need the transactional writes/incremental pull/storage management capabilities of Hudi.</li>
+  <li><strong>BULK_INSERT</strong> : Both upsert and insert operations keep input records in memory to speed up storage heuristics computations faster (among other things) and thus can be cumbersome for 
+ initial loading/bootstrapping a Hudi dataset at first. Bulk insert provides the same semantics as insert, while implementing a sort-based data writing algorithm, which can scale very well for several hundred TBs 
+ of initial load. However, this just does a best-effort job at sizing files vs guaranteeing file sizes like inserts/upserts do.</li>
+</ul>
+
+<h2 id="deltastreamer">DeltaStreamer</h2>
+
+<p>The <code class="highlighter-rouge">HoodieDeltaStreamer</code> utility (part of hudi-utilities-bundle) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.</p>
+
+<ul>
+  <li>Exactly once ingestion of new events from Kafka, <a href="https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports">incremental imports</a> from Sqoop or output of <code class="highlighter-rouge">HiveIncrementalPuller</code> or files under a DFS folder</li>
+  <li>Support json, avro or a custom record types for the incoming data</li>
+  <li>Manage checkpoints, rollback &amp; recovery</li>
+  <li>Leverage Avro schemas from DFS or Confluent <a href="https://github.com/confluentinc/schema-registry">schema registry</a>.</li>
+  <li>Support for plugging in transformations</li>
+</ul>
+
+<p>Command line options describe capabilities in more detail</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">[</span><span class="n">hoodie</span><span class="o">]</span><span class="err">$</span> <span class="n">spark</span><span class="o">-</span><span class="n">submit</span> <span class="o">--</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">HoodieDeltaStreamer</span> <span class="err">`</span><span class="n">ls</span> <span class="n">packaging</span><span class="o">/</span><span class="n">hudi</span><span class="o">-</span><span class="n">utilities</span><span class="o">-</span><span class="n">bundle</span><span class="o">/</span><span class="n">target</span><span class="o">/</span><span class="n">hudi</span><span class="o">-</span><span class="n">utilities</span><span class="o">-</span><span class="n">bundle</span><span class="o">-*.</span><span class="na">jar</span><span class="err">`</span> <span class="o">--</span><span class="n">help</span>
+<span class="nl">Usage:</span> <span class="o">&lt;</span><span class="n">main</span> <span class="kd">class</span><span class="err">&gt;</span> <span class="err">[</span><span class="nc">options</span><span class="o">]</span>
+  <span class="nl">Options:</span>
+    <span class="o">--</span><span class="n">commit</span><span class="o">-</span><span class="n">on</span><span class="o">-</span><span class="n">errors</span>
+        <span class="nc">Commit</span> <span class="n">even</span> <span class="n">when</span> <span class="n">some</span> <span class="n">records</span> <span class="n">failed</span> <span class="n">to</span> <span class="n">be</span> <span class="n">written</span>
+      <span class="nl">Default:</span> <span class="kc">false</span>
+    <span class="o">--</span><span class="n">enable</span><span class="o">-</span><span class="n">hive</span><span class="o">-</span><span class="n">sync</span>
+          <span class="nc">Enable</span> <span class="n">syncing</span> <span class="n">to</span> <span class="n">hive</span>
+       <span class="nl">Default:</span> <span class="kc">false</span>
+    <span class="o">--</span><span class="n">filter</span><span class="o">-</span><span class="n">dupes</span>
+          <span class="nc">Should</span> <span class="n">duplicate</span> <span class="n">records</span> <span class="n">from</span> <span class="n">source</span> <span class="n">be</span> <span class="n">dropped</span><span class="o">/</span><span class="n">filtered</span> <span class="n">outbefore</span> 
+          <span class="n">insert</span><span class="o">/</span><span class="n">bulk</span><span class="o">-</span><span class="n">insert</span> 
+      <span class="nl">Default:</span> <span class="kc">false</span>
+    <span class="o">--</span><span class="n">help</span><span class="o">,</span> <span class="o">-</span><span class="n">h</span>
+    <span class="o">--</span><span class="n">hudi</span><span class="o">-</span><span class="n">conf</span>
+          <span class="nc">Any</span> <span class="n">configuration</span> <span class="n">that</span> <span class="n">can</span> <span class="n">be</span> <span class="n">set</span> <span class="n">in</span> <span class="n">the</span> <span class="n">properties</span> <span class="nf">file</span> <span class="o">(</span><span class="n">using</span> <span class="n">the</span> <span class="no">CLI</span> 
+          <span class="n">parameter</span> <span class="s">"--propsFilePath"</span><span class="o">)</span> <span class="n">can</span> <span class="n">also</span> <span class="n">be</span> <span class="n">passed</span> <span class="n">command</span> <span class="n">line</span> <span class="n">using</span> <span class="k">this</span> 
+          <span class="n">parameter</span> 
+          <span class="nl">Default:</span> <span class="o">[]</span>
+    <span class="o">--</span><span class="n">op</span>
+      <span class="nc">Takes</span> <span class="n">one</span> <span class="n">of</span> <span class="n">these</span> <span class="n">values</span> <span class="o">:</span> <span class="no">UPSERT</span> <span class="o">(</span><span class="k">default</span><span class="o">),</span> <span class="no">INSERT</span> <span class="o">(</span><span class="n">use</span> <span class="n">when</span> <span class="n">input</span> <span class="n">is</span>
+      <span class="n">purely</span> <span class="k">new</span> <span class="n">data</span><span class="o">/</span><span class="n">inserts</span> <span class="n">to</span> <span class="n">gain</span> <span class="n">speed</span><span class="o">)</span>
+      <span class="nl">Default:</span> <span class="no">UPSERT</span>
+      <span class="nc">Possible</span> <span class="nl">Values:</span> <span class="o">[</span><span class="no">UPSERT</span><span class="o">,</span> <span class="no">INSERT</span><span class="o">,</span> <span class="no">BULK_INSERT</span><span class="o">]</span>
+    <span class="o">--</span><span class="n">payload</span><span class="o">-</span><span class="kd">class</span>
+      <span class="nc">subclass</span> <span class="n">of</span> <span class="nc">HoodieRecordPayload</span><span class="o">,</span> <span class="n">that</span> <span class="n">works</span> <span class="n">off</span> <span class="n">a</span> <span class="nc">GenericRecord</span><span class="o">.</span>
+      <span class="nc">Implement</span> <span class="n">your</span> <span class="n">own</span><span class="o">,</span> <span class="k">if</span> <span class="n">you</span> <span class="n">want</span> <span class="n">to</span> <span class="k">do</span> <span class="n">something</span> <span class="n">other</span> <span class="n">than</span> <span class="n">overwriting</span>
+      <span class="n">existing</span> <span class="n">value</span>
+      <span class="nl">Default:</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">OverwriteWithLatestAvroPayload</span>
+    <span class="o">--</span><span class="n">props</span>
+      <span class="n">path</span> <span class="n">to</span> <span class="n">properties</span> <span class="n">file</span> <span class="n">on</span> <span class="n">localfs</span> <span class="n">or</span> <span class="n">dfs</span><span class="o">,</span> <span class="n">with</span> <span class="n">configurations</span> <span class="k">for</span>
+      <span class="nc">Hudi</span> <span class="n">client</span><span class="o">,</span> <span class="n">schema</span> <span class="n">provider</span><span class="o">,</span> <span class="n">key</span> <span class="n">generator</span> <span class="n">and</span> <span class="n">data</span> <span class="n">source</span><span class="o">.</span> <span class="nc">For</span>
+      <span class="nc">Hudi</span> <span class="n">client</span> <span class="n">props</span><span class="o">,</span> <span class="n">sane</span> <span class="n">defaults</span> <span class="n">are</span> <span class="n">used</span><span class="o">,</span> <span class="n">but</span> <span class="n">recommend</span> <span class="n">use</span> <span class="n">to</span>
+      <span class="n">provide</span> <span class="n">basic</span> <span class="n">things</span> <span class="n">like</span> <span class="n">metrics</span> <span class="n">endpoints</span><span class="o">,</span> <span class="n">hive</span> <span class="n">configs</span> <span class="n">etc</span><span class="o">.</span> <span class="nc">For</span>
+      <span class="n">sources</span><span class="o">,</span> <span class="n">referto</span> <span class="n">individual</span> <span class="n">classes</span><span class="o">,</span> <span class="k">for</span> <span class="n">supported</span> <span class="n">properties</span><span class="o">.</span>
+      <span class="nl">Default:</span> <span class="nl">file:</span><span class="c1">///Users/vinoth/bin/hoodie/src/test/resources/delta-streamer-config/dfs-source.properties</span>
+    <span class="o">--</span><span class="n">schemaprovider</span><span class="o">-</span><span class="kd">class</span>
+      <span class="nc">subclass</span> <span class="n">of</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">schema</span><span class="o">.</span><span class="na">SchemaProvider</span> <span class="n">to</span> <span class="n">attach</span>
+      <span class="n">schemas</span> <span class="n">to</span> <span class="n">input</span> <span class="o">&amp;</span> <span class="n">target</span> <span class="n">table</span> <span class="n">data</span><span class="o">,</span> <span class="n">built</span> <span class="n">in</span> <span class="nl">options:</span>
+      <span class="nc">FilebasedSchemaProvider</span>
+      <span class="nl">Default:</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">schema</span><span class="o">.</span><span class="na">FilebasedSchemaProvider</span>
+    <span class="o">--</span><span class="n">source</span><span class="o">-</span><span class="kd">class</span>
+      <span class="nc">Subclass</span> <span class="n">of</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">sources</span> <span class="n">to</span> <span class="n">read</span> <span class="n">data</span><span class="o">.</span> <span class="nc">Built</span><span class="o">-</span><span class="n">in</span>
+      <span class="nl">options:</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">sources</span><span class="o">.{</span><span class="nc">JsonDFSSource</span> <span class="o">(</span><span class="k">default</span><span class="o">),</span>
+      <span class="nc">AvroDFSSource</span><span class="o">,</span> <span class="nc">JsonKafkaSource</span><span class="o">,</span> <span class="nc">AvroKafkaSource</span><span class="o">,</span> <span class="nc">HiveIncrPullSource</span><span class="o">}</span>
+      <span class="nl">Default:</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">sources</span><span class="o">.</span><span class="na">JsonDFSSource</span>
+    <span class="o">--</span><span class="n">source</span><span class="o">-</span><span class="n">limit</span>
+      <span class="nc">Maximum</span> <span class="n">amount</span> <span class="n">of</span> <span class="n">data</span> <span class="n">to</span> <span class="n">read</span> <span class="n">from</span> <span class="n">source</span><span class="o">.</span> <span class="nl">Default:</span> <span class="nc">No</span> <span class="n">limit</span> <span class="nc">For</span> <span class="n">e</span><span class="o">.</span><span class="na">g</span><span class="o">:</span>
+      <span class="nc">DFSSource</span> <span class="o">=&gt;</span> <span class="n">max</span> <span class="n">bytes</span> <span class="n">to</span> <span class="n">read</span><span class="o">,</span> <span class="nc">KafkaSource</span> <span class="o">=&gt;</span> <span class="n">max</span> <span class="n">events</span> <span class="n">to</span> <span class="n">read</span>
+      <span class="nl">Default:</span> <span class="mi">9223372036854775807</span>
+    <span class="o">--</span><span class="n">source</span><span class="o">-</span><span class="n">ordering</span><span class="o">-</span><span class="n">field</span>
+      <span class="nc">Field</span> <span class="n">within</span> <span class="n">source</span> <span class="n">record</span> <span class="n">to</span> <span class="n">decide</span> <span class="n">how</span> <span class="n">to</span> <span class="k">break</span> <span class="n">ties</span> <span class="n">between</span> <span class="n">records</span>
+      <span class="n">with</span> <span class="n">same</span> <span class="n">key</span> <span class="n">in</span> <span class="n">input</span> <span class="n">data</span><span class="o">.</span> <span class="nl">Default:</span> <span class="err">'</span><span class="n">ts</span><span class="err">'</span> <span class="n">holding</span> <span class="n">unix</span> <span class="n">timestamp</span> <span class="n">of</span>
+      <span class="n">record</span>
+      <span class="nl">Default:</span> <span class="n">ts</span>
+    <span class="o">--</span><span class="n">spark</span><span class="o">-</span><span class="n">master</span>
+      <span class="n">spark</span> <span class="n">master</span> <span class="n">to</span> <span class="n">use</span><span class="o">.</span>
+      <span class="nl">Default:</span> <span class="n">local</span><span class="o">[</span><span class="mi">2</span><span class="o">]</span>
+  <span class="o">*</span> <span class="o">--</span><span class="n">target</span><span class="o">-</span><span class="n">base</span><span class="o">-</span><span class="n">path</span>
+      <span class="n">base</span> <span class="n">path</span> <span class="k">for</span> <span class="n">the</span> <span class="n">target</span> <span class="nc">Hudi</span> <span class="n">dataset</span><span class="o">.</span> <span class="o">(</span><span class="nc">Will</span> <span class="n">be</span> <span class="n">created</span> <span class="k">if</span> <span class="n">did</span> <span class="n">not</span>
+      <span class="n">exist</span> <span class="n">first</span> <span class="n">time</span> <span class="n">around</span><span class="o">.</span> <span class="nc">If</span> <span class="n">exists</span><span class="o">,</span> <span class="n">expected</span> <span class="n">to</span> <span class="n">be</span> <span class="n">a</span> <span class="nc">Hudi</span> <span class="n">dataset</span><span class="o">)</span>
+  <span class="o">*</span> <span class="o">--</span><span class="n">target</span><span class="o">-</span><span class="n">table</span>
+      <span class="n">name</span> <span class="n">of</span> <span class="n">the</span> <span class="n">target</span> <span class="n">table</span> <span class="n">in</span> <span class="nc">Hive</span>
+    <span class="o">--</span><span class="n">transformer</span><span class="o">-</span><span class="kd">class</span>
+      <span class="nc">subclass</span> <span class="n">of</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">transform</span><span class="o">.</span><span class="na">Transformer</span><span class="o">.</span> <span class="no">UDF</span> <span class="n">to</span>
+      <span class="n">transform</span> <span class="n">raw</span> <span class="n">source</span> <span class="n">dataset</span> <span class="n">to</span> <span class="n">a</span> <span class="n">target</span> <span class="nf">dataset</span> <span class="o">(</span><span class="n">conforming</span> <span class="n">to</span> <span class="n">target</span>
+      <span class="n">schema</span><span class="o">)</span> <span class="n">before</span> <span class="n">writing</span><span class="o">.</span> <span class="nc">Default</span> <span class="o">:</span> <span class="nc">Not</span> <span class="n">set</span><span class="o">.</span> <span class="nl">E:</span><span class="n">g</span> <span class="o">-</span>
+      <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">transform</span><span class="o">.</span><span class="na">SqlQueryBasedTransformer</span> <span class="o">(</span><span class="n">which</span>
+      <span class="n">allows</span> <span class="n">a</span> <span class="no">SQL</span> <span class="n">query</span> <span class="n">template</span> <span class="n">to</span> <span class="n">be</span> <span class="n">passed</span> <span class="n">as</span> <span class="n">a</span> <span class="n">transformation</span> <span class="n">function</span><span class="o">)</span>
+</code></pre></div></div>
+
+<p>The tool takes a hierarchically composed property file and has pluggable interfaces for extracting data, key generation and providing schema. Sample configs for ingesting from kafka and dfs are
+provided under <code class="highlighter-rouge">hudi-utilities/src/test/resources/delta-streamer-config</code>.</p>
+
+<p>For e.g: once you have Confluent Kafka, Schema registry up &amp; running, produce some test data using (<a href="https://docs.confluent.io/current/ksql/docs/tutorials/generate-custom-test-data.html">impressions.avro</a> provided by schema-registry repo)</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">[</span><span class="n">confluent</span><span class="o">-</span><span class="mf">5.0</span><span class="o">.</span><span class="mi">0</span><span class="o">]</span><span class="err">$</span> <span class="n">bin</span><span class="o">/</span><span class="n">ksql</span><span class="o">-</span><span class="n">datagen</span> <span class="n">schema</span><span class="o">=../</span><span class="n">impressions</span><span class="o">.</span><span class="na">avro</span> <span class="n">format</span><span class="o">=</span><span class="n">avro</span> <span class="n">topic</span><span class="o">=</span><span class="n">impressions</span> <span class="n">key</span><span class="o">=</span><span class="n">impressionid</span>
+</code></pre></div></div>
+
+<p>and then ingest it as follows.</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">[</span><span class="n">hoodie</span><span class="o">]</span><span class="err">$</span> <span class="n">spark</span><span class="o">-</span><span class="n">submit</span> <span class="o">--</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">HoodieDeltaStreamer</span> <span class="err">`</span><span class="n">ls</span> <span class="n">packaging</span><span class="o">/</span><span class="n">hudi</span><span class="o">-</span><span class="n">utilities</span><span class="o">-</span><span class="n">bundle</span><span class="o">/</span><span class="n">target</span><span class="o">/</span><span class="n">hudi</span><span class="o">-</span><span class="n">utilities</span><span class="o">-</span><span class="n">bundle</span><span class="o">-*.</span><span class="na">jar</span><span class="err">`</span> <span class="err">\</span>
+  <span class="o">--</span><span class="n">props</span> <span class="nl">file:</span><span class="c1">//${PWD}/hudi-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \</span>
+  <span class="o">--</span><span class="n">schemaprovider</span><span class="o">-</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">schema</span><span class="o">.</span><span class="na">SchemaRegistryProvider</span> <span class="err">\</span>
+  <span class="o">--</span><span class="n">source</span><span class="o">-</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">sources</span><span class="o">.</span><span class="na">AvroKafkaSource</span> <span class="err">\</span>
+  <span class="o">--</span><span class="n">source</span><span class="o">-</span><span class="n">ordering</span><span class="o">-</span><span class="n">field</span> <span class="n">impresssiontime</span> <span class="err">\</span>
+  <span class="o">--</span><span class="n">target</span><span class="o">-</span><span class="n">base</span><span class="o">-</span><span class="n">path</span> <span class="nl">file:</span><span class="c1">///tmp/hudi-deltastreamer-op --target-table uber.impressions \</span>
+  <span class="o">--</span><span class="n">op</span> <span class="no">BULK_INSERT</span>
+</code></pre></div></div>
+
+<p>In some cases, you may want to migrate your existing dataset into Hudi beforehand. Please refer to <a href="/docs/migration_guide.html">migration guide</a>.</p>
+
+<h2 id="datasource-writer">Datasource Writer</h2>
+
+<p>The <code class="highlighter-rouge">hudi-spark</code> module offers the DataSource API to write (and also read) any data frame into a Hudi dataset.
+Following is how we can upsert a dataframe, while specifying the field names that need to be used
+for <code class="highlighter-rouge">recordKey =&gt; _row_key</code>, <code class="highlighter-rouge">partitionPath =&gt; partition</code> and <code class="highlighter-rouge">precombineKey =&gt; timestamp</code></p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">inputDF</span><span class="o">.</span><span class="na">write</span><span class="o">()</span>
+       <span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">options</span><span class="o">(</span><span class="n">clientOpts</span><span class="o">)</span> <span class="c1">// any of the Hudi client opts can be passed in as well</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">RECORDKEY_FIELD_OPT_KEY</span><span class="o">(),</span> <span class="s">"_row_key"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">(),</span> <span class="s">"partition"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">(),</span> <span class="s">"timestamp"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">HoodieWriteConfig</span><span class="o">.</span><span class="na">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">mode</span><span class="o">(</span><span class="nc">SaveMode</span><span class="o">.</span><span class="na">Append</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
+</code></pre></div></div>
+
+<h2 id="syncing-to-hive">Syncing to Hive</h2>
+
+<p>Both tools above support syncing of the dataset’s latest schema to Hive metastore, such that queries can pick up new columns and partitions.
+In case, its preferable to run this from commandline or in an independent jvm, Hudi provides a <code class="highlighter-rouge">HiveSyncTool</code>, which can be invoked as below, 
+once you have built the hudi-hive module.</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">cd</span> <span class="n">hudi</span><span class="o">-</span><span class="n">hive</span>
+<span class="o">./</span><span class="n">run_sync_tool</span><span class="o">.</span><span class="na">sh</span>
+ <span class="o">[</span><span class="n">hudi</span><span class="o">-</span><span class="n">hive</span><span class="o">]</span><span class="err">$</span> <span class="o">./</span><span class="n">run_sync_tool</span><span class="o">.</span><span class="na">sh</span> <span class="o">--</span><span class="n">help</span>
+<span class="nl">Usage:</span> <span class="o">&lt;</span><span class="n">main</span> <span class="kd">class</span><span class="err">&gt;</span> <span class="err">[</span><span class="nc">options</span><span class="o">]</span>
+  <span class="nl">Options:</span>
+  <span class="o">*</span> <span class="o">--</span><span class="n">base</span><span class="o">-</span><span class="n">path</span>
+       <span class="nc">Basepath</span> <span class="n">of</span> <span class="nc">Hudi</span> <span class="n">dataset</span> <span class="n">to</span> <span class="n">sync</span>
+  <span class="o">*</span> <span class="o">--</span><span class="n">database</span>
+       <span class="n">name</span> <span class="n">of</span> <span class="n">the</span> <span class="n">target</span> <span class="n">database</span> <span class="n">in</span> <span class="nc">Hive</span>
+    <span class="o">--</span><span class="n">help</span><span class="o">,</span> <span class="o">-</span><span class="n">h</span>
+       <span class="nl">Default:</span> <span class="kc">false</span>
+  <span class="o">*</span> <span class="o">--</span><span class="n">jdbc</span><span class="o">-</span><span class="n">url</span>
+       <span class="nc">Hive</span> <span class="n">jdbc</span> <span class="n">connect</span> <span class="n">url</span>
+  <span class="o">*</span> <span class="o">--</span><span class="n">use</span><span class="o">-</span><span class="n">jdbc</span>
+       <span class="nc">Whether</span> <span class="n">to</span> <span class="n">use</span> <span class="n">jdbc</span> <span class="n">connection</span> <span class="n">or</span> <span class="n">hive</span> <span class="nf">metastore</span> <span class="o">(</span><span class="n">via</span> <span class="n">thrift</span><span class="o">)</span>
+  <span class="o">*</span> <span class="o">--</span><span class="n">pass</span>
+       <span class="nc">Hive</span> <span class="n">password</span>
+  <span class="o">*</span> <span class="o">--</span><span class="n">table</span>
+       <span class="n">name</span> <span class="n">of</span> <span class="n">the</span> <span class="n">target</span> <span class="n">table</span> <span class="n">in</span> <span class="nc">Hive</span>
+  <span class="o">*</span> <span class="o">--</span><span class="n">user</span>
+       <span class="nc">Hive</span> <span class="n">username</span>
+</code></pre></div></div>
+
+<h2 id="deletes">Deletes</h2>
+
+<p>Hudi supports implementing two types of deletes on data stored in Hudi datasets, by enabling the user to specify a different record payload implementation.</p>
+
+<ul>
+  <li><strong>Soft Deletes</strong> : With soft deletes, user wants to retain the key but just null out the values for all other fields. 
+ This can be simply achieved by ensuring the appropriate fields are nullable in the dataset schema and simply upserting the dataset after setting these fields to null.</li>
+  <li><strong>Hard Deletes</strong> : A stronger form of delete is to physically remove any trace of the record from the dataset. This can be achieved by issuing an upsert with a custom payload implementation
+ via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in <code class="highlighter-rouge">org.apache.hudi.EmptyHoodieRecordPayload</code> class that does exactly this.</li>
+</ul>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="n">deleteDF</span> <span class="c1">// dataframe containing just records to be deleted</span>
+   <span class="o">.</span><span class="na">write</span><span class="o">().</span><span class="na">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
+   <span class="o">.</span><span class="na">option</span><span class="o">(...)</span> <span class="c1">// Add HUDI options like record-key, partition-path and others as needed for your setup</span>
+   <span class="c1">// specify record_key, partition_key, precombine_fieldkey &amp; usual params</span>
+   <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">PAYLOAD_CLASS_OPT_KEY</span><span class="o">,</span> <span class="s">"org.apache.hudi.EmptyHoodieRecordPayload"</span><span class="o">)</span>
+ 
+</code></pre></div></div>
+
+<h2 id="storage-management">Storage Management</h2>
+
+<p>Hudi also performs several key storage management functions on the data stored in a Hudi dataset. A key aspect of storing data on DFS is managing file sizes and counts
+and reclaiming storage space. For e.g HDFS is infamous for its handling of small files, which exerts memory/RPC pressure on the Name Node and can potentially destabilize
+the entire cluster. In general, query engines provide much better performance on adequately sized columnar files, since they can effectively amortize cost of obtaining 
+column statistics etc. Even on some cloud data stores, there is often cost to listing directories with large number of small files.</p>
+
+<p>Here are some ways to efficiently manage the storage of your Hudi datasets.</p>
+
+<ul>
+  <li>The <a href="/docs/configurations.html#compactionSmallFileSize">small file handling feature</a> in Hudi, profiles incoming workload 
+and distributes inserts to existing file groups instead of creating new file groups, which can lead to small files.</li>
+  <li>Cleaner can be <a href="/docs/configurations.html#retainCommits">configured</a> to clean up older file slices, more or less aggressively depending on maximum time for queries to run &amp; lookback needed for incremental pull</li>
+  <li>User can also tune the size of the <a href="/docs/configurations.html#limitFileSize">base/parquet file</a>, <a href="/docs/configurations.html#logFileMaxSize">log files</a> &amp; expected <a href="/docs/configurations.html#parquetCompressionRatio">compression ratio</a>, 
+such that sufficient number of inserts are grouped into the same file group, resulting in well sized base files ultimately.</li>
+  <li>Intelligently tuning the <a href="/docs/configurations.html#withBulkInsertParallelism">bulk insert parallelism</a>, can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
+once created cannot be deleted, but simply expanded as explained before.</li>
+  <li>For workloads with heavy updates, the <a href="/docs/concepts.html#merge-on-read-storage">merge-on-read storage</a> provides a nice mechanism for ingesting quickly into smaller files and then later merging them into larger base files via compaction.</li>
+</ul>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <a class="footer-link-img" href="https://apache.org">
+        <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+      </a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the Apache License, Version 2.0.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+      <br>
+      Apache Hudi is an effort undergoing incubation at The Apache Software Foundation (ASF), sponsored by the <a href="http://incubator.apache.org/">Apache Incubator</a>.
+      Incubation is required of all newly accepted projects until a further review indicates that the infrastructure, communications, and decision making process have
+      stabilized in a manner consistent with other successful ASF projects. While incubation status is not necessarily a
+      reflection of the completeness or stability of the code, it does indicate that the project has yet to be fully endorsed by the ASF.
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+
+  </body>
+</html>
