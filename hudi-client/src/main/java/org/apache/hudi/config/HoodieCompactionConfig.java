@@ -18,8 +18,8 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.io.compact.strategy.CompactionStrategy;
 import org.apache.hudi.io.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -82,7 +82,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   // 200GB of target IO per compaction
   public static final String DEFAULT_COMPACTION_STRATEGY = LogFileSizeBasedCompactionStrategy.class.getName();
   // used to merge records written to log file
-  public static final String DEFAULT_PAYLOAD_CLASS = HoodieAvroPayload.class.getName();
+  public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
   public static final String PAYLOAD_CLASS_PROP = "hoodie.compaction.payload.class";
 
   // used to choose a trade off between IO vs Memory when performing compaction process

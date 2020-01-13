@@ -34,7 +34,7 @@ public class TestRecordReaderValueIterator {
 
   @Test
   public void testValueIterator() {
-    String[] values = new String[] {"hoodie", "efficient", "new project", "realtime", "spark", "dataset",};
+    String[] values = new String[] {"hoodie", "efficient", "new project", "realtime", "spark", "table",};
     List<Pair<Integer, String>> entries =
         IntStream.range(0, values.length).boxed().map(idx -> Pair.of(idx, values[idx])).collect(Collectors.toList());
     TestRecordReader reader = new TestRecordReader(entries);

@@ -910,7 +910,7 @@ public class TestCleaner extends TestHoodieClientBase {
    * Test CLeaner Stat when there are no partition paths.
    */
   @Test
-  public void testCleaningWithZeroPartitonPaths() throws IOException {
+  public void testCleaningWithZeroPartitionPaths() throws IOException {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())

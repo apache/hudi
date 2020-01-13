@@ -60,7 +60,7 @@ import java.util.stream.Stream;
 /**
  * Common thread-safe implementation for multiple TableFileSystemView Implementations. Provides uniform handling of (a)
  * Loading file-system views from underlying file-system (b) Pending compaction operations and changing file-system
- * views based on that (c) Thread-safety in loading and managing file system views for this dataset. (d) resetting
+ * views based on that (c) Thread-safety in loading and managing file system views for this table. (d) resetting
  * file-system views The actual mechanism of fetching file slices from different view storages is delegated to
  * sub-classes.
  */

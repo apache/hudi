@@ -20,7 +20,7 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.InvalidDatasetException;
+import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent;
@@ -43,7 +43,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Tool to sync a hoodie HDFS dataset with a hive metastore table. Either use it as a api
+ * Tool to sync a hoodie HDFS table with a hive metastore table. Either use it as a api
  * HiveSyncTool.syncHoodieTable(HiveSyncConfig) or as a command line java -cp hoodie-hive.jar HiveSyncTool [args]
  * <p>
  * This utility will get the schema from the latest commit and will sync hive table schema Also this will sync the
@@ -80,7 +80,7 @@ public class HiveSyncTool {
           break;
         default:
           LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
-          throw new InvalidDatasetException(hoodieHiveClient.getBasePath());
+          throw new InvalidTableException(hoodieHiveClient.getBasePath());
       }
     } catch (RuntimeException re) {
       LOG.error("Got runtime exception when hive syncing", re);
@@ -95,7 +95,7 @@ public class HiveSyncTool {
 
     // Check if the necessary table exists
     boolean tableExists = hoodieHiveClient.doesTableExist();
-    // Get the parquet schema for this dataset looking at the latest commit
+    // Get the parquet schema for this table looking at the latest commit
     MessageType schema = hoodieHiveClient.getDataSchema();
     // Sync schema if needed
     syncSchema(tableExists, isRealTime, schema);
@@ -146,7 +146,7 @@ public class HiveSyncTool {
             ParquetHiveSerDe.class.getName());
       }
     } else {
-      // Check if the dataset schema has evolved
+      // Check if the table schema has evolved
       Map<String, String> tableSchema = hoodieHiveClient.getTableSchema();
       SchemaDifference schemaDiff = SchemaUtil.getSchemaDifference(schema, tableSchema, cfg.partitionFields);
       if (!schemaDiff.isEmpty()) {
@@ -186,7 +186,7 @@ public class HiveSyncTool {
   public static void main(String[] args) throws Exception {
     // parse the params
     final HiveSyncConfig cfg = new HiveSyncConfig();
-    JCommander cmd = new JCommander(cfg, args);
+    JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
       System.exit(1);

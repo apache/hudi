@@ -61,7 +61,7 @@ public class ComplexKeyGenerator extends KeyGenerator {
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
     for (String recordKeyField : recordKeyFields) {
-      String recordKeyValue = DataSourceUtils.getNullableNestedFieldValAsString(record, recordKeyField);
+      String recordKeyValue = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
       if (recordKeyValue == null) {
         recordKey.append(recordKeyField + ":" + NULL_RECORDKEY_PLACEHOLDER + ",");
       } else if (recordKeyValue.isEmpty()) {
@@ -79,7 +79,7 @@ public class ComplexKeyGenerator extends KeyGenerator {
 
     StringBuilder partitionPath = new StringBuilder();
     for (String partitionPathField : partitionPathFields) {
-      String fieldVal = DataSourceUtils.getNullableNestedFieldValAsString(record, partitionPathField);
+      String fieldVal = DataSourceUtils.getNestedFieldValAsString(record, partitionPathField, true);
       if (fieldVal == null || fieldVal.isEmpty()) {
         partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + DEFAULT_PARTITION_PATH
                 : DEFAULT_PARTITION_PATH);

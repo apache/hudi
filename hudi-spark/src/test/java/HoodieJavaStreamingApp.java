@@ -45,7 +45,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * Sample program that writes & reads hoodie datasets via the Spark datasource streaming.
+ * Sample program that writes & reads hoodie tables via the Spark datasource streaming.
  */
 public class HoodieJavaStreamingApp {
 
@@ -98,7 +98,7 @@ public class HoodieJavaStreamingApp {
 
   public static void main(String[] args) throws Exception {
     HoodieJavaStreamingApp cli = new HoodieJavaStreamingApp();
-    JCommander cmd = new JCommander(cli, args);
+    JCommander cmd = new JCommander(cli, null, args);
 
     if (cli.help) {
       cmd.usage();

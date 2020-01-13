@@ -416,7 +416,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     WorkloadProfile profile = new WorkloadProfile(jsc.parallelize(records));
     HoodieCopyOnWriteTable.UpsertPartitioner partitioner =
         (HoodieCopyOnWriteTable.UpsertPartitioner) table.getUpsertPartitioner(profile);
-    assertEquals("Update record should have gone to the 1 update partiton", 0, partitioner.getPartition(
+    assertEquals("Update record should have gone to the 1 update partition", 0, partitioner.getPartition(
         new Tuple2<>(updateRecords.get(0).getKey(), Option.ofNullable(updateRecords.get(0).getCurrentLocation()))));
     return partitioner;
   }

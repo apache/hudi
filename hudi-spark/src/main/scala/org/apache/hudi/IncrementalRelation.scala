@@ -48,12 +48,12 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   val fs = new Path(basePath).getFileSystem(sqlContext.sparkContext.hadoopConfiguration)
   val metaClient = new HoodieTableMetaClient(sqlContext.sparkContext.hadoopConfiguration, basePath, true)
-  // MOR datasets not supported yet
+  // MOR tables not supported yet
   if (metaClient.getTableType.equals(HoodieTableType.MERGE_ON_READ)) {
-    throw new HoodieException("Incremental view not implemented yet, for merge-on-read datasets")
+    throw new HoodieException("Incremental view not implemented yet, for merge-on-read tables")
   }
   // TODO : Figure out a valid HoodieWriteConfig
-  val hoodieTable = HoodieTable.getHoodieTable(metaClient, HoodieWriteConfig.newBuilder().withPath(basePath).build(),
+  private val hoodieTable = HoodieTable.getHoodieTable(metaClient, HoodieWriteConfig.newBuilder().withPath(basePath).build(),
     sqlContext.sparkContext)
   val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
   if (commitTimeline.empty()) {

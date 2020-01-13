@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,26 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.hudi.utilities.schema;
-
-import org.apache.hudi.common.util.TypedProperties;
-
-import org.apache.avro.Schema;
-import org.apache.spark.api.java.JavaSparkContext;
-
-/**
- * Schema provider that will force DeltaStreamer to infer target schema from the table. It can be used with SQL or
- * Flattening transformers to avoid having a target schema in the schema registry.
- */
-public class NullTargetSchemaRegistryProvider extends SchemaRegistryProvider {
-
-  public NullTargetSchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
-    super(props, jssc);
-  }
-
-  @Override
-  public Schema getTargetSchema() {
-    return null;
-  }
+{
+  "namespace": "example.avro",
+  "type": "record",
+  "name": "User",
+  "fields": [
+    {"name": "field1", "type": ["null", "string"], "default": null},
+    {"name": "createTime", "type": ["null", "string"], "default": null}
+  ]
 }

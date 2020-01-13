@@ -29,7 +29,7 @@ import java.util.List;
 /**
  * Helper class to generate Key and column names for rocksdb based view
  *
- * For RocksDB, 3 colFamilies are used for storing file-system view for each dataset. (a) View (b) Partitions Cached (c)
+ * For RocksDB, 3 colFamilies are used for storing file-system view for each table. (a) View (b) Partitions Cached (c)
  * Pending Compactions
  *
  *

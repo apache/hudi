@@ -26,9 +26,9 @@ import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -37,7 +37,7 @@ import java.io.IOException;
  */
 public class EmbeddedTimelineService {
 
-  private static final Logger LOG = LoggerFactory.getLogger(EmbeddedTimelineService.class);
+  private static final Logger LOG = LogManager.getLogger(EmbeddedTimelineService.class);
 
   private int serverPort;
   private String hostAddr;
@@ -72,13 +72,13 @@ public class EmbeddedTimelineService {
   public void startServer() throws IOException {
     server = new TimelineService(0, viewManager, hadoopConf.newCopy());
     serverPort = server.startService();
-    LOG.info("Started embedded timeline server at {} : {}", hostAddr, serverPort);
+    LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
   }
 
   private void setHostAddrFromSparkConf(SparkConf sparkConf) {
     String hostAddr = sparkConf.get("spark.driver.host", null);
     if (hostAddr != null) {
-      LOG.info("Overriding hostIp to ({}) found in spark-conf. It was {}", hostAddr, this.hostAddr);
+      LOG.info("Overriding hostIp to (" + hostAddr + ") found in spark-conf. It was " + this.hostAddr);
       this.hostAddr = hostAddr;
     } else {
       LOG.warn("Unable to find driver bind address from spark config");

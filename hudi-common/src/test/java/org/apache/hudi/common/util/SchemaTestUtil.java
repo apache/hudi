@@ -169,6 +169,10 @@ public class SchemaTestUtil {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/complex-test-evolved.avsc"));
   }
 
+  public static Schema getTimestampEvolvedSchema() throws IOException {
+    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/timestamp-test-evolved.avsc"));
+  }
+
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String commitTime,
       String fileId) throws IOException {
     TestRecord record = new TestRecord(commitTime, recordNumber, fileId);
