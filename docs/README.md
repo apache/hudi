@@ -5,7 +5,7 @@ This folder contains resources that build the [Apache Hudi website](https://hudi
 
 ### Building docs
 
-The site is based on a [Jekyll](https://jekyllrb.com/) theme hosted [here](https://idratherbewriting.com/documentation-theme-jekyll/) with detailed instructions.
+The site is based on a [Jekyll](https://jekyllrb.com/) theme hosted [here](https://github.com/mmistakes/minimal-mistakes/) with detailed instructions.
 
 #### Docker
 
