@@ -193,14 +193,15 @@ public class DeltaSync implements Serializable {
    */
   private void refreshTimeline() throws IOException {
     if (fs.exists(new Path(cfg.targetBasePath))) {
-      HoodieTableMetaClient meta = new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath,
-          cfg.payloadClassName);
+      HoodieTableMetaClient meta =
+          new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath, cfg.payloadClassName);
       switch (meta.getTableType()) {
         case COPY_ON_WRITE:
           this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
           break;
         case MERGE_ON_READ:
-          this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants());
+          this.commitTimelineOpt =
+              Option.of(meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants());
           break;
         default:
           throw new HoodieException("Unsupported table type :" + meta.getTableType());

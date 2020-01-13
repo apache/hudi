@@ -66,8 +66,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
         "hoodie.deltastreamer.keygen.timebased.input.dateformat";
     private static final String TIMESTAMP_OUTPUT_DATE_FORMAT_PROP =
         "hoodie.deltastreamer.keygen.timebased.output.dateformat";
-    private static final String TIMESTAMP_TIMEZONE_FORMAT_PROP =
-            "hoodie.deltastreamer.keygen.timebased.timezone";
+    private static final String TIMESTAMP_TIMEZONE_FORMAT_PROP = "hoodie.deltastreamer.keygen.timebased.timezone";
   }
 
   public TimestampBasedKeyGenerator(TypedProperties config) {

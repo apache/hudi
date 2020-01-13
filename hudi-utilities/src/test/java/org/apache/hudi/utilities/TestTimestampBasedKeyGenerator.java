@@ -40,14 +40,13 @@ public class TestTimestampBasedKeyGenerator {
   @Before
   public void initialize() throws IOException {
     schema = SchemaTestUtil.getTimestampEvolvedSchema();
-    baseRecord = SchemaTestUtil
-        .generateAvroRecordFromJson(schema, 1, "001", "f1");
+    baseRecord = SchemaTestUtil.generateAvroRecordFromJson(schema, 1, "001", "f1");
 
     properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "field1");
     properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "createTime");
     properties.setProperty(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(), "false");
   }
-  
+
   private TypedProperties getBaseKeyConfig(String timestampType, String dateFormat, String timezone) {
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.type", timestampType);
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", dateFormat);
