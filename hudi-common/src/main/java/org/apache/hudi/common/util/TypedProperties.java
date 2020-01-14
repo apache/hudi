@@ -61,37 +61,37 @@ public class TypedProperties extends Properties implements Serializable {
 
   public int getInteger(String property) {
     checkKey(property);
-    return Integer.valueOf(getProperty(property));
+    return Integer.parseInt(getProperty(property));
   }
 
   public int getInteger(String property, int defaultValue) {
-    return containsKey(property) ? Integer.valueOf(getProperty(property)) : defaultValue;
+    return containsKey(property) ? Integer.parseInt(getProperty(property)) : defaultValue;
   }
 
   public long getLong(String property) {
     checkKey(property);
-    return Long.valueOf(getProperty(property));
+    return Long.parseLong(getProperty(property));
   }
 
   public long getLong(String property, long defaultValue) {
-    return containsKey(property) ? Long.valueOf(getProperty(property)) : defaultValue;
+    return containsKey(property) ? Long.parseLong(getProperty(property)) : defaultValue;
   }
 
   public boolean getBoolean(String property) {
     checkKey(property);
-    return Boolean.valueOf(getProperty(property));
+    return Boolean.parseBoolean(getProperty(property));
   }
 
   public boolean getBoolean(String property, boolean defaultValue) {
-    return containsKey(property) ? Boolean.valueOf(getProperty(property)) : defaultValue;
+    return containsKey(property) ? Boolean.parseBoolean(getProperty(property)) : defaultValue;
   }
 
   public double getDouble(String property) {
     checkKey(property);
-    return Double.valueOf(getProperty(property));
+    return Double.parseDouble(getProperty(property));
   }
 
   public double getDouble(String property, double defaultValue) {
-    return containsKey(property) ? Double.valueOf(getProperty(property)) : defaultValue;
+    return containsKey(property) ? Double.parseDouble(getProperty(property)) : defaultValue;
   }
 }
