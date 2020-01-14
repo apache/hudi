@@ -53,7 +53,9 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_TABLE_NAME_PROP_NAME = "hoodie.table.name";
   public static final String HOODIE_TABLE_TYPE_PROP_NAME = "hoodie.table.type";
+  @Deprecated
   public static final String HOODIE_RO_FILE_FORMAT_PROP_NAME = "hoodie.table.ro.file.format";
+  @Deprecated
   public static final String HOODIE_RT_FILE_FORMAT_PROP_NAME = "hoodie.table.rt.file.format";
   public static final String HOODIE_BASE_FILE_FORMAT_PROP_NAME = "hoodie.table.base.file.format";
   public static final String HOODIE_LOG_FILE_FORMAT_PROP_NAME = "hoodie.table.log.file.format";
@@ -174,6 +176,9 @@ public class HoodieTableConfig implements Serializable {
     if (props.containsKey(HOODIE_BASE_FILE_FORMAT_PROP_NAME)) {
       return HoodieFileFormat.valueOf(props.getProperty(HOODIE_BASE_FILE_FORMAT_PROP_NAME));
     }
+    if (props.containsKey(HOODIE_RO_FILE_FORMAT_PROP_NAME)) {
+      return HoodieFileFormat.valueOf(props.getProperty(HOODIE_RO_FILE_FORMAT_PROP_NAME));
+    }
     return DEFAULT_BASE_FILE_FORMAT;
   }
 
@@ -185,6 +190,9 @@ public class HoodieTableConfig implements Serializable {
   public HoodieFileFormat getLogFileFormat() {
     if (props.containsKey(HOODIE_LOG_FILE_FORMAT_PROP_NAME)) {
       return HoodieFileFormat.valueOf(props.getProperty(HOODIE_LOG_FILE_FORMAT_PROP_NAME));
+    }
+    if (props.containsKey(HOODIE_RT_FILE_FORMAT_PROP_NAME)) {
+      return HoodieFileFormat.valueOf(props.getProperty(HOODIE_RT_FILE_FORMAT_PROP_NAME));
     }
     return DEFAULT_LOG_FILE_FORMAT;
   }

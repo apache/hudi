@@ -60,13 +60,6 @@ public class HoodieHiveUtil {
     return job.getConfiguration().get(startCommitTimestampName);
   }
 
-  public static String readMode(JobContext job, String tableName) {
-    String modePropertyName = String.format(HOODIE_CONSUME_MODE_PATTERN, tableName);
-    String mode = job.getConfiguration().get(modePropertyName, DEFAULT_SCAN_MODE);
-    LOG.info(modePropertyName + ": " + mode);
-    return mode;
-  }
-
   public static Path getNthParent(Path path, int n) {
     Path parent = path;
     for (int i = 0; i < n; i++) {

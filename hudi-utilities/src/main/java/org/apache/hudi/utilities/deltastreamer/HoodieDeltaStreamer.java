@@ -156,12 +156,10 @@ public class HoodieDeltaStreamer implements Serializable {
         required = true)
     public String targetBasePath;
 
-    // TODO: How to obtain hive configs to register?
     @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
     public String targetTableName;
 
-    @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ",
-        required = true)
+    @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
     public String tableType;
 
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "

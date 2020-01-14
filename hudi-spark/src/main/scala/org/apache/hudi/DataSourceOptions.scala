@@ -21,6 +21,7 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 import org.apache.hudi.keygen.SimpleKeyGenerator
+import org.apache.log4j.LogManager
 
 /**
   * List of options that can be passed to the Hoodie datasource,
@@ -31,6 +32,9 @@ import org.apache.hudi.keygen.SimpleKeyGenerator
   * Options supported for reading hoodie tables.
   */
 object DataSourceReadOptions {
+
+  private val log = LogManager.getLogger(classOf[DefaultSource])
+
   /**
     * Whether data needs to be read, in
     *
@@ -44,7 +48,33 @@ object DataSourceReadOptions {
   val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
   val QUERY_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
   val QUERY_TYPE_INCREMENTAL_OPT_VAL = "incremental"
-  val DEFAULT_QUERY_TYPE_OPT_VAL = QUERY_TYPE_SNAPSHOT_OPT_VAL
+  val DEFAULT_QUERY_TYPE_OPT_VAL: String = QUERY_TYPE_SNAPSHOT_OPT_VAL
+
+  @Deprecated
+  val VIEW_TYPE_OPT_KEY = "hoodie.datasource.view.type"
+  @Deprecated
+  val VIEW_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
+  @Deprecated
+  val VIEW_TYPE_INCREMENTAL_OPT_VAL = "incremental"
+  @Deprecated
+  val VIEW_TYPE_REALTIME_OPT_VAL = "realtime"
+  @Deprecated
+  val DEFAULT_VIEW_TYPE_OPT_VAL = VIEW_TYPE_READ_OPTIMIZED_OPT_VAL
+
+  /**
+    * This eases migration from old configs to new configs.
+    */
+  def translateViewTypesToQueryTypes(optParams: Map[String, String]) : Map[String, String] = {
+    val translation = Map(VIEW_TYPE_READ_OPTIMIZED_OPT_VAL -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
+                          VIEW_TYPE_INCREMENTAL_OPT_VAL -> QUERY_TYPE_INCREMENTAL_OPT_VAL,
+                          VIEW_TYPE_REALTIME_OPT_VAL -> QUERY_TYPE_SNAPSHOT_OPT_VAL)
+    if (optParams.contains(VIEW_TYPE_OPT_KEY) && !optParams.contains(QUERY_TYPE_OPT_KEY)) {
+      log.warn(VIEW_TYPE_OPT_KEY + " is deprecated and will be removed in a later release. Please use " + QUERY_TYPE_OPT_KEY)
+      optParams ++ Map(QUERY_TYPE_OPT_KEY -> translation(optParams(VIEW_TYPE_OPT_KEY)))
+    } else {
+      optParams
+    }
+  }
 
   /**
     * Instant time to start incrementally pulling data from. The instanttime here need not
@@ -72,12 +102,16 @@ object DataSourceReadOptions {
     * This option allows setting filters directly on Hoodie Source
     */
   val PUSH_DOWN_INCR_FILTERS_OPT_KEY = "hoodie.datasource.read.incr.filters"
+  val DEFAULTPUSH_DOWN_FILTERS_OPT_VAL = ""
 }
 
 /**
   * Options supported for writing hoodie tables.
   */
 object DataSourceWriteOptions {
+
+  private val log = LogManager.getLogger(classOf[DefaultSource])
+
   /**
     * The write operation, that this write should do
     *
@@ -100,6 +134,25 @@ object DataSourceWriteOptions {
   val COW_TABLE_TYPE_OPT_VAL = HoodieTableType.COPY_ON_WRITE.name
   val MOR_TABLE_TYPE_OPT_VAL = HoodieTableType.MERGE_ON_READ.name
   val DEFAULT_TABLE_TYPE_OPT_VAL = COW_TABLE_TYPE_OPT_VAL
+
+  @Deprecated
+  val STORAGE_TYPE_OPT_KEY = "hoodie.datasource.write.storage.type"
+  @Deprecated
+  val COW_STORAGE_TYPE_OPT_VAL = HoodieTableType.COPY_ON_WRITE.name
+  @Deprecated
+  val MOR_STORAGE_TYPE_OPT_VAL = HoodieTableType.MERGE_ON_READ.name
+  @Deprecated
+  val DEFAULT_STORAGE_TYPE_OPT_VAL = COW_STORAGE_TYPE_OPT_VAL
+
+  def translateStorageTypeToTableType(optParams: Map[String, String]) : Map[String, String] = {
+    if (optParams.contains(STORAGE_TYPE_OPT_KEY) && !optParams.contains(TABLE_TYPE_OPT_KEY)) {
+      log.warn(STORAGE_TYPE_OPT_KEY + " is deprecated and will be removed in a later release; Please use " + TABLE_TYPE_OPT_KEY)
+      optParams ++ Map(TABLE_TYPE_OPT_KEY -> optParams(STORAGE_TYPE_OPT_KEY))
+    } else {
+      optParams
+    }
+  }
+
 
   /**
     * Hive table name, to register the table into.

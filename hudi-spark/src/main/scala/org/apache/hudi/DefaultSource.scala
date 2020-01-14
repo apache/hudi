@@ -50,7 +50,7 @@ class DefaultSource extends RelationProvider
                               optParams: Map[String, String],
                               schema: StructType): BaseRelation = {
     // Add default options for unspecified read options keys.
-    val parameters = Map(QUERY_TYPE_OPT_KEY -> DEFAULT_QUERY_TYPE_OPT_VAL) ++ optParams
+    val parameters = Map(QUERY_TYPE_OPT_KEY -> DEFAULT_QUERY_TYPE_OPT_VAL) ++ translateViewTypesToQueryTypes(optParams)
 
     val path = parameters.get("path")
     if (path.isEmpty) {
