@@ -167,7 +167,7 @@ public class UtilitiesTestBase {
       StringBuffer sb = new StringBuffer();
       String line;
       while ((line = reader.readLine()) != null) {
-        sb.append(line);
+        sb.append(line + "\n");
       }
       return sb.toString();
     }
