@@ -170,6 +170,22 @@ public class QuickstartUtils {
       return updates;
     }
 
+    /**
+     * Generates new Deletes, randomly distributed across the keys above. There can be duplicates within the returned
+     * list
+     *
+     * @param n Number of deletes (including dups)
+     * @return list of hoodie records to delete
+     */
+    public List<HoodieKey> generateDeletes(Integer n) throws IOException {
+      List<HoodieKey> deletes = new ArrayList<>();
+      for (int i = 0; i < n; i++) {
+        HoodieKey key = existingKeys.get(rand.nextInt(numExistingKeys));
+        deletes.add(key);
+      }
+      return deletes;
+    }
+
     public void close() {
       existingKeys.clear();
     }
