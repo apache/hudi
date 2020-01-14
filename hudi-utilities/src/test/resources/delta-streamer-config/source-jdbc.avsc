@@ -21,6 +21,10 @@
   "namespace": "hoodie.triprec",
   "fields": [
   {
+    "name":"ID",
+    "type": "int"
+  },
+  {
 	"name": "TIMESTAMP",
 	"type": ["double", "null"]
   },

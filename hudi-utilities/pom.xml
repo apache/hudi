@@ -73,7 +73,7 @@
     <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
-      <version>1.4.199</version>
+      <version>${h2.version}</version>
       <scope>test</scope>
     </dependency>
 

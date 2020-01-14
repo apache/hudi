@@ -16,12 +16,13 @@
  * limitations under the License.
  */
 CREATE TABLE triprec (
-    timestamp DOUBLE,
-    rider VARCHAR(200),
-    driver VARCHAR(200),
-    begin_lat DOUBLE,
-    begin_lon DOUBLE,
-    end_lat DOUBLE,
-    end_lon DOUBLE,
-    fare DOUBLE
+    id          INT NOT NULL,
+    timestamp   DOUBLE,
+    rider       VARCHAR(200),
+    driver      VARCHAR(200),
+    begin_lat   DOUBLE,
+    begin_lon   DOUBLE,
+    end_lat     DOUBLE,
+    end_lon     DOUBLE,
+    fare        DOUBLE
 );

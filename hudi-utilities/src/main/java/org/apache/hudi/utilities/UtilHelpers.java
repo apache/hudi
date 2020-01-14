@@ -49,6 +49,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.execution.datasources.jdbc.JDBCOptions;
+import org.apache.spark.sql.execution.datasources.jdbc.JdbcOptionsInWrite;
 import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils;
 import org.apache.spark.sql.jdbc.JdbcDialect;
 import org.apache.spark.sql.jdbc.JdbcDialects;
@@ -75,10 +76,10 @@ public class UtilHelpers {
   private static final Logger LOG = LogManager.getLogger(UtilHelpers.class);
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
-      SparkSession sparkSession, SchemaProvider schemaProvider) throws IOException {
+                                    SparkSession sparkSession, SchemaProvider schemaProvider) throws IOException {
     try {
       return (Source) ReflectionUtils.loadClass(sourceClass,
-          new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class}, cfg,
+          new Class<?>[]{TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class}, cfg,
           jssc, sparkSession, schemaProvider);
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);
@@ -86,7 +87,7 @@ public class UtilHelpers {
   }
 
   public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,
-      JavaSparkContext jssc) throws IOException {
+                                                    JavaSparkContext jssc) throws IOException {
     try {
       return schemaProviderClass == null ? null
           : (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
@@ -104,6 +105,7 @@ public class UtilHelpers {
   }
 
   /**
+   *
    */
   public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
     DFSPropertiesConfiguration conf;
@@ -143,7 +145,7 @@ public class UtilHelpers {
   /**
    * Parse Schema from file.
    *
-   * @param fs File System
+   * @param fs         File System
    * @param schemaFile Schema File
    */
   public static String parseSchema(FileSystem fs, String schemaFile) throws Exception {
@@ -194,7 +196,7 @@ public class UtilHelpers {
 
   /**
    * Build Spark Context for ingestion/compaction.
-   * 
+   *
    * @return
    */
   public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
@@ -206,13 +208,13 @@ public class UtilHelpers {
   /**
    * Build Hoodie write client.
    *
-   * @param jsc Java Spark Context
-   * @param basePath Base Path
-   * @param schemaStr Schema
+   * @param jsc         Java Spark Context
+   * @param basePath    Base Path
+   * @param schemaStr   Schema
    * @param parallelism Parallelism
    */
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) throws Exception {
+                                                     int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) throws Exception {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
@@ -256,11 +258,13 @@ public class UtilHelpers {
    * @throws Exception
    */
   public static Schema getSchema(Map<String, String> options) throws Exception {
-    JDBCOptions jdbcOptions = new JDBCOptions(toScalaImmutableMap(options));
+    scala.collection.immutable.Map<String, String> ioptions = toScalaImmutableMap(options);
+    JDBCOptions jdbcOptions = new JDBCOptions(ioptions);
     Connection conn = JdbcUtils.createConnectionFactory(jdbcOptions).apply();
     String url = jdbcOptions.url();
-    String table = jdbcOptions.table();
-    boolean tableExists = JdbcUtils.tableExists(conn, url, table);
+    String table = jdbcOptions.tableOrQuery();
+    JdbcOptionsInWrite jdbcOptionsInWrite = new JdbcOptionsInWrite(ioptions);
+    boolean tableExists = JdbcUtils.tableExists(conn, jdbcOptionsInWrite);
     if (tableExists) {
       JdbcDialect dialect = JdbcDialects.get(url);
       try {
@@ -269,7 +273,12 @@ public class UtilHelpers {
           statement.setQueryTimeout(Integer.parseInt(options.get("timeout")));
           ResultSet rs = statement.executeQuery();
           try {
-            StructType structType = JdbcUtils.getSchema(rs, dialect);
+            StructType structType;
+            if (Boolean.parseBoolean(ioptions.get("nullable").get())) {
+              structType = JdbcUtils.getSchema(rs, dialect, true);
+            } else {
+              structType = JdbcUtils.getSchema(rs, dialect, false);
+            }
             return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
           } finally {
             rs.close();

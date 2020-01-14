@@ -127,6 +127,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.password", "");
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.dbtable", "triprec");
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.timeout", "0");
+    props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.nullable", "false");
     // Hive Configs
     props.setProperty(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), "jdbc:hive2://127.0.0.1:9999/");
     props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "testdb1");
@@ -525,10 +526,10 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   @Test
   public void testJdbcbasedSchemaProvider() throws Exception {
     initH2Database();
-    String dataSetBasePath = dfsBasePath + "/test_dataset";
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, Operation.BULK_INSERT,
+    String tableBasePath = dfsBasePath + "/test_dataset";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.BULK_INSERT,
         SqlQueryBasedTransformer.class.getName(), PROPS_FILENAME_TEST_SOURCE, true,
-        false);
+        false, false, null, null);
     try {
       TypedProperties props = UtilHelpers.readConfig(dfs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
       Schema sourceSchema = UtilHelpers.createSchemaProvider(JdbcbasedSchemaProvider.class.getName(), props, jsc).getSourceSchema();
