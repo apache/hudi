@@ -19,12 +19,14 @@ package org.apache.hudi.cli
 
 import java.util.stream.Collectors
 
+import com.beust.jcommander.Parameter
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.hudi.common.model.{HoodieDataFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.FSUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.utilities.config.AbstractCommandConfig
 import org.apache.log4j.Logger
 import org.apache.spark.sql.{DataFrame, SQLContext}
 
@@ -35,11 +37,7 @@ import scala.collection.mutable._
 /**
   * Spark job to de-duplicate data present in a partition path
   */
-class DedupeSparkJob(basePath: String,
-                     duplicatedPartitionPath: String,
-                     repairOutputPath: String,
-                     sqlContext: SQLContext,
-                     fs: FileSystem) {
+class DedupeSparkJob(cfg: DedupeConfig, sqlContext: SQLContext, fs: FileSystem) {
 
 
   val sparkHelper = new SparkHelper(sqlContext, fs)
@@ -76,9 +74,9 @@ class DedupeSparkJob(basePath: String,
     val tmpTableName = s"htbl_${System.currentTimeMillis()}"
     val dedupeTblName = s"${tmpTableName}_dupeKeys"
 
-    val metadata = new HoodieTableMetaClient(fs.getConf, basePath)
+    val metadata = new HoodieTableMetaClient(fs.getConf, cfg.basePath)
 
-    val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"$basePath/$duplicatedPartitionPath"))
+    val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"${cfg.basePath}/${cfg.duplicatedPartitionPath}"))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
     val latestFiles: java.util.List[HoodieDataFile] = fsView.getLatestDataFiles().collect(Collectors.toList[HoodieDataFile]())
     val filteredStatuses = latestFiles.map(f => f.getPath)
@@ -127,9 +125,9 @@ class DedupeSparkJob(basePath: String,
 
 
   def fixDuplicates(dryRun: Boolean = true) = {
-    val metadata = new HoodieTableMetaClient(fs.getConf, basePath)
+    val metadata = new HoodieTableMetaClient(fs.getConf, cfg.basePath)
 
-    val allFiles = fs.listStatus(new Path(s"$basePath/$duplicatedPartitionPath"))
+    val allFiles = fs.listStatus(new Path(s"${cfg.basePath}/${cfg.duplicatedPartitionPath}"))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
 
     val latestFiles: java.util.List[HoodieDataFile] = fsView.getLatestDataFiles().collect(Collectors.toList[HoodieDataFile]())
@@ -140,7 +138,7 @@ class DedupeSparkJob(basePath: String,
     // 1. Copy all latest files into the temp fix path
     fileNameToPathMap.foreach { case (fileName, filePath) =>
       val badSuffix = if (dupeFixPlan.contains(fileName)) ".bad" else ""
-      val dstPath = new Path(s"$repairOutputPath/${filePath.getName}$badSuffix")
+      val dstPath = new Path(s"${cfg.repairOutputPath}/${filePath.getName}$badSuffix")
       LOG.info(s"Copying from $filePath to $dstPath")
       FileUtil.copy(fs, filePath, fs, dstPath, false, true, fs.getConf)
     }
@@ -148,15 +146,15 @@ class DedupeSparkJob(basePath: String,
     // 2. Remove duplicates from the bad files
     dupeFixPlan.foreach { case (fileName, keysToSkip) =>
       val commitTime = FSUtils.getCommitTime(fileNameToPathMap(fileName).getName)
-      val badFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}.bad")
-      val newFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}")
+      val badFilePath = new Path(s"${cfg.repairOutputPath}/${fileNameToPathMap(fileName).getName}.bad")
+      val newFilePath = new Path(s"${cfg.repairOutputPath}/${fileNameToPathMap(fileName).getName}")
       LOG.info(" Skipping and writing new file for : " + fileName)
       SparkHelpers.skipKeysAndWriteNewFile(commitTime, fs, badFilePath, newFilePath, dupeFixPlan(fileName))
       fs.delete(badFilePath, false)
     }
 
     // 3. Check that there are no duplicates anymore.
-    val df = sqlContext.read.parquet(s"$repairOutputPath/*.parquet")
+    val df = sqlContext.read.parquet(s"${cfg.repairOutputPath}/*.parquet")
     df.registerTempTable("fixedTbl")
     val dupeKeyDF = getDupeKeyDF("fixedTbl")
     val dupeCnt = dupeKeyDF.count()
@@ -167,7 +165,7 @@ class DedupeSparkJob(basePath: String,
 
     // 4. Additionally ensure no record keys are left behind.
     val sourceDF = sparkHelper.getDistinctKeyDF(fileNameToPathMap.map(t => t._2.toString).toList)
-    val fixedDF = sparkHelper.getDistinctKeyDF(fileNameToPathMap.map(t => s"$repairOutputPath/${t._2.getName}").toList)
+    val fixedDF = sparkHelper.getDistinctKeyDF(fileNameToPathMap.map(t => s"${cfg.repairOutputPath}/${t._2.getName}").toList)
     val missedRecordKeysDF = sourceDF.except(fixedDF)
     val missedCnt = missedRecordKeysDF.count()
     if (missedCnt != 0) {
@@ -179,8 +177,8 @@ class DedupeSparkJob(basePath: String,
     println("No duplicates found & counts are in check!!!! ")
     // 4. Prepare to copy the fixed files back.
     fileNameToPathMap.foreach { case (_, filePath) =>
-      val srcPath = new Path(s"$repairOutputPath/${filePath.getName}")
-      val dstPath = new Path(s"$basePath/$duplicatedPartitionPath/${filePath.getName}")
+      val srcPath = new Path(s"${cfg.repairOutputPath}/${filePath.getName}")
+      val dstPath = new Path(s"${cfg.basePath}/${cfg.duplicatedPartitionPath}/${filePath.getName}")
       if (dryRun) {
         LOG.info(s"[JUST KIDDING!!!] Copying from $srcPath to $dstPath")
       } else {
@@ -190,4 +188,18 @@ class DedupeSparkJob(basePath: String,
       }
     }
   }
+}
+
+class DedupeConfig extends AbstractCommandConfig {
+  @Parameter(names = Array("--duplicated-partition-path", "-dpp"),
+    description = "Duplicated partition path for deduplication", required = true)
+  var duplicatedPartitionPath: String = _
+
+  @Parameter(names = Array("--repaired-output-path", "-rop"),
+    description = "Repaired output path for deduplication", required = true)
+  var repairOutputPath: String = _
+
+  @Parameter(names = Array("--base-path", "-bp"),
+    description = "Base path for the hoodie dataset", required = true)
+  var basePath: String = _
 }

@@ -25,15 +25,14 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
 
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.utilities.config.AbstractCommandConfig;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.util.List;
 
 public class HoodieCompactionAdminTool {
@@ -46,11 +45,7 @@ public class HoodieCompactionAdminTool {
 
   public static void main(String[] args) throws Exception {
     final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
-      cmd.usage();
-      System.exit(1);
-    }
+    cfg.parseCommandConfig(args, true);
     HoodieCompactionAdminTool admin = new HoodieCompactionAdminTool(cfg);
     admin.run(UtilHelpers.buildSparkContext("admin-compactor", cfg.sparkMaster, cfg.sparkMemory));
   }
@@ -140,33 +135,31 @@ public class HoodieCompactionAdminTool {
   /**
    * Admin Configuration Options.
    */
-  public static class Config implements Serializable {
+  public static class Config extends AbstractCommandConfig {
 
     @Parameter(names = {"--operation", "-op"}, description = "Operation", required = true)
     public Operation operation = Operation.VALIDATE;
     @Parameter(names = {"--base-path", "-bp"}, description = "Base path for the table", required = true)
     public String basePath = null;
-    @Parameter(names = {"--instant-time", "-in"}, description = "Compaction Instant time", required = false)
+    @Parameter(names = {"--instant-time", "-in"}, description = "Compaction Instant time")
     public String compactionInstantTime = null;
-    @Parameter(names = {"--partition-path", "-pp"}, description = "Partition Path", required = false)
+    @Parameter(names = {"--partition-path", "-pp"}, description = "Partition Path")
     public String partitionPath = null;
-    @Parameter(names = {"--file-id", "-id"}, description = "File Id", required = false)
+    @Parameter(names = {"--file-id", "-id"}, description = "File Id")
     public String fileId = null;
-    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = false)
+    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert")
     public int parallelism = 3;
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = true)
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
-    @Parameter(names = {"--dry-run", "-dr"}, description = "Dry Run Mode", required = false)
+    @Parameter(names = {"--dry-run", "-dr"}, description = "Dry Run Mode")
     public boolean dryRun = false;
-    @Parameter(names = {"--skip-validation", "-sv"}, description = "Skip Validation", required = false)
+    @Parameter(names = {"--skip-validation", "-sv"}, description = "Skip Validation")
     public boolean skipValidation = false;
-    @Parameter(names = {"--output-path", "-ot"}, description = "Output Path", required = false)
+    @Parameter(names = {"--output-path", "-ot"}, description = "Output Path")
     public String outputPath = null;
-    @Parameter(names = {"--print-output", "-pt"}, description = "Print Output", required = false)
+    @Parameter(names = {"--print-output", "-pt"}, description = "Print Output")
     public boolean printOutput = true;
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
   }
 }

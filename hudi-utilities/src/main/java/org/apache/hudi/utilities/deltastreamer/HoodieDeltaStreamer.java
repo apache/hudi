@@ -34,11 +34,11 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.config.AbstractCommandConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.JsonDFSSource;
 
 import com.beust.jcommander.IStringConverter;
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
 import com.google.common.base.Preconditions;
@@ -148,7 +148,7 @@ public class HoodieDeltaStreamer implements Serializable {
     }
   }
 
-  public static class Config implements Serializable {
+  public static class Config extends AbstractCommandConfig {
 
     @Parameter(names = {"--target-base-path"},
         description = "base path for the target hoodie table. "
@@ -268,9 +268,6 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
     public String checkpoint = null;
 
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
-
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(storageType));
@@ -284,11 +281,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
   public static void main(String[] args) throws Exception {
     final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
-      cmd.usage();
-      System.exit(1);
-    }
+    cfg.parseCommandConfig(args, true);
 
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     JavaSparkContext jssc =

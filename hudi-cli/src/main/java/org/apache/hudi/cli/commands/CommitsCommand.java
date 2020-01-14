@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.NumericUtils;
 
+import org.apache.hudi.utilities.HoodieRollback;
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
@@ -102,8 +103,12 @@ public class CommitsCommand implements CommandMarker {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK.toString(), commitTime,
-        HoodieCLI.getTableMetaClient().getBasePath());
+    HoodieRollback.Config config = new HoodieRollback.Config();
+    config.basePath = HoodieCLI.getTableMetaClient().getBasePath();
+    config.commitTime = commitTime;
+    String[] commandConfig = config.getCommandConfigsAsStringArray(SparkMain.SparkCommand.ROLLBACK.name());
+
+    sparkLauncher.addAppArgs(commandConfig);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

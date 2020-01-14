@@ -23,10 +23,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.config.AbstractCommandConfig;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullException;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
 
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -40,7 +40,6 @@ import org.stringtemplate.v4.ST;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -64,7 +63,7 @@ public class HiveIncrementalPuller {
   private static final Logger LOG = LogManager.getLogger(HiveIncrementalPuller.class);
   private static String driverName = "org.apache.hive.jdbc.HiveDriver";
 
-  public static class Config implements Serializable {
+  public static class Config extends AbstractCommandConfig {
 
     @Parameter(names = {"--hiveUrl"})
     public String hiveJDBCUrl = "jdbc:hive2://localhost:10014/;transportMode=http;httpPath=hs2";
@@ -92,8 +91,6 @@ public class HiveIncrementalPuller {
     public String fromCommitTime;
     @Parameter(names = {"--maxCommits"})
     public int maxCommits = 3;
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
   }
 
   static {
@@ -219,7 +216,7 @@ public class HiveIncrementalPuller {
     // Set the from commit time
     executeStatement("set hoodie." + config.sourceTable + ".consume.start.timestamp=" + config.fromCommitTime, stmt);
     // Set number of commits to pull
-    executeStatement("set hoodie." + config.sourceTable + ".consume.max.commits=" + String.valueOf(config.maxCommits),
+    executeStatement("set hoodie." + config.sourceTable + ".consume.max.commits=" + config.maxCommits,
         stmt);
   }
 
@@ -233,14 +230,14 @@ public class HiveIncrementalPuller {
     stmt.execute(sql);
   }
 
-  private String inferCommitTime(FileSystem fs) throws SQLException, IOException {
-    LOG.info("FromCommitTime not specified. Trying to infer it from Hoodie table " + config.targetDb + "."
+  private String inferCommitTime(FileSystem fs) throws IOException {
+    LOG.info("FromCommitTime not specified. Trying to infer it from Hoodie dataset " + config.targetDb + "."
         + config.targetTable);
     String targetDataLocation = getTableLocation(config.targetDb, config.targetTable);
     return scanForCommitTime(fs, targetDataLocation);
   }
 
-  private String getTableLocation(String db, String table) throws SQLException {
+  private String getTableLocation(String db, String table) {
     ResultSet resultSet = null;
     Statement stmt = null;
     try {
@@ -309,7 +306,7 @@ public class HiveIncrementalPuller {
     return FileSystem.mkdirs(fs, targetBaseDirPath, new FsPermission(FsAction.ALL, FsAction.ALL, FsAction.ALL));
   }
 
-  private String getLastCommitTimePulled(FileSystem fs, String sourceTableLocation) throws IOException {
+  private String getLastCommitTimePulled(FileSystem fs, String sourceTableLocation) {
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs.getConf(), sourceTableLocation);
     List<String> commitsToSync = metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
         .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstants().map(HoodieInstant::getTimestamp)
@@ -337,11 +334,7 @@ public class HiveIncrementalPuller {
 
   public static void main(String[] args) throws IOException {
     final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
-      cmd.usage();
-      System.exit(1);
-    }
+    cfg.parseCommandConfig(args, true, true);
     new HiveIncrementalPuller(cfg).saveDelta();
   }
 }

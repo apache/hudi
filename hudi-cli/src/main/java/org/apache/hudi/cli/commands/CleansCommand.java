@@ -18,6 +18,7 @@
 
 package org.apache.hudi.cli.commands;
 
+import com.google.common.base.Strings;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.cli.HoodieCLI;
@@ -30,7 +31,8 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.AvroUtils;
-import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.HoodieCleaner;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.core.CommandMarker;
@@ -42,6 +44,7 @@ import scala.collection.JavaConverters;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -136,9 +139,17 @@ public class CleansCommand implements CommandMarker {
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
-    String cmd = SparkMain.SparkCommand.CLEAN.toString();
-    sparkLauncher.addAppArgs(cmd, metaClient.getBasePath(), master, propsFilePath, sparkMemory);
-    UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
+    HoodieCleaner.Config config = new HoodieCleaner.Config();
+    config.configs = Arrays.asList(configs);
+    if (!Strings.isNullOrEmpty(propsFilePath)) {
+      config.propsFilePath = propsFilePath;
+    }
+    config.basePath = metaClient.getBasePath();
+    config.sparkMaster = master;
+    config.sparkMemory = sparkMemory;
+    String[] commandConfig = config.getCommandConfigsAsStringArray(SparkMain.SparkCommand.CLEAN.toString());
+    sparkLauncher.addAppArgs(commandConfig);
+
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hudi.cli.DedupeConfig;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
@@ -53,8 +54,13 @@ public class RepairsCommand implements CommandMarker {
           mandatory = true) final String sparkPropertiesPath)
       throws Exception {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.DEDUPLICATE.toString(), duplicatedPartitionPath, repairedOutputPath,
-        HoodieCLI.getTableMetaClient().getBasePath());
+    DedupeConfig config = new DedupeConfig();
+    config.basePath_$eq(HoodieCLI.getTableMetaClient().getBasePath());
+    config.duplicatedPartitionPath_$eq(duplicatedPartitionPath);
+    config.repairOutputPath_$eq(repairedOutputPath);
+    String[] commandConfig = config.getCommandConfigsAsStringArray(SparkMain.SparkCommand.DEDUPLICATE.name());
+
+    sparkLauncher.addAppArgs(commandConfig);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

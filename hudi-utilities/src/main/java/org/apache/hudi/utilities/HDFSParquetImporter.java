@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.beust.jcommander.IValueValidator;
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
 import com.google.common.annotations.VisibleForTesting;
@@ -42,6 +41,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hudi.utilities.config.AbstractCommandConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
@@ -81,13 +81,9 @@ public class HDFSParquetImporter implements Serializable {
     this.cfg = cfg;
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
-      cmd.usage();
-      System.exit(1);
-    }
+    cfg.parseCommandConfig(args, true, true);
     HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
     JavaSparkContext jssc =
         UtilHelpers.buildSparkContext("data-importer-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
@@ -198,7 +194,7 @@ public class HDFSParquetImporter implements Serializable {
    * @param <T> Type
    */
   protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(HoodieWriteClient client, String instantTime,
-      JavaRDD<HoodieRecord<T>> hoodieRecords) throws Exception {
+      JavaRDD<HoodieRecord<T>> hoodieRecords) {
     switch (cfg.command.toLowerCase()) {
       case "upsert": {
         return client.upsert(hoodieRecords, instantTime);
@@ -238,7 +234,7 @@ public class HDFSParquetImporter implements Serializable {
     }
   }
 
-  public static class Config implements Serializable {
+  public static class Config extends AbstractCommandConfig {
 
     @Parameter(names = {"--command", "-c"}, description = "Write command Valid values are insert(default)/upsert/bulkinsert",
         required = false, validateValueWith = CommandValidator.class)
@@ -260,14 +256,14 @@ public class HDFSParquetImporter implements Serializable {
     public int parallelism = 1;
     @Parameter(names = {"--schema-file", "-sf"}, description = "path for Avro schema file", required = true)
     public String schemaFile = null;
-    @Parameter(names = {"--format", "-f"}, description = "Format for the input data.", required = false,
+    @Parameter(names = {"--format", "-f"}, description = "Format for the input data.",
         validateValueWith = FormatValidator.class)
     public String format = null;
-    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
-    @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
+    @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client for importing")
@@ -275,7 +271,5 @@ public class HDFSParquetImporter implements Serializable {
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
     public List<String> configs = new ArrayList<>();
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
   }
 }

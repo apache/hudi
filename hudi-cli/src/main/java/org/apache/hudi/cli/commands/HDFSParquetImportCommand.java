@@ -18,12 +18,13 @@
 
 package org.apache.hudi.cli.commands;
 
+import com.google.common.base.Strings;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.HDFSParquetImporter.FormatValidator;
-import org.apache.hudi.utilities.UtilHelpers;
 
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
@@ -33,6 +34,8 @@ import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
 import scala.collection.JavaConverters;
+
+import java.util.Arrays;
 
 /**
  * CLI command for importing parquet table to hudi table.
@@ -78,9 +81,25 @@ public class HDFSParquetImportCommand implements CommandMarker {
       cmd = SparkCommand.UPSERT.toString();
     }
 
-    sparkLauncher.addAppArgs(cmd, srcPath, targetPath, tableName, tableType, rowKeyField, partitionPathField,
-        parallelism, schemaFilePath, sparkMemory, retry, propsFilePath);
-    UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
+    HDFSParquetImporter.Config config = new HDFSParquetImporter.Config();
+    config.command = cmd;
+    config.srcPath = srcPath;
+    config.targetPath = targetPath;
+    config.tableName = tableName;
+    config.tableType = tableType;
+    config.rowKey = rowKeyField;
+    config.partitionKey = partitionPathField;
+    config.parallelism = Integer.parseInt(parallelism);
+    config.schemaFile = schemaFilePath;
+    config.sparkMemory = sparkMemory;
+    config.retry = Integer.parseInt(retry);
+    config.configs = Arrays.asList(configs);
+    if (!Strings.isNullOrEmpty(propsFilePath)) {
+      config.propsFilePath = propsFilePath;
+    }
+    String[] commandConfig = config.getCommandConfigsAsStringArray(cmd);
+
+    sparkLauncher.addAppArgs(commandConfig);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

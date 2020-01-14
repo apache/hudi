@@ -30,12 +30,12 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.utilities.config.AbstractCommandConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -56,7 +56,7 @@ public class HoodieSnapshotCopier implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSnapshotCopier.class);
 
-  static class Config implements Serializable {
+  static class Config extends AbstractCommandConfig {
 
     @Parameter(names = {"--base-path", "-bp"}, description = "Hoodie table base path", required = true)
     String basePath = null;
@@ -164,7 +164,7 @@ public class HoodieSnapshotCopier implements Serializable {
   public static void main(String[] args) throws IOException {
     // Take input configs
     final Config cfg = new Config();
-    new JCommander(cfg, null, args);
+    cfg.parseCommandConfig(args);
     LOG.info(String.format("Snapshot hoodie table from %s targetBasePath to %stargetBasePath", cfg.basePath,
         cfg.outputPath));
 
