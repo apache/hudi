@@ -228,9 +228,9 @@ public class TestHoodieCompactionStrategy {
 
   private List<HoodieCompactionOperation> createCompactionOperations(HoodieWriteConfig config,
       Map<Long, List<Long>> sizesMap) {
-    Map<Long, String> keyToPartitionMap = sizesMap.keySet().stream()
-        .map(e -> Pair.of(e, partitionPaths[RANDOM.nextInt(partitionPaths.length - 1)]))
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    Map<Long, String> keyToPartitionMap =
+        sizesMap.keySet().stream().map(e -> Pair.of(e, partitionPaths[RANDOM.nextInt(partitionPaths.length - 1)]))
+            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     return createCompactionOperations(config, sizesMap, keyToPartitionMap);
   }
 

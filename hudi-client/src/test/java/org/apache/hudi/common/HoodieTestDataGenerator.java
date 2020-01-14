@@ -83,8 +83,8 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"amount\",\"type\": \"double\"},{\"name\": \"currency\", \"type\": \"string\"}]}},"
       + "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false} ]}";
   public static String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
-  public static String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,"
-                                                  + "struct<amount:double,currency:string>,boolean";
+  public static String TRIP_HIVE_COLUMN_TYPES =
+      "double,string,string,string,double,double,double,double," + "struct<amount:double,currency:string>,boolean";
   public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
   public static Schema avroSchemaWithMetadataFields = HoodieAvroUtils.addMetadataFields(avroSchema);
 
