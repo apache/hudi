@@ -40,6 +40,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -217,7 +218,7 @@ public class HoodieAvroUtils {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try {
       OutputStream out = new DeflaterOutputStream(baos);
-      out.write(text.getBytes("UTF-8"));
+      out.write(text.getBytes(StandardCharsets.UTF_8));
       out.close();
     } catch (IOException e) {
       throw new HoodieIOException("IOException while compressing text " + text, e);
@@ -234,7 +235,7 @@ public class HoodieAvroUtils {
       while ((len = in.read(buffer)) > 0) {
         baos.write(buffer, 0, len);
       }
-      return new String(baos.toByteArray(), "UTF-8");
+      return new String(baos.toByteArray(), StandardCharsets.UTF_8);
     } catch (IOException e) {
       throw new HoodieIOException("IOException while decompressing text", e);
     }

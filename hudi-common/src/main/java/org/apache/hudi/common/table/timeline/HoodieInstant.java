@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * A Hoodie Instant represents a action done on a hoodie dataset. All actions start with a inflight instant and then
+ * A Hoodie Instant represents a action done on a hoodie table. All actions start with a inflight instant and then
  * create a completed instant after done.
  *
  * @see HoodieTimeline

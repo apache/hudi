@@ -63,7 +63,7 @@ public class HoodieClientExample {
 
   public static void main(String[] args) throws Exception {
     HoodieClientExample cli = new HoodieClientExample();
-    JCommander cmd = new JCommander(cli, args);
+    JCommander cmd = new JCommander(cli, null, args);
 
     if (cli.help) {
       cmd.usage();
@@ -132,7 +132,7 @@ public class HoodieClientExample {
     client.delete(deleteRecords, newCommitTime);
 
     /**
-     * Schedule a compaction and also perform compaction on a MOR dataset
+     * Schedule a compaction and also perform compaction on a MOR table
      */
     if (HoodieTableType.valueOf(tableType) == HoodieTableType.MERGE_ON_READ) {
       Option<String> instant = client.scheduleCompaction(Option.empty());

@@ -82,7 +82,7 @@ public class HoodieCleaner {
 
   public static class Config implements Serializable {
 
-    @Parameter(names = {"--target-base-path"}, description = "base path for the hoodie dataset to be cleaner.",
+    @Parameter(names = {"--target-base-path"}, description = "base path for the hoodie table to be cleaner.",
         required = true)
     public String basePath;
 
@@ -103,7 +103,7 @@ public class HoodieCleaner {
 
   public static void main(String[] args) throws Exception {
     final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, args);
+    JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
       System.exit(1);

@@ -292,7 +292,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testCOWToMORConvertedDatasetRollback() throws Exception {
+  public void testCOWToMORConvertedTableRollback() throws Exception {
 
     // Set TableType to COW
     HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, HoodieTableType.COPY_ON_WRITE);

@@ -65,7 +65,7 @@ public class RepairsCommand implements CommandMarker {
     return "Deduplication failed ";
   }
 
-  @CliCommand(value = "repair addpartitionmeta", help = "Add partition metadata to a dataset, if not present")
+  @CliCommand(value = "repair addpartitionmeta", help = "Add partition metadata to a table, if not present")
   public String addPartitionMeta(
       @CliOption(key = {"dryrun"}, help = "Should we actually add or just print what would be done",
           unspecifiedDefaultValue = "true") final boolean dryRun)

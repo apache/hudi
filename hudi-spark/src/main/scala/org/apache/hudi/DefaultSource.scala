@@ -29,7 +29,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 
 /**
-  * Hoodie Spark Datasource, for reading and writing hoodie datasets
+  * Hoodie Spark Datasource, for reading and writing hoodie tables
   *
   */
 class DefaultSource extends RelationProvider

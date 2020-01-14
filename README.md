@@ -57,6 +57,12 @@ git clone https://github.com/apache/incubator-hudi.git && cd incubator-hudi
 mvn clean package -DskipTests -DskipITs
 ```
 
+To build the Javadoc for all Java and Scala classes:
+```
+# Javadoc generated under target/site/apidocs
+mvn clean javadoc:aggregate -Pjavadocs
+```
+
 ## Quickstart
 
 Please visit [https://hudi.apache.org/quickstart.html](https://hudi.apache.org/quickstart.html) to quickly explore Hudi's capabilities using spark-shell. 

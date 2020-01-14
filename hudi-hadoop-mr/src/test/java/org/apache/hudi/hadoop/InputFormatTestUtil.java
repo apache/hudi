@@ -45,7 +45,7 @@ public class InputFormatTestUtil {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
-  public static File prepareDataset(TemporaryFolder basePath, int numberOfFiles, String commitNumber)
+  public static File prepareTable(TemporaryFolder basePath, int numberOfFiles, String commitNumber)
       throws IOException {
     basePath.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
@@ -105,7 +105,7 @@ public class InputFormatTestUtil {
     return new Schema.Parser().parse(InputFormatTestUtil.class.getResourceAsStream(location));
   }
 
-  public static File prepareParquetDataset(TemporaryFolder basePath, Schema schema, int numberOfFiles,
+  public static File prepareParquetTable(TemporaryFolder basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws IOException {
     basePath.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
@@ -114,7 +114,7 @@ public class InputFormatTestUtil {
     return partitionPath;
   }
 
-  public static File prepareSimpleParquetDataset(TemporaryFolder basePath, Schema schema, int numberOfFiles,
+  public static File prepareSimpleParquetTable(TemporaryFolder basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws Exception {
     basePath.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
@@ -123,7 +123,7 @@ public class InputFormatTestUtil {
     return partitionPath;
   }
 
-  public static File prepareNonPartitionedParquetDataset(TemporaryFolder baseDir, Schema schema, int numberOfFiles,
+  public static File prepareNonPartitionedParquetTable(TemporaryFolder baseDir, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws IOException {
     baseDir.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), baseDir.getRoot().toString());

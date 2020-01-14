@@ -60,7 +60,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Input Format, that provides a real-time view of data in a Hoodie dataset.
+ * Input Format, that provides a real-time view of data in a Hoodie table.
  */
 @UseFileSplitsFromInputFormat
 public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat implements Configurable {

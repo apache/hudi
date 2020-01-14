@@ -95,11 +95,10 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
-
-    if (!timeline.containsInstant(commitInstant)) {
-      return "Commit " + commitTime + " not found in Commits " + timeline;
+    HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline filteredTimeline = completedTimeline.filter(instant -> instant.getTimestamp().equals(commitTime));
+    if (filteredTimeline.empty()) {
+      return "Commit " + commitTime + " not found in Commits " + completedTimeline;
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
@@ -206,8 +205,8 @@ public class CommitsCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  @CliCommand(value = "commits compare", help = "Compare commits with another Hoodie dataset")
-  public String compareCommits(@CliOption(key = {"path"}, help = "Path of the dataset to compare to") final String path)
+  @CliCommand(value = "commits compare", help = "Compare commits with another Hoodie table")
+  public String compareCommits(@CliOption(key = {"path"}, help = "Path of the table to compare to") final String path)
       throws Exception {
 
     HoodieTableMetaClient source = HoodieCLI.getTableMetaClient();
@@ -234,8 +233,8 @@ public class CommitsCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "commits sync", help = "Compare commits with another Hoodie dataset")
-  public String syncCommits(@CliOption(key = {"path"}, help = "Path of the dataset to compare to") final String path) {
+  @CliCommand(value = "commits sync", help = "Compare commits with another Hoodie table")
+  public String syncCommits(@CliOption(key = {"path"}, help = "Path of the table to compare to") final String path) {
     HoodieCLI.syncTableMetadata = new HoodieTableMetaClient(HoodieCLI.conf, path);
     HoodieCLI.state = HoodieCLI.CLIState.SYNC;
     return "Load sync state between " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " and "

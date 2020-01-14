@@ -110,7 +110,6 @@
     <dependency>
       <groupId>com.beust</groupId>
       <artifactId>jcommander</artifactId>
-      <version>1.48</version>
     </dependency>
 
     <dependency>

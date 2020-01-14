@@ -89,7 +89,7 @@
                 </relocation>
                 <relocation>
                   <pattern>org.apache.avro.</pattern>
-                  <shadedPattern>${mr.bundle.avro.shade.prefix}org.apache.avro.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
@@ -143,17 +143,7 @@
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
-      <scope>${mr.bundle.avro.scope}</scope>
+      <scope>compile</scope>
     </dependency>
   </dependencies>
-
-  <profiles>
-    <profile>
-      <id>mr-bundle-shade-avro</id>
-      <properties>
-        <mr.bundle.avro.scope>compile</mr.bundle.avro.scope>
-        <mr.bundle.avro.shade.prefix>org.apache.hudi.</mr.bundle.avro.shade.prefix>
-      </properties>
-    </profile>
-  </profiles>
 </project>

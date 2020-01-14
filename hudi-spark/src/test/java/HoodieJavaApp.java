@@ -45,7 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Sample program that writes & reads hoodie datasets via the Spark datasource.
+ * Sample program that writes & reads hoodie tables via the Spark datasource.
  */
 public class HoodieJavaApp {
 
@@ -89,7 +89,7 @@ public class HoodieJavaApp {
 
   public static void main(String[] args) throws Exception {
     HoodieJavaApp cli = new HoodieJavaApp();
-    JCommander cmd = new JCommander(cli, args);
+    JCommander cmd = new JCommander(cli, null, args);
 
     if (cli.help) {
       cmd.usage();
@@ -104,6 +104,7 @@ public class HoodieJavaApp {
     SparkSession spark = SparkSession.builder().appName("Hoodie Spark APP")
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
     JavaSparkContext jssc = new JavaSparkContext(spark.sparkContext());
+    spark.sparkContext().setLogLevel("WARN");
     FileSystem fs = FileSystem.get(jssc.hadoopConfiguration());
 
     // Generator of some records to be loaded in.

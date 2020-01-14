@@ -76,7 +76,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testArchiveEmptyDataset() throws IOException {
+  public void testArchiveEmptyTable() throws IOException {
     HoodieWriteConfig cfg =
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table").build();
@@ -87,7 +87,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testArchiveDatasetWithArchival() throws IOException {
+  public void testArchiveTableWithArchival() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 4).build())
@@ -229,7 +229,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testArchiveDatasetWithNoArchival() throws IOException {
+  public void testArchiveTableWithNoArchival() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())

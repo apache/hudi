@@ -145,7 +145,7 @@ public class CompactionCommand implements CommandMarker {
   @CliCommand(value = "compaction show", help = "Shows compaction details for a specific compaction instant")
   public String compactionShow(
       @CliOption(key = "instant", mandatory = true,
-          help = "Base path for the target hoodie dataset") final String compactionInstantTime,
+          help = "Base path for the target hoodie table") final String compactionInstantTime,
       @CliOption(key = {"limit"}, help = "Limit commits",
           unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
@@ -212,7 +212,7 @@ public class CompactionCommand implements CommandMarker {
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory,
       @CliOption(key = "retry", unspecifiedDefaultValue = "1", help = "Number of retries") final String retry,
-      @CliOption(key = "compactionInstant", help = "Base path for the target hoodie dataset") String compactionInstantTime,
+      @CliOption(key = "compactionInstant", help = "Base path for the target hoodie table") String compactionInstantTime,
       @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
         unspecifiedDefaultValue = "") final String propsFilePath,
       @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
@@ -471,7 +471,7 @@ public class CompactionCommand implements CommandMarker {
       if (result.get()) {
         System.out.println("All renames successfully completed to " + operation + " done !!");
       } else {
-        System.out.println("Some renames failed. DataSet could be in inconsistent-state. Try running compaction repair");
+        System.out.println("Some renames failed. table could be in inconsistent-state. Try running compaction repair");
       }
 
       List<Comparable[]> rows = new ArrayList<>();
