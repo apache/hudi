@@ -343,7 +343,7 @@ object AvroConversionHelper {
             avroSchema,
             field.dataType,
             field.name,
-            getNewRecordNamespace(field.dataType, recordNamespace, field.name)))
+            getNewRecordNamespace(field.dataType, recordNamespace, structName)))
         (item: Any) => {
           if (item == null) {
             null
