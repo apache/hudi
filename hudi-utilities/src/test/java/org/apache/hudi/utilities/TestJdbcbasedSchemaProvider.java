@@ -1,12 +1,14 @@
 package org.apache.hudi.utilities;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.JdbcbasedSchemaProvider;
+
+import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -34,6 +36,13 @@ public class TestJdbcbasedSchemaProvider {
     PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.dbtable", "triprec");
     PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.timeout", "0");
     PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.nullable", "false");
+  }
+
+  @After
+  public void teardown() throws Exception {
+    if (jsc != null) {
+      jsc.stop();
+    }
   }
 
   @Test
