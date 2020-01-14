@@ -98,6 +98,7 @@ import static org.junit.Assert.fail;
  */
 public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
+  private static final Random RANDOM = new Random();
   private static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
   private static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
@@ -669,7 +670,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
      */
     @Override
     public Double call(Double lat1, Double lat2, Double lon1, Double lon2) {
-      return new Random().nextDouble();
+      return RANDOM.nextDouble();
     }
   }
 
