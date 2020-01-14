@@ -257,7 +257,7 @@ public class UtilHelpers {
    * @return
    * @throws Exception
    */
-  public static Schema getSchema(Map<String, String> options) throws Exception {
+  public static Schema getJDBCSchema(Map<String, String> options) throws Exception {
     scala.collection.immutable.Map<String, String> ioptions = toScalaImmutableMap(options);
     JDBCOptions jdbcOptions = new JDBCOptions(ioptions);
     Connection conn = JdbcUtils.createConnectionFactory(jdbcOptions).apply();
@@ -290,7 +290,7 @@ public class UtilHelpers {
         conn.close();
       }
     } else {
-      throw new HoodieException(String.format("%s table not exists!", table));
+      throw new HoodieException(String.format("%s table does not exists!", table));
     }
   }
 

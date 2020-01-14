@@ -74,7 +74,7 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
     }
 
     try {
-      sourceSchema = UtilHelpers.getSchema(options);
+      sourceSchema = UtilHelpers.getJDBCSchema(options);
     } catch (Exception e) {
       throw new HoodieException("Failed to get Schema through jdbc. ", e);
     }
