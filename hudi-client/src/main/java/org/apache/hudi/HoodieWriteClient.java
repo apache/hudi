@@ -953,7 +953,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
-        timeline.readPlanAsBytes(HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get());
+        timeline.readCompactionPlanAsBytes(HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get());
     // Merge extra meta-data passed by user with the one already in inflight compaction
     Option<Map<String, String>> mergedMetaData = extraMetadata.map(m -> {
       Map<String, String> merged = new HashMap<>();

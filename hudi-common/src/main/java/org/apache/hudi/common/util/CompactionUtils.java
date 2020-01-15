@@ -140,7 +140,7 @@ public class CompactionUtils {
       throws IOException {
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
     HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
-        metaClient.getActiveTimeline().readPlanAsBytes(
+        metaClient.getActiveTimeline().readCompactionPlanAsBytes(
             HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
     return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
   }
