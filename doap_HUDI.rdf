@@ -28,8 +28,7 @@
     <homepage rdf:resource="https://hudi.apache.org" />
     <asfext:pmc rdf:resource="https://hudi.apache.org" />
     <shortdesc>Ingests and Manages storage of large analytical datasets</shortdesc>
-    <description>Hudi (pronounced “Hoodie”) ingests and manages storage of large analytical datasets over DFS
-     (HDFS or cloud stores) and provides three logical views for query access.</description>
+    <description>Hudi (pronounced “Hoodie”) brings stream processing to big data, providing upserts, deletes and incremental data streams.</description>
     <bug-database rdf:resource="https://issues.apache.org/jira/browse/HUDI" />
     <mailing-list rdf:resource="https://hudi.apache.org/community.html" />
     <download-page rdf:resource="https://hudi.apache.org/community.html" />

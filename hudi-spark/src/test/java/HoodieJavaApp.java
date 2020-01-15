@@ -206,11 +206,11 @@ public class HoodieJavaApp {
     /**
      * Read & do some queries
      */
-    Dataset<Row> hoodieROViewDF = spark.read().format("org.apache.hudi")
+    Dataset<Row> snapshotQueryDF = spark.read().format("org.apache.hudi")
         // pass any path glob, can include hoodie & non-hoodie
         // datasets
         .load(tablePath + (nonPartitionedTable ? "/*" : "/*/*/*/*"));
-    hoodieROViewDF.registerTempTable("hoodie_ro");
+    snapshotQueryDF.registerTempTable("hoodie_ro");
     spark.sql("describe hoodie_ro").show();
     // all trips whose fare amount was greater than 2.
     spark.sql("select fare.amount, begin_lon, begin_lat, timestamp from hoodie_ro where fare.amount > 2.0").show();
@@ -219,7 +219,7 @@ public class HoodieJavaApp {
       /**
        * Consume incrementally, only changes in commit 2 above. Currently only supported for COPY_ON_WRITE TABLE
        */
-      Dataset<Row> hoodieIncViewDF = spark.read().format("org.apache.hudi")
+      Dataset<Row> incQueryDF = spark.read().format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
           // Only changes in write 2 above
           .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), commitInstantTime1)
@@ -227,7 +227,7 @@ public class HoodieJavaApp {
           .load(tablePath);
 
       LOG.info("You will only see records from : " + commitInstantTime2);
-      hoodieIncViewDF.groupBy(hoodieIncViewDF.col("_hoodie_commit_time")).count().show();
+      incQueryDF.groupBy(incQueryDF.col("_hoodie_commit_time")).count().show();
     }
   }
 
