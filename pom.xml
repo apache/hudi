@@ -110,6 +110,9 @@
     <spark.bundle.hive.shade.prefix></spark.bundle.hive.shade.prefix>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix></utilities.bundle.hive.shade.prefix>
+    <jacoco.version>0.8.5</jacoco.version>
+    <gradle-maven-plugin.version>1.0.8</gradle-maven-plugin.version>
+    <gradle.task>jacobo</gradle.task>
   </properties>
 
   <scm>
@@ -229,7 +232,7 @@
           <excludes>
             <exclude>**/IT*.java</exclude>
           </excludes>
-          <argLine>-Xmx1024m -XX:MaxPermSize=256m</argLine>
+          <argLine>-Xmx1024m -XX:MaxPermSize=256m ${surefireArgLine}</argLine>
         </configuration>
       </plugin>
     </plugins>
@@ -243,7 +246,7 @@
         <plugin>
           <groupId>org.jacoco</groupId>
           <artifactId>jacoco-maven-plugin</artifactId>
-          <version>0.7.8</version>
+          <version>${jacoco.version}</version>
           <executions>
             <!--
                 Prepares the property pointing to the JaCoCo runtime agent which
@@ -384,6 +387,30 @@
               <phase>compile</phase>
               <goals>
                 <goal>check</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.fortasoft</groupId>
+          <artifactId>gradle-maven-plugin</artifactId>
+          <version>${gradle-maven-plugin.version}</version>
+          <configuration>
+            <tasks>
+              <task>${gradle.task}</task>
+            </tasks>
+            <args>
+              <arg>--build-file=../build.gradle</arg>
+              <arg>-PjacocoReportPath=${project.basedir}/target/site/jacoco-ut/jacoco.xml</arg>
+              <arg>-PcoberturaReportPath=${project.basedir}/target/site/cobertura/coverage.xml</arg>
+              <arg>-PsrcDirPath=${project.basedir}/src/main/java</arg>
+            </args>
+          </configuration>
+          <executions>
+            <execution>
+              <phase>test</phase>
+              <goals>
+                <goal>invoke</goal>
               </goals>
             </execution>
           </executions>
@@ -1077,6 +1104,29 @@
           </plugin>
         </plugins>
       </build>
+    </profile>
+    <profile>
+      <id>skipTestCompileAndRun</id>
+      <activation>
+        <property>
+          <name>maven.test.skip</name>
+          <value>true</value>
+        </property>
+      </activation>
+      <properties>
+        <gradle.task>noop</gradle.task>
+      </properties>
+    </profile>
+    <profile>
+      <id>skipTestRun</id>
+      <activation>
+        <property>
+          <name>skipTests</name>
+        </property>
+      </activation>
+      <properties>
+        <gradle.task>noop</gradle.task>
+      </properties>
     </profile>
   </profiles>
 

@@ -1,0 +1,22 @@
+plugins {
+    id 'com.kageiit.jacobo' version '2.0.8'
+}
+
+description = ''
+dependencies {
+}
+
+// Task to convert jacoco coverage to cobertura coverage
+// The input path of jacoco report and output path where
+// cobertura report is saved are passed as project
+// properties.
+task jacobo(type: com.kageiit.jacobo.JacoboTask) {
+    jacocoReport = file(project.jacocoReportPath)
+    coberturaReport = file(project.coberturaReportPath)
+    srcDirs = [project.srcDirPath]
+}
+
+// noop task for when tests don't run
+task noop {
+}
+
