@@ -23,7 +23,7 @@
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>hudi-spark</artifactId>
+  <artifactId>hudi-spark_2.11</artifactId>
   <packaging>jar</packaging>
 
   <properties>

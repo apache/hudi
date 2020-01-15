@@ -23,7 +23,7 @@
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>hudi-utilities</artifactId>
+  <artifactId>hudi-utilities_2.11</artifactId>
   <packaging>jar</packaging>
 
   <properties>
@@ -109,7 +109,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark</artifactId>
+      <artifactId>hudi-spark_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
       <exclusions>
         <exclusion>

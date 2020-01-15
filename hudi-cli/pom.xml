@@ -140,7 +140,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-utilities</artifactId>
+      <artifactId>hudi-utilities_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
     </dependency>
 
