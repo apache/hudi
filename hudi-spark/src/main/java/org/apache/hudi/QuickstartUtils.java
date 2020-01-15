@@ -172,7 +172,7 @@ public class QuickstartUtils {
     }
 
     /**
-     * Generates delete records for the passed in rows
+     * Generates delete records for the passed in rows.
      *
      * @param rows List of {@link Row}s for which delete record need to be generated
      * @return list of hoodie records to delete
