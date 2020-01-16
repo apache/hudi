@@ -544,7 +544,8 @@ public class HoodieTestDataGenerator {
       throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
     }
 
-    return IntStream.range(0, n).boxed().map(i -> {
+    List<HoodieKey> result = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
       int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
       KeyPartition kp = existingKeys.get(index);
       // Find the available keyPartition starting from randomly chosen one.
@@ -555,8 +556,10 @@ public class HoodieTestDataGenerator {
       existingKeys.remove(kp);
       numExistingKeys--;
       used.add(kp);
-      return kp.key;
-    });
+      result.add(kp.key);
+    }
+
+    return result.stream();
   }
 
   /**
@@ -574,7 +577,8 @@ public class HoodieTestDataGenerator {
       throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
     }
 
-    return IntStream.range(0, n).boxed().map(i -> {
+    List<HoodieRecord> result = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
       int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
       KeyPartition kp = existingKeys.get(index);
       // Find the available keyPartition starting from randomly chosen one.
@@ -586,11 +590,13 @@ public class HoodieTestDataGenerator {
       numExistingKeys--;
       used.add(kp);
       try {
-        return new HoodieRecord(kp.key, generateRandomDeleteValue(kp.key, commitTime));
+        result.add(new HoodieRecord(kp.key, generateRandomDeleteValue(kp.key, commitTime)));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
-    });
+    }
+
+    return result.stream();
   }
 
   public String[] getPartitionPaths() {
