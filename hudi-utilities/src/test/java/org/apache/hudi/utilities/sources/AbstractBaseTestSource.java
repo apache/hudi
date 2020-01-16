@@ -88,7 +88,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     HoodieTestDataGenerator dataGenerator = dataGeneratorMap.get(partition);
 
     // generate `sourceLimit` number of upserts each time.
-    int numExistingKeys = dataGenerator.getNumExistingKeys();
+    int numExistingKeys = dataGenerator.getNumExistingKeys(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
     LOG.info("NumExistingKeys=" + numExistingKeys);
 
     int numUpdates = Math.min(numExistingKeys, sourceLimit / 2);
@@ -110,16 +110,16 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     LOG.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
         + ", Free Memory=" + Runtime.getRuntime().freeMemory());
 
-    Stream<GenericRecord> updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates)
-        .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
-    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts)
-        .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+    Stream<GenericRecord> updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .map(hr -> AbstractBaseTestSource.toGenericRecord(hr));
+    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .map(hr -> AbstractBaseTestSource.toGenericRecord(hr));
     return Stream.concat(updateStream, insertStream);
   }
 
-  private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {
+  private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
     try {
-      Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.avroSchema);
+      Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(HoodieTestDataGenerator.avroSchema);
       return (GenericRecord) recordOpt.get();
     } catch (IOException e) {
       return null;

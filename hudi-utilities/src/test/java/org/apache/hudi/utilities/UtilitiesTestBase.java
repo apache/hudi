@@ -72,6 +72,7 @@ public class UtilitiesTestBase {
   protected transient SparkSession sparkSession = null;
   protected transient SQLContext sqlContext;
   protected static HiveServer2 hiveServer;
+  protected static HiveTestService hiveTestService;
 
   @BeforeClass
   public static void initClass() throws Exception {
@@ -85,8 +86,8 @@ public class UtilitiesTestBase {
     dfsBasePath = dfs.getWorkingDirectory().toString();
     dfs.mkdirs(new Path(dfsBasePath));
     if (startHiveService) {
-      HiveTestService hiveService = new HiveTestService(hdfsTestService.getHadoopConf());
-      hiveServer = hiveService.start();
+      hiveTestService = new HiveTestService(hdfsTestService.getHadoopConf());
+      hiveServer = hiveTestService.start();
       clearHiveDb();
     }
   }
@@ -98,6 +99,9 @@ public class UtilitiesTestBase {
     }
     if (hiveServer != null) {
       hiveServer.stop();
+    }
+    if (hiveTestService != null) {
+      hiveTestService.stop();
     }
   }
 
@@ -229,7 +233,7 @@ public class UtilitiesTestBase {
       }
     }
 
-    public static String[] jsonifyRecords(List<HoodieRecord> records) throws IOException {
+    public static String[] jsonifyRecords(List<HoodieRecord> records) {
       return records.stream().map(Helpers::toJsonString).toArray(String[]::new);
     }
   }

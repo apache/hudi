@@ -85,7 +85,7 @@ public class TestDFSPropertiesConfiguration {
   }
 
   @Test
-  public void testParsing() throws IOException {
+  public void testParsing() {
     DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/t1.props"));
     TypedProperties props = cfg.getConfig();
     assertEquals(5, props.size());

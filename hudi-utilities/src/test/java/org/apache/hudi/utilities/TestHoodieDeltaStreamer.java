@@ -61,6 +61,7 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.api.java.UDF4;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.streaming.kafka.KafkaTestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -88,12 +89,16 @@ import static org.junit.Assert.fail;
 public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
   private static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
+  public static final String PROPS_FILENAME_TEST_SOURCE1 = "test-source1.properties";
   private static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
+  public static KafkaTestUtils testUtils;
 
   @BeforeClass
   public static void initClass() throws Exception {
     UtilitiesTestBase.initClass(true);
+    testUtils = new KafkaTestUtils();
+    testUtils.setup();
 
     // prepare the configs.
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/base.properties", dfs, dfsBasePath + "/base.properties");
@@ -101,6 +106,14 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
         dfsBasePath + "/sql-transformer.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source.avsc", dfs, dfsBasePath + "/source.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target.avsc", dfs, dfsBasePath + "/target.avsc");
+
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source_fg.avsc", dfs, dfsBasePath + "/source_fg.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source_uber.avsc", dfs, dfsBasePath + "/source_uber.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target_fg.avsc", dfs, dfsBasePath + "/target_fg.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target_uber.avsc", dfs, dfsBasePath + "/target_uber.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/custom_config.json", dfs, dfsBasePath + "/custom_config.json");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/invalid_hive_sync_custom_config.json", dfs, dfsBasePath + "/invalid_hive_sync_custom_config.json");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/invalid_ingestion_custom_config.json", dfs, dfsBasePath + "/invalid_ingestion_custom_config.json");
 
     TypedProperties props = new TypedProperties();
     props.setProperty("include", "sql-transformer.properties");
@@ -140,6 +153,33 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_INVALID);
+
+    TypedProperties props1 = new TypedProperties();
+    props1.setProperty("hoodie.deltastreamer.source.kafka.topic", "topic2");
+    props1.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source_fg.avsc");
+    props1.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target_fg.avsc");
+    populateCommonProps(props1);
+    UtilitiesTestBase.Helpers.savePropsToDFS(props1, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
+  }
+
+  private static void populateCommonProps(TypedProperties props) {
+    props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
+    props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
+
+    //Kafka source properties
+    props.setProperty("metadata.broker.list", testUtils.brokerAddress());
+    props.setProperty("auto.offset.reset", "smallest");
+    props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+    props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents", String.valueOf(5000));
+
+    // Hive Configs
+    props.setProperty(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), "jdbc:hive2://127.0.0.1:9999/");
+    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "testdb2");
+    props.setProperty(DataSourceWriteOptions.HIVE_ASSUME_DATE_PARTITION_OPT_KEY(), "false");
+    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "datestr");
+    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
+        MultiPartKeysValueExtractor.class.getName());
   }
 
   @AfterClass
@@ -291,7 +331,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   @Test
-  public void testProps() throws IOException {
+  public void testProps() {
     TypedProperties props =
         new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getConfig();
     assertEquals(2, props.getInteger("hoodie.upsert.shuffle.parallelism"));

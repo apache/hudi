@@ -42,7 +42,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.HashMap;
 
 import static org.junit.Assert.assertEquals;
@@ -95,7 +94,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
   }
 
   @Test
-  public void testJsonKafkaSource() throws IOException {
+  public void testJsonKafkaSource() {
 
     // topic setup.
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
@@ -143,7 +142,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
   }
 
   @Test
-  public void testJsonKafkaSourceWithDefaultUpperCap() throws IOException {
+  public void testJsonKafkaSourceWithDefaultUpperCap() {
     // topic setup.
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
@@ -172,7 +171,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
   }
 
   @Test
-  public void testJsonKafkaSourceWithConfigurableUpperCap() throws IOException {
+  public void testJsonKafkaSourceWithConfigurableUpperCap() {
     // topic setup.
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();

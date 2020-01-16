@@ -91,6 +91,17 @@ public class HoodieDeltaStreamer implements Serializable {
         getDefaultHiveConf(jssc.hadoopConfiguration()));
   }
 
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, TypedProperties props) throws IOException {
+    this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
+        getDefaultHiveConf(jssc.hadoopConfiguration()), props);
+  }
+
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+                             TypedProperties properties) throws IOException {
+    this.cfg = cfg;
+    this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, hiveConf, properties);
+  }
+
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf) throws IOException {
     this.cfg = cfg;
     this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, hiveConf);
@@ -156,6 +167,10 @@ public class HoodieDeltaStreamer implements Serializable {
         required = true)
     public String targetBasePath;
 
+    @Parameter(names = {"--base-path-prefix"},
+        description = "base path prefix for multi table support via HoodieMultiTableDeltaStreamer class")
+    public String basePathPrefix;
+
     // TODO: How to obtain hive configs to register?
     @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
     public String targetTableName;
@@ -170,6 +185,10 @@ public class HoodieDeltaStreamer implements Serializable {
         + "to individual classes, for supported properties.")
     public String propsFilePath =
         "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
+
+    @Parameter(names = {"--custom-props"}, description = "path to properties file on localfs or dfs, with configurations for "
+        + "individual onboarded tables")
+    public String customPropsFilePath = null;
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
@@ -344,6 +363,32 @@ public class HoodieDeltaStreamer implements Serializable {
      * Delta Sync.
      */
     private transient DeltaSync deltaSync;
+
+    public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+                            TypedProperties properties) throws IOException {
+      this.cfg = cfg;
+      this.jssc = jssc;
+      this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
+
+      if (fs.exists(new Path(cfg.targetBasePath))) {
+        HoodieTableMetaClient meta =
+            new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath, false);
+        tableType = meta.getTableType();
+        // This will guarantee there is no surprise with table type
+        Preconditions.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.storageType)),
+            "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.storageType);
+      } else {
+        tableType = HoodieTableType.valueOf(cfg.storageType);
+      }
+
+      this.props = properties;
+      LOG.info("Creating delta streamer with configs : " + props.toString());
+      this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
+
+      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, tableType, props, jssc, fs, hiveConf,
+        this::onInitializingWriteClient);
+
+    }
 
     public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf)
         throws IOException {

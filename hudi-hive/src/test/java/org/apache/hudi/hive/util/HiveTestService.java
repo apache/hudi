@@ -121,7 +121,7 @@ public class HiveTestService {
     return hiveServer;
   }
 
-  public void stop() throws IOException {
+  public void stop() {
     resetSystemProperties();
     if (tServer != null) {
       tServer.stop();
