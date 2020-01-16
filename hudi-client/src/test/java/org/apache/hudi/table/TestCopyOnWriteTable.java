@@ -64,6 +64,7 @@ import java.util.UUID;
 import scala.Tuple2;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -224,7 +225,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
         }
       }
     }
-    assertTrue(updatedParquetFile != null);
+    assertNotNull(updatedParquetFile);
     // Check whether the record has been updated
     Path updatedParquetFilePath = new Path(updatedParquetFile.getAbsolutePath());
     BloomFilter updatedFilter =
@@ -240,16 +241,16 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     ParquetReader updatedReader = ParquetReader.builder(new AvroReadSupport<>(), updatedParquetFilePath).build();
     index = 0;
     while ((newRecord = (GenericRecord) updatedReader.read()) != null) {
-      assertTrue(newRecord.get("_row_key").toString().equals(records.get(index).getRecordKey()));
+      assertEquals(newRecord.get("_row_key").toString(), records.get(index).getRecordKey());
       if (index == 0) {
-        assertTrue(newRecord.get("number").toString().equals("15"));
+        assertEquals("15", newRecord.get("number").toString());
       }
       index++;
     }
     updatedReader.close();
     // Also check the numRecordsWritten
     WriteStatus writeStatus = statuses.get(0);
-    assertTrue("Should be only one file generated", statuses.size() == 1);
+    assertEquals("Should be only one file generated", 1, statuses.size());
     assertEquals(4, writeStatus.getStat().getNumWrites());// 3 rewritten records + 1 new record
   }
 
@@ -415,7 +416,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     WorkloadProfile profile = new WorkloadProfile(jsc.parallelize(records));
     HoodieCopyOnWriteTable.UpsertPartitioner partitioner =
         (HoodieCopyOnWriteTable.UpsertPartitioner) table.getUpsertPartitioner(profile);
-    assertEquals("Update record should have gone to the 1 update partiton", 0, partitioner.getPartition(
+    assertEquals("Update record should have gone to the 1 update partition", 0, partitioner.getPartition(
         new Tuple2<>(updateRecords.get(0).getKey(), Option.ofNullable(updateRecords.get(0).getCurrentLocation()))));
     return partitioner;
   }

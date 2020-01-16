@@ -164,7 +164,7 @@ public class HoodieClientTestUtils {
                                         String commitTime) {
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
     if (!commitTimeline.containsInstant(commitInstant)) {
-      new HoodieException("No commit exists at " + commitTime);
+      throw new HoodieException("No commit exists at " + commitTime);
     }
     try {
       HashMap<String, String> paths =
@@ -178,7 +178,7 @@ public class HoodieClientTestUtils {
   }
 
   /**
-   * Obtain all new data written into the Hoodie dataset since the given timestamp.
+   * Obtain all new data written into the Hoodie table since the given timestamp.
    */
   public static Dataset<Row> readSince(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
                                        String lastCommitTime) {
@@ -195,7 +195,7 @@ public class HoodieClientTestUtils {
   }
 
   /**
-   * Reads the paths under the a hoodie dataset out as a DataFrame.
+   * Reads the paths under the a hoodie table out as a DataFrame.
    */
   public static Dataset<Row> read(JavaSparkContext jsc, String basePath, SQLContext sqlContext, FileSystem fs,
                                   String... paths) {
@@ -212,7 +212,7 @@ public class HoodieClientTestUtils {
       }
       return sqlContext.read().parquet(filteredPaths.toArray(new String[filteredPaths.size()]));
     } catch (Exception e) {
-      throw new HoodieException("Error reading hoodie dataset as a dataframe", e);
+      throw new HoodieException("Error reading hoodie table as a dataframe", e);
     }
   }
 

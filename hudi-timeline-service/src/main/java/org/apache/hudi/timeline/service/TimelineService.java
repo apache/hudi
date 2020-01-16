@@ -157,7 +157,7 @@ public class TimelineService {
 
   public static void main(String[] args) throws Exception {
     final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, args);
+    JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help) {
       cmd.usage();
       System.exit(1);

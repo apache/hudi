@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieDependentSystemUnavailableException;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -39,12 +39,15 @@ import org.apache.hudi.table.HoodieTable;
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.HRegionLocation;
 import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.BufferedMutator;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HTable;
+import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.RegionLocator;
 import org.apache.hadoop.hbase.client.Result;
@@ -89,7 +92,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   private int maxQpsPerRegionServer;
   /**
    * multiPutBatchSize will be computed and re-set in updateLocation if
-   * {@link HoodieIndexConfig.HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP} is set to true.
+   * {@link HoodieHBaseIndexConfig#HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP} is set to true.
    */
   private Integer multiPutBatchSize;
   private Integer numRegionServersForTable;
@@ -115,9 +118,8 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   public HBaseIndexQPSResourceAllocator createQPSResourceAllocator(HoodieWriteConfig config) {
     try {
       LOG.info("createQPSResourceAllocator :" + config.getHBaseQPSResourceAllocatorClass());
-      final HBaseIndexQPSResourceAllocator resourceAllocator = (HBaseIndexQPSResourceAllocator) ReflectionUtils
-          .loadClass(config.getHBaseQPSResourceAllocatorClass(), config);
-      return resourceAllocator;
+      return (HBaseIndexQPSResourceAllocator) ReflectionUtils
+              .loadClass(config.getHBaseQPSResourceAllocatorClass(), config);
     } catch (Exception e) {
       LOG.warn("error while instantiating HBaseIndexQPSResourceAllocator", e);
     }
@@ -149,24 +151,23 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   /**
-   * Since we are sharing the HbaseConnection across tasks in a JVM, make sure the HbaseConnectio is closed when JVM
+   * Since we are sharing the HBaseConnection across tasks in a JVM, make sure the HBaseConnection is closed when JVM
    * exits.
    */
   private void addShutDownHook() {
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      public void run() {
-        try {
-          hbaseConnection.close();
-        } catch (Exception e) {
-          // fail silently for any sort of exception
-        }
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      try {
+        hbaseConnection.close();
+      } catch (Exception e) {
+        // fail silently for any sort of exception
       }
-    });
+    }));
   }
 
   /**
    * Ensure that any resources used for indexing are released here.
    */
+  @Override
   public void close() {
     this.hBaseIndexQPSResourceAllocator.releaseQPSResources();
   }
@@ -195,7 +196,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     return (Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>>) (partitionNum,
         hoodieRecordIterator) -> {
 
-      Integer multiGetBatchSize = config.getHbaseIndexGetBatchSize();
+      int multiGetBatchSize = config.getHbaseIndexGetBatchSize();
 
       // Grab the global HBase connection
       synchronized (HBaseIndex.class) {
@@ -285,13 +286,10 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
           hbaseConnection = getHBaseConnection();
         }
       }
-      HTable hTable = null;
-      try {
-        hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName));
+      try (BufferedMutator mutator = hbaseConnection.getBufferedMutator(TableName.valueOf(tableName))) {
         while (statusIterator.hasNext()) {
           WriteStatus writeStatus = statusIterator.next();
-          List<Put> puts = new ArrayList<>();
-          List<Delete> deletes = new ArrayList<>();
+          List<Mutation> mutations = new ArrayList<>();
           try {
             for (HoodieRecord rec : writeStatus.getWrittenRecords()) {
               if (!writeStatus.isErrored(rec.getKey())) {
@@ -305,20 +303,20 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
                   put.addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN, Bytes.toBytes(loc.get().getInstantTime()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN, Bytes.toBytes(loc.get().getFileId()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN, Bytes.toBytes(rec.getPartitionPath()));
-                  puts.add(put);
+                  mutations.add(put);
                 } else {
                   // Delete existing index for a deleted record
                   Delete delete = new Delete(Bytes.toBytes(rec.getRecordKey()));
-                  deletes.add(delete);
+                  mutations.add(delete);
                 }
               }
-              if (puts.size() + deletes.size() < multiPutBatchSize) {
+              if (mutations.size() < multiPutBatchSize) {
                 continue;
               }
-              doPutsAndDeletes(hTable, puts, deletes);
+              doMutations(mutator, mutations);
             }
             // process remaining puts and deletes, if any
-            doPutsAndDeletes(hTable, puts, deletes);
+            doMutations(mutator, mutations);
           } catch (Exception e) {
             Exception we = new Exception("Error updating index for " + writeStatus, e);
             LOG.error(we);
@@ -328,32 +326,21 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
         }
       } catch (IOException e) {
         throw new HoodieIndexException("Failed to Update Index locations because of exception with HBase Client", e);
-      } finally {
-        if (hTable != null) {
-          try {
-            hTable.close();
-          } catch (IOException e) {
-            // Ignore
-          }
-        }
       }
       return writeStatusList.iterator();
     };
   }
 
   /**
-   * Helper method to facilitate performing puts and deletes in Hbase.
+   * Helper method to facilitate performing mutations (including puts and deletes) in Hbase.
    */
-  private void doPutsAndDeletes(HTable hTable, List<Put> puts, List<Delete> deletes) throws IOException {
-    if (puts.size() > 0) {
-      hTable.put(puts);
+  private void doMutations(BufferedMutator mutator, List<Mutation> mutations) throws IOException {
+    if (mutations.isEmpty()) {
+      return;
     }
-    if (deletes.size() > 0) {
-      hTable.delete(deletes);
-    }
-    hTable.flushCommits();
-    puts.clear();
-    deletes.clear();
+    mutator.mutate(mutations);
+    mutator.flush();
+    mutations.clear();
     sleepForTime(SLEEP_TIME_MILLISECONDS);
   }
 
@@ -483,7 +470,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
       try (Connection conn = getHBaseConnection()) {
         RegionLocator regionLocator = conn.getRegionLocator(TableName.valueOf(tableName));
         numRegionServersForTable = Math
-            .toIntExact(regionLocator.getAllRegionLocations().stream().map(e -> e.getServerName()).distinct().count());
+            .toIntExact(regionLocator.getAllRegionLocations().stream().map(HRegionLocation::getServerName).distinct().count());
         return numRegionServersForTable;
       } catch (IOException e) {
         LOG.error(e);

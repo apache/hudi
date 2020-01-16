@@ -66,12 +66,9 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
     private final Properties props = new Properties();
 
     public Builder fromFile(File propertiesFile) throws IOException {
-      FileReader reader = new FileReader(propertiesFile);
-      try {
+      try (FileReader reader = new FileReader(propertiesFile)) {
         this.props.load(reader);
         return this;
-      } finally {
-        reader.close();
       }
     }
 

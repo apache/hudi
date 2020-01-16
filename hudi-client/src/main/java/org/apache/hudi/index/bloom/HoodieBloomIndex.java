@@ -180,10 +180,10 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
           .mapToPair(t -> t).countByKey();
     } else {
       fileToComparisons = new HashMap<>();
-      partitionToFileInfo.entrySet().stream().forEach(e -> {
-        for (BloomIndexFileInfo fileInfo : e.getValue()) {
+      partitionToFileInfo.forEach((key, value) -> {
+        for (BloomIndexFileInfo fileInfo : value) {
           // each file needs to be compared against all the records coming into the partition
-          fileToComparisons.put(fileInfo.getFileId(), recordsPerPartition.get(e.getKey()));
+          fileToComparisons.put(fileInfo.getFileId(), recordsPerPartition.get(key));
         }
       });
     }
@@ -302,7 +302,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
   /**
    * For each incoming record, produce N output records, 1 each for each file against which the record's key needs to be
-   * checked. For datasets, where the keys have a definite insert order (e.g: timestamp as prefix), the number of files
+   * checked. For tables, where the keys have a definite insert order (e.g: timestamp as prefix), the number of files
    * to be compared gets cut down a lot from range pruning.
    *
    * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on

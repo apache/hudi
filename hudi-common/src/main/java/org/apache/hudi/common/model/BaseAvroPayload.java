@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -31,11 +31,10 @@ import java.io.Serializable;
  * Base class for all AVRO record based payloads, that can be ordered based on a field.
  */
 public abstract class BaseAvroPayload implements Serializable {
-
   /**
    * Avro data extracted from the source converted to bytes.
    */
-  protected final byte[] recordBytes;
+  public final byte[] recordBytes;
 
   /**
    * For purposes of preCombining.
@@ -43,12 +42,14 @@ public abstract class BaseAvroPayload implements Serializable {
   protected final Comparable orderingVal;
 
   /**
-   * @param record
-   * @param orderingVal
+   * Instantiate {@link BaseAvroPayload}.
+   *
+   * @param record      Generic record for the payload.
+   * @param orderingVal {@link Comparable} to be used in pre combine.
    */
   public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
     try {
-      this.recordBytes = HoodieAvroUtils.avroToBytes(record);
+      this.recordBytes = record != null ? HoodieAvroUtils.avroToBytes(record) : new byte[0];
     } catch (IOException io) {
       throw new HoodieIOException("Cannot convert GenericRecord to bytes", io);
     }

@@ -85,7 +85,7 @@ public class TestHDFSParquetImporter implements Serializable {
    * Test successful data import with retries.
    */
   @Test
-  public void testDatasetImportWithRetries() throws Exception {
+  public void testImportWithRetries() throws Exception {
     JavaSparkContext jsc = null;
     try {
       jsc = getJavaSparkContext();
@@ -166,7 +166,7 @@ public class TestHDFSParquetImporter implements Serializable {
           "driver-" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
     ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
-        .withSchema(HoodieTestDataGenerator.avroSchema).withConf(HoodieTestUtils.getDefaultHadoopConf()).build();
+        .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build();
     for (GenericRecord record : records) {
       writer.write(record);
     }

@@ -18,8 +18,14 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.util.FSUtils;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.io.ArrayWritable;
@@ -28,17 +34,17 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.util.FSUtils;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import java.io.File;
-import java.io.IOException;
-
-import static org.junit.Assert.assertEquals;
-
-public class TestHoodieInputFormat {
+public class TestHoodieParquetInputFormat {
 
   private HoodieParquetInputFormat inputFormat;
   private JobConf jobConf;
@@ -56,7 +62,7 @@ public class TestHoodieInputFormat {
   @Test
   public void testInputFormatLoad() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareDataset(basePath, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
     InputFormatTestUtil.commit(basePath, "100");
 
     // Add the paths
@@ -72,7 +78,7 @@ public class TestHoodieInputFormat {
   @Test
   public void testInputFormatUpdates() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareDataset(basePath, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
     InputFormatTestUtil.commit(basePath, "100");
 
     // Add the paths
@@ -99,8 +105,8 @@ public class TestHoodieInputFormat {
   @Test
   public void testIncrementalSimple() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareDataset(basePath, 10, "100");
-    InputFormatTestUtil.commit(basePath, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
+    createCommitFile(basePath, "100", "2016/05/01");
 
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -112,28 +118,42 @@ public class TestHoodieInputFormat {
         files.length);
   }
 
+  private void createCommitFile(TemporaryFolder basePath, String commitNumber, String partitionPath)
+      throws IOException {
+    List<HoodieWriteStat> writeStats = HoodieTestUtils.generateFakeHoodieWriteStat(1);
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    writeStats.stream().forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
+    File file = new File(basePath.getRoot().toString() + "/.hoodie/", commitNumber + ".commit");
+    file.createNewFile();
+    FileOutputStream fileOutputStream = new FileOutputStream(file);
+    fileOutputStream.write(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+    fileOutputStream.flush();
+    fileOutputStream.close();
+  }
+
   @Test
   public void testIncrementalWithMultipleCommits() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareDataset(basePath, 10, "100");
-    InputFormatTestUtil.commit(basePath, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
+    createCommitFile(basePath, "100", "2016/05/01");
+
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
     // update files
     InputFormatTestUtil.simulateUpdates(partitionDir, "100", 5, "200", false);
-    InputFormatTestUtil.commit(basePath, "200");
+    createCommitFile(basePath, "200", "2016/05/01");
 
     InputFormatTestUtil.simulateUpdates(partitionDir, "100", 4, "300", false);
-    InputFormatTestUtil.commit(basePath, "300");
+    createCommitFile(basePath, "300", "2016/05/01");
 
     InputFormatTestUtil.simulateUpdates(partitionDir, "100", 3, "400", false);
-    InputFormatTestUtil.commit(basePath, "400");
+    createCommitFile(basePath, "400", "2016/05/01");
 
     InputFormatTestUtil.simulateUpdates(partitionDir, "100", 2, "500", false);
-    InputFormatTestUtil.commit(basePath, "500");
+    createCommitFile(basePath, "500", "2016/05/01");
 
     InputFormatTestUtil.simulateUpdates(partitionDir, "100", 1, "600", false);
-    InputFormatTestUtil.commit(basePath, "600");
+    createCommitFile(basePath, "600", "2016/05/01");
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
     FileStatus[] files = inputFormat.listStatus(jobConf);
@@ -166,7 +186,7 @@ public class TestHoodieInputFormat {
     // initial commit
     Schema schema = InputFormatTestUtil.readSchema("/sample1.avsc");
     String commit1 = "20160628071126";
-    File partitionDir = InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, 10, commit1);
+    File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 10, commit1);
     InputFormatTestUtil.commit(basePath, commit1);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -190,8 +210,24 @@ public class TestHoodieInputFormat {
         2, 10);
   }
 
-  private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit, int totalExpected)
-      throws IOException {
+  @Test
+  public void testGetIncrementalTableNames() throws IOException {
+    String[] expectedincrTables = {"db1.raw_trips", "db2.model_trips"};
+    JobConf conf = new JobConf();
+    String incrementalMode1 = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, expectedincrTables[0]);
+    conf.set(incrementalMode1, HoodieHiveUtil.INCREMENTAL_SCAN_MODE);
+    String incrementalMode2 = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, expectedincrTables[1]);
+    conf.set(incrementalMode2,HoodieHiveUtil.INCREMENTAL_SCAN_MODE);
+    String defaultmode = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, "db3.first_trips");
+    conf.set(defaultmode, HoodieHiveUtil.DEFAULT_SCAN_MODE);
+    List<String> actualincrTables = HoodieHiveUtil.getIncrementalTableNames(Job.getInstance(conf));
+    for (int i = 0; i < expectedincrTables.length; i++) {
+      assertTrue(actualincrTables.contains(expectedincrTables[i]));
+    }
+  }
+
+  private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit,
+      int totalExpected) throws IOException {
     int actualCount = 0;
     int totalCount = 0;
     InputSplit[] splits = inputFormat.getSplits(jobConf, 1);

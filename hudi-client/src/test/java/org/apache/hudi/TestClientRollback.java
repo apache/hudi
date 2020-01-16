@@ -127,9 +127,7 @@ public class TestClientRollback extends TestHoodieClientBase {
       table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
       final ReadOptimizedView view2 = table.getROFileSystemView();
 
-      dataFiles = partitionPaths.stream().flatMap(s -> {
-        return view2.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("004"));
-      }).collect(Collectors.toList());
+      dataFiles = partitionPaths.stream().flatMap(s -> view2.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
       assertEquals("The data files for commit 004 should be present", 3, dataFiles.size());
 
       // rolling back to a non existent savepoint must not succeed
@@ -205,7 +203,7 @@ public class TestClientRollback extends TestHoodieClientBase {
       // Rollback commit 1 (this should fail, since commit2 is still around)
       try {
         client.rollback(commitTime1);
-        assertTrue("Should have thrown an exception ", false);
+        fail("Should have thrown an exception ");
       } catch (HoodieRollbackException hrbe) {
         // should get here
       }

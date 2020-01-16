@@ -19,8 +19,8 @@
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
-import org.apache.hudi.NonpartitionedKeyGenerator;
-import org.apache.hudi.SimpleKeyGenerator;
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -45,7 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Sample program that writes & reads hoodie datasets via the Spark datasource.
+ * Sample program that writes & reads hoodie tables via the Spark datasource.
  */
 public class HoodieJavaApp {
 
@@ -89,7 +89,7 @@ public class HoodieJavaApp {
 
   public static void main(String[] args) throws Exception {
     HoodieJavaApp cli = new HoodieJavaApp();
-    JCommander cmd = new JCommander(cli, args);
+    JCommander cmd = new JCommander(cli, null, args);
 
     if (cli.help) {
       cmd.usage();
@@ -104,6 +104,7 @@ public class HoodieJavaApp {
     SparkSession spark = SparkSession.builder().appName("Hoodie Spark APP")
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
     JavaSparkContext jssc = new JavaSparkContext(spark.sparkContext());
+    spark.sparkContext().setLogLevel("WARN");
     FileSystem fs = FileSystem.get(jssc.hadoopConfiguration());
 
     // Generator of some records to be loaded in.
@@ -114,13 +115,12 @@ public class HoodieJavaApp {
     } else {
       dataGen = new HoodieTestDataGenerator();
     }
-    List<HoodieRecord> recordsSoFar = new ArrayList<>();
 
     /**
      * Commit with only inserts
      */
     // Generate some input..
-    recordsSoFar.addAll(dataGen.generateInserts("001"/* ignore */, 100));
+    List<HoodieRecord> recordsSoFar = new ArrayList<>(dataGen.generateInserts("001"/* ignore */, 100));
     List<String> records1 = DataSourceTestUtils.convertToStringList(recordsSoFar);
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));
 
@@ -212,8 +212,8 @@ public class HoodieJavaApp {
         .load(tablePath + (nonPartitionedTable ? "/*" : "/*/*/*/*"));
     hoodieROViewDF.registerTempTable("hoodie_ro");
     spark.sql("describe hoodie_ro").show();
-    // all trips whose fare was greater than 2.
-    spark.sql("select fare, begin_lon, begin_lat, timestamp from hoodie_ro where fare > 2.0").show();
+    // all trips whose fare amount was greater than 2.
+    spark.sql("select fare.amount, begin_lon, begin_lat, timestamp from hoodie_ro where fare.amount > 2.0").show();
 
     if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) {
       /**

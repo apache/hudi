@@ -156,7 +156,7 @@ public class HoodieSnapshotCopier implements Serializable {
     // Create the _SUCCESS tag
     Path successTagPath = new Path(outputDir + "/_SUCCESS");
     if (!fs.exists(successTagPath)) {
-      LOG.info(String.format("Creating _SUCCESS under targetBasePath: $s", outputDir));
+      LOG.info(String.format("Creating _SUCCESS under targetBasePath: %s", outputDir));
       fs.createNewFile(successTagPath);
     }
   }
@@ -164,7 +164,7 @@ public class HoodieSnapshotCopier implements Serializable {
   public static void main(String[] args) throws IOException {
     // Take input configs
     final Config cfg = new Config();
-    new JCommander(cfg, args);
+    new JCommander(cfg, null, args);
     LOG.info(String.format("Snapshot hoodie table from %s targetBasePath to %stargetBasePath", cfg.basePath,
         cfg.outputPath));
 

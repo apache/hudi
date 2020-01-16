@@ -75,9 +75,9 @@ import static java.util.stream.Collectors.toList;
 public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
   private static final Logger LOG = LogManager.getLogger(HoodieRealtimeTableCompactor.class);
-  // Accumulator to keep track of total log files for a dataset
+  // Accumulator to keep track of total log files for a table
   private AccumulatorV2<Long, Long> totalLogFiles;
-  // Accumulator to keep track of total log file slices for a dataset
+  // Accumulator to keep track of total log file slices for a table
   private AccumulatorV2<Long, Long> totalFileSlices;
 
   @Override

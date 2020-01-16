@@ -23,17 +23,24 @@ import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.cli.utils.InputStreamConsumer;
+import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.AvroUtils;
-
+import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.spark.launcher.SparkLauncher;
+import org.apache.spark.util.Utils;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
+import scala.collection.JavaConverters;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -59,12 +66,11 @@ public class CleansCommand implements CommandMarker {
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
     List<HoodieInstant> cleans = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
-    for (int i = 0; i < cleans.size(); i++) {
-      HoodieInstant clean = cleans.get(i);
+    for (HoodieInstant clean : cleans) {
       HoodieCleanMetadata cleanMetadata =
-          AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
-      rows.add(new Comparable[] {clean.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
-          cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
+              AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
+      rows.add(new Comparable[]{clean.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
+              cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
     }
 
     TableHeader header =
@@ -103,8 +109,8 @@ public class CleansCommand implements CommandMarker {
       String path = entry.getKey();
       HoodieCleanPartitionMetadata stats = entry.getValue();
       String policy = stats.getPolicy();
-      Integer totalSuccessDeletedFiles = stats.getSuccessDeleteFiles().size();
-      Integer totalFailedDeletedFiles = stats.getFailedDeleteFiles().size();
+      int totalSuccessDeletedFiles = stats.getSuccessDeleteFiles().size();
+      int totalFailedDeletedFiles = stats.getFailedDeleteFiles().size();
       rows.add(new Comparable[] {path, policy, totalSuccessDeletedFiles, totalFailedDeletedFiles});
     }
 
@@ -112,5 +118,33 @@ public class CleansCommand implements CommandMarker {
         .addTableHeaderField("Total Files Successfully Deleted").addTableHeaderField("Total Failed Deletions");
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
 
+  }
+
+  @CliCommand(value = "cleans run", help = "run clean")
+  public String runClean(@CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+      help = "Spark executor memory") final String sparkMemory,
+                         @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for cleaning",
+                           unspecifiedDefaultValue = "") final String propsFilePath,
+                         @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
+                           unspecifiedDefaultValue = "") final String[] configs,
+                         @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master ") String master) throws IOException, InterruptedException, URISyntaxException {
+    boolean initialized = HoodieCLI.initConf();
+    HoodieCLI.initFS(initialized);
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+
+    String sparkPropertiesPath =
+        Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
+    SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+
+    String cmd = SparkMain.SparkCommand.CLEAN.toString();
+    sparkLauncher.addAppArgs(cmd, metaClient.getBasePath(), master, propsFilePath, sparkMemory);
+    UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
+    Process process = sparkLauncher.launch();
+    InputStreamConsumer.captureOutput(process);
+    int exitCode = process.waitFor();
+    if (exitCode != 0) {
+      return "Failed to clean hoodie dataset";
+    }
+    return "Cleaned hoodie dataset";
   }
 }

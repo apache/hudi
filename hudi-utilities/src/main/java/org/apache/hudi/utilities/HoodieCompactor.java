@@ -51,7 +51,7 @@ public class HoodieCompactor {
   }
 
   public static class Config implements Serializable {
-    @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the dataset", required = true)
+    @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
     public String tableName = null;
@@ -69,7 +69,7 @@ public class HoodieCompactor {
     public int retry = 0;
     @Parameter(names = {"--schedule", "-sc"}, description = "Schedule compaction", required = false)
     public Boolean runSchedule = false;
-    @Parameter(names = {"--strategy", "-st"}, description = "Stratgey Class", required = false)
+    @Parameter(names = {"--strategy", "-st"}, description = "Strategy Class", required = false)
     public String strategyClassName = null;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
@@ -85,7 +85,7 @@ public class HoodieCompactor {
 
   public static void main(String[] args) throws Exception {
     final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, args);
+    JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
       System.exit(1);

@@ -45,10 +45,29 @@
     "type" : "double"
   }, {
     "name" : "fare",
-    "type" : "double"
-  }, {
-    "name" : "haversine_distance",
-    "type" : "double"
+    "type" : {
+      "type" : "record",
+      "name" : "fare",
+       "fields" : [
+        {
+         "name" : "amount",
+         "type" : "double"
+        },
+        {
+         "name" : "currency",
+         "type" : "string"
+        }
+       ]
+    }
+  },
+  {
+     "name" : "_hoodie_is_deleted",
+     "type" : "boolean",
+     "default" : false
+  },
+  {
+     "name" : "haversine_distance",
+     "type" : "double"
   }]
 }
 

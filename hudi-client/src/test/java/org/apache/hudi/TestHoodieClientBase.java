@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
@@ -54,12 +53,12 @@ import org.junit.Assert;
 import org.junit.Before;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -217,8 +216,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
       if (!partitionToKeys.containsKey(partitionPath)) {
         partitionToKeys.put(partitionPath, new HashSet<>());
       }
-      assertTrue("key " + key + " is duplicate within partition " + partitionPath,
-          !partitionToKeys.get(partitionPath).contains(key));
+      assertFalse("key " + key + " is duplicate within partition " + partitionPath, partitionToKeys.get(partitionPath).contains(key));
       partitionToKeys.get(partitionPath).add(key);
     }
   }
@@ -253,11 +251,11 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    * @param keyGenFunction Keys Generation function
    * @return Wrapped function
    */
-  private Function2<List<HoodieKey>, String, Integer> wrapDeleteKeysGenFunctionForPreppedCalls(
-      final HoodieWriteConfig writeConfig, final Function2<List<HoodieKey>, String, Integer> keyGenFunction) {
-    return (commit, numRecords) -> {
+  private Function<Integer, List<HoodieKey>> wrapDeleteKeysGenFunctionForPreppedCalls(
+      final HoodieWriteConfig writeConfig, final Function<Integer, List<HoodieKey>> keyGenFunction) {
+    return (numRecords) -> {
       final HoodieIndex index = HoodieIndex.createIndex(writeConfig, jsc);
-      List<HoodieKey> records = keyGenFunction.apply(commit, numRecords);
+      List<HoodieKey> records = keyGenFunction.apply(numRecords);
       final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
       HoodieTable table = HoodieTable.getHoodieTable(metaClient, writeConfig, jsc);
       JavaRDD<HoodieRecord> recordsToDelete = jsc.parallelize(records, 1)
@@ -292,8 +290,8 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    * @param wrapped      Actual Records Generation function
    * @return Wrapped Function
    */
-  Function2<List<HoodieKey>, String, Integer> generateWrapDeleteKeysFn(boolean isPreppedAPI,
-                                                                       HoodieWriteConfig writeConfig, Function2<List<HoodieKey>, String, Integer> wrapped) {
+  Function<Integer, List<HoodieKey>> generateWrapDeleteKeysFn(boolean isPreppedAPI,
+                                                                       HoodieWriteConfig writeConfig, Function<Integer, List<HoodieKey>> wrapped) {
     if (isPreppedAPI) {
       return wrapDeleteKeysGenFunctionForPreppedCalls(writeConfig, wrapped);
     } else {
@@ -381,7 +379,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
                                    int numRecordsInThisCommit,
                                    Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieKey>, String> deleteFn, boolean isPreppedAPI,
                                    boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords) throws Exception {
-    final Function2<List<HoodieKey>, String, Integer> keyGenFunction =
+    final Function<Integer, List<HoodieKey>> keyGenFunction =
         generateWrapDeleteKeysFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeletes);
 
     return deleteBatch(client, newCommitTime, prevCommitTime, initCommitTime, numRecordsInThisCommit,
@@ -476,14 +474,14 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    */
   JavaRDD<WriteStatus> deleteBatch(HoodieWriteClient client, String newCommitTime, String prevCommitTime,
                                    String initCommitTime, int numRecordsInThisCommit,
-                                   Function2<List<HoodieKey>, String, Integer> keyGenFunction,
+                                   Function<Integer, List<HoodieKey>> keyGenFunction,
                                    Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieKey>, String> deleteFn,
                                    boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords) throws Exception {
 
     // Delete 1 (only deletes)
     client.startCommitWithTime(newCommitTime);
 
-    List<HoodieKey> keysToDelete = keyGenFunction.apply(newCommitTime, numRecordsInThisCommit);
+    List<HoodieKey> keysToDelete = keyGenFunction.apply(numRecordsInThisCommit);
     JavaRDD<HoodieKey> deleteRecords = jsc.parallelize(keysToDelete, 1);
 
     JavaRDD<WriteStatus> result = deleteFn.apply(client, deleteRecords, newCommitTime);
@@ -531,37 +529,6 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    */
   HoodieCleanStat getCleanStat(List<HoodieCleanStat> hoodieCleanStatsTwo, String partitionPath) {
     return hoodieCleanStatsTwo.stream().filter(e -> e.getPartitionPath().equals(partitionPath)).findFirst().orElse(null);
-  }
-
-  /**
-   * Utility to simulate commit touching files in a partition.
-   *
-   * @param files         List of file-Ids to be touched
-   * @param partitionPath Partition
-   * @param commitTime    Commit Timestamp
-   * @throws IOException in case of error
-   */
-  void updateAllFilesInPartition(List<String> files, String partitionPath, String commitTime) throws IOException {
-    for (String fileId : files) {
-      HoodieTestUtils.createDataFile(basePath, partitionPath, commitTime, fileId);
-    }
-  }
-
-  /**
-   * Helper methods to create new data files in a partition.
-   *
-   * @param partitionPath Partition
-   * @param commitTime    Commit Timestamp
-   * @param numFiles      Number of files to be added
-   * @return Created files
-   * @throws IOException in case of error
-   */
-  List<String> createFilesInPartition(String partitionPath, String commitTime, int numFiles) throws IOException {
-    List<String> files = new ArrayList<>();
-    for (int i = 0; i < numFiles; i++) {
-      files.add(HoodieTestUtils.createNewDataFile(basePath, partitionPath, commitTime));
-    }
-    return files;
   }
 
   // Functional Interfaces for passing lambda and Hoodie Write API contexts

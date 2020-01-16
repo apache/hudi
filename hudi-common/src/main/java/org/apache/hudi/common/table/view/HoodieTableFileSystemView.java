@@ -205,6 +205,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     });
   }
 
+  @Override
   public void close() {
     closed = true;
     super.reset();
@@ -212,6 +213,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     fgIdToPendingCompaction = null;
   }
 
+  @Override
   public boolean isClosed() {
     return closed;
   }

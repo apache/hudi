@@ -62,7 +62,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
 
   /**
    * TODO: We need to persist the index type into hoodie.properties and be able to access the index just with a simple
-   * basepath pointing to the dataset. Until, then just always assume a BloomIndex
+   * basepath pointing to the table. Until, then just always assume a BloomIndex
    */
   private final transient HoodieIndex<T> index;
   private final HoodieTimeline commitTimeline;
@@ -70,7 +70,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
   private transient Option<SQLContext> sqlContextOpt;
 
   /**
-   * @param basePath path to Hoodie dataset
+   * @param basePath path to Hoodie table
    */
   public HoodieReadClient(JavaSparkContext jsc, String basePath, Option<EmbeddedTimelineService> timelineService) {
     this(jsc, HoodieWriteConfig.newBuilder().withPath(basePath)
@@ -80,7 +80,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
   }
 
   /**
-   * @param basePath path to Hoodie dataset
+   * @param basePath path to Hoodie table
    */
   public HoodieReadClient(JavaSparkContext jsc, String basePath) {
     this(jsc, basePath, Option.empty());

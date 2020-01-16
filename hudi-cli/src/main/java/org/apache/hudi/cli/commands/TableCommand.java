@@ -24,7 +24,7 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
-import org.apache.hudi.exception.DatasetNotFoundException;
+import org.apache.hudi.exception.TableNotFoundException;
 
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
@@ -37,26 +37,26 @@ import java.util.HashMap;
 import java.util.List;
 
 /**
- * CLI command to display hudi dataset options.
+ * CLI command to display hudi table options.
  */
 @Component
-public class DatasetsCommand implements CommandMarker {
+public class TableCommand implements CommandMarker {
 
   static {
-    System.out.println("DatasetsCommand getting loaded");
+    System.out.println("Table command getting loaded");
   }
 
-  @CliCommand(value = "connect", help = "Connect to a hoodie dataset")
+  @CliCommand(value = "connect", help = "Connect to a hoodie table")
   public String connect(
-      @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the dataset") final String path,
-      @CliOption(key = {"layoutVersion"}, mandatory = false, help = "Timeline Layout version") Integer layoutVersion,
-      @CliOption(key = {"eventuallyConsistent"}, mandatory = false, unspecifiedDefaultValue = "false",
+      @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the table") final String path,
+      @CliOption(key = {"layoutVersion"}, help = "Timeline Layout version") Integer layoutVersion,
+      @CliOption(key = {"eventuallyConsistent"}, unspecifiedDefaultValue = "false",
           help = "Enable eventual consistency") final boolean eventuallyConsistent,
-      @CliOption(key = {"initialCheckIntervalMs"}, mandatory = false, unspecifiedDefaultValue = "2000",
+      @CliOption(key = {"initialCheckIntervalMs"}, unspecifiedDefaultValue = "2000",
           help = "Initial wait time for eventual consistency") final Integer initialConsistencyIntervalMs,
-      @CliOption(key = {"maxCheckIntervalMs"}, mandatory = false, unspecifiedDefaultValue = "300000",
+      @CliOption(key = {"maxCheckIntervalMs"}, unspecifiedDefaultValue = "300000",
           help = "Max wait time for eventual consistency") final Integer maxConsistencyIntervalMs,
-      @CliOption(key = {"maxCheckIntervalMs"}, mandatory = false, unspecifiedDefaultValue = "7",
+      @CliOption(key = {"maxCheckIntervalMs"}, unspecifiedDefaultValue = "7",
           help = "Max checks for eventual consistency") final Integer maxConsistencyChecks)
       throws IOException {
     HoodieCLI
@@ -67,7 +67,7 @@ public class DatasetsCommand implements CommandMarker {
     HoodieCLI.initConf();
     HoodieCLI.connectTo(path, layoutVersion);
     HoodieCLI.initFS(true);
-    HoodieCLI.state = HoodieCLI.CLIState.DATASET;
+    HoodieCLI.state = HoodieCLI.CLIState.TABLE;
     return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " loaded";
   }
 
@@ -81,7 +81,7 @@ public class DatasetsCommand implements CommandMarker {
    */
   @CliCommand(value = "create", help = "Create a hoodie table if not present")
   public String createTable(
-      @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the dataset") final String path,
+      @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the table") final String path,
       @CliOption(key = {"tableName"}, mandatory = true, help = "Hoodie Table Name") final String name,
       @CliOption(key = {"tableType"}, unspecifiedDefaultValue = "COPY_ON_WRITE",
           help = "Hoodie Table Type. Must be one of : COPY_ON_WRITE or MERGE_ON_READ") final String tableTypeStr,
@@ -98,13 +98,13 @@ public class DatasetsCommand implements CommandMarker {
     try {
       new HoodieTableMetaClient(HoodieCLI.conf, path);
       existing = true;
-    } catch (DatasetNotFoundException dfe) {
+    } catch (TableNotFoundException dfe) {
       // expected
     }
 
     // Do not touch table that already exist
     if (existing) {
-      throw new IllegalStateException("Dataset already existing in path : " + path);
+      throw new IllegalStateException("Table already existing in path : " + path);
     }
 
     final HoodieTableType tableType = HoodieTableType.valueOf(tableTypeStr);
@@ -118,7 +118,7 @@ public class DatasetsCommand implements CommandMarker {
   /**
    * Describes table properties.
    */
-  @CliCommand(value = "desc", help = "Describle Hoodie Table properties")
+  @CliCommand(value = "desc", help = "Describe Hoodie Table properties")
   public String descTable() {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     TableHeader header = new TableHeader().addTableHeaderField("Property").addTableHeaderField("Value");

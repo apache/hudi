@@ -42,7 +42,7 @@ public abstract class SchemaProvider implements Serializable {
   public abstract Schema getSourceSchema();
 
   public Schema getTargetSchema() {
-    // by default, use source schema as target for hoodie dataset as well
+    // by default, use source schema as target for hoodie table as well
     return getSourceSchema();
   }
 }

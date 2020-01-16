@@ -16,31 +16,28 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.TypedProperties;
-import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
 
+import java.io.Serializable;
+
 /**
- * Simple Key generator for unpartitioned Hive Tables.
+ * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record.
  */
-public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
+public abstract class KeyGenerator implements Serializable {
 
-  private static final String EMPTY_PARTITION = "";
+  protected transient TypedProperties config;
 
-  public NonpartitionedKeyGenerator(TypedProperties props) {
-    super(props);
+  protected KeyGenerator(TypedProperties config) {
+    this.config = config;
   }
 
-  @Override
-  public HoodieKey getKey(GenericRecord record) {
-    String recordKey = DataSourceUtils.getNullableNestedFieldValAsString(record, recordKeyField);
-    if (recordKey == null || recordKey.isEmpty()) {
-      throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
-    }
-    return new HoodieKey(recordKey, EMPTY_PARTITION);
-  }
+  /**
+   * Generate a Hoodie Key out of provided generic record.
+   */
+  public abstract HoodieKey getKey(GenericRecord record);
 }

@@ -18,7 +18,9 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
+import org.apache.hudi.keygen.SimpleKeyGenerator
 
 /**
   * List of options that can be passed to the Hoodie datasource,
@@ -26,7 +28,7 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
   */
 
 /**
-  * Options supported for reading hoodie datasets.
+  * Options supported for reading hoodie tables.
   */
 object DataSourceReadOptions {
   /**
@@ -73,7 +75,7 @@ object DataSourceReadOptions {
 }
 
 /**
-  * Options supported for writing hoodie datasets.
+  * Options supported for writing hoodie tables.
   */
 object DataSourceWriteOptions {
   /**
@@ -100,7 +102,7 @@ object DataSourceWriteOptions {
   val DEFAULT_STORAGE_TYPE_OPT_VAL = COW_STORAGE_TYPE_OPT_VAL
 
   /**
-    * Hive table name, to register the dataset into.
+    * Hive table name, to register the table into.
     *
     * Default:  None (mandatory)
     */
@@ -200,7 +202,6 @@ object DataSourceWriteOptions {
   val HIVE_URL_OPT_KEY = "hoodie.datasource.hive_sync.jdbcurl"
   val HIVE_PARTITION_FIELDS_OPT_KEY = "hoodie.datasource.hive_sync.partition_fields"
   val HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY = "hoodie.datasource.hive_sync.partition_extractor_class"
-  val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = "hoodie.datasource.hive_sync.assume_date_partitioning"
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = "hoodie.datasource.hive_sync.use_pre_apache_input_format"
 
   // DEFAULT FOR HIVE SPECIFIC CONFIGS

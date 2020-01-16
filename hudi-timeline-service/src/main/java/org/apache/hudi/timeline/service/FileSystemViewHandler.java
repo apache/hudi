@@ -77,7 +77,7 @@ public class FileSystemViewHandler {
   }
 
   /**
-   * Determines if local view of dataset's timeline is behind that of client's view.
+   * Determines if local view of table's timeline is behind that of client's view.
    */
   private boolean isLocalViewBehind(Context ctx) {
     String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
@@ -284,9 +284,9 @@ public class FileSystemViewHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
-    app.post(RemoteHoodieTableFileSystemView.REFRESH_DATASET, new ViewHandler(ctx -> {
+    app.post(RemoteHoodieTableFileSystemView.REFRESH_TABLE, new ViewHandler(ctx -> {
       boolean success = sliceHandler
-          .refreshDataset(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
+          .refreshTable(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
       writeValueAsString(ctx, success);
     }, false));
   }

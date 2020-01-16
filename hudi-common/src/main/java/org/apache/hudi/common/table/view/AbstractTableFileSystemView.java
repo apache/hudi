@@ -60,7 +60,7 @@ import java.util.stream.Stream;
 /**
  * Common thread-safe implementation for multiple TableFileSystemView Implementations. Provides uniform handling of (a)
  * Loading file-system views from underlying file-system (b) Pending compaction operations and changing file-system
- * views based on that (c) Thread-safety in loading and managing file system views for this dataset. (d) resetting
+ * views based on that (c) Thread-safety in loading and managing file system views for this table. (d) resetting
  * file-system views The actual mechanism of fetching file slices from different view storages is delegated to
  * sub-classes.
  */
@@ -182,6 +182,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Clears the partition Map and reset view states.
    */
+  @Override
   public final void reset() {
     try {
       writeLock.lock();
@@ -380,6 +381,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Get Latest data file for a partition and file-Id.
    */
+  @Override
   public final Option<HoodieDataFile> getLatestDataFile(String partitionStr, String fileId) {
     try {
       readLock.lock();
@@ -434,6 +436,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Get Latest File Slice for a given fileId in a given partition.
    */
+  @Override
   public final Option<FileSlice> getLatestFileSlice(String partitionStr, String fileId) {
     try {
       readLock.lock();

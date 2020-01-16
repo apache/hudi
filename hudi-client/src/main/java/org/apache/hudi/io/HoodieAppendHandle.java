@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -89,6 +90,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   private boolean doInit = true;
   // Total number of bytes written during this append phase (an estimation)
   private long estimatedNumberOfBytesWritten;
+  // Total number of bytes written to file
+  private long sizeInBytes = 0;
   // Number of records that must be written to meet the max block size for a log block
   private int numberOfRecords = 0;
   // Max block size to limit to for a log block
@@ -132,6 +135,10 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
       writeStatus.getStat().setFileId(fileId);
       averageRecordSize = SizeEstimator.estimate(record);
       try {
+        //save hoodie partition meta in the partition path
+        HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, baseInstantTime,
+            new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
+        partitionMetadata.trySave(TaskContext.getPartitionId());
         this.writer = createLogWriter(fileSlice, baseInstantTime);
         this.currentLogFile = writer.getLogFile();
         ((HoodieDeltaWriteStat) writeStatus.getStat()).setLogVersion(currentLogFile.getLogVersion());
@@ -207,7 +214,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
         recordList.clear();
       }
       if (keysToDelete.size() > 0) {
-        writer = writer.appendBlock(new HoodieDeleteBlock(keysToDelete.stream().toArray(HoodieKey[]::new), header));
+        writer = writer.appendBlock(new HoodieDeleteBlock(keysToDelete.toArray(new HoodieKey[keysToDelete.size()]), header));
         keysToDelete.clear();
       }
     } catch (Exception e) {
@@ -241,8 +248,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
     try {
       // flush any remaining records to disk
       doAppend(header);
-      long sizeInBytes = writer.getCurrentSize();
+
       if (writer != null) {
+        sizeInBytes = writer.getCurrentSize();
         writer.close();
       }
 

@@ -38,6 +38,8 @@ import org.apache.hudi.common.util.AvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.func.OperationResult;
+import org.apache.hudi.utilities.UtilHelpers;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -84,7 +86,7 @@ public class CompactionCommand implements CommandMarker {
   public String compactionsAll(
       @CliOption(key = {"includeExtraMetadata"}, help = "Include extra metadata",
           unspecifiedDefaultValue = "false") final boolean includeExtraMetadata,
-      @CliOption(key = {"limit"}, mandatory = false, help = "Limit commits",
+      @CliOption(key = {"limit"}, help = "Limit commits",
           unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
@@ -99,10 +101,9 @@ public class CompactionCommand implements CommandMarker {
 
     List<HoodieInstant> instants = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
-    for (int i = 0; i < instants.size(); i++) {
-      HoodieInstant instant = instants.get(i);
+    for (HoodieInstant instant : instants) {
       HoodieCompactionPlan compactionPlan = null;
-      if (!instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
+      if (!HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())) {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
           compactionPlan = AvroUtils.deserializeCompactionPlan(
@@ -117,7 +118,7 @@ public class CompactionCommand implements CommandMarker {
       }
 
       if (null != compactionPlan) {
-        HoodieInstant.State state = instant.getState();
+        State state = instant.getState();
         if (committed.contains(instant.getTimestamp())) {
           state = State.COMPLETED;
         }
@@ -144,8 +145,8 @@ public class CompactionCommand implements CommandMarker {
   @CliCommand(value = "compaction show", help = "Shows compaction details for a specific compaction instant")
   public String compactionShow(
       @CliOption(key = "instant", mandatory = true,
-          help = "Base path for the target hoodie dataset") final String compactionInstantTime,
-      @CliOption(key = {"limit"}, mandatory = false, help = "Limit commits",
+          help = "Base path for the target hoodie table") final String compactionInstantTime,
+      @CliOption(key = {"limit"}, help = "Limit commits",
           unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
@@ -175,7 +176,11 @@ public class CompactionCommand implements CommandMarker {
 
   @CliCommand(value = "compaction schedule", help = "Schedule Compaction")
   public String scheduleCompact(@CliOption(key = "sparkMemory", unspecifiedDefaultValue = "1G",
-      help = "Spark executor memory") final String sparkMemory) throws Exception {
+      help = "Spark executor memory") final String sparkMemory,
+                                @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
+                                  unspecifiedDefaultValue = "") final String propsFilePath,
+                                @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
+                                  unspecifiedDefaultValue = "") final String[] configs) throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
@@ -187,7 +192,8 @@ public class CompactionCommand implements CommandMarker {
         Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkCommand.COMPACT_SCHEDULE.toString(), client.getBasePath(),
-        client.getTableConfig().getTableName(), compactionInstantTime, sparkMemory);
+        client.getTableConfig().getTableName(), compactionInstantTime, sparkMemory, propsFilePath);
+    UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -206,8 +212,11 @@ public class CompactionCommand implements CommandMarker {
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
           help = "Spark executor memory") final String sparkMemory,
       @CliOption(key = "retry", unspecifiedDefaultValue = "1", help = "Number of retries") final String retry,
-      @CliOption(key = "compactionInstant", mandatory = false,
-          help = "Base path for the target hoodie dataset") String compactionInstantTime)
+      @CliOption(key = "compactionInstant", help = "Base path for the target hoodie table") String compactionInstantTime,
+      @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
+        unspecifiedDefaultValue = "") final String propsFilePath,
+      @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
+        unspecifiedDefaultValue = "") final String[] configs)
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
@@ -224,13 +233,13 @@ public class CompactionCommand implements CommandMarker {
       }
       compactionInstantTime = firstPendingInstant.get();
     }
-
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkCommand.COMPACT_RUN.toString(), client.getBasePath(),
         client.getTableConfig().getTableName(), compactionInstantTime, parallelism, schemaFilePath,
-        sparkMemory, retry);
+        sparkMemory, retry, propsFilePath);
+    UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -276,7 +285,7 @@ public class CompactionCommand implements CommandMarker {
 
     String outputPathStr = getTmpSerializerFile();
     Path outputPath = new Path(outputPathStr);
-    String output = null;
+    String output;
     try {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
@@ -290,10 +299,10 @@ public class CompactionCommand implements CommandMarker {
         return "Failed to validate compaction for " + compactionInstant;
       }
       List<ValidationOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
-      boolean valid = res.stream().map(r -> r.isSuccess()).reduce(Boolean::logicalAnd).orElse(true);
+      boolean valid = res.stream().map(OperationResult::isSuccess).reduce(Boolean::logicalAnd).orElse(true);
       String message = "\n\n\t COMPACTION PLAN " + (valid ? "VALID" : "INVALID") + "\n\n";
       List<Comparable[]> rows = new ArrayList<>();
-      res.stream().forEach(r -> {
+      res.forEach(r -> {
         Comparable[] row = new Comparable[] {r.getOperation().getFileId(), r.getOperation().getBaseInstantTime(),
             r.getOperation().getDataFileName().isPresent() ? r.getOperation().getDataFileName().get() : "",
             r.getOperation().getDeltaFileNames().size(), r.isSuccess(),
@@ -337,7 +346,7 @@ public class CompactionCommand implements CommandMarker {
 
     String outputPathStr = getTmpSerializerFile();
     Path outputPath = new Path(outputPathStr);
-    String output = "";
+    String output;
     try {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
@@ -381,7 +390,7 @@ public class CompactionCommand implements CommandMarker {
 
     String outputPathStr = getTmpSerializerFile();
     Path outputPath = new Path(outputPathStr);
-    String output = "";
+    String output;
     try {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
@@ -427,7 +436,7 @@ public class CompactionCommand implements CommandMarker {
 
     String outputPathStr = getTmpSerializerFile();
     Path outputPath = new Path(outputPathStr);
-    String output = "";
+    String output;
     try {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
@@ -462,11 +471,11 @@ public class CompactionCommand implements CommandMarker {
       if (result.get()) {
         System.out.println("All renames successfully completed to " + operation + " done !!");
       } else {
-        System.out.println("Some renames failed. DataSet could be in inconsistent-state. Try running compaction repair");
+        System.out.println("Some renames failed. table could be in inconsistent-state. Try running compaction repair");
       }
 
       List<Comparable[]> rows = new ArrayList<>();
-      res.stream().forEach(r -> {
+      res.forEach(r -> {
         Comparable[] row =
             new Comparable[] {r.getOperation().fileId, r.getOperation().srcPath, r.getOperation().destPath,
                 r.isExecuted(), r.isSuccess(), r.getException().isPresent() ? r.getException().get().getMessage() : ""};

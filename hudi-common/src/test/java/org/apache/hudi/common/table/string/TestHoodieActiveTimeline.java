@@ -31,7 +31,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
-import java.io.IOException;
 import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
@@ -53,7 +52,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testLoadingInstantsFromFiles() throws IOException {
+  public void testLoadingInstantsFromFiles() {
     HoodieInstant instant1 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
     HoodieInstant instant2 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "3");
     HoodieInstant instant3 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "5");
@@ -100,7 +99,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testTimelineOperationsBasic() throws Exception {
+  public void testTimelineOperationsBasic() {
     timeline = new HoodieActiveTimeline(metaClient);
     assertTrue(timeline.empty());
     assertEquals("", 0, timeline.countInstants());
@@ -112,7 +111,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testTimelineOperations() throws Exception {
+  public void testTimelineOperations() {
     timeline = new MockHoodieTimeline(Stream.of("01", "03", "05", "07", "09", "11", "13", "15", "17", "19"),
         Stream.of("21", "23"));
     HoodieTestUtils.assertStreamEquals("", Stream.of("05", "07", "09", "11"), timeline.getCommitTimeline()

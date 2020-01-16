@@ -89,7 +89,7 @@ public class FileSliceHandler extends Handler {
         .collect(Collectors.toList());
   }
 
-  public boolean refreshDataset(String basePath) {
+  public boolean refreshTable(String basePath) {
     viewManager.clearFileSystemView(basePath);
     return true;
   }

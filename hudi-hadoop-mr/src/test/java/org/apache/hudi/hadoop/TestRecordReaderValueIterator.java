@@ -26,7 +26,6 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -35,7 +34,7 @@ public class TestRecordReaderValueIterator {
 
   @Test
   public void testValueIterator() {
-    String[] values = new String[] {"hoodie", "efficient", "new project", "realtime", "spark", "dataset",};
+    String[] values = new String[] {"hoodie", "efficient", "new project", "realtime", "spark", "table",};
     List<Pair<Integer, String>> entries =
         IntStream.range(0, values.length).boxed().map(idx -> Pair.of(idx, values[idx])).collect(Collectors.toList());
     TestRecordReader reader = new TestRecordReader(entries);
@@ -61,7 +60,7 @@ public class TestRecordReaderValueIterator {
     }
 
     @Override
-    public boolean next(IntWritable key, Text value) throws IOException {
+    public boolean next(IntWritable key, Text value) {
       if (currIndex >= entries.size()) {
         return false;
       }
@@ -82,17 +81,17 @@ public class TestRecordReaderValueIterator {
     }
 
     @Override
-    public long getPos() throws IOException {
+    public long getPos() {
       return currIndex;
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
 
     }
 
     @Override
-    public float getProgress() throws IOException {
+    public float getProgress() {
       return (currIndex * 1.0F) / entries.size();
     }
   }

@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 /**
  * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are
  * loaded from hoodie.properties, these properties are usually set during initializing a path as hoodie base path and
- * never changes during the lifetime of a hoodie dataset.
+ * never changes during the lifetime of a hoodie table.
  *
  * @see HoodieTableMetaClient
  * @since 0.3.0
@@ -62,19 +62,25 @@ public class HoodieTableConfig implements Serializable {
   public static final HoodieTableType DEFAULT_TABLE_TYPE = HoodieTableType.COPY_ON_WRITE;
   public static final HoodieFileFormat DEFAULT_RO_FILE_FORMAT = HoodieFileFormat.PARQUET;
   public static final HoodieFileFormat DEFAULT_RT_FILE_FORMAT = HoodieFileFormat.HOODIE_LOG;
+  public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
   public static final Integer DEFAULT_TIMELINE_LAYOUT_VERSION = TimelineLayoutVersion.VERSION_0;
-
-  public static final String DEFAULT_PAYLOAD_CLASS = HoodieAvroPayload.class.getName();
   public static final String DEFAULT_ARCHIVELOG_FOLDER = "";
   private Properties props;
 
-  public HoodieTableConfig(FileSystem fs, String metaPath) {
+  public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
     Properties props = new Properties();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
-    LOG.info("Loading dataset properties from " + propertyPath);
+    LOG.info("Loading table properties from " + propertyPath);
     try {
       try (FSDataInputStream inputStream = fs.open(propertyPath)) {
         props.load(inputStream);
+      }
+      if (props.containsKey(HOODIE_PAYLOAD_CLASS_PROP_NAME) && payloadClassName != null
+          && !props.getProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME).equals(payloadClassName)) {
+        props.setProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, payloadClassName);
+        try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
+          props.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
+        }
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not load Hoodie properties from " + propertyPath, e);
@@ -109,7 +115,7 @@ public class HoodieTableConfig implements Serializable {
       if (!properties.containsKey(HOODIE_TABLE_TYPE_PROP_NAME)) {
         properties.setProperty(HOODIE_TABLE_TYPE_PROP_NAME, DEFAULT_TABLE_TYPE.name());
       }
-      if (properties.getProperty(HOODIE_TABLE_TYPE_PROP_NAME) == HoodieTableType.MERGE_ON_READ.name()
+      if (properties.getProperty(HOODIE_TABLE_TYPE_PROP_NAME).equals(HoodieTableType.MERGE_ON_READ.name())
           && !properties.containsKey(HOODIE_PAYLOAD_CLASS_PROP_NAME)) {
         properties.setProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS);
       }
@@ -144,7 +150,7 @@ public class HoodieTableConfig implements Serializable {
    * Read the payload class for HoodieRecords from the table properties.
    */
   public String getPayloadClass() {
-    // There could be datasets written with payload class from com.uber.hoodie. Need to transparently
+    // There could be tables written with payload class from com.uber.hoodie. Need to transparently
     // change to org.apache.hudi
     return props.getProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS).replace("com.uber.hoodie",
         "org.apache.hudi");
@@ -182,7 +188,7 @@ public class HoodieTableConfig implements Serializable {
   }
 
   /**
-   * Get the relative path of archive log folder under metafolder, for this dataset.
+   * Get the relative path of archive log folder under metafolder, for this table.
    */
   public String getArchivelogFolder() {
     return props.getProperty(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, DEFAULT_ARCHIVELOG_FOLDER);

@@ -45,7 +45,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * Sample program that writes & reads hoodie datasets via the Spark datasource streaming.
+ * Sample program that writes & reads hoodie tables via the Spark datasource streaming.
  */
 public class HoodieJavaStreamingApp {
 
@@ -98,7 +98,7 @@ public class HoodieJavaStreamingApp {
 
   public static void main(String[] args) throws Exception {
     HoodieJavaStreamingApp cli = new HoodieJavaStreamingApp();
-    JCommander cmd = new JCommander(cli, args);
+    JCommander cmd = new JCommander(cli, null, args);
 
     if (cli.help) {
       cmd.usage();
@@ -195,8 +195,8 @@ public class HoodieJavaStreamingApp {
         .load(tablePath + "/*/*/*/*");
     hoodieROViewDF.registerTempTable("hoodie_ro");
     spark.sql("describe hoodie_ro").show();
-    // all trips whose fare was greater than 2.
-    spark.sql("select fare, begin_lon, begin_lat, timestamp from hoodie_ro where fare > 2.0").show();
+    // all trips whose fare amount was greater than 2.
+    spark.sql("select fare.amount, begin_lon, begin_lat, timestamp from hoodie_ro where fare.amount > 2.0").show();
 
     if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) {
       /**

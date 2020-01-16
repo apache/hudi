@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.KeyGenerator;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -79,7 +79,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
 /**
- * Sync's one batch of data to hoodie dataset.
+ * Sync's one batch of data to hoodie table.
  */
 public class DeltaSync implements Serializable {
 
@@ -103,12 +103,12 @@ public class DeltaSync implements Serializable {
   private transient SchemaProvider schemaProvider;
 
   /**
-   * Allows transforming source to target dataset before writing.
+   * Allows transforming source to target table before writing.
    */
   private transient Transformer transformer;
 
   /**
-   * Extract the key for the target dataset.
+   * Extract the key for the target table.
    */
   private KeyGenerator keyGenerator;
 
@@ -158,8 +158,8 @@ public class DeltaSync implements Serializable {
   private final HoodieTableType tableType;
 
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
-      HoodieTableType tableType, TypedProperties props, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
-      Function<HoodieWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+                   HoodieTableType tableType, TypedProperties props, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+                   Function<HoodieWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
 
     this.cfg = cfg;
     this.jssc = jssc;
@@ -193,12 +193,22 @@ public class DeltaSync implements Serializable {
    */
   private void refreshTimeline() throws IOException {
     if (fs.exists(new Path(cfg.targetBasePath))) {
-      HoodieTableMetaClient meta = new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath);
-      this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+      HoodieTableMetaClient meta = new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath,
+          cfg.payloadClassName);
+      switch (meta.getTableType()) {
+        case COPY_ON_WRITE:
+          this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
+          break;
+        case MERGE_ON_READ:
+          this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants());
+          break;
+        default:
+          throw new HoodieException("Unsupported table type :" + meta.getTableType());
+      }
     } else {
       this.commitTimelineOpt = Option.empty();
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
-          cfg.storageType, cfg.targetTableName, "archived");
+          cfg.storageType, cfg.targetTableName, "archived", cfg.payloadClassName);
     }
   }
 
@@ -260,7 +270,7 @@ public class DeltaSync implements Serializable {
       }
     } else {
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
-          cfg.storageType, cfg.targetTableName, "archived");
+          cfg.storageType, cfg.targetTableName, "archived", cfg.payloadClassName);
     }
 
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
@@ -288,7 +298,7 @@ public class DeltaSync implements Serializable {
       // default to RowBasedSchemaProvider
       schemaProvider = this.schemaProvider == null || this.schemaProvider.getTargetSchema() == null
           ? transformed.map(r -> (SchemaProvider) new RowBasedSchemaProvider(r.schema())).orElse(
-              dataAndCheckpoint.getSchemaProvider())
+          dataAndCheckpoint.getSchemaProvider())
           : this.schemaProvider;
     } else {
       // Pull the data from the source & prepare the write
@@ -313,25 +323,25 @@ public class DeltaSync implements Serializable {
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
       HoodieRecordPayload payload = DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-          (Comparable) DataSourceUtils.getNestedFieldVal(gr, cfg.sourceOrderingField));
+          (Comparable) DataSourceUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false));
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
+
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
   }
 
   /**
    * Perform Hoodie Write. Run Cleaner, schedule compaction and syncs to hive if needed.
    *
-   * @param records Input Records
+   * @param records       Input Records
    * @param checkpointStr Checkpoint String
-   * @param metrics Metrics
+   * @param metrics       Metrics
    * @return Option Compaction instant if one is scheduled
    */
   private Option<String> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
-      HoodieDeltaStreamerMetrics metrics, Timer.Context overallTimerContext) throws Exception {
+                                     HoodieDeltaStreamerMetrics metrics, Timer.Context overallTimerContext) throws Exception {
 
     Option<String> scheduledCompactionInstant = Option.empty();
-
     // filter dupes if needed
     if (cfg.filterDupes) {
       // turn upserts to insert
@@ -377,7 +387,7 @@ public class DeltaSync implements Serializable {
 
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
-          scheduledCompactionInstant = writeClient.scheduleCompaction(Option.of(checkpointCommitMetadata));
+          scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());
         }
 
         if (!isEmpty) {

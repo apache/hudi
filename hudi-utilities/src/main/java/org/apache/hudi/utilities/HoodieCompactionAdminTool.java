@@ -46,7 +46,7 @@ public class HoodieCompactionAdminTool {
 
   public static void main(String[] args) throws Exception {
     final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, args);
+    JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
       System.exit(1);
@@ -144,7 +144,7 @@ public class HoodieCompactionAdminTool {
 
     @Parameter(names = {"--operation", "-op"}, description = "Operation", required = true)
     public Operation operation = Operation.VALIDATE;
-    @Parameter(names = {"--base-path", "-bp"}, description = "Base path for the dataset", required = true)
+    @Parameter(names = {"--base-path", "-bp"}, description = "Base path for the table", required = true)
     public String basePath = null;
     @Parameter(names = {"--instant-time", "-in"}, description = "Compaction Instant time", required = false)
     public String compactionInstantTime = null;

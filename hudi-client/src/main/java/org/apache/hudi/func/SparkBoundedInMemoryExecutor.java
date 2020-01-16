@@ -48,6 +48,7 @@ public class SparkBoundedInMemoryExecutor<I, O, E> extends BoundedInMemoryExecut
     this.sparkThreadTaskContext = TaskContext.get();
   }
 
+  @Override
   public void preExecute() {
     // Passing parent thread's TaskContext to newly launched thread for it to access original TaskContext properties.
     TaskContext$.MODULE$.setTaskContext(sparkThreadTaskContext);

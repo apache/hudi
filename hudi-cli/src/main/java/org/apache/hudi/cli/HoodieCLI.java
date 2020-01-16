@@ -48,7 +48,7 @@ public class HoodieCLI {
    * Enum for CLI state.
    */
   public enum CLIState {
-    INIT, DATASET, SYNC
+    INIT, TABLE, SYNC
   }
 
   public static void setConsistencyGuardConfig(ConsistencyGuardConfig config) {
@@ -100,7 +100,7 @@ public class HoodieCLI {
    */
   public static HoodieTableMetaClient getTableMetaClient() {
     if (tableMetadata == null) {
-      throw new NullPointerException("There is no hudi dataset. Please use connect command to set dataset first");
+      throw new NullPointerException("There is no hudi table. Please use connect command to set table first");
     }
     return tableMetadata;
   }

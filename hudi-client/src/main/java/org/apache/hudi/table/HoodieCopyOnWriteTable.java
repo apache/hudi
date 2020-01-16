@@ -279,6 +279,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
    * @param jsc JavaSparkContext
    * @return Cleaner Plan
    */
+  @Override
   public HoodieCleanerPlan scheduleClean(JavaSparkContext jsc) {
     try {
       HoodieCleanHelper cleaner = new HoodieCleanHelper(this, config);
@@ -315,14 +316,14 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   @Override
   public List<HoodieCleanStat> clean(JavaSparkContext jsc, HoodieInstant cleanInstant, HoodieCleanerPlan cleanerPlan) {
     int cleanerParallelism = Math.min(
-        (int) (cleanerPlan.getFilesToBeDeletedPerPartition().values().stream().mapToInt(x -> x.size()).count()),
+        (int) (cleanerPlan.getFilesToBeDeletedPerPartition().values().stream().mapToInt(List::size).count()),
         config.getCleanerParallelism());
     LOG.info("Using cleanerParallelism: " + cleanerParallelism);
     List<Tuple2<String, PartitionCleanStat>> partitionCleanStats = jsc
         .parallelize(cleanerPlan.getFilesToBeDeletedPerPartition().entrySet().stream()
-            .flatMap(x -> x.getValue().stream().map(y -> new Tuple2<String, String>(x.getKey(), y)))
+            .flatMap(x -> x.getValue().stream().map(y -> new Tuple2<>(x.getKey(), y)))
             .collect(Collectors.toList()), cleanerParallelism)
-        .mapPartitionsToPair(deleteFilesFunc(this)).reduceByKey((e1, e2) -> e1.merge(e2)).collect();
+        .mapPartitionsToPair(deleteFilesFunc(this)).reduceByKey(PartitionCleanStat::merge).collect();
 
     Map<String, PartitionCleanStat> partitionCleanStatsMap =
         partitionCleanStats.stream().collect(Collectors.toMap(Tuple2::_1, Tuple2::_2));
@@ -348,9 +349,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   @Override
   public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, HoodieInstant instant, boolean deleteInstants)
       throws IOException {
-    Long startTime = System.currentTimeMillis();
+    long startTime = System.currentTimeMillis();
     List<HoodieRollbackStat> stats = new ArrayList<>();
-    String actionType = metaClient.getCommitActionType();
     HoodieActiveTimeline activeTimeline = this.getActiveTimeline();
 
     if (instant.isCompleted()) {
@@ -379,9 +379,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   private List<RollbackRequest> generateRollbackRequests(HoodieInstant instantToRollback)
       throws IOException {
     return FSUtils.getAllPartitionPaths(this.metaClient.getFs(), this.getMetaClient().getBasePath(),
-        config.shouldAssumeDatePartitioning()).stream().map(partitionPath -> {
-          return RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback);
-        }).collect(Collectors.toList());
+        config.shouldAssumeDatePartitioning()).stream().map(partitionPath -> RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback))
+            .collect(Collectors.toList());
   }
 
 
@@ -541,7 +540,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     /**
      * List of all small files to be corrected.
      */
-    List<SmallFile> smallFiles = new ArrayList<SmallFile>();
+    List<SmallFile> smallFiles = new ArrayList<>();
     /**
      * Total number of RDD partitions, is determined by total buckets we want to pack the incoming workload into.
      */
@@ -567,7 +566,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
      * Rolling stats for files.
      */
     protected HoodieRollingStatMetadata rollingStatMetadata;
-    protected long averageRecordSize;
 
     UpsertPartitioner(WorkloadProfile profile) {
       updateLocationToBucket = new HashMap<>();

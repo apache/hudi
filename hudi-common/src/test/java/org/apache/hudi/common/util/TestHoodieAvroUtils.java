@@ -44,15 +44,15 @@ public class TestHoodieAvroUtils {
         continue;
       }
 
-      Assert.assertTrue("field name is null", field.name() != null);
+      Assert.assertNotNull("field name is null", field.name());
       Map<String, JsonNode> props = field.getJsonProps();
-      Assert.assertTrue("The property is null", props != null);
+      Assert.assertNotNull("The property is null", props);
 
       if (field.name().equals("pii_col")) {
         piiPresent = true;
         Assert.assertTrue("sensitivity_level is removed in field 'pii_col'", props.containsKey("column_category"));
       } else {
-        Assert.assertTrue("The property shows up but not set", props.size() == 0);
+        Assert.assertEquals("The property shows up but not set", 0, props.size());
       }
     }
     Assert.assertTrue("column pii_col doesn't show up", piiPresent);

@@ -41,8 +41,8 @@ public class HoodieMetrics {
   public String finalizeTimerName = null;
   public String compactionTimerName = null;
   public String indexTimerName = null;
-  private HoodieWriteConfig config = null;
-  private String tableName = null;
+  private HoodieWriteConfig config;
+  private String tableName;
   private Timer rollbackTimer = null;
   private Timer cleanTimer = null;
   private Timer commitTimer = null;

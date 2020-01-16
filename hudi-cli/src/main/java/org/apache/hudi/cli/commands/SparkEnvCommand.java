@@ -46,7 +46,7 @@ public class SparkEnvCommand implements CommandMarker {
     env.put(map[0].trim(), map[1].trim());
   }
 
-  @CliCommand(value = "show env all", help = "Show spark launcher envs")
+  @CliCommand(value = "show envs all", help = "Show spark launcher envs")
   public String showAllEnv() {
     String[][] rows = new String[env.size()][2];
     int i = 0;

@@ -107,7 +107,7 @@ public abstract class ITTestBase {
         .append(" --master local[2] --driver-class-path ").append(HADOOP_CONF_DIR)
         .append(
             " --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --executor-memory 1G --num-executors 1 ")
-        .append(" --packages com.databricks:spark-avro_2.11:4.0.0 ").append(" -i ").append(commandFile).toString();
+        .append(" --packages org.apache.spark:spark-avro_2.11:2.4.4 ").append(" -i ").append(commandFile).toString();
   }
 
   static String getPrestoConsoleCommand(String commandFile) {
@@ -165,8 +165,7 @@ public abstract class ITTestBase {
     LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
 
     if (expectedToSucceed) {
-      Assert.assertTrue("Command (" + Arrays.toString(command) + ") expected to succeed. Exit (" + exitCode + ")",
-          exitCode == 0);
+      Assert.assertEquals("Command (" + Arrays.toString(command) + ") expected to succeed. Exit (" + exitCode + ")", 0, exitCode);
     } else {
       Assert.assertTrue("Command (" + Arrays.toString(command) + ") expected to fail. Exit (" + exitCode + ")",
           exitCode != 0);

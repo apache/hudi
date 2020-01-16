@@ -16,28 +16,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
-
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.util.TypedProperties;
-
-import org.apache.avro.generic.GenericRecord;
-
-import java.io.Serializable;
+package org.apache.hudi.exception;
 
 /**
- * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record.
+ * Exception thrown to indicate that a hoodie table is invalid.
  */
-public abstract class KeyGenerator implements Serializable {
+public class InvalidTableException extends HoodieException {
 
-  protected transient TypedProperties config;
-
-  protected KeyGenerator(TypedProperties config) {
-    this.config = config;
+  public InvalidTableException(String basePath) {
+    super(getErrorMessage(basePath));
   }
 
-  /**
-   * Generate a Hoodie Key out of provided generic record.
-   */
-  public abstract HoodieKey getKey(GenericRecord record);
+  private static String getErrorMessage(String basePath) {
+    return "Invalid Hoodie Table. " + basePath;
+  }
 }

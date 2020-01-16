@@ -110,12 +110,11 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
   }
 
   private HoodieWriteConfig makeConfig() {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+    return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().bloomIndexPruneByRanges(rangePruning)
             .bloomIndexTreebasedFilter(treeFiltering).bloomIndexBucketizedChecking(bucketizedChecking)
             .bloomIndexKeysPerBucket(2).build())
         .build();
-    return config;
   }
 
   @Test
@@ -278,7 +277,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testTagLocationWithEmptyRDD() throws Exception {
+  public void testTagLocationWithEmptyRDD() {
     // We have some records to be tagged (two different partitions)
     JavaRDD<HoodieRecord> recordRDD = jsc.emptyRDD();
     // Also create the metadata and config

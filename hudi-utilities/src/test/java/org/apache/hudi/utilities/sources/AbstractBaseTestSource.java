@@ -76,12 +76,12 @@ public abstract class AbstractBaseTestSource extends AvroSource {
   }
 
   protected AbstractBaseTestSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-      SchemaProvider schemaProvider) {
+                                   SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
   }
 
   protected static Stream<GenericRecord> fetchNextBatch(TypedProperties props, int sourceLimit, String commitTime,
-      int partition) {
+                                                        int partition) {
     int maxUniqueKeys =
         props.getInteger(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, TestSourceConfig.DEFAULT_MAX_UNIQUE_RECORDS);
 
@@ -94,10 +94,12 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     int numUpdates = Math.min(numExistingKeys, sourceLimit / 2);
     int numInserts = sourceLimit - numUpdates;
     LOG.info("Before adjustments => numInserts=" + numInserts + ", numUpdates=" + numUpdates);
+    boolean reachedMax = false;
 
     if (numInserts + numExistingKeys > maxUniqueKeys) {
       // Limit inserts so that maxUniqueRecords is maintained
       numInserts = Math.max(0, maxUniqueKeys - numExistingKeys);
+      reachedMax = true;
     }
 
     if ((numInserts + numUpdates) < sourceLimit) {
@@ -105,16 +107,26 @@ public abstract class AbstractBaseTestSource extends AvroSource {
       numUpdates = Math.min(numExistingKeys, sourceLimit - numInserts);
     }
 
-    LOG.info("NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
+    Stream<GenericRecord> deleteStream = Stream.empty();
+    Stream<GenericRecord> updateStream;
     long memoryUsage1 = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
     LOG.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
         + ", Free Memory=" + Runtime.getRuntime().freeMemory());
-
-    Stream<GenericRecord> updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .map(hr -> AbstractBaseTestSource.toGenericRecord(hr));
+    if (!reachedMax && numUpdates >= 50) {
+      LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + (numUpdates - 50) + ", NumDeletes=50, maxUniqueRecords="
+          + maxUniqueKeys);
+      // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
+      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(commitTime, 50).map(AbstractBaseTestSource::toGenericRecord);
+      updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .map(AbstractBaseTestSource::toGenericRecord);
+    } else {
+      LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
+      updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+          .map(AbstractBaseTestSource::toGenericRecord);
+    }
     Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .map(hr -> AbstractBaseTestSource.toGenericRecord(hr));
-    return Stream.concat(updateStream, insertStream);
+        .map(AbstractBaseTestSource::toGenericRecord);
+    return Stream.concat(deleteStream, Stream.concat(updateStream, insertStream));
   }
 
   private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
