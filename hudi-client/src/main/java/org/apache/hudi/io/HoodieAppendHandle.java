@@ -90,6 +90,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   private boolean doInit = true;
   // Total number of bytes written during this append phase (an estimation)
   private long estimatedNumberOfBytesWritten;
+  // Total number of bytes written to file
+  private long sizeInBytes = 0;
   // Number of records that must be written to meet the max block size for a log block
   private int numberOfRecords = 0;
   // Max block size to limit to for a log block
@@ -246,8 +248,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
     try {
       // flush any remaining records to disk
       doAppend(header);
-      long sizeInBytes = writer.getCurrentSize();
+
       if (writer != null) {
+        sizeInBytes = writer.getCurrentSize();
         writer.close();
       }
 
