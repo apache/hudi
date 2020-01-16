@@ -130,6 +130,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
    * Close the file, after flushing data in the buffer.
    * @throws IOException
    */
+  @Override
   public void close() throws IOException {
     if (!isClosed) {
       this.flush();
@@ -209,6 +210,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
    * @param pos  - position in the file to be loaded to the buffer.
    * @throws IOException
    */
+  @Override
   public void seek(long pos) throws IOException {
     if (pos >= this.validLastPosition || pos < this.startPosition) {
       // seeking outside of current buffer -- flush and read
@@ -230,6 +232,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
   /**
    * @return current file position
    */
+  @Override
   public long getFilePointer() {
     return this.currentPosition;
   }
@@ -239,6 +242,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
    * @return - length of the file (including data yet to be flushed to the file).
    * @throws IOException
    */
+  @Override
   public long length() throws IOException {
     return Math.max(this.currentPosition, super.length());
   }
@@ -275,6 +279,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
    * @return - returns a byte as an integer.
    * @throws IOException
    */
+  @Override
   public int read() throws IOException {
     if (endOfBufferReached()) {
       if (!loadNewBlockToBuffer()) {
@@ -291,6 +296,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
    * @return  - returns number of bytes read.
    * @throws IOException
    */
+  @Override
   public int read(byte[] b) throws IOException {
     return this.read(b, 0, b.length);
   }
@@ -303,6 +309,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
    * @return - number of bytes read.
    * @throws IOException
    */
+  @Override
   public int read(byte[] b, int off, int len) throws IOException {
     if (endOfBufferReached()) {
       if (!loadNewBlockToBuffer()) {
@@ -337,6 +344,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
    * @param v - value to be written
    * @throws IOException
    */
+  @Override
   public void write(int v) throws IOException {
     byte [] b = new byte[1];
     b[0] = (byte) v;
@@ -348,6 +356,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
    * @param b - byte array with data to be written
    * @throws IOException
    */
+  @Override
   public void write(byte[] b) throws IOException {
     this.write(b, 0, b.length);
   }
@@ -359,6 +368,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
    * @param len - length of bytes to be written
    * @throws IOException
    */
+  @Override
   public void write(byte[] b, int off, int len) throws IOException {
     // As all data may not fit into the buffer, more than one write would be required.
     while (len > 0) {
