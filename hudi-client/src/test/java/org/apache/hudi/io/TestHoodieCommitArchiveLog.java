@@ -20,7 +20,9 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -41,6 +43,9 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -412,5 +417,33 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
         .getTimelineOfActions(Collections.singleton(HoodieTimeline.CLEAN_ACTION)).filterInflights();
     assertEquals("Loaded inflight clean actions and the count should match", expectedTotalInstants,
         timeline.countInstants());
+  }
+
+  @Test
+  public void testCommitMetadataConverter() {
+    HoodieCommitMetadata hoodieCommitMetadata = new HoodieCommitMetadata();
+    hoodieCommitMetadata.setOperationType(WriteOperationType.INSERT);
+
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-commitMetadata-converter")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
+        .build();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
+
+    Class<?> clazz  = HoodieCommitArchiveLog.class;
+    try {
+      Method commitMetadataConverter = clazz.getDeclaredMethod("commitMetadataConverter", HoodieCommitMetadata.class);
+      commitMetadataConverter.setAccessible(true);
+      org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata =
+          (org.apache.hudi.avro.model.HoodieCommitMetadata) commitMetadataConverter.invoke(archiveLog, hoodieCommitMetadata);
+      assertEquals(expectedCommitMetadata.getOperationType(), WriteOperationType.INSERT.toString());
+    } catch (NoSuchMethodException e) {
+      assertTrue(e.getMessage(), false);
+    } catch (IllegalAccessException e) {
+      assertTrue(e.getMessage(), false);
+    } catch (InvocationTargetException e) {
+      assertTrue(e.getMessage(), false);
+    }
   }
 }

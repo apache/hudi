@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRollingStat;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -71,6 +72,15 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
   private final transient HoodieIndex<T> index;
 
   private transient Timer.Context writeContext = null;
+  private transient WriteOperationType operationType;
+
+  public void setOperationType(WriteOperationType operationType) {
+    this.operationType = operationType;
+  }
+
+  public WriteOperationType getOperationType() {
+    return this.operationType;
+  }
 
   protected AbstractHoodieWriteClient(JavaSparkContext jsc, HoodieIndex index, HoodieWriteConfig clientConfig) {
     super(jsc, clientConfig);
@@ -149,6 +159,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       extraMetadata.get().forEach(metadata::addMetadata);
     }
     metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
+    metadata.setOperationType(operationType);
 
     try {
       activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, commitTime),
@@ -255,9 +266,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     return index;
   }
 
-  protected HoodieTable getTableAndInitCtx(OperationType operationType) {
+  protected HoodieTable getTableAndInitCtx(WriteOperationType operationType) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    if (operationType == OperationType.DELETE) {
+    if (operationType == WriteOperationType.DELETE) {
       setWriteSchemaFromLastInstant(metaClient);
     }
     // Create a Hoodie table which encapsulated the commits and files visible
