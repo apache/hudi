@@ -229,8 +229,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String log1Ver1 = makeOldLogFileName("file1", ".log", "1", 1);
     String log1base2 = makeOldLogFileName("file1", ".log", "2", 0);
     List<HoodieLogFile> logFiles = Stream.of(log1base2, log1Ver1, log1Ver0).map(HoodieLogFile::new)
-        .collect(Collectors.toList());
-    logFiles.sort(HoodieLogFile.getLogFileComparator());
+        .sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
     assertEquals(log1Ver0, logFiles.get(0).getFileName());
     assertEquals(log1Ver1, logFiles.get(1).getFileName());
     assertEquals(log1base2, logFiles.get(2).getFileName());
@@ -250,8 +249,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
     List<HoodieLogFile> logFiles =
         Stream.of(log1Ver1W1, log1base2W0, log1base2W1, log1Ver1W0, log1Ver0W1, log1Ver0W0)
-            .map(HoodieLogFile::new).collect(Collectors.toList());
-    logFiles.sort(HoodieLogFile.getLogFileComparator());
+            .map(HoodieLogFile::new).sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
     assertEquals(log1Ver0W0, logFiles.get(0).getFileName());
     assertEquals(log1Ver0W1, logFiles.get(1).getFileName());
     assertEquals(log1Ver1W0, logFiles.get(2).getFileName());

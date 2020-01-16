@@ -108,7 +108,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     // for all unique split parents, obtain all delta files based on delta commit timeline,
     // grouped on file id
     List<HoodieRealtimeFileSplit> rtSplits = new ArrayList<>();
-    partitionsToParquetSplits.keySet().stream().forEach(partitionPath -> {
+    partitionsToParquetSplits.keySet().forEach(partitionPath -> {
       // for each partition path obtain the data & log file groupings, then map back to inputsplits
       HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionPath);
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
@@ -149,7 +149,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
       }
     });
     LOG.info("Returning a total splits of " + rtSplits.size());
-    return rtSplits.toArray(new InputSplit[rtSplits.size()]);
+    return rtSplits.toArray(new InputSplit[0]);
   }
 
   @Override

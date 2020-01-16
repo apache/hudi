@@ -63,7 +63,7 @@ class DefaultSource extends RelationProvider
       sqlContext.sparkContext.hadoopConfiguration.setClass(
         "mapreduce.input.pathFilter.class",
         classOf[HoodieROTablePathFilter],
-        classOf[org.apache.hadoop.fs.PathFilter]);
+        classOf[org.apache.hadoop.fs.PathFilter])
 
       log.info("Constructing hoodie (as parquet) data source with options :" + parameters)
       log.warn("Snapshot view not supported yet via data source, for MERGE_ON_READ tables. " +

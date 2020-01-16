@@ -79,7 +79,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
     this.logRecordScanner = new HoodieUnMergedLogRecordScanner(FSUtils.getFs(split.getPath().toString(), jobConf),
         split.getBasePath(), split.getDeltaLogPaths(), getReaderSchema(), split.getMaxCommitTime(),
         Boolean
-            .valueOf(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
+            .parseBoolean(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
         false, jobConf.getInt(MAX_DFS_STREAM_BUFFER_SIZE_PROP, DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE), record -> {
           // convert Hoodie log record to Hadoop AvroWritable and buffer
           GenericRecord rec = (GenericRecord) record.getData().getInsertValue(getReaderSchema()).get();
@@ -93,7 +93,6 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
   /**
    * Setup log and parquet reading in parallel. Both write to central buffer.
    */
-  @SuppressWarnings("unchecked")
   private List<BoundedInMemoryQueueProducer<ArrayWritable>> getParallelProducers() {
     List<BoundedInMemoryQueueProducer<ArrayWritable>> producers = new ArrayList<>();
     producers.add(new FunctionBasedQueueProducer<>(buffer -> {
@@ -105,7 +104,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
   }
 
   @Override
-  public boolean next(NullWritable key, ArrayWritable value) throws IOException {
+  public boolean next(NullWritable key, ArrayWritable value) {
     if (!iterator.hasNext()) {
       return false;
     }
@@ -125,7 +124,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
   }
 
   @Override
-  public long getPos() throws IOException {
+  public long getPos() {
     // TODO: vb - No logical way to represent parallel stream pos in a single long.
     // Should we just return invalid (-1). Where is it used ?
     return 0;

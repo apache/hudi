@@ -36,7 +36,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
-import java.util.Arrays;
+import java.util.Collections;
 
 public class HoodieIncrSource extends RowSource {
 
@@ -87,9 +87,9 @@ public class HoodieIncrSource extends RowSource {
   @Override
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
 
-    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.HOODIE_SRC_BASE_PATH));
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.HOODIE_SRC_BASE_PATH));
 
-    /**
+    /*
      * DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.HOODIE_SRC_BASE_PATH,
      * Config.HOODIE_SRC_PARTITION_FIELDS)); List<String> partitionFields =
      * props.getStringList(Config.HOODIE_SRC_PARTITION_FIELDS, ",", new ArrayList<>()); PartitionValueExtractor
@@ -121,7 +121,7 @@ public class HoodieIncrSource extends RowSource {
 
     Dataset<Row> source = reader.load(srcPath);
 
-    /**
+    /*
      * log.info("Partition Fields are : (" + partitionFields + "). Initial Source Schema :" + source.schema());
      * 
      * StructType newSchema = new StructType(source.schema().fields()); for (String field : partitionFields) { newSchema

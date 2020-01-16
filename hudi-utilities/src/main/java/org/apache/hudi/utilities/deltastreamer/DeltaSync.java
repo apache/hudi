@@ -376,8 +376,8 @@ public class DeltaSync implements Serializable {
       throw new HoodieDeltaStreamerException("Unknown operation :" + cfg.operation);
     }
 
-    long totalErrorRecords = writeStatusRDD.mapToDouble(ws -> ws.getTotalErrorRecords()).sum().longValue();
-    long totalRecords = writeStatusRDD.mapToDouble(ws -> ws.getTotalRecords()).sum().longValue();
+    long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
+    long totalRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
     boolean hasErrors = totalErrorRecords > 0;
     long hiveSyncTimeMs = 0;
     if (!hasErrors || cfg.commitOnErrors) {
@@ -414,10 +414,10 @@ public class DeltaSync implements Serializable {
     } else {
       LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
       LOG.error("Printing out the top 100 errors");
-      writeStatusRDD.filter(ws -> ws.hasErrors()).take(100).forEach(ws -> {
+      writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
         LOG.error("Global error :", ws.getGlobalError());
         if (ws.getErrors().size() > 0) {
-          ws.getErrors().entrySet().forEach(r -> LOG.trace("Error for key:" + r.getKey() + " is " + r.getValue()));
+          ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
         }
       });
       // Rolling back instant
@@ -456,7 +456,7 @@ public class DeltaSync implements Serializable {
   /**
    * Sync to Hive.
    */
-  private void syncHive() throws ClassNotFoundException {
+  private void syncHive() {
     if (cfg.enableHiveSync) {
       HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath);
       LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"

@@ -56,6 +56,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
@@ -81,7 +82,7 @@ public class HDFSParquetImporter implements Serializable {
     this.cfg = cfg;
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
@@ -160,8 +161,7 @@ public class HDFSParquetImporter implements Serializable {
     AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(), (new Schema.Parser().parse(schemaStr)));
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
-    return jsc
-        .newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class, GenericRecord.class,
+    return jsc.newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class, GenericRecord.class,
             job.getConfiguration())
         // To reduce large number of tasks.
         .coalesce(16 * cfg.parallelism).map(entry -> {
@@ -198,7 +198,7 @@ public class HDFSParquetImporter implements Serializable {
    * @param <T> Type
    */
   protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(HoodieWriteClient client, String instantTime,
-      JavaRDD<HoodieRecord<T>> hoodieRecords) throws Exception {
+      JavaRDD<HoodieRecord<T>> hoodieRecords) {
     switch (cfg.command.toLowerCase()) {
       case "upsert": {
         return client.upsert(hoodieRecords, instantTime);
@@ -227,7 +227,7 @@ public class HDFSParquetImporter implements Serializable {
 
   public static class FormatValidator implements IValueValidator<String> {
 
-    List<String> validFormats = Arrays.asList("parquet");
+    List<String> validFormats = Collections.singletonList("parquet");
 
     @Override
     public void validate(String name, String value) throws ParameterException {
@@ -241,7 +241,7 @@ public class HDFSParquetImporter implements Serializable {
   public static class Config implements Serializable {
 
     @Parameter(names = {"--command", "-c"}, description = "Write command Valid values are insert(default)/upsert/bulkinsert",
-        required = false, validateValueWith = CommandValidator.class)
+        validateValueWith = CommandValidator.class)
     public String command = "INSERT";
     @Parameter(names = {"--src-path", "-sp"}, description = "Base path for the input table", required = true)
     public String srcPath = null;

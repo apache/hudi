@@ -78,7 +78,7 @@ public abstract class AbstractRealtimeRecordReader {
   // Property to set the max memory for dfs inputstream buffer size
   public static final String MAX_DFS_STREAM_BUFFER_SIZE_PROP = "hoodie.memory.dfs.buffer.max.size";
   // Setting this to lower value of 1 MB since no control over how many RecordReaders will be started in a mapper
-  public static final int DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE = 1 * 1024 * 1024; // 1 MB
+  public static final int DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE = 1024 * 1024; // 1 MB
   // Property to set file path prefix for spillable file
   public static final String SPILLABLE_MAP_BASE_PATH_PROP = "hoodie.memory.spillable.map.path";
   // Default file path prefix for spillable file
@@ -170,18 +170,12 @@ public abstract class AbstractRealtimeRecordReader {
     // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L188}
     // Field Names -> {@link https://github.com/apache/hive/blob/f37c5de6c32b9395d1b34fa3c02ed06d1bfbf6eb/serde/src/java
     // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L229}
-    Set<String> fieldOrdersSet = new LinkedHashSet<>();
     String[] fieldOrdersWithDups = fieldOrderCsv.split(",");
-    for (String fieldOrder : fieldOrdersWithDups) {
-      fieldOrdersSet.add(fieldOrder);
-    }
-    String[] fieldOrders = fieldOrdersSet.toArray(new String[fieldOrdersSet.size()]);
+    Set<String> fieldOrdersSet = new LinkedHashSet<>(Arrays.asList(fieldOrdersWithDups));
+    String[] fieldOrders = fieldOrdersSet.toArray(new String[0]);
     List<String> fieldNames = Arrays.stream(fieldNameCsv.split(","))
         .filter(fn -> !partitioningFields.contains(fn)).collect(Collectors.toList());
-    Set<String> fieldNamesSet = new LinkedHashSet<>();
-    for (String fieldName : fieldNames) {
-      fieldNamesSet.add(fieldName);
-    }
+    Set<String> fieldNamesSet = new LinkedHashSet<>(fieldNames);
     // Hive does not provide ids for partitioning fields, so check for lengths excluding that.
     if (fieldNamesSet.size() != fieldOrders.length) {
       throw new HoodieException(String
@@ -189,7 +183,7 @@ public abstract class AbstractRealtimeRecordReader {
               fieldNames.size(), fieldOrders.length));
     }
     TreeMap<Integer, String> orderedFieldMap = new TreeMap<>();
-    String[] fieldNamesArray = fieldNamesSet.toArray(new String[fieldNamesSet.size()]);
+    String[] fieldNamesArray = fieldNamesSet.toArray(new String[0]);
     for (int ox = 0; ox < fieldOrders.length; ox++) {
       orderedFieldMap.put(Integer.parseInt(fieldOrders[ox]), fieldNamesArray[ox]);
     }
@@ -402,7 +396,7 @@ public abstract class AbstractRealtimeRecordReader {
   public long getMaxCompactionMemoryInBytes() {
     // jobConf.getMemoryForMapTask() returns in MB
     return (long) Math
-        .ceil(Double.valueOf(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
+        .ceil(Double.parseDouble(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
             * jobConf.getMemoryForMapTask() * 1024 * 1024L);
   }
 }

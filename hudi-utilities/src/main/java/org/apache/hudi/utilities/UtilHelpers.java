@@ -167,9 +167,8 @@ public class UtilHelpers {
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
 
-    additionalConfigs.entrySet().forEach(e -> sparkConf.set(e.getKey(), e.getValue()));
-    SparkConf newSparkConf = HoodieWriteClient.registerClasses(sparkConf);
-    return newSparkConf;
+    additionalConfigs.forEach(sparkConf::set);
+    return HoodieWriteClient.registerClasses(sparkConf);
   }
 
   public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, Map<String, String> configs) {
@@ -200,7 +199,7 @@ public class UtilHelpers {
    * @param parallelism Parallelism
    */
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) throws Exception {
+      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())

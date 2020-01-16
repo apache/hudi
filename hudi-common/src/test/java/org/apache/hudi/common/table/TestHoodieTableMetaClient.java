@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 
-import com.google.common.collect.Lists;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.SequenceFile;
@@ -34,6 +33,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -120,7 +120,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieInstant instant2 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "2");
     HoodieInstant instant3 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "3");
 
-    assertEquals(Lists.newArrayList(instant1, instant2, instant3),
+    assertEquals(Arrays.asList(instant1, instant2, instant3),
         archivedTimeline.getInstants().collect(Collectors.toList()));
 
     assertArrayEquals(new Text("data1").getBytes(), archivedTimeline.getInstantDetails(instant1).get());

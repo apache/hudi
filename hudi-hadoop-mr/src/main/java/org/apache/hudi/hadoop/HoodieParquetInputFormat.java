@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -48,6 +49,7 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -93,9 +95,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     if (nonHoodiePaths.size() > 0) {
       setInputPaths(job, nonHoodiePaths.toArray(new Path[nonHoodiePaths.size()]));
       FileStatus[] fileStatuses = super.listStatus(job);
-      for (FileStatus fileStatus: fileStatuses) {
-        returns.add(fileStatus);
-      }
+      returns.addAll(Arrays.asList(fileStatuses));
     }
 
     // process snapshot queries next.
@@ -133,8 +133,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
         .getInstants().collect(Collectors.toList());
     // Extract partitions touched by the commitsToCheck
     Set<String> partitionsToList = new HashSet<>();
-    for (int i = 0; i < commitsToCheck.size(); i++) {
-      HoodieInstant commit = commitsToCheck.get(i);
+    for (HoodieInstant commit : commitsToCheck) {
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get(),
           HoodieCommitMetadata.class);
       partitionsToList.addAll(commitMetadata.getPartitionToWriteStats().keySet());
@@ -171,15 +170,14 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
           return false;
         })
         .collect(Collectors.joining(","));
-    if (incrementalInputPaths == null || incrementalInputPaths.isEmpty()) {
+    if (StringUtils.isNullOrEmpty(incrementalInputPaths)) {
       return null;
     }
     // Mutate the JobConf to set the input paths to only partitions touched by incremental pull.
     setInputPaths(job, incrementalInputPaths);
     FileStatus[] fileStatuses = super.listStatus(job);
-    BaseFileOnlyView roView = new HoodieTableFileSystemView(tableMetaClient, timeline,
-        fileStatuses);
-    List<String> commitsList = commitsToCheck.stream().map(s -> s.getTimestamp()).collect(Collectors.toList());
+    BaseFileOnlyView roView = new HoodieTableFileSystemView(tableMetaClient, timeline, fileStatuses);
+    List<String> commitsList = commitsToCheck.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
     List<FileStatus> returns = new ArrayList<>();
     for (HoodieBaseFile filteredFile : filteredFiles) {
@@ -200,7 +198,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
    * @throws IOException
    */
   private Map<HoodieTableMetaClient, List<FileStatus>> groupFileStatusForSnapshotPaths(
-      FileStatus[] fileStatuses, Collection<HoodieTableMetaClient> metaClientList) throws IOException {
+      FileStatus[] fileStatuses, Collection<HoodieTableMetaClient> metaClientList) {
     // This assumes the paths for different tables are grouped together
     Map<HoodieTableMetaClient, List<FileStatus>> grouped = new HashMap<>();
     HoodieTableMetaClient metadata = null;
@@ -231,8 +229,8 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
    * Filters data files for a snapshot queried table.
    */
   private List<FileStatus> filterFileStatusForSnapshotMode(
-      HoodieTableMetaClient metadata, List<FileStatus> fileStatuses) throws IOException {
-    FileStatus[] statuses = fileStatuses.toArray(new FileStatus[fileStatuses.size()]);
+      HoodieTableMetaClient metadata, List<FileStatus> fileStatuses) {
+    FileStatus[] statuses = fileStatuses.toArray(new FileStatus[0]);
     if (LOG.isDebugEnabled()) {
       LOG.debug("Hoodie Metadata initialized with completed commit Ts as :" + metadata);
     }
@@ -258,7 +256,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
    * super.listStatus() and gets back a FileStatus[] 2. Then it creates the HoodieTableMetaClient for the paths listed.
    * 3. Generation of splits looks at FileStatus size to create splits, which skips this file
    */
-  private HoodieBaseFile checkFileStatus(HoodieBaseFile dataFile) throws IOException {
+  private HoodieBaseFile checkFileStatus(HoodieBaseFile dataFile) {
     Path dataPath = dataFile.getFileStatus().getPath();
     try {
       if (dataFile.getFileSize() == 0) {

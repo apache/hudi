@@ -95,7 +95,7 @@ public class FileSystemViewManager {
    * Closes all views opened.
    */
   public void close() {
-    this.globalViewMap.values().stream().forEach(v -> v.close());
+    this.globalViewMap.values().forEach(SyncableFileSystemView::close);
     this.globalViewMap.clear();
   }
 
@@ -196,7 +196,7 @@ public class FileSystemViewManager {
         return new FileSystemViewManager(conf, config, (basePath, viewConfig) -> {
           RemoteHoodieTableFileSystemView remoteFileSystemView =
               createRemoteFileSystemView(conf, viewConfig, new HoodieTableMetaClient(conf.newCopy(), basePath));
-          SyncableFileSystemView secondaryView = null;
+          SyncableFileSystemView secondaryView;
           switch (viewConfig.getSecondaryStorageType()) {
             case MEMORY:
               secondaryView = createInMemoryFileSystemView(conf, viewConfig, basePath);
