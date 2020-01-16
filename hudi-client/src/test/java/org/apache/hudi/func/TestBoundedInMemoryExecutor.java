@@ -84,7 +84,7 @@ public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
     SparkBoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
     try {
       executor = new SparkBoundedInMemoryExecutor(hoodieWriteConfig, hoodieRecords.iterator(), consumer,
-          getTransformFunction(HoodieTestDataGenerator.avroSchema));
+          getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA));
       int result = executor.execute();
       // It should buffer and write 100 records
       Assert.assertEquals(result, 100);

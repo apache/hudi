@@ -764,7 +764,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
 
         // Write them to corresponding avro logfiles
         HoodieTestUtils.writeRecordsToLogFiles(metaClient.getFs(), metaClient.getBasePath(),
-            HoodieTestDataGenerator.avroSchemaWithMetadataFields, updatedRecords);
+            HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, updatedRecords);
 
         // Verify that all data file has one log file
         metaClient = HoodieTableMetaClient.reload(metaClient);

@@ -189,7 +189,7 @@ public class UtilitiesTestBase {
 
     public static void saveParquetToDFS(List<GenericRecord> records, Path targetFile) throws IOException {
       try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(targetFile)
-          .withSchema(HoodieTestDataGenerator.avroSchema).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {
+          .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {
         for (GenericRecord record : records) {
           writer.write(record);
         }
@@ -205,7 +205,7 @@ public class UtilitiesTestBase {
 
     public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {
       try {
-        Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.avroSchema);
+        Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.AVRO_SCHEMA);
         return (GenericRecord) recordOpt.get();
       } catch (IOException e) {
         return null;
