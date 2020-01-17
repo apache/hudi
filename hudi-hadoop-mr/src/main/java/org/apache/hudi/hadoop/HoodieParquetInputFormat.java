@@ -180,7 +180,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     BaseFileOnlyView roView = new HoodieTableFileSystemView(tableMetaClient, timeline,
         fileStatuses);
     List<String> commitsList = commitsToCheck.stream().map(s -> s.getTimestamp()).collect(Collectors.toList());
-    List<HoodieBaseFile> filteredFiles = roView.getLatestDataFilesInRange(commitsList).collect(Collectors.toList());
+    List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
     List<FileStatus> returns = new ArrayList<>();
     for (HoodieBaseFile filteredFile : filteredFiles) {
       LOG.debug("Processing incremental hoodie file - " + filteredFile.getPath());
@@ -240,7 +240,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     HoodieTimeline timeline = metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     BaseFileOnlyView roView = new HoodieTableFileSystemView(metadata, timeline, statuses);
     // filter files on the latest commit found
-    List<HoodieBaseFile> filteredFiles = roView.getLatestDataFiles().collect(Collectors.toList());
+    List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFiles().collect(Collectors.toList());
     LOG.info("Total paths to process after hoodie filter " + filteredFiles.size());
     List<FileStatus> returns = new ArrayList<>();
     for (HoodieBaseFile filteredFile : filteredFiles) {

@@ -293,7 +293,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
                 .filter(fs -> fs.getFileId().equals(operation.getFileId())).findFirst());
         if (fileSliceOptional.isPresent()) {
           FileSlice fs = fileSliceOptional.get();
-          Option<HoodieBaseFile> df = fs.getDataFile();
+          Option<HoodieBaseFile> df = fs.getBaseFile();
           if (operation.getDataFileName().isPresent()) {
             String expPath = metaClient.getFs()
                 .getFileStatus(
@@ -448,7 +448,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
         .orElse(HoodieLogFile.LOGFILE_BASE_VERSION - 1);
     String logExtn = fileSliceForCompaction.getLogFiles().findFirst().map(lf -> "." + lf.getFileExtension())
         .orElse(HoodieLogFile.DELTA_EXTENSION);
-    String parentPath = fileSliceForCompaction.getDataFile().map(df -> new Path(df.getPath()).getParent().toString())
+    String parentPath = fileSliceForCompaction.getBaseFile().map(df -> new Path(df.getPath()).getParent().toString())
         .orElse(fileSliceForCompaction.getLogFiles().findFirst().map(lf -> lf.getPath().getParent().toString()).get());
     for (HoodieLogFile toRepair : logFilesToRepair) {
       int version = maxUsedVersion + 1;

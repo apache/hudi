@@ -268,7 +268,7 @@ public class TestCleaner extends TestHoodieClientBase {
               if (compactionFileIdToLatestFileSlice.containsKey(fileGroup.getFileGroupId())) {
                 // Ensure latest file-slice selected for compaction is retained
                 Option<HoodieBaseFile> dataFileForCompactionPresent =
-                    Option.fromJavaOptional(fileGroup.getAllDataFiles().filter(df -> {
+                    Option.fromJavaOptional(fileGroup.getAllBaseFiles().filter(df -> {
                       return compactionFileIdToLatestFileSlice.get(fileGroup.getFileGroupId()).getBaseInstantTime()
                           .equals(df.getCommitTime());
                     }).findAny());
@@ -277,7 +277,7 @@ public class TestCleaner extends TestHoodieClientBase {
               } else {
                 // file has no more than max versions
                 String fileId = fileGroup.getFileGroupId().getFileId();
-                List<HoodieBaseFile> dataFiles = fileGroup.getAllDataFiles().collect(Collectors.toList());
+                List<HoodieBaseFile> dataFiles = fileGroup.getAllBaseFiles().collect(Collectors.toList());
 
                 assertTrue("fileId " + fileId + " has more than " + maxVersions + " versions",
                     dataFiles.size() <= maxVersions);
@@ -391,7 +391,7 @@ public class TestCleaner extends TestHoodieClientBase {
           List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
           for (HoodieFileGroup fileGroup : fileGroups) {
             Set<String> commitTimes = new HashSet<>();
-            fileGroup.getAllDataFiles().forEach(value -> {
+            fileGroup.getAllBaseFiles().forEach(value -> {
               LOG.debug("Data File - " + value);
               commitTimes.add(value.getCommitTime());
             });
@@ -1074,7 +1074,7 @@ public class TestCleaner extends TestHoodieClientBase {
           true)
           .filter(fs -> fs.getFileId().equals(fileId)).findFirst());
       Assert.assertTrue("Base Instant for Compaction must be preserved", fileSliceForCompaction.isPresent());
-      Assert.assertTrue("FileSlice has data-file", fileSliceForCompaction.get().getDataFile().isPresent());
+      Assert.assertTrue("FileSlice has data-file", fileSliceForCompaction.get().getBaseFile().isPresent());
       Assert.assertEquals("FileSlice has log-files", 2, fileSliceForCompaction.get().getLogFiles().count());
     });
 

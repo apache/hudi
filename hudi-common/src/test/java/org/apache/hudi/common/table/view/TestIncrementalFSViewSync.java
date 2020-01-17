@@ -502,7 +502,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       view.getLatestFileSlices(p).forEach(fs -> {
         Assert.assertEquals(instantTime, fs.getBaseInstantTime());
         Assert.assertEquals(p, fs.getPartitionPath());
-        Assert.assertFalse(fs.getDataFile().isPresent());
+        Assert.assertFalse(fs.getBaseFile().isPresent());
       });
       view.getLatestMergedFileSlicesBeforeOrOn(p, instantTime).forEach(fs -> {
         Assert
@@ -625,7 +625,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         });
       } else {
         partitions.forEach(p -> {
-          view.getLatestDataFiles(p).forEach(f -> {
+          view.getLatestBaseFiles(p).forEach(f -> {
             Assert.assertEquals(instant, f.getCommitTime());
           });
         });
@@ -676,10 +676,10 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
                 FileSlice slice2 = e2.getValue();
                 Assert.assertEquals(slice1.getBaseInstantTime(), slice2.getBaseInstantTime());
                 Assert.assertEquals(slice1.getFileId(), slice2.getFileId());
-                Assert.assertEquals(slice1.getDataFile().isPresent(), slice2.getDataFile().isPresent());
-                if (slice1.getDataFile().isPresent()) {
-                  HoodieBaseFile df1 = slice1.getDataFile().get();
-                  HoodieBaseFile df2 = slice2.getDataFile().get();
+                Assert.assertEquals(slice1.getBaseFile().isPresent(), slice2.getBaseFile().isPresent());
+                if (slice1.getBaseFile().isPresent()) {
+                  HoodieBaseFile df1 = slice1.getBaseFile().get();
+                  HoodieBaseFile df2 = slice2.getBaseFile().get();
                   Assert.assertEquals(df1.getCommitTime(), df2.getCommitTime());
                   Assert.assertEquals(df1.getFileId(), df2.getFileId());
                   Assert.assertEquals(df1.getFileName(), df2.getFileName());

@@ -688,7 +688,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       if (!commitTimeline.empty()) { // if we have some commits
         HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
         List<HoodieBaseFile> allFiles = getBaseFileOnlyView()
-            .getLatestDataFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
+            .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
 
         for (HoodieBaseFile file : allFiles) {
           if (file.getFileSize() < config.getParquetSmallFileLimit()) {

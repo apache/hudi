@@ -246,7 +246,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
           List<Pair<String, String>> filteredFiles = new ArrayList<>();
           if (latestCommitTime.isPresent()) {
             filteredFiles = hoodieTable.getBaseFileOnlyView()
-                .getLatestDataFilesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp())
+                .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp())
                 .map(f -> Pair.of(partitionPath, f.getFileId())).collect(toList());
           }
           return filteredFiles.iterator();

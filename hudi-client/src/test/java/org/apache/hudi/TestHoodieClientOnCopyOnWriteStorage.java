@@ -512,7 +512,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     HoodieTable table = getHoodieTable(metadata, config);
     BaseFileOnlyView fileSystemView = table.getBaseFileOnlyView();
     List<HoodieBaseFile> files =
-        fileSystemView.getLatestDataFilesBeforeOrOn(testPartitionPath, commitTime3).collect(Collectors.toList());
+        fileSystemView.getLatestBaseFilesBeforeOrOn(testPartitionPath, commitTime3).collect(Collectors.toList());
     int numTotalInsertsInCommit3 = 0;
     int numTotalUpdatesInCommit3 = 0;
     for (HoodieBaseFile file : files) {
@@ -617,7 +617,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = getHoodieTable(metaClient, config);
     List<HoodieBaseFile> files = table.getBaseFileOnlyView()
-        .getLatestDataFilesBeforeOrOn(testPartitionPath, commitTime3).collect(Collectors.toList());
+        .getLatestBaseFilesBeforeOrOn(testPartitionPath, commitTime3).collect(Collectors.toList());
     assertEquals("Total of 2 valid data files", 2, files.size());
 
     int totalInserts = 0;

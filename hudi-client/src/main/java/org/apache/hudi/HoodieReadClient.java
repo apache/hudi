@@ -137,7 +137,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
   private Option<String> convertToDataFilePath(Option<Pair<String, String>> partitionPathFileIDPair) {
     if (partitionPathFileIDPair.isPresent()) {
       HoodieBaseFile dataFile = hoodieTable.getBaseFileOnlyView()
-          .getLatestDataFile(partitionPathFileIDPair.get().getLeft(), partitionPathFileIDPair.get().getRight()).get();
+          .getLatestBaseFile(partitionPathFileIDPair.get().getLeft(), partitionPathFileIDPair.get().getRight()).get();
       return Option.of(dataFile.getPath());
     } else {
       return Option.empty();

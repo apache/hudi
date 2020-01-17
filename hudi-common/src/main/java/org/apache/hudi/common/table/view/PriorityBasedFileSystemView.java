@@ -120,39 +120,39 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
-  public Stream<HoodieBaseFile> getLatestDataFiles(String partitionPath) {
-    return execute(partitionPath, preferredView::getLatestDataFiles, secondaryView::getLatestDataFiles);
+  public Stream<HoodieBaseFile> getLatestBaseFiles(String partitionPath) {
+    return execute(partitionPath, preferredView::getLatestBaseFiles, secondaryView::getLatestBaseFiles);
   }
 
   @Override
-  public Stream<HoodieBaseFile> getLatestDataFiles() {
-    return execute(preferredView::getLatestDataFiles, secondaryView::getLatestDataFiles);
+  public Stream<HoodieBaseFile> getLatestBaseFiles() {
+    return execute(preferredView::getLatestBaseFiles, secondaryView::getLatestBaseFiles);
   }
 
   @Override
-  public Stream<HoodieBaseFile> getLatestDataFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
-    return execute(partitionPath, maxCommitTime, preferredView::getLatestDataFilesBeforeOrOn,
-        secondaryView::getLatestDataFilesBeforeOrOn);
+  public Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
+    return execute(partitionPath, maxCommitTime, preferredView::getLatestBaseFilesBeforeOrOn,
+        secondaryView::getLatestBaseFilesBeforeOrOn);
   }
 
   @Override
-  public Option<HoodieBaseFile> getLatestDataFile(String partitionPath, String fileId) {
-    return execute(partitionPath, fileId, preferredView::getLatestDataFile, secondaryView::getLatestDataFile);
+  public Option<HoodieBaseFile> getLatestBaseFile(String partitionPath, String fileId) {
+    return execute(partitionPath, fileId, preferredView::getLatestBaseFile, secondaryView::getLatestBaseFile);
   }
 
   @Override
-  public Option<HoodieBaseFile> getDataFileOn(String partitionPath, String instantTime, String fileId) {
-    return execute(partitionPath, instantTime, fileId, preferredView::getDataFileOn, secondaryView::getDataFileOn);
+  public Option<HoodieBaseFile> getBaseFileOn(String partitionPath, String instantTime, String fileId) {
+    return execute(partitionPath, instantTime, fileId, preferredView::getBaseFileOn, secondaryView::getBaseFileOn);
   }
 
   @Override
-  public Stream<HoodieBaseFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
-    return execute(commitsToReturn, preferredView::getLatestDataFilesInRange, secondaryView::getLatestDataFilesInRange);
+  public Stream<HoodieBaseFile> getLatestBaseFilesInRange(List<String> commitsToReturn) {
+    return execute(commitsToReturn, preferredView::getLatestBaseFilesInRange, secondaryView::getLatestBaseFilesInRange);
   }
 
   @Override
-  public Stream<HoodieBaseFile> getAllDataFiles(String partitionPath) {
-    return execute(partitionPath, preferredView::getAllDataFiles, secondaryView::getAllDataFiles);
+  public Stream<HoodieBaseFile> getAllBaseFiles(String partitionPath) {
+    return execute(partitionPath, preferredView::getAllBaseFiles, secondaryView::getAllBaseFiles);
   }
 
   @Override

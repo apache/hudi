@@ -73,7 +73,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       Iterator<HoodieRecord<T>> recordItr, String fileId) {
     super(config, commitTime, fileId, hoodieTable);
     String partitionPath = init(fileId, recordItr);
-    init(fileId, partitionPath, hoodieTable.getBaseFileOnlyView().getLatestDataFile(partitionPath, fileId).get());
+    init(fileId, partitionPath, hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
   }
 
   /**

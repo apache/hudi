@@ -402,7 +402,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
         assertEquals("Expect baseInstant to match compaction Instant", fileSlice.getBaseInstantTime(), opPair.getKey());
         assertTrue("Expect atleast one log file to be present where the latest delta commit was written",
             fileSlice.getLogFiles().count() > 0);
-        assertFalse("Expect no data-file to be present", fileSlice.getDataFile().isPresent());
+        assertFalse("Expect no data-file to be present", fileSlice.getBaseFile().isPresent());
       } else {
         assertTrue("Expect baseInstant to be less than or equal to latestDeltaCommit",
             fileSlice.getBaseInstantTime().compareTo(latestDeltaCommit) <= 0);
@@ -487,7 +487,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     assertFalse("Verify all file-slices have base-instant same as compaction instant", fileSliceList.stream()
         .anyMatch(fs -> !fs.getBaseInstantTime().equals(compactionInstantTime)));
     assertFalse("Verify all file-slices have data-files",
-        fileSliceList.stream().anyMatch(fs -> !fs.getDataFile().isPresent()));
+        fileSliceList.stream().anyMatch(fs -> !fs.getBaseFile().isPresent()));
 
     if (hasDeltaCommitAfterPendingCompaction) {
       assertFalse("Verify all file-slices have atleast one log-file",
@@ -537,7 +537,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(table.getMetaClient().getFs(), cfg.getBasePath());
     HoodieTableFileSystemView view =
         new HoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(), allFiles);
-    return view.getLatestDataFiles().collect(Collectors.toList());
+    return view.getLatestBaseFiles().collect(Collectors.toList());
   }
 
   private List<FileSlice> getCurrentLatestFileSlices(HoodieTable table) {

@@ -80,7 +80,7 @@ class DedupeSparkJob(basePath: String,
 
     val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"$basePath/$duplicatedPartitionPath"))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
-    val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestDataFiles().collect(Collectors.toList[HoodieBaseFile]())
+    val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
     val filteredStatuses = latestFiles.map(f => f.getPath)
     LOG.info(s" List of files under partition: ${} =>  ${filteredStatuses.mkString(" ")}")
 
@@ -132,7 +132,7 @@ class DedupeSparkJob(basePath: String,
     val allFiles = fs.listStatus(new Path(s"$basePath/$duplicatedPartitionPath"))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
 
-    val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestDataFiles().collect(Collectors.toList[HoodieBaseFile]())
+    val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
 
     val fileNameToPathMap = latestFiles.map(f => (f.getFileId, new Path(f.getPath))).toMap
     val dupeFixPlan = planDuplicateFix()

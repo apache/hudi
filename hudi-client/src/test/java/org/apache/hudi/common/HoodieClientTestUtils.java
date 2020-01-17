@@ -205,7 +205,7 @@ public class HoodieClientTestUtils {
       for (String path : paths) {
         BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
             metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new Path(path)));
-        List<HoodieBaseFile> latestFiles = fileSystemView.getLatestDataFiles().collect(Collectors.toList());
+        List<HoodieBaseFile> latestFiles = fileSystemView.getLatestBaseFiles().collect(Collectors.toList());
         for (HoodieBaseFile file : latestFiles) {
           filteredPaths.add(file.getPath());
         }

@@ -44,28 +44,28 @@ public interface TableFileSystemView {
     /**
      * Stream all the latest data files in the given partition.
      */
-    Stream<HoodieBaseFile> getLatestDataFiles(String partitionPath);
+    Stream<HoodieBaseFile> getLatestBaseFiles(String partitionPath);
 
     /**
      * Get Latest data file for a partition and file-Id.
      */
-    Option<HoodieBaseFile> getLatestDataFile(String partitionPath, String fileId);
+    Option<HoodieBaseFile> getLatestBaseFile(String partitionPath, String fileId);
 
     /**
      * Stream all the latest data files, in the file system view.
      */
-    Stream<HoodieBaseFile> getLatestDataFiles();
+    Stream<HoodieBaseFile> getLatestBaseFiles();
 
     /**
      * Stream all the latest version data files in the given partition with precondition that commitTime(file) before
      * maxCommitTime.
      */
-    Stream<HoodieBaseFile> getLatestDataFilesBeforeOrOn(String partitionPath, String maxCommitTime);
+    Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime);
 
     /**
      * Stream all the latest data files pass.
      */
-    Stream<HoodieBaseFile> getLatestDataFilesInRange(List<String> commitsToReturn);
+    Stream<HoodieBaseFile> getLatestBaseFilesInRange(List<String> commitsToReturn);
   }
 
   /**
@@ -75,12 +75,12 @@ public interface TableFileSystemView {
     /**
      * Stream all the data file versions grouped by FileId for a given partition.
      */
-    Stream<HoodieBaseFile> getAllDataFiles(String partitionPath);
+    Stream<HoodieBaseFile> getAllBaseFiles(String partitionPath);
 
     /**
      * Get the version of data file matching the instant time in the given partition.
      */
-    Option<HoodieBaseFile> getDataFileOn(String partitionPath, String instantTime, String fileId);
+    Option<HoodieBaseFile> getBaseFileOn(String partitionPath, String instantTime, String fileId);
 
   }
 

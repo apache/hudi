@@ -27,7 +27,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * The data transfer object of data file.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class DataFileDTO {
+public class BaseFileDTO {
 
   @JsonProperty("fileStatus")
   private FileStatusDTO fileStatus;
@@ -36,27 +36,27 @@ public class DataFileDTO {
   @JsonProperty("fileLen")
   private long fileLen;
 
-  public static HoodieBaseFile toHoodieDataFile(DataFileDTO dto) {
+  public static HoodieBaseFile toHoodieBaseFile(BaseFileDTO dto) {
     if (null == dto) {
       return null;
     }
 
-    HoodieBaseFile dataFile = null;
+    HoodieBaseFile baseFile;
     if (null != dto.fileStatus) {
-      dataFile = new HoodieBaseFile(FileStatusDTO.toFileStatus(dto.fileStatus));
+      baseFile = new HoodieBaseFile(FileStatusDTO.toFileStatus(dto.fileStatus));
     } else {
-      dataFile = new HoodieBaseFile(dto.fullPath);
-      dataFile.setFileLen(dto.fileLen);
+      baseFile = new HoodieBaseFile(dto.fullPath);
+      baseFile.setFileLen(dto.fileLen);
     }
-    return dataFile;
+    return baseFile;
   }
 
-  public static DataFileDTO fromHoodieDataFile(HoodieBaseFile dataFile) {
+  public static BaseFileDTO fromHoodieBaseFile(HoodieBaseFile dataFile) {
     if (null == dataFile) {
       return null;
     }
 
-    DataFileDTO dto = new DataFileDTO();
+    BaseFileDTO dto = new BaseFileDTO();
     dto.fileStatus = FileStatusDTO.fromFileStatus(dataFile.getFileStatus());
     dto.fullPath = dataFile.getPath();
     dto.fileLen = dataFile.getFileLen();

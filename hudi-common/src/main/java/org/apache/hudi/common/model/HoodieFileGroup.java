@@ -82,11 +82,11 @@ public class HoodieFileGroup implements Serializable {
   /**
    * Add a new datafile into the file group.
    */
-  public void addDataFile(HoodieBaseFile dataFile) {
+  public void addBaseFile(HoodieBaseFile dataFile) {
     if (!fileSlices.containsKey(dataFile.getCommitTime())) {
       fileSlices.put(dataFile.getCommitTime(), new FileSlice(fileGroupId, dataFile.getCommitTime()));
     }
-    fileSlices.get(dataFile.getCommitTime()).setDataFile(dataFile);
+    fileSlices.get(dataFile.getCommitTime()).setBaseFile(dataFile);
   }
 
   /**
@@ -156,7 +156,7 @@ public class HoodieFileGroup implements Serializable {
    * Gets the latest data file.
    */
   public Option<HoodieBaseFile> getLatestDataFile() {
-    return Option.fromJavaOptional(getAllDataFiles().findFirst());
+    return Option.fromJavaOptional(getAllBaseFiles().findFirst());
   }
 
   /**
@@ -187,8 +187,8 @@ public class HoodieFileGroup implements Serializable {
   /**
    * Stream of committed data files, sorted reverse commit time.
    */
-  public Stream<HoodieBaseFile> getAllDataFiles() {
-    return getAllFileSlices().filter(slice -> slice.getDataFile().isPresent()).map(slice -> slice.getDataFile().get());
+  public Stream<HoodieBaseFile> getAllBaseFiles() {
+    return getAllFileSlices().filter(slice -> slice.getBaseFile().isPresent()).map(slice -> slice.getBaseFile().get());
   }
 
   @Override

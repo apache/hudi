@@ -347,8 +347,8 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
           // by different spark partitions in a single batch
           Option<FileSlice> smallFileSlice = Option.fromJavaOptional(getSliceView()
                   .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), false)
-                  .filter(fileSlice -> fileSlice.getLogFiles().count() < 1 && fileSlice.getDataFile().get().getFileSize() < config.getParquetSmallFileLimit())
-                  .min((FileSlice left, FileSlice right) -> left.getDataFile().get().getFileSize() < right.getDataFile().get().getFileSize() ? -1 : 1));
+                  .filter(fileSlice -> fileSlice.getLogFiles().count() < 1 && fileSlice.getBaseFile().get().getFileSize() < config.getParquetSmallFileLimit())
+                  .min((FileSlice left, FileSlice right) -> left.getBaseFile().get().getFileSize() < right.getBaseFile().get().getFileSize() ? -1 : 1));
           if (smallFileSlice.isPresent()) {
             allSmallFileSlices.add(smallFileSlice.get());
           }
@@ -367,9 +367,9 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
         // Create SmallFiles from the eligible file slices
         for (FileSlice smallFileSlice : allSmallFileSlices) {
           SmallFile sf = new SmallFile();
-          if (smallFileSlice.getDataFile().isPresent()) {
+          if (smallFileSlice.getBaseFile().isPresent()) {
             // TODO : Move logic of file name, file id, base commit time handling inside file slice
-            String filename = smallFileSlice.getDataFile().get().getFileName();
+            String filename = smallFileSlice.getBaseFile().get().getFileName();
             sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
             sf.sizeBytes = getTotalFileSize(smallFileSlice);
             smallFileLocations.add(sf);
@@ -395,10 +395,10 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     }
 
     private long getTotalFileSize(FileSlice fileSlice) {
-      if (!fileSlice.getDataFile().isPresent()) {
+      if (!fileSlice.getBaseFile().isPresent()) {
         return convertLogFilesSizeToExpectedParquetSize(fileSlice.getLogFiles().collect(Collectors.toList()));
       } else {
-        return fileSlice.getDataFile().get().getFileSize()
+        return fileSlice.getBaseFile().get().getFileSize()
             + convertLogFilesSizeToExpectedParquetSize(fileSlice.getLogFiles().collect(Collectors.toList()));
       }
     }

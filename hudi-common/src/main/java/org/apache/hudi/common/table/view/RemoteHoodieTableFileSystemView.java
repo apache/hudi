@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
-import org.apache.hudi.common.table.timeline.dto.DataFileDTO;
+import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
@@ -205,74 +205,74 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<HoodieBaseFile> getLatestDataFiles(String partitionPath) {
+  public Stream<HoodieBaseFile> getLatestBaseFiles(String partitionPath) {
     Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
     try {
-      List<DataFileDTO> dataFiles = executeRequest(LATEST_PARTITION_DATA_FILES_URL, paramsMap,
-          new TypeReference<List<DataFileDTO>>() {}, RequestMethod.GET);
-      return dataFiles.stream().map(DataFileDTO::toHoodieDataFile);
+      List<BaseFileDTO> dataFiles = executeRequest(LATEST_PARTITION_DATA_FILES_URL, paramsMap,
+          new TypeReference<List<BaseFileDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
   }
 
   @Override
-  public Stream<HoodieBaseFile> getLatestDataFiles() {
+  public Stream<HoodieBaseFile> getLatestBaseFiles() {
     Map<String, String> paramsMap = getParams();
     try {
-      List<DataFileDTO> dataFiles = executeRequest(LATEST_ALL_DATA_FILES, paramsMap,
-          new TypeReference<List<DataFileDTO>>() {}, RequestMethod.GET);
-      return dataFiles.stream().map(DataFileDTO::toHoodieDataFile);
+      List<BaseFileDTO> dataFiles = executeRequest(LATEST_ALL_DATA_FILES, paramsMap,
+          new TypeReference<List<BaseFileDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
   }
 
   @Override
-  public Stream<HoodieBaseFile> getLatestDataFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
+  public Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxCommitTime);
     try {
-      List<DataFileDTO> dataFiles = executeRequest(LATEST_DATA_FILES_BEFORE_ON_INSTANT_URL, paramsMap,
-          new TypeReference<List<DataFileDTO>>() {}, RequestMethod.GET);
-      return dataFiles.stream().map(DataFileDTO::toHoodieDataFile);
+      List<BaseFileDTO> dataFiles = executeRequest(LATEST_DATA_FILES_BEFORE_ON_INSTANT_URL, paramsMap,
+          new TypeReference<List<BaseFileDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
   }
 
   @Override
-  public Option<HoodieBaseFile> getDataFileOn(String partitionPath, String instantTime, String fileId) {
+  public Option<HoodieBaseFile> getBaseFileOn(String partitionPath, String instantTime, String fileId) {
     Map<String, String> paramsMap = getParamsWithAdditionalParams(partitionPath,
         new String[] {INSTANT_PARAM, FILEID_PARAM}, new String[] {instantTime, fileId});
     try {
-      List<DataFileDTO> dataFiles = executeRequest(LATEST_DATA_FILE_ON_INSTANT_URL, paramsMap,
-          new TypeReference<List<DataFileDTO>>() {}, RequestMethod.GET);
-      return Option.fromJavaOptional(dataFiles.stream().map(DataFileDTO::toHoodieDataFile).findFirst());
+      List<BaseFileDTO> dataFiles = executeRequest(LATEST_DATA_FILE_ON_INSTANT_URL, paramsMap,
+          new TypeReference<List<BaseFileDTO>>() {}, RequestMethod.GET);
+      return Option.fromJavaOptional(dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile).findFirst());
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
   }
 
   @Override
-  public Stream<HoodieBaseFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
+  public Stream<HoodieBaseFile> getLatestBaseFilesInRange(List<String> commitsToReturn) {
     Map<String, String> paramsMap =
         getParams(INSTANTS_PARAM, StringUtils.join(commitsToReturn.toArray(new String[0]), ","));
     try {
-      List<DataFileDTO> dataFiles = executeRequest(LATEST_DATA_FILES_RANGE_INSTANT_URL, paramsMap,
-          new TypeReference<List<DataFileDTO>>() {}, RequestMethod.GET);
-      return dataFiles.stream().map(DataFileDTO::toHoodieDataFile);
+      List<BaseFileDTO> dataFiles = executeRequest(LATEST_DATA_FILES_RANGE_INSTANT_URL, paramsMap,
+          new TypeReference<List<BaseFileDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
   }
 
   @Override
-  public Stream<HoodieBaseFile> getAllDataFiles(String partitionPath) {
+  public Stream<HoodieBaseFile> getAllBaseFiles(String partitionPath) {
     Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
     try {
-      List<DataFileDTO> dataFiles =
-          executeRequest(ALL_DATA_FILES, paramsMap, new TypeReference<List<DataFileDTO>>() {}, RequestMethod.GET);
-      return dataFiles.stream().map(DataFileDTO::toHoodieDataFile);
+      List<BaseFileDTO> dataFiles =
+          executeRequest(ALL_DATA_FILES, paramsMap, new TypeReference<List<BaseFileDTO>>() {}, RequestMethod.GET);
+      return dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }
@@ -439,12 +439,12 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Option<HoodieBaseFile> getLatestDataFile(String partitionPath, String fileId) {
+  public Option<HoodieBaseFile> getLatestBaseFile(String partitionPath, String fileId) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, FILEID_PARAM, fileId);
     try {
-      List<DataFileDTO> dataFiles = executeRequest(LATEST_PARTITION_DATA_FILE_URL, paramsMap,
-          new TypeReference<List<DataFileDTO>>() {}, RequestMethod.GET);
-      return Option.fromJavaOptional(dataFiles.stream().map(DataFileDTO::toHoodieDataFile).findFirst());
+      List<BaseFileDTO> dataFiles = executeRequest(LATEST_PARTITION_DATA_FILE_URL, paramsMap,
+          new TypeReference<List<BaseFileDTO>>() {}, RequestMethod.GET);
+      return Option.fromJavaOptional(dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile).findFirst());
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }

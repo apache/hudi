@@ -87,8 +87,8 @@ public class FileSystemViewCommand implements CommandMarker {
       row[idx++] = fg.getPartitionPath();
       row[idx++] = fg.getFileGroupId().getFileId();
       row[idx++] = fs.getBaseInstantTime();
-      row[idx++] = fs.getDataFile().isPresent() ? fs.getDataFile().get().getPath() : "";
-      row[idx++] = fs.getDataFile().isPresent() ? fs.getDataFile().get().getFileSize() : -1;
+      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getPath() : "";
+      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFileSize() : -1;
       if (!baseFileOnly) {
         row[idx++] = fs.getLogFiles().count();
         row[idx++] = fs.getLogFiles().mapToLong(HoodieLogFile::getFileSize).sum();
@@ -154,9 +154,9 @@ public class FileSystemViewCommand implements CommandMarker {
       row[idx++] = partition;
       row[idx++] = fs.getFileId();
       row[idx++] = fs.getBaseInstantTime();
-      row[idx++] = fs.getDataFile().isPresent() ? fs.getDataFile().get().getPath() : "";
+      row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getPath() : "";
 
-      long dataFileSize = fs.getDataFile().isPresent() ? fs.getDataFile().get().getFileSize() : -1;
+      long dataFileSize = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFileSize() : -1;
       row[idx++] = dataFileSize;
 
       if (!baseFileOnly) {

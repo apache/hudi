@@ -593,7 +593,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
             // Scan all partitions files with this commit time
             LOG.info("Collecting latest files in partition path " + partitionPath);
             BaseFileOnlyView view = table.getBaseFileOnlyView();
-            List<String> latestFiles = view.getLatestDataFilesBeforeOrOn(partitionPath, commitTime)
+            List<String> latestFiles = view.getLatestBaseFilesBeforeOrOn(partitionPath, commitTime)
                 .map(HoodieBaseFile::getFileName).collect(Collectors.toList());
             return new Tuple2<>(partitionPath, latestFiles);
           }).collectAsMap();

@@ -201,7 +201,7 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
               // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
               // for spark Map operations and collecting them finally in Avro generated classes for storing
               // into meta files.
-              Option<HoodieBaseFile> dataFile = s.getDataFile();
+              Option<HoodieBaseFile> dataFile = s.getBaseFile();
               return new CompactionOperation(dataFile, partitionPath, logFiles,
                   config.getCompactionStrategy().captureMetrics(config, dataFile, partitionPath, logFiles));
             }).filter(c -> !c.getDeltaFileNames().isEmpty()).collect(toList()).iterator())

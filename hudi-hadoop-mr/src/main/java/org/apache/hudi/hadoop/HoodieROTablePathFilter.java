@@ -139,7 +139,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
           HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
           HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
               metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), fs.listStatus(folder));
-          List<HoodieBaseFile> latestFiles = fsView.getLatestDataFiles().collect(Collectors.toList());
+          List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles().collect(Collectors.toList());
           // populate the cache
           if (!hoodiePathCache.containsKey(folder.toString())) {
             hoodiePathCache.put(folder.toString(), new HashSet<>());
