@@ -107,13 +107,13 @@ public class CompactionCommand implements CommandMarker {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
           compactionPlan = AvroUtils.deserializeCompactionPlan(
-              activeTimeline.readPlanAsBytes(
+              activeTimeline.readCompactionPlanAsBytes(
                   HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
         } catch (HoodieIOException ioe) {
           // SKIP
         }
       } else {
-        compactionPlan = AvroUtils.deserializeCompactionPlan(activeTimeline.readPlanAsBytes(
+        compactionPlan = AvroUtils.deserializeCompactionPlan(activeTimeline.readCompactionPlanAsBytes(
             HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
       }
 
@@ -156,7 +156,7 @@ public class CompactionCommand implements CommandMarker {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
     HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
-        activeTimeline.readPlanAsBytes(
+        activeTimeline.readCompactionPlanAsBytes(
             HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get());
 
     List<Comparable[]> rows = new ArrayList<>();
