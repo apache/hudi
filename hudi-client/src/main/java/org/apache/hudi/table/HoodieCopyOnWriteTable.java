@@ -26,7 +26,7 @@ import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -84,7 +84,9 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 /**
- * Implementation of a very heavily read-optimized Hoodie Table where.
+ * Implementation of a very heavily read-optimized Hoodie Table where, all data is stored in base files, with
+ * zero read amplification.
+ *
  * <p>
  * INSERTS - Produce new files, block aligned to desired size (or) Merge with the smallest existing file, to expand it
  * <p>
@@ -181,7 +183,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieDataFile oldDataFile) throws IOException {
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(commitTime, fileId, keyToNewRecords, oldDataFile);
     return handleUpdateInternal(upsertHandle, commitTime, fileId);
@@ -223,7 +225,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   protected HoodieMergeHandle getUpdateHandle(String commitTime, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieDataFile dataFileToBeMerged) {
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
     return new HoodieMergeHandle<>(config, commitTime, this, keyToNewRecords, fileId, dataFileToBeMerged);
   }
 
@@ -685,10 +687,10 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
       if (!commitTimeline.empty()) { // if we have some commits
         HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
-        List<HoodieDataFile> allFiles = getROFileSystemView()
-            .getLatestDataFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
+        List<HoodieBaseFile> allFiles = getBaseFileOnlyView()
+            .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
 
-        for (HoodieDataFile file : allFiles) {
+        for (HoodieBaseFile file : allFiles) {
           if (file.getFileSize() < config.getParquetSmallFileLimit()) {
             String filename = file.getFileName();
             SmallFile sf = new SmallFile();

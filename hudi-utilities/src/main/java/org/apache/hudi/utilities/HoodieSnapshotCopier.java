@@ -19,12 +19,12 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.SerializableConfiguration;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.TableFileSystemView.ReadOptimizedView;
+import org.apache.hudi.common.table.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.FSUtils;
@@ -73,7 +73,7 @@ public class HoodieSnapshotCopier implements Serializable {
     FileSystem fs = FSUtils.getFs(baseDir, jsc.hadoopConfiguration());
     final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
     final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs.getConf(), baseDir);
-    final ReadOptimizedView fsView = new HoodieTableFileSystemView(tableMetadata,
+    final BaseFileOnlyView fsView = new HoodieTableFileSystemView(tableMetadata,
         tableMetadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
     // Get the latest commit
     Option<HoodieInstant> latestCommit =
@@ -101,7 +101,7 @@ public class HoodieSnapshotCopier implements Serializable {
         // Only take latest version files <= latestCommit.
         FileSystem fs1 = FSUtils.getFs(baseDir, serConf.newCopy());
         List<Tuple2<String, String>> filePaths = new ArrayList<>();
-        Stream<HoodieDataFile> dataFiles = fsView.getLatestDataFilesBeforeOrOn(partition, latestCommitTimestamp);
+        Stream<HoodieBaseFile> dataFiles = fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp);
         dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
 
         // also need to copy over partition metadata

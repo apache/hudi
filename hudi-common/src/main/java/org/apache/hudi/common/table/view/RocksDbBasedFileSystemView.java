@@ -20,7 +20,7 @@ package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -174,7 +174,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
       rocksDB.writeBatch(batch -> {
         fg.getAllFileSlicesIncludingInflight().forEach(fs -> {
           rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
-          fs.getDataFile().ifPresent(df -> {
+          fs.getBaseFile().ifPresent(df -> {
             rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs),
                 df);
           });
@@ -218,8 +218,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
             switch (mode) {
               case ADD: {
                 FileSlice newFileSlice = new FileSlice(oldSlice.getFileGroupId(), oldSlice.getBaseInstantTime());
-                oldSlice.getDataFile().ifPresent(df -> newFileSlice.setDataFile(df));
-                fs.getDataFile().ifPresent(df -> newFileSlice.setDataFile(df));
+                oldSlice.getBaseFile().ifPresent(df -> newFileSlice.setBaseFile(df));
+                fs.getBaseFile().ifPresent(df -> newFileSlice.setBaseFile(df));
                 Map<String, HoodieLogFile> newLogFiles = new HashMap<>(logFiles);
                 deltaLogFiles.entrySet().stream().filter(e -> !logFiles.containsKey(e.getKey()))
                     .forEach(p -> newLogFiles.put(p.getKey(), p.getValue()));
@@ -230,15 +230,15 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
               case REMOVE: {
                 LOG.info("Removing old File Slice =" + fs);
                 FileSlice newFileSlice = new FileSlice(oldSlice.getFileGroupId(), oldSlice.getBaseInstantTime());
-                fs.getDataFile().orElseGet(() -> {
-                  oldSlice.getDataFile().ifPresent(df -> newFileSlice.setDataFile(df));
+                fs.getBaseFile().orElseGet(() -> {
+                  oldSlice.getBaseFile().ifPresent(df -> newFileSlice.setBaseFile(df));
                   return null;
                 });
 
                 deltaLogFiles.keySet().stream().forEach(p -> logFiles.remove(p));
                 // Add remaining log files back
                 logFiles.values().stream().forEach(lf -> newFileSlice.addLogFile(lf));
-                if (newFileSlice.getDataFile().isPresent() || (newFileSlice.getLogFiles().count() > 0)) {
+                if (newFileSlice.getBaseFile().isPresent() || (newFileSlice.getLogFiles().count() > 0)) {
                   LOG.info("Adding back new file-slice after remove FS=" + newFileSlice);
                   return newFileSlice;
                 }
@@ -250,7 +250,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
           }
         }).filter(Objects::nonNull).forEach(fs -> {
           rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
-          fs.getDataFile().ifPresent(df -> {
+          fs.getBaseFile().ifPresent(df -> {
             rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs),
                 df);
           });
@@ -266,8 +266,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
-  Stream<HoodieDataFile> fetchAllDataFiles(String partitionPath) {
-    return rocksDB.<HoodieDataFile>prefixSearch(schemaHelper.getColFamilyForView(),
+  Stream<HoodieBaseFile> fetchAllBaseFiles(String partitionPath) {
+    return rocksDB.<HoodieBaseFile>prefixSearch(schemaHelper.getColFamilyForView(),
         schemaHelper.getPrefixForDataFileViewByPartition(partitionPath)).map(Pair::getValue);
   }
 
@@ -298,11 +298,11 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
-  protected Option<HoodieDataFile> fetchLatestDataFile(String partitionPath, String fileId) {
+  protected Option<HoodieBaseFile> fetchLatestBaseFile(String partitionPath, String fileId) {
     // Retries only file-slices of the file and filters for the latest
     return Option
         .ofNullable(rocksDB
-            .<HoodieDataFile>prefixSearch(schemaHelper.getColFamilyForView(),
+            .<HoodieBaseFile>prefixSearch(schemaHelper.getColFamilyForView(),
                 schemaHelper.getPrefixForDataFileViewByPartitionFile(partitionPath, fileId))
             .map(Pair::getValue).reduce(null,
                 (x, y) -> ((x == null) ? y

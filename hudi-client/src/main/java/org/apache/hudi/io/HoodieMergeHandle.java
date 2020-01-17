@@ -19,7 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.WriteStatus;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -73,14 +73,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       Iterator<HoodieRecord<T>> recordItr, String fileId) {
     super(config, commitTime, fileId, hoodieTable);
     String partitionPath = init(fileId, recordItr);
-    init(fileId, partitionPath, hoodieTable.getROFileSystemView().getLatestDataFile(partitionPath, fileId).get());
+    init(fileId, partitionPath, hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
   }
 
   /**
    * Called by compactor code path.
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
-      Map<String, HoodieRecord<T>> keyToNewRecords, String fileId, HoodieDataFile dataFileToBeMerged) {
+      Map<String, HoodieRecord<T>> keyToNewRecords, String fileId, HoodieBaseFile dataFileToBeMerged) {
     super(config, commitTime, fileId, hoodieTable);
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchema = true;
@@ -154,7 +154,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
-  private void init(String fileId, String partitionPath, HoodieDataFile dataFileToBeMerged) {
+  private void init(String fileId, String partitionPath, HoodieBaseFile dataFileToBeMerged) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());

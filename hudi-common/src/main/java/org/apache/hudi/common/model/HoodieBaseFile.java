@@ -27,21 +27,21 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * Hoodie data file.
+ * Hoodie base file.
  */
-public class HoodieDataFile implements Serializable {
+public class HoodieBaseFile implements Serializable {
 
   private transient FileStatus fileStatus;
   private final String fullPath;
   private long fileLen;
 
-  public HoodieDataFile(FileStatus fileStatus) {
+  public HoodieBaseFile(FileStatus fileStatus) {
     this.fileStatus = fileStatus;
     this.fullPath = fileStatus.getPath().toString();
     this.fileLen = fileStatus.getLen();
   }
 
-  public HoodieDataFile(String filePath) {
+  public HoodieBaseFile(String filePath) {
     this.fileStatus = null;
     this.fullPath = filePath;
     this.fileLen = -1;
@@ -87,7 +87,7 @@ public class HoodieDataFile implements Serializable {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    HoodieDataFile dataFile = (HoodieDataFile) o;
+    HoodieBaseFile dataFile = (HoodieBaseFile) o;
     return Objects.equals(fullPath, dataFile.fullPath);
   }
 

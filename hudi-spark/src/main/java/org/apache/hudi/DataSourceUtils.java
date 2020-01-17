@@ -138,8 +138,8 @@ public class DataSourceUtils {
                                                      String tblName, Map<String, String> parameters) {
 
     // inline compaction is on by default for MOR
-    boolean inlineCompact = parameters.get(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY())
-        .equals(DataSourceWriteOptions.MOR_STORAGE_TYPE_OPT_VAL());
+    boolean inlineCompact = parameters.get(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY())
+        .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
 
     // insert/bulk-insert combining to be true, if filtering for duplicates
     boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS_OPT_KEY()));

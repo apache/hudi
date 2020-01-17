@@ -20,11 +20,11 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableFileSystemView.ReadOptimizedView;
+import org.apache.hudi.common.table.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -100,15 +100,15 @@ public class TestClientRollback extends TestHoodieClientBase {
           FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), getConfig().shouldAssumeDatePartitioning());
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
-      final ReadOptimizedView view1 = table.getROFileSystemView();
+      final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
 
-      List<HoodieDataFile> dataFiles = partitionPaths.stream().flatMap(s -> {
-        return view1.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("003"));
+      List<HoodieBaseFile> dataFiles = partitionPaths.stream().flatMap(s -> {
+        return view1.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"));
       }).collect(Collectors.toList());
       assertEquals("The data files for commit 003 should be present", 3, dataFiles.size());
 
       dataFiles = partitionPaths.stream().flatMap(s -> {
-        return view1.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("002"));
+        return view1.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"));
       }).collect(Collectors.toList());
       assertEquals("The data files for commit 002 should be present", 3, dataFiles.size());
 
@@ -125,9 +125,9 @@ public class TestClientRollback extends TestHoodieClientBase {
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
-      final ReadOptimizedView view2 = table.getROFileSystemView();
+      final BaseFileOnlyView view2 = table.getBaseFileOnlyView();
 
-      dataFiles = partitionPaths.stream().flatMap(s -> view2.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
+      dataFiles = partitionPaths.stream().flatMap(s -> view2.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
       assertEquals("The data files for commit 004 should be present", 3, dataFiles.size());
 
       // rolling back to a non existent savepoint must not succeed
@@ -144,19 +144,19 @@ public class TestClientRollback extends TestHoodieClientBase {
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
-      final ReadOptimizedView view3 = table.getROFileSystemView();
+      final BaseFileOnlyView view3 = table.getBaseFileOnlyView();
       dataFiles = partitionPaths.stream().flatMap(s -> {
-        return view3.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("002"));
+        return view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"));
       }).collect(Collectors.toList());
       assertEquals("The data files for commit 002 be available", 3, dataFiles.size());
 
       dataFiles = partitionPaths.stream().flatMap(s -> {
-        return view3.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("003"));
+        return view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"));
       }).collect(Collectors.toList());
       assertEquals("The data files for commit 003 should be rolled back", 0, dataFiles.size());
 
       dataFiles = partitionPaths.stream().flatMap(s -> {
-        return view3.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("004"));
+        return view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"));
       }).collect(Collectors.toList());
       assertEquals("The data files for commit 004 should be rolled back", 0, dataFiles.size());
     }

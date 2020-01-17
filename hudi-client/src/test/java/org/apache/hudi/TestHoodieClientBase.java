@@ -157,7 +157,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
 
   protected HoodieTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-    ((SyncableFileSystemView) (table.getRTFileSystemView())).reset();
+    ((SyncableFileSystemView) (table.getSliceView())).reset();
     return table;
   }
 

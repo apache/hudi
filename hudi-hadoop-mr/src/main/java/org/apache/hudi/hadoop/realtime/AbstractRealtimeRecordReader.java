@@ -336,7 +336,7 @@ public abstract class AbstractRealtimeRecordReader {
    */
   private void init() throws IOException {
     Schema schemaFromLogFile =
-        LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaFilePaths(), jobConf);
+        LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaLogPaths(), jobConf);
     if (schemaFromLogFile == null) {
       writerSchema = new AvroSchemaConverter().convert(baseFileSchema);
       LOG.debug("Writer Schema From Parquet => " + writerSchema.getFields());
@@ -360,7 +360,7 @@ public abstract class AbstractRealtimeRecordReader {
 
     readerSchema = generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
     LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
-        split.getDeltaFilePaths(), split.getPath(), projectionFields));
+        split.getDeltaLogPaths(), split.getPath(), projectionFields));
   }
 
   private Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap) {

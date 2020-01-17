@@ -61,7 +61,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
     return new HoodieMergedLogRecordScanner(FSUtils.getFs(split.getPath().toString(), jobConf), split.getBasePath(),
-        split.getDeltaFilePaths(), usesCustomPayload ? getWriterSchema() : getReaderSchema(), split.getMaxCommitTime(),
+        split.getDeltaLogPaths(), usesCustomPayload ? getWriterSchema() : getReaderSchema(), split.getMaxCommitTime(),
         getMaxCompactionMemoryInBytes(),
         Boolean
             .valueOf(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),

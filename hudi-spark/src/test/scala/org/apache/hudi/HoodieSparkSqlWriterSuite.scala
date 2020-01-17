@@ -29,13 +29,13 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     val originals = HoodieSparkSqlWriter.parametersWithWriteDefaults(Map.empty)
     val rhsKey = "hoodie.right.hand.side.key"
     val rhsVal = "hoodie.right.hand.side.val"
-    val modifier = Map(OPERATION_OPT_KEY -> INSERT_OPERATION_OPT_VAL, STORAGE_TYPE_OPT_KEY -> MOR_STORAGE_TYPE_OPT_VAL, rhsKey -> rhsVal)
+    val modifier = Map(OPERATION_OPT_KEY -> INSERT_OPERATION_OPT_VAL, TABLE_TYPE_OPT_KEY -> MOR_TABLE_TYPE_OPT_VAL, rhsKey -> rhsVal)
     val modified = HoodieSparkSqlWriter.parametersWithWriteDefaults(modifier)
     val matcher = (k: String, v: String) => modified(k) should be(v)
 
     originals foreach {
       case (OPERATION_OPT_KEY, _) => matcher(OPERATION_OPT_KEY, INSERT_OPERATION_OPT_VAL)
-      case (STORAGE_TYPE_OPT_KEY, _) => matcher(STORAGE_TYPE_OPT_KEY, MOR_STORAGE_TYPE_OPT_VAL)
+      case (TABLE_TYPE_OPT_KEY, _) => matcher(TABLE_TYPE_OPT_KEY, MOR_TABLE_TYPE_OPT_VAL)
       case (`rhsKey`, _) => matcher(rhsKey, rhsVal)
       case (k, v) => matcher(k, v)
     }
