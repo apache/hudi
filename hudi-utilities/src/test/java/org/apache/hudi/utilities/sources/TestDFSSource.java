@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.UtilitiesTestBase;
@@ -34,7 +35,7 @@ import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.SparkSession;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -77,118 +78,157 @@ public class TestDFSSource extends UtilitiesTestBase {
 
   @Test
   public void testJsonDFSSource() throws IOException {
-    dfs.mkdirs(new Path(dfsBasePath + "/jsonFiles"));
-    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    new DFSSourceTestCase(dfsBasePath + "/jsonFiles", ".json") {
+      @Override
+      Source prepareDFSSource() {
+        TypedProperties props = new TypedProperties();
+        props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsRoot);
+        return new JsonDFSSource(props, jsc, sparkSession, schemaProvider);
+      }
 
-    TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsBasePath + "/jsonFiles");
-    JsonDFSSource jsonDFSSource = new JsonDFSSource(props, jsc, sparkSession, schemaProvider);
-    SourceFormatAdapter jsonSource = new SourceFormatAdapter(jsonDFSSource);
-
-    // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
-    assertEquals(Option.empty(), jsonSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
-    UtilitiesTestBase.Helpers.saveStringsToDFS(Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 100)), dfs,
-        dfsBasePath + "/jsonFiles/1.json");
-    // Test respecting sourceLimit
-    int sourceLimit = 10;
-    RemoteIterator<LocatedFileStatus> files = dfs.listFiles(new Path(dfsBasePath + "/jsonFiles/1.json"), true);
-    FileStatus file1Status = files.next();
-    assertTrue(file1Status.getLen() > sourceLimit);
-    assertEquals(Option.empty(), jsonSource.fetchNewDataInAvroFormat(Option.empty(), sourceLimit).getBatch());
-    // Test json -> Avro
-    InputBatch<JavaRDD<GenericRecord>> fetch1 = jsonSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
-    assertEquals(100, fetch1.getBatch().get().count());
-    // Test json -> Row format
-    InputBatch<Dataset<Row>> fetch1AsRows = jsonSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
-    assertEquals(100, fetch1AsRows.getBatch().get().count());
-    // Test Avro -> Row format
-    Dataset<Row> fetch1Rows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
-        schemaProvider.getSourceSchema().toString(), jsonDFSSource.getSparkSession());
-    assertEquals(100, fetch1Rows.count());
-
-    // 2. Produce new data, extract new data
-    UtilitiesTestBase.Helpers.saveStringsToDFS(Helpers.jsonifyRecords(dataGenerator.generateInserts("001", 10000)), dfs,
-        dfsBasePath + "/jsonFiles/2.json");
-    InputBatch<Dataset<Row>> fetch2 =
-        jsonSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
-    assertEquals(10000, fetch2.getBatch().get().count());
-
-    // 3. Extract with previous checkpoint => gives same data back (idempotent)
-    InputBatch<Dataset<Row>> fetch3 =
-        jsonSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
-    assertEquals(10000, fetch3.getBatch().get().count());
-    assertEquals(fetch2.getCheckpointForNextBatch(), fetch3.getCheckpointForNextBatch());
-    fetch3.getBatch().get().registerTempTable("test_dfs_table");
-    Dataset<Row> rowDataset = new SQLContext(jsc.sc()).sql("select * from test_dfs_table");
-    assertEquals(10000, rowDataset.count());
-
-    // 4. Extract with latest checkpoint => no new data returned
-    InputBatch<JavaRDD<GenericRecord>> fetch4 =
-        jsonSource.fetchNewDataInAvroFormat(Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
-    assertEquals(Option.empty(), fetch4.getBatch());
-
-    // 5. Extract from the beginning
-    InputBatch<JavaRDD<GenericRecord>> fetch5 = jsonSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
-    assertEquals(10100, fetch5.getBatch().get().count());
+      @Override
+      void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
+        UtilitiesTestBase.Helpers.saveStringsToDFS(
+            Helpers.jsonifyRecords(records), dfs, path.toString());
+      }
+    }.run();
   }
 
   @Test
   public void testParquetDFSSource() throws IOException {
-    dfs.mkdirs(new Path(dfsBasePath + "/parquetFiles"));
+    new DFSSourceTestCase(dfsBasePath + "/parquetFiles", ".parquet") {
+      @Override
+      Source prepareDFSSource() {
+        TypedProperties props = new TypedProperties();
+        props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsRoot);
+        return new ParquetDFSSource(props, jsc, sparkSession, schemaProvider);
+      }
+
+      @Override
+      void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
+        Helpers.saveParquetToDFS(Helpers.toGenericRecords(records, dataGenerator), path);
+      }
+    }.run();
+  }
+
+  /**
+   * An abstract test case for {@link Source} using DFS as the file system.
+   */
+  abstract class DFSSourceTestCase {
+
+    String dfsRoot;
+    String fileSuffix;
+    int fileCount = 1;
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
 
-    TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsBasePath + "/parquetFiles");
-    ParquetDFSSource parquetDFSSource = new ParquetDFSSource(props, jsc, sparkSession, schemaProvider);
-    SourceFormatAdapter parquetSource = new SourceFormatAdapter(parquetDFSSource);
+    DFSSourceTestCase(String dfsRoot, String fileSuffix) {
+      this.dfsRoot = dfsRoot;
+      this.fileSuffix = fileSuffix;
+    }
 
-    // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
-    assertEquals(Option.empty(), parquetSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
-    List<GenericRecord> batch1 = Helpers.toGenericRecords(dataGenerator.generateInserts("000", 100), dataGenerator);
-    Path file1 = new Path(dfsBasePath + "/parquetFiles", "1.parquet");
-    Helpers.saveParquetToDFS(batch1, file1);
-    // Test respecting sourceLimit
-    int sourceLimit = 10;
-    RemoteIterator<LocatedFileStatus> files = dfs.listFiles(file1, true);
-    FileStatus file1Status = files.next();
-    assertTrue(file1Status.getLen() > sourceLimit);
-    assertEquals(Option.empty(), parquetSource.fetchNewDataInAvroFormat(Option.empty(), sourceLimit).getBatch());
-    // Test parquet -> Avro
-    InputBatch<JavaRDD<GenericRecord>> fetch1 = parquetSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
-    assertEquals(100, fetch1.getBatch().get().count());
-    // Test parquet -> Row
-    InputBatch<Dataset<Row>> fetch1AsRows = parquetSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
-    assertEquals(100, fetch1AsRows.getBatch().get().count());
+    /**
+     * Prepares the specific {@link Source} to test, by passing in necessary configurations.
+     *
+     * @return A {@link Source} using DFS as the file system.
+     */
+    abstract Source prepareDFSSource();
 
-    // 2. Produce new data, extract new data
-    List<GenericRecord> batch2 = Helpers.toGenericRecords(dataGenerator.generateInserts("001", 10000), dataGenerator);
-    Path file2 = new Path(dfsBasePath + "/parquetFiles", "2.parquet");
-    Helpers.saveParquetToDFS(batch2, file2);
-    // Test parquet -> Avro
-    InputBatch<JavaRDD<GenericRecord>> fetch2 =
-        parquetSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
-    assertEquals(10000, fetch2.getBatch().get().count());
-    // Test parquet -> Row
-    InputBatch<Dataset<Row>> fetch2AsRows =
-        parquetSource.fetchNewDataInRowFormat(Option.of(fetch1AsRows.getCheckpointForNextBatch()), Long.MAX_VALUE);
-    assertEquals(10000, fetch2AsRows.getBatch().get().count());
+    /**
+     * Writes test data, i.e., a {@link List} of {@link HoodieRecord}, to a file on DFS.
+     *
+     * @param records Test data.
+     * @param path    The path in {@link Path} of the file to write.
+     * @throws IOException
+     */
+    abstract void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException;
 
-    // 3. Extract with previous checkpoint => gives same data back (idempotent)
-    InputBatch<Dataset<Row>> fetch3AsRows =
-        parquetSource.fetchNewDataInRowFormat(Option.of(fetch1AsRows.getCheckpointForNextBatch()), Long.MAX_VALUE);
-    assertEquals(10000, fetch3AsRows.getBatch().get().count());
-    assertEquals(fetch2AsRows.getCheckpointForNextBatch(), fetch3AsRows.getCheckpointForNextBatch());
-    fetch3AsRows.getBatch().get().registerTempTable("test_dfs_table");
-    Dataset<Row> rowDataset = new SQLContext(jsc.sc()).sql("select * from test_dfs_table");
-    assertEquals(10000, rowDataset.count());
+    /**
+     * Generates a batch of test data and writes the data to a file.  This can be called multiple
+     * times to generate multiple files.
+     *
+     * @return The {@link Path} of the file.
+     * @throws IOException
+     */
+    Path generateOneFile() throws IOException {
+      Path path = new Path(dfsRoot, fileCount + fileSuffix);
+      switch (fileCount) {
+        case 1:
+          writeNewDataToFile(dataGenerator.generateInserts("000", 100), path);
+          fileCount++;
+          return path;
+        case 2:
+          writeNewDataToFile(dataGenerator.generateInserts("001", 10000), path);
+          fileCount++;
+          return path;
+        default:
+          return null;
+      }
+    }
 
-    // 4. Extract with latest checkpoint => no new data returned
-    InputBatch<JavaRDD<GenericRecord>> fetch4 =
-        parquetSource.fetchNewDataInAvroFormat(Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
-    assertEquals(Option.empty(), fetch4.getBatch());
+    /**
+     * Runs the test scenario.
+     *
+     * @throws IOException
+     */
+    void run() throws IOException {
+      dfs.mkdirs(new Path(dfsRoot));
+      SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareDFSSource());
 
-    // 5. Extract from the beginning
-    InputBatch<JavaRDD<GenericRecord>> fetch5 = parquetSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
-    assertEquals(10100, fetch5.getBatch().get().count());
+      // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
+      assertEquals(Option.empty(),
+          sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
+      // Test respecting sourceLimit
+      int sourceLimit = 10;
+      RemoteIterator<LocatedFileStatus> files = dfs.listFiles(generateOneFile(), true);
+      FileStatus file1Status = files.next();
+      assertTrue(file1Status.getLen() > sourceLimit);
+      assertEquals(Option.empty(),
+          sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), sourceLimit).getBatch());
+      // Test fetching Avro format
+      InputBatch<JavaRDD<GenericRecord>> fetch1 =
+          sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+      assertEquals(100, fetch1.getBatch().get().count());
+      // Test fetching Row format
+      InputBatch<Dataset<Row>> fetch1AsRows =
+          sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
+      assertEquals(100, fetch1AsRows.getBatch().get().count());
+      // Test Avro to Row format
+      Dataset<Row> fetch1Rows = AvroConversionUtils
+          .createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
+              schemaProvider.getSourceSchema().toString(), sparkSession);
+      assertEquals(100, fetch1Rows.count());
+
+      // 2. Produce new data, extract new data
+      generateOneFile();
+      // Test fetching Avro format
+      InputBatch<JavaRDD<GenericRecord>> fetch2 = sourceFormatAdapter.fetchNewDataInAvroFormat(
+          Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+      assertEquals(10000, fetch2.getBatch().get().count());
+      // Test fetching Row format
+      InputBatch<Dataset<Row>> fetch2AsRows = sourceFormatAdapter.fetchNewDataInRowFormat(
+          Option.of(fetch1AsRows.getCheckpointForNextBatch()), Long.MAX_VALUE);
+      assertEquals(10000, fetch2AsRows.getBatch().get().count());
+
+      // 3. Extract with previous checkpoint => gives same data back (idempotent)
+      InputBatch<Dataset<Row>> fetch3AsRows = sourceFormatAdapter.fetchNewDataInRowFormat(
+          Option.of(fetch1AsRows.getCheckpointForNextBatch()), Long.MAX_VALUE);
+      assertEquals(10000, fetch3AsRows.getBatch().get().count());
+      assertEquals(fetch2AsRows.getCheckpointForNextBatch(),
+          fetch3AsRows.getCheckpointForNextBatch());
+      fetch3AsRows.getBatch().get().createOrReplaceTempView("test_dfs_table");
+      Dataset<Row> rowDataset = SparkSession.builder().sparkContext(jsc.sc()).getOrCreate()
+          .sql("select * from test_dfs_table");
+      assertEquals(10000, rowDataset.count());
+
+      // 4. Extract with latest checkpoint => no new data returned
+      InputBatch<JavaRDD<GenericRecord>> fetch4 = sourceFormatAdapter.fetchNewDataInAvroFormat(
+          Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
+      assertEquals(Option.empty(), fetch4.getBatch());
+
+      // 5. Extract from the beginning
+      InputBatch<JavaRDD<GenericRecord>> fetch5 = sourceFormatAdapter.fetchNewDataInAvroFormat(
+          Option.empty(), Long.MAX_VALUE);
+      assertEquals(10100, fetch5.getBatch().get().count());
+    }
   }
 }
