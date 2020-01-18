@@ -158,7 +158,40 @@ val tripsPointInTimeDF = spark.read.format("org.apache.hudi").
     load(basePath);
 tripsPointInTimeDF.registerTempTable("hudi_trips_point_in_time")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_point_in_time where fare > 20.0").show()
-``` 
+```
+
+## Delete data {#deletes}
+Delete records for the HoodieKeys passed in.
+
+```
+// fetch total records count
+spark.sql("select uuid, partitionPath from hudi_ro_table").count()
+// fetch two records to be deleted
+val ds = spark.sql("select uuid, partitionPath from hudi_ro_table").limit(2)
+
+// issue deletes
+val deletes = dataGen.generateDeletes(ds.collectAsList())
+val df = spark.read.json(spark.sparkContext.parallelize(deletes, 2));
+df.write.format("org.apache.hudi").
+options(getQuickstartWriteConfigs).
+option(OPERATION_OPT_KEY,"delete").
+option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+option(TABLE_NAME, tableName).
+mode(Append).
+save(basePath);
+
+// run the same read query as above.
+val roAfterDeleteViewDF = spark.
+    read.
+    format("org.apache.hudi").
+    load(basePath + "/*/*/*/*")
+roAfterDeleteViewDF.registerTempTable("hudi_ro_table")
+// fetch should return (total - 2) records
+spark.sql("select uuid, partitionPath from hudi_ro_table").count()
+```
+Note: Only `Append` mode is supported for delete operation.
 
 ## Where to go from here?
 
