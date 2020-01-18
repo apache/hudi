@@ -40,7 +40,7 @@ public class HoodieDataSourceHelpers {
    * view read, to perform incremental processing.
    */
   public static boolean hasNewCommits(FileSystem fs, String basePath, String commitTimestamp) {
-    return listCommitsSince(fs, basePath, commitTimestamp).size() > 0;
+    return !listCommitsSince(fs, basePath, commitTimestamp).isEmpty();
   }
 
   /**

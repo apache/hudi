@@ -57,7 +57,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.reverseLogReader = reverseLogReader;
     this.bufferSize = bufferSize;
     this.prevReadersInOpenState = new ArrayList<>();
-    if (logFiles.size() > 0) {
+    if (!logFiles.isEmpty()) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
       this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false);
     }
@@ -89,7 +89,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
       return false;
     } else if (currentReader.hasNext()) {
       return true;
-    } else if (logFiles.size() > 0) {
+    } else if (!logFiles.isEmpty()) {
       try {
         HoodieLogFile nextLogFile = logFiles.remove(0);
         // First close previous reader only if readBlockLazily is true

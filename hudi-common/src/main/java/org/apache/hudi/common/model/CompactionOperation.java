@@ -68,7 +68,7 @@ public class CompactionOperation implements Serializable {
       this.id = new HoodieFileGroupId(partitionPath, dataFile.get().getFileId());
       this.dataFileCommitTime = Option.of(dataFile.get().getCommitTime());
     } else {
-      assert logFiles.size() > 0;
+      assert !logFiles.isEmpty();
       this.dataFileName = Option.empty();
       this.baseInstantTime = FSUtils.getBaseCommitTimeFromLogPath(logFiles.get(0).getPath());
       this.id = new HoodieFileGroupId(partitionPath, FSUtils.getFileIdFromLogPath(logFiles.get(0).getPath()));

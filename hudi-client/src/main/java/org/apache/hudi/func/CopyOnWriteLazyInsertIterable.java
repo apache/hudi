@@ -158,7 +158,7 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
         statuses.add(handle.close());
       }
       handle = null;
-      assert statuses.size() > 0;
+      assert !statuses.isEmpty();
     }
 
     @Override

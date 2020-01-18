@@ -87,7 +87,7 @@ public class HoodieSnapshotCopier implements Serializable {
         latestCommitTimestamp));
 
     List<String> partitions = FSUtils.getAllPartitionPaths(fs, baseDir, shouldAssumeDatePartitioning);
-    if (partitions.size() > 0) {
+    if (!partitions.isEmpty()) {
       LOG.info(String.format("The job needs to copy %d partitions.", partitions.size()));
 
       // Make sure the output directory is empty

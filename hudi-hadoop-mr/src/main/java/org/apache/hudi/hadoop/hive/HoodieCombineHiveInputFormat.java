@@ -463,7 +463,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         processPaths(job, combine, iss, path);
       }
 
-      if (inpFiles.size() > 0) {
+      if (!inpFiles.isEmpty()) {
         // Processing files
         for (Path filterPath : poolSet) {
           combine.createPool(job, new CombineFilter(filterPath));
@@ -560,7 +560,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     }
 
     // Process the normal splits
-    if (nonCombinablePaths.size() > 0) {
+    if (!nonCombinablePaths.isEmpty()) {
       FileInputFormat.setInputPaths(job, nonCombinablePaths.toArray(new Path[nonCombinablePaths.size()]));
       InputSplit[] splits = super.getSplits(job, numSplits);
       for (InputSplit split : splits) {
@@ -569,7 +569,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     }
 
     // Process the combine splits
-    if (combinablePaths.size() > 0) {
+    if (!combinablePaths.isEmpty()) {
       FileInputFormat.setInputPaths(job, combinablePaths.toArray(new Path[combinablePaths.size()]));
       Map<Path, PartitionDesc> pathToPartitionInfo = this.pathToPartitionInfo != null ? this.pathToPartitionInfo
           : Utilities.getMapWork(job).getPathToPartitionInfo();

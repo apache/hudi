@@ -90,7 +90,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
 
     // process non hoodie Paths next.
     List<Path> nonHoodiePaths = inputPathHandler.getNonHoodieInputPaths();
-    if (nonHoodiePaths.size() > 0) {
+    if (!nonHoodiePaths.isEmpty()) {
       setInputPaths(job, nonHoodiePaths.toArray(new Path[nonHoodiePaths.size()]));
       FileStatus[] fileStatuses = super.listStatus(job);
       for (FileStatus fileStatus: fileStatuses) {
@@ -100,7 +100,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
 
     // process snapshot queries next.
     List<Path> snapshotPaths = inputPathHandler.getSnapshotPaths();
-    if (snapshotPaths.size() > 0) {
+    if (!snapshotPaths.isEmpty()) {
       setInputPaths(job, snapshotPaths.toArray(new Path[snapshotPaths.size()]));
       FileStatus[] fileStatuses = super.listStatus(job);
       Map<HoodieTableMetaClient, List<FileStatus>> groupedFileStatus =

@@ -698,8 +698,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       roView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
       dataFilesToRead = roView.getLatestBaseFiles();
       List<HoodieBaseFile> dataFilesList = dataFilesToRead.collect(Collectors.toList());
-      assertTrue("Should list the parquet files we wrote in the delta commit",
-          dataFilesList.size() > 0);
+      assertTrue("Should list the parquet files we wrote in the delta commit", !dataFilesList.isEmpty());
 
       /**
        * Write 2 (only updates + inserts, written to .log file + correction of existing parquet file size)

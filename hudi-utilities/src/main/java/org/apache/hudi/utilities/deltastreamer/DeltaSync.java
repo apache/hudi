@@ -405,7 +405,7 @@ public class DeltaSync implements Serializable {
       LOG.error("Printing out the top 100 errors");
       writeStatusRDD.filter(ws -> ws.hasErrors()).take(100).forEach(ws -> {
         LOG.error("Global error :", ws.getGlobalError());
-        if (ws.getErrors().size() > 0) {
+        if (!ws.getErrors().isEmpty()) {
           ws.getErrors().entrySet().forEach(r -> LOG.trace("Error for key:" + r.getKey() + " is " + r.getValue()));
         }
       });

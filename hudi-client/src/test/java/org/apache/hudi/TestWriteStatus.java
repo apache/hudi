@@ -34,7 +34,7 @@ public class TestWriteStatus {
     for (int i = 0; i < 1000; i++) {
       status.markFailure(Mockito.mock(HoodieRecord.class), t, null);
     }
-    assertTrue(status.getFailedRecords().size() > 0);
+    assertTrue(!status.getFailedRecords().isEmpty());
     assertTrue(status.getFailedRecords().size() < 150); // 150 instead of 100, to prevent flaky test
     assertTrue(status.hasErrors());
   }

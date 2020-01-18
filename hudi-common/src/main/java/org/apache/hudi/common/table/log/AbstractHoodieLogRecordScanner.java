@@ -258,7 +258,7 @@ public abstract class AbstractHoodieLogRecordScanner {
    * Checks if the current logblock belongs to a later instant.
    */
   private boolean isNewInstantBlock(HoodieLogBlock logBlock) {
-    return currentInstantLogBlocks.size() > 0 && currentInstantLogBlocks.peek().getBlockType() != CORRUPT_BLOCK
+    return !currentInstantLogBlocks.isEmpty() && currentInstantLogBlocks.peek().getBlockType() != CORRUPT_BLOCK
         && !logBlock.getLogBlockHeader().get(INSTANT_TIME)
             .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME));
   }

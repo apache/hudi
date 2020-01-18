@@ -269,7 +269,7 @@ public class HoodieCommitArchiveLog {
   }
 
   private void writeToFile(Schema wrapperSchema, List<IndexedRecord> records) throws Exception {
-    if (records.size() > 0) {
+    if (!records.isEmpty()) {
       Map<HeaderMetadataType, String> header = Maps.newHashMap();
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
       HoodieAvroDataBlock block = new HoodieAvroDataBlock(records, header);

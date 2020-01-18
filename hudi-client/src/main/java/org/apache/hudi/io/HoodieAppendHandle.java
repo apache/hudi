@@ -209,11 +209,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
     try {
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writerSchema.toString());
-      if (recordList.size() > 0) {
+      if (!recordList.isEmpty()) {
         writer = writer.appendBlock(new HoodieAvroDataBlock(recordList, header));
         recordList.clear();
       }
-      if (keysToDelete.size() > 0) {
+      if (!keysToDelete.isEmpty()) {
         writer = writer.appendBlock(new HoodieDeleteBlock(keysToDelete.toArray(new HoodieKey[keysToDelete.size()]), header));
         keysToDelete.clear();
       }

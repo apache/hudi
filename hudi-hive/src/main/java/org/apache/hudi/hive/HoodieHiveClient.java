@@ -255,7 +255,7 @@ public class HoodieHiveClient {
     try {
       String newSchemaStr = SchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields);
       // Cascade clause should not be present for non-partitioned tables
-      String cascadeClause = syncConfig.partitionFields.size() > 0 ? " cascade" : "";
+      String cascadeClause = syncConfig.partitionFields.isEmpty() ? "" : " cascade";
       StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
               .append(syncConfig.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
               .append(HIVE_ESCAPE_CHARACTER).append(tableName)

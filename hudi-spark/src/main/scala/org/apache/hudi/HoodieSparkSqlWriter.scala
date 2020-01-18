@@ -289,7 +289,7 @@ private[hudi] object HoodieSparkSqlWriter {
           .take(100)
           .foreach(ws => {
             log.trace("Global error :", ws.getGlobalError)
-            if (ws.getErrors.size() > 0) {
+            if (!ws.getErrors.isEmpty) {
               ws.getErrors.foreach(kt =>
                 log.trace(s"Error for key: ${kt._1}", kt._2))
             }

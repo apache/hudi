@@ -101,7 +101,7 @@ public class DFSPathSelector {
       }
 
       // no data to read
-      if (filteredFiles.size() == 0) {
+      if (filteredFiles.isEmpty()) {
         return new ImmutablePair<>(Option.empty(), lastCheckpointStr.orElseGet(() -> String.valueOf(Long.MIN_VALUE)));
       }
 

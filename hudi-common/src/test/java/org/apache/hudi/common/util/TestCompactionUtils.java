@@ -166,7 +166,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
       // Convert back to HoodieCompactionOperation and check for equality
       return CompactionUtils.buildHoodieCompactionOperation(op2);
     }).collect(Collectors.toList());
-    Assert.assertTrue("Transformation did get tested", originalOps.size() > 0);
+    Assert.assertTrue("Transformation did get tested", !originalOps.isEmpty());
     Assert.assertEquals("All fields set correctly in transformations", originalOps, regeneratedOps);
   }
 
