@@ -95,6 +95,38 @@ cn_docs:
         url: /cn/docs/privacy.html
 
 
-
+0.5.0_docs:
+  - title: Getting Started
+    children:
+      - title: "Quick Start"
+        url: /docs/0.5.0-quick-start-guide.html
+      - title: "Use Cases"
+        url: /docs/0.5.0-use_cases.html
+      - title: "Talks & Powered By"
+        url: /docs/0.5.0-powered_by.html
+      - title: "Comparison"
+        url: /docs/0.5.0-comparison.html
+      - title: "Docker Demo"
+        url: /docs/0.5.0-docker_demo.html
+  - title: Documentation
+    children:
+      - title: "Concepts"
+        url: /docs/0.5.0-concepts.html
+      - title: "Writing Data"
+        url: /docs/0.5.0-writing_data.html
+      - title: "Querying Data"
+        url: /docs/0.5.0-querying_data.html
+      - title: "Configuration"
+        url: /docs/0.5.0-configurations.html
+      - title: "Performance"
+        url: /docs/0.5.0-performance.html
+      - title: "Administering"
+        url: /docs/0.5.0-admin_guide.html
+  - title: INFO
+    children:
+      - title: "Docs Versions"
+        url: /docs/docs-versions.html
+      - title: "Privacy Policy"
+        url: /docs/privacy.html
 
 
