@@ -94,8 +94,6 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
    */
   abstract void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException;
 
-  // Generates a batch of test data and writes the data to a file.
-
   /**
    * Generates a batch of test data and writes the data to a file.
    *
