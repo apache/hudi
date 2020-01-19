@@ -5,6 +5,13 @@
   {%- assign author = site.author -%}
 {%- endif -%}
 
+{%- if page.language == "0.5.0" -%}
+  {%- assign author = site.0.5.0_author -%}
+{%- else -%}
+  {%- assign author = site.author -%}
+{%- endif -%}
+
+
 <div itemscope itemtype="https://schema.org/Person">
 
   <div class="author__content">
