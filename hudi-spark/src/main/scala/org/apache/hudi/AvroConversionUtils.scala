@@ -31,12 +31,14 @@ object AvroConversionUtils {
 
   def createRdd(df: DataFrame, structName: String, recordNamespace: String): RDD[GenericRecord] = {
     val avroSchema = convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
-    createRdd(df, avroSchema.toString, structName, recordNamespace)
+    createRdd(df, avroSchema, structName, recordNamespace)
   }
 
-  def createRdd(df: DataFrame, avroSchemaAsJsonString: String, structName: String, recordNamespace: String)
+  def createRdd(df: DataFrame, avroSchema: Schema, structName: String, recordNamespace: String)
   : RDD[GenericRecord] = {
-    val dataType = df.schema
+    // Use the Avro schema to derive the StructType which has the correct nullability information
+    val dataType = SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
+    val avroSchemaAsJsonString = avroSchema.toString
     val encoder = RowEncoder.apply(dataType).resolveAndBind()
     df.queryExecution.toRdd.map(encoder.fromRow)
       .mapPartitions { records =>

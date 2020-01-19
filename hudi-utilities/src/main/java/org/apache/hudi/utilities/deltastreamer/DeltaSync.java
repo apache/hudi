@@ -290,8 +290,19 @@ public class DeltaSync implements Serializable {
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.apply(jssc, sparkSession, data, props));
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
-      avroRDDOptional = transformed
-          .map(t -> AvroConversionUtils.createRdd(t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
+      if (this.schemaProvider != null && this.schemaProvider.getTargetSchema() != null) {
+        // If the target schema is specified through Avro schema,
+        // pass in the schema for the Row-to-Avro conversion
+        // to avoid nullability mismatch between Avro schema and Row schema
+        avroRDDOptional = transformed
+            .map(t -> AvroConversionUtils.createRdd(
+                t, this.schemaProvider.getTargetSchema(),
+                HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
+      } else {
+        avroRDDOptional = transformed
+            .map(t -> AvroConversionUtils.createRdd(
+                t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
+      }
 
       // Use Transformed Row's schema if not overridden
       // Use Transformed Row's schema if not overridden. If target schema is not specified
