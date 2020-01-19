@@ -10,7 +10,7 @@ language: cn
     <tbody>
       {% for d in site.previous_docs %}
         <tr>
-            <th>{{ d.version }}</th>
+            <th style="background-color: white !important;">{{ d.version }}</th>
             <td><a href="{{ d.en }}">英文版</a></td>
             <td><a href="{{ d.cn }}">中文版</a></td>
         </tr>
