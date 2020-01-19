@@ -313,3 +313,13 @@ Copyright (c) 2005, European Commission project OneLab under contract 034819 (ht
   limitations under the License.
 
  -------------------------------------------------------------------------------
+
+ This product includes code from Apache Cassandra
+
+ * org.apache.hudi.common.util.BufferedRandomAccessFile adapted from org.apache.cassandra.io.BufferedRandomAccessFile
+
+ Copyright: 2011-2019 The Apache Software Foundation
+ Home page: http://cassandra.apache.org/
+ License: http://www.apache.org/licenses/LICENSE-2.0
+
+ -------------------------------------------------------------------------------
