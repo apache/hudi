@@ -12,14 +12,7 @@
         {% unless logo_path == empty %}
           <a class="site-logo" href="{{ '/' | relative_url }}">
               <div style="width: 150px; height: 40px">
-
               </div>
-<!--            <img src="{{ logo_path | relative_url }}" alt="">-->
-<!--            {% if site.subtitle %}-->
-<!--            <span class="site-subtitle" style="font-size: 0.8em !important;">-->
-<!--              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ site.subtitle }}-->
-<!--            </span>-->
-<!--            {% endif %}-->
           </a>
         {% endunless %}
         <a class="site-title" href="{{ '/' | relative_url }}">
@@ -48,7 +41,7 @@
     </div>
   </div>
 </div>
-<!--
-<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/incubator-hudi/issues">Report on Issue</a>.
-  Click <a href="/"> here</a> back to old site.</p>
--->
+
+{%- if page.version -%}
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This documentation is an out-of-date version of Apache Hudi({{ page.version }}). We recommend you use <a href="/docs/quick-start-guide.html">the latest version</a>.</p>
+{%- endif -%}

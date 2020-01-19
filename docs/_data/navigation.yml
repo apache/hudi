@@ -125,8 +125,41 @@ cn_docs:
   - title: INFO
     children:
       - title: "Docs Versions"
-        url: /docs/docs-versions.html
+        url: /docs/0.5.0-docs-versions.html
       - title: "Privacy Policy"
-        url: /docs/privacy.html
+        url: /docs/0.5.0-privacy.html
 
+0.5.0_cn_docs:
+  - title: 入门指南
+    children:
+      - title: "快速开始"
+        url: /cn/docs/0.5.0-quick-start-guide.html
+      - title: "使用案例"
+        url: /cn/docs/0.5.0-use_cases.html
+      - title: "演讲 & hudi 用户"
+        url: /cn/docs/0.5.0-powered_by.html
+      - title: "对比"
+        url: /cn/docs/0.5.0-comparison.html
+      - title: "Docker 示例"
+        url: /cn/docs/0.5.0-docker_demo.html
+  - title: 帮助文档
+    children:
+      - title: "概念"
+        url: /cn/docs/0.5.0-concepts.html
+      - title: "写入数据"
+        url: /cn/docs/0.5.0-writing_data.html
+      - title: "查询数据"
+        url: /cn/docs/0.5.0-querying_data.html
+      - title: "配置"
+        url: /cn/docs/0.5.0-configurations.html
+      - title: "性能"
+        url: /cn/docs/0.5.0-performance.html
+      - title: "管理"
+        url: /cn/docs/0.5.0-admin_guide.html
+  - title: 其他信息
+    children:
+      - title: "文档版本"
+        url: /cn/docs/0.5.0-docs-versions.html
+      - title: "版权信息"
+        url: /cn/docs/0.5.0-privacy.html
 
