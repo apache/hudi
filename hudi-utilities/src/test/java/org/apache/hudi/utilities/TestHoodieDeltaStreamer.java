@@ -99,7 +99,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
   private static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
   private static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
+  private static final String PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
+  private static final int PARQUET_NUM_RECORDS = 5;
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
+
+  private static int parquetTestNum = 1;
 
   @BeforeClass
   public static void initClass() throws Exception {
@@ -149,6 +153,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_INVALID);
+
+    prepareParquetDFSFiles(PARQUET_NUM_RECORDS);
   }
 
   @AfterClass
@@ -630,9 +636,14 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     Assert.assertEquals(1000, c);
   }
 
-  private void prepareParquetDFSSource(int numRecords, boolean useSchemaProvider, boolean hasTransformer) throws IOException {
-    String sourceRoot = dfsBasePath + "/parquetFiles";
+  private static void prepareParquetDFSFiles(int numRecords) throws IOException {
+    String path = PARQUET_SOURCE_ROOT + "/1.parquet";
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    Helpers.saveParquetToDFS(Helpers.toGenericRecords(
+        dataGenerator.generateInserts("000", numRecords), dataGenerator), new Path(path));
+  }
 
+  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = new TypedProperties();
     parquetProps.setProperty("include", "base.properties");
@@ -644,25 +655,21 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
         parquetProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/target.avsc");
       }
     }
-    parquetProps.setProperty("hoodie.deltastreamer.source.dfs.root", sourceRoot);
+    parquetProps.setProperty("hoodie.deltastreamer.source.dfs.root", PARQUET_SOURCE_ROOT);
 
     UtilitiesTestBase.Helpers.savePropsToDFS(parquetProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_PARQUET);
-    String path = sourceRoot + "/1.parquet";
-    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    Helpers.saveParquetToDFS(Helpers.toGenericRecords(
-        dataGenerator.generateInserts("000", numRecords), dataGenerator), new Path(path));
   }
 
   private void testParquetDFSSource(boolean useSchemaProvider, String transformerClassName) throws Exception {
-    int numRecords = 5;
-    prepareParquetDFSSource(numRecords, useSchemaProvider, transformerClassName != null);
-    String tableBasePath = dfsBasePath + "/test_csv_table";
+    prepareParquetDFSSource(useSchemaProvider, transformerClassName != null);
+    String tableBasePath = dfsBasePath + "/test_parquet_table" + parquetTestNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
         TestHelpers.makeConfig(tableBasePath, Operation.INSERT, ParquetDFSSource.class.getName(),
             transformerClassName, PROPS_FILENAME_TEST_PARQUET, false,
             useSchemaProvider, 100000, false, null, null), jsc);
     deltaStreamer.sync();
-    TestHelpers.assertRecordCount(numRecords, tableBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
+    parquetTestNum++;
   }
 
   @Test
