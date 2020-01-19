@@ -55,7 +55,6 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
   FilebasedSchemaProvider schemaProvider;
   String dfsRoot;
   String fileSuffix;
-  int fileCount = 1;
   HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
 
   @BeforeClass
@@ -95,26 +94,21 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
    */
   abstract void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException;
 
+  // Generates a batch of test data and writes the data to a file.
+
   /**
-   * Generates a batch of test data and writes the data to a file.  This can be called multiple times to generate multiple files.
+   * Generates a batch of test data and writes the data to a file.
    *
-   * @return The {@link Path} of the file.
+   * @param filename  The name of the file.
+   * @param commitTime  The commit time.
+   * @param n  The number of records to generate.
+   * @return  The file path.
    * @throws IOException
    */
-  Path generateOneFile() throws IOException {
-    Path path = new Path(dfsRoot, fileCount + fileSuffix);
-    switch (fileCount) {
-      case 1:
-        writeNewDataToFile(dataGenerator.generateInserts("000", 100), path);
-        fileCount++;
-        return path;
-      case 2:
-        writeNewDataToFile(dataGenerator.generateInserts("001", 10000), path);
-        fileCount++;
-        return path;
-      default:
-        return null;
-    }
+  Path generateOneFile(String filename, String commitTime, int n) throws IOException {
+    Path path = new Path(dfsRoot, filename + fileSuffix);
+    writeNewDataToFile(dataGenerator.generateInserts(commitTime, n), path);
+    return path;
   }
 
   /**
@@ -132,7 +126,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
         sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
     // Test respecting sourceLimit
     int sourceLimit = 10;
-    RemoteIterator<LocatedFileStatus> files = dfs.listFiles(generateOneFile(), true);
+    RemoteIterator<LocatedFileStatus> files = dfs.listFiles(generateOneFile("1", "000", 100), true);
     FileStatus file1Status = files.next();
     assertTrue(file1Status.getLen() > sourceLimit);
     assertEquals(Option.empty(),
@@ -152,7 +146,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
     assertEquals(100, fetch1Rows.count());
 
     // 2. Produce new data, extract new data
-    generateOneFile();
+    generateOneFile("2", "001", 10000);
     // Test fetching Avro format
     InputBatch<JavaRDD<GenericRecord>> fetch2 = sourceFormatAdapter.fetchNewDataInAvroFormat(
         Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
