@@ -224,7 +224,7 @@ public class HoodieClientTestUtils {
           .createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     }
     HoodieAvroWriteSupport writeSupport =
-        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter, true);
     String commitTime = FSUtils.getCommitTime(filename);
     HoodieParquetConfig config = new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP,
         ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,

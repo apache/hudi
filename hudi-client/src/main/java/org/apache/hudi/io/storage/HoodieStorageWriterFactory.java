@@ -57,7 +57,8 @@ public class HoodieStorageWriterFactory {
             config.getDynamicBloomFilterMaxNumEntries(),
             config.getBloomFilterType());
     HoodieAvroWriteSupport writeSupport =
-        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter,
+            config.isBloomFilterCompressionEnabled());
 
     HoodieParquetConfig parquetConfig = new HoodieParquetConfig(writeSupport, config.getParquetCompressionCodec(),
         config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),

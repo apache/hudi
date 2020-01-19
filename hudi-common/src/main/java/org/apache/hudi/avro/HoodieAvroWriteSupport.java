@@ -22,6 +22,7 @@ import org.apache.hudi.common.bloom.filter.BloomFilter;
 import org.apache.hudi.common.bloom.filter.HoodieDynamicBoundedBloomFilter;
 
 import org.apache.avro.Schema;
+import org.apache.hudi.common.util.GzipCompressionUtils;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.schema.MessageType;
@@ -36,23 +37,34 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
   private BloomFilter bloomFilter;
   private String minRecordKey;
   private String maxRecordKey;
+  private final Boolean compressBloomFilter;
 
   public static final String OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "com.uber.hoodie.bloomfilter";
   public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "org.apache.hudi.bloomfilter";
   public static final String HOODIE_MIN_RECORD_KEY_FOOTER = "hoodie_min_record_key";
   public static final String HOODIE_MAX_RECORD_KEY_FOOTER = "hoodie_max_record_key";
   public static final String HOODIE_BLOOM_FILTER_TYPE_CODE = "hoodie_bloom_filter_type_code";
+  public static final String HOODIE_BLOOM_FILTER_IS_COMPRESSED = "hoodie_bloom_filter_is_compressed";
+  public static final String HOODIE_BLOOM_FILTER_COMPRESSION_TYPE = "hoodie_bloom_filter_compresseion_type";
 
-  public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, BloomFilter bloomFilter) {
+  public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, BloomFilter bloomFilter, boolean compress) {
     super(schema, avroSchema);
     this.bloomFilter = bloomFilter;
+    this.compressBloomFilter = compress;
   }
 
   @Override
   public WriteSupport.FinalizedWriteContext finalizeWrite() {
     HashMap<String, String> extraMetaData = new HashMap<>();
     if (bloomFilter != null) {
-      extraMetaData.put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, bloomFilter.serializeToString());
+      String serialized = null;
+      if (compressBloomFilter) {
+        serialized = GzipCompressionUtils.compress(bloomFilter.serializeToBytes());
+        extraMetaData.put(HOODIE_BLOOM_FILTER_COMPRESSION_TYPE, GzipCompressionUtils.TYPE);
+      } else {
+        serialized = bloomFilter.serializeToString();
+      }
+      extraMetaData.put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, serialized);
       if (minRecordKey != null && maxRecordKey != null) {
         extraMetaData.put(HOODIE_MIN_RECORD_KEY_FOOTER, minRecordKey);
         extraMetaData.put(HOODIE_MAX_RECORD_KEY_FOOTER, maxRecordKey);
@@ -60,6 +72,7 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
       if (bloomFilter.getBloomFilterTypeCode().name().contains(HoodieDynamicBoundedBloomFilter.TYPE_CODE_PREFIX)) {
         extraMetaData.put(HOODIE_BLOOM_FILTER_TYPE_CODE, bloomFilter.getBloomFilterTypeCode().name());
       }
+      extraMetaData.put(HOODIE_BLOOM_FILTER_IS_COMPRESSED, compressBloomFilter.toString());
     }
     return new WriteSupport.FinalizedWriteContext(extraMetaData);
   }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common;
 
+import java.util.Random;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -34,6 +35,8 @@ import java.io.IOException;
  * The common hoodie test harness to provide the basic infrastructure.
  */
 public class HoodieCommonTestHarness {
+
+  private static final Random RAND = new Random(46474747);
 
   protected String basePath = null;
 
@@ -89,5 +92,22 @@ public class HoodieCommonTestHarness {
    */
   protected HoodieTableType getTableType() {
     return HoodieTableType.COPY_ON_WRITE;
+  }
+
+
+  /**
+   * Generate random String of required length.
+   * @param stringLength Length of random string generated.
+   * @return
+   */
+  public static String generateRandomString(int stringLength) {
+    int lowLimit = 48; // ascii for 0
+    int upperLimit = 122; // ascii for z
+    StringBuilder buffer = new StringBuilder(stringLength);
+    for (int i = 0; i < stringLength; i++) {
+      int randomLimitedInt = lowLimit + (int) (RAND.nextFloat() * (upperLimit - lowLimit + 1));
+      buffer.append((char) randomLimitedInt);
+    }
+    return buffer.toString();
   }
 }

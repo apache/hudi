@@ -41,7 +41,6 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -58,17 +57,21 @@ import static org.junit.Assert.assertTrue;
 public class TestParquetUtils extends HoodieCommonTestHarness {
 
   String bloomFilterTypeToTest;
+  Boolean enableCompression;
 
-  @Parameters()
-  public static Collection<Object[]> data() {
+  @Parameters(name = "{index} => bloomFilterTypeToTest={0}, enableCompression={1}")
+  public static Iterable<Object[]> data() {
     return Arrays.asList(new Object[][] {
-        {BloomFilterTypeCode.SIMPLE.name()},
-        {BloomFilterTypeCode.DYNAMIC_V0.name()}
+        {BloomFilterTypeCode.SIMPLE.name(), Boolean.TRUE},
+        {BloomFilterTypeCode.SIMPLE.name(), Boolean.FALSE},
+        {BloomFilterTypeCode.DYNAMIC_V0.name(), Boolean.TRUE},
+        {BloomFilterTypeCode.DYNAMIC_V0.name(), Boolean.FALSE}
     });
   }
 
-  public TestParquetUtils(String bloomFilterTypeToTest) {
+  public TestParquetUtils(String bloomFilterTypeToTest, Boolean enableCompression) {
     this.bloomFilterTypeToTest = bloomFilterTypeToTest;
+    this.enableCompression = enableCompression;
   }
 
   @Before
@@ -132,7 +135,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     BloomFilter filter = BloomFilterFactory
         .createBloomFilter(1000, 0.0001, 10000, bloomFilterTypeToTest);
     HoodieAvroWriteSupport writeSupport =
-        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter, enableCompression);
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
         120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE);
     for (String rowKey : rowKeys) {

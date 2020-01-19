@@ -58,6 +58,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_BLOOM_INDEX_FILTER_TYPE = BloomFilterTypeCode.SIMPLE.name();
   public static final String HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = "hoodie.bloom.index.filter.dynamic.max.entries";
   public static final String DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = "100000";
+  public static final String BLOOM_INDEX_ENABLE_COMPRESSION = "hoodie.bloom.index.compressed";
+  public static final String DEFAULT_BLOOM_INDEX_ENABLE_COMPRESSION = "false";
 
   // 1B bloom filter checks happen in 250 seconds. 500ms to read a bloom filter.
   // 10M checks in 2500ms, thus amortizing the cost of reading bloom filter across partitions.
@@ -177,6 +179,11 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder bloomIndexEnableCompression(boolean enableCompression) {
+      props.setProperty(BLOOM_INDEX_ENABLE_COMPRESSION, Boolean.toString(enableCompression));
+      return this;
+    }
+
     public Builder bloomIndexKeysPerBucket(int keysPerBucket) {
       props.setProperty(BLOOM_INDEX_KEYS_PER_BUCKET_PROP, String.valueOf(keysPerBucket));
       return this;
@@ -212,6 +219,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           BLOOM_INDEX_TREE_BASED_FILTER_PROP, DEFAULT_BLOOM_INDEX_TREE_BASED_FILTER);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_BUCKETIZED_CHECKING_PROP),
           BLOOM_INDEX_BUCKETIZED_CHECKING_PROP, DEFAULT_BLOOM_INDEX_BUCKETIZED_CHECKING);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_ENABLE_COMPRESSION),
+          BLOOM_INDEX_ENABLE_COMPRESSION, DEFAULT_BLOOM_INDEX_ENABLE_COMPRESSION);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_KEYS_PER_BUCKET_PROP),
           BLOOM_INDEX_KEYS_PER_BUCKET_PROP, DEFAULT_BLOOM_INDEX_KEYS_PER_BUCKET);
       setDefaultOnCondition(props, !props.contains(BLOOM_INDEX_FILTER_TYPE),

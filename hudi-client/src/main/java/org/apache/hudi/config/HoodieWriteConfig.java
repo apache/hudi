@@ -318,6 +318,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Double.parseDouble(props.getProperty(HoodieIndexConfig.BLOOM_FILTER_FPP));
   }
 
+  public boolean isBloomFilterCompressionEnabled() {
+    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_ENABLE_COMPRESSION));
+  }
+
   public String getHbaseZkQuorum() {
     return props.getProperty(HoodieHBaseIndexConfig.HBASE_ZKQUORUM_PROP);
   }

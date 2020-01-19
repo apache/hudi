@@ -97,13 +97,18 @@ public class SimpleBloomFilter implements BloomFilter {
    */
   @Override
   public String serializeToString() {
+    return DatatypeConverter.printBase64Binary(serializeToBytes());
+  }
+
+  @Override
+  public byte[] serializeToBytes() {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(baos);
     try {
       filter.write(dos);
       byte[] bytes = baos.toByteArray();
       dos.close();
-      return DatatypeConverter.printBase64Binary(bytes);
+      return bytes;
     } catch (IOException e) {
       throw new HoodieIndexException("Could not serialize BloomFilter instance", e);
     }

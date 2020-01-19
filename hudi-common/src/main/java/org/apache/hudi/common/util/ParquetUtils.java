@@ -31,6 +31,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.Preconditions;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -149,13 +150,26 @@ public class ParquetUtils {
         readParquetFooter(configuration, false, parquetFilePath,
             HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
             HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-            HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE);
+            HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE,
+            HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_IS_COMPRESSED,
+            HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_COMPRESSION_TYPE);
     String footerVal = footerVals.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     if (null == footerVal) {
       // We use old style key "com.uber.hoodie.bloomfilter"
       footerVal = footerVals.get(HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     }
     BloomFilter toReturn = null;
+    boolean isCompressed = false;
+    if (footerVals.containsKey(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_IS_COMPRESSED)) {
+      isCompressed = Boolean.valueOf(footerVals.get(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_IS_COMPRESSED));
+      if (isCompressed) {
+        String compressionType = footerVals.get(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_COMPRESSION_TYPE);
+        Preconditions.checkArgument(compressionType.equals(GzipCompressionUtils.TYPE),
+            "Unknown Compression Type " + compressionType);
+        footerVal = GzipCompressionUtils.decompress(footerVal);
+      }
+    }
+
     if (footerVal != null) {
       if (footerVals.containsKey(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE)) {
         toReturn = BloomFilterFactory.fromString(footerVal,

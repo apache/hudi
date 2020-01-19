@@ -44,6 +44,11 @@ public interface BloomFilter {
   String serializeToString();
 
   /**
+   * Serialize the bloom filter as byte array.
+   */
+  byte[] serializeToBytes();
+
+  /**
    * @return the bloom index type code.
    **/
   BloomFilterTypeCode getBloomFilterTypeCode();
