@@ -10,7 +10,7 @@ last_modified_at: 2019-12-30T15:59:57-04:00
     <tbody>
       {% for d in site.previous_docs %}
         <tr>
-            <th>{{ d.version }}</th>
+            <th class="docversions">{{ d.version }}</th>
             <td><a href="{{ d.en }}">English Version</a></td>
             <td><a href="{{ d.cn }}">Chinese Version</a></td>
         </tr>

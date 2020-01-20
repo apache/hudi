@@ -155,12 +155,12 @@ var store = [{
         "url": "http://0.0.0.0:4000/docs/0.5.0-privacy.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "文档版本",
-        "excerpt":"                                  latest             英文版             中文版                       ","categories": [],
+        "excerpt":"                                  Latest             英文版             中文版                                      0.5.0             英文版             中文版                       ","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/cn/docs/0.5.0-docs-versions.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "Docs Versions",
-        "excerpt":"                                  latest             English Version             Chinese Version                       ","categories": [],
+        "excerpt":"                                  Latest             English Version             Chinese Version                                      0.5.0             English Version             Chinese Version                       ","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/docs/0.5.0-docs-versions.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
@@ -320,12 +320,12 @@ var store = [{
         "url": "http://0.0.0.0:4000/docs/privacy.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "文档版本",
-        "excerpt":"                                  latest             英文版             中文版                       ","categories": [],
+        "excerpt":"                                  Latest             英文版             中文版                                      0.5.0             英文版             中文版                       ","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/cn/docs/docs-versions.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "Docs Versions",
-        "excerpt":"                                  latest             English Version             Chinese Version                       ","categories": [],
+        "excerpt":"                                  Latest             English Version             Chinese Version                                      0.5.0             English Version             Chinese Version                       ","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/docs/docs-versions.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
