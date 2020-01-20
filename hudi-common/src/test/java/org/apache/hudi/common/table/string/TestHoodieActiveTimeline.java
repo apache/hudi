@@ -37,6 +37,7 @@ import org.junit.rules.ExpectedException;
 import java.io.IOException;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.TimelineLayoutVersion.VERSION_0;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -102,11 +103,14 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         timeline.getCommitTimeline().filterPendingExcludingCompaction().getInstants());
 
     // Backwards compatibility testing for reading compaction plans
+    metaClient = HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(),
+        metaClient.getBasePath(), metaClient.getTableType(), metaClient.getTableConfig().getTableName(),
+        metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_0);
     HoodieInstant instant6 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "9");
     byte[] dummy = new byte[5];
     HoodieActiveTimeline oldTimeline = new HoodieActiveTimeline(new HoodieTableMetaClient(metaClient.getHadoopConf(),
         metaClient.getBasePath(), true, metaClient.getConsistencyGuardConfig(),
-        Option.of(new TimelineLayoutVersion(TimelineLayoutVersion.VERSION_0))));
+        Option.of(new TimelineLayoutVersion(VERSION_0))));
     // Old Timeline writes both to aux and timeline folder
     oldTimeline.saveToCompactionRequested(instant6, Option.of(dummy));
     // Now use latest timeline version

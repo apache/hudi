@@ -117,7 +117,14 @@ public class HoodieTableMetaClient implements Serializable {
     TableNotFoundException.checkTableValidity(fs, basePathDir, metaPathDir);
     this.tableConfig = new HoodieTableConfig(fs, metaPath, payloadClassName);
     this.tableType = tableConfig.getTableType();
-    this.timelineLayoutVersion = layoutVersion.orElse(tableConfig.getTimelineLayoutVersion());
+    Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
+    if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
+      // Ensure layout version passed in config is not lower than the one seen in hoodie.properties
+      Preconditions.checkArgument(layoutVersion.get().compareTo(tableConfigVersion.get()) >= 0,
+          "Layout Version defined in hoodie properties has higher version (" + tableConfigVersion.get()
+              + ") than the one passed in config (" + layoutVersion.get() + ")");
+    }
+    this.timelineLayoutVersion = layoutVersion.orElseGet(() -> tableConfig.getTimelineLayoutVersion().get());
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
     LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {

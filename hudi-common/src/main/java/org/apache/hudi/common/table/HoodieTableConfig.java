@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.TimelineLayoutVersion;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -144,10 +145,10 @@ public class HoodieTableConfig implements Serializable {
     return DEFAULT_TABLE_TYPE;
   }
 
-  public TimelineLayoutVersion getTimelineLayoutVersion() {
-    return new TimelineLayoutVersion(Integer.valueOf(props.getProperty(HOODIE_TIMELINE_LAYOUT_VERSION,
-        String.valueOf(DEFAULT_TIMELINE_LAYOUT_VERSION))));
-
+  public Option<TimelineLayoutVersion> getTimelineLayoutVersion() {
+    return props.containsKey(HOODIE_TIMELINE_LAYOUT_VERSION)
+        ? Option.of(new TimelineLayoutVersion(Integer.valueOf(props.getProperty(HOODIE_TIMELINE_LAYOUT_VERSION))))
+        : Option.empty();
   }
 
   /**

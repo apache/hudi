@@ -757,6 +757,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
 
+
       // Build WriteConfig at the end
       HoodieWriteConfig config = new HoodieWriteConfig(props);
       Preconditions.checkArgument(config.getBasePath() != null);
