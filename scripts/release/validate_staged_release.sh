@@ -84,6 +84,9 @@ echo "Checking Checksum of Source Release"
 diff -u hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz.sha512 got.sha512 
 echo -e "\t\tChecksum Check of Source Release - [OK]\n"
 
+# Download KEYS file
+curl https://dist.apache.org/repos/dist/release/incubator/hudi/KEYS > ../KEYS
+
 # GPG Check
 echo "Checking Signature"
 (bash -c "gpg --import ../KEYS $REDIRECT" && bash -c "gpg --verify hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz.asc hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz $REDIRECT" && echo -e "\t\tSignature Check - [OK]\n") || (echo -e "\t\tSignature Check - [FAILED] - Run with --verbose to get details\n" && exit -1)
