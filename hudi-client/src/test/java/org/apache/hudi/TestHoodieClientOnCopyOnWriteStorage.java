@@ -70,6 +70,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.HoodieTestDataGenerator.NULL_SCHEMA;
 import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.model.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -271,7 +272,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
       throws Exception {
     // Force using older timeline layout
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
-        TimelineLayoutVersion.VERSION_0).build();
+        VERSION_0).build();
+    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(), metaClient.getTableType(),
+        metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
+        metaClient.getTableConfig().getPayloadClass(), VERSION_0);
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     // Write 1 (only inserts)
