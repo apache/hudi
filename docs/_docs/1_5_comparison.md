@@ -44,7 +44,7 @@ just for analytics. Finally, HBase does not support incremental processing primi
 ## Stream Processing
 
 A popular question, we get is : "How does Hudi relate to stream processing systems?", which we will try to answer here. Simply put, Hudi can integrate with
-batch (`copy-on-write storage`) and streaming (`merge-on-read storage`) jobs of today, to store the computed results in Hadoop. For Spark apps, this can happen via direct
+batch (`copy-on-write table`) and streaming (`merge-on-read table`) jobs of today, to store the computed results in Hadoop. For Spark apps, this can happen via direct
 integration of Hudi library with Spark/Spark streaming DAGs. In case of Non-Spark processing systems (eg: Flink, Hive), the processing can be done in the respective systems
 and later sent into a Hudi table via a Kafka topic/DFS intermediate file. In more conceptual level, data processing
 pipelines just consist of three components : `source`, `processing`, `sink`, with users ultimately running queries against the sink to use the results of the pipeline.

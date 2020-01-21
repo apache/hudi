@@ -11,14 +11,14 @@ the conventional alternatives for achieving these tasks.
 
 ## Upserts
 
-Following shows the speed up obtained for NoSQL database ingestion, from incrementally upserting on a Hudi dataset on the copy-on-write storage,
+Following shows the speed up obtained for NoSQL database ingestion, from incrementally upserting on a Hudi table on the copy-on-write storage,
 on 5 tables ranging from small to huge (as opposed to bulk loading the tables)
 
 <figure>
     <img class="docimage" src="/assets/images/hudi_upsert_perf1.png" alt="hudi_upsert_perf1.png" style="max-width: 1000px" />
 </figure>
 
-Given Hudi can build the dataset incrementally, it opens doors for also scheduling ingesting more frequently thus reducing latency, with
+Given Hudi can build the table incrementally, it opens doors for also scheduling ingesting more frequently thus reducing latency, with
 significant savings on the overall compute cost.
 
 <figure>
@@ -43,8 +43,8 @@ For e.g , with 100M timestamp prefixed keys (5% updates, 95% inserts) on a event
 
 ## Read Optimized Queries
 
-The major design goal for read optimized view is to achieve the latency reduction & efficiency gains in previous section,
-with no impact on queries. Following charts compare the Hudi vs non-Hudi datasets across Hive/Presto/Spark queries and demonstrate this.
+The major design goal for read optimized querying is to achieve the latency reduction & efficiency gains in previous section,
+with no impact on queries. Following charts compare the Hudi vs non-Hudi tables across Hive/Presto/Spark queries and demonstrate this.
 
 **Hive**
 

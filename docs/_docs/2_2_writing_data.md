@@ -1,5 +1,5 @@
 ---
-title: Writing Hudi Datasets
+title: Writing Hudi Tables
 keywords: hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL
 permalink: /docs/writing_data.html
 summary: In this page, we will discuss some available tools for incrementally ingesting & storing data.
@@ -7,24 +7,24 @@ toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
-In this section, we will cover ways to ingest new changes from external sources or even other Hudi datasets using the [DeltaStreamer](#deltastreamer) tool, as well as 
-speeding up large Spark jobs via upserts using the [Hudi datasource](#datasource-writer). Such datasets can then be [queried](/docs/querying_data.html) using various query engines.
+In this section, we will cover ways to ingest new changes from external sources or even other Hudi tables using the [DeltaStreamer](#deltastreamer) tool, as well as 
+speeding up large Spark jobs via upserts using the [Hudi datasource](#datasource-writer). Such tables can then be [queried](/docs/querying_data.html) using various query engines.
 
 
 ## Write Operations
 
 Before that, it may be helpful to understand the 3 different write operations provided by Hudi datasource or the delta streamer tool and how best to leverage them. These operations
-can be chosen/changed across each commit/deltacommit issued against the dataset.
+can be chosen/changed across each commit/deltacommit issued against the table.
 
 
  - **UPSERT** : This is the default operation where the input records are first tagged as inserts or updates by looking up the index and 
  the records are ultimately written after heuristics are run to determine how best to pack them on storage to optimize for things like file sizing. 
  This operation is recommended for use-cases like database change capture where the input almost certainly contains updates.
  - **INSERT** : This operation is very similar to upsert in terms of heuristics/file sizing but completely skips the index lookup step. Thus, it can be a lot faster than upserts 
- for use-cases like log de-duplication (in conjunction with options to filter duplicates mentioned below). This is also suitable for use-cases where the dataset can tolerate duplicates, but just 
+ for use-cases like log de-duplication (in conjunction with options to filter duplicates mentioned below). This is also suitable for use-cases where the table can tolerate duplicates, but just 
  need the transactional writes/incremental pull/storage management capabilities of Hudi.
  - **BULK_INSERT** : Both upsert and insert operations keep input records in memory to speed up storage heuristics computations faster (among other things) and thus can be cumbersome for 
- initial loading/bootstrapping a Hudi dataset at first. Bulk insert provides the same semantics as insert, while implementing a sort-based data writing algorithm, which can scale very well for several hundred TBs 
+ initial loading/bootstrapping a Hudi table at first. Bulk insert provides the same semantics as insert, while implementing a sort-based data writing algorithm, which can scale very well for several hundred TBs 
  of initial load. However, this just does a best-effort job at sizing files vs guaranteeing file sizes like inserts/upserts do. 
 
 
@@ -100,8 +100,8 @@ Usage: <main class> [options]
       spark master to use.
       Default: local[2]
   * --target-base-path
-      base path for the target Hudi dataset. (Will be created if did not
-      exist first time around. If exists, expected to be a Hudi dataset)
+      base path for the target Hudi table. (Will be created if did not
+      exist first time around. If exists, expected to be a Hudi table)
   * --target-table
       name of the target table in Hive
     --transformer-class
@@ -129,15 +129,16 @@ and then ingest it as follows.
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
   --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
   --source-ordering-field impresssiontime \
-  --target-base-path file:///tmp/hudi-deltastreamer-op --target-table uber.impressions \
+  --target-base-path file:\/\/\/tmp/hudi-deltastreamer-op \ 
+  --target-table uber.impressions \
   --op BULK_INSERT
 ```
 
-In some cases, you may want to migrate your existing dataset into Hudi beforehand. Please refer to [migration guide](/docs/migration_guide.html). 
+In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](/docs/migration_guide.html). 
 
 ## Datasource Writer
 
-The `hudi-spark` module offers the DataSource API to write (and also read) any data frame into a Hudi dataset.
+The `hudi-spark` module offers the DataSource API to write (and also read) any data frame into a Hudi table.
 Following is how we can upsert a dataframe, while specifying the field names that need to be used
 for `recordKey => _row_key`, `partitionPath => partition` and `precombineKey => timestamp`
 
@@ -156,41 +157,32 @@ inputDF.write()
 
 ## Syncing to Hive
 
-Both tools above support syncing of the dataset's latest schema to Hive metastore, such that queries can pick up new columns and partitions.
+Both tools above support syncing of the table's latest schema to Hive metastore, such that queries can pick up new columns and partitions.
 In case, its preferable to run this from commandline or in an independent jvm, Hudi provides a `HiveSyncTool`, which can be invoked as below, 
-once you have built the hudi-hive module.
+once you have built the hudi-hive module. Following is how we sync the above Datasource Writer written table to Hive metastore.
+
+```java
+cd hudi-hive
+./run_sync_tool.sh  --jdbc-url jdbc:hive2:\/\/hiveserver:10000 --user hive --pass hive --partitioned-by partition --base-path <basePath> --database default --table <tableName>
+```
+
+Starting with Hudi 0.5.1 version read optimized version of merge-on-read tables are suffixed '_ro' by default. For backwards compatibility with older Hudi versions, 
+an optional HiveSyncConfig - `--skip-ro-suffix`, has been provided to turn off '_ro' suffixing if desired. Explore other hive sync options using the following command:
 
 ```java
 cd hudi-hive
 ./run_sync_tool.sh
  [hudi-hive]$ ./run_sync_tool.sh --help
-Usage: <main class> [options]
-  Options:
-  * --base-path
-       Basepath of Hudi dataset to sync
-  * --database
-       name of the target database in Hive
-    --help, -h
-       Default: false
-  * --jdbc-url
-       Hive jdbc connect url
-  * --use-jdbc
-       Whether to use jdbc connection or hive metastore (via thrift)
-  * --pass
-       Hive password
-  * --table
-       name of the target table in Hive
-  * --user
-       Hive username
 ```
 
 ## Deletes 
 
-Hudi supports implementing two types of deletes on data stored in Hudi datasets, by enabling the user to specify a different record payload implementation. 
+Hudi supports implementing two types of deletes on data stored in Hudi tables, by enabling the user to specify a different record payload implementation. 
+For more info refer to [Delete support in Hudi](https://cwiki.apache.org/confluence/x/6IqvC).
 
  - **Soft Deletes** : With soft deletes, user wants to retain the key but just null out the values for all other fields. 
- This can be simply achieved by ensuring the appropriate fields are nullable in the dataset schema and simply upserting the dataset after setting these fields to null.
- - **Hard Deletes** : A stronger form of delete is to physically remove any trace of the record from the dataset. This can be achieved by issuing an upsert with a custom payload implementation
+ This can be simply achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
+ - **Hard Deletes** : A stronger form of delete is to physically remove any trace of the record from the table. This can be achieved by issuing an upsert with a custom payload implementation
  via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in `org.apache.hudi.EmptyHoodieRecordPayload` class that does exactly this.
  
 ```java
@@ -203,14 +195,14 @@ Hudi supports implementing two types of deletes on data stored in Hudi datasets,
 ```
 
 
-## Storage Management
+## Optimized DFS Access
 
-Hudi also performs several key storage management functions on the data stored in a Hudi dataset. A key aspect of storing data on DFS is managing file sizes and counts
+Hudi also performs several key storage management functions on the data stored in a Hudi table. A key aspect of storing data on DFS is managing file sizes and counts
 and reclaiming storage space. For e.g HDFS is infamous for its handling of small files, which exerts memory/RPC pressure on the Name Node and can potentially destabilize
 the entire cluster. In general, query engines provide much better performance on adequately sized columnar files, since they can effectively amortize cost of obtaining 
 column statistics etc. Even on some cloud data stores, there is often cost to listing directories with large number of small files.
 
-Here are some ways to efficiently manage the storage of your Hudi datasets.
+Here are some ways to efficiently manage the storage of your Hudi tables.
 
  - The [small file handling feature](/docs/configurations.html#compactionSmallFileSize) in Hudi, profiles incoming workload 
    and distributes inserts to existing file groups instead of creating new file groups, which can lead to small files. 
@@ -219,4 +211,4 @@ Here are some ways to efficiently manage the storage of your Hudi datasets.
    such that sufficient number of inserts are grouped into the same file group, resulting in well sized base files ultimately.
  - Intelligently tuning the [bulk insert parallelism](/docs/configurations.html#withBulkInsertParallelism), can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
    once created cannot be deleted, but simply expanded as explained before.
- - For workloads with heavy updates, the [merge-on-read storage](/docs/concepts.html#merge-on-read-storage) provides a nice mechanism for ingesting quickly into smaller files and then later merging them into larger base files via compaction.
+ - For workloads with heavy updates, the [merge-on-read table](/docs/concepts.html#merge-on-read-table) provides a nice mechanism for ingesting quickly into smaller files and then later merging them into larger base files via compaction.

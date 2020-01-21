@@ -7,14 +7,14 @@ toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
-This page covers the different ways of configuring your job to write/read Hudi datasets. 
+This page covers the different ways of configuring your job to write/read Hudi tables. 
 At a high level, you can control behaviour at few levels. 
 
-- **[Spark Datasource Configs](#spark-datasource)** : These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing view type to read.
+- **[Spark Datasource Configs](#spark-datasource)** : These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
 - **[WriteClient Configs](#writeclient-configs)** : Internally, the Hudi datasource uses a RDD based `HoodieWriteClient` api to actually perform writes to storage. These configs provide deep control over lower level aspects like 
    file sizing, compression, parallelism, compaction, write schema, cleaning etc. Although Hudi provides sane defaults, from time-time these configs may need to be tweaked to optimize for specific workloads.
 - **[RecordPayload Config](#PAYLOAD_CLASS_OPT_KEY)** : This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and 
-   stored old record. Hudi provides default implementations such as `OverwriteWithLatestAvroPayload` which simply update storage with the latest/last-written record. 
+   stored old record. Hudi provides default implementations such as `OverwriteWithLatestAvroPayload` which simply update table with the latest/last-written record. 
    This can be overridden to a custom class extending `HoodieRecordPayload` class, on both datasource and WriteClient levels.
  
 ## Talking to Cloud Storage
@@ -49,20 +49,20 @@ inputDF.write()
 .save(basePath);
 ```
 
-Options useful for writing datasets via `write.format.option(...)`
+Options useful for writing tables via `write.format.option(...)`
 
 #### TABLE_NAME_OPT_KEY {#TABLE_NAME_OPT_KEY}
   Property: `hoodie.datasource.write.table.name` [Required]<br/>
-  <span style="color:grey">Hive table name, to register the dataset into.</span>
+  <span style="color:grey">Hive table name, to register the table into.</span>
   
 #### OPERATION_OPT_KEY {#OPERATION_OPT_KEY}
   Property: `hoodie.datasource.write.operation`, Default: `upsert`<br/>
   <span style="color:grey">whether to do upsert, insert or bulkinsert for the write operation. Use `bulkinsert` to load new data into a table, and there on use `upsert`/`insert`. 
   bulk insert uses a disk based write path to scale to load large inputs without need to cache it.</span>
   
-#### STORAGE_TYPE_OPT_KEY {#STORAGE_TYPE_OPT_KEY}
-  Property: `hoodie.datasource.write.storage.type`, Default: `COPY_ON_WRITE` <br/>
-  <span style="color:grey">The storage type for the underlying data, for this write. This can't change between writes.</span>
+#### TABLE_TYPE_OPT_KEY {#TABLE_TYPE_OPT_KEY}
+  Property: `hoodie.datasource.write.table.type`, Default: `COPY_ON_WRITE` <br/>
+  <span style="color:grey">The table type for the underlying data, for this write. This can't change between writes.</span>
   
 #### PRECOMBINE_FIELD_OPT_KEY {#PRECOMBINE_FIELD_OPT_KEY}
   Property: `hoodie.datasource.write.precombine.field`, Default: `ts` <br/>
@@ -100,7 +100,7 @@ This is useful to store checkpointing information, in a consistent way with the 
   
 #### HIVE_SYNC_ENABLED_OPT_KEY {#HIVE_SYNC_ENABLED_OPT_KEY}
   Property: `hoodie.datasource.hive_sync.enable`, Default: `false` <br/>
-  <span style="color:grey">When set to true, register/sync the dataset to Apache Hive metastore</span>
+  <span style="color:grey">When set to true, register/sync the table to Apache Hive metastore</span>
   
 #### HIVE_DATABASE_OPT_KEY {#HIVE_DATABASE_OPT_KEY}
   Property: `hoodie.datasource.hive_sync.database`, Default: `default` <br/>
@@ -124,7 +124,7 @@ This is useful to store checkpointing information, in a consistent way with the 
   
 #### HIVE_PARTITION_FIELDS_OPT_KEY {#HIVE_PARTITION_FIELDS_OPT_KEY}
   Property: `hoodie.datasource.hive_sync.partition_fields`, Default: ` ` <br/>
-  <span style="color:grey">field in the dataset to use for determining hive partition columns.</span>
+  <span style="color:grey">field in the table to use for determining hive partition columns.</span>
   
 #### HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY {#HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY}
   Property: `hoodie.datasource.hive_sync.partition_extractor_class`, Default: `org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor` <br/>
@@ -136,13 +136,13 @@ This is useful to store checkpointing information, in a consistent way with the 
 
 ### Read Options
 
-Options useful for reading datasets via `read.format.option(...)`
+Options useful for reading tables via `read.format.option(...)`
 
-#### VIEW_TYPE_OPT_KEY {#VIEW_TYPE_OPT_KEY}
-Property: `hoodie.datasource.view.type`, Default: `read_optimized` <br/>
+#### QUERY_TYPE_OPT_KEY {#QUERY_TYPE_OPT_KEY}
+Property: `hoodie.datasource.query.type`, Default: `snapshot` <br/>
 <span style="color:grey">Whether data needs to be read, in incremental mode (new data since an instantTime)
 (or) Read Optimized mode (obtain latest view, based on columnar data)
-(or) Real time mode (obtain latest view, based on row & columnar data)</span>
+(or) Snapshot mode (obtain latest view, based on row & columnar data)</span>
 
 #### BEGIN_INSTANTTIME_OPT_KEY {#BEGIN_INSTANTTIME_OPT_KEY} 
 Property: `hoodie.datasource.read.begin.instanttime`, [Required in incremental mode] <br/>
@@ -182,15 +182,15 @@ Property: `hoodie.base.path` [Required] <br/>
 
 #### withSchema(schema_str) {#withSchema} 
 Property: `hoodie.avro.schema` [Required]<br/>
-<span style="color:grey">This is the current reader avro schema for the dataset. This is a string of the entire schema. HoodieWriteClient uses this schema to pass on to implementations of HoodieRecordPayload to convert from the source format to avro record. This is also used when re-writing records during an update. </span>
+<span style="color:grey">This is the current reader avro schema for the table. This is a string of the entire schema. HoodieWriteClient uses this schema to pass on to implementations of HoodieRecordPayload to convert from the source format to avro record. This is also used when re-writing records during an update. </span>
 
 #### forTable(table_name) {#forTable} 
 Property: `hoodie.table.name` [Required] <br/>
- <span style="color:grey">Table name for the dataset, will be used for registering with Hive. Needs to be same across runs.</span>
+ <span style="color:grey">Table name that will be used for registering with Hive. Needs to be same across runs.</span>
 
 #### withBulkInsertParallelism(bulk_insert_parallelism = 1500) {#withBulkInsertParallelism} 
 Property: `hoodie.bulkinsert.shuffle.parallelism`<br/>
-<span style="color:grey">Bulk insert is meant to be used for large initial imports and this parallelism determines the initial number of files in your dataset. Tune this to achieve a desired optimal size during initial import.</span>
+<span style="color:grey">Bulk insert is meant to be used for large initial imports and this parallelism determines the initial number of files in your table. Tune this to achieve a desired optimal size during initial import.</span>
 
 #### withParallelism(insert_shuffle_parallelism = 1500, upsert_shuffle_parallelism = 1500) {#withParallelism} 
 Property: `hoodie.insert.shuffle.parallelism`, `hoodie.upsert.shuffle.parallelism`<br/>
@@ -310,7 +310,7 @@ Property: `hoodie.logfile.data.block.max.size` <br/>
 
 #### logFileToParquetCompressionRatio(logFileToParquetCompressionRatio = 0.35) {#logFileToParquetCompressionRatio} 
 Property: `hoodie.logfile.to.parquet.compression.ratio` <br/>
-<span style="color:grey">Expected additional compression as records move from log files to parquet. Used for merge_on_read storage to send inserts into log files & control the size of compacted parquet file.</span>
+<span style="color:grey">Expected additional compression as records move from log files to parquet. Used for merge_on_read table to send inserts into log files & control the size of compacted parquet file.</span>
  
 #### parquetCompressionCodec(parquetCompressionCodec = gzip) {#parquetCompressionCodec} 
 Property: `hoodie.parquet.compression.codec` <br/>
@@ -326,7 +326,7 @@ Property: `hoodie.cleaner.policy` <br/>
 
 #### retainCommits(no_of_commits_to_retain = 24) {#retainCommits} 
 Property: `hoodie.cleaner.commits.retained` <br/>
-<span style="color:grey">Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much you can incrementally pull on this dataset</span>
+<span style="color:grey">Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much you can incrementally pull on this table</span>
 
 #### archiveCommitsWith(minCommits = 96, maxCommits = 128) {#archiveCommitsWith} 
 Property: `hoodie.keep.min.commits`, `hoodie.keep.max.commits` <br/>
