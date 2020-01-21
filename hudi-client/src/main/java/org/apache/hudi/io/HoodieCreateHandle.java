@@ -27,8 +27,10 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.exception.HoodieParseException;
 import org.apache.hudi.io.storage.HoodieStorageWriter;
 import org.apache.hudi.io.storage.HoodieStorageWriterFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -41,6 +43,9 @@ import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
 
 import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Iterator;
 
 public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
@@ -61,7 +66,23 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
 
-    this.path = makeNewPath(partitionPath);
+    String time = "";
+    String SourceFormat = config.getProps().getProperty("hoodie.datasource.write.partitionpath.source.time.format");
+    String TargetFormat = config.getProps().getProperty("hoodie.datasource.write.partitionpath.target.time.format");
+    SimpleDateFormat sourceSdf = new SimpleDateFormat(SourceFormat);
+    SimpleDateFormat targetSdf = new SimpleDateFormat(TargetFormat);
+    try {
+      Date date = sourceSdf.parse(partitionPath);
+      time = targetSdf.format(date);
+    } catch (ParseException e) {
+      throw new HoodieParseException("Time conversion failed :" + partitionPath, e);
+    }
+
+    if(StringUtils.isNullOrEmpty(time)) {
+      this.path = makeNewPath(partitionPath);
+    } else {
+      this.path = makeNewPath(time);
+    }
 
     try {
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, commitTime,
