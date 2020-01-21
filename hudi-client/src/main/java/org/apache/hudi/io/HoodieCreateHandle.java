@@ -67,17 +67,18 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
     writeStatus.setPartitionPath(partitionPath);
 
     String time = "";
-    String SourceFormat = config.getProps().getProperty("hoodie.datasource.write.partitionpath.source.time.format");
-    String TargetFormat = config.getProps().getProperty("hoodie.datasource.write.partitionpath.target.time.format");
-    SimpleDateFormat sourceSdf = new SimpleDateFormat(SourceFormat);
-    SimpleDateFormat targetSdf = new SimpleDateFormat(TargetFormat);
-    try {
-      Date date = sourceSdf.parse(partitionPath);
-      time = targetSdf.format(date);
-    } catch (ParseException e) {
-      throw new HoodieParseException("Time conversion failed :" + partitionPath, e);
+    String sourceFormat = config.getProps().getProperty("hoodie.datasource.write.partitionpath.source.time.format");
+    String targetFormat = config.getProps().getProperty("hoodie.datasource.write.partitionpath.target.time.format", "yyyy/MM/dd");
+    if(!StringUtils.isNullOrEmpty(sourceFormat)) {
+        SimpleDateFormat sourceSdf = new SimpleDateFormat(sourceFormat);
+        SimpleDateFormat targetSdf = new SimpleDateFormat(targetFormat);
+        try {
+            Date date = sourceSdf.parse(partitionPath);
+            time = targetSdf.format(date);
+        } catch (ParseException e) {
+            throw new HoodieParseException("Time conversion failed :" + partitionPath, e);
+        }
     }
-
     if(StringUtils.isNullOrEmpty(time)) {
       this.path = makeNewPath(partitionPath);
     } else {
