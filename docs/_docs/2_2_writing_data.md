@@ -8,7 +8,7 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 In this section, we will cover ways to ingest new changes from external sources or even other Hudi datasets using the [DeltaStreamer](#deltastreamer) tool, as well as 
-speeding up large Spark jobs via upserts using the [Hudi datasource](#datasource-writer). Such datasets can then be [queried](querying_data.html) using various query engines.
+speeding up large Spark jobs via upserts using the [Hudi datasource](#datasource-writer). Such datasets can then be [queried](/docs/querying_data.html) using various query engines.
 
 
 ## Write Operations

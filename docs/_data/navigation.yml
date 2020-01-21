@@ -38,8 +38,8 @@ docs:
         url: /docs/configurations.html
       - title: "Performance"
         url: /docs/performance.html
-      - title: "Administering"
-        url: /docs/admin_guide.html
+      - title: "Deployment"
+        url: /docs/deployment.html
   - title: INFO
     children:
       - title: "Docs Versions"
@@ -86,7 +86,7 @@ cn_docs:
       - title: "性能"
         url: /cn/docs/performance.html
       - title: "管理"
-        url: /cn/docs/admin_guide.html
+        url: /cn/docs/deployment.html
   - title: 其他信息
     children:
       - title: "文档版本"
