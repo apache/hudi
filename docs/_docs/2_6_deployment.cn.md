@@ -1,7 +1,7 @@
 ---
 title: 管理 Hudi Pipelines
 keywords: hudi, administration, operation, devops
-permalink: /cn/docs/admin_guide.html
+permalink: /cn/docs/deployment.html
 summary: This section offers an overview of tools available to operate an ecosystem of Hudi datasets
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
