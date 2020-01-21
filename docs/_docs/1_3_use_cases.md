@@ -20,7 +20,7 @@ or [complicated handcrafted merge workflows](http://hortonworks.com/blog/four-st
 For NoSQL datastores like [Cassandra](http://cassandra.apache.org/) / [Voldemort](http://www.project-voldemort.com/voldemort/) / [HBase](https://hbase.apache.org/), even moderately big installations store billions of rows.
 It goes without saying that __full bulk loads are simply infeasible__ and more efficient approaches are needed if ingestion is to keep up with the typically high update volumes.
 
-Even for immutable data sources like [Kafka](kafka.apache.org) , Hudi helps __enforces a minimum file size on HDFS__, which improves NameNode health by solving one of the [age old problems in Hadoop land](https://blog.cloudera.com/blog/2009/02/the-small-files-problem/) in a holistic way. This is all the more important for event streams, since typically its higher volume (eg: click streams) and if not managed well, can cause serious damage to your Hadoop cluster.
+Even for immutable data sources like [Kafka](https://kafka.apache.org) , Hudi helps __enforces a minimum file size on HDFS__, which improves NameNode health by solving one of the [age old problems in Hadoop land](https://blog.cloudera.com/blog/2009/02/the-small-files-problem/) in a holistic way. This is all the more important for event streams, since typically its higher volume (eg: click streams) and if not managed well, can cause serious damage to your Hadoop cluster.
 
 Across all sources, Hudi adds the much needed ability to atomically publish new data to consumers via notion of commits, shielding them from partial ingestion failures
 
@@ -32,13 +32,13 @@ This is absolutely perfect for lower scale ([relative to Hadoop installations li
 But, typically these systems end up getting abused for less interactive queries also since data on Hadoop is intolerably stale. This leads to under utilization & wasteful hardware/license costs.
 
 On the other hand, interactive SQL solutions on Hadoop such as Presto & SparkSQL excel in __queries that finish within few seconds__.
-By bringing __data freshness to a few minutes__, Hudi can provide a much efficient alternative, as well unlock real-time analytics on __several magnitudes larger datasets__ stored in DFS.
+By bringing __data freshness to a few minutes__, Hudi can provide a much efficient alternative, as well unlock real-time analytics on __several magnitudes larger tables__ stored in DFS.
 Also, Hudi has no external dependencies (like a dedicated HBase cluster, purely used for real-time analytics) and thus enables faster analytics on much fresher analytics, without increasing the operational overhead.
 
 
 ## Incremental Processing Pipelines
 
-One fundamental ability Hadoop provides is to build a chain of datasets derived from each other via DAGs expressed as workflows.
+One fundamental ability Hadoop provides is to build a chain of tables derived from each other via DAGs expressed as workflows.
 Workflows often depend on new data being output by multiple upstream workflows and traditionally, availability of new data is indicated by a new DFS Folder/Hive Partition.
 Let's take a concrete example to illustrate this. An upstream workflow `U` can create a Hive partition for every hour, with data for that hour (event_time) at the end of each hour (processing_time), providing effective freshness of 1 hour.
 Then, a downstream workflow `D`, kicks off immediately after `U` finishes, and does its own processing for the next hour, increasing the effective latency to 2 hours.
@@ -48,8 +48,8 @@ Unfortunately, in today's post-mobile & pre-IoT world, __late data from intermit
 In such cases, the only remedy to guarantee correctness is to [reprocess the last few hours](https://falcon.apache.org/FalconDocumentation.html#Handling_late_input_data) worth of data,
 over and over again each hour, which can significantly hurt the efficiency across the entire ecosystem. For e.g; imagine reprocessing TBs worth of data every hour across hundreds of workflows.
 
-Hudi comes to the rescue again, by providing a way to consume new data (including late data) from an upsteam Hudi dataset `HU` at a record granularity (not folders/partitions),
-apply the processing logic, and efficiently update/reconcile late data with a downstream Hudi dataset `HD`. Here, `HU` and `HD` can be continuously scheduled at a much more frequent schedule
+Hudi comes to the rescue again, by providing a way to consume new data (including late data) from an upsteam Hudi table `HU` at a record granularity (not folders/partitions),
+apply the processing logic, and efficiently update/reconcile late data with a downstream Hudi table `HD`. Here, `HU` and `HD` can be continuously scheduled at a much more frequent schedule
 like 15 mins, and providing an end-end latency of 30 mins at `HD`.
 
 To achieve this, Hudi has embraced similar concepts from stream processing frameworks like [Spark Streaming](https://spark.apache.org/docs/latest/streaming-programming-guide.html#join-operations) , Pub/Sub systems like [Kafka](http://kafka.apache.org/documentation/#theconsumer)
@@ -64,4 +64,4 @@ For e.g, a Spark Pipeline can [determine hard braking events on Hadoop](https://
 A popular choice for this queue is Kafka and this model often results in __redundant storage of same data on DFS (for offline analysis on computed results) and Kafka (for dispersal)__
 
 Once again Hudi can efficiently solve this problem, by having the Spark Pipeline upsert output from
-each run into a Hudi dataset, which can then be incrementally tailed (just like a Kafka topic) for new data & written into the serving store.
+each run into a Hudi table, which can then be incrementally tailed (just like a Kafka topic) for new data & written into the serving store.
