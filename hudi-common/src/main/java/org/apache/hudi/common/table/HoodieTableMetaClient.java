@@ -384,9 +384,9 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Helper method to scan all hoodie-instant metafiles.
    *
-   * @param fs Fs implementation for this table
-   * @param metaPath MetaPath where meta files are stored
-   * @param nameFilter NameFilter to filter meta files
+   * @param fs The file system implementation for this table
+   * @param metaPath The meta path where meta files are stored
+   * @param nameFilter The name filter to filter meta files
    * @return An array of meta FileStatus
    * @throws IOException In case of failure
    */
