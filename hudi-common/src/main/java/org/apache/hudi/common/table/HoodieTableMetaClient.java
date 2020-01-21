@@ -381,7 +381,15 @@ public class HoodieTableMetaClient implements Serializable {
     return metaClient;
   }
 
-  // HELPER METHODS TO CREATE META FILE NAMES
+  /**
+   * Helper method to scan all hoodie-instant metafiles.
+   *
+   * @param fs Fs implementation for this table
+   * @param metaPath MetaPath where meta files are stored
+   * @param nameFilter NameFilter to filter meta files
+   * @return An array of meta FileStatus
+   * @throws IOException In case of failure
+   */
   public static FileStatus[] scanFiles(FileSystem fs, Path metaPath, PathFilter nameFilter) throws IOException {
     return fs.listStatus(metaPath, nameFilter);
   }
