@@ -55,4 +55,4 @@ cd ..
 echo "Deploying to repository.apache.org with scala version ${SCALA_VERSION}"
 
 COMMON_OPTIONS="-Pscala-${SCALA_VERSION} -Prelease -DskipTests -DretryFailedDeploymentCount=10 -DdeployArtifacts=true"
-#$MVN clean deploy $COMMON_OPTIONS
+$MVN clean deploy $COMMON_OPTIONS
