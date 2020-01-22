@@ -16,7 +16,9 @@ Hudi works with Spark-2.x versions. You can follow instructions [here](https://s
 From the extracted directory run spark-shell with Hudi as:
 
 ```scala
-bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating \
+bin/spark-shell \
+    --packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating \
+    --packages org.apache.spark:spark-avro_2.11:2.4.4 \
     --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -164,7 +166,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 You can also do the quickstart by [building hudi yourself](https://github.com/apache/incubator-hudi#building-apache-hudi-from-source), 
 and using `--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar` in the spark-shell command above
-instead of `--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating`
+instead of `--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating --packages org.apache.spark:spark-avro_2.11:2.4.4`
 
 Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 
 Hudi tables can be queried from query engines like Hive, Spark, Presto and much more. We have put together a 
