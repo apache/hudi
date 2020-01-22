@@ -234,6 +234,14 @@ public interface HoodieTimeline extends Serializable {
     return predicateToApply.test(commit1, commit2);
   }
 
+  /**
+   * Return true if specified timestamp is in range (startTs, endTs].
+   */
+  static boolean isInRange(String timestamp, String startTs, String endTs) {
+    return HoodieTimeline.compareTimestamps(timestamp, startTs, GREATER)
+            && HoodieTimeline.compareTimestamps(timestamp, endTs, LESSER_OR_EQUAL);
+  }
+
   static HoodieInstant getCompletedInstant(final HoodieInstant instant) {
     return new HoodieInstant(State.COMPLETED, instant.getAction(), instant.getTimestamp());
   }
