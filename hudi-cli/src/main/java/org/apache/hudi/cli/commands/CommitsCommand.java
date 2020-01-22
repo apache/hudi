@@ -21,6 +21,7 @@ package org.apache.hudi.cli.commands;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.cli.utils.CommitUtil;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -41,10 +42,8 @@ import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -186,10 +185,10 @@ public class CommitsCommand implements CommandMarker {
           final boolean headerOnly)
           throws IOException {
     if (StringUtils.isNullOrEmpty(startTs)) {
-      startTs = getTimeDaysAgo(10);
+      startTs = CommitUtil.getTimeDaysAgo(10);
     }
     if (StringUtils.isNullOrEmpty(endTs)) {
-      endTs = getTimeDaysAgo(1);
+      endTs = CommitUtil.getTimeDaysAgo(1);
     }
     HoodieArchivedTimeline archivedTimeline = HoodieCLI.getTableMetaClient().getArchivedTimeline();
     try {
@@ -362,10 +361,4 @@ public class CommitsCommand implements CommandMarker {
     return "Load sync state between " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " and "
         + HoodieCLI.syncTableMetadata.getTableConfig().getTableName();
   }
-
-  private String getTimeDaysAgo(int numberOfDays) {
-    Date date = Date.from(ZonedDateTime.now().minusDays(numberOfDays).toInstant());
-    return HoodieActiveTimeline.COMMIT_FORMATTER.format(date);
-  }
-
 }
