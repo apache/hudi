@@ -191,7 +191,7 @@
         <artifactId>jacoco-maven-plugin</artifactId>
       </plugin>
       <plugin>
-        <groupId>org.fortasoft</groupId>
+        <groupId>codes.rafael.gradlemavenplugin</groupId>
         <artifactId>gradle-maven-plugin</artifactId>
       </plugin>
       <plugin>

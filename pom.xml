@@ -111,7 +111,7 @@
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix></utilities.bundle.hive.shade.prefix>
     <jacoco.version>0.8.5</jacoco.version>
-    <gradle-maven-plugin.version>1.0.8</gradle-maven-plugin.version>
+    <gradle-maven-plugin.version>1.0.10</gradle-maven-plugin.version>
     <gradle.task>jacobo</gradle.task>
   </properties>
 
@@ -392,7 +392,7 @@
           </executions>
         </plugin>
         <plugin>
-          <groupId>org.fortasoft</groupId>
+          <groupId>codes.rafael.gradlemavenplugin</groupId>
           <artifactId>gradle-maven-plugin</artifactId>
           <version>${gradle-maven-plugin.version}</version>
           <configuration>
