@@ -13,7 +13,7 @@ last_modified_at: 2019-12-30T15:59:57-04:00
  * Apache Hudi (incubating) jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
 
 ### Release Highlights
- * Upgrade from Spark 2.1.0 to Spark 2.4.4 and upgrade from avro 1.7.7 to avro 1.8.2 accordingly. Spark 2.4 supports drop and please use Spark 2.4+ for Hudi 0.5.1+ above.
+ * Upgrade from Spark 2.1.0 to Spark 2.4.4 and upgrade from avro 1.7.7 to avro 1.8.2 accordingly. Spark 2.4+ supports drop and please use Spark 2.4+ for Hudi 0.5.1+ above.
  * When using spark-shell to give a quick peek at Hudi, please provide --packages org.apache.spark:spark-avro:2.4.4, more details would refer to [latest quickstart docs](https://hudi.apache.org/docs/quick-start-guide.html)
  * Key generator moved to separate package under org.apache.hudi.keygen.
  * CLI supports `repair overwrite-hoodie-props` to overwrite the table's hoodie.properties with specified file.
