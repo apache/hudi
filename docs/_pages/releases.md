@@ -6,6 +6,31 @@ toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
+## [Release 0.5.1-incubating]
+
+### Download Information
+ * Source Release : [Apache Hudi(incubating) 0.5.1-incubating Source Release](https://www.apache.org/dist/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz) ([asc](https://www.apache.org/dist/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc), [sha512](https://www.apache.org/dist/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512))
+ * Apache Hudi (incubating) jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
+
+### Release Highlights
+ * Upgrade from Spark 2.1.0 to Spark 2.4.4 and upgrade from avro 1.7.7 to avro 1.8.2 accordingly. Spark 2.4 supports drop and please use Spark 2.4+ for Hudi 0.5.1+ above.
+ * When using spark-shell to give a quick peek at Hudi, please provide --packages org.apache.spark:spark-avro:2.4.4, more details would refer to [latest quickstart docs](https://hudi.apache.org/docs/quick-start-guide.html)
+ * Key generator moved to separate package under org.apache.hudi.keygen.
+ * CLI supports `repair overwrite-hoodie-props` to overwrite the table's hoodie.properties with specified file.
+ * Hive Sync tool will register RO tables for MOR with a _ro suffix, so query with _ro suffix. You would use `--skip-ro-suffix` in sync config to control suffix.
+ * DeltaStreamer configs changed including from `storage-type` to `table-type`. Refer to [wiki](https://cwiki.apache.org/confluence/display/HUDI/Design+And+Architecture) with more latest terminologies.
+ * Hudi now supports both scala 2.11 and scala 2.12, please refer to [Build with Scala 2.12](https://github.com/apache/incubator-hudi#build-with-scala-212) to build with scala 2.12. Also, the packages hudi-spark, hudi-utilities, hudi-spark-bundle and hudi-utilities-bundle
+ are changed according hudi-spark_{scala_version}, hudi-spark_{scala_version}, hudi-utilities_{scala_version}, hudi-spark-bundle_{scala_version} and hudi-utilities-bundle_{scala_version}, scala_version here includes 2.11 and 2.12.
+ * Configuration Value change for Kafka Reset Offset Strategies. Enum values are changed from LARGEST to LATEST, SMALLEST to EARLIEST for configuring kafka reset offset strategies in deltastreamer.
+ * Need shade Avro if implement custom payload, which is similar to hudi-hadoop-mr-bundle.
+ * Better delete support in DeltaStreamer, would refer to [latest quickstart docs](https://hudi.apache.org/docs/quick-start-guide.html)
+ * Support for AWS Database Migration Service(DMS) in DeltaStreamer
+ * Support for DynamicBloomFilter.
+ * Support option to overwrite payload implementation in hoodie.properties file.
+
+### Raw Release Notes
+ The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346183)
+
 ## [Release 0.5.0-incubating](https://github.com/apache/incubator-hudi/releases/tag/release-0.5.0-incubating) ([docs](/docs/0.5.0-quick-start-guide.html))
 
 ### Download Information
