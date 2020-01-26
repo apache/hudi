@@ -6,7 +6,7 @@ summary: "Hudi brings stream processing to big data, providing fresh data while 
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
-Hudi (pronounced “Hoodie”) ingests & manages storage of large analytical tables over DFS ([HDFS](http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html) or cloud stores) and provides three types of querying.
+Hudi (pronounced “Hoodie”) ingests & manages storage of large analytical tables over DFS ([HDFS](http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html) or cloud stores) and provides three types of queries.
 
  * **Read Optimized query** - Provides excellent query performance on pure columnar storage, much like plain [Parquet](https://parquet.apache.org/) tables.
  * **Incremental query** - Provides a change stream out of the dataset to feed downstream jobs/ETLs.

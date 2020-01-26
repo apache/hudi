@@ -16,9 +16,19 @@ Hudi works with Spark-2.x versions. You can follow instructions [here](https://s
 From the extracted directory run spark-shell with Hudi as:
 
 ```scala
-bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating \
+spark-2.4.4-bin-hadoop2.7/bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
     --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
+
+<div class="notice--info">
+  <h4>Please note the following: </h4>
+<ul>
+  <li>spark-avro module needs to be specified in --packages as it is not included with spark-shell by default</li>
+  <li>spark-avro and spark versions must match (we have used 2.4.4 for both above)</li>
+  <li>we have used hudi-spark-bundle built for scala 2.11 since the spark-avro module used also depends on 2.11. 
+         If spark-avro_2.12 is used, correspondingly hudi-spark-bundle_2.12 needs to be used. </li>
+</ul>
+</div>
 
 Setup table name, base path and a data generator to generate records for this guide.
 
@@ -83,7 +93,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 This query provides snapshot querying of the ingested data. Since our partition path (`region/country/city`) is 3 levels nested 
 from base path we ve used `load(basePath + "/*/*/*/*")`. 
-Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and querying types supported.
+Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
 {: .notice--info}
 
 ## Update data
@@ -133,7 +143,7 @@ val tripsIncrementalDF = spark.
     option(QUERY_TYPE_OPT_KEY, QUERY_TYPE_INCREMENTAL_OPT_VAL).
     option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
     load(basePath);
-tripsIncrementalDF.registerTempTable("hudi_trips_incremental")
+tripsIncrementalDF.createOrReplaceTempView("hudi_trips_incremental")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
 ``` 
 
@@ -156,7 +166,7 @@ val tripsPointInTimeDF = spark.read.format("org.apache.hudi").
     option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
     option(END_INSTANTTIME_OPT_KEY, endTime).
     load(basePath);
-tripsPointInTimeDF.registerTempTable("hudi_trips_point_in_time")
+tripsPointInTimeDF.createOrReplaceTempView("hudi_trips_point_in_time")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_point_in_time where fare > 20.0").show()
 ```
 
@@ -196,8 +206,9 @@ Note: Only `Append` mode is supported for delete operation.
 ## Where to go from here?
 
 You can also do the quickstart by [building hudi yourself](https://github.com/apache/incubator-hudi#building-apache-hudi-from-source), 
-and using `--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar` in the spark-shell command above
-instead of `--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating`
+and using `--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar` in the spark-shell command above
+instead of `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/incubator-hudi#build-with-scala-212)
+for more info.
 
 Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 
 Hudi tables can be queried from query engines like Hive, Spark, Presto and much more. We have put together a 
