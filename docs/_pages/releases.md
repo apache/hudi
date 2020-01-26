@@ -22,12 +22,12 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 Also, the packages hudi-spark, hudi-utilities, hudi-spark-bundle and hudi-utilities-bundle are changed correspondingly to hudi-spark_{scala_version}, hudi-spark_{scala_version}, hudi-utilities_{scala_version}, hudi-spark-bundle_{scala_version} and hudi-utilities-bundle_{scala_version}.
 Note that scala_version here is one of (2.11, 2.12).
 * With 0.5.1, we added functionality to stop using renames for Hudi timeline metadata operations. This feature is automatically enabled for newly created Hudi tables. For existing tables, this feature is turned off by default. Please read this [section](deployment_link), before enabling this feature for existing hudi table.
-To enable the new hudi timeline layout which avoids renames, use the write config "hoodie.timeline.layout.version=1". Alternatively, you can append the line "hoodie.timeline.layout.version=1" to hoodie.properties. Note that in any case, upgrade hudi readers (query engines) first with 0.5.1-incubating release before upgrading writer.
+To enable the new hudi timeline layout which avoids renames, use the write config "hoodie.timeline.layout.version=1". Alternatively, you can use "repair overwrite-hoodie-props" to append the line "hoodie.timeline.layout.version=1" to hoodie.properties. Note that in any case, upgrade hudi readers (query engines) first with 0.5.1-incubating release before upgrading writer.
 * CLI supports `repair overwrite-hoodie-props` to overwrite the table's hoodie.properties with specified file.
 * DeltaStreamer CLI parameter for capturing table type is changed from --storage-type to --table-type. Refer to [wiki](https://cwiki.apache.org/confluence/display/HUDI/Design+And+Architecture) with more latest terminologies.
 * Configuration Value change for Kafka Reset Offset Strategies. Enum values are changed from LARGEST to LATEST, SMALLEST to EARLIEST for configuring Kafka reset offset strategies with configuration(auto.offset.reset) in deltastreamer.
 * When using spark-shell to give a quick peek at Hudi, please provide --packages org.apache.spark:spark-avro_2.11:2.4.4, more details would refer to [latest quickstart docs](https://hudi.apache.org/docs/quick-start-guide.html)
-* Key generator moved to separate package under org.apache.hudi.keygen. If you are using overridden key generator classes (configuration ("hoodie.datasource.write.keygenerator.class")) that comes with hudi package, please make change the fully qualified class name is changed accordingly.
+* Key generator moved to separate package under org.apache.hudi.keygen. If you are using overridden key generator classes (configuration ("hoodie.datasource.write.keygenerator.class")) that comes with hudi package, please ensure the fully qualified class name is changed accordingly.
 * Hive Sync tool will register RO tables for MOR with a _ro suffix, so query with _ro suffix. You would use `--skip-ro-suffix` in sync config to control suffix.
 * With 0.5.1, hudi-hadoop-mr-bundle which is used by query engines such as presto and hive includes shaded avro package to support hudi real time queries through these engines. Hudi supports pluggable logic for merging of records. Users provide their own implementation of [HoodieRecordPayload](https://github.com/apache/incubator-hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecordPayload.java).
 If you are using this feature, you need to relocate the avro dependencies in your custom record payload class to be consistent with internal hudi shading. You need to add the following relocation when shading the package containing the record payload implementation.
@@ -41,8 +41,7 @@ If you are using this feature, you need to relocate the avro dependencies in you
 
  * Better delete support in DeltaStreamer would refer to [latest quickstart docs](https://hudi.apache.org/docs/quick-start-guide.html)
  * Support for AWS Database Migration Service(DMS) in DeltaStreamer
- * Support for DynamicBloomFilter.
- * Support option to overwrite payload implementation in hoodie.properties file.
+ * Support for DynamicBloomFilter. This is turned off by default, to enable the DynamicBloomFilter, please use the index config "hoodie.bloom.index.filter.type=DYNAMIC_V0"
 
 ### Raw Release Notes
  The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346183)
