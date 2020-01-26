@@ -18,12 +18,15 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.table.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.table.TableFileSystemView.SliceView;
+
 /**
- * A consolidated file-system view interface exposing both realtime and read-optimized views along with
+ * A consolidated file-system view interface exposing both complete slice and basefile only views along with
  * update operations.
  */
 public interface SyncableFileSystemView
-    extends TableFileSystemView, TableFileSystemView.ReadOptimizedView, TableFileSystemView.RealtimeView {
+    extends TableFileSystemView, BaseFileOnlyView, SliceView {
 
 
 

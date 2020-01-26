@@ -245,6 +245,8 @@ This product includes code from Apache Spark
 
 * org.apache.hudi.AvroConversionHelper copied from classes in org/apache/spark/sql/avro package
 
+* dev/change-scala-version.sh copied from https://github.com/apache/spark/blob/branch-2.4/dev/change-scala-version.sh
+
 Copyright: 2014 and onwards The Apache Software Foundation
 Home page: http://spark.apache.org/
 License: http://www.apache.org/licenses/LICENSE-2.0
@@ -309,5 +311,15 @@ Copyright (c) 2005, European Commission project OneLab under contract 034819 (ht
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
   See the License for the specific language governing permissions and
   limitations under the License.
+
+ -------------------------------------------------------------------------------
+
+ This product includes code from Apache Cassandra
+
+ * org.apache.hudi.common.util.BufferedRandomAccessFile adapted from org.apache.cassandra.io.BufferedRandomAccessFile
+
+ Copyright: 2011-2019 The Apache Software Foundation
+ Home page: http://cassandra.apache.org/
+ License: http://www.apache.org/licenses/LICENSE-2.0
 
  -------------------------------------------------------------------------------

@@ -37,8 +37,8 @@ public class HoodieHiveUtil {
   public static final String HOODIE_START_COMMIT_PATTERN = "hoodie.%s.consume.start.timestamp";
   public static final String HOODIE_MAX_COMMIT_PATTERN = "hoodie.%s.consume.max.commits";
   public static final String INCREMENTAL_SCAN_MODE = "INCREMENTAL";
-  public static final String LATEST_SCAN_MODE = "LATEST";
-  public static final String DEFAULT_SCAN_MODE = LATEST_SCAN_MODE;
+  public static final String SNAPSHOT_SCAN_MODE = "SNAPSHOT";
+  public static final String DEFAULT_SCAN_MODE = SNAPSHOT_SCAN_MODE;
   public static final int DEFAULT_MAX_COMMITS = 1;
   public static final int MAX_COMMIT_ALL = -1;
   public static final int DEFAULT_LEVELS_TO_BASEPATH = 3;
@@ -58,13 +58,6 @@ public class HoodieHiveUtil {
     String startCommitTimestampName = String.format(HOODIE_START_COMMIT_PATTERN, tableName);
     LOG.info("Read start commit time - " + job.getConfiguration().get(startCommitTimestampName));
     return job.getConfiguration().get(startCommitTimestampName);
-  }
-
-  public static String readMode(JobContext job, String tableName) {
-    String modePropertyName = String.format(HOODIE_CONSUME_MODE_PATTERN, tableName);
-    String mode = job.getConfiguration().get(modePropertyName, DEFAULT_SCAN_MODE);
-    LOG.info(modePropertyName + ": " + mode);
-    return mode;
   }
 
   public static Path getNthParent(Path path, int n) {

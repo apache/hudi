@@ -22,14 +22,14 @@ import org.apache.hudi.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.TableFileSystemView.RealtimeView;
+import org.apache.hudi.common.table.TableFileSystemView.SliceView;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FSUtils;
@@ -66,15 +66,15 @@ import java.util.stream.StreamSupport;
 import static java.util.stream.Collectors.toList;
 
 /**
- * HoodieRealtimeTableCompactor compacts a hoodie table with merge on read storage. Computes all possible compactions,
+ * Compacts a hoodie table with merge on read storage. Computes all possible compactions,
  * passes it through a CompactionFilter and executes all the compactions and writes a new version of base files and make
  * a normal commit
  *
  * @see HoodieCompactor
  */
-public class HoodieRealtimeTableCompactor implements HoodieCompactor {
+public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieRealtimeTableCompactor.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieMergeOnReadTableCompactor.class);
   // Accumulator to keep track of total log files for a table
   private AccumulatorV2<Long, Long> totalLogFiles;
   // Accumulator to keep track of total log file slices for a table
@@ -128,7 +128,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
       return Lists.<WriteStatus>newArrayList();
     }
 
-    Option<HoodieDataFile> oldDataFileOpt =
+    Option<HoodieBaseFile> oldDataFileOpt =
         operation.getBaseFile(metaClient.getBasePath(), operation.getPartitionPath());
 
     // Compacting is very similar to applying updates to existing file
@@ -170,7 +170,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     jsc.sc().register(totalFileSlices);
 
     Preconditions.checkArgument(hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ,
-        "HoodieRealtimeTableCompactor can only compact table of type " + HoodieTableType.MERGE_ON_READ + " and not "
+        "Can only compact table of type " + HoodieTableType.MERGE_ON_READ + " and not "
             + hoodieTable.getMetaClient().getTableType().name());
 
     // TODO : check if maxMemory is not greater than JVM or spark.executor memory
@@ -188,7 +188,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
       return null;
     }
 
-    RealtimeView fileSystemView = hoodieTable.getRTFileSystemView();
+    SliceView fileSystemView = hoodieTable.getSliceView();
     LOG.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
     List<HoodieCompactionOperation> operations = jsc.parallelize(partitionPaths, partitionPaths.size())
         .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> fileSystemView
@@ -201,7 +201,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
               // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
               // for spark Map operations and collecting them finally in Avro generated classes for storing
               // into meta files.
-              Option<HoodieDataFile> dataFile = s.getDataFile();
+              Option<HoodieBaseFile> dataFile = s.getBaseFile();
               return new CompactionOperation(dataFile, partitionPath, logFiles,
                   config.getCompactionStrategy().captureMetrics(config, dataFile, partitionPath, logFiles));
             }).filter(c -> !c.getDeltaFileNames().isEmpty()).collect(toList()).iterator())

@@ -72,7 +72,7 @@ public class CleanerUtils {
       throws IOException {
     CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
     HoodieCleanMetadata cleanMetadata = AvroUtils.deserializeHoodieCleanMetadata(
-        metaClient.getActiveTimeline().readPlanAsBytes(cleanInstant).get());
+        metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get());
     return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
   }
 
@@ -85,7 +85,7 @@ public class CleanerUtils {
    */
   public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
-    return AvroUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().readPlanAsBytes(cleanInstant).get(),
+    return AvroUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get(),
         HoodieCleanerPlan.class);
   }
 }

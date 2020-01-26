@@ -20,7 +20,7 @@ add jar ${hudi.hadoop.bundle};
 show tables;
 
 show partitions stock_ticks_cow;
-show partitions stock_ticks_mor;
+show partitions stock_ticks_mor_ro;
 show partitions stock_ticks_mor_rt;
 
 !quit

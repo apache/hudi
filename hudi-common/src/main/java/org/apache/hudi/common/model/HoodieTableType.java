@@ -27,9 +27,6 @@ package org.apache.hudi.common.model;
  * <p>
  * MERGE_ON_READ - Speeds up upserts, by delaying merge until enough work piles up.
  * <p>
- * In the future, following might be added.
- * <p>
- * SIMPLE_LSM - A simple 2 level LSM tree.
  */
 public enum HoodieTableType {
   COPY_ON_WRITE, MERGE_ON_READ

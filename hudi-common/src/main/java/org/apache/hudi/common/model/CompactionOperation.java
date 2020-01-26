@@ -60,7 +60,7 @@ public class CompactionOperation implements Serializable {
     this.metrics = metrics;
   }
 
-  public CompactionOperation(Option<HoodieDataFile> dataFile, String partitionPath, List<HoodieLogFile> logFiles,
+  public CompactionOperation(Option<HoodieBaseFile> dataFile, String partitionPath, List<HoodieLogFile> logFiles,
       Map<String, Double> metrics) {
     if (dataFile.isPresent()) {
       this.baseInstantTime = dataFile.get().getCommitTime();
@@ -111,9 +111,9 @@ public class CompactionOperation implements Serializable {
     return id;
   }
 
-  public Option<HoodieDataFile> getBaseFile(String basePath, String partitionPath) {
+  public Option<HoodieBaseFile> getBaseFile(String basePath, String partitionPath) {
     Path dirPath = FSUtils.getPartitionPath(basePath, partitionPath);
-    return dataFileName.map(df -> new HoodieDataFile(new Path(dirPath, df).toString()));
+    return dataFileName.map(df -> new HoodieBaseFile(new Path(dirPath, df).toString()));
   }
 
   /**

@@ -34,6 +34,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
@@ -279,18 +280,28 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return readDataFromPath(detailPath);
   }
 
+  public Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant) {
+    // Cleaner metadata are always stored only in timeline .hoodie
+    return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
+  }
+
   //-----------------------------------------------------------------
   //      BEGIN - COMPACTION RELATED META-DATA MANAGEMENT.
   //-----------------------------------------------------------------
 
-  public Option<byte[]> readPlanAsBytes(HoodieInstant instant) {
-    Path detailPath = null;
-    if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
-      detailPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
-    } else {
-      detailPath = new Path(metaClient.getMetaPath(), instant.getFileName());
+  public Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant) {
+    try {
+      // Reading from auxiliary path first. In future release, we will cleanup compaction management
+      // to only write to timeline and skip auxiliary and this code will be able to handle it.
+      return readDataFromPath(new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName()));
+    } catch (HoodieIOException e) {
+      // This will be removed in future release. See HUDI-546
+      if (e.getIOException() instanceof FileNotFoundException) {
+        return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
+      } else {
+        throw e;
+      }
     }
-    return readDataFromPath(detailPath);
   }
 
   /**
@@ -344,14 +355,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private void createFileInAuxiliaryFolder(HoodieInstant instant, Option<byte[]> data) {
-    if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
-      /**
-       *  For latest version, since we write immutable files directly in timeline directory, there is no need to write
-       *  additional immutable files in .aux folder
-       */
-      Path fullPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
-      createFileInPath(fullPath, data);
-    }
+    // This will be removed in future release. See HUDI-546
+    Path fullPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
+    createFileInPath(fullPath, data);
   }
 
   //-----------------------------------------------------------------
@@ -369,8 +375,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     Preconditions.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     Preconditions.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, CLEAN_ACTION, inflightInstant.getTimestamp());
-    // First write metadata to aux folder
-    createFileInAuxiliaryFolder(commitInstant, data);
     // Then write to timeline
     transitionState(inflightInstant, commitInstant, data);
     return commitInstant;
@@ -471,8 +475,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public void saveToCleanRequested(HoodieInstant instant, Option<byte[]> content) {
     Preconditions.checkArgument(instant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     Preconditions.checkArgument(instant.getState().equals(State.REQUESTED));
-    // Write workload to auxiliary folder
-    createFileInAuxiliaryFolder(instant, content);
     // Plan is stored in meta path
     createFileInMetaPath(instant.getFileName(), content, false);
   }

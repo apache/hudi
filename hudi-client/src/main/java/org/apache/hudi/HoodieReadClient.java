@@ -20,7 +20,7 @@ package org.apache.hudi;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -136,8 +136,8 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
 
   private Option<String> convertToDataFilePath(Option<Pair<String, String>> partitionPathFileIDPair) {
     if (partitionPathFileIDPair.isPresent()) {
-      HoodieDataFile dataFile = hoodieTable.getROFileSystemView()
-          .getLatestDataFile(partitionPathFileIDPair.get().getLeft(), partitionPathFileIDPair.get().getRight()).get();
+      HoodieBaseFile dataFile = hoodieTable.getBaseFileOnlyView()
+          .getLatestBaseFile(partitionPathFileIDPair.get().getLeft(), partitionPathFileIDPair.get().getRight()).get();
       return Option.of(dataFile.getPath());
     } else {
       return Option.empty();

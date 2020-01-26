@@ -76,4 +76,9 @@ public class TimelineLayoutVersion implements Serializable, Comparable<TimelineL
   public int compareTo(TimelineLayoutVersion o) {
     return Integer.compare(version, o.version);
   }
+
+  @Override
+  public String toString() {
+    return String.valueOf(version);
+  }
 }

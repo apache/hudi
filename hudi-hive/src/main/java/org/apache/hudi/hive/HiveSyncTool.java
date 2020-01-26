@@ -53,30 +53,44 @@ import java.util.stream.Collectors;
 public class HiveSyncTool {
 
   private static final Logger LOG = LogManager.getLogger(HiveSyncTool.class);
-  private final HoodieHiveClient hoodieHiveClient;
-  public static final String SUFFIX_REALTIME_TABLE = "_rt";
+  public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
+  public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
+
   private final HiveSyncConfig cfg;
+  private final HoodieHiveClient hoodieHiveClient;
+  private final String snapshotTableName;
+  private final Option<String> roTableTableName;
 
   public HiveSyncTool(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
     this.cfg = cfg;
+    switch (hoodieHiveClient.getTableType()) {
+      case COPY_ON_WRITE:
+        this.snapshotTableName = cfg.tableName;
+        this.roTableTableName = Option.empty();
+        break;
+      case MERGE_ON_READ:
+        this.snapshotTableName = cfg.tableName + SUFFIX_SNAPSHOT_TABLE;
+        this.roTableTableName = cfg.skipROSuffix ? Option.of(cfg.tableName) :
+            Option.of(cfg.tableName + SUFFIX_READ_OPTIMIZED_TABLE);
+        break;
+      default:
+        LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
+        throw new InvalidTableException(hoodieHiveClient.getBasePath());
+    }
   }
 
   public void syncHoodieTable() throws ClassNotFoundException {
     try {
       switch (hoodieHiveClient.getTableType()) {
         case COPY_ON_WRITE:
-          syncHoodieTable(false);
+          syncHoodieTable(snapshotTableName, false);
           break;
         case MERGE_ON_READ:
           // sync a RO table for MOR
-          syncHoodieTable(false);
-          String originalTableName = cfg.tableName;
-          // TODO : Make realtime table registration optional using a config param
-          cfg.tableName = cfg.tableName + SUFFIX_REALTIME_TABLE;
+          syncHoodieTable(roTableTableName.get(), false);
           // sync a RT table for MOR
-          syncHoodieTable(true);
-          cfg.tableName = originalTableName;
+          syncHoodieTable(snapshotTableName, true);
           break;
         default:
           LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
@@ -89,31 +103,30 @@ public class HiveSyncTool {
     }
   }
 
-  private void syncHoodieTable(boolean isRealTime) throws ClassNotFoundException {
-    LOG.info("Trying to sync hoodie table " + cfg.tableName + " with base path " + hoodieHiveClient.getBasePath()
+  private void syncHoodieTable(String tableName, boolean useRealtimeInputFormat) {
+    LOG.info("Trying to sync hoodie table " + tableName + " with base path " + hoodieHiveClient.getBasePath()
         + " of type " + hoodieHiveClient.getTableType());
-
     // Check if the necessary table exists
-    boolean tableExists = hoodieHiveClient.doesTableExist();
+    boolean tableExists = hoodieHiveClient.doesTableExist(tableName);
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = hoodieHiveClient.getDataSchema();
     // Sync schema if needed
-    syncSchema(tableExists, isRealTime, schema);
+    syncSchema(tableName, tableExists, useRealtimeInputFormat, schema);
 
-    LOG.info("Schema sync complete. Syncing partitions for " + cfg.tableName);
+    LOG.info("Schema sync complete. Syncing partitions for " + tableName);
     // Get the last time we successfully synced partitions
     Option<String> lastCommitTimeSynced = Option.empty();
     if (tableExists) {
-      lastCommitTimeSynced = hoodieHiveClient.getLastCommitTimeSynced();
+      lastCommitTimeSynced = hoodieHiveClient.getLastCommitTimeSynced(tableName);
     }
     LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
     List<String> writtenPartitionsSince = hoodieHiveClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
     LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
     // Sync the partitions if needed
-    syncPartitions(writtenPartitionsSince);
+    syncPartitions(tableName, writtenPartitionsSince);
 
-    hoodieHiveClient.updateLastCommitTimeSynced();
-    LOG.info("Sync complete for " + cfg.tableName);
+    hoodieHiveClient.updateLastCommitTimeSynced(tableName);
+    LOG.info("Sync complete for " + tableName);
   }
 
   /**
@@ -123,17 +136,14 @@ public class HiveSyncTool {
    * @param tableExists - does table exist
    * @param schema - extracted schema
    */
-  private void syncSchema(boolean tableExists, boolean isRealTime, MessageType schema) throws ClassNotFoundException {
+  private void syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat, MessageType schema) {
     // Check and sync schema
     if (!tableExists) {
-      LOG.info("Table " + cfg.tableName + " is not found. Creating it");
-      if (!isRealTime) {
-        // TODO - RO Table for MOR only after major compaction (UnboundedCompaction is default
-        // for now)
-        String inputFormatClassName =
-            cfg.usePreApacheInputFormat ? com.uber.hoodie.hadoop.HoodieInputFormat.class.getName()
-                : HoodieParquetInputFormat.class.getName();
-        hoodieHiveClient.createTable(schema, inputFormatClassName, MapredParquetOutputFormat.class.getName(),
+      LOG.info("Hive table " + tableName + " is not found. Creating it");
+      if (!useRealTimeInputFormat) {
+        String inputFormatClassName = cfg.usePreApacheInputFormat ? com.uber.hoodie.hadoop.HoodieInputFormat.class.getName()
+            : HoodieParquetInputFormat.class.getName();
+        hoodieHiveClient.createTable(tableName, schema, inputFormatClassName, MapredParquetOutputFormat.class.getName(),
             ParquetHiveSerDe.class.getName());
       } else {
         // Custom serde will not work with ALTER TABLE REPLACE COLUMNS
@@ -142,18 +152,18 @@ public class HiveSyncTool {
         String inputFormatClassName =
             cfg.usePreApacheInputFormat ? com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat.class.getName()
                 : HoodieParquetRealtimeInputFormat.class.getName();
-        hoodieHiveClient.createTable(schema, inputFormatClassName, MapredParquetOutputFormat.class.getName(),
+        hoodieHiveClient.createTable(tableName, schema, inputFormatClassName, MapredParquetOutputFormat.class.getName(),
             ParquetHiveSerDe.class.getName());
       }
     } else {
       // Check if the table schema has evolved
-      Map<String, String> tableSchema = hoodieHiveClient.getTableSchema();
+      Map<String, String> tableSchema = hoodieHiveClient.getTableSchema(tableName);
       SchemaDifference schemaDiff = SchemaUtil.getSchemaDifference(schema, tableSchema, cfg.partitionFields);
       if (!schemaDiff.isEmpty()) {
-        LOG.info("Schema difference found for " + cfg.tableName);
-        hoodieHiveClient.updateTableDefinition(schema);
+        LOG.info("Schema difference found for " + tableName);
+        hoodieHiveClient.updateTableDefinition(tableName, schema);
       } else {
-        LOG.info("No Schema difference for " + cfg.tableName);
+        LOG.info("No Schema difference for " + tableName);
       }
     }
   }
@@ -162,19 +172,19 @@ public class HiveSyncTool {
    * Syncs the list of storage parititions passed in (checks if the partition is in hive, if not adds it or if the
    * partition path does not match, it updates the partition path).
    */
-  private void syncPartitions(List<String> writtenPartitionsSince) {
+  private void syncPartitions(String tableName, List<String> writtenPartitionsSince) {
     try {
-      List<Partition> hivePartitions = hoodieHiveClient.scanTablePartitions();
+      List<Partition> hivePartitions = hoodieHiveClient.scanTablePartitions(tableName);
       List<PartitionEvent> partitionEvents =
           hoodieHiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince);
       List<String> newPartitions = filterPartitions(partitionEvents, PartitionEventType.ADD);
       LOG.info("New Partitions " + newPartitions);
-      hoodieHiveClient.addPartitionsToTable(newPartitions);
+      hoodieHiveClient.addPartitionsToTable(tableName, newPartitions);
       List<String> updatePartitions = filterPartitions(partitionEvents, PartitionEventType.UPDATE);
       LOG.info("Changed Partitions " + updatePartitions);
-      hoodieHiveClient.updatePartitionsToTable(updatePartitions);
+      hoodieHiveClient.updatePartitionsToTable(tableName, updatePartitions);
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to sync partitions for table " + cfg.tableName, e);
+      throw new HoodieHiveSyncException("Failed to sync partitions for table " + tableName, e);
     }
   }
 

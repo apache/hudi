@@ -77,7 +77,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
     // Consumer of this record reader
     this.iterator = this.executor.getQueue().iterator();
     this.logRecordScanner = new HoodieUnMergedLogRecordScanner(FSUtils.getFs(split.getPath().toString(), jobConf),
-        split.getBasePath(), split.getDeltaFilePaths(), getReaderSchema(), split.getMaxCommitTime(),
+        split.getBasePath(), split.getDeltaLogPaths(), getReaderSchema(), split.getMaxCommitTime(),
         Boolean
             .valueOf(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
         false, jobConf.getInt(MAX_DFS_STREAM_BUFFER_SIZE_PROP, DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE), record -> {

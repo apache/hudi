@@ -18,8 +18,11 @@
 
 package org.apache.hudi.common.table.string;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.model.TimelineLayoutVersion;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -31,8 +34,10 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
+import java.io.IOException;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.TimelineLayoutVersion.VERSION_0;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -52,7 +57,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testLoadingInstantsFromFiles() {
+  public void testLoadingInstantsFromFiles() throws IOException {
     HoodieInstant instant1 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
     HoodieInstant instant2 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "3");
     HoodieInstant instant3 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "5");
@@ -96,6 +101,33 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         timeline.getCommitTimeline().filterCompletedInstants().getInstants());
     HoodieTestUtils.assertStreamEquals("Check the instants stream", Stream.of(instant5),
         timeline.getCommitTimeline().filterPendingExcludingCompaction().getInstants());
+
+    // Backwards compatibility testing for reading compaction plans
+    metaClient = HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(),
+        metaClient.getBasePath(), metaClient.getTableType(), metaClient.getTableConfig().getTableName(),
+        metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_0);
+    HoodieInstant instant6 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "9");
+    byte[] dummy = new byte[5];
+    HoodieActiveTimeline oldTimeline = new HoodieActiveTimeline(new HoodieTableMetaClient(metaClient.getHadoopConf(),
+        metaClient.getBasePath(), true, metaClient.getConsistencyGuardConfig(),
+        Option.of(new TimelineLayoutVersion(VERSION_0))));
+    // Old Timeline writes both to aux and timeline folder
+    oldTimeline.saveToCompactionRequested(instant6, Option.of(dummy));
+    // Now use latest timeline version
+    timeline = timeline.reload();
+    // Ensure aux file is present
+    assertTrue(metaClient.getFs().exists(new Path(metaClient.getMetaAuxiliaryPath(), instant6.getFileName())));
+    // Read 5 bytes
+    assertEquals(timeline.readCompactionPlanAsBytes(instant6).get().length, 5);
+
+    // Delete auxiliary file to mimic future release where we stop writing to aux
+    metaClient.getFs().delete(new Path(metaClient.getMetaAuxiliaryPath(), instant6.getFileName()));
+
+    // Ensure requested instant is not present in aux
+    assertFalse(metaClient.getFs().exists(new Path(metaClient.getMetaAuxiliaryPath(), instant6.getFileName())));
+
+    // Now read compaction plan again which should not throw exception
+    assertEquals(timeline.readCompactionPlanAsBytes(instant6).get().length, 5);
   }
 
   @Test

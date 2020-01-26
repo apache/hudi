@@ -118,14 +118,14 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void ingestFirstBatchAndHiveSync() throws Exception {
     List<String> cmds = new ImmutableList.Builder<String>()
         .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
-            + " --storage-type COPY_ON_WRITE "
+            + " --table-type COPY_ON_WRITE "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties "
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
             + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME))
         .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
-            + " --storage-type MERGE_ON_READ "
+            + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties "
@@ -139,7 +139,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testHiveAfterFirstBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_TBLCHECK_COMMANDS);
     assertStdOutContains(stdOutErrPair, "| stock_ticks_cow     |");
-    assertStdOutContains(stdOutErrPair, "| stock_ticks_mor     |");
+    assertStdOutContains(stdOutErrPair, "| stock_ticks_mor_ro  |");
     assertStdOutContains(stdOutErrPair, "| stock_ticks_mor_rt  |");
 
     assertStdOutContains(stdOutErrPair,
@@ -159,7 +159,8 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testSparkSQLAfterFirstBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_BATCH1_COMMANDS, true);
     assertStdOutContains(stdOutErrPair, "|default |stock_ticks_cow   |false      |\n"
-        + "|default |stock_ticks_mor    |false      |\n|default |stock_ticks_mor_rt |false      |");
+                                                    + "|default |stock_ticks_mor_ro |false      |\n" +
+                                                      "|default |stock_ticks_mor_rt |false      |");
     assertStdOutContains(stdOutErrPair,
         "+------+-------------------+\n|GOOG  |2018-08-31 10:29:00|\n+------+-------------------+", 3);
     assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 09:59:00|6330  |1230.5   |1230.02 |", 3);
@@ -170,14 +171,14 @@ public class ITTestHoodieDemo extends ITTestBase {
     List<String> cmds = new ImmutableList.Builder<String>()
         .add("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH2 + " " + HDFS_BATCH_PATH2)
         .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
-            + " --storage-type COPY_ON_WRITE "
+            + " --table-type COPY_ON_WRITE "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties "
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
             + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME))
         .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
-            + " --storage-type MERGE_ON_READ "
+            + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties "
@@ -291,8 +292,10 @@ public class ITTestHoodieDemo extends ITTestBase {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_INCREMENTAL_COMMANDS, true);
     assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:59:00|9021  |1227.1993|1227.215|");
     assertStdOutContains(stdOutErrPair, "|default |stock_ticks_cow           |false      |\n"
-        + "|default |stock_ticks_derived_mor   |false      |\n|default |stock_ticks_derived_mor_rt|false      |\n"
-        + "|default |stock_ticks_mor           |false      |\n|default |stock_ticks_mor_rt        |false      |\n"
+        + "|default |stock_ticks_derived_mor_ro|false      |\n"
+        + "|default |stock_ticks_derived_mor_rt|false      |\n"
+        + "|default |stock_ticks_mor_ro        |false      |\n"
+        + "|default |stock_ticks_mor_rt        |false      |\n"
         + "|        |stock_ticks_cow_incr      |true       |");
     assertStdOutContains(stdOutErrPair, "|count(1)|\n+--------+\n|99     |", 2);
   }

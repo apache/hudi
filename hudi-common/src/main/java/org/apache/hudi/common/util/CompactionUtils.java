@@ -69,8 +69,8 @@ public class CompactionUtils {
     builder.setFileId(fileSlice.getFileId());
     builder.setBaseInstantTime(fileSlice.getBaseInstantTime());
     builder.setDeltaFilePaths(fileSlice.getLogFiles().map(lf -> lf.getPath().getName()).collect(Collectors.toList()));
-    if (fileSlice.getDataFile().isPresent()) {
-      builder.setDataFilePath(fileSlice.getDataFile().get().getFileName());
+    if (fileSlice.getBaseFile().isPresent()) {
+      builder.setDataFilePath(fileSlice.getBaseFile().get().getFileName());
     }
 
     if (metricsCaptureFunction.isPresent()) {
@@ -140,7 +140,7 @@ public class CompactionUtils {
       throws IOException {
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
     HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
-        metaClient.getActiveTimeline().readPlanAsBytes(
+        metaClient.getActiveTimeline().readCompactionPlanAsBytes(
             HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
     return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
   }
