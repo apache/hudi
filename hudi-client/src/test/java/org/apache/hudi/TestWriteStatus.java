@@ -24,6 +24,7 @@ import org.junit.Test;
 import org.mockito.Mockito;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class TestWriteStatus {
@@ -37,6 +38,14 @@ public class TestWriteStatus {
     assertTrue(status.getFailedRecords().size() > 0);
     assertTrue(status.getFailedRecords().size() < 150); // 150 instead of 100, to prevent flaky test
     assertTrue(status.hasErrors());
+
+    assertFalse(status.hasGlobalError());
+    status.setGlobalError(t);
+    assertTrue(status.hasGlobalError());
+    assertEquals(status.getGlobalError(), t);
+
+    status.setTotalErrorRecords(1000);
+    assertEquals(status.getTotalErrorRecords(), 1000);
   }
 
   @Test
@@ -49,7 +58,18 @@ public class TestWriteStatus {
     }
     assertEquals(1000, status.getFailedRecords().size());
     assertTrue(status.hasErrors());
+    assertEquals(status.getErrors().size(), 1);
     assertTrue(status.getWrittenRecords().isEmpty());
     assertEquals(2000, status.getTotalRecords());
+
+    status.setTotalRecords(1000);
+    assertEquals(status.getTotalRecords(), 1000);
+  }
+
+  @Test
+  public void testAdditional() {
+    WriteStatus status = new WriteStatus(false, 1.0);
+    // format is not enforced so we dont need to test it
+    status.toString();
   }
 }
