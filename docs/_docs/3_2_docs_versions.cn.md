@@ -11,8 +11,8 @@ language: cn
       {% for d in site.previous_docs %}
         <tr>
             <th>{{ d.version }}</th>
-            <td><a href="{{ d.en }}">English Version</a></td>
-            <td><a href="{{ d.cn }}">Chinese Version</a></td>
+            <td><a href="{{ d.en }}">英文版</a></td>
+            <td><a href="{{ d.cn }}">中文版</a></td>
         </tr>
       {% endfor %}
     </tbody>
