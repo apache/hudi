@@ -1092,6 +1092,6 @@
 
   <issueManagement>
     <system>GitHub</system>
-    <url>https://github.org/apache/hudi/issues</url>
+    <url>https://github.com/apache/incubator-hudi/issues</url>
   </issueManagement>
 </project>
