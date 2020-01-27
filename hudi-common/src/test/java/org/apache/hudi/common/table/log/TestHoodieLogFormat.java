@@ -414,6 +414,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         dataBlockRead.getRecords().size());
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords1,
         dataBlockRead.getRecords());
+    assertEquals(dataBlockRead.getSchema(), getSimpleSchema());
 
     reader.hasNext();
     nextBlock = reader.next();
@@ -1388,5 +1389,37 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     assertFalse(reader.hasPrev());
     reader.close();
+  }
+
+  @Test
+  public void testV0Format() throws IOException, InterruptedException, URISyntaxException {
+    // HoodieLogFormatVersion.DEFAULT_VERSION has been deprecated so we cannot
+    // create a writer for it. So these tests are only for the HoodieAvroDataBlock
+    // of older version.
+    Schema schema = getSimpleSchema();
+    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
+    List<IndexedRecord> recordsCopy = new ArrayList<>(records);
+    assertEquals(records.size(), 100);
+    assertEquals(recordsCopy.size(), 100);
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, schema);
+    byte[] content = dataBlock.getBytes(schema);
+    assertTrue(content.length > 0);
+
+    HoodieLogBlock logBlock = HoodieAvroDataBlock.getBlock(content, schema);
+    assertEquals(logBlock.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
+    List<IndexedRecord> readRecords = ((HoodieAvroDataBlock)logBlock).getRecords();
+    assertEquals(readRecords.size(), recordsCopy.size());
+    for (int i = 0; i < recordsCopy.size(); ++i) {
+      assertEquals(recordsCopy.get(i), readRecords.get(i));
+    }
+
+    // Reader schema is optional if it is same as write schema
+    logBlock = HoodieAvroDataBlock.getBlock(content, null);
+    assertEquals(logBlock.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
+    readRecords = ((HoodieAvroDataBlock)logBlock).getRecords();
+    assertEquals(readRecords.size(), recordsCopy.size());
+    for (int i = 0; i < recordsCopy.size(); ++i) {
+      assertEquals(recordsCopy.get(i), readRecords.get(i));
+    }
   }
 }
