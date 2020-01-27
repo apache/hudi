@@ -81,6 +81,14 @@ table {
     font-size: 18px;
     margin: 0.75em;
   }
+
+  // landing page feature table
+  table td {
+    border-top: 0px;
+    border-right: 0px;
+    border-left: 0px;
+    border-bottom: 1px solid #ceeef7;
+  }
 }
 
 .home-power-items {
