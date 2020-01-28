@@ -159,9 +159,21 @@ body {
 
   .docversions {
     display: block;
-    margin-top: 8px;
-    margin-right: 3px;
+
+    th {
+        display: block;
+        margin-top: 8px;
+        margin-right: 3px;
+    }
+
+    td {
+        border-top: 0px;
+        border-right: 0px;
+        border-left: 0px;
+    }
+
   }
+
 }
 
 .page__hero {
