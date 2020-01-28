@@ -72,6 +72,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     this.replication = replication;
     this.logWriteToken = logWriteToken;
     this.rolloverLogWriteToken = rolloverLogWriteToken;
+    addShutDownHook();
     Path path = logFile.getPath();
     if (fs.exists(path)) {
       boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
@@ -87,6 +88,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
             // may still happen if scheme is viewfs.
             isAppendSupported = false;
           } else {
+            /*
+             * Before throwing an exception, close the outputstream,
+             * to ensure that the lease on the log file is released.
+             */
+            close();
             throw ioe;
           }
         }
@@ -221,6 +227,24 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     return output.getPos();
   }
 
+  /**
+   * Close the output stream when the JVM exits.
+   */
+  private void addShutDownHook() {
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      public void run() {
+        try {
+          if (output != null) {
+            close();
+          }
+        } catch (Exception e) {
+          LOG.warn("unable to close output stream for log file " + logFile, e);
+          // fail silently for any sort of exception
+        }
+      }
+    });
+  }
+
   private void handleAppendExceptionOrRecoverLease(Path path, RemoteException e)
       throws IOException, InterruptedException {
     if (e.getMessage().contains(APPEND_UNAVAILABLE_EXCEPTION_MESSAGE)) {
@@ -256,7 +280,23 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
         throw new HoodieException(e);
       }
     } else {
-      throw new HoodieIOException("Failed to open an append stream ", e);
+      // When fs.append() has failed and an exception is thrown, by closing the output stream
+      // we shall force hdfs to release the lease on the log file. When Spark retries this task (with
+      // new attemptId, say taskId.1) it will be able to acquire lease on the log file (as output stream was
+      // closed properly by taskId.0).
+      //
+      // If close() call were to fail throwing an exception, our best bet is to rollover to a new log file.
+      try {
+        close();
+        // output stream has been successfully closed and lease on the log file has been released,
+        // before throwing an exception for the append failure.
+        throw new HoodieIOException("Failed to append to the output stream ", e);
+      } catch (Exception ce) {
+        LOG.warn("Failed to close the output stream for " + fs.getClass().getName() + " on path " + path
+            + ". Rolling over to a new log file.");
+        this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
+        createNewFile();
+      }
     }
   }
 
