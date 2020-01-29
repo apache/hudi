@@ -224,6 +224,17 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
       case e: HoodieKeyException =>
         // do nothing
     }
+
+    // reset name and field1 values.
+    baseRecord.put("name", "name1")
+    baseRecord.put("field1", "field1")
+    val hk7 = new ComplexKeyGenerator(getKeyConfig("field1, name", "field1, name", "false")).getKey(baseRecord)
+    assertEquals("field1:field1,name:name1", hk7.getRecordKey)
+    assertEquals("field1/name1", hk7.getPartitionPath)
+
+    val hk8 = new ComplexKeyGenerator(getKeyConfig("field1,", "field1,", "false")).getKey(baseRecord)
+    assertEquals("field1:field1", hk8.getRecordKey)
+    assertEquals("field1", hk8.getPartitionPath)
   }
 
   @Test def testGlobalDeleteKeyGenerator() = {
