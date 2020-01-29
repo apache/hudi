@@ -13,6 +13,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 
 /**
  * A FileSystem which stores all content in memory and returns a byte[] when {@link #getFileAsBytes()} is called
@@ -24,20 +25,21 @@ public class InMemoryFileSystem extends FileSystem {
   private ByteArrayOutputStream bos;
   private Configuration conf = null;
   static final String SCHEME = "inmemfs";
+  private URI uri;
 
   InMemoryFileSystem() {
-    bos = new ByteArrayOutputStream();
   }
 
   @Override
   public void initialize(URI name, Configuration conf) throws IOException {
     super.initialize(name, conf);
     this.conf = conf;
+    this.uri = name;
   }
 
   @Override
   public URI getUri() {
-    return URI.create(getScheme());
+    return uri;
   }
 
   public String getScheme() {
@@ -52,6 +54,12 @@ public class InMemoryFileSystem extends FileSystem {
   @Override
   public FSDataOutputStream create(Path path, FsPermission fsPermission, boolean b, int i, short i1, long l,
                                    Progressable progressable) throws IOException {
+    bos = new ByteArrayOutputStream();
+    try {
+      this.uri = new URI(path.toString());
+    } catch (URISyntaxException e) {
+      throw new IllegalArgumentException("Path not parsable as URI " + path);
+    }
     return new FSDataOutputStream(bos, new Statistics(getScheme()));
   }
 
@@ -76,9 +84,7 @@ public class InMemoryFileSystem extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path inlinePath) throws FileNotFoundException, IOException {
-    System.out.println("listStatus invoked ");
     throw new UnsupportedOperationException("No support for listStatus");
-    // return new FileStatus[] {getFileStatus(inlinePath)};
   }
 
   @Override

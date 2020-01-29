@@ -50,11 +50,12 @@ public class TestInMemoryFileSystem {
     byte[] randomBytes = new byte[RANDOM.nextInt(1000)];
     RANDOM.nextBytes(randomBytes);
     out.write(randomBytes);
+    out.close();
     InMemoryFileSystem inMemoryFileSystem = (InMemoryFileSystem) outerInMemFSPath.getFileSystem(conf);
     byte[] bytesRead = inMemoryFileSystem.getFileAsBytes();
     Assert.assertArrayEquals(randomBytes, bytesRead);
     Assert.assertEquals(InMemoryFileSystem.SCHEME, inMemoryFileSystem.getScheme());
-    Assert.assertEquals(URI.create(InMemoryFileSystem.SCHEME), inMemoryFileSystem.getUri());
+    Assert.assertEquals(URI.create(outerInMemFSPath.toString()), inMemoryFileSystem.getUri());
   }
 
   @Test

@@ -75,7 +75,7 @@ public class TestParquetReadWriteFlow {
     Path outerInMemFSPath = getRandomOuterInMemPath();
     Path outerPath = new Path(FILE_SCHEME + outerInMemFSPath.toString().substring(outerInMemFSPath.toString().indexOf(':')));
     generatedPath = outerPath;
-    ParquetWriter inlineWriter = new AvroParquetWriter(outerInMemFSPath, HoodieTestDataGenerator.avroSchema,
+    ParquetWriter inlineWriter = new AvroParquetWriter(outerInMemFSPath, HoodieTestDataGenerator.AVRO_SCHEMA,
         CompressionCodecName.GZIP, 100 * 1024 * 1024, 1024 * 1024, true, inMemoryConf);
     // write few records
     List<GenericRecord> recordsToWrite = getParquetHoodieRecords();
@@ -142,7 +142,7 @@ public class TestParquetReadWriteFlow {
     List<HoodieRecord> hoodieRecords = dataGenerator.generateInsertsWithHoodieAvroPayload(commitTime, 10);
     List<GenericRecord> toReturn = new ArrayList<>();
     for (HoodieRecord record : hoodieRecords) {
-      toReturn.add((GenericRecord) record.getData().getInsertValue(HoodieTestDataGenerator.avroSchema).get());
+      toReturn.add((GenericRecord) record.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get());
     }
     return toReturn;
   }
