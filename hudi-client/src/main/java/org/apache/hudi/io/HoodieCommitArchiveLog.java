@@ -239,7 +239,7 @@ public class HoodieCommitArchiveLog {
     return success;
   }
 
-  public void archive(List<HoodieInstant> instants) throws HoodieCommitException {
+  public void archive(List<HoodieInstant> instants) {
     try {
       HoodieTimeline commitTimeline = metaClient.getActiveTimeline().getAllCommitsTimeline().filterCompletedInstants();
       Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();

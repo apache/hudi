@@ -30,7 +30,7 @@ public abstract class BoundedInMemoryQueueConsumer<I, O> {
    *
    * @param queue In Memory bounded queue
    */
-  public O consume(BoundedInMemoryQueue<?, I> queue) throws Exception {
+  public O consume(BoundedInMemoryQueue<?, I> queue) {
     Iterator<I> iterator = queue.iterator();
 
     while (iterator.hasNext()) {

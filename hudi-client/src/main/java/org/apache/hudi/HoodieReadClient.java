@@ -200,7 +200,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
    * @param hoodieRecords Input RDD of Hoodie records
    * @return Tagged RDD of Hoodie records
    */
-  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> hoodieRecords) throws HoodieIndexException {
+  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> hoodieRecords) {
     return index.tagLocation(hoodieRecords, jsc, hoodieTable);
   }
 

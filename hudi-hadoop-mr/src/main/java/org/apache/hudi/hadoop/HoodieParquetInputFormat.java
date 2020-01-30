@@ -200,7 +200,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
    * @throws IOException
    */
   private Map<HoodieTableMetaClient, List<FileStatus>> groupFileStatusForSnapshotPaths(
-      FileStatus[] fileStatuses, Collection<HoodieTableMetaClient> metaClientList) throws IOException {
+      FileStatus[] fileStatuses, Collection<HoodieTableMetaClient> metaClientList) {
     // This assumes the paths for different tables are grouped together
     Map<HoodieTableMetaClient, List<FileStatus>> grouped = new HashMap<>();
     HoodieTableMetaClient metadata = null;

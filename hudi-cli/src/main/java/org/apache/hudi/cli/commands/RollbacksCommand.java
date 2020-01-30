@@ -56,8 +56,7 @@ public class RollbacksCommand implements CommandMarker {
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
-      throws IOException {
+          unspecifiedDefaultValue = "false") final boolean headerOnly) {
     HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.getTableMetaClient());
     HoodieTimeline rollback = activeTimeline.getRollbackTimeline().filterCompletedInstants();
 

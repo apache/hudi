@@ -310,8 +310,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats)
-      throws HoodieIOException {
+  public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats) {
     // delegate to base class for MOR tables
     super.finalizeWrite(jsc, instantTs, stats);
   }

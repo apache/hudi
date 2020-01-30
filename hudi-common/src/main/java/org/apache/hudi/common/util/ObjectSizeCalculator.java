@@ -105,7 +105,7 @@ public class ObjectSizeCalculator {
    * @return the total allocated size of the object and all other objects it retains.
    * @throws UnsupportedOperationException if the current vm memory layout cannot be detected.
    */
-  public static long getObjectSize(Object obj) throws UnsupportedOperationException {
+  public static long getObjectSize(Object obj) {
     return obj == null ? 0 : new ObjectSizeCalculator(CurrentLayout.SPEC).calculateObjectSize(obj);
   }
 

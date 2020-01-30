@@ -80,7 +80,7 @@ public class AvroConvertor implements Serializable {
     }
   }
 
-  public GenericRecord fromJson(String json) throws IOException {
+  public GenericRecord fromJson(String json) {
     initSchema();
     initJsonConvertor();
     return jsonConverter.convert(json, schema);

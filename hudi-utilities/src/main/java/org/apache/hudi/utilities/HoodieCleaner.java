@@ -60,7 +60,7 @@ public class HoodieCleaner {
    */
   private TypedProperties props;
 
-  public HoodieCleaner(Config cfg, JavaSparkContext jssc) throws IOException {
+  public HoodieCleaner(Config cfg, JavaSparkContext jssc) {
     this.cfg = cfg;
     this.jssc = jssc;
     this.fs = FSUtils.getFs(cfg.basePath, jssc.hadoopConfiguration());
@@ -75,7 +75,7 @@ public class HoodieCleaner {
     client.clean();
   }
 
-  private HoodieWriteConfig getHoodieClientConfig() throws Exception {
+  private HoodieWriteConfig getHoodieClientConfig() {
     return HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.basePath).withAutoCommit(false)
         .withProps(props).build();
   }

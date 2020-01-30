@@ -84,7 +84,7 @@ public class RocksDBDAO {
   /**
    * Initialized Rocks DB instance.
    */
-  private void init() throws HoodieException {
+  private void init() {
     try {
       LOG.info("DELETING RocksDB persisted at " + rocksDBBasePath);
       FileIOUtils.deleteDirectory(new File(rocksDBBasePath));

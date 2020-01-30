@@ -293,7 +293,7 @@ public class SparkMain {
     }
   }
 
-  private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
+  private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) {
     HoodieWriteClient client = createHoodieClient(jsc, basePath);
     if (client.rollbackToSavepoint(savepointTime)) {
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
@@ -304,7 +304,7 @@ public class SparkMain {
     }
   }
 
-  private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
+  private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
     return new HoodieWriteClient(jsc, config);

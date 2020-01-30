@@ -50,7 +50,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
   }
 
   public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(HoodieWriteConfig config,
-      JavaSparkContext jsc) throws HoodieIndexException {
+      JavaSparkContext jsc) {
     switch (config.getIndexType()) {
       case HBASE:
         return new HBaseIndex<>(config);
@@ -77,7 +77,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    * present).
    */
   public abstract JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, JavaSparkContext jsc,
-      HoodieTable<T> hoodieTable) throws HoodieIndexException;
+      HoodieTable<T> hoodieTable);
 
   /**
    * Extracts the location of written records, and updates the index.
@@ -85,7 +85,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    * TODO(vc): We may need to propagate the record as well in a WriteStatus class
    */
   public abstract JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc,
-      HoodieTable<T> hoodieTable) throws HoodieIndexException;
+      HoodieTable<T> hoodieTable);
 
   /**
    * Rollback the efffects of the commit made at commitTime.

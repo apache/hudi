@@ -56,7 +56,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
    * Goes through the log files and populates a map with latest version of each key logged, since the base split was
    * written.
    */
-  private HoodieMergedLogRecordScanner getMergedLogRecordScanner() throws IOException {
+  private HoodieMergedLogRecordScanner getMergedLogRecordScanner() {
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)

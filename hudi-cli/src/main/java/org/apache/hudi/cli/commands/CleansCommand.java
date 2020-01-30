@@ -80,7 +80,7 @@ public class CleansCommand implements CommandMarker {
   }
 
   @CliCommand(value = "cleans refresh", help = "Refresh the commits")
-  public String refreshCleans() throws IOException {
+`  public String refreshCleans() {
     HoodieCLI.refreshTableMetadata();
     return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
   }

@@ -200,7 +200,7 @@ public class UtilHelpers {
    * @param parallelism Parallelism
    */
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) throws Exception {
+      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())

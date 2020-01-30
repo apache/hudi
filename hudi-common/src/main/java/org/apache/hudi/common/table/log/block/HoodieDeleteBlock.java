@@ -102,7 +102,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
 
   public static HoodieLogBlock getBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
       boolean readBlockLazily, long position, long blockSize, long blockEndPos, Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer) throws IOException {
+      Map<HeaderMetadataType, String> footer) {
 
     return new HoodieDeleteBlock(content, inputStream, readBlockLazily,
         Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)), header, footer);

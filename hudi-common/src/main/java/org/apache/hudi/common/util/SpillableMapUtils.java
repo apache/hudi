@@ -102,7 +102,7 @@ public class SpillableMapUtils {
    * Compute a bytes representation of the payload by serializing the contents This is used to estimate the size of the
    * payload (either in memory or when written to disk).
    */
-  public static <R> long computePayloadSize(R value, SizeEstimator<R> valueSizeEstimator) throws IOException {
+  public static <R> long computePayloadSize(R value, SizeEstimator<R> valueSizeEstimator) {
     return valueSizeEstimator.sizeEstimate(value);
   }
 

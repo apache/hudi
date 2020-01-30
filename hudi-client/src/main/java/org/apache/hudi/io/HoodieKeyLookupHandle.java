@@ -70,7 +70,7 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
    * Given a list of row keys and one file, return only row keys existing in that file.
    */
   public static List<String> checkCandidatesAgainstFile(Configuration configuration, List<String> candidateRecordKeys,
-                                                        Path filePath) throws HoodieIndexException {
+                                                        Path filePath) {
     List<String> foundRecordKeys = new ArrayList<>();
     try {
       // Load all rowKeys from the file, to double-confirm

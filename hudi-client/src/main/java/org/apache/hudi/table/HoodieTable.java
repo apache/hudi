@@ -310,8 +310,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param stats List of HoodieWriteStats
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
-  public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats)
-      throws HoodieIOException {
+  public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats) {
     cleanFailedWrites(jsc, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled());
   }
 
@@ -345,7 +344,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @throws HoodieIOException
    */
   protected void cleanFailedWrites(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats,
-      boolean consistencyCheckEnabled) throws HoodieIOException {
+      boolean consistencyCheckEnabled) {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.

@@ -422,8 +422,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * are unknown across batches Inserts (which are new parquet files) are rolled back based on commit time. // TODO :
    * Create a new WorkloadProfile metadata file instead of using HoodieCommitMetadata
    */
-  private void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, HoodieTable<T> table, String commitTime)
-      throws HoodieCommitException {
+  private void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, HoodieTable<T> table, String commitTime) {
     try {
       HoodieCommitMetadata metadata = new HoodieCommitMetadata();
       profile.getPartitionPaths().forEach(path -> {
@@ -713,7 +712,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @param commitTime Instant time of the commit
    * @return {@code true} If rollback the record changes successfully. {@code false} otherwise
    */
-  public boolean rollback(final String commitTime) throws HoodieRollbackException {
+  public boolean rollback(final String commitTime) {
     rollbackInternal(commitTime);
     return true;
   }
@@ -726,7 +725,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    *
    * @param instantTime Instant time to which restoration is requested
    */
-  public void restoreToInstant(final String instantTime) throws HoodieRollbackException {
+  public void restoreToInstant(final String instantTime) {
 
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
@@ -821,7 +820,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
    * cleaned)
    */
-  public void clean() throws HoodieIOException {
+  public void clean() {
     cleanClient.clean();
   }
 
@@ -833,7 +832,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @param startCleanTime Cleaner Instant Timestamp
    * @throws HoodieIOException in case of any IOException
    */
-  protected HoodieCleanMetadata clean(String startCleanTime) throws HoodieIOException {
+  protected HoodieCleanMetadata clean(String startCleanTime) {
     return cleanClient.clean(startCleanTime);
   }
 

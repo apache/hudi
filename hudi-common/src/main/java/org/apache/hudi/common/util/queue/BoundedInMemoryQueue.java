@@ -222,7 +222,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * Puts an empty entry to queue to denote termination.
    */
-  public void close() throws InterruptedException {
+  public void close() {
     // done queueing records notifying queue-reader.
     isWriteDone.set(true);
   }

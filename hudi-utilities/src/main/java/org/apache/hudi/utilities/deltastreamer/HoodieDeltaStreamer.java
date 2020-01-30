@@ -143,7 +143,7 @@ public class HoodieDeltaStreamer implements Serializable {
   private static class OperationConvertor implements IStringConverter<Operation> {
 
     @Override
-    public Operation convert(String value) throws ParameterException {
+    public Operation convert(String value) {
       return Operation.valueOf(value);
     }
   }

@@ -309,7 +309,7 @@ public class HiveIncrementalPuller {
     return FileSystem.mkdirs(fs, targetBaseDirPath, new FsPermission(FsAction.ALL, FsAction.ALL, FsAction.ALL));
   }
 
-  private String getLastCommitTimePulled(FileSystem fs, String sourceTableLocation) throws IOException {
+  private String getLastCommitTimePulled(FileSystem fs, String sourceTableLocation) {
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs.getConf(), sourceTableLocation);
     List<String> commitsToSync = metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
         .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstants().map(HoodieInstant::getTimestamp)

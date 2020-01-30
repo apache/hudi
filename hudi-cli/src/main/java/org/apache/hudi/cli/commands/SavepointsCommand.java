@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
 public class SavepointsCommand implements CommandMarker {
 
   @CliCommand(value = "savepoints show", help = "Show the savepoints")
-  public String showSavepoints() throws IOException {
+  public String showSavepoints() {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getSavePointTimeline().filterCompletedInstants();
     List<HoodieInstant> commits = timeline.getReverseOrderedInstants().collect(Collectors.toList());
@@ -65,8 +65,7 @@ public class SavepointsCommand implements CommandMarker {
   @CliCommand(value = "savepoint create", help = "Savepoint a commit")
   public String savepoint(@CliOption(key = {"commit"}, help = "Commit to savepoint") final String commitTime,
       @CliOption(key = {"user"}, unspecifiedDefaultValue = "default", help = "User who is creating the savepoint") final String user,
-      @CliOption(key = {"comments"}, unspecifiedDefaultValue = "default", help = "Comments for creating the savepoint") final String comments)
-      throws Exception {
+      @CliOption(key = {"comments"}, unspecifiedDefaultValue = "default", help = "Comments for creating the savepoint") final String comments) {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
@@ -127,7 +126,7 @@ public class SavepointsCommand implements CommandMarker {
     return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
   }
 
-  private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
+  private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
     return new HoodieWriteClient(jsc, config, false);

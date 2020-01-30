@@ -66,7 +66,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
    * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
    * cleaned)
    */
-  public void clean() throws HoodieIOException {
+  public void clean() {
     String startCleanTime = HoodieActiveTimeline.createNewInstantTime();
     clean(startCleanTime);
   }
@@ -79,7 +79,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
    * @param startCleanTime Cleaner Instant Timestamp
    * @throws HoodieIOException in case of any IOException
    */
-  protected HoodieCleanMetadata clean(String startCleanTime) throws HoodieIOException {
+  protected HoodieCleanMetadata clean(String startCleanTime) {
     // Create a Hoodie table which encapsulated the commits and files visible
     final HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
 

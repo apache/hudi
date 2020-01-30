@@ -55,7 +55,7 @@ public class SerializationUtils {
    * @return a byte[] with the converted Serializable
    * @throws IOException if the serialization fails
    */
-  public static byte[] serialize(final Object obj) throws IOException {
+  public static byte[] serialize(final Object obj) {
     return SERIALIZER_REF.get().serialize(obj);
   }
 
@@ -99,7 +99,7 @@ public class SerializationUtils {
       kryo.setRegistrationRequired(false);
     }
 
-    byte[] serialize(Object obj) throws IOException {
+    byte[] serialize(Object obj) {
       kryo.reset();
       baos.reset();
       Output output = new Output(baos);
