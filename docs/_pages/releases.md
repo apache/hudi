@@ -17,7 +17,7 @@ last_modified_at: 2019-12-30T15:59:57-04:00
     * Upgrade from Spark 2.1.0 to Spark 2.4.4
     * Upgrade from Avro 1.7.7 to Avro 1.8.2
     * Upgrade from Parquet 1.8.1 to Parquet 1.10.1
-    * Upgrade from Kafka 0.8.2.1 to Kafka 2.0.0 as a result of updating spark-streaming-kafka artifact from 0.8_2.11/2.12 to 0.10_2.11/12.
+    * Upgrade from Kafka 0.8.2.1 to Kafka 2.0.0 as a result of updating spark-streaming-kafka artifact from 0.8_2.11/2.12 to 0.10_2.11/2.12.
 * **IMPORTANT** This version requires your runtime spark version to be upgraded to 2.4+.
 * Hudi now supports both Scala 2.11 and Scala 2.12, please refer to [Build with Scala 2.12](https://github.com/apache/incubator-hudi#build-with-scala-212) to build with Scala 2.12.
 Also, the packages hudi-spark, hudi-utilities, hudi-spark-bundle and hudi-utilities-bundle are changed correspondingly to hudi-spark_{scala_version}, hudi-spark_{scala_version}, hudi-utilities_{scala_version}, hudi-spark-bundle_{scala_version} and hudi-utilities-bundle_{scala_version}.
