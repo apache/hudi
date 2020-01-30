@@ -65,11 +65,9 @@ mvn clean javadoc:aggregate -Pjavadocs
 
 ### Build with Scala 2.12
 
-The default Scala version supported is 2.11. To build for Scala 2.12 version, after code checkout run dev/change-scala-version.sh 
-and build using `scala-2.12` profile
+The default Scala version supported is 2.11. To build for Scala 2.12 version, build using `scala-2.12` profile
 
 ```
-dev/change-scala-version 2.12
 mvn clean package -DskipTests -DskipITs -Pscala-2.12
 ```
 
