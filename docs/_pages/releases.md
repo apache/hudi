@@ -40,7 +40,7 @@ If you are using this feature, you need to relocate the avro dependencies in you
 </relocation>
  ```
 
- * Better delete support in DeltaStreamer. Please refer to [blog](https://cwiki.apache.org/confluence/display/HUDI/2020/01/15/Delete+support+in+Hudi) for more info.
+ * Better delete support in DeltaStreamer, please refer to [blog](https://cwiki.apache.org/confluence/display/HUDI/2020/01/15/Delete+support+in+Hudi) for more info.
  * Support for AWS Database Migration Service(DMS) in DeltaStreamer, please refer to [blog](https://cwiki.apache.org/confluence/display/HUDI/2020/01/20/Change+Capture+Using+AWS+Database+Migration+Service+and+Hudi) for more info.
  * Support for DynamicBloomFilter. This is turned off by default, to enable the DynamicBloomFilter, please use the index config "hoodie.bloom.index.filter.type=DYNAMIC_V0".
 
