@@ -141,11 +141,11 @@ The intention of copy on write table, is to fundamentally improve how tables are
 
 Merge on read table is a superset of copy on write, in the sense it still supports read optimized queries of the table by exposing only the base/columnar files in latest file slices.
 Additionally, it stores incoming upserts for each file group, onto a row based delta log, to support snapshot queries by applying the delta log, 
-onto the latest version of each file id on-the-fly during query time. Thus, this table type attempts to balance read and write amplication intelligently, to provide near real-time data.
+onto the latest version of each file id on-the-fly during query time. Thus, this table type attempts to balance read and write amplification intelligently, to provide near real-time data.
 The most significant change here, would be to the compactor, which now carefully chooses which delta log files need to be compacted onto
 their columnar base file, to keep the query performance in check (larger delta log files would incur longer merge times with merge data on query side)
 
-Following illustrates how the table works, and shows two types of querying - snapshot querying and read optimized querying.
+Following illustrates how the table works, and shows two types of queries - snapshot query and read optimized query.
 
 <figure>
     <img class="docimage" src="/assets/images/hudi_mor.png" alt="hudi_mor.png" style="max-width: 100%" />
@@ -158,7 +158,7 @@ There are lot of interesting things happening in this example, which bring out t
  all the data from 10:05 to 10:10. The base columnar files are still versioned with the commit, as before.
  Thus, if one were to simply look at base files alone, then the table layout looks exactly like a copy on write table.
  - A periodic compaction process reconciles these changes from the delta log and produces a new version of base file, just like what happened at 10:05 in the example.
- - There are two ways of querying the same underlying table: Read Optimized querying and Snapshot querying, depending on whether we chose query performance or freshness of data.
+ - There are two ways of querying the same underlying table: Read Optimized query and Snapshot query, depending on whether we chose query performance or freshness of data.
  - The semantics around when data from a commit is available to a query changes in a subtle way for a read optimized query. Note, that such a query
  running at 10:10, wont see data after 10:05 above, while a snapshot query always sees the freshest data.
  - When we trigger compaction & what it decides to compact hold all the key to solving these hard problems. By implementing a compacting

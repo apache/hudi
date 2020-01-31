@@ -15,12 +15,12 @@ Specifically, following Hive tables are registered based off [table name](/docs/
 and [table type](/docs/configurations.html#TABLE_TYPE_OPT_KEY) passed during write.   
 
 If `table name = hudi_trips` and `table type = COPY_ON_WRITE`, then we get: 
- - `hudi_trips` supports snapshot querying and incremental querying of the table backed by `HoodieParquetInputFormat`, exposing purely columnar data.
+ - `hudi_trips` supports snapshot query and incremental query on the table backed by `HoodieParquetInputFormat`, exposing purely columnar data.
 
 
 If `table name = hudi_trips` and `table type = MERGE_ON_READ`, then we get:
- - `hudi_trips_rt` supports snapshot querying and incremental querying (providing near-real time data) of the table  backed by `HoodieParquetRealtimeInputFormat`, exposing merged view of base and log data.
- - `hudi_trips_ro` supports read optimized querying of the table backed by `HoodieParquetInputFormat`, exposing purely columnar data.
+ - `hudi_trips_rt` supports snapshot query and incremental query (providing near-real time data) on the table  backed by `HoodieParquetRealtimeInputFormat`, exposing merged view of base and log data.
+ - `hudi_trips_ro` supports read optimized query on the table backed by `HoodieParquetInputFormat`, exposing purely columnar data.
  
 
 As discussed in the concepts section, the one key primitive needed for [incrementally processing](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop),
@@ -89,11 +89,11 @@ separated) and calls InputFormat.listStatus() only once with all those partition
 Spark provides much easier deployment & management of Hudi jars and bundles into jobs/notebooks. At a high level, there are two ways to access Hudi tables in Spark.
 
  - **Hudi DataSource** : Supports Read Optimized, Incremental Pulls similar to how standard datasources (e.g: `spark.read.parquet`) work.
- - **Read as Hive tables** : Supports all three query types, including the snapshot querying, relying on the custom Hudi input formats again like Hive.
+ - **Read as Hive tables** : Supports all three query types, including the snapshot queries, relying on the custom Hudi input formats again like Hive.
  
- In general, your spark job needs a dependency to `hudi-spark` or `hudi-spark-bundle-x.y.z.jar` needs to be on the class path of driver & executors (hint: use `--jars` argument)
+ In general, your spark job needs a dependency to `hudi-spark` or `hudi-spark-bundle_2.*-x.y.z.jar` needs to be on the class path of driver & executors (hint: use `--jars` argument)
  
-### Read optimized querying
+### Read optimized query
 
 Pushing a path filter into sparkContext as follows allows for read optimized querying of a Hudi hive table using SparkSQL. 
 This method retains Spark built-in optimizations for reading Parquet files like vectorized reading on Hudi tables.
@@ -110,12 +110,12 @@ Dataset<Row> hoodieROViewDF = spark.read().format("org.apache.hudi")
 .load("/glob/path/pattern");
 ```
  
-### Snapshot querying {#spark-snapshot-querying}
-Currently, near-real time data can only be queried as a Hive table in Spark using snapshot querying mode. In order to do this, set `spark.sql.hive.convertMetastoreParquet=false`, forcing Spark to fallback 
+### Snapshot query {#spark-snapshot-query}
+Currently, near-real time data can only be queried as a Hive table in Spark using snapshot query mode. In order to do this, set `spark.sql.hive.convertMetastoreParquet=false`, forcing Spark to fallback 
 to using the Hive Serde to read the data (planning/executions is still Spark). 
 
 ```java
-$ spark-shell --jars hudi-spark-bundle-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages org.apache.spark:spark-avro_2.11:2.4.4 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
+$ spark-shell --jars hudi-spark-bundle_2.11-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages org.apache.spark:spark-avro_2.11:2.4.4 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
 
 scala> sqlContext.sql("select count(*) from hudi_trips_rt where datestr = '2016-10-02'").show()
 scala> sqlContext.sql("select count(*) from hudi_trips_rt where datestr = '2016-10-02'").show()
@@ -148,5 +148,5 @@ Additionally, `HoodieReadClient` offers the following functionality using Hudi's
 
 ## Presto
 
-Presto is a popular query engine, providing interactive query performance. Presto currently supports only read optimized querying on Hudi tables. 
+Presto is a popular query engine, providing interactive query performance. Presto currently supports only read optimized queries on Hudi tables. 
 This requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation.

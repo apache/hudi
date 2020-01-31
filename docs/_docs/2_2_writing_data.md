@@ -43,23 +43,56 @@ Command line options describe capabilities in more detail
 ```java
 [hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` --help
 Usage: <main class> [options]
-  Options:
+Options:
+    --checkpoint
+      Resume Delta Streamer from this checkpoint.
     --commit-on-errors
-        Commit even when some records failed to be written
+      Commit even when some records failed to be written
+      Default: false
+    --compact-scheduling-minshare
+      Minshare for compaction as defined in
+      https://spark.apache.org/docs/latest/job-scheduling.html
+      Default: 0
+    --compact-scheduling-weight
+      Scheduling weight for compaction as defined in
+      https://spark.apache.org/docs/latest/job-scheduling.html
+      Default: 1
+    --continuous
+      Delta Streamer runs in continuous mode running source-fetch -> Transform
+      -> Hudi Write in loop
+      Default: false
+    --delta-sync-scheduling-minshare
+      Minshare for delta sync as defined in
+      https://spark.apache.org/docs/latest/job-scheduling.html
+      Default: 0
+    --delta-sync-scheduling-weight
+      Scheduling weight for delta sync as defined in
+      https://spark.apache.org/docs/latest/job-scheduling.html
+      Default: 1
+    --disable-compaction
+      Compaction is enabled for MoR table by default. This flag disables it
       Default: false
     --enable-hive-sync
-          Enable syncing to hive
-       Default: false
+      Enable syncing to hive
+      Default: false
     --filter-dupes
-          Should duplicate records from source be dropped/filtered outbefore 
-          insert/bulk-insert 
+      Should duplicate records from source be dropped/filtered out before
+      insert/bulk-insert
       Default: false
     --help, -h
-    --hudi-conf
-          Any configuration that can be set in the properties file (using the CLI 
-          parameter "--propsFilePath") can also be passed command line using this 
-          parameter 
-          Default: []
+
+    --hoodie-conf
+      Any configuration that can be set in the properties file (using the CLI
+      parameter "--propsFilePath") can also be passed command line using this
+      parameter
+      Default: []
+    --max-pending-compactions
+      Maximum number of outstanding inflight/requested compactions. Delta Sync
+      will not happen unlessoutstanding compactions is less than this number
+      Default: 5
+    --min-sync-interval-seconds
+      the min sync interval of each sync in continuous mode
+      Default: 0
     --op
       Takes one of these values : UPSERT (default), INSERT (use when input is
       purely new data/inserts to gain speed)
@@ -69,19 +102,22 @@ Usage: <main class> [options]
       subclass of HoodieRecordPayload, that works off a GenericRecord.
       Implement your own, if you want to do something other than overwriting
       existing value
-      Default: org.apache.hudi.OverwriteWithLatestAvroPayload
+      Default: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
     --props
       path to properties file on localfs or dfs, with configurations for
-      Hudi client, schema provider, key generator and data source. For
-      Hudi client props, sane defaults are used, but recommend use to
+      hoodie client, schema provider, key generator and data source. For
+      hoodie client props, sane defaults are used, but recommend use to
       provide basic things like metrics endpoints, hive configs etc. For
       sources, referto individual classes, for supported properties.
       Default: file:///Users/vinoth/bin/hoodie/src/test/resources/delta-streamer-config/dfs-source.properties
     --schemaprovider-class
       subclass of org.apache.hudi.utilities.schema.SchemaProvider to attach
       schemas to input & target table data, built in options:
-      FilebasedSchemaProvider
-      Default: org.apache.hudi.utilities.schema.FilebasedSchemaProvider
+      org.apache.hudi.utilities.schema.FilebasedSchemaProvider.Source (See
+      org.apache.hudi.utilities.sources.Source) implementation can implement
+      their own SchemaProvider. For Sources that return Dataset<Row>, the
+      schema is obtained implicitly. However, this CLI option allows
+      overriding the schemaprovider returned by Source.
     --source-class
       Subclass of org.apache.hudi.utilities.sources to read data. Built-in
       options: org.apache.hudi.utilities.sources.{JsonDFSSource (default),
@@ -89,7 +125,7 @@ Usage: <main class> [options]
       Default: org.apache.hudi.utilities.sources.JsonDFSSource
     --source-limit
       Maximum amount of data to read from source. Default: No limit For e.g:
-      DFSSource => max bytes to read, KafkaSource => max events to read
+      DFS-Source => max bytes to read, Kafka-Source => max events to read
       Default: 9223372036854775807
     --source-ordering-field
       Field within source record to decide how to break ties between records
@@ -99,17 +135,19 @@ Usage: <main class> [options]
     --spark-master
       spark master to use.
       Default: local[2]
+  * --table-type
+      Type of table. COPY_ON_WRITE (or) MERGE_ON_READ
   * --target-base-path
-      base path for the target Hudi table. (Will be created if did not
-      exist first time around. If exists, expected to be a Hudi table)
+      base path for the target hoodie table. (Will be created if did not exist
+      first time around. If exists, expected to be a hoodie table)
   * --target-table
       name of the target table in Hive
     --transformer-class
-      subclass of org.apache.hudi.utilities.transform.Transformer. UDF to
-      transform raw source dataset to a target dataset (conforming to target
-      schema) before writing. Default : Not set. E:g -
+      subclass of org.apache.hudi.utilities.transform.Transformer. Allows
+      transforming raw source Dataset to a target Dataset (conforming to
+      target schema) before writing. Default : Not set. E:g -
       org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which
-      allows a SQL query template to be passed as a transformation function)
+      allows a SQL query templated to be passed as a transformation function)
 ```
 
 The tool takes a hierarchically composed property file and has pluggable interfaces for extracting data, key generation and providing schema. Sample configs for ingesting from kafka and dfs are
