@@ -37,7 +37,7 @@ import scala.collection.JavaConverters;
  */
 public class SparkBasedReader {
 
-  public static final String SPARK_AVRO_FORMAT = "com.databricks.spark.avro";
+  public static final String SPARK_AVRO_FORMAT = "avro";
   public static final String SPARK_PARQUET_FORMAT = "com.databricks.spark.parquet";
   private static final String AVRO_SCHEMA_OPTION_KEY = "avroSchema";
   private static final String DEFAULT_STRUCT_NAME = "test.struct";

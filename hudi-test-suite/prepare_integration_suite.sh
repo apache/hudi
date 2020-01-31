@@ -20,7 +20,7 @@ usage() {
 }
 
 get_spark_command() {
-echo "spark-submit --packages com.databricks:spark-avro_2.11:4.0.0 \
+echo "spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.4 \
 --master $0 \
 --deploy-mode $1 \
 --properties-file $2 \

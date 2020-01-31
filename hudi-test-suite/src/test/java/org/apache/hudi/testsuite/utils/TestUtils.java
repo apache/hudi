@@ -52,7 +52,7 @@ public class TestUtils {
     for (int i = 0; i < numFiles; i++) {
       JavaRDD<GenericRecord> rdd = makeRDD(jsc, numRecordsPerFile);
       AvroConversionUtils.createDataFrame(rdd.rdd(), schema.toString(), sparkSession).write()
-          .format("com.databricks.spark.avro").save(basePath + "/" + i);
+          .format("avro").save(basePath + "/" + i);
     }
   }
 
