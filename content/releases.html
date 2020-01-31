@@ -179,19 +179,26 @@
         
         <aside class="sidebar__right sticky">
           <nav class="toc">
-            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> In this page</h4></header>
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
             <ul class="toc__menu">
-  <li><a href="#release-050-incubating-docs">Release 0.5.0-incubating (docs)</a>
+  <li><a href="#release-051-incubating">[Release 0.5.1-incubating]</a>
     <ul>
       <li><a href="#download-information">Download Information</a></li>
       <li><a href="#release-highlights">Release Highlights</a></li>
-      <li><a href="#migration-guide-for-this-release">Migration Guide for this release</a></li>
       <li><a href="#raw-release-notes">Raw Release Notes</a></li>
+    </ul>
+  </li>
+  <li><a href="#release-050-incubating-docs">Release 0.5.0-incubating (docs)</a>
+    <ul>
+      <li><a href="#download-information-1">Download Information</a></li>
+      <li><a href="#release-highlights-1">Release Highlights</a></li>
+      <li><a href="#migration-guide-for-this-release">Migration Guide for this release</a></li>
+      <li><a href="#raw-release-notes-1">Raw Release Notes</a></li>
     </ul>
   </li>
   <li><a href="#release-047">Release 0.4.7</a>
     <ul>
-      <li><a href="#release-highlights-1">Release Highlights</a></li>
+      <li><a href="#release-highlights-2">Release Highlights</a></li>
       <li><a href="#pr-list">PR LIST</a></li>
     </ul>
   </li>
@@ -199,15 +206,64 @@
           </nav>
         </aside>
         
-        <h2 id="release-050-incubating-docs"><a href="https://github.com/apache/incubator-hudi/releases/tag/release-0.5.0-incubating">Release 0.5.0-incubating</a> (<a href="/docs/0.5.0-quick-start-guide.html">docs</a>)</h2>
+        <h2 id="release-051-incubating">[Release 0.5.1-incubating]</h2>
 
 <h3 id="download-information">Download Information</h3>
+<ul>
+  <li>Source Release : <a href="https://www.apache.org/dist/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz">Apache Hudi(incubating) 0.5.1-incubating Source Release</a> (<a href="https://www.apache.org/dist/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc">asc</a>, <a href="https://www.apache.org/dist/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Apache Hudi (incubating) jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
+</ul>
+
+<h3 id="release-highlights">Release Highlights</h3>
+<ul>
+  <li>Dependency Version Upgrades
+    <ul>
+      <li>Upgrade from Spark 2.1.0 to Spark 2.4.4</li>
+      <li>Upgrade from Avro 1.7.7 to Avro 1.8.2</li>
+      <li>Upgrade from Parquet 1.8.1 to Parquet 1.10.1</li>
+      <li>Upgrade from Kafka 0.8.2.1 to Kafka 2.0.0 as a result of updating spark-streaming-kafka artifact from 0.8_2.11/2.12 to 0.10_2.11/2.12.</li>
+    </ul>
+  </li>
+  <li><strong>IMPORTANT</strong> This version requires your runtime spark version to be upgraded to 2.4+.</li>
+  <li>Hudi now supports both Scala 2.11 and Scala 2.12, please refer to <a href="https://github.com/apache/incubator-hudi#build-with-scala-212">Build with Scala 2.12</a> to build with Scala 2.12.
+Also, the packages hudi-spark, hudi-utilities, hudi-spark-bundle and hudi-utilities-bundle are changed correspondingly to hudi-spark_{scala_version}, hudi-spark_{scala_version}, hudi-utilities_{scala_version}, hudi-spark-bundle_{scala_version} and hudi-utilities-bundle_{scala_version}.
+Note that scala_version here is one of (2.11, 2.12).</li>
+  <li>With 0.5.1, we added functionality to stop using renames for Hudi timeline metadata operations. This feature is automatically enabled for newly created Hudi tables. For existing tables, this feature is turned off by default. Please read this <a href="https://hudi.apache.org/docs/deployment.html#upgrading">section</a>, before enabling this feature for existing hudi tables.
+To enable the new hudi timeline layout which avoids renames, use the write config “hoodie.timeline.layout.version=1”. Alternatively, you can use “repair overwrite-hoodie-props” to append the line “hoodie.timeline.layout.version=1” to hoodie.properties. Note that in any case, upgrade hudi readers (query engines) first with 0.5.1-incubating release before upgrading writer.</li>
+  <li>CLI supports <code class="highlighter-rouge">repair overwrite-hoodie-props</code> to overwrite the table’s hoodie.properties with specified file, for one-time updates to table name or even enabling the new timeline layout above. Note that few queries may temporarily fail while the overwrite happens (few milliseconds).</li>
+  <li>DeltaStreamer CLI parameter for capturing table type is changed from –storage-type to –table-type. Refer to <a href="https://cwiki.apache.org/confluence/display/HUDI/Design+And+Architecture">wiki</a> with more latest terminologies.</li>
+  <li>Configuration Value change for Kafka Reset Offset Strategies. Enum values are changed from LARGEST to LATEST, SMALLEST to EARLIEST for configuring Kafka reset offset strategies with configuration(auto.offset.reset) in deltastreamer.</li>
+  <li>When using spark-shell to give a quick peek at Hudi, please provide <code class="highlighter-rouge">--packages org.apache.spark:spark-avro_2.11:2.4.4</code>, more details would refer to <a href="https://hudi.apache.org/docs/quick-start-guide.html">latest quickstart docs</a></li>
+  <li>Key generator moved to separate package under org.apache.hudi.keygen. If you are using overridden key generator classes (configuration (“hoodie.datasource.write.keygenerator.class”)) that comes with hudi package, please ensure the fully qualified class name is changed accordingly.</li>
+  <li>Hive Sync tool will register RO tables for MOR with a _ro suffix, so query with _ro suffix. You would use <code class="highlighter-rouge">--skip-ro-suffix</code> in sync config in sync config to retain the old naming without the _ro suffix.</li>
+  <li>With 0.5.1, hudi-hadoop-mr-bundle which is used by query engines such as presto and hive includes shaded avro package to support hudi real time queries through these engines. Hudi supports pluggable logic for merging of records. Users provide their own implementation of <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecordPayload.java">HoodieRecordPayload</a>.
+If you are using this feature, you need to relocate the avro dependencies in your custom record payload class to be consistent with internal hudi shading. You need to add the following relocation when shading the package containing the record payload implementation.</li>
+</ul>
+
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;relocation&gt;</span>
+    <span class="nt">&lt;pattern&gt;</span>org.apache.avro.<span class="nt">&lt;/pattern&gt;</span>
+    <span class="nt">&lt;shadedPattern&gt;</span>org.apache.hudi.org.apache.avro.<span class="nt">&lt;/shadedPattern&gt;</span>
+<span class="nt">&lt;/relocation&gt;</span>
+</code></pre></div></div>
+
+<ul>
+  <li>Better delete support in DeltaStreamer, please refer to <a href="https://cwiki.apache.org/confluence/display/HUDI/2020/01/15/Delete+support+in+Hudi">blog</a> for more info.</li>
+  <li>Support for AWS Database Migration Service(DMS) in DeltaStreamer, please refer to <a href="https://cwiki.apache.org/confluence/display/HUDI/2020/01/20/Change+Capture+Using+AWS+Database+Migration+Service+and+Hudi">blog</a> for more info.</li>
+  <li>Support for DynamicBloomFilter. This is turned off by default, to enable the DynamicBloomFilter, please use the index config “hoodie.bloom.index.filter.type=DYNAMIC_V0”.</li>
+</ul>
+
+<h3 id="raw-release-notes">Raw Release Notes</h3>
+<p>The raw release notes are available <a href="https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346183">here</a></p>
+
+<h2 id="release-050-incubating-docs"><a href="https://github.com/apache/incubator-hudi/releases/tag/release-0.5.0-incubating">Release 0.5.0-incubating</a> (<a href="/docs/0.5.0-quick-start-guide.html">docs</a>)</h2>
+
+<h3 id="download-information-1">Download Information</h3>
 <ul>
   <li>Source Release : <a href="https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz">Apache Hudi(incubating) 0.5.0-incubating Source Release</a> (<a href="https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc">asc</a>, <a href="https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512">sha512</a>)</li>
   <li>Apache Hudi (incubating) jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
 </ul>
 
-<h3 id="release-highlights">Release Highlights</h3>
+<h3 id="release-highlights-1">Release Highlights</h3>
 <ul>
   <li>Package and format renaming from com.uber.hoodie to org.apache.hudi (See migration guide section below)</li>
   <li>Major redo of Hudi bundles to address class and jar version mismatches in different environments</li>
@@ -220,12 +276,12 @@
 <h3 id="migration-guide-for-this-release">Migration Guide for this release</h3>
 <p>This is the first Apache release for Hudi (incubating). Prior to this release, Hudi Jars were published using “com.uber.hoodie” maven co-ordinates. We have a <a href="https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi">migration guide</a></p>
 
-<h3 id="raw-release-notes">Raw Release Notes</h3>
+<h3 id="raw-release-notes-1">Raw Release Notes</h3>
 <p>The raw release notes are available <a href="https://jira.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346087">here</a></p>
 
 <h2 id="release-047"><a href="https://github.com/apache/incubator-hudi/releases/tag/hoodie-0.4.7">Release 0.4.7</a></h2>
 
-<h3 id="release-highlights-1">Release Highlights</h3>
+<h3 id="release-highlights-2">Release Highlights</h3>
 
 <ul>
   <li>Major releases with fundamental changes to filesystem listing &amp; write failure handling</li>

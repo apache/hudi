@@ -4,7 +4,7 @@
     <meta charset="utf-8">
 
 <!-- begin _includes/seo.html --><title>Structure - Apache Hudi</title>
-<meta name="description" content="Hudi (pronounced “Hoodie”) ingests &amp; manages storage of large analytical datasets over DFS (HDFS or cloud stores) and provides three logical views for query access.">
+<meta name="description" content="Hudi (pronounced “Hoodie”) ingests &amp; manages storage of large analytical tables over DFS (HDFS or cloud stores) and provides three types of queries.">
 
 <meta property="og:type" content="article">
 <meta property="og:locale" content="en_US">
@@ -13,7 +13,7 @@
 <meta property="og:url" content="https://hudi.apache.org/docs/structure.html">
 
 
-  <meta property="og:description" content="Hudi (pronounced “Hoodie”) ingests &amp; manages storage of large analytical datasets over DFS (HDFS or cloud stores) and provides three logical views for query access.">
+  <meta property="og:description" content="Hudi (pronounced “Hoodie”) ingests &amp; manages storage of large analytical tables over DFS (HDFS or cloud stores) and provides three types of queries.">
 
 
 
@@ -269,7 +269,7 @@
             
 
             
-              <li><a href="/docs/admin_guide.html" class="">Administering</a></li>
+              <li><a href="/docs/deployment.html" class="">Deployment</a></li>
             
 
           
@@ -337,21 +337,21 @@
             }
           </style>
         
-        <p>Hudi (pronounced “Hoodie”) ingests &amp; manages storage of large analytical datasets over DFS (<a href="http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html">HDFS</a> or cloud stores) and provides three logical views for query access.</p>
+        <p>Hudi (pronounced “Hoodie”) ingests &amp; manages storage of large analytical tables over DFS (<a href="http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html">HDFS</a> or cloud stores) and provides three types of queries.</p>
 
 <ul>
-  <li><strong>Read Optimized View</strong> - Provides excellent query performance on pure columnar storage, much like plain <a href="https://parquet.apache.org/">Parquet</a> tables.</li>
-  <li><strong>Incremental View</strong> - Provides a change stream out of the dataset to feed downstream jobs/ETLs.</li>
-  <li><strong>Near-Real time Table</strong> - Provides queries on real-time data, using a combination of columnar &amp; row based storage (e.g Parquet + <a href="http://avro.apache.org/docs/current/mr.html">Avro</a>)</li>
+  <li><strong>Read Optimized query</strong> - Provides excellent query performance on pure columnar storage, much like plain <a href="https://parquet.apache.org/">Parquet</a> tables.</li>
+  <li><strong>Incremental query</strong> - Provides a change stream out of the dataset to feed downstream jobs/ETLs.</li>
+  <li><strong>Snapshot query</strong> - Provides queries on real-time data, using a combination of columnar &amp; row based storage (e.g Parquet + <a href="http://avro.apache.org/docs/current/mr.html">Avro</a>)</li>
 </ul>
 
 <figure>
     <img class="docimage" src="/assets/images/hudi_intro_1.png" alt="hudi_intro_1.png" />
 </figure>
 
-<p>By carefully managing how data is laid out in storage &amp; how it’s exposed to queries, Hudi is able to power a rich data ecosystem where external sources can be ingested in near real-time and made available for interactive SQL Engines like <a href="https://prestodb.io">Presto</a> &amp; <a href="https://spark.apache.org/sql/">Spark</a>, while at the same time capable of being consumed incrementally from processing/ETL frameworks like <a href="https://hive.apache.org/">Hive</a> &amp; <a href="https://spark.apache.org/docs/latest/">Spark</a> to build derived (Hudi) datasets.</p>
+<p>By carefully managing how data is laid out in storage &amp; how it’s exposed to queries, Hudi is able to power a rich data ecosystem where external sources can be ingested in near real-time and made available for interactive SQL Engines like <a href="https://prestodb.io">Presto</a> &amp; <a href="https://spark.apache.org/sql/">Spark</a>, while at the same time capable of being consumed incrementally from processing/ETL frameworks like <a href="https://hive.apache.org/">Hive</a> &amp; <a href="https://spark.apache.org/docs/latest/">Spark</a> to build derived (Hudi) tables.</p>
 
-<p>Hudi broadly consists of a self contained Spark library to build datasets and integrations with existing query engines for data access. See <a href="/docs/quick-start-guide">quickstart</a> for a demo.</p>
+<p>Hudi broadly consists of a self contained Spark library to build tables and integrations with existing query engines for data access. See <a href="/docs/quick-start-guide">quickstart</a> for a demo.</p>
 
       </section>
 
