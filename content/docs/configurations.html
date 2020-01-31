@@ -4,7 +4,7 @@
     <meta charset="utf-8">
 
 <!-- begin _includes/seo.html --><title>Configurations - Apache Hudi</title>
-<meta name="description" content="This page covers the different ways of configuring your job to write/read Hudi datasets. At a high level, you can control behaviour at few levels.">
+<meta name="description" content="This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.">
 
 <meta property="og:type" content="article">
 <meta property="og:locale" content="en_US">
@@ -13,7 +13,7 @@
 <meta property="og:url" content="https://hudi.apache.org/docs/configurations.html">
 
 
-  <meta property="og:description" content="This page covers the different ways of configuring your job to write/read Hudi datasets. At a high level, you can control behaviour at few levels.">
+  <meta property="og:description" content="This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.">
 
 
 
@@ -269,7 +269,7 @@
             
 
             
-              <li><a href="/docs/admin_guide.html" class="">Administering</a></li>
+              <li><a href="/docs/deployment.html" class="">Deployment</a></li>
             
 
           
@@ -333,7 +333,7 @@
         
         <aside class="sidebar__right sticky">
           <nav class="toc">
-            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> In this page</h4></header>
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
             <ul class="toc__menu">
   <li><a href="#talking-to-cloud-storage">Talking to Cloud Storage</a></li>
   <li><a href="#spark-datasource">Spark Datasource Configs</a>
@@ -355,15 +355,15 @@
           </nav>
         </aside>
         
-        <p>This page covers the different ways of configuring your job to write/read Hudi datasets. 
+        <p>This page covers the different ways of configuring your job to write/read Hudi tables. 
 At a high level, you can control behaviour at few levels.</p>
 
 <ul>
-  <li><strong><a href="#spark-datasource">Spark Datasource Configs</a></strong> : These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing view type to read.</li>
+  <li><strong><a href="#spark-datasource">Spark Datasource Configs</a></strong> : These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.</li>
   <li><strong><a href="#writeclient-configs">WriteClient Configs</a></strong> : Internally, the Hudi datasource uses a RDD based <code class="highlighter-rouge">HoodieWriteClient</code> api to actually perform writes to storage. These configs provide deep control over lower level aspects like 
  file sizing, compression, parallelism, compaction, write schema, cleaning etc. Although Hudi provides sane defaults, from time-time these configs may need to be tweaked to optimize for specific workloads.</li>
   <li><strong><a href="#PAYLOAD_CLASS_OPT_KEY">RecordPayload Config</a></strong> : This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and 
- stored old record. Hudi provides default implementations such as <code class="highlighter-rouge">OverwriteWithLatestAvroPayload</code> which simply update storage with the latest/last-written record. 
+ stored old record. Hudi provides default implementations such as <code class="highlighter-rouge">OverwriteWithLatestAvroPayload</code> which simply update table with the latest/last-written record. 
  This can be overridden to a custom class extending <code class="highlighter-rouge">HoodieRecordPayload</code> class, on both datasource and WriteClient levels.</li>
 </ul>
 
@@ -399,20 +399,20 @@ The actual datasource level configs are listed below.</p>
 <span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
 </code></pre></div></div>
 
-<p>Options useful for writing datasets via <code class="highlighter-rouge">write.format.option(...)</code></p>
+<p>Options useful for writing tables via <code class="highlighter-rouge">write.format.option(...)</code></p>
 
 <h4 id="TABLE_NAME_OPT_KEY">TABLE_NAME_OPT_KEY</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.write.table.name</code> [Required]<br />
-  <span style="color:grey">Hive table name, to register the dataset into.</span></p>
+  <span style="color:grey">Hive table name, to register the table into.</span></p>
 
 <h4 id="OPERATION_OPT_KEY">OPERATION_OPT_KEY</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.write.operation</code>, Default: <code class="highlighter-rouge">upsert</code><br />
   <span style="color:grey">whether to do upsert, insert or bulkinsert for the write operation. Use <code class="highlighter-rouge">bulkinsert</code> to load new data into a table, and there on use <code class="highlighter-rouge">upsert</code>/<code class="highlighter-rouge">insert</code>. 
   bulk insert uses a disk based write path to scale to load large inputs without need to cache it.</span></p>
 
-<h4 id="STORAGE_TYPE_OPT_KEY">STORAGE_TYPE_OPT_KEY</h4>
-<p>Property: <code class="highlighter-rouge">hoodie.datasource.write.storage.type</code>, Default: <code class="highlighter-rouge">COPY_ON_WRITE</code> <br />
-  <span style="color:grey">The storage type for the underlying data, for this write. This can’t change between writes.</span></p>
+<h4 id="TABLE_TYPE_OPT_KEY">TABLE_TYPE_OPT_KEY</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.datasource.write.table.type</code>, Default: <code class="highlighter-rouge">COPY_ON_WRITE</code> <br />
+  <span style="color:grey">The table type for the underlying data, for this write. This can’t change between writes.</span></p>
 
 <h4 id="PRECOMBINE_FIELD_OPT_KEY">PRECOMBINE_FIELD_OPT_KEY</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.write.precombine.field</code>, Default: <code class="highlighter-rouge">ts</code> <br />
@@ -450,7 +450,7 @@ This is useful to store checkpointing information, in a consistent way with the 
 
 <h4 id="HIVE_SYNC_ENABLED_OPT_KEY">HIVE_SYNC_ENABLED_OPT_KEY</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.hive_sync.enable</code>, Default: <code class="highlighter-rouge">false</code> <br />
-  <span style="color:grey">When set to true, register/sync the dataset to Apache Hive metastore</span></p>
+  <span style="color:grey">When set to true, register/sync the table to Apache Hive metastore</span></p>
 
 <h4 id="HIVE_DATABASE_OPT_KEY">HIVE_DATABASE_OPT_KEY</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.hive_sync.database</code>, Default: <code class="highlighter-rouge">default</code> <br />
@@ -474,7 +474,7 @@ This is useful to store checkpointing information, in a consistent way with the 
 
 <h4 id="HIVE_PARTITION_FIELDS_OPT_KEY">HIVE_PARTITION_FIELDS_OPT_KEY</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.hive_sync.partition_fields</code>, Default: ` ` <br />
-  <span style="color:grey">field in the dataset to use for determining hive partition columns.</span></p>
+  <span style="color:grey">field in the table to use for determining hive partition columns.</span></p>
 
 <h4 id="HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY">HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.hive_sync.partition_extractor_class</code>, Default: <code class="highlighter-rouge">org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor</code> <br />
@@ -486,13 +486,13 @@ This is useful to store checkpointing information, in a consistent way with the 
 
 <h3 id="read-options">Read Options</h3>
 
-<p>Options useful for reading datasets via <code class="highlighter-rouge">read.format.option(...)</code></p>
+<p>Options useful for reading tables via <code class="highlighter-rouge">read.format.option(...)</code></p>
 
-<h4 id="VIEW_TYPE_OPT_KEY">VIEW_TYPE_OPT_KEY</h4>
-<p>Property: <code class="highlighter-rouge">hoodie.datasource.view.type</code>, Default: <code class="highlighter-rouge">read_optimized</code> <br />
+<h4 id="QUERY_TYPE_OPT_KEY">QUERY_TYPE_OPT_KEY</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.datasource.query.type</code>, Default: <code class="highlighter-rouge">snapshot</code> <br />
 <span style="color:grey">Whether data needs to be read, in incremental mode (new data since an instantTime)
 (or) Read Optimized mode (obtain latest view, based on columnar data)
-(or) Real time mode (obtain latest view, based on row &amp; columnar data)</span></p>
+(or) Snapshot mode (obtain latest view, based on row &amp; columnar data)</span></p>
 
 <h4 id="BEGIN_INSTANTTIME_OPT_KEY">BEGIN_INSTANTTIME_OPT_KEY</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.read.begin.instanttime</code>, [Required in incremental mode] <br />
@@ -530,15 +530,15 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 
 <h4 id="withSchema">withSchema(schema_str)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.avro.schema</code> [Required]<br />
-<span style="color:grey">This is the current reader avro schema for the dataset. This is a string of the entire schema. HoodieWriteClient uses this schema to pass on to implementations of HoodieRecordPayload to convert from the source format to avro record. This is also used when re-writing records during an update. </span></p>
+<span style="color:grey">This is the current reader avro schema for the table. This is a string of the entire schema. HoodieWriteClient uses this schema to pass on to implementations of HoodieRecordPayload to convert from the source format to avro record. This is also used when re-writing records during an update. </span></p>
 
 <h4 id="forTable">forTable(table_name)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.table.name</code> [Required] <br />
- <span style="color:grey">Table name for the dataset, will be used for registering with Hive. Needs to be same across runs.</span></p>
+ <span style="color:grey">Table name that will be used for registering with Hive. Needs to be same across runs.</span></p>
 
 <h4 id="withBulkInsertParallelism">withBulkInsertParallelism(bulk_insert_parallelism = 1500)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.bulkinsert.shuffle.parallelism</code><br />
-<span style="color:grey">Bulk insert is meant to be used for large initial imports and this parallelism determines the initial number of files in your dataset. Tune this to achieve a desired optimal size during initial import.</span></p>
+<span style="color:grey">Bulk insert is meant to be used for large initial imports and this parallelism determines the initial number of files in your table. Tune this to achieve a desired optimal size during initial import.</span></p>
 
 <h4 id="withParallelism">withParallelism(insert_shuffle_parallelism = 1500, upsert_shuffle_parallelism = 1500)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.insert.shuffle.parallelism</code>, <code class="highlighter-rouge">hoodie.upsert.shuffle.parallelism</code><br />
@@ -657,7 +657,7 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 
 <h4 id="logFileToParquetCompressionRatio">logFileToParquetCompressionRatio(logFileToParquetCompressionRatio = 0.35)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.logfile.to.parquet.compression.ratio</code> <br />
-<span style="color:grey">Expected additional compression as records move from log files to parquet. Used for merge_on_read storage to send inserts into log files &amp; control the size of compacted parquet file.</span></p>
+<span style="color:grey">Expected additional compression as records move from log files to parquet. Used for merge_on_read table to send inserts into log files &amp; control the size of compacted parquet file.</span></p>
 
 <h4 id="parquetCompressionCodec">parquetCompressionCodec(parquetCompressionCodec = gzip)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.parquet.compression.codec</code> <br />
@@ -673,7 +673,7 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 
 <h4 id="retainCommits">retainCommits(no_of_commits_to_retain = 24)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.cleaner.commits.retained</code> <br />
-<span style="color:grey">Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much you can incrementally pull on this dataset</span></p>
+<span style="color:grey">Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much you can incrementally pull on this table</span></p>
 
 <h4 id="archiveCommitsWith">archiveCommitsWith(minCommits = 96, maxCommits = 128)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.keep.min.commits</code>, <code class="highlighter-rouge">hoodie.keep.max.commits</code> <br />

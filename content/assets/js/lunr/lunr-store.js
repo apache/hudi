@@ -190,7 +190,7 @@ var store = [{
         "url": "http://0.0.0.0:4000/cn/docs/migration_guide.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "Migration Guide",
-        "excerpt":"Hudi maintains metadata such as commit timeline and indexes to manage a dataset. The commit timelines helps to understand the actions happening on a dataset as well as the current state of a dataset. Indexes are used by Hudi to maintain a record key to file id mapping to efficiently...","categories": [],
+        "excerpt":"Hudi maintains metadata such as commit timeline and indexes to manage a table. The commit timelines helps to understand the actions happening on a table as well as the current state of a table. Indexes are used by Hudi to maintain a record key to file id mapping to efficiently...","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/docs/migration_guide.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
@@ -210,12 +210,12 @@ var store = [{
         "url": "http://0.0.0.0:4000/cn/docs/quick-start-guide.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "Quick-Start Guide",
-        "excerpt":"This guide provides a quick peek at Hudi’s capabilities using spark-shell. Using Spark datasources, we will walk through code snippets that allows you to insert and update a Hudi dataset of default storage type: Copy on Write. After each write operation we will also show how to read the data...","categories": [],
+        "excerpt":"This guide provides a quick peek at Hudi’s capabilities using spark-shell. Using Spark datasources, we will walk through code snippets that allows you to insert and update a Hudi table of default table type: Copy on Write. After each write operation we will also show how to read the data...","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/docs/quick-start-guide.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "Structure",
-        "excerpt":"Hudi (pronounced “Hoodie”) ingests &amp; manages storage of large analytical datasets over DFS (HDFS or cloud stores) and provides three logical views for query access. Read Optimized View - Provides excellent query performance on pure columnar storage, much like plain Parquet tables. Incremental View - Provides a change stream out...","categories": [],
+        "excerpt":"Hudi (pronounced “Hoodie”) ingests &amp; manages storage of large analytical tables over DFS (HDFS or cloud stores) and provides three types of queries. Read Optimized query - Provides excellent query performance on pure columnar storage, much like plain Parquet tables. Incremental query - Provides a change stream out of the...","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/docs/structure.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
@@ -255,7 +255,7 @@ var store = [{
         "url": "http://0.0.0.0:4000/cn/docs/concepts.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "Concepts",
-        "excerpt":"Apache Hudi (pronounced “Hudi”) provides the following streaming primitives over datasets on DFS Upsert (how do I change the dataset?) Incremental pull (how do I fetch data that changed?) In this section, we will discuss key concepts &amp; terminologies that are important to understand, to be able to effectively use...","categories": [],
+        "excerpt":"Apache Hudi (pronounced “Hudi”) provides the following streaming primitives over hadoop compatible storages Update/Delete Records (how do I change records in a table?) Change Streams (how do I fetch records that changed?) In this section, we will discuss key concepts &amp; terminologies that are important to understand, to be able...","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/docs/concepts.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
@@ -264,8 +264,8 @@ var store = [{
         "tags": [],
         "url": "http://0.0.0.0:4000/cn/docs/writing_data.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
-        "title": "Writing Hudi Datasets",
-        "excerpt":"In this section, we will cover ways to ingest new changes from external sources or even other Hudi datasets using the DeltaStreamer tool, as well as speeding up large Spark jobs via upserts using the Hudi datasource. Such datasets can then be queried using various query engines. Write Operations Before...","categories": [],
+        "title": "Writing Hudi Tables",
+        "excerpt":"In this section, we will cover ways to ingest new changes from external sources or even other Hudi tables using the DeltaStreamer tool, as well as speeding up large Spark jobs via upserts using the Hudi datasource. Such tables can then be queried using various query engines. Write Operations Before...","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/docs/writing_data.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
@@ -274,8 +274,8 @@ var store = [{
         "tags": [],
         "url": "http://0.0.0.0:4000/cn/docs/querying_data.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
-        "title": "Querying Hudi Datasets",
-        "excerpt":"Conceptually, Hudi stores data physically once on DFS, while providing 3 logical views on top, as explained before. Once the dataset is synced to the Hive metastore, it provides external Hive tables backed by Hudi’s custom inputformats. Once the proper hudi bundle has been provided, the dataset can be queried...","categories": [],
+        "title": "Querying Hudi Tables",
+        "excerpt":"Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained before. Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi’s custom inputformats. Once the proper hudi bundle has been provided, the table can be queried...","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/docs/querying_data.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
@@ -285,7 +285,7 @@ var store = [{
         "url": "http://0.0.0.0:4000/cn/docs/configurations.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "Configurations",
-        "excerpt":"This page covers the different ways of configuring your job to write/read Hudi datasets. At a high level, you can control behaviour at few levels. Spark Datasource Configs : These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge...","categories": [],
+        "excerpt":"This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels. Spark Datasource Configs : These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge...","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/docs/configurations.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
@@ -295,19 +295,19 @@ var store = [{
         "url": "http://0.0.0.0:4000/cn/docs/performance.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "Performance",
-        "excerpt":"In this section, we go over some real world performance numbers for Hudi upserts, incremental pull and compare them against the conventional alternatives for achieving these tasks. Upserts Following shows the speed up obtained for NoSQL database ingestion, from incrementally upserting on a Hudi dataset on the copy-on-write storage, on...","categories": [],
+        "excerpt":"In this section, we go over some real world performance numbers for Hudi upserts, incremental pull and compare them against the conventional alternatives for achieving these tasks. Upserts Following shows the speed up obtained for NoSQL database ingestion, from incrementally upserting on a Hudi table on the copy-on-write storage, on...","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/docs/performance.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "管理 Hudi Pipelines",
         "excerpt":"管理员/运维人员可以通过以下方式了解Hudi数据集/管道 通过Admin CLI进行管理 Graphite指标 Hudi应用程序的Spark UI 本节简要介绍了每一种方法，并提供了有关故障排除的一些常规指南 Admin CLI 一旦构建了hudi，就可以通过cd hudi-cli &amp;&amp; ./hudi-cli.sh启动shell。 一个hudi数据集位于DFS上的basePath位置，我们需要该位置才能连接到Hudi数据集。 Hudi库使用.hoodie子文件夹跟踪所有元数据，从而有效地在内部管理该数据集。 初始化hudi表，可使用如下命令。 18/09/06 15:56:52 INFO annotation.AutowiredAnnotationBeanPostProcessor: JSR-330 'javax.inject.Inject' annotation found and supported for autowiring ============================================ * * * _ _ _ _ * * | | | | | | (_) * * | |__| |...","categories": [],
         "tags": [],
-        "url": "http://0.0.0.0:4000/cn/docs/admin_guide.html",
+        "url": "http://0.0.0.0:4000/cn/docs/deployment.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
-        "title": "Administering Hudi Pipelines",
-        "excerpt":"Admins/ops can gain visibility into Hudi datasets/pipelines in the following ways Administering via the Admin CLI Graphite metrics Spark UI of the Hudi Application This section provides a glimpse into each of these, with some general guidance on troubleshooting Admin CLI Once hudi has been built, the shell can be...","categories": [],
+        "title": "Deployment Guide",
+        "excerpt":"This section provides all the help you need to deploy and operate Hudi tables at scale. Specifically, we will cover the following aspects. Deployment Model : How various Hudi components are deployed and managed. Upgrading Versions : Picking up new releases of Hudi, guidelines and general best-practices. Migrating to Hudi...","categories": [],
         "tags": [],
-        "url": "http://0.0.0.0:4000/docs/admin_guide.html",
+        "url": "http://0.0.0.0:4000/docs/deployment.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "Privacy Policy",
         "excerpt":"Information about your use of this website is collected using server access logs and a tracking cookie. The collected information consists of the following: The IP address from which you access the website; The type of browser and operating system you use to access our site; The date and time...","categories": [],
@@ -320,7 +320,7 @@ var store = [{
         "url": "http://0.0.0.0:4000/docs/privacy.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "文档版本",
-        "excerpt":"                                  Latest             英文版             中文版                                      0.5.0             英文版             中文版                       ","categories": [],
+        "excerpt":"                                  Latest             英文版             中文版                                      0.5.0             英文版             中文版                        ","categories": [],
         "tags": [],
         "url": "http://0.0.0.0:4000/cn/docs/docs-versions.html",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{

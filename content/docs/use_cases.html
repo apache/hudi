@@ -269,7 +269,7 @@
             
 
             
-              <li><a href="/docs/admin_guide.html" class="">Administering</a></li>
+              <li><a href="/docs/deployment.html" class="">Deployment</a></li>
             
 
           
@@ -333,7 +333,7 @@
         
         <aside class="sidebar__right sticky">
           <nav class="toc">
-            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> In this page</h4></header>
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
             <ul class="toc__menu">
   <li><a href="#near-real-time-ingestion">Near Real-Time Ingestion</a></li>
   <li><a href="#near-real-time-analytics">Near Real-time Analytics</a></li>
@@ -356,7 +356,7 @@ or <a href="http://hortonworks.com/blog/four-step-strategy-incremental-updates-h
 <p>For NoSQL datastores like <a href="http://cassandra.apache.org/">Cassandra</a> / <a href="http://www.project-voldemort.com/voldemort/">Voldemort</a> / <a href="https://hbase.apache.org/">HBase</a>, even moderately big installations store billions of rows.
 It goes without saying that <strong>full bulk loads are simply infeasible</strong> and more efficient approaches are needed if ingestion is to keep up with the typically high update volumes.</p>
 
-<p>Even for immutable data sources like <a href="kafka.apache.org">Kafka</a> , Hudi helps <strong>enforces a minimum file size on HDFS</strong>, which improves NameNode health by solving one of the <a href="https://blog.cloudera.com/blog/2009/02/the-small-files-problem/">age old problems in Hadoop land</a> in a holistic way. This is all the more important for event streams, since typically its higher volume (eg: click streams) and if not managed well, can cause serious damage to your Hadoop cluster.</p>
+<p>Even for immutable data sources like <a href="https://kafka.apache.org">Kafka</a> , Hudi helps <strong>enforces a minimum file size on HDFS</strong>, which improves NameNode health by solving one of the <a href="https://blog.cloudera.com/blog/2009/02/the-small-files-problem/">age old problems in Hadoop land</a> in a holistic way. This is all the more important for event streams, since typically its higher volume (eg: click streams) and if not managed well, can cause serious damage to your Hadoop cluster.</p>
 
 <p>Across all sources, Hudi adds the much needed ability to atomically publish new data to consumers via notion of commits, shielding them from partial ingestion failures</p>
 
@@ -367,12 +367,12 @@ This is absolutely perfect for lower scale (<a href="https://blog.twitter.com/20
 But, typically these systems end up getting abused for less interactive queries also since data on Hadoop is intolerably stale. This leads to under utilization &amp; wasteful hardware/license costs.</p>
 
 <p>On the other hand, interactive SQL solutions on Hadoop such as Presto &amp; SparkSQL excel in <strong>queries that finish within few seconds</strong>.
-By bringing <strong>data freshness to a few minutes</strong>, Hudi can provide a much efficient alternative, as well unlock real-time analytics on <strong>several magnitudes larger datasets</strong> stored in DFS.
+By bringing <strong>data freshness to a few minutes</strong>, Hudi can provide a much efficient alternative, as well unlock real-time analytics on <strong>several magnitudes larger tables</strong> stored in DFS.
 Also, Hudi has no external dependencies (like a dedicated HBase cluster, purely used for real-time analytics) and thus enables faster analytics on much fresher analytics, without increasing the operational overhead.</p>
 
 <h2 id="incremental-processing-pipelines">Incremental Processing Pipelines</h2>
 
-<p>One fundamental ability Hadoop provides is to build a chain of datasets derived from each other via DAGs expressed as workflows.
+<p>One fundamental ability Hadoop provides is to build a chain of tables derived from each other via DAGs expressed as workflows.
 Workflows often depend on new data being output by multiple upstream workflows and traditionally, availability of new data is indicated by a new DFS Folder/Hive Partition.
 Let’s take a concrete example to illustrate this. An upstream workflow <code class="highlighter-rouge">U</code> can create a Hive partition for every hour, with data for that hour (event_time) at the end of each hour (processing_time), providing effective freshness of 1 hour.
 Then, a downstream workflow <code class="highlighter-rouge">D</code>, kicks off immediately after <code class="highlighter-rouge">U</code> finishes, and does its own processing for the next hour, increasing the effective latency to 2 hours.</p>
@@ -382,8 +382,8 @@ Unfortunately, in today’s post-mobile &amp; pre-IoT world, <strong>late data f
 In such cases, the only remedy to guarantee correctness is to <a href="https://falcon.apache.org/FalconDocumentation.html#Handling_late_input_data">reprocess the last few hours</a> worth of data,
 over and over again each hour, which can significantly hurt the efficiency across the entire ecosystem. For e.g; imagine reprocessing TBs worth of data every hour across hundreds of workflows.</p>
 
-<p>Hudi comes to the rescue again, by providing a way to consume new data (including late data) from an upsteam Hudi dataset <code class="highlighter-rouge">HU</code> at a record granularity (not folders/partitions),
-apply the processing logic, and efficiently update/reconcile late data with a downstream Hudi dataset <code class="highlighter-rouge">HD</code>. Here, <code class="highlighter-rouge">HU</code> and <code class="highlighter-rouge">HD</code> can be continuously scheduled at a much more frequent schedule
+<p>Hudi comes to the rescue again, by providing a way to consume new data (including late data) from an upsteam Hudi table <code class="highlighter-rouge">HU</code> at a record granularity (not folders/partitions),
+apply the processing logic, and efficiently update/reconcile late data with a downstream Hudi table <code class="highlighter-rouge">HD</code>. Here, <code class="highlighter-rouge">HU</code> and <code class="highlighter-rouge">HD</code> can be continuously scheduled at a much more frequent schedule
 like 15 mins, and providing an end-end latency of 30 mins at <code class="highlighter-rouge">HD</code>.</p>
 
 <p>To achieve this, Hudi has embraced similar concepts from stream processing frameworks like <a href="https://spark.apache.org/docs/latest/streaming-programming-guide.html#join-operations">Spark Streaming</a> , Pub/Sub systems like <a href="http://kafka.apache.org/documentation/#theconsumer">Kafka</a>
@@ -397,7 +397,7 @@ For e.g, a Spark Pipeline can <a href="https://eng.uber.com/telematics/">determi
 A popular choice for this queue is Kafka and this model often results in <strong>redundant storage of same data on DFS (for offline analysis on computed results) and Kafka (for dispersal)</strong></p>
 
 <p>Once again Hudi can efficiently solve this problem, by having the Spark Pipeline upsert output from
-each run into a Hudi dataset, which can then be incrementally tailed (just like a Kafka topic) for new data &amp; written into the serving store.</p>
+each run into a Hudi table, which can then be incrementally tailed (just like a Kafka topic) for new data &amp; written into the serving store.</p>
 
       </section>
 
