@@ -16,7 +16,8 @@ Hudi works with Spark-2.x versions. You can follow instructions [here](https://s
 From the extracted directory run spark-shell with Hudi as:
 
 ```scala
-spark-2.4.4-bin-hadoop2.7/bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
+spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
+    --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
     --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
