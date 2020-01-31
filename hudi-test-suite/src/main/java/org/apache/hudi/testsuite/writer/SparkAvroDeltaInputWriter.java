@@ -31,7 +31,7 @@ import java.io.IOException;
  */
 public class SparkAvroDeltaInputWriter implements DeltaInputWriter<JavaRDD<GenericRecord>> {
 
-  private static final String AVRO_FORMAT_PACKAGE = "com.databricks.spark.avro";
+  private static final String AVRO_FORMAT_PACKAGE = "avro";
   public SparkSession sparkSession;
   private String schemaStr;
   // TODO : the base path has to be a new path every time for spark avro

@@ -154,6 +154,16 @@
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
       <classifier>tests</classifier>
+      <exclusions>
+        <exclusion>
+          <artifactId>netty</artifactId>
+          <groupId>io.netty</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>netty-all</artifactId>
+          <groupId>io.netty</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
@@ -184,6 +194,14 @@
         <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <artifactId>netty</artifactId>
+          <groupId>io.netty</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>netty-all</artifactId>
+          <groupId>io.netty</groupId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -243,8 +261,19 @@
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>com.databricks</groupId>
+          <artifactId>spark-avro_2.11</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
+
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-avro_2.11</artifactId>
+      <version>${spark.version}</version>
+    </dependency>
+
 
     <!-- Used for SQL templating -->
     <dependency>
