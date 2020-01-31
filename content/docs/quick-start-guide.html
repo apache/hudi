@@ -502,32 +502,32 @@ specific commit time and beginTime to “000” (denoting earliest possible comm
 <h2 id="deletes">Delete data</h2>
 <p>Delete records for the HoodieKeys passed in.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>// fetch total records count
-spark.sql("select uuid, partitionPath from hudi_ro_table").count()
-// fetch two records to be deleted
-val ds = spark.sql("select uuid, partitionPath from hudi_ro_table").limit(2)
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// fetch total records count
+</span><span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select uuid, partitionPath from hudi_ro_table"</span><span class="o">).</span><span class="py">count</span><span class="o">()</span>
+<span class="c1">// fetch two records to be deleted
+</span><span class="k">val</span> <span class="nv">ds</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select uuid, partitionPath from hudi_ro_table"</span><span class="o">).</span><span class="py">limit</span><span class="o">(</span><span class="mi">2</span><span class="o">)</span>
 
-// issue deletes
-val deletes = dataGen.generateDeletes(ds.collectAsList())
-val df = spark.read.json(spark.sparkContext.parallelize(deletes, 2));
-df.write.format("org.apache.hudi").
-options(getQuickstartWriteConfigs).
-option(OPERATION_OPT_KEY,"delete").
-option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-option(TABLE_NAME, tableName).
-mode(Append).
-save(basePath);
+<span class="c1">// issue deletes
+</span><span class="k">val</span> <span class="nv">deletes</span> <span class="k">=</span> <span class="nv">dataGen</span><span class="o">.</span><span class="py">generateDeletes</span><span class="o">(</span><span class="nv">ds</span><span class="o">.</span><span class="py">collectAsList</span><span class="o">())</span>
+<span class="k">val</span> <span class="nv">df</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">read</span><span class="o">.</span><span class="py">json</span><span class="o">(</span><span class="nv">spark</span><span class="o">.</span><span class="py">sparkContext</span><span class="o">.</span><span class="py">parallelize</span><span class="o">(</span><span class="n">deletes</span><span class="o">,</span> <span class="mi">2</span><span class="o">));</span>
+<span class="nv">df</span><span class="o">.</span><span class="py">write</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">).</span>
+<span class="nf">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">).</span>
+<span class="nf">option</span><span class="o">(</span><span class="nc">OPERATION_OPT_KEY</span><span class="o">,</span><span class="s">"delete"</span><span class="o">).</span>
+<span class="nf">option</span><span class="o">(</span><span class="nc">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">).</span>
+<span class="nf">option</span><span class="o">(</span><span class="nc">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">).</span>
+<span class="nf">option</span><span class="o">(</span><span class="nc">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">).</span>
+<span class="nf">option</span><span class="o">(</span><span class="nc">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">).</span>
+<span class="nf">mode</span><span class="o">(</span><span class="nc">Append</span><span class="o">).</span>
+<span class="nf">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
 
-// run the same read query as above.
-val roAfterDeleteViewDF = spark.
-    read.
-    format("org.apache.hudi").
-    load(basePath + "/*/*/*/*")
-roAfterDeleteViewDF.registerTempTable("hudi_ro_table")
-// fetch should return (total - 2) records
-spark.sql("select uuid, partitionPath from hudi_ro_table").count()
+<span class="c1">// run the same read query as above.
+</span><span class="k">val</span> <span class="nv">roAfterDeleteViewDF</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span>
+    <span class="n">read</span><span class="o">.</span>
+    <span class="nf">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">).</span>
+    <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">)</span>
+<span class="nv">roAfterDeleteViewDF</span><span class="o">.</span><span class="py">registerTempTable</span><span class="o">(</span><span class="s">"hudi_ro_table"</span><span class="o">)</span>
+<span class="c1">// fetch should return (total - 2) records
+</span><span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select uuid, partitionPath from hudi_ro_table"</span><span class="o">).</span><span class="py">count</span><span class="o">()</span>
 </code></pre></div></div>
 <p>Note: Only <code class="highlighter-rouge">Append</code> mode is supported for delete operation.</p>
 

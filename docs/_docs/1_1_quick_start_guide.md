@@ -173,7 +173,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 ## Delete data {#deletes}
 Delete records for the HoodieKeys passed in.
 
-```
+```scala
 // fetch total records count
 spark.sql("select uuid, partitionPath from hudi_ro_table").count()
 // fetch two records to be deleted
