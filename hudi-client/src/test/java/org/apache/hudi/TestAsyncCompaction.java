@@ -88,7 +88,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   public void testRollbackForInflightCompaction() throws Exception {
     // Rollback inflight compaction
     HoodieWriteConfig cfg = getConfig(false);
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);
+         HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());) {
 
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -97,7 +98,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       int numRecs = 2000;
 
       List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
-      runNextDeltaCommits(client, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
+      runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
           new ArrayList<>());
 
       // Schedule compaction but do not run them
@@ -150,10 +151,11 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
 
     int numRecs = 2000;
 
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);
+         HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());) {
 
       List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
-      records = runNextDeltaCommits(client, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
+      records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
           new ArrayList<>());
 
       // Schedule compaction but do not run them
@@ -191,7 +193,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   public void testInflightCompaction() throws Exception {
     // There is inflight compaction. Subsequent compaction run must work correctly
     HoodieWriteConfig cfg = getConfig(true);
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);
+         HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());) {
 
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -202,7 +205,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       int numRecs = 2000;
 
       List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
-      records = runNextDeltaCommits(client, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
+      records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
           new ArrayList<>());
 
       // Schedule and mark compaction instant as inflight
@@ -212,7 +215,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       moveCompactionFromRequestedToInflight(compactionInstantTime, cfg);
 
       // Complete ingestions
-      runNextDeltaCommits(client, Arrays.asList(thirdInstantTime, fourthInstantTime), records, cfg, false,
+      runNextDeltaCommits(client, readClient, Arrays.asList(thirdInstantTime, fourthInstantTime), records, cfg, false,
           Arrays.asList(compactionInstantTime));
 
       // execute inflight compaction
@@ -225,6 +228,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     // Case: Failure case. Latest pending compaction instant time must be earlier than this instant time
     HoodieWriteConfig cfg = getConfig(false);
     HoodieWriteClient client = getHoodieWriteClient(cfg, true);
+    HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
     String firstInstantTime = "001";
     String secondInstantTime = "004";
@@ -233,7 +237,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     int numRecs = 2000;
 
     List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
-    records = runNextDeltaCommits(client, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
+    records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
         new ArrayList<>());
 
     // Schedule compaction but do not run them
@@ -245,7 +249,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
 
     boolean gotException = false;
     try {
-      runNextDeltaCommits(client, Arrays.asList(failedInstantTime), records, cfg, false,
+      runNextDeltaCommits(client, readClient, Arrays.asList(failedInstantTime), records, cfg, false,
           Arrays.asList(compactionInstantTime));
     } catch (IllegalArgumentException iex) {
       // Latest pending compaction instant time must be earlier than this instant time. Should fail here
@@ -260,6 +264,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
 
     HoodieWriteConfig cfg = getConfig(false);
     HoodieWriteClient client = getHoodieWriteClient(cfg, true);
+    HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
     String firstInstantTime = "001";
     String secondInstantTime = "004";
@@ -268,7 +273,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     int numRecs = 2000;
 
     List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
-    records = runNextDeltaCommits(client, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
+    records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
         new ArrayList<>());
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
@@ -296,6 +301,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
 
     HoodieWriteConfig cfg = getConfig(false);
     HoodieWriteClient client = getHoodieWriteClient(cfg, true);
+    HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
     String firstInstantTime = "001";
     String secondInstantTime = "004";
@@ -303,7 +309,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     int numRecs = 2000;
 
     List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
-    runNextDeltaCommits(client, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
+    runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
         new ArrayList<>());
 
     boolean gotException = false;
@@ -341,7 +347,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   public void testCompactionAfterTwoDeltaCommits() throws Exception {
     // No Delta Commits after compaction request
     HoodieWriteConfig cfg = getConfig(true);
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true)) {
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);
+         HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());) {
 
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -349,7 +356,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       int numRecs = 2000;
 
       List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
-      runNextDeltaCommits(client, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
+      runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
           new ArrayList<>());
 
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
@@ -362,7 +369,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   public void testInterleavedCompaction() throws Exception {
     // Case: Two delta commits before and after compaction schedule
     HoodieWriteConfig cfg = getConfig(true);
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);
+         HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());) {
 
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -373,14 +381,14 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       int numRecs = 2000;
 
       List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
-      records = runNextDeltaCommits(client, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
+      records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
           new ArrayList<>());
 
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       scheduleCompaction(compactionInstantTime, client, cfg);
 
-      runNextDeltaCommits(client, Arrays.asList(thirdInstantTime, fourthInstantTime), records, cfg, false,
+      runNextDeltaCommits(client, readClient, Arrays.asList(thirdInstantTime, fourthInstantTime), records, cfg, false,
           Arrays.asList(compactionInstantTime));
       executeCompaction(compactionInstantTime, client, hoodieTable, cfg, numRecs, true);
     }
@@ -410,15 +418,14 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     });
   }
 
-  private List<HoodieRecord> runNextDeltaCommits(HoodieWriteClient client, List<String> deltaInstants,
-      List<HoodieRecord> records, HoodieWriteConfig cfg, boolean insertFirst, List<String> expPendingCompactionInstants)
+  private List<HoodieRecord> runNextDeltaCommits(HoodieWriteClient client, final HoodieReadClient readClient, List<String> deltaInstants,
+                                                 List<HoodieRecord> records, HoodieWriteConfig cfg, boolean insertFirst, List<String> expPendingCompactionInstants)
       throws Exception {
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-    List<Pair<HoodieInstant, HoodieCompactionPlan>> pendingCompactions =
-        CompactionUtils.getAllPendingCompactionPlans(metaClient);
+    List<Pair<String, HoodieCompactionPlan>> pendingCompactions = readClient.getPendingCompactions();
     List<String> gotPendingCompactionInstants =
-        pendingCompactions.stream().map(pc -> pc.getKey().getTimestamp()).sorted().collect(Collectors.toList());
+        pendingCompactions.stream().map(pc -> pc.getKey()).sorted().collect(Collectors.toList());
     assertEquals(expPendingCompactionInstants, gotPendingCompactionInstants);
 
     Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> fgIdToCompactionOperation =
