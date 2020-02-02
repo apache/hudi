@@ -58,7 +58,9 @@ public class HiveServiceProvider {
 
   public void stopLocalHiveServiceIfNeeded() throws IOException {
     if (config.isHiveLocal()) {
-      hiveServer.stop();
+      if (hiveService != null) {
+        hiveService.stop();
+      }
     }
   }
 
