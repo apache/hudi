@@ -73,7 +73,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   // it holds the root cause of the exception in case either queueing records (consuming from
   // inputIterator) fails or
   // thread reading records from queue fails.
-  private final AtomicReference<Exception> hasFailed = new AtomicReference(null);
+  private final AtomicReference<Exception> hasFailed = new AtomicReference<>(null);
   // used for indicating that all the records from queue are read successfully.
   private final AtomicBoolean isReadDone = new AtomicBoolean(false);
   // used for indicating that all records have been enqueued
@@ -222,7 +222,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * Puts an empty entry to queue to denote termination.
    */
-  public void close() throws InterruptedException {
+  public void close() {
     // done queueing records notifying queue-reader.
     isWriteDone.set(true);
   }

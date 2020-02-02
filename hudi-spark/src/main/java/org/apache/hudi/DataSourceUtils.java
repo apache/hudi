@@ -43,7 +43,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -127,7 +127,7 @@ public class DataSourceUtils {
   }
 
   public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
-    checkPropNames.stream().forEach(prop -> {
+    checkPropNames.forEach(prop -> {
       if (!props.containsKey(prop)) {
         throw new HoodieNotSupportedException("Required property " + prop + " is missing");
       }
@@ -182,19 +182,13 @@ public class DataSourceUtils {
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
                                                      HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> timelineService) {
-    HoodieReadClient client = null;
-    try {
-      client = new HoodieReadClient<>(jssc, writeConfig, timelineService);
+    try (HoodieReadClient client = new HoodieReadClient<>(jssc, writeConfig, timelineService)) {
       return client.tagLocation(incomingHoodieRecords)
           .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
     } catch (TableNotFoundException e) {
       // this will be executed when there is no hoodie table yet
       // so no dups to drop
       return incomingHoodieRecords;
-    } finally {
-      if (null != client) {
-        client.close();
-      }
     }
   }
 
@@ -207,12 +201,12 @@ public class DataSourceUtils {
   }
 
   public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath) {
-    checkRequiredProperties(props, Arrays.asList(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY()));
+    checkRequiredProperties(props, Collections.singletonList(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY()));
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
     hiveSyncConfig.basePath = basePath;
     hiveSyncConfig.usePreApacheInputFormat =
         props.getBoolean(DataSourceWriteOptions.HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY(),
-            Boolean.valueOf(DataSourceWriteOptions.DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL()));
+            Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL()));
     hiveSyncConfig.databaseName = props.getString(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(),
         DataSourceWriteOptions.DEFAULT_HIVE_DATABASE_OPT_VAL());
     hiveSyncConfig.tableName = props.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY());

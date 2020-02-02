@@ -83,7 +83,7 @@ public class HoodieCompactor {
     public List<String> configs = new ArrayList<>();
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {

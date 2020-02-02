@@ -33,13 +33,12 @@ import java.io.IOException;
 import static org.junit.Assert.assertEquals;
 
 public class TestTimestampBasedKeyGenerator {
-  private Schema schema;
   private GenericRecord baseRecord;
   private TypedProperties properties = new TypedProperties();
 
   @Before
   public void initialize() throws IOException {
-    schema = SchemaTestUtil.getTimestampEvolvedSchema();
+    Schema schema = SchemaTestUtil.getTimestampEvolvedSchema();
     baseRecord = SchemaTestUtil
         .generateAvroRecordFromJson(schema, 1, "001", "f1");
 

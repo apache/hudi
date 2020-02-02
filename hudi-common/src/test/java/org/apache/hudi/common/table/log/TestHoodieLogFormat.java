@@ -86,7 +86,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   private FileSystem fs;
   private Path partitionPath;
   private int bufferSize = 4096;
-  private Boolean readBlocksLazily = true;
+  private Boolean readBlocksLazily;
 
   public TestHoodieLogFormat(Boolean readBlocksLazily) {
     this.readBlocksLazily = readBlocksLazily;

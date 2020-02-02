@@ -69,7 +69,7 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
   }
 
   public boolean isIncrementalTimelineSyncEnabled() {
-    return Boolean.valueOf(props.getProperty(FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE));
+    return Boolean.parseBoolean(props.getProperty(FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE));
   }
 
   public String getRemoteViewServerHost() {
@@ -87,10 +87,8 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
 
   public long getMaxMemoryForPendingCompaction() {
     long totalMemory = Long.parseLong(props.getProperty(FILESYSTEM_VIEW_SPILLABLE_MEM));
-    long reservedForPendingComaction =
-        new Double(totalMemory * Double.parseDouble(props.getProperty(FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION)))
-            .longValue();
-    return reservedForPendingComaction;
+    return new Double(totalMemory * Double.parseDouble(props.getProperty(FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION)))
+        .longValue();
   }
 
   public String getBaseStoreDir() {
@@ -113,12 +111,9 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
     private final Properties props = new Properties();
 
     public Builder fromFile(File propertiesFile) throws IOException {
-      FileReader reader = new FileReader(propertiesFile);
-      try {
+      try (FileReader reader = new FileReader(propertiesFile)) {
         props.load(reader);
         return this;
-      } finally {
-        reader.close();
       }
     }
 

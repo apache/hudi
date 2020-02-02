@@ -77,7 +77,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
     val jsc = new JavaSparkContext(sparkContext)
     val basePath = new Path(parameters("path"))
-    val commitTime = HoodieActiveTimeline.createNewInstantTime();
+    val commitTime = HoodieActiveTimeline.createNewInstantTime()
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     var exists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
 
@@ -282,7 +282,7 @@ private[hudi] object HoodieSparkSqlWriter {
       client.close()
       commitSuccess && syncHiveSucess
     } else {
-      log.error(s"$operation failed with ${errorCount} errors :");
+      log.error(s"$operation failed with $errorCount errors :")
       if (log.isTraceEnabled) {
         log.trace("Printing out the top 100 errors")
         writeStatuses.rdd.filter(ws => ws.hasErrors)

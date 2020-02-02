@@ -55,10 +55,9 @@ public class CleanerUtils {
       }
     }
 
-    HoodieCleanMetadata metadata = new HoodieCleanMetadata(startCleanTime,
+    return new HoodieCleanMetadata(startCleanTime,
         durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
         partitionMetadataBuilder.build(), CLEAN_METADATA_VERSION_2);
-    return metadata;
   }
 
   /**

@@ -64,10 +64,10 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat("yyyyMMddHHmmss");
 
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
-      new String[]{COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
-          INFLIGHT_DELTA_COMMIT_EXTENSION, REQUESTED_DELTA_COMMIT_EXTENSION, SAVEPOINT_EXTENSION,
-          INFLIGHT_SAVEPOINT_EXTENSION, CLEAN_EXTENSION, REQUESTED_CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION,
-          INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION}));
+      COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
+      INFLIGHT_DELTA_COMMIT_EXTENSION, REQUESTED_DELTA_COMMIT_EXTENSION, SAVEPOINT_EXTENSION,
+      INFLIGHT_SAVEPOINT_EXTENSION, CLEAN_EXTENSION, REQUESTED_CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION,
+      INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION));
 
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
@@ -79,7 +79,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public static String createNewInstantTime() {
     return lastInstantTime.updateAndGet((oldVal) -> {
-      String newCommitTime = null;
+      String newCommitTime;
       do {
         newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
       } while (HoodieTimeline.compareTimestamps(newCommitTime, oldVal, LESSER_OR_EQUAL));
@@ -255,7 +255,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void deleteCompactionRequested(HoodieInstant instant) {
     Preconditions.checkArgument(instant.isRequested());
-    Preconditions.checkArgument(instant.getAction() == HoodieTimeline.COMPACTION_ACTION);
+    Preconditions.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
     deleteInstantFile(instant);
   }
 

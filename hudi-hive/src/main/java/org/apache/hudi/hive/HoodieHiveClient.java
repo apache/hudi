@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -41,6 +40,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -65,7 +65,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -190,7 +189,7 @@ public class HoodieHiveClient {
     for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
       partBuilder.add("`" + syncConfig.partitionFields.get(i) + "`='" + partitionValues.get(i) + "'");
     }
-    return partBuilder.stream().collect(Collectors.joining(","));
+    return String.join(",", partBuilder);
   }
 
   private List<String> constructChangePartitions(String tableName, List<String> partitions) {
@@ -500,7 +499,7 @@ public class HoodieHiveClient {
    * @param sql SQL statement to execute
    */
   public CommandProcessorResponse updateHiveSQLUsingHiveDriver(String sql) throws HoodieHiveSyncException {
-    List<CommandProcessorResponse> responses = updateHiveSQLs(Arrays.asList(sql));
+    List<CommandProcessorResponse> responses = updateHiveSQLs(Collections.singletonList(sql));
     return responses.get(responses.size() - 1);
   }
 

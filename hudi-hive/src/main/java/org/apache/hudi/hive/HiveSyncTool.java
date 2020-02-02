@@ -80,7 +80,7 @@ public class HiveSyncTool {
     }
   }
 
-  public void syncHoodieTable() throws ClassNotFoundException {
+  public void syncHoodieTable() {
     try {
       switch (hoodieHiveClient.getTableType()) {
         case COPY_ON_WRITE:
@@ -193,7 +193,7 @@ public class HiveSyncTool {
         .collect(Collectors.toList());
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     // parse the params
     final HiveSyncConfig cfg = new HiveSyncConfig();
     JCommander cmd = new JCommander(cfg, null, args);

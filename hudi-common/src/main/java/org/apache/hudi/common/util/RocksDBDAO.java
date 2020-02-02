@@ -26,6 +26,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.rocksdb.AbstractImmutableNativeReference;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
@@ -61,13 +62,11 @@ public class RocksDBDAO {
   private transient ConcurrentHashMap<String, ColumnFamilyDescriptor> managedDescriptorMap;
   private transient RocksDB rocksDB;
   private boolean closed = false;
-  private final String basePath;
   private final String rocksDBBasePath;
 
   public RocksDBDAO(String basePath, String rocksDBBasePath) {
-    this.basePath = basePath;
     this.rocksDBBasePath =
-        String.format("%s/%s/%s", rocksDBBasePath, this.basePath.replace("/", "_"), UUID.randomUUID().toString());
+        String.format("%s/%s/%s", rocksDBBasePath, basePath.replace("/", "_"), UUID.randomUUID().toString());
     init();
   }
 
@@ -153,14 +152,11 @@ public class RocksDBDAO {
    * Perform a batch write operation.
    */
   public void writeBatch(BatchHandler handler) {
-    WriteBatch batch = new WriteBatch();
-    try {
+    try (WriteBatch batch = new WriteBatch()) {
       handler.apply(batch);
       getRocksDB().write(new WriteOptions(), batch);
     } catch (RocksDBException re) {
       throw new HoodieException(re);
-    } finally {
-      batch.close();
     }
   }
 
@@ -442,9 +438,7 @@ public class RocksDBDAO {
   public synchronized void close() {
     if (!closed) {
       closed = true;
-      managedHandlesMap.values().forEach(columnFamilyHandle -> {
-        columnFamilyHandle.close();
-      });
+      managedHandlesMap.values().forEach(AbstractImmutableNativeReference::close);
       managedHandlesMap.clear();
       managedDescriptorMap.clear();
       getRocksDB().close();

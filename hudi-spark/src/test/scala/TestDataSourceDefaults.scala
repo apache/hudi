@@ -31,7 +31,7 @@ import org.scalatest.junit.AssertionsForJUnit
 class TestDataSourceDefaults extends AssertionsForJUnit {
 
   val schema = SchemaTestUtil.getComplexEvolvedSchema
-  var baseRecord: GenericRecord = null
+  var baseRecord: GenericRecord = _
 
   @Before def initialize(): Unit = {
     baseRecord = SchemaTestUtil
@@ -60,10 +60,9 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
       new SimpleKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: IllegalArgumentException => {
+      case e: IllegalArgumentException =>
         // do nothing
-      }
-    };
+    }
 
     // recordkey field not specified
     try {
@@ -72,10 +71,9 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
       new SimpleKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: IllegalArgumentException => {
+      case e: IllegalArgumentException =>
         // do nothing
-      }
-    };
+    }
 
     // nested field as record key and partition path
     val hk2 = new SimpleKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.isAdmin", "false"))
@@ -89,14 +87,13 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
         .getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: HoodieException => {
+      case e: HoodieException =>
         // do nothing
-      }
-    };
+    }
 
     // if partition path can't be found, return default partition path
     val hk3 = new SimpleKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere", "false"))
-      .getKey(baseRecord);
+      .getKey(baseRecord)
     assertEquals("default", hk3.getPartitionPath)
 
     // if enable hive style partitioning
@@ -155,10 +152,9 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
       new ComplexKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: IllegalArgumentException => {
+      case e: IllegalArgumentException =>
         // do nothing
-      }
-    };
+    }
 
     // recordkey field not specified
     try {
@@ -167,10 +163,9 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
       new ComplexKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: IllegalArgumentException => {
+      case e: IllegalArgumentException =>
         // do nothing
-      }
-    };
+    }
 
     // nested field as record key and partition path
     val hk2 = new ComplexKeyGenerator(getKeyConfig("testNestedRecord.userId,testNestedRecord.isAdmin", "testNestedRecord.userId,testNestedRecord.isAdmin", "false"))
@@ -184,14 +179,13 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
         .getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: HoodieException => {
+      case e: HoodieException =>
         // do nothing
-      }
-    };
+    }
 
     // if partition path can't be found, return default partition path
     val hk3 = new ComplexKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere", "false"))
-      .getKey(baseRecord);
+      .getKey(baseRecord)
     assertEquals("default", hk3.getPartitionPath)
 
     // if enable hive style partitioning
@@ -269,10 +263,9 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
       new GlobalDeleteKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: IllegalArgumentException => {
+      case e: IllegalArgumentException =>
         // do nothing
-      }
-    };
+    }
 
     // Nested record key not found
     try {
@@ -280,10 +273,9 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
         .getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: HoodieException => {
+      case e: HoodieException =>
         // do nothing
-      }
-    };
+    }
 
     // if all parts of the composite record key are null/empty, throw error
     try {
