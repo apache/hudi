@@ -172,33 +172,35 @@ public class KafkaOffsetGen {
   public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit) {
 
     // Obtain current metadata for the topic
-    KafkaConsumer consumer = new KafkaConsumer(kafkaParams);
-    List<PartitionInfo> partitionInfoList;
-    partitionInfoList = consumer.partitionsFor(topicName);
-    Set<TopicPartition> topicPartitions = partitionInfoList.stream()
-            .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
-
-    // Determine the offset ranges to read from
     Map<TopicPartition, Long> fromOffsets;
-    if (lastCheckpointStr.isPresent()) {
-      fromOffsets = checkupValidOffsets(consumer, lastCheckpointStr, topicPartitions);
-    } else {
-      KafkaResetOffsetStrategies autoResetValue = KafkaResetOffsetStrategies
-              .valueOf(props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
-      switch (autoResetValue) {
-        case EARLIEST:
-          fromOffsets = consumer.beginningOffsets(topicPartitions);
-          break;
-        case LATEST:
-          fromOffsets = consumer.endOffsets(topicPartitions);
-          break;
-        default:
-          throw new HoodieNotSupportedException("Auto reset value must be one of 'smallest' or 'largest' ");
-      }
-    }
+    Map<TopicPartition, Long> toOffsets;
+    try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
+      List<PartitionInfo> partitionInfoList;
+      partitionInfoList = consumer.partitionsFor(topicName);
+      Set<TopicPartition> topicPartitions = partitionInfoList.stream()
+              .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
-    // Obtain the latest offsets.
-    Map<TopicPartition, Long> toOffsets = consumer.endOffsets(topicPartitions);
+      // Determine the offset ranges to read from
+      if (lastCheckpointStr.isPresent()) {
+        fromOffsets = checkupValidOffsets(consumer, lastCheckpointStr, topicPartitions);
+      } else {
+        KafkaResetOffsetStrategies autoResetValue = KafkaResetOffsetStrategies
+                .valueOf(props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
+        switch (autoResetValue) {
+          case EARLIEST:
+            fromOffsets = consumer.beginningOffsets(topicPartitions);
+            break;
+          case LATEST:
+            fromOffsets = consumer.endOffsets(topicPartitions);
+            break;
+          default:
+            throw new HoodieNotSupportedException("Auto reset value must be one of 'smallest' or 'largest' ");
+        }
+      }
+
+      // Obtain the latest offsets.
+      toOffsets = consumer.endOffsets(topicPartitions);
+    }
 
     // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
     long maxEventsToReadFromKafka = props.getLong(Config.MAX_EVENTS_FROM_KAFKA_SOURCE_PROP,
