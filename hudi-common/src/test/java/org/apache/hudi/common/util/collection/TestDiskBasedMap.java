@@ -167,7 +167,7 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
     schema = SchemaTestUtil.getSimpleSchema();
     List<IndexedRecord> indexedRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1);
     hoodieRecords =
-        indexedRecords.stream().map(r -> new HoodieRecord(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+        indexedRecords.stream().map(r -> new HoodieRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
             new AvroBinaryTestPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
     payloadSize = SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema));
     assertTrue(payloadSize > 0);
@@ -176,7 +176,7 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
     final Schema simpleSchemaWithMetadata = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     indexedRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1);
     hoodieRecords = indexedRecords.stream()
-        .map(r -> new HoodieRecord(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+        .map(r -> new HoodieRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
             new AvroBinaryTestPayload(
                 Option.of(HoodieAvroUtils.rewriteRecord((GenericRecord) r, simpleSchemaWithMetadata)))))
         .collect(Collectors.toList());
@@ -193,7 +193,7 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
     // Test sizeEstimatorPerformance with simpleSchema
     Schema schema = SchemaTestUtil.getSimpleSchema();
     List<HoodieRecord> hoodieRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1, schema);
-    HoodieRecordSizeEstimator sizeEstimator = new HoodieRecordSizeEstimator(schema);
+    HoodieRecordSizeEstimator sizeEstimator = new HoodieRecordSizeEstimator<>(schema);
     HoodieRecord record = hoodieRecords.remove(0);
     long startTime = System.currentTimeMillis();
     SpillableMapUtils.computePayloadSize(record, sizeEstimator);

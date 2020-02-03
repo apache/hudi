@@ -333,8 +333,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       if (o instanceof CombinePathInputFormat) {
         CombinePathInputFormat mObj = (CombinePathInputFormat) o;
         return (opList.equals(mObj.opList)) && (inputFormatClassName.equals(mObj.inputFormatClassName))
-            && (deserializerClassName == null ? (mObj.deserializerClassName == null)
-                : deserializerClassName.equals(mObj.deserializerClassName));
+            && (Objects.equals(deserializerClassName, mObj.deserializerClassName));
       }
       return false;
     }
@@ -353,16 +352,16 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     init(job);
     Map<Path, ArrayList<String>> pathToAliases = mrwork.getPathToAliases();
     Map<String, Operator<? extends OperatorDesc>> aliasToWork = mrwork.getAliasToWork();
-    /** MOD - Initialize a custom combine input format shim that will call listStatus on the custom inputFormat **/
+    /* MOD - Initialize a custom combine input format shim that will call listStatus on the custom inputFormat **/
     HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim combine =
-        new HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim();
+        new HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim<>();
 
     InputSplit[] splits;
 
     if (combine.getInputPathsShim(job).length == 0) {
       throw new IOException("No input paths specified in job");
     }
-    ArrayList<InputSplit> result = new ArrayList<>();
+    List<InputSplit> result = new ArrayList<>();
 
     // combine splits only from same tables and same partitions. Do not combine splits from multiple
     // tables or multiple partitions.

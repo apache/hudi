@@ -86,11 +86,8 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
   }
 
   private String unCompressData(byte[] data) throws IOException {
-    InflaterInputStream iis = new InflaterInputStream(new ByteArrayInputStream(data));
-    try {
+    try (InflaterInputStream iis = new InflaterInputStream(new ByteArrayInputStream(data))) {
       return FileIOUtils.readAsUTFString(iis, dataSize);
-    } finally {
-      iis.close();
     }
   }
 

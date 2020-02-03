@@ -260,14 +260,13 @@ public class HDFSParquetImporter implements Serializable {
     public int parallelism = 1;
     @Parameter(names = {"--schema-file", "-sf"}, description = "path for Avro schema file", required = true)
     public String schemaFile = null;
-    @Parameter(names = {"--format", "-f"}, description = "Format for the input data.", required = false,
-        validateValueWith = FormatValidator.class)
+    @Parameter(names = {"--format", "-f"}, description = "Format for the input data.", validateValueWith = FormatValidator.class)
     public String format = null;
-    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
-    @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
+    @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client for importing")

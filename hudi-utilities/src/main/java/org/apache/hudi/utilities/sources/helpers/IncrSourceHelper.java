@@ -38,7 +38,7 @@ public class IncrSourceHelper {
   private static String getStrictlyLowerTimestamp(String timestamp) {
     long ts = Long.parseLong(timestamp);
     Preconditions.checkArgument(ts > 0, "Timestamp must be positive");
-    Long lower = ts - 1;
+    long lower = ts - 1;
     return "" + lower;
   }
 
@@ -73,7 +73,7 @@ public class IncrSourceHelper {
 
     Option<HoodieInstant> nthInstant = Option.fromJavaOptional(activeCommitTimeline
         .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstants().reduce((x, y) -> y));
-    return Pair.of(beginInstantTime, nthInstant.map(instant -> instant.getTimestamp()).orElse(beginInstantTime));
+    return Pair.of(beginInstantTime, nthInstant.map(HoodieInstant::getTimestamp).orElse(beginInstantTime));
   }
 
   /**

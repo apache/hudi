@@ -42,6 +42,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -246,13 +247,17 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record5));
 
     String filename0 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", Arrays.asList(record1), schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", Collections.singletonList(record1),
+                schema, null, false);
     String filename1 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Lists.newArrayList(), schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Lists.newArrayList(),
+                schema, null, false);
     String filename2 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Arrays.asList(record2), schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record2),
+                schema, null, false);
     String filename3 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Arrays.asList(record4), schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record4),
+                schema, null, false);
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -265,21 +270,29 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     JavaRDD<HoodieRecord> taggedRecordRDD = index.tagLocation(recordRDD, jsc, table);
 
     for (HoodieRecord record : taggedRecordRDD.collect()) {
-      if (record.getRecordKey().equals("000")) {
-        assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename0)));
-        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange1.getJsonData());
-      } else if (record.getRecordKey().equals("001")) {
-        assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename2)));
-        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange2.getJsonData());
-      } else if (record.getRecordKey().equals("002")) {
-        assertTrue(!record.isCurrentLocationKnown());
-        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange3.getJsonData());
-      } else if (record.getRecordKey().equals("003")) {
-        assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename3)));
-        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange5.getJsonData());
-      } else if (record.getRecordKey().equals("004")) {
-        assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename3)));
-        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange4.getJsonData());
+      switch (record.getRecordKey()) {
+        case "000":
+          assertEquals(record.getCurrentLocation().getFileId(), FSUtils.getFileId(filename0));
+          assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange1.getJsonData());
+          break;
+        case "001":
+          assertEquals(record.getCurrentLocation().getFileId(), FSUtils.getFileId(filename2));
+          assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange2.getJsonData());
+          break;
+        case "002":
+          assertFalse(record.isCurrentLocationKnown());
+          assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange3.getJsonData());
+          break;
+        case "003":
+          assertEquals(record.getCurrentLocation().getFileId(), FSUtils.getFileId(filename3));
+          assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange5.getJsonData());
+          break;
+        case "004":
+          assertEquals(record.getCurrentLocation().getFileId(), FSUtils.getFileId(filename3));
+          assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange4.getJsonData());
+          break;
+        default:
+          throw new IllegalArgumentException("Unknown Key: " + record.getRecordKey());
       }
     }
   }

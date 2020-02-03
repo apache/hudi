@@ -193,7 +193,7 @@ public class FSUtils {
     return partitions;
   }
 
-  public static final List<String> getAllDataFilesForMarkers(FileSystem fs, String basePath, String instantTs,
+  public static List<String> getAllDataFilesForMarkers(FileSystem fs, String basePath, String instantTs,
       String markerDir) throws IOException {
     List<String> dataFiles = new LinkedList<>();
     processFiles(fs, markerDir, (status) -> {
