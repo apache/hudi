@@ -466,9 +466,9 @@ public class FSUtils {
   public static void deleteOlderCleanMetaFiles(FileSystem fs, String metaPath, Stream<HoodieInstant> instants) {
     // TODO - this should be archived when archival is made general for all meta-data
     // skip MIN_CLEAN_TO_KEEP and delete rest
-    instants.skip(MIN_CLEAN_TO_KEEP).map(s -> {
+    instants.skip(MIN_CLEAN_TO_KEEP).forEach(s -> {
       try {
-        return fs.delete(new Path(metaPath, s.getFileName()), false);
+        fs.delete(new Path(metaPath, s.getFileName()), false);
       } catch (IOException e) {
         throw new HoodieIOException("Could not delete clean meta files" + s.getFileName(), e);
       }
@@ -478,9 +478,9 @@ public class FSUtils {
   public static void deleteOlderRollbackMetaFiles(FileSystem fs, String metaPath, Stream<HoodieInstant> instants) {
     // TODO - this should be archived when archival is made general for all meta-data
     // skip MIN_ROLLBACK_TO_KEEP and delete rest
-    instants.skip(MIN_ROLLBACK_TO_KEEP).map(s -> {
+    instants.skip(MIN_ROLLBACK_TO_KEEP).forEach(s -> {
       try {
-        return fs.delete(new Path(metaPath, s.getFileName()), false);
+        fs.delete(new Path(metaPath, s.getFileName()), false);
       } catch (IOException e) {
         throw new HoodieIOException("Could not delete rollback meta files " + s.getFileName(), e);
       }
