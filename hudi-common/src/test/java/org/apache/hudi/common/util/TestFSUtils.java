@@ -22,7 +22,9 @@ import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -32,6 +34,8 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 
+import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -43,11 +47,14 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests file system utils.
  */
 public class TestFSUtils extends HoodieCommonTestHarness {
+  private final long minRollbackToKeep = 10;
+  private final long minCleanToKeep = 10;
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
@@ -113,7 +120,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
       return true;
     }, true);
 
-    Assert.assertTrue("Hoodie MetaFolder MUST be skipped but got :" + collected,
+    assertTrue("Hoodie MetaFolder MUST be skipped but got :" + collected,
         collected.stream().noneMatch(s -> s.contains(HoodieTableMetaClient.METAFOLDER_NAME)));
     // Check if only files are listed
     Assert.assertEquals(2, collected.size());
@@ -193,7 +200,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String fileName = UUID.randomUUID().toString();
     String oldLogFile = makeOldLogFileName(fileName, ".log", "100", 1);
     Path rlPath = new Path(new Path(partitionPath), oldLogFile);
-    Assert.assertTrue(FSUtils.isLogFile(rlPath));
+    assertTrue(FSUtils.isLogFile(rlPath));
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(rlPath));
     assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(rlPath));
     assertEquals(1, FSUtils.getFileVersionFromLog(rlPath));
@@ -211,7 +218,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1");
     System.out.println("Log File =" + logFile);
     Path rlPath = new Path(new Path(partitionPath), logFile);
-    Assert.assertTrue(FSUtils.isLogFile(rlPath));
+    assertTrue(FSUtils.isLogFile(rlPath));
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(rlPath));
     assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(rlPath));
     assertEquals(2, FSUtils.getFileVersionFromLog(rlPath));
@@ -260,5 +267,91 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   public static String makeOldLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version) {
     return "." + String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
+  }
+
+  @Test
+  public void testDeleteOlderRollbackFiles() throws Exception {
+    String[] commitTimes = new String[]{"20160501010101", "20160501020101", "20160501030101", "20160501040101",
+        "20160502020601", "20160502030601", "20160502040601", "20160502050601", "20160506030611",
+        "20160506040611", "20160506050611", "20160506060611"};
+    List<HoodieInstant> hoodieInstants = new ArrayList<>();
+    // create rollback files
+    for (String commitTime : commitTimes) {
+      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+          + commitTime + HoodieTimeline.ROLLBACK_EXTENSION).createNewFile();
+      hoodieInstants.add(new HoodieInstant(false, HoodieTimeline.ROLLBACK_ACTION, commitTime));
+    }
+
+    FSUtils.deleteOlderRollbackMetaFiles(FSUtils.getFs(basePath, new Configuration()),
+        basePath + "/.hoodie", hoodieInstants.stream());
+    File[] rollbackFiles = new File(basePath + "/.hoodie").listFiles(new FilenameFilter() {
+      @Override
+      public boolean accept(File dir, String name) {
+        return name.contains(HoodieTimeline.ROLLBACK_EXTENSION);
+      }
+    });
+    assertTrue(rollbackFiles.length == minRollbackToKeep);
+  }
+
+  @Test
+  public void testDeleteOlderCleanMetaFiles() throws Exception {
+    String[] commitTimes = new String[]{"20160501010101", "20160501020101", "20160501030101", "20160501040101",
+        "20160502020601", "20160502030601", "20160502040601", "20160502050601", "20160506030611",
+        "20160506040611", "20160506050611", "20160506060611"};
+    List<HoodieInstant> hoodieInstants = new ArrayList<>();
+    // create rollback files
+    for (String commitTime : commitTimes) {
+      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+          + commitTime + HoodieTimeline.CLEAN_EXTENSION).createNewFile();
+      hoodieInstants.add(new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, commitTime));
+    }
+    FSUtils.deleteOlderCleanMetaFiles(FSUtils.getFs(basePath, new Configuration()),
+        basePath + "/.hoodie", hoodieInstants.stream());
+    File[] cleanFiles = new File(basePath + "/.hoodie").listFiles(new FilenameFilter() {
+      @Override
+      public boolean accept(File dir, String name) {
+        return name.contains(HoodieTimeline.CLEAN_EXTENSION);
+      }
+    });
+    assertTrue(cleanFiles.length == minCleanToKeep);
+  }
+
+  @Test
+  public void testFileNameRelatedFunctions() throws Exception {
+    String commitTime = "20160501010101";
+    String partitionStr = "2016/05/01";
+    int taskPartitionId = 456;
+    String writeToken = "456";
+    String fileId = "Id123";
+    int version = 1;
+    final String LOG_STR = "log";
+    final String LOG_EXTENTION = "." + LOG_STR;
+
+    // data file name
+    String dataFileName = FSUtils.makeDataFileName(commitTime, writeToken, fileId);
+    assertTrue(commitTime.equals(FSUtils.getCommitTime(dataFileName)));
+    assertTrue(fileId.equals(FSUtils.getFileId(dataFileName)));
+
+    String logFileName = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, commitTime, version, writeToken);
+    assertTrue(FSUtils.isLogFile(new Path(logFileName)));
+    assertTrue(commitTime.equals(FSUtils.getBaseCommitTimeFromLogPath(new Path(logFileName))));
+    assertTrue(fileId.equals(FSUtils.getFileIdFromLogPath(new Path(logFileName))));
+    assertTrue(version == FSUtils.getFileVersionFromLog(new Path(logFileName)));
+    assertTrue(LOG_STR.equals(FSUtils.getFileExtensionFromLog(new Path(logFileName))));
+
+    // create three versions of log file
+    String partitionPath = basePath + "/" + partitionStr;
+    new File(partitionPath).mkdirs();
+    String  log1 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, commitTime, 1, writeToken);
+    new File(partitionPath + "/" + log1).createNewFile();
+    String  log2 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, commitTime, 2, writeToken);
+    new File(partitionPath + "/" + log2).createNewFile();
+    String  log3 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, commitTime, 3, writeToken);
+    new File(partitionPath + "/" + log3).createNewFile();
+
+    assertTrue(3 == FSUtils.getLatestLogVersion(FSUtils.getFs(basePath, new Configuration()),
+        new Path(partitionPath), fileId, LOG_EXTENTION, commitTime).get().getLeft());
+    assertTrue(4 == FSUtils.computeNextLogVersion(FSUtils.getFs(basePath, new Configuration()),
+        new Path(partitionPath), fileId, LOG_EXTENTION, commitTime));
   }
 }
