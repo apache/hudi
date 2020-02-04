@@ -26,6 +26,7 @@ import org.apache.hudi.testsuite.DeltaOutputType;
 import org.apache.hudi.testsuite.dag.HiveSyncDagGenerator;
 import org.apache.hudi.testsuite.dag.InsertOnlyDagGenerator;
 import org.apache.hudi.testsuite.dag.InsertUpsertDagGenerator;
+import org.apache.hudi.testsuite.dag.SimpleWorkflowDagGenerator;
 import org.apache.hudi.testsuite.dag.WorkflowDagGenerator;
 import org.apache.hudi.testsuite.job.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.utilities.UtilitiesTestBase;
@@ -161,7 +162,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     String inputBasePath = dfsBasePath + "/input/" + UUID.randomUUID().toString();
     String outputBasePath = dfsBasePath + "/result/" + UUID.randomUUID().toString();
     HoodieTestSuiteConfig cfg = makeConfig(inputBasePath, outputBasePath);
-    cfg.workloadDagGenerator = WorkflowDagGenerator.class.getName();
+    cfg.workloadDagGenerator = SimpleWorkflowDagGenerator.class.getName();
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(new Configuration(), cfg.targetBasePath);
