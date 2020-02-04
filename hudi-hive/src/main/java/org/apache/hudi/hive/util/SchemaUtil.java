@@ -18,6 +18,10 @@
 
 package org.apache.hudi.hive.util;
 
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
@@ -26,11 +30,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
-
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -46,7 +45,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Schema Utilities.
@@ -367,10 +365,9 @@ public class SchemaUtil {
       return true;
     } else if (prevType.equalsIgnoreCase("float") && newType.equalsIgnoreCase("double")) {
       return true;
-    } else if (prevType.contains("struct") && newType.toLowerCase().contains("struct")) {
-      return true;
+    } else {
+      return prevType.contains("struct") && newType.toLowerCase().contains("struct");
     }
-    return false;
   }
 
   public static String generateSchemaString(MessageType storageSchema) throws IOException {
@@ -403,18 +400,17 @@ public class SchemaUtil {
           .append(getPartitionKeyType(hiveSchema, partitionKeyWithTicks)).toString());
     }
 
-    String partitionsStr = partitionFields.stream().collect(Collectors.joining(","));
+    String partitionsStr = String.join(",", partitionFields);
     StringBuilder sb = new StringBuilder("CREATE EXTERNAL TABLE  IF NOT EXISTS ");
-    sb = sb.append(HIVE_ESCAPE_CHARACTER).append(config.databaseName).append(HIVE_ESCAPE_CHARACTER)
+    sb.append(HIVE_ESCAPE_CHARACTER).append(config.databaseName).append(HIVE_ESCAPE_CHARACTER)
             .append(".").append(HIVE_ESCAPE_CHARACTER).append(tableName).append(HIVE_ESCAPE_CHARACTER);
-    sb = sb.append("( ").append(columns).append(")");
+    sb.append("( ").append(columns).append(")");
     if (!config.partitionFields.isEmpty()) {
-      sb = sb.append(" PARTITIONED BY (").append(partitionsStr).append(")");
+      sb.append(" PARTITIONED BY (").append(partitionsStr).append(")");
     }
-    sb = sb.append(" ROW FORMAT SERDE '").append(serdeClass).append("'");
-    sb = sb.append(" STORED AS INPUTFORMAT '").append(inputFormatClass).append("'");
-    sb = sb.append(" OUTPUTFORMAT '").append(outputFormatClass).append("' LOCATION '").append(config.basePath)
-        .append("'");
+    sb.append(" ROW FORMAT SERDE '").append(serdeClass).append("'");
+    sb.append(" STORED AS INPUTFORMAT '").append(inputFormatClass).append("'");
+    sb.append(" OUTPUTFORMAT '").append(outputFormatClass).append("' LOCATION '").append(config.basePath).append("'");
     return sb.toString();
   }
 
@@ -433,7 +429,6 @@ public class SchemaUtil {
    * 
    * @return
    */
-  @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   public static MessageType readSchemaFromLogFile(FileSystem fs, Path path) throws IOException {
     Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null);
     HoodieAvroDataBlock lastBlock = null;

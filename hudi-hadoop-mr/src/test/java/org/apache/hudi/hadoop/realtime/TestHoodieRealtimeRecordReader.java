@@ -210,7 +210,7 @@ public class TestHoodieRealtimeRecordReader {
             action.equals(HoodieTimeline.ROLLBACK_ACTION) ? String.valueOf(baseInstantTs + logVersion - 2)
                 : instantTime;
 
-        HoodieLogFormat.Writer writer = null;
+        HoodieLogFormat.Writer writer;
         if (action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
           writer = writeRollback(partitionDir, schema, "fileid0", baseInstant, instantTime,
               String.valueOf(baseInstantTs + logVersion - 1), logVersion);
@@ -317,7 +317,7 @@ public class TestHoodieRealtimeRecordReader {
         numRecordsAtCommit2++;
         Assert.assertTrue(gotKey > firstBatchLastRecordKey);
         Assert.assertTrue(gotKey <= secondBatchLastRecordKey);
-        assertEquals((int) gotKey, lastSeenKeyFromLog + 1);
+        assertEquals(gotKey, lastSeenKeyFromLog + 1);
         lastSeenKeyFromLog++;
       } else {
         numRecordsAtCommit1++;
@@ -491,7 +491,6 @@ public class TestHoodieRealtimeRecordReader {
     writer = writeRollbackBlockToLogFile(partitionDir, schema, "fileid0", commitTime, newCommitTime, "101", 1);
     logFilePaths.add(writer.getLogFile().getPath().toString());
     writer.close();
-    assertTrue("block - size should be > 0", size > 0);
     InputFormatTestUtil.deltaCommit(basePath, newCommitTime);
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)

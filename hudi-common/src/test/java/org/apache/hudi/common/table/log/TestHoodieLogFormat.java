@@ -285,7 +285,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     }
   }
 
-  /**
+  /*
    * This is actually a test on concurrent append and not recovery lease. Commenting this out.
    * https://issues.apache.org/jira/browse/HUDI-117
    */
@@ -337,7 +337,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(2, statuses.length);
   }
 
-  @SuppressWarnings("unchecked")
   @Test
   public void testBasicWriteAndScan() throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
@@ -366,7 +365,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     reader.close();
   }
 
-  @SuppressWarnings("unchecked")
   @Test
   public void testBasicAppendAndRead() throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
@@ -434,7 +432,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     reader.close();
   }
 
-  @SuppressWarnings("unchecked")
   @Test
   public void testBasicAppendAndScanMultipleFiles() throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
@@ -911,11 +908,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, header);
     writer = writer.appendBlock(dataBlock);
 
-    List<String> originalKeys =
-        copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-            .collect(Collectors.toList());
-
-    // Delete 50 keys
     // Delete 50 keys
     List<HoodieKey> deletedKeys = copyOfRecords1.stream()
         .map(s -> (new HoodieKey(((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(),
@@ -1127,8 +1119,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
    * duplicate data.
    *
    */
-  private void testAvroLogRecordReaderMergingMultipleLogFiles(int numRecordsInLog1, int numRecordsInLog2)
-      throws IOException, URISyntaxException, InterruptedException {
+  private void testAvroLogRecordReaderMergingMultipleLogFiles(int numRecordsInLog1, int numRecordsInLog2) {
     try {
       // Write one Data block with same InstantTime (written in same batch)
       Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
@@ -1178,8 +1169,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testAvroLogRecordReaderWithFailedTaskInFirstStageAttempt()
-      throws IOException, URISyntaxException, InterruptedException {
+  public void testAvroLogRecordReaderWithFailedTaskInFirstStageAttempt() {
     /*
      * FIRST_ATTEMPT_FAILED:
      * Original task from the stage attempt failed, but subsequent stage retry succeeded.
@@ -1188,8 +1178,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testAvroLogRecordReaderWithFailedTaskInSecondStageAttempt()
-      throws IOException, URISyntaxException, InterruptedException {
+  public void testAvroLogRecordReaderWithFailedTaskInSecondStageAttempt() {
     /*
      * SECOND_ATTEMPT_FAILED:
      * Original task from stage attempt succeeded, but subsequent retry attempt failed.
@@ -1198,8 +1187,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testAvroLogRecordReaderTasksSucceededInBothStageAttempts()
-      throws IOException, URISyntaxException, InterruptedException {
+  public void testAvroLogRecordReaderTasksSucceededInBothStageAttempts() {
     /*
      * BOTH_ATTEMPTS_SUCCEEDED:
      * Original task from the stage attempt and duplicate task from the stage retry succeeded.
@@ -1207,7 +1195,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     testAvroLogRecordReaderMergingMultipleLogFiles(100, 100);
   }
 
-  @SuppressWarnings("unchecked")
   @Test
   public void testBasicAppendAndReadInReverse() throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
@@ -1335,7 +1322,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     reader.close();
   }
 
-  @SuppressWarnings("unchecked")
   @Test
   public void testBasicAppendAndTraverseInReverse() throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
@@ -1392,7 +1378,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testV0Format() throws IOException, InterruptedException, URISyntaxException {
+  public void testV0Format() throws IOException, URISyntaxException {
     // HoodieLogFormatVersion.DEFAULT_VERSION has been deprecated so we cannot
     // create a writer for it. So these tests are only for the HoodieAvroDataBlock
     // of older version.

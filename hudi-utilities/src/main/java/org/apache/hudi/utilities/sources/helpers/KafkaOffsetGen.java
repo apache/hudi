@@ -94,8 +94,7 @@ public class KafkaOffsetGen {
 
       // Create initial offset ranges for each 'to' partition, with from = to offsets.
       OffsetRange[] ranges = new OffsetRange[toOffsetMap.size()];
-      toOffsetMap.entrySet().stream().map(e -> {
-        TopicPartition tp = e.getKey();
+      toOffsetMap.keySet().stream().map(tp -> {
         long fromOffset = fromOffsetMap.getOrDefault(tp, 0L);
         return OffsetRange.create(tp, fromOffset, fromOffset);
       }).sorted(byPartition).collect(Collectors.toList()).toArray(ranges);
@@ -208,9 +207,7 @@ public class KafkaOffsetGen {
     maxEventsToReadFromKafka = (maxEventsToReadFromKafka == Long.MAX_VALUE || maxEventsToReadFromKafka == Integer.MAX_VALUE)
         ? Config.maxEventsFromKafkaSource : maxEventsToReadFromKafka;
     long numEvents = sourceLimit == Long.MAX_VALUE ? maxEventsToReadFromKafka : sourceLimit;
-    OffsetRange[] offsetRanges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
-
-    return offsetRanges;
+    return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
   }
 
   // check up checkpoint offsets is valid or not, if true, return checkpoint offsets,

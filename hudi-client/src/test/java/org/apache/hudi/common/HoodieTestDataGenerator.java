@@ -210,13 +210,10 @@ public class HoodieTestDataGenerator {
     Path commitFile =
         new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
     FileSystem fs = FSUtils.getFs(basePath, configuration);
-    FSDataOutputStream os = fs.create(commitFile, true);
-    HoodieCompactionPlan workload = new HoodieCompactionPlan();
-    try {
+    try (FSDataOutputStream os = fs.create(commitFile, true)) {
+      HoodieCompactionPlan workload = new HoodieCompactionPlan();
       // Write empty commit metadata
       os.writeBytes(new String(AvroUtils.serializeCompactionPlan(workload).get(), StandardCharsets.UTF_8));
-    } finally {
-      os.close();
     }
   }
 
@@ -225,13 +222,10 @@ public class HoodieTestDataGenerator {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeSavePointFileName(commitTime));
     FileSystem fs = FSUtils.getFs(basePath, configuration);
-    FSDataOutputStream os = fs.create(commitFile, true);
-    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    try {
+    try (FSDataOutputStream os = fs.create(commitFile, true)) {
+      HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
       // Write empty commit metadata
       os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-    } finally {
-      os.close();
     }
   }
 

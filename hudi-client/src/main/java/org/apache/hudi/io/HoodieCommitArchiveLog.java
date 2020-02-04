@@ -147,9 +147,9 @@ public class HoodieCommitArchiveLog {
     HoodieTimeline cleanAndRollbackTimeline = table.getActiveTimeline()
         .getTimelineOfActions(Sets.newHashSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants();
     Stream<HoodieInstant> instants = cleanAndRollbackTimeline.getInstants()
-        .collect(Collectors.groupingBy(s -> s.getAction())).entrySet().stream().map(i -> {
-          if (i.getValue().size() > maxCommitsToKeep) {
-            return i.getValue().subList(0, i.getValue().size() - minCommitsToKeep);
+        .collect(Collectors.groupingBy(HoodieInstant::getAction)).values().stream().map(hoodieInstants -> {
+          if (hoodieInstants.size() > maxCommitsToKeep) {
+            return hoodieInstants.subList(0, hoodieInstants.size() - minCommitsToKeep);
           } else {
             return new ArrayList<HoodieInstant>();
           }

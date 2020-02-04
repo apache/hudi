@@ -68,6 +68,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -106,7 +107,7 @@ public class TestCleaner extends TestHoodieClientBase {
       Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> insertFn) throws Exception {
 
-    /**
+    /*
      * do a big insert (this is basically same as insert part of upsert, just adding it here so we can catch breakages
      * in insert(), if the implementation diverges.)
      */
@@ -606,8 +607,8 @@ public class TestCleaner extends TestHoodieClientBase {
     String filePath2 = metaClient.getBasePath() + "/" + partition1 + "/" + fileName2;
 
     List<String> deletePathPatterns1 = Arrays.asList(filePath1, filePath2);
-    List<String> successDeleteFiles1 = Arrays.asList(filePath1);
-    List<String> failedDeleteFiles1 = Arrays.asList(filePath2);
+    List<String> successDeleteFiles1 = Collections.singletonList(filePath1);
+    List<String> failedDeleteFiles1 = Collections.singletonList(filePath2);
 
     // create partition1 clean stat.
     HoodieCleanStat cleanStat1 = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
@@ -630,7 +631,8 @@ public class TestCleaner extends TestHoodieClientBase {
 
     // map with relative path.
     Map<String, Tuple3> newExpected = new HashMap<>();
-    newExpected.put(partition1, new Tuple3<>(Arrays.asList(fileName1, fileName2), Arrays.asList(fileName1), Arrays.asList(fileName2)));
+    newExpected.put(partition1, new Tuple3<>(Arrays.asList(fileName1, fileName2), Collections.singletonList(fileName1),
+            Collections.singletonList(fileName2)));
     newExpected.put(partition2, new Tuple3<>(deletePathPatterns2, successDeleteFiles2, failedDeleteFiles2));
 
     HoodieCleanMetadata metadata =
@@ -1079,19 +1081,18 @@ public class TestCleaner extends TestHoodieClientBase {
     });
 
     // Test for progress (Did we clean some files ?)
-    long numFilesUnderCompactionDeleted = hoodieCleanStats.stream().flatMap(cleanStat -> {
-      return convertPathToFileIdWithCommitTime(newMetaClient, cleanStat.getDeletePathPatterns())
-          .map(fileIdWithCommitTime -> {
-            if (expFileIdToPendingCompaction.containsKey(fileIdWithCommitTime.getKey())) {
-              Assert.assertTrue("Deleted instant time must be less than pending compaction",
-                  HoodieTimeline.compareTimestamps(
-                      fileIdToLatestInstantBeforeCompaction.get(fileIdWithCommitTime.getKey()),
-                      fileIdWithCommitTime.getValue(), HoodieTimeline.GREATER));
-              return true;
-            }
-            return false;
-          });
-    }).filter(x -> x).count();
+    long numFilesUnderCompactionDeleted = hoodieCleanStats.stream()
+            .flatMap(cleanStat -> convertPathToFileIdWithCommitTime(newMetaClient, cleanStat.getDeletePathPatterns())
+        .map(fileIdWithCommitTime -> {
+          if (expFileIdToPendingCompaction.containsKey(fileIdWithCommitTime.getKey())) {
+            Assert.assertTrue("Deleted instant time must be less than pending compaction",
+                HoodieTimeline.compareTimestamps(
+                    fileIdToLatestInstantBeforeCompaction.get(fileIdWithCommitTime.getKey()),
+                    fileIdWithCommitTime.getValue(), HoodieTimeline.GREATER));
+            return true;
+          }
+          return false;
+        })).filter(x -> x).count();
     long numDeleted =
         hoodieCleanStats.stream().mapToLong(cleanStat -> cleanStat.getDeletePathPatterns().size()).sum();
     // Tighter check for regression
@@ -1123,7 +1124,7 @@ public class TestCleaner extends TestHoodieClientBase {
    * @throws IOException in case of error
    */
   private int getTotalTempFiles() throws IOException {
-    RemoteIterator itr = fs.listFiles(new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME), true);
+    RemoteIterator<?> itr = fs.listFiles(new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME), true);
     int count = 0;
     while (itr.hasNext()) {
       count++;
