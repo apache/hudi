@@ -121,7 +121,7 @@ public class TimelineServerPerf implements Serializable {
       System.out.println("Timeline Server Host Address=" + hostAddr + ", port=" + timelineServer.getServerPort());
       while (true) {
         try {
-          Thread.sleep(60000);
+          TimeUnit.MINUTES.sleep(1);
         } catch (InterruptedException e) {
           // skip it
         }

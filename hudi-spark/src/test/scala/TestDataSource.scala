@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+import java.util.concurrent.TimeUnit
+
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.common.HoodieTestDataGenerator
 import org.apache.hudi.common.util.FSUtils
@@ -239,7 +241,7 @@ class TestDataSource extends AssertionsForJUnit {
     val f2 = Future {
       inputDF1.write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process one microbatch
-      Thread.sleep(3000)
+      TimeUnit.SECONDS.sleep(3)
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, destPath, "000"))
       val commitInstantTime1: String = HoodieDataSourceHelpers.latestCommit(fs, destPath)
       // Read RO View
@@ -249,7 +251,7 @@ class TestDataSource extends AssertionsForJUnit {
 
       inputDF2.write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process one microbatch
-      Thread.sleep(10000)
+      TimeUnit.SECONDS.sleep(10)
       val commitInstantTime2: String = HoodieDataSourceHelpers.latestCommit(fs, destPath)
 
       assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())

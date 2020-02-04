@@ -68,6 +68,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -250,7 +251,7 @@ public class HoodieClientTestUtils {
 
   public static String writeParquetFile(String basePath, String partitionPath, List<HoodieRecord> records,
                                         Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException, InterruptedException {
-    Thread.sleep(1000);
+    TimeUnit.SECONDS.sleep(1);
     String commitTime = HoodieTestUtils.makeNewCommitTime();
     String fileId = UUID.randomUUID().toString();
     String filename = FSUtils.makeDataFileName(commitTime, "1-0-1", fileId);

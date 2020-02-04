@@ -70,6 +70,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -444,7 +445,7 @@ public class DeltaSync implements Serializable {
         LOG.error("Got error trying to start a new commit. Retrying after sleeping for a sec", ie);
         retryNum++;
         try {
-          Thread.sleep(1000);
+          TimeUnit.SECONDS.sleep(1);
         } catch (InterruptedException e) {
           // No-Op
         }

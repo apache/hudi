@@ -16,6 +16,8 @@
  */
 package org.apache.hudi
 
+import java.util.concurrent.TimeUnit
+
 import org.apache.hudi.exception.HoodieCorruptedDataException
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.streaming.Sink
@@ -114,7 +116,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     fn match {
       case x: util.Success[T] => x
       case _ if n > 1 =>
-        Thread.sleep(waitInMillis)
+        TimeUnit.MILLISECONDS.sleep(waitInMillis)
         retry(n - 1, waitInMillis * 2)(fn)
       case f => f
     }

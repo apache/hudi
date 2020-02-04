@@ -302,7 +302,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
         boolean ret = false;
         while (!ret) {
           try {
-            Thread.sleep(3000);
+            TimeUnit.SECONDS.sleep(3);
             ret = condition.apply(true);
           } catch (Throwable error) {
             LOG.warn("Got error :", error);

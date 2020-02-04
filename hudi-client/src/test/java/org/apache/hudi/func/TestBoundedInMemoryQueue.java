@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -227,7 +228,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
     });
     // waiting for permits to expire.
     while (!isQueueFull(queue.rateLimiter)) {
-      Thread.sleep(10);
+      TimeUnit.MILLISECONDS.sleep(10);
     }
     Assert.assertEquals(0, queue.rateLimiter.availablePermits());
     Assert.assertEquals(recordLimit, queue.currentRateLimit);
@@ -240,7 +241,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
 
     // waiting for permits to expire.
     while (!isQueueFull(queue.rateLimiter)) {
-      Thread.sleep(10);
+      TimeUnit.MILLISECONDS.sleep(10);
     }
     // No change is expected in rate limit or number of queued records. We only expect
     // queueing thread to read
@@ -280,7 +281,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
 
     // waiting for permits to expire.
     while (!isQueueFull(queue1.rateLimiter)) {
-      Thread.sleep(10);
+      TimeUnit.MILLISECONDS.sleep(10);
     }
     // notify queueing thread of an exception and ensure that it exits.
     final Exception e = new Exception("Failing it :)");

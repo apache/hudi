@@ -66,6 +66,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import scala.Tuple2;
 
@@ -335,7 +336,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
   private static void sleepForTime(int sleepTimeMs) {
     try {
-      Thread.sleep(sleepTimeMs);
+      TimeUnit.MILLISECONDS.sleep(sleepTimeMs);
     } catch (InterruptedException e) {
       LOG.error("Sleep interrupted during throttling", e);
       throw new RuntimeException(e);

@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -193,7 +194,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
   void sleepSafe(long waitMs) {
     try {
-      Thread.sleep(waitMs);
+      TimeUnit.MILLISECONDS.sleep(waitMs);
     } catch (InterruptedException e) {
       // ignore & continue next attempt
     }

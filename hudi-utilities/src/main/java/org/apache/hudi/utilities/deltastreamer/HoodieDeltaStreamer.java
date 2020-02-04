@@ -400,7 +400,7 @@ public class HoodieDeltaStreamer implements Serializable {
               if (toSleepMs > 0) {
                 LOG.info("Last sync ran less than min sync interval: " + cfg.minSyncIntervalSeconds + " s, sleep: "
                     + toSleepMs + " ms.");
-                Thread.sleep(toSleepMs);
+                TimeUnit.MILLISECONDS.sleep(toSleepMs);
               }
             } catch (Exception e) {
               LOG.error("Shutting down delta-sync due to exception", e);

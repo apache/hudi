@@ -36,6 +36,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 public class HoodieWithTimelineServer implements Serializable {
@@ -95,7 +96,7 @@ public class HoodieWithTimelineServer implements Serializable {
     try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
 
       System.out.println("Sleeping for " + cfg.delaySecs + " secs ");
-      Thread.sleep(cfg.delaySecs * 1000);
+      TimeUnit.SECONDS.sleep(cfg.delaySecs);
       System.out.println("Woke up after sleeping for " + cfg.delaySecs + " secs ");
 
       HttpGet request = new HttpGet(url);

@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Sample program that writes & reads hoodie tables via the Spark datasource streaming.
@@ -176,13 +177,13 @@ public class HoodieJavaStreamingApp {
   public void show(SparkSession spark, FileSystem fs, Dataset<Row> inputDF1, Dataset<Row> inputDF2) throws Exception {
     inputDF1.write().mode(SaveMode.Append).json(streamingSourcePath);
     // wait for spark streaming to process one microbatch
-    Thread.sleep(3000);
+    TimeUnit.SECONDS.sleep(3);
     String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
     LOG.info("First commit at instant time :" + commitInstantTime1);
 
     inputDF2.write().mode(SaveMode.Append).json(streamingSourcePath);
     // wait for spark streaming to process one microbatch
-    Thread.sleep(3000);
+    TimeUnit.SECONDS.sleep(3);
     String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
     LOG.info("Second commit at instant time :" + commitInstantTime2);
 

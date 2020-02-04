@@ -70,6 +70,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -882,7 +883,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       writeClient.commit(newCommitTime, statuses);
 
       // Sleep for small interval (at least 1 second) to force a new rollback start time.
-      Thread.sleep(1000);
+      TimeUnit.SECONDS.sleep(1);
 
       // We will test HUDI-204 here. We will simulate rollback happening twice by copying the commit file to local fs
       // and calling rollback twice
@@ -915,7 +916,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       assertEquals(0, numLogFiles);
       metaClient.getFs().copyFromLocalFile(new Path(file.getAbsolutePath()),
           new Path(metaClient.getMetaPath(), fileName));
-      Thread.sleep(1000);
+      TimeUnit.SECONDS.sleep(1);
       // Rollback again to pretend the first rollback failed partially. This should not error our
       writeClient.rollback(newCommitTime);
       folder.delete();

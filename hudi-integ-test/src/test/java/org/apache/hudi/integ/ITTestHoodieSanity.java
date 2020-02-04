@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Smoke tests to run as part of verification.
  */
@@ -123,7 +125,7 @@ public class ITTestHoodieSanity extends ITTestBase {
     } catch (AssertionError ex) {
       // In travis, sometimes, the hivemetastore is not ready even though we wait for the port to be up
       // Workaround to sleep for 5 secs and retry
-      Thread.sleep(5000);
+      TimeUnit.SECONDS.sleep(5);
       dropHiveTables(hiveTableName, tableType);
     }
 

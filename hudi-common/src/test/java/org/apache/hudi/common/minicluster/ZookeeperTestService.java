@@ -36,6 +36,7 @@ import java.io.OutputStream;
 import java.io.Reader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A Zookeeper minicluster service implementation.
@@ -187,7 +188,7 @@ public class ZookeeperTestService {
         break;
       }
       try {
-        Thread.sleep(250);
+        TimeUnit.MILLISECONDS.sleep(250);
       } catch (InterruptedException e) {
         // ignore
       }
@@ -228,7 +229,7 @@ public class ZookeeperTestService {
         break;
       }
       try {
-        Thread.sleep(250);
+        TimeUnit.MILLISECONDS.sleep(250);
       } catch (InterruptedException e) {
         // ignore
       }

@@ -56,6 +56,7 @@ import java.net.SocketException;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class HiveTestService {
 
@@ -162,7 +163,7 @@ public class HiveTestService {
         break;
       }
       try {
-        Thread.sleep(250);
+        TimeUnit.MILLISECONDS.sleep(250);
       } catch (InterruptedException e) {
         // ignore
       }

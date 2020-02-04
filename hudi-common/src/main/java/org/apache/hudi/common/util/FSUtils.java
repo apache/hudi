@@ -50,6 +50,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -458,7 +459,7 @@ public class FSUtils {
       }
       // Sleep for 1 second before trying again. Typically it takes about 2-3 seconds to recover
       // under default settings
-      Thread.sleep(1000);
+      TimeUnit.SECONDS.sleep(1);
     }
     return recovered;
   }

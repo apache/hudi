@@ -60,6 +60,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import scala.Tuple2;
 
@@ -204,7 +205,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
 
     List<HoodieRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
 
-    Thread.sleep(1000);
+    TimeUnit.SECONDS.sleep(1);
     String newCommitTime = HoodieTestUtils.makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     final HoodieCopyOnWriteTable newTable = new HoodieCopyOnWriteTable(config, jsc);
