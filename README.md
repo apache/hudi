@@ -75,4 +75,4 @@ mvn clean package -DskipTests -DskipITs -Pscala-2.12
 
 ## Quickstart
 
-Please visit [https://hudi.apache.org/quickstart.html](https://hudi.apache.org/quickstart.html) to quickly explore Hudi's capabilities using spark-shell. 
+Please visit [https://hudi.apache.org/docs/quick-start-guide.html](https://hudi.apache.org/docs/quick-start-guide.html) to quickly explore Hudi's capabilities using spark-shell. 

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -59,7 +59,7 @@ import java.nio.ByteBuffer;
 public final class BufferedRandomAccessFile extends RandomAccessFile {
   private static final Logger LOG = Logger.getLogger(BufferedRandomAccessFile.class);
   static final int DEFAULT_BUFFER_SIZE = (1 << 16); // 64K buffer
-  static final int BUFFER_BOUNDARY_MASK = ~(DEFAULT_BUFFER_SIZE - 1);
+  static final int BUFFER_BOUNDARY_MASK = -DEFAULT_BUFFER_SIZE;
 
   private int capacity;
   private ByteBuffer dataBuffer;

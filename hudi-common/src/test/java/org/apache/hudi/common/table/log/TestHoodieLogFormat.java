@@ -86,7 +86,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   private FileSystem fs;
   private Path partitionPath;
   private int bufferSize = 4096;
-  private Boolean readBlocksLazily = true;
+  private Boolean readBlocksLazily;
 
   public TestHoodieLogFormat(Boolean readBlocksLazily) {
     this.readBlocksLazily = readBlocksLazily;
@@ -414,6 +414,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         dataBlockRead.getRecords().size());
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords1,
         dataBlockRead.getRecords());
+    assertEquals(dataBlockRead.getSchema(), getSimpleSchema());
 
     reader.hasNext();
     nextBlock = reader.next();
@@ -1113,6 +1114,99 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
   }
 
+  /*
+   * During a spark stage failure, when the stage is retried, tasks that are part of the previous attempt
+   * of the stage would continue to run.  As a result two different tasks could be performing the same operation.
+   * When trying to update the log file, only one of the tasks would succeed (one holding lease on the log file).
+   *
+   * In order to make progress in this scenario, second task attempting to update the log file would rollover to
+   * a new version of the log file.  As a result, we might end up with two log files with same set of data records
+   * present in both of them.
+   *
+   * Following uint tests mimic this scenario to ensure that the reader can handle merging multiple log files with
+   * duplicate data.
+   *
+   */
+  private void testAvroLogRecordReaderMergingMultipleLogFiles(int numRecordsInLog1, int numRecordsInLog2)
+      throws IOException, URISyntaxException, InterruptedException {
+    try {
+      // Write one Data block with same InstantTime (written in same batch)
+      Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+      List<IndexedRecord> records = SchemaTestUtil.generateHoodieTestRecords(0, 101);
+      List<IndexedRecord> records2 = new ArrayList<>(records);
+
+      // Write1 with numRecordsInLog1 records written to log.1
+      Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+          .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+          .overBaseCommit("100").withFs(fs).build();
+
+      Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+      header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
+      HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records.subList(0, numRecordsInLog1), header);
+      writer = writer.appendBlock(dataBlock);
+      // Get the size of the block
+      long size = writer.getCurrentSize();
+      writer.close();
+
+      // write2 with numRecordsInLog2 records written to log.2
+      Writer writer2 = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+          .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+          .overBaseCommit("100").withFs(fs).withSizeThreshold(size - 1).build();
+
+      Map<HoodieLogBlock.HeaderMetadataType, String> header2 = Maps.newHashMap();
+      header2.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+      header2.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
+      HoodieAvroDataBlock dataBlock2 = new HoodieAvroDataBlock(records2.subList(0, numRecordsInLog2), header2);
+      writer2 = writer2.appendBlock(dataBlock2);
+      // Get the size of the block
+      writer2.close();
+
+      // From the two log files generated, read the records
+      List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1",
+          HoodieLogFile.DELTA_EXTENSION, "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
+
+      HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema,
+          "100", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
+
+      assertEquals("We would read 100 records",
+          Math.max(numRecordsInLog1, numRecordsInLog2), scanner.getNumMergedRecordsInLog());
+
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
+  @Test
+  public void testAvroLogRecordReaderWithFailedTaskInFirstStageAttempt()
+      throws IOException, URISyntaxException, InterruptedException {
+    /*
+     * FIRST_ATTEMPT_FAILED:
+     * Original task from the stage attempt failed, but subsequent stage retry succeeded.
+     */
+    testAvroLogRecordReaderMergingMultipleLogFiles(77, 100);
+  }
+
+  @Test
+  public void testAvroLogRecordReaderWithFailedTaskInSecondStageAttempt()
+      throws IOException, URISyntaxException, InterruptedException {
+    /*
+     * SECOND_ATTEMPT_FAILED:
+     * Original task from stage attempt succeeded, but subsequent retry attempt failed.
+     */
+    testAvroLogRecordReaderMergingMultipleLogFiles(100, 66);
+  }
+
+  @Test
+  public void testAvroLogRecordReaderTasksSucceededInBothStageAttempts()
+      throws IOException, URISyntaxException, InterruptedException {
+    /*
+     * BOTH_ATTEMPTS_SUCCEEDED:
+     * Original task from the stage attempt and duplicate task from the stage retry succeeded.
+     */
+    testAvroLogRecordReaderMergingMultipleLogFiles(100, 100);
+  }
+
   @SuppressWarnings("unchecked")
   @Test
   public void testBasicAppendAndReadInReverse() throws IOException, URISyntaxException, InterruptedException {
@@ -1295,5 +1389,37 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     assertFalse(reader.hasPrev());
     reader.close();
+  }
+
+  @Test
+  public void testV0Format() throws IOException, InterruptedException, URISyntaxException {
+    // HoodieLogFormatVersion.DEFAULT_VERSION has been deprecated so we cannot
+    // create a writer for it. So these tests are only for the HoodieAvroDataBlock
+    // of older version.
+    Schema schema = getSimpleSchema();
+    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
+    List<IndexedRecord> recordsCopy = new ArrayList<>(records);
+    assertEquals(records.size(), 100);
+    assertEquals(recordsCopy.size(), 100);
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, schema);
+    byte[] content = dataBlock.getBytes(schema);
+    assertTrue(content.length > 0);
+
+    HoodieLogBlock logBlock = HoodieAvroDataBlock.getBlock(content, schema);
+    assertEquals(logBlock.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
+    List<IndexedRecord> readRecords = ((HoodieAvroDataBlock)logBlock).getRecords();
+    assertEquals(readRecords.size(), recordsCopy.size());
+    for (int i = 0; i < recordsCopy.size(); ++i) {
+      assertEquals(recordsCopy.get(i), readRecords.get(i));
+    }
+
+    // Reader schema is optional if it is same as write schema
+    logBlock = HoodieAvroDataBlock.getBlock(content, null);
+    assertEquals(logBlock.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
+    readRecords = ((HoodieAvroDataBlock)logBlock).getRecords();
+    assertEquals(readRecords.size(), recordsCopy.size());
+    for (int i = 0; i < recordsCopy.size(); ++i) {
+      assertEquals(recordsCopy.get(i), readRecords.get(i));
+    }
   }
 }

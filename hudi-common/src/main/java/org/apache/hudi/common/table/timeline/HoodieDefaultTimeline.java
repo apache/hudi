@@ -65,7 +65,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     final MessageDigest md;
     try {
       md = MessageDigest.getInstance(HASHING_ALGORITHM);
-      this.instants.stream().forEach(i -> md
+      this.instants.forEach(i -> md
           .update(StringUtils.joinUsingDelim("_", i.getTimestamp(), i.getAction(), i.getState().name()).getBytes()));
     } catch (NoSuchAlgorithmException nse) {
       throw new HoodieException(nse);

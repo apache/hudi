@@ -114,7 +114,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public void initialize(URI uri, Configuration conf) throws IOException {
+  public void initialize(URI uri, Configuration conf) {
     // Get the default filesystem to decorate
     Path path = new Path(uri);
     // Remove 'hoodie-' prefix from path

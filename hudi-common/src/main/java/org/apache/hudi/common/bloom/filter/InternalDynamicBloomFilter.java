@@ -98,8 +98,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
 
   @Override
   public void and(InternalFilter filter) {
-    if (filter == null
-        || !(filter instanceof InternalDynamicBloomFilter)
+    if (!(filter instanceof InternalDynamicBloomFilter)
         || filter.vectorSize != this.vectorSize
         || filter.nbHash != this.nbHash) {
       throw new IllegalArgumentException("filters cannot be and-ed");
@@ -122,8 +121,8 @@ class InternalDynamicBloomFilter extends InternalFilter {
       return true;
     }
 
-    for (int i = 0; i < matrix.length; i++) {
-      if (matrix[i].membershipTest(key)) {
+    for (BloomFilter bloomFilter : matrix) {
+      if (bloomFilter.membershipTest(key)) {
         return true;
       }
     }
@@ -133,15 +132,14 @@ class InternalDynamicBloomFilter extends InternalFilter {
 
   @Override
   public void not() {
-    for (int i = 0; i < matrix.length; i++) {
-      matrix[i].not();
+    for (BloomFilter bloomFilter : matrix) {
+      bloomFilter.not();
     }
   }
 
   @Override
   public void or(InternalFilter filter) {
-    if (filter == null
-        || !(filter instanceof InternalDynamicBloomFilter)
+    if (!(filter instanceof InternalDynamicBloomFilter)
         || filter.vectorSize != this.vectorSize
         || filter.nbHash != this.nbHash) {
       throw new IllegalArgumentException("filters cannot be or-ed");
@@ -159,8 +157,7 @@ class InternalDynamicBloomFilter extends InternalFilter {
 
   @Override
   public void xor(InternalFilter filter) {
-    if (filter == null
-        || !(filter instanceof InternalDynamicBloomFilter)
+    if (!(filter instanceof InternalDynamicBloomFilter)
         || filter.vectorSize != this.vectorSize
         || filter.nbHash != this.nbHash) {
       throw new IllegalArgumentException("filters cannot be xor-ed");
@@ -180,8 +177,8 @@ class InternalDynamicBloomFilter extends InternalFilter {
   public String toString() {
     StringBuilder res = new StringBuilder();
 
-    for (int i = 0; i < matrix.length; i++) {
-      res.append(matrix[i]);
+    for (BloomFilter bloomFilter : matrix) {
+      res.append(bloomFilter);
       res.append(Character.LINE_SEPARATOR);
     }
     return res.toString();
@@ -195,8 +192,8 @@ class InternalDynamicBloomFilter extends InternalFilter {
     out.writeInt(nr);
     out.writeInt(currentNbRecord);
     out.writeInt(matrix.length);
-    for (int i = 0; i < matrix.length; i++) {
-      matrix[i].write(out);
+    for (BloomFilter bloomFilter : matrix) {
+      bloomFilter.write(out);
     }
   }
 
@@ -217,13 +214,9 @@ class InternalDynamicBloomFilter extends InternalFilter {
    * Adds a new row to <i>this</i> dynamic Bloom filter.
    */
   private void addRow() {
-    org.apache.hadoop.util.bloom.BloomFilter[] tmp = new org.apache.hadoop.util.bloom.BloomFilter[matrix.length + 1];
-
-    for (int i = 0; i < matrix.length; i++) {
-      tmp[i] = matrix[i];
-    }
-
-    tmp[tmp.length - 1] = new org.apache.hadoop.util.bloom.BloomFilter(vectorSize, nbHash, hashType);
+    BloomFilter[] tmp = new BloomFilter[matrix.length + 1];
+    System.arraycopy(matrix, 0, tmp, 0, matrix.length);
+    tmp[tmp.length - 1] = new BloomFilter(vectorSize, nbHash, hashType);
     matrix = tmp;
   }
 

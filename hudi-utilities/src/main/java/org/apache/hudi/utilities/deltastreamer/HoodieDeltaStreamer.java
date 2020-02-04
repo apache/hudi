@@ -64,7 +64,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -486,7 +485,7 @@ public class HoodieDeltaStreamer implements Serializable {
         HoodieTableMetaClient meta =
             new HoodieTableMetaClient(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath, true);
         List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
-        pending.stream().forEach(hoodieInstant -> asyncCompactService.enqueuePendingCompaction(hoodieInstant));
+        pending.forEach(hoodieInstant -> asyncCompactService.enqueuePendingCompaction(hoodieInstant));
         asyncCompactService.start((error) -> {
           // Shutdown DeltaSync
           shutdown(false);
@@ -600,29 +599,27 @@ public class HoodieDeltaStreamer implements Serializable {
     @Override
     protected Pair<CompletableFuture, ExecutorService> startService() {
       ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentCompaction);
-      List<CompletableFuture<Boolean>> compactionFutures =
-          IntStream.range(0, maxConcurrentCompaction).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
-            try {
-              // Set Compactor Pool Name for allowing users to prioritize compaction
-              LOG.info("Setting Spark Pool name for compaction to " + SchedulerConfGenerator.COMPACT_POOL_NAME);
-              jssc.setLocalProperty("spark.scheduler.pool", SchedulerConfGenerator.COMPACT_POOL_NAME);
+      return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentCompaction).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
+        try {
+          // Set Compactor Pool Name for allowing users to prioritize compaction
+          LOG.info("Setting Spark Pool name for compaction to " + SchedulerConfGenerator.COMPACT_POOL_NAME);
+          jssc.setLocalProperty("spark.scheduler.pool", SchedulerConfGenerator.COMPACT_POOL_NAME);
 
-              while (!isShutdownRequested()) {
-                final HoodieInstant instant = fetchNextCompactionInstant();
-                if (null != instant) {
-                  compactor.compact(instant);
-                }
-              }
-              LOG.info("Compactor shutting down properly!!");
-            } catch (InterruptedException ie) {
-              LOG.warn("Compactor executor thread got interrupted exception. Stopping", ie);
-            } catch (IOException e) {
-              LOG.error("Compactor executor failed", e);
-              throw new HoodieIOException(e.getMessage(), e);
+          while (!isShutdownRequested()) {
+            final HoodieInstant instant = fetchNextCompactionInstant();
+            if (null != instant) {
+              compactor.compact(instant);
             }
-            return true;
-          }, executor)).collect(Collectors.toList());
-      return Pair.of(CompletableFuture.allOf(compactionFutures.stream().toArray(CompletableFuture[]::new)), executor);
+          }
+          LOG.info("Compactor shutting down properly!!");
+        } catch (InterruptedException ie) {
+          LOG.warn("Compactor executor thread got interrupted exception. Stopping", ie);
+        } catch (IOException e) {
+          LOG.error("Compactor executor failed", e);
+          throw new HoodieIOException(e.getMessage(), e);
+        }
+        return true;
+      }, executor)).toArray(CompletableFuture[]::new)), executor);
     }
   }
 

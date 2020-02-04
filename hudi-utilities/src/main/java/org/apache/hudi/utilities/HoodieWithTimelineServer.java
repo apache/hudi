@@ -42,30 +42,28 @@ public class HoodieWithTimelineServer implements Serializable {
 
   private final Config cfg;
 
-  private transient Javalin app = null;
-
   public HoodieWithTimelineServer(Config cfg) {
     this.cfg = cfg;
   }
 
   public static class Config implements Serializable {
 
-    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
-    @Parameter(names = {"--num-partitions", "-n"}, description = "Num Partitions", required = false)
+    @Parameter(names = {"--num-partitions", "-n"}, description = "Num Partitions")
     public Integer numPartitions = 100;
-    @Parameter(names = {"--server-port", "-p"}, description = " Server Port", required = false)
+    @Parameter(names = {"--server-port", "-p"}, description = " Server Port")
     public Integer serverPort = 26754;
-    @Parameter(names = {"--delay-secs", "-d"}, description = "Delay(sec) before client connects", required = false)
+    @Parameter(names = {"--delay-secs", "-d"}, description = "Delay(sec) before client connects")
     public Integer delaySecs = 30;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
   }
 
   public void startService() {
-    app = Javalin.create().start(cfg.serverPort);
+    Javalin app = Javalin.create().start(cfg.serverPort);
     app.get("/", ctx -> ctx.result("Hello World"));
   }
 
@@ -107,7 +105,7 @@ public class HoodieWithTimelineServer implements Serializable {
       System.out.println("Response Code from(" + url + ") : " + response.getStatusLine().getStatusCode());
 
       try (BufferedReader rd = new BufferedReader(new InputStreamReader(response.getEntity().getContent()))) {
-        StringBuffer result = new StringBuffer();
+        StringBuilder result = new StringBuilder();
         String line;
         while ((line = rd.readLine()) != null) {
           result.append(line);

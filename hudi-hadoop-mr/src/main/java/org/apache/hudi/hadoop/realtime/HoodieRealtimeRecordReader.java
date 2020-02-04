@@ -48,7 +48,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
   }
 
   public static boolean canSkipMerging(JobConf jobConf) {
-    return Boolean.valueOf(jobConf.get(REALTIME_SKIP_MERGE_PROP, DEFAULT_REALTIME_SKIP_MERGE));
+    return Boolean.parseBoolean(jobConf.get(REALTIME_SKIP_MERGE_PROP, DEFAULT_REALTIME_SKIP_MERGE));
   }
 
   /**

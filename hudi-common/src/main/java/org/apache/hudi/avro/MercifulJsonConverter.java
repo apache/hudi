@@ -49,15 +49,13 @@ public class MercifulJsonConverter {
    * Build type processor map for each avro type.
    */
   private static Map<Schema.Type, JsonToAvroFieldProcessor> getFieldTypeProcessors() {
-    Map<Schema.Type, JsonToAvroFieldProcessor> processorMap =
-        new ImmutableMap.Builder<Schema.Type, JsonToAvroFieldProcessor>().put(Type.STRING, generateStringTypeHandler())
-            .put(Type.BOOLEAN, generateBooleanTypeHandler()).put(Type.DOUBLE, generateDoubleTypeHandler())
-            .put(Type.FLOAT, generateFloatTypeHandler()).put(Type.INT, generateIntTypeHandler())
-            .put(Type.LONG, generateLongTypeHandler()).put(Type.ARRAY, generateArrayTypeHandler())
-            .put(Type.RECORD, generateRecordTypeHandler()).put(Type.ENUM, generateEnumTypeHandler())
-            .put(Type.MAP, generateMapTypeHandler()).put(Type.BYTES, generateBytesTypeHandler())
-            .put(Type.FIXED, generateFixedTypeHandler()).build();
-    return processorMap;
+    return new ImmutableMap.Builder<Type, JsonToAvroFieldProcessor>().put(Type.STRING, generateStringTypeHandler())
+        .put(Type.BOOLEAN, generateBooleanTypeHandler()).put(Type.DOUBLE, generateDoubleTypeHandler())
+        .put(Type.FLOAT, generateFloatTypeHandler()).put(Type.INT, generateIntTypeHandler())
+        .put(Type.LONG, generateLongTypeHandler()).put(Type.ARRAY, generateArrayTypeHandler())
+        .put(Type.RECORD, generateRecordTypeHandler()).put(Type.ENUM, generateEnumTypeHandler())
+        .put(Type.MAP, generateMapTypeHandler()).put(Type.BYTES, generateBytesTypeHandler())
+        .put(Type.FIXED, generateFixedTypeHandler()).build();
   }
 
   /**
@@ -286,7 +284,7 @@ public class MercifulJsonConverter {
       public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
           throws HoodieJsonToAvroConversionException {
         Schema elementSchema = schema.getElementType();
-        List listRes = new ArrayList();
+        List<Object> listRes = new ArrayList<>();
         for (Object v : (List) value) {
           listRes.add(convertJsonToAvroField(v, name, elementSchema));
         }
@@ -301,7 +299,7 @@ public class MercifulJsonConverter {
       public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
           throws HoodieJsonToAvroConversionException {
         Schema valueSchema = schema.getValueType();
-        Map<String, Object> mapRes = new HashMap<String, Object>();
+        Map<String, Object> mapRes = new HashMap<>();
         for (Map.Entry<String, Object> v : ((Map<String, Object>) value).entrySet()) {
           mapRes.put(v.getKey(), convertJsonToAvroField(v.getValue(), name, valueSchema));
         }

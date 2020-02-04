@@ -52,7 +52,7 @@ object AvroConversionUtils {
   }
 
   def createRddForDeletes(df: DataFrame, rowField: String, partitionField: String): RDD[HoodieKey] = {
-    df.rdd.map(row => (new HoodieKey(row.getAs[String](rowField), row.getAs[String](partitionField))))
+    df.rdd.map(row => new HoodieKey(row.getAs[String](rowField), row.getAs[String](partitionField)))
   }
 
   def createDataFrame(rdd: RDD[GenericRecord], schemaStr: String, ss: SparkSession): Dataset[Row] = {
@@ -67,7 +67,7 @@ object AvroConversionUtils {
           val convertor = AvroConversionHelper.createConverterToRow(schema, dataType)
           records.map { x => convertor(x).asInstanceOf[Row] }
         }
-      }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr))).asInstanceOf[Dataset[Row]]
+      }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr)))
     }
   }
 

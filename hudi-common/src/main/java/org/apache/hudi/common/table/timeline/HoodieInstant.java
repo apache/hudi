@@ -45,13 +45,13 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       .put(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION).build();
 
   public static final Comparator<HoodieInstant> ACTION_COMPARATOR =
-      Comparator.<HoodieInstant, String>comparing(instant -> getComparableAction(instant.getAction()));
+      Comparator.comparing(instant -> getComparableAction(instant.getAction()));
 
   public static final Comparator<HoodieInstant> COMPARATOR = Comparator.comparing(HoodieInstant::getTimestamp)
       .thenComparing(ACTION_COMPARATOR).thenComparing(HoodieInstant::getState);
 
-  public static final String getComparableAction(String action) {
-    return COMPARABLE_ACTIONS.containsKey(action) ? COMPARABLE_ACTIONS.get(action) : action;
+  public static String getComparableAction(String action) {
+    return COMPARABLE_ACTIONS.getOrDefault(action, action);
   }
 
   /**

@@ -49,7 +49,7 @@ public class LogReaderUtils {
     HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
     while (reader.hasPrev()) {
       HoodieLogBlock block = reader.prev();
-      if (block instanceof HoodieAvroDataBlock && block != null) {
+      if (block instanceof HoodieAvroDataBlock) {
         HoodieAvroDataBlock lastBlock = (HoodieAvroDataBlock) block;
         if (completedTimeline
             .containsOrBeforeTimelineStarts(lastBlock.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME))) {

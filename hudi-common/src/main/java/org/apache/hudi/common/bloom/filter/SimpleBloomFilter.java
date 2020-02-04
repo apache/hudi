@@ -41,7 +41,7 @@ import java.nio.charset.StandardCharsets;
 
 public class SimpleBloomFilter implements BloomFilter {
 
-  private org.apache.hadoop.util.bloom.BloomFilter filter = null;
+  private org.apache.hadoop.util.bloom.BloomFilter filter;
 
   /**
    * Create a new Bloom filter with the given configurations.
@@ -114,8 +114,7 @@ public class SimpleBloomFilter implements BloomFilter {
     filter.write(os);
   }
 
-  private void readObject(ObjectInputStream is)
-      throws IOException, ClassNotFoundException {
+  private void readObject(ObjectInputStream is) throws IOException {
     filter = new org.apache.hadoop.util.bloom.BloomFilter();
     filter.readFields(is);
   }

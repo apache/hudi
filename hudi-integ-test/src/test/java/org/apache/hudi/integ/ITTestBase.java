@@ -87,7 +87,7 @@ public abstract class ITTestBase {
     cmd.add("hive.stats.autogather=false");
     cmd.add("-e");
     cmd.add("\"" + fullCommand + "\"");
-    return cmd.stream().toArray(String[]::new);
+    return cmd.toArray(new String[0]);
   }
 
   private static String getHiveConsoleCommandFile(String commandFile, String additionalVar) {

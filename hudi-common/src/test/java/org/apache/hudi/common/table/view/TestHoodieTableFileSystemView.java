@@ -209,7 +209,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
    * @return
    */
   private Stream<FileSlice> getAllRawFileSlices(String partitionPath) {
-    return fsView.getAllFileGroups(partitionPath).map(group -> group.getAllFileSlicesIncludingInflight())
+    return fsView.getAllFileGroups(partitionPath).map(HoodieFileGroup::getAllFileSlicesIncludingInflight)
         .flatMap(sliceList -> sliceList);
   }
 
@@ -220,7 +220,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
    * @return
    */
   public Stream<FileSlice> getLatestRawFileSlices(String partitionPath) {
-    return fsView.getAllFileGroups(partitionPath).map(fileGroup -> fileGroup.getLatestFileSlicesIncludingInflight())
+    return fsView.getAllFileGroups(partitionPath).map(HoodieFileGroup::getLatestFileSlicesIncludingInflight)
         .filter(fileSliceOpt -> fileSliceOpt.isPresent()).map(Option::get);
   }
 
@@ -275,7 +275,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     partitionFileSlicesPairs.add(Pair.of(partitionPath, fileSlices.get(0)));
     HoodieCompactionPlan compactionPlan =
         CompactionUtils.buildFromFileSlices(partitionFileSlicesPairs, Option.empty(), Option.empty());
-    HoodieInstant compactionInstant = null;
+    HoodieInstant compactionInstant;
     if (isCompactionInFlight) {
       // Create a Data-file but this should be skipped by view
       new File(basePath + "/" + partitionPath + "/" + compactDataFileName).createNewFile();
