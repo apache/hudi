@@ -217,7 +217,7 @@ public class HDFSParquetImporter implements Serializable {
     List<String> validCommands = Arrays.asList("insert", "upsert", "bulkinsert");
 
     @Override
-    public void validate(String name, String value) throws ParameterException {
+    public void validate(String name, String value) {
       if (value == null || !validCommands.contains(value.toLowerCase())) {
         throw new ParameterException(
             String.format("Invalid command: value:%s: supported commands:%s", value, validCommands));
@@ -230,7 +230,7 @@ public class HDFSParquetImporter implements Serializable {
     List<String> validFormats = Collections.singletonList("parquet");
 
     @Override
-    public void validate(String name, String value) throws ParameterException {
+    public void validate(String name, String value) {
       if (value == null || !validFormats.contains(value)) {
         throw new ParameterException(
             String.format("Invalid format type: value:%s: supported formats:%s", value, validFormats));

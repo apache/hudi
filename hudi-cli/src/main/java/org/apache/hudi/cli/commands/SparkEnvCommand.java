@@ -37,8 +37,7 @@ public class SparkEnvCommand implements CommandMarker {
   public static Map<String, String> env = new HashMap<String, String>();
 
   @CliCommand(value = "set", help = "Set spark launcher env to cli")
-  public void setEnv(@CliOption(key = {"conf"}, help = "Env config to be set") final String confMap)
-      throws IllegalArgumentException {
+  public void setEnv(@CliOption(key = {"conf"}, help = "Env config to be set") final String confMap) {
     String[] map = confMap.split("=");
     if (map.length != 2) {
       throw new IllegalArgumentException("Illegal set parameter, please use like [set --conf SPARK_HOME=/usr/etc/spark]");

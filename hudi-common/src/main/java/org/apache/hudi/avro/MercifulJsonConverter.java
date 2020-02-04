@@ -143,15 +143,13 @@ public class MercifulJsonConverter {
       return res.getRight();
     }
 
-    protected abstract Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-        throws HoodieJsonToAvroConversionException;
+    protected abstract Pair<Boolean, Object> convert(Object value, String name, Schema schema);
   }
 
   private static JsonToAvroFieldProcessor generateBooleanTypeHandler() {
     return new JsonToAvroFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-          throws HoodieJsonToAvroConversionException {
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
         if (value instanceof Boolean) {
           return Pair.of(true, value);
         }
@@ -163,8 +161,7 @@ public class MercifulJsonConverter {
   private static JsonToAvroFieldProcessor generateIntTypeHandler() {
     return new JsonToAvroFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-          throws HoodieJsonToAvroConversionException {
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
         if (value instanceof Number) {
           return Pair.of(true, ((Number) value).intValue());
         } else if (value instanceof String) {
@@ -178,8 +175,7 @@ public class MercifulJsonConverter {
   private static JsonToAvroFieldProcessor generateDoubleTypeHandler() {
     return new JsonToAvroFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-          throws HoodieJsonToAvroConversionException {
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
         if (value instanceof Number) {
           return Pair.of(true, ((Number) value).doubleValue());
         } else if (value instanceof String) {
@@ -193,8 +189,7 @@ public class MercifulJsonConverter {
   private static JsonToAvroFieldProcessor generateFloatTypeHandler() {
     return new JsonToAvroFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-          throws HoodieJsonToAvroConversionException {
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
         if (value instanceof Number) {
           return Pair.of(true, ((Number) value).floatValue());
         } else if (value instanceof String) {
@@ -208,8 +203,7 @@ public class MercifulJsonConverter {
   private static JsonToAvroFieldProcessor generateLongTypeHandler() {
     return new JsonToAvroFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-          throws HoodieJsonToAvroConversionException {
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
         if (value instanceof Number) {
           return Pair.of(true, ((Number) value).longValue());
         } else if (value instanceof String) {
@@ -223,8 +217,7 @@ public class MercifulJsonConverter {
   private static JsonToAvroFieldProcessor generateStringTypeHandler() {
     return new JsonToAvroFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-          throws HoodieJsonToAvroConversionException {
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
         return Pair.of(true, value.toString());
       }
     };
@@ -233,8 +226,7 @@ public class MercifulJsonConverter {
   private static JsonToAvroFieldProcessor generateBytesTypeHandler() {
     return new JsonToAvroFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-          throws HoodieJsonToAvroConversionException {
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
         return Pair.of(true, value.toString().getBytes());
       }
     };
@@ -243,8 +235,7 @@ public class MercifulJsonConverter {
   private static JsonToAvroFieldProcessor generateFixedTypeHandler() {
     return new JsonToAvroFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-          throws HoodieJsonToAvroConversionException {
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
         byte[] src = value.toString().getBytes();
         byte[] dst = new byte[schema.getFixedSize()];
         System.arraycopy(src, 0, dst, 0, Math.min(schema.getFixedSize(), src.length));
@@ -256,8 +247,7 @@ public class MercifulJsonConverter {
   private static JsonToAvroFieldProcessor generateEnumTypeHandler() {
     return new JsonToAvroFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-          throws HoodieJsonToAvroConversionException {
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
         if (schema.getEnumSymbols().contains(value.toString())) {
           return Pair.of(true, new GenericData.EnumSymbol(schema, value.toString()));
         }
@@ -270,8 +260,7 @@ public class MercifulJsonConverter {
   private static JsonToAvroFieldProcessor generateRecordTypeHandler() {
     return new JsonToAvroFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-          throws HoodieJsonToAvroConversionException {
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
         GenericRecord result = new GenericData.Record(schema);
         return Pair.of(true, convertJsonToAvro((Map<String, Object>) value, schema));
       }
@@ -281,8 +270,7 @@ public class MercifulJsonConverter {
   private static JsonToAvroFieldProcessor generateArrayTypeHandler() {
     return new JsonToAvroFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-          throws HoodieJsonToAvroConversionException {
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
         Schema elementSchema = schema.getElementType();
         List<Object> listRes = new ArrayList<>();
         for (Object v : (List) value) {
@@ -296,8 +284,7 @@ public class MercifulJsonConverter {
   private static JsonToAvroFieldProcessor generateMapTypeHandler() {
     return new JsonToAvroFieldProcessor() {
       @Override
-      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
-          throws HoodieJsonToAvroConversionException {
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
         Schema valueSchema = schema.getValueType();
         Map<String, Object> mapRes = new HashMap<>();
         for (Map.Entry<String, Object> v : ((Map<String, Object>) value).entrySet()) {
