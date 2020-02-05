@@ -431,6 +431,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return StorageLevel.fromString(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
   }
 
+  public boolean getBloomIndexUpdatePartitionPath() {
+    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH));
+  }
+
   /**
    * storage properties.
    */
