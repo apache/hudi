@@ -198,9 +198,9 @@ val roAfterDeleteViewDF = spark.
   read.
   format("hudi").
   load(basePath + "/*/*/*/*")
-roAfterDeleteViewDF.registerTempTable("hudi_ro_table")
+roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 // fetch should return (total - 2) records
-spark.sql("select uuid, partitionPath from hudi_ro_table").count()
+spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
 ```
 Note: Only `Append` mode is supported for delete operation.
 
