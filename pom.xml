@@ -1060,6 +1060,11 @@
         <scala.version>2.12.10</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
       </properties>
+      <activation>
+        <property>
+          <name>scala-2.12</name>
+        </property>
+      </activation>
       <build>
         <plugins>
           <plugin>

@@ -245,8 +245,6 @@ This product includes code from Apache Spark
 
 * org.apache.hudi.AvroConversionHelper copied from classes in org/apache/spark/sql/avro package
 
-* dev/change-scala-version.sh copied from https://github.com/apache/spark/blob/branch-2.4/dev/change-scala-version.sh
-
 Copyright: 2014 and onwards The Apache Software Foundation
 Home page: http://spark.apache.org/
 License: http://www.apache.org/licenses/LICENSE-2.0
