@@ -75,6 +75,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -251,6 +252,9 @@ public class TestHoodieRealtimeRecordReader {
           key = recordReader.createKey();
           value = recordReader.createValue();
         }
+        recordReader.getPos();
+        assertEquals(1.0, recordReader.getProgress(), 0.05);
+        recordReader.close();
       } catch (Exception ioe) {
         throw new HoodieException(ioe.getMessage(), ioe);
       }
@@ -295,10 +299,10 @@ public class TestHoodieRealtimeRecordReader {
     List<Schema.Field> fields = schema.getFields();
     setHiveColumnNameProps(fields, jobConf, true);
     // Enable merge skipping.
-    jobConf.set("hoodie.realtime.merge.skip", "true");
+    jobConf.set(REALTIME_SKIP_MERGE_PROP, "true");
 
     // validate unmerged record reader
-    RealtimeUnmergedRecordReader recordReader = new RealtimeUnmergedRecordReader(split, jobConf, reader);
+    HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
 
     // use reader to read base Parquet File and log file
     // here all records should be present. Also ensure log records are in order.
@@ -333,6 +337,8 @@ public class TestHoodieRealtimeRecordReader {
     assertEquals(numRecords, numRecordsAtCommit1);
     assertEquals(numRecords, numRecordsAtCommit2);
     assertEquals(2 * numRecords, seenKeys.size());
+    assertEquals(1.0, recordReader.getProgress(), 0.05);
+    recordReader.close();
   }
 
   @Test
