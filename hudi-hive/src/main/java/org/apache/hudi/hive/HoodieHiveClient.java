@@ -498,12 +498,12 @@ public class HoodieHiveClient {
    *
    * @param sql SQL statement to execute
    */
-  public CommandProcessorResponse updateHiveSQLUsingHiveDriver(String sql) throws HoodieHiveSyncException {
+  public CommandProcessorResponse updateHiveSQLUsingHiveDriver(String sql) {
     List<CommandProcessorResponse> responses = updateHiveSQLs(Collections.singletonList(sql));
     return responses.get(responses.size() - 1);
   }
 
-  private List<CommandProcessorResponse> updateHiveSQLs(List<String> sqls) throws HoodieHiveSyncException {
+  private List<CommandProcessorResponse> updateHiveSQLs(List<String> sqls) {
     SessionState ss = null;
     org.apache.hadoop.hive.ql.Driver hiveDriver = null;
     List<CommandProcessorResponse> responses = new ArrayList<>();

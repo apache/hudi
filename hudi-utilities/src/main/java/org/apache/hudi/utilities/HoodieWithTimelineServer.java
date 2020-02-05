@@ -90,7 +90,7 @@ public class HoodieWithTimelineServer implements Serializable {
     Preconditions.checkArgument(gotMessages.equals(messages), "Got expected reply from Server");
   }
 
-  public String sendRequest(String driverHost, int port) throws RuntimeException {
+  public String sendRequest(String driverHost, int port) {
     String url = String.format("http://%s:%d/", driverHost, port);
     try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
 
