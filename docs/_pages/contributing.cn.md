@@ -88,7 +88,11 @@ and more importantly also try to improve the process along the way as well.
 
  - Once you finalize on a project/task, please open a new JIRA or assign an existing one to yourself. 
       - Almost all PRs should be linked to a JIRA. It's always good to have a JIRA upfront to avoid duplicating efforts.
-      - If the changes are minor, then `[MINOR]` prefix can be added to Pull Request title without a JIRA. 
+      - If the changes are minor, then `[MINOR]` prefix can be added to Pull Request title without a JIRA. Below are some tips to judge **MINOR** Pull Request :
+        - trivial fixes (for example, a typo, a broken link, intellisense or an obvious error)
+        - the change is not functionality relevant
+        - changed lines less than 50
+        - obviously judge that the PR would pass without waiting for CI / CD verification
       - But, you may be asked to file a JIRA, if reviewer deems it necessary
  - Before you begin work,
       - Claim the JIRA using the process above and assign the JIRA to yourself.
