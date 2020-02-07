@@ -89,8 +89,8 @@ and more importantly also try to improve the process along the way as well.
       - Almost all PRs should be linked to a JIRA. It's always good to have a JIRA upfront to avoid duplicating efforts.
       - If the changes are minor, then `[MINOR]` prefix can be added to Pull Request title without a JIRA. Below are some tips to judge **MINOR** Pull Request :
         - trivial fixes (for example, a typo, a broken link, intellisense or an obvious error)
-        - the change is not functionality relevant
-        - changed lines less than 50
+        - the change does not alter functionality or performance in any way
+        - changed lines less than 100
         - obviously judge that the PR would pass without waiting for CI / CD verification
       - But, you may be asked to file a JIRA, if reviewer deems it necessary
  - Before you begin work,
