@@ -436,7 +436,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
         HoodieWriteStat insertStat = new HoodieWriteStat();
         insertStat.setNumInserts(partitionStat.getNumInserts());
         insertStat.setFileId("");
-        insertStat.setPrevCommit("");
+        insertStat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
         metadata.addWriteStat(path.toString(), insertStat);
 
         partitionStat.getUpdateLocationToCount().forEach((key, value) -> {
