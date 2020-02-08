@@ -42,29 +42,29 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
     // e.g., jdbc:postgresql://localhost/test?user=fred&password=secret
     private static final String SOURCE_SCHEMA_JDBC_CONNECTION_URL = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.connection.url";
     // The class name of the JDBC driver to use to connect to this URL.
-    private static final String TARGET_SCHEMA_JDBC_DRIVER_TYPE = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.driver.type";
-    private static final String TARGET_SCHEMA_JDBC_USERNAME = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.username";
-    private static final String TARGET_SCHEMA_JDBC_PASSWORD = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.password";
-    private static final String TARGET_SCHEMA_JDBC_DBTABLE = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.dbtable";
+    private static final String SOURCE_SCHEMA_JDBC_DRIVER_TYPE = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.driver.type";
+    private static final String SOURCE_SCHEMA_JDBC_USERNAME = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.username";
+    private static final String SOURCE_SCHEMA_JDBC_PASSWORD = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.password";
+    private static final String SOURCE_SCHEMA_JDBC_DBTABLE = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.dbtable";
     // The number of seconds the driver will wait for a Statement object to execute to the given number of seconds.
     // Zero means there is no limit. In the write path, this option depends on how JDBC drivers implement the API setQueryTimeout,
     // e.g., the h2 JDBC driver checks the timeout of each query instead of an entire JDBC batch. It defaults to 0.
-    private static final String TARGET_SCHEMA_JDBC_TIMEOUT = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.timeout";
+    private static final String SOURCE_SCHEMA_JDBC_TIMEOUT = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.timeout";
     // If true, all the columns are nullable.
-    private static final String TARGET_SCHEMA_JDBC_NULLABLE = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.nullable";
+    private static final String SOURCE_SCHEMA_JDBC_NULLABLE = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.nullable";
   }
 
   public JdbcbasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     options.put("url", props.getString(Config.SOURCE_SCHEMA_JDBC_CONNECTION_URL));
-    options.put("driver", props.getString(Config.TARGET_SCHEMA_JDBC_DRIVER_TYPE));
-    options.put("user", props.getString(Config.TARGET_SCHEMA_JDBC_USERNAME));
-    options.put("password", props.getString(Config.TARGET_SCHEMA_JDBC_PASSWORD));
-    options.put("dbtable", props.getString(Config.TARGET_SCHEMA_JDBC_DBTABLE));
+    options.put("driver", props.getString(Config.SOURCE_SCHEMA_JDBC_DRIVER_TYPE));
+    options.put("user", props.getString(Config.SOURCE_SCHEMA_JDBC_USERNAME));
+    options.put("password", props.getString(Config.SOURCE_SCHEMA_JDBC_PASSWORD));
+    options.put("dbtable", props.getString(Config.SOURCE_SCHEMA_JDBC_DBTABLE));
     // the number of seconds the driver will wait for a Statement object to execute to the given
     // number of seconds. Zero means there is no limit.
-    options.put("timeout", props.getString(Config.TARGET_SCHEMA_JDBC_TIMEOUT, "0"));
-    options.put("nullable", props.getString(Config.TARGET_SCHEMA_JDBC_NULLABLE, "true"));
+    options.put("timeout", props.getString(Config.SOURCE_SCHEMA_JDBC_TIMEOUT, "0"));
+    options.put("nullable", props.getString(Config.SOURCE_SCHEMA_JDBC_NULLABLE, "true"));
   }
 
   @Override
