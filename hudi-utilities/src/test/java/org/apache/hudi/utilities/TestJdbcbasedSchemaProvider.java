@@ -48,12 +48,12 @@ public class TestJdbcbasedSchemaProvider {
   public void init() {
     jsc = UtilHelpers.buildSparkContext(this.getClass().getName() + "-hoodie", "local[2]");
     PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.connection.url", "jdbc:h2:mem:test_mem");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.driver.type", "org.h2.Driver");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.username", "sa");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.password", "");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.dbtable", "triprec");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.timeout", "0");
-    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.jdbc.nullable", "false");
+    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.driver.type", "org.h2.Driver");
+    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.username", "sa");
+    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.password", "");
+    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.dbtable", "triprec");
+    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.timeout", "0");
+    PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.nullable", "false");
   }
 
   @After
