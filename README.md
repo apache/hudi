@@ -35,10 +35,10 @@ Hudi manages the storage of large analytical datasets on DFS (Cloud stores, HDFS
 * Async compaction of row & columnar data
 * Timeline metadata to track lineage
  
-Hudi provides the ability to query via three types of views:
- * **Read Optimized View** - Provides excellent snapshot query performance via purely columnar storage (e.g. [Parquet](https://parquet.apache.org/)).
- * **Incremental View** - Provides a change stream with records inserted or updated after a point in time.
- * **Real-time View** - Provides snapshot queries on real-time data, using a combination of columnar & row-based storage (e.g [Parquet](https://parquet.apache.org/) + [Avro](https://avro.apache.org/docs/current/mr.html)).
+Hudi supports three types of queries:
+ * **Snapshot Query** - Provides snapshot queries on real-time data, using a combination of columnar & row-based storage (e.g [Parquet](https://parquet.apache.org/) + [Avro](https://avro.apache.org/docs/current/mr.html)).
+ * **Incremental Query** - Provides a change stream with records inserted or updated after a point in time.
+ * **Read Optimized Query** - Provides excellent snapshot query performance via purely columnar storage (e.g. [Parquet](https://parquet.apache.org/)).
 
 Learn more about Hudi at [https://hudi.apache.org](https://hudi.apache.org)
 
@@ -63,6 +63,14 @@ To build the Javadoc for all Java and Scala classes:
 mvn clean javadoc:aggregate -Pjavadocs
 ```
 
+### Build with Scala 2.12
+
+The default Scala version supported is 2.11. To build for Scala 2.12 version, build using `scala-2.12` profile
+
+```
+mvn clean package -DskipTests -DskipITs -Dscala-2.12
+```
+
 ## Quickstart
 
-Please visit [https://hudi.apache.org/quickstart.html](https://hudi.apache.org/quickstart.html) to quickly explore Hudi's capabilities using spark-shell. 
+Please visit [https://hudi.apache.org/docs/quick-start-guide.html](https://hudi.apache.org/docs/quick-start-guide.html) to quickly explore Hudi's capabilities using spark-shell. 

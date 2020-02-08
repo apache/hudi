@@ -116,7 +116,7 @@ class TestDataSource extends AssertionsForJUnit {
     // we have 2 commits, try pulling the first commit (which is not the latest)
     val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").get(0);
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY, DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "000")
       .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, firstCommit)
       .load(basePath);
@@ -127,7 +127,7 @@ class TestDataSource extends AssertionsForJUnit {
 
     // pull the latest commit
     val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY, DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, commitInstantTime1)
       .load(basePath);
 
@@ -145,7 +145,7 @@ class TestDataSource extends AssertionsForJUnit {
       .options(commonOpts)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_STORAGE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -193,7 +193,7 @@ class TestDataSource extends AssertionsForJUnit {
     assertEquals(hoodieROViewDF2.count(), totalUniqueKeyToGenerate)
 
     val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY, DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, commitInstantTime1)
       .load(basePath)
     assertEquals(hoodieIncViewDF2.count(), insert2NewKeyCnt)
@@ -263,7 +263,7 @@ class TestDataSource extends AssertionsForJUnit {
       // we have 2 commits, try pulling the first commit (which is not the latest)
       val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").get(0)
       val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
-        .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY, DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL)
+        .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "000")
         .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, firstCommit)
         .load(destPath)
@@ -275,7 +275,7 @@ class TestDataSource extends AssertionsForJUnit {
 
       // pull the latest commit
       val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
-        .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY, DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL)
+        .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, commitInstantTime1)
         .load(destPath)
 

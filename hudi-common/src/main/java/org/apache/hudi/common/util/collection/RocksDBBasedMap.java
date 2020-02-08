@@ -84,11 +84,7 @@ public final class RocksDBBasedMap<K extends Serializable, R extends Serializabl
 
   @Override
   public void putAll(Map<? extends K, ? extends R> m) {
-    getRocksDBDAO().writeBatch(batch -> {
-      m.entrySet().forEach(entry -> {
-        getRocksDBDAO().putInBatch(batch, columnFamilyName, entry.getKey(), entry.getValue());
-      });
-    });
+    getRocksDBDAO().writeBatch(batch -> m.forEach((key, value) -> getRocksDBDAO().putInBatch(batch, columnFamilyName, key, value)));
   }
 
   private RocksDBDAO getRocksDBDAO() {

@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -76,7 +76,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
     this.commitTimeline = hoodieTable.getCompletedCommitTimeline();
     this.config = config;
     this.fgIdToPendingCompactionOperations =
-        ((SyncableFileSystemView) hoodieTable.getRTFileSystemView()).getPendingCompactionOperations()
+        ((SyncableFileSystemView) hoodieTable.getSliceView()).getPendingCompactionOperations()
             .map(entry -> Pair.of(
                 new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()),
                 entry.getValue()))
@@ -148,7 +148,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
       while (fileSliceIterator.hasNext() && keepVersions > 0) {
         // Skip this most recent version
         FileSlice nextSlice = fileSliceIterator.next();
-        Option<HoodieDataFile> dataFile = nextSlice.getDataFile();
+        Option<HoodieBaseFile> dataFile = nextSlice.getBaseFile();
         if (dataFile.isPresent() && savepointedFiles.contains(dataFile.get().getFileName())) {
           // do not clean up a savepoint data file
           continue;
@@ -158,8 +158,8 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
       // Delete the remaining files
       while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
-        if (nextSlice.getDataFile().isPresent()) {
-          HoodieDataFile dataFile = nextSlice.getDataFile().get();
+        if (nextSlice.getBaseFile().isPresent()) {
+          HoodieBaseFile dataFile = nextSlice.getBaseFile().get();
           deletePaths.add(dataFile.getFileName());
         }
         if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
@@ -212,7 +212,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
         // Ensure there are more than 1 version of the file (we only clean old files from updates)
         // i.e always spare the last commit.
         for (FileSlice aSlice : fileSliceList) {
-          Option<HoodieDataFile> aFile = aSlice.getDataFile();
+          Option<HoodieBaseFile> aFile = aSlice.getBaseFile();
           String fileCommitTime = aSlice.getBaseInstantTime();
           if (aFile.isPresent() && savepointedFiles.contains(aFile.get().getFileName())) {
             // do not clean up a savepoint data file

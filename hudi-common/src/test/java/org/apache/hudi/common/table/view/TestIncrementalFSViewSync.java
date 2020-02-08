@@ -29,7 +29,7 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -62,6 +62,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -115,13 +116,13 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     unscheduleCompaction(view, "14", "13", "11");
 
     // Add one more delta instant
-    instantsToFiles.putAll(testMultipleWriteSteps(view, Arrays.asList("15"), true, "11"));
+    instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("15"), true, "11"));
 
     // Schedule Compaction again
     scheduleCompaction(view, "16");
 
     // Run Compaction - This will be the second file-slice
-    testMultipleWriteSteps(view, Arrays.asList("16"), false, "16", 2);
+    testMultipleWriteSteps(view, Collections.singletonList("16"), false, "16", 2);
 
     // Run 2 more ingest
     instantsToFiles.putAll(testMultipleWriteSteps(view, Arrays.asList("17", "18"), true, "16", 2));
@@ -130,25 +131,25 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     scheduleCompaction(view, "19");
 
     // Run one more ingestion after pending compaction. THis will be 3rd slice
-    instantsToFiles.putAll(testMultipleWriteSteps(view, Arrays.asList("20"), true, "19", 3));
+    instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("20"), true, "19", 3));
 
     // Clean first slice
-    testCleans(view, Arrays.asList("21"),
+    testCleans(view, Collections.singletonList("21"),
         new ImmutableMap.Builder<String, List<String>>().put("11", Arrays.asList("12", "13", "15")).build(),
-        instantsToFiles, Arrays.asList("11"));
+        instantsToFiles, Collections.singletonList("11"));
 
     // Add one more ingestion instant. This should be 2nd slice now
-    instantsToFiles.putAll(testMultipleWriteSteps(view, Arrays.asList("22"), true, "19", 2));
+    instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("22"), true, "19", 2));
 
     // Restore last ingestion
-    testRestore(view, Arrays.asList("23"), true, new HashMap<>(), Arrays.asList("22"), "24", false);
+    testRestore(view, Collections.singletonList("23"), true, new HashMap<>(), Collections.singletonList("22"), "24", false);
 
     // Run one more ingestion. THis is still 2nd slice
-    instantsToFiles.putAll(testMultipleWriteSteps(view, Arrays.asList("24"), true, "19", 2));
+    instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("24"), true, "19", 2));
 
     // Finish Compaction
-    instantsToFiles.putAll(testMultipleWriteSteps(view, Arrays.asList("19"), false, "19", 2,
-        Arrays.asList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "24"))));
+    instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("19"), false, "19", 2,
+        Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "24"))));
   }
 
   @Test
@@ -198,13 +199,13 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     SyncableFileSystemView view1 = getFileSystemView(metaClient);
     view1.sync();
-    Map<String, List<String>> instantsToFiles = null;
+    Map<String, List<String>> instantsToFiles;
 
     /**
      * Case where incremental syncing is catching up on more than one ingestion at a time
      */
     // Run 1 ingestion on MOR table (1 delta commits). View1 is now sync up to this point
-    instantsToFiles = testMultipleWriteSteps(view1, Arrays.asList("11"), true, "11");
+    instantsToFiles = testMultipleWriteSteps(view1, Collections.singletonList("11"), true, "11");
 
     SyncableFileSystemView view2 =
         getFileSystemView(new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath()));
@@ -213,7 +214,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("12", "13"), true, "11"));
 
     // Now Sync view1 and add 1 more ingestion. Check if view1 is able to catchup correctly
-    instantsToFiles.putAll(testMultipleWriteSteps(view1, Arrays.asList("14"), true, "11"));
+    instantsToFiles.putAll(testMultipleWriteSteps(view1, Collections.singletonList("14"), true, "11"));
 
     view2.sync();
     SyncableFileSystemView view3 =
@@ -238,8 +239,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     scheduleCompaction(view2, "16");
     instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("17", "18"), true, "16", 2));
     // Compaction
-    testMultipleWriteSteps(view2, Arrays.asList("16"), false, "16", 2,
-        Arrays.asList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "18")));
+    testMultipleWriteSteps(view2, Collections.singletonList("16"), false, "16", 2,
+        Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "18")));
     view1.sync();
     areViewsConsistent(view1, view2, partitions.size() * fileIdsPerPartition.size() * 2);
     SyncableFileSystemView view5 =
@@ -249,14 +250,14 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     /**
      * Case where a clean happened and then rounds of ingestion and compaction happened
      */
-    testCleans(view2, Arrays.asList("19"),
+    testCleans(view2, Collections.singletonList("19"),
         new ImmutableMap.Builder<String, List<String>>().put("11", Arrays.asList("12", "13", "14")).build(),
-        instantsToFiles, Arrays.asList("11"));
+        instantsToFiles, Collections.singletonList("11"));
     scheduleCompaction(view2, "20");
     instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("21", "22"), true, "20", 2));
     // Compaction
-    testMultipleWriteSteps(view2, Arrays.asList("20"), false, "20", 2,
-        Arrays.asList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "22")));
+    testMultipleWriteSteps(view2, Collections.singletonList("20"), false, "20", 2,
+        Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "22")));
     // Run one more round of ingestion
     instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("23", "24"), true, "20", 2));
     view1.sync();
@@ -268,14 +269,14 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     /**
      * Case where multiple restores and ingestions happened
      */
-    testRestore(view2, Arrays.asList("25"), true, new HashMap<>(), Arrays.asList("24"), "29", true);
-    testRestore(view2, Arrays.asList("26"), true, new HashMap<>(), Arrays.asList("23"), "29", false);
-    instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("27"), true, "20", 2));
+    testRestore(view2, Collections.singletonList("25"), true, new HashMap<>(), Collections.singletonList("24"), "29", true);
+    testRestore(view2, Collections.singletonList("26"), true, new HashMap<>(), Collections.singletonList("23"), "29", false);
+    instantsToFiles.putAll(testMultipleWriteSteps(view2, Collections.singletonList("27"), true, "20", 2));
     scheduleCompaction(view2, "28");
-    instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("29"), true, "28", 3));
+    instantsToFiles.putAll(testMultipleWriteSteps(view2, Collections.singletonList("29"), true, "28", 3));
     // Compaction
-    testMultipleWriteSteps(view2, Arrays.asList("28"), false, "28", 3,
-        Arrays.asList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "29")));
+    testMultipleWriteSteps(view2, Collections.singletonList("28"), false, "28", 3,
+        Collections.singletonList(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "29")));
 
     Arrays.asList(view1, view2, view3, view4, view5, view6).forEach(v -> {
       v.sync();
@@ -371,8 +372,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         LOG.info("Last Instant is :" + view.getLastInstant().get());
         if (isRestore) {
           Assert.assertEquals(newRestoreInstants.get(idx), view.getLastInstant().get().getTimestamp());
-          Assert.assertEquals(isRestore ? HoodieTimeline.RESTORE_ACTION : HoodieTimeline.ROLLBACK_ACTION,
-              view.getLastInstant().get().getAction());
+          Assert.assertEquals(HoodieTimeline.RESTORE_ACTION, view.getLastInstant().get().getAction());
         }
         Assert.assertEquals(State.COMPLETED, view.getLastInstant().get().getState());
 
@@ -502,7 +502,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       view.getLatestFileSlices(p).forEach(fs -> {
         Assert.assertEquals(instantTime, fs.getBaseInstantTime());
         Assert.assertEquals(p, fs.getPartitionPath());
-        Assert.assertFalse(fs.getDataFile().isPresent());
+        Assert.assertFalse(fs.getBaseFile().isPresent());
       });
       view.getLatestMergedFileSlicesBeforeOrOn(p, instantTime).forEach(fs -> {
         Assert
@@ -532,9 +532,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     view.sync();
     Assert.assertEquals(newLastInstant, view.getLastInstant().get().getTimestamp());
-    partitions.forEach(p -> view.getLatestFileSlices(p).forEach(fs -> {
-      Assert.assertEquals(newBaseInstant, fs.getBaseInstantTime());
-    }));
+    partitions.forEach(p -> view.getLatestFileSlices(p).forEach(fs -> Assert.assertEquals(newBaseInstant, fs.getBaseInstantTime())));
   }
 
   /**
@@ -618,17 +616,11 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       final long expTotalFileSlicesPerPartition = fileIdsPerPartition.size() * multiple;
       partitions.forEach(p -> Assert.assertEquals(expTotalFileSlicesPerPartition, view.getAllFileSlices(p).count()));
       if (deltaCommit) {
-        partitions.forEach(p -> {
-          view.getLatestFileSlices(p).forEach(f -> {
-            Assert.assertEquals(baseInstantForDeltaCommit, f.getBaseInstantTime());
-          });
-        });
+        partitions.forEach(p ->
+            view.getLatestFileSlices(p).forEach(f -> Assert.assertEquals(baseInstantForDeltaCommit, f.getBaseInstantTime()))
+        );
       } else {
-        partitions.forEach(p -> {
-          view.getLatestDataFiles(p).forEach(f -> {
-            Assert.assertEquals(instant, f.getCommitTime());
-          });
-        });
+        partitions.forEach(p -> view.getLatestBaseFiles(p).forEach(f -> Assert.assertEquals(instant, f.getCommitTime())));
       }
 
       metaClient.reloadActiveTimeline();
@@ -676,10 +668,10 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
                 FileSlice slice2 = e2.getValue();
                 Assert.assertEquals(slice1.getBaseInstantTime(), slice2.getBaseInstantTime());
                 Assert.assertEquals(slice1.getFileId(), slice2.getFileId());
-                Assert.assertEquals(slice1.getDataFile().isPresent(), slice2.getDataFile().isPresent());
-                if (slice1.getDataFile().isPresent()) {
-                  HoodieDataFile df1 = slice1.getDataFile().get();
-                  HoodieDataFile df2 = slice2.getDataFile().get();
+                Assert.assertEquals(slice1.getBaseFile().isPresent(), slice2.getBaseFile().isPresent());
+                if (slice1.getBaseFile().isPresent()) {
+                  HoodieBaseFile df1 = slice1.getBaseFile().get();
+                  HoodieBaseFile df2 = slice2.getBaseFile().get();
                   Assert.assertEquals(df1.getCommitTime(), df2.getCommitTime());
                   Assert.assertEquals(df1.getFileId(), df2.getFileId());
                   Assert.assertEquals(df1.getFileName(), df2.getFileName());
@@ -704,23 +696,21 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
   private List<String> addInstant(HoodieTableMetaClient metaClient, String instant, boolean deltaCommit,
       String baseInstant) throws IOException {
-    List<Pair<String, HoodieWriteStat>> writeStats = partitions.stream().flatMap(p -> {
-      return fileIdsPerPartition.stream().map(f -> {
-        try {
-          File file = new File(basePath + "/" + p + "/"
-              + (deltaCommit
-                  ? FSUtils.makeLogFileName(f, ".log", baseInstant, Integer.parseInt(instant), TEST_WRITE_TOKEN)
-                  : FSUtils.makeDataFileName(instant, TEST_WRITE_TOKEN, f)));
-          file.createNewFile();
-          HoodieWriteStat w = new HoodieWriteStat();
-          w.setFileId(f);
-          w.setPath(String.format("%s/%s", p, file.getName()));
-          return Pair.of(p, w);
-        } catch (IOException e) {
-          throw new HoodieException(e);
-        }
-      });
-    }).collect(Collectors.toList());
+    List<Pair<String, HoodieWriteStat>> writeStats = partitions.stream().flatMap(p -> fileIdsPerPartition.stream().map(f -> {
+      try {
+        File file = new File(basePath + "/" + p + "/"
+            + (deltaCommit
+                ? FSUtils.makeLogFileName(f, ".log", baseInstant, Integer.parseInt(instant), TEST_WRITE_TOKEN)
+                : FSUtils.makeDataFileName(instant, TEST_WRITE_TOKEN, f)));
+        file.createNewFile();
+        HoodieWriteStat w = new HoodieWriteStat();
+        w.setFileId(f);
+        w.setPath(String.format("%s/%s", p, file.getName()));
+        return Pair.of(p, w);
+      } catch (IOException e) {
+        throw new HoodieException(e);
+      }
+    })).collect(Collectors.toList());
 
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     writeStats.forEach(e -> metadata.addWriteStat(e.getKey(), e.getValue()));

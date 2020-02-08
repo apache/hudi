@@ -29,7 +29,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
-import org.apache.hudi.common.table.TableFileSystemView.RealtimeView;
+import org.apache.hudi.common.table.TableFileSystemView.SliceView;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -90,6 +90,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   private boolean doInit = true;
   // Total number of bytes written during this append phase (an estimation)
   private long estimatedNumberOfBytesWritten;
+  // Total number of bytes written to file
+  private long sizeInBytes = 0;
   // Number of records that must be written to meet the max block size for a log block
   private int numberOfRecords = 0;
   // Max block size to limit to for a log block
@@ -115,7 +117,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
     if (doInit) {
       this.partitionPath = record.getPartitionPath();
       // extract some information from the first record
-      RealtimeView rtView = hoodieTable.getRTFileSystemView();
+      SliceView rtView = hoodieTable.getSliceView();
       Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
       // Set the base commit time as the current commitTime for new inserts into log files
       String baseInstantTime = instantTime;
@@ -246,8 +248,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
     try {
       // flush any remaining records to disk
       doAppend(header);
-      long sizeInBytes = writer.getCurrentSize();
+
       if (writer != null) {
+        sizeInBytes = writer.getCurrentSize();
         writer.close();
       }
 

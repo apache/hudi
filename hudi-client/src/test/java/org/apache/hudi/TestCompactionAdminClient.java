@@ -275,7 +275,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     // Expect all file-slice whose base-commit is same as compaction commit to contain no new Log files
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant)).forEach(fs -> {
-          Assert.assertFalse("No Data file must be present", fs.getDataFile().isPresent());
+          Assert.assertFalse("No Data file must be present", fs.getBaseFile().isPresent());
           Assert.assertEquals("No Log Files", 0, fs.getLogFiles().count());
         });
 
@@ -336,7 +336,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))
         .filter(fs -> fs.getFileId().equals(op.getFileId())).forEach(fs -> {
-          Assert.assertFalse("No Data file must be present", fs.getDataFile().isPresent());
+          Assert.assertFalse("No Data file must be present", fs.getBaseFile().isPresent());
           Assert.assertEquals("No Log Files", 0, fs.getLogFiles().count());
         });
 

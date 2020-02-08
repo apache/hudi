@@ -26,7 +26,7 @@ import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -68,6 +68,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -106,7 +107,7 @@ public class TestCleaner extends TestHoodieClientBase {
       Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> insertFn) throws Exception {
 
-    /**
+    /*
      * do a big insert (this is basically same as insert part of upsert, just adding it here so we can catch breakages
      * in insert(), if the implementation diverges.)
      */
@@ -267,8 +268,8 @@ public class TestCleaner extends TestHoodieClientBase {
             for (HoodieFileGroup fileGroup : fileGroups) {
               if (compactionFileIdToLatestFileSlice.containsKey(fileGroup.getFileGroupId())) {
                 // Ensure latest file-slice selected for compaction is retained
-                Option<HoodieDataFile> dataFileForCompactionPresent =
-                    Option.fromJavaOptional(fileGroup.getAllDataFiles().filter(df -> {
+                Option<HoodieBaseFile> dataFileForCompactionPresent =
+                    Option.fromJavaOptional(fileGroup.getAllBaseFiles().filter(df -> {
                       return compactionFileIdToLatestFileSlice.get(fileGroup.getFileGroupId()).getBaseInstantTime()
                           .equals(df.getCommitTime());
                     }).findAny());
@@ -277,7 +278,7 @@ public class TestCleaner extends TestHoodieClientBase {
               } else {
                 // file has no more than max versions
                 String fileId = fileGroup.getFileGroupId().getFileId();
-                List<HoodieDataFile> dataFiles = fileGroup.getAllDataFiles().collect(Collectors.toList());
+                List<HoodieBaseFile> dataFiles = fileGroup.getAllBaseFiles().collect(Collectors.toList());
 
                 assertTrue("fileId " + fileId + " has more than " + maxVersions + " versions",
                     dataFiles.size() <= maxVersions);
@@ -391,7 +392,7 @@ public class TestCleaner extends TestHoodieClientBase {
           List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
           for (HoodieFileGroup fileGroup : fileGroups) {
             Set<String> commitTimes = new HashSet<>();
-            fileGroup.getAllDataFiles().forEach(value -> {
+            fileGroup.getAllBaseFiles().forEach(value -> {
               LOG.debug("Data File - " + value);
               commitTimes.add(value.getCommitTime());
             });
@@ -606,8 +607,8 @@ public class TestCleaner extends TestHoodieClientBase {
     String filePath2 = metaClient.getBasePath() + "/" + partition1 + "/" + fileName2;
 
     List<String> deletePathPatterns1 = Arrays.asList(filePath1, filePath2);
-    List<String> successDeleteFiles1 = Arrays.asList(filePath1);
-    List<String> failedDeleteFiles1 = Arrays.asList(filePath2);
+    List<String> successDeleteFiles1 = Collections.singletonList(filePath1);
+    List<String> failedDeleteFiles1 = Collections.singletonList(filePath2);
 
     // create partition1 clean stat.
     HoodieCleanStat cleanStat1 = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
@@ -630,7 +631,8 @@ public class TestCleaner extends TestHoodieClientBase {
 
     // map with relative path.
     Map<String, Tuple3> newExpected = new HashMap<>();
-    newExpected.put(partition1, new Tuple3<>(Arrays.asList(fileName1, fileName2), Arrays.asList(fileName1), Arrays.asList(fileName2)));
+    newExpected.put(partition1, new Tuple3<>(Arrays.asList(fileName1, fileName2), Collections.singletonList(fileName1),
+            Collections.singletonList(fileName2)));
     newExpected.put(partition2, new Tuple3<>(deletePathPatterns2, successDeleteFiles2, failedDeleteFiles2));
 
     HoodieCleanMetadata metadata =
@@ -1025,7 +1027,7 @@ public class TestCleaner extends TestHoodieClientBase {
           metaClient = HoodieTableMetaClient.reload(metaClient);
           HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
           FileSlice slice =
-              table.getRTFileSystemView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
+              table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
                   .filter(fs -> fs.getFileId().equals(fileId)).findFirst().get();
           List<FileSlice> slices = new ArrayList<>();
           if (compactionInstantsToFileSlices.containsKey(compactionInstants[j])) {
@@ -1069,29 +1071,28 @@ public class TestCleaner extends TestHoodieClientBase {
 
     expFileIdToPendingCompaction.forEach((fileId, value) -> {
       String baseInstantForCompaction = fileIdToLatestInstantBeforeCompaction.get(fileId);
-      Option<FileSlice> fileSliceForCompaction = Option.fromJavaOptional(hoodieTable.getRTFileSystemView()
+      Option<FileSlice> fileSliceForCompaction = Option.fromJavaOptional(hoodieTable.getSliceView()
           .getLatestFileSlicesBeforeOrOn(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, baseInstantForCompaction,
           true)
           .filter(fs -> fs.getFileId().equals(fileId)).findFirst());
       Assert.assertTrue("Base Instant for Compaction must be preserved", fileSliceForCompaction.isPresent());
-      Assert.assertTrue("FileSlice has data-file", fileSliceForCompaction.get().getDataFile().isPresent());
+      Assert.assertTrue("FileSlice has data-file", fileSliceForCompaction.get().getBaseFile().isPresent());
       Assert.assertEquals("FileSlice has log-files", 2, fileSliceForCompaction.get().getLogFiles().count());
     });
 
     // Test for progress (Did we clean some files ?)
-    long numFilesUnderCompactionDeleted = hoodieCleanStats.stream().flatMap(cleanStat -> {
-      return convertPathToFileIdWithCommitTime(newMetaClient, cleanStat.getDeletePathPatterns())
-          .map(fileIdWithCommitTime -> {
-            if (expFileIdToPendingCompaction.containsKey(fileIdWithCommitTime.getKey())) {
-              Assert.assertTrue("Deleted instant time must be less than pending compaction",
-                  HoodieTimeline.compareTimestamps(
-                      fileIdToLatestInstantBeforeCompaction.get(fileIdWithCommitTime.getKey()),
-                      fileIdWithCommitTime.getValue(), HoodieTimeline.GREATER));
-              return true;
-            }
-            return false;
-          });
-    }).filter(x -> x).count();
+    long numFilesUnderCompactionDeleted = hoodieCleanStats.stream()
+            .flatMap(cleanStat -> convertPathToFileIdWithCommitTime(newMetaClient, cleanStat.getDeletePathPatterns())
+        .map(fileIdWithCommitTime -> {
+          if (expFileIdToPendingCompaction.containsKey(fileIdWithCommitTime.getKey())) {
+            Assert.assertTrue("Deleted instant time must be less than pending compaction",
+                HoodieTimeline.compareTimestamps(
+                    fileIdToLatestInstantBeforeCompaction.get(fileIdWithCommitTime.getKey()),
+                    fileIdWithCommitTime.getValue(), HoodieTimeline.GREATER));
+            return true;
+          }
+          return false;
+        })).filter(x -> x).count();
     long numDeleted =
         hoodieCleanStats.stream().mapToLong(cleanStat -> cleanStat.getDeletePathPatterns().size()).sum();
     // Tighter check for regression
@@ -1123,7 +1124,7 @@ public class TestCleaner extends TestHoodieClientBase {
    * @throws IOException in case of error
    */
   private int getTotalTempFiles() throws IOException {
-    RemoteIterator itr = fs.listFiles(new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME), true);
+    RemoteIterator<?> itr = fs.listFiles(new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME), true);
     int count = 0;
     while (itr.hasNext()) {
       count++;
@@ -1135,9 +1136,9 @@ public class TestCleaner extends TestHoodieClientBase {
   private Stream<Pair<String, String>> convertPathToFileIdWithCommitTime(final HoodieTableMetaClient metaClient,
       List<String> paths) {
     Predicate<String> roFilePredicate =
-        path -> path.contains(metaClient.getTableConfig().getROFileFormat().getFileExtension());
+        path -> path.contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
     Predicate<String> rtFilePredicate =
-        path -> path.contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension());
+        path -> path.contains(metaClient.getTableConfig().getLogFileFormat().getFileExtension());
     Stream<Pair<String, String>> stream1 = paths.stream().filter(roFilePredicate).map(fullPath -> {
       String fileName = Paths.get(fullPath).getFileName().toString();
       return Pair.of(FSUtils.getFileId(fileName), FSUtils.getCommitTime(fileName));

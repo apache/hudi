@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>0.5.1-SNAPSHOT</version>
+  <version>0.5.2-SNAPSHOT</version>
   <description>Apache Hudi (incubating) brings stream style processing on big data</description>
   <url>https://github.com/apache/incubator-hudi</url>
   <name>Hudi</name>
@@ -71,14 +71,18 @@
     <maven-surefire-plugin.version>2.19.1</maven-surefire-plugin.version>
     <maven-shade-plugin.version>3.1.1</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
+    <maven-compiler-plugin.version>3.8.0</maven-compiler-plugin.version>
+    <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
     <genjavadoc-plugin.version>0.15</genjavadoc-plugin.version>
+    <build-helper-maven-plugin.version>1.7</build-helper-maven-plugin.version>
+    <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
 
     <java.version>1.8</java.version>
     <fasterxml.version>2.6.7</fasterxml.version>
+    <kafka.version>2.0.0</kafka.version>
     <glassfish.version>2.17</glassfish.version>
     <parquet.version>1.10.1</parquet.version>
     <junit.version>4.11</junit.version>
-    <junit-dep.version>4.10</junit-dep.version>
     <mockito.version>1.10.19</mockito.version>
     <log4j.version>1.2.17</log4j.version>
     <slf4j.version>1.7.5</slf4j.version>
@@ -91,7 +95,7 @@
     <spark.version>2.4.4</spark.version>
     <avro.version>1.8.2</avro.version>
     <scala.version>2.11.8</scala.version>
-    <scala.libversion>2.11</scala.libversion>
+    <scala.binary.version>2.11</scala.binary.version>
     <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
@@ -110,6 +114,7 @@
     <spark.bundle.hive.shade.prefix></spark.bundle.hive.shade.prefix>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix></utilities.bundle.hive.shade.prefix>
+    <argLine>-Xmx1024m -XX:MaxPermSize=256m</argLine>
   </properties>
 
   <scm>
@@ -155,29 +160,6 @@
           </execution>
         </executions>
       </plugin>
-      <plugin>
-        <groupId>org.scalastyle</groupId>
-        <artifactId>scalastyle-maven-plugin</artifactId>
-        <version>1.0.0</version>
-        <configuration>
-          <verbose>false</verbose>
-          <failOnViolation>true</failOnViolation>
-          <includeTestSourceDirectory>true</includeTestSourceDirectory>
-          <failOnWarning>false</failOnWarning>
-          <sourceDirectory>${project.basedir}/src/main/scala</sourceDirectory>
-          <testSourceDirectory>${project.basedir}/src/test/scala</testSourceDirectory>
-          <configLocation>${main.basedir}/style/scalastyle.xml</configLocation>
-          <outputEncoding>UTF-8</outputEncoding>
-        </configuration>
-        <executions>
-          <execution>
-            <phase>compile</phase>
-            <goals>
-              <goal>check</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
 <!--
       See https://jira.apache.org/jira/browse/HUDI-304
       <plugin>
@@ -209,6 +191,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
+        <version>${maven-compiler-plugin.version}</version>
         <configuration>
           <source>${java.version}</source>
           <target>${java.version}</target>
@@ -226,7 +209,9 @@
         </configuration>
       </plugin>
       <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-deploy-plugin</artifactId>
+        <version>${maven-deploy-plugin.version}</version>
         <executions>
           <execution>
             <id>default-deploy</id>
@@ -252,7 +237,6 @@
           <excludes>
             <exclude>**/IT*.java</exclude>
           </excludes>
-          <argLine>-Xmx1024m -XX:MaxPermSize=256m</argLine>
         </configuration>
       </plugin>
     </plugins>
@@ -260,6 +244,7 @@
     <pluginManagement>
       <plugins>
         <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-jar-plugin</artifactId>
           <version>${maven-jar-plugin.version}</version>
         </plugin>
@@ -280,11 +265,6 @@
               <configuration>
                 <!-- Sets the path to the file which contains the execution data. -->
                 <destFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</destFile>
-                <!--
-                    Sets the name of the property containing the settings
-                    for JaCoCo runtime agent.
-                -->
-                <propertyName>surefireArgLine</propertyName>
               </configuration>
             </execution>
             <!--
@@ -388,6 +368,29 @@
             </execution>
           </executions>
         </plugin>
+        <plugin>
+          <groupId>org.scalastyle</groupId>
+          <artifactId>scalastyle-maven-plugin</artifactId>
+          <version>1.0.0</version>
+          <configuration>
+            <verbose>false</verbose>
+            <failOnViolation>true</failOnViolation>
+            <includeTestSourceDirectory>true</includeTestSourceDirectory>
+            <failOnWarning>false</failOnWarning>
+            <sourceDirectory>${project.basedir}/src/main/scala</sourceDirectory>
+            <testSourceDirectory>${project.basedir}/src/test/scala</testSourceDirectory>
+            <configLocation>${main.basedir}/style/scalastyle.xml</configLocation>
+            <outputEncoding>UTF-8</outputEncoding>
+          </configuration>
+          <executions>
+            <execution>
+              <phase>compile</phase>
+              <goals>
+                <goal>check</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
       </plugins>
     </pluginManagement>
   </build>
@@ -424,8 +427,8 @@
       </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.module</groupId>
-        <artifactId>jackson-module-scala_2.11</artifactId>
-        <version>${fasterxml.version}</version>
+        <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
+        <version>${fasterxml.version}.1</version>
       </dependency>
 
       <!-- Glassfish -->
@@ -471,13 +474,13 @@
       <!-- Spark -->
       <dependency>
         <groupId>org.apache.spark</groupId>
-        <artifactId>spark-core_2.11</artifactId>
+        <artifactId>spark-core_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
         <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.spark</groupId>
-        <artifactId>spark-sql_2.11</artifactId>
+        <artifactId>spark-sql_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
         <scope>provided</scope>
       </dependency>
@@ -485,7 +488,7 @@
       <!-- Spark (Packages) -->
       <dependency>
         <groupId>org.apache.spark</groupId>
-        <artifactId>spark-avro_2.11</artifactId>
+        <artifactId>spark-avro_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
         <scope>provided</scope>
       </dependency>
@@ -983,6 +986,7 @@
           <plugin>
             <groupId>org.codehaus.mojo</groupId>
             <artifactId>build-helper-maven-plugin</artifactId>
+            <version>${build-helper-maven-plugin.version}</version>
             <executions>
               <execution>
                 <phase>generate-sources</phase>
@@ -1041,10 +1045,53 @@
         </plugins>
       </build>
     </profile>
+    <!-- Exists for backwards compatibility; profile doesn't do anything -->
+    <profile>
+      <id>scala-2.11</id>
+    </profile>
+
+    <profile>
+      <id>scala-2.12</id>
+      <properties>
+        <scala.version>2.12.10</scala.version>
+        <scala.binary.version>2.12</scala.binary.version>
+      </properties>
+      <activation>
+        <property>
+          <name>scala-2.12</name>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <version>${maven-enforcer-plugin.version}</version>
+            <executions>
+              <execution>
+                <id>enforce-versions</id>
+                <goals>
+                  <goal>enforce</goal>
+                </goals>
+                <configuration>
+                  <rules>
+                    <bannedDependencies>
+                      <excludes combine.children="append">
+                        <exclude>*:*_2.11</exclude>
+                      </excludes>
+                    </bannedDependencies>
+                  </rules>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 
   <issueManagement>
     <system>GitHub</system>
-    <url>https://github.org/apache/hudi/issues</url>
+    <url>https://github.com/apache/incubator-hudi/issues</url>
   </issueManagement>
 </project>

@@ -116,7 +116,7 @@ public class TestHBaseQPSResourceAllocator extends HoodieClientTestHarness {
 
   private HoodieHBaseIndexConfig getConfigWithResourceAllocator(Option<String> resourceAllocatorClass) {
     HoodieHBaseIndexConfig.Builder builder = new HoodieHBaseIndexConfig.Builder()
-        .hbaseZkPort(Integer.valueOf(hbaseConfig.get("hbase.zookeeper.property.clientPort")))
+        .hbaseZkPort(Integer.parseInt(hbaseConfig.get("hbase.zookeeper.property.clientPort")))
         .hbaseZkQuorum(hbaseConfig.get("hbase.zookeeper.quorum")).hbaseTableName(tableName).hbaseIndexGetBatchSize(100);
     if (resourceAllocatorClass.isPresent()) {
       builder.withQPSResourceAllocatorType(resourceAllocatorClass.get());

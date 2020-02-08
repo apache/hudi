@@ -33,12 +33,12 @@ import org.apache.parquet.avro.AvroParquetWriter;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 public class InputFormatTestUtil {
@@ -59,13 +59,10 @@ public class InputFormatTestUtil {
 
   public static void simulateUpdates(File directory, final String originalCommit, int numberOfFilesUpdated,
       String newCommit, boolean randomize) throws IOException {
-    List<File> dataFiles = Arrays.asList(directory.listFiles(new FilenameFilter() {
-      @Override
-      public boolean accept(File dir, String name) {
-        String commitTs = FSUtils.getCommitTime(name);
-        return originalCommit.equals(commitTs);
-      }
-    }));
+    List<File> dataFiles = Arrays.asList(Objects.requireNonNull(directory.listFiles((dir, name) -> {
+      String commitTs = FSUtils.getCommitTime(name);
+      return originalCommit.equals(commitTs);
+    })));
     if (randomize) {
       Collections.shuffle(dataFiles);
     }
@@ -183,16 +180,10 @@ public class InputFormatTestUtil {
 
   public static void simulateParquetUpdates(File directory, Schema schema, String originalCommit,
       int totalNumberOfRecords, int numberOfRecordsToUpdate, String newCommit) throws IOException {
-    File fileToUpdate = directory.listFiles(new FilenameFilter() {
-      @Override
-      public boolean accept(File dir, String name) {
-        return name.endsWith("parquet");
-      }
-    })[0];
+    File fileToUpdate = Objects.requireNonNull(directory.listFiles((dir, name) -> name.endsWith("parquet")))[0];
     String fileId = FSUtils.getFileId(fileToUpdate.getName());
     File dataFile = new File(directory, FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId));
-    AvroParquetWriter parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema);
-    try {
+    try (AvroParquetWriter parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema)) {
       for (GenericRecord record : generateAvroRecords(schema, totalNumberOfRecords, originalCommit, fileId)) {
         if (numberOfRecordsToUpdate > 0) {
           // update this record
@@ -203,8 +194,6 @@ public class InputFormatTestUtil {
         }
         parquetWriter.write(record);
       }
-    } finally {
-      parquetWriter.close();
     }
 
   }

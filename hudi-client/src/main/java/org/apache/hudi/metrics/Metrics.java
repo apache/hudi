@@ -49,17 +49,14 @@ public class Metrics {
     }
     // reporter.start();
 
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      @Override
-      public void run() {
-        try {
-          reporter.report();
-          Closeables.close(reporter.getReporter(), true);
-        } catch (Exception e) {
-          e.printStackTrace();
-        }
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      try {
+        reporter.report();
+        Closeables.close(reporter.getReporter(), true);
+      } catch (Exception e) {
+        e.printStackTrace();
       }
-    });
+    }));
   }
 
   public static Metrics getInstance() {

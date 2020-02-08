@@ -431,6 +431,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return StorageLevel.fromString(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
   }
 
+  public boolean getBloomIndexUpdatePartitionPath() {
+    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH));
+  }
+
   /**
    * storage properties.
    */
@@ -756,6 +760,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       String layoutVersion = props.getProperty(TIMELINE_LAYOUT_VERSION);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
+
 
       // Build WriteConfig at the end
       HoodieWriteConfig config = new HoodieWriteConfig(props);

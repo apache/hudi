@@ -106,8 +106,6 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
 
   @Override
   public Stream<HoodieFileGroup> fetchAllStoredFileGroups() {
-    return ((ExternalSpillableMap) partitionToFileGroupsMap).valueStream().flatMap(fg -> {
-      return ((List<HoodieFileGroup>) fg).stream();
-    });
+    return ((ExternalSpillableMap) partitionToFileGroupsMap).valueStream().flatMap(fg -> ((List<HoodieFileGroup>) fg).stream());
   }
 }

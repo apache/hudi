@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.TimelineLayoutVersion;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -53,15 +54,19 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_TABLE_NAME_PROP_NAME = "hoodie.table.name";
   public static final String HOODIE_TABLE_TYPE_PROP_NAME = "hoodie.table.type";
+  @Deprecated
   public static final String HOODIE_RO_FILE_FORMAT_PROP_NAME = "hoodie.table.ro.file.format";
+  @Deprecated
   public static final String HOODIE_RT_FILE_FORMAT_PROP_NAME = "hoodie.table.rt.file.format";
+  public static final String HOODIE_BASE_FILE_FORMAT_PROP_NAME = "hoodie.table.base.file.format";
+  public static final String HOODIE_LOG_FILE_FORMAT_PROP_NAME = "hoodie.table.log.file.format";
   public static final String HOODIE_TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
   public static final String HOODIE_PAYLOAD_CLASS_PROP_NAME = "hoodie.compaction.payload.class";
   public static final String HOODIE_ARCHIVELOG_FOLDER_PROP_NAME = "hoodie.archivelog.folder";
 
   public static final HoodieTableType DEFAULT_TABLE_TYPE = HoodieTableType.COPY_ON_WRITE;
-  public static final HoodieFileFormat DEFAULT_RO_FILE_FORMAT = HoodieFileFormat.PARQUET;
-  public static final HoodieFileFormat DEFAULT_RT_FILE_FORMAT = HoodieFileFormat.HOODIE_LOG;
+  public static final HoodieFileFormat DEFAULT_BASE_FILE_FORMAT = HoodieFileFormat.PARQUET;
+  public static final HoodieFileFormat DEFAULT_LOG_FILE_FORMAT = HoodieFileFormat.HOODIE_LOG;
   public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
   public static final Integer DEFAULT_TIMELINE_LAYOUT_VERSION = TimelineLayoutVersion.VERSION_0;
   public static final String DEFAULT_ARCHIVELOG_FOLDER = "";
@@ -140,10 +145,10 @@ public class HoodieTableConfig implements Serializable {
     return DEFAULT_TABLE_TYPE;
   }
 
-  public TimelineLayoutVersion getTimelineLayoutVersion() {
-    return new TimelineLayoutVersion(Integer.valueOf(props.getProperty(HOODIE_TIMELINE_LAYOUT_VERSION,
-        String.valueOf(DEFAULT_TIMELINE_LAYOUT_VERSION))));
-
+  public Option<TimelineLayoutVersion> getTimelineLayoutVersion() {
+    return props.containsKey(HOODIE_TIMELINE_LAYOUT_VERSION)
+        ? Option.of(new TimelineLayoutVersion(Integer.valueOf(props.getProperty(HOODIE_TIMELINE_LAYOUT_VERSION))))
+        : Option.empty();
   }
 
   /**
@@ -164,27 +169,33 @@ public class HoodieTableConfig implements Serializable {
   }
 
   /**
-   * Get the Read Optimized Storage Format.
+   * Get the base file storage format.
    *
-   * @return HoodieFileFormat for the Read Optimized Storage format
+   * @return HoodieFileFormat for the base file Storage format
    */
-  public HoodieFileFormat getROFileFormat() {
+  public HoodieFileFormat getBaseFileFormat() {
+    if (props.containsKey(HOODIE_BASE_FILE_FORMAT_PROP_NAME)) {
+      return HoodieFileFormat.valueOf(props.getProperty(HOODIE_BASE_FILE_FORMAT_PROP_NAME));
+    }
     if (props.containsKey(HOODIE_RO_FILE_FORMAT_PROP_NAME)) {
       return HoodieFileFormat.valueOf(props.getProperty(HOODIE_RO_FILE_FORMAT_PROP_NAME));
     }
-    return DEFAULT_RO_FILE_FORMAT;
+    return DEFAULT_BASE_FILE_FORMAT;
   }
 
   /**
-   * Get the Read Optimized Storage Format.
+   * Get the log Storage Format.
    *
-   * @return HoodieFileFormat for the Read Optimized Storage format
+   * @return HoodieFileFormat for the log Storage format
    */
-  public HoodieFileFormat getRTFileFormat() {
+  public HoodieFileFormat getLogFileFormat() {
+    if (props.containsKey(HOODIE_LOG_FILE_FORMAT_PROP_NAME)) {
+      return HoodieFileFormat.valueOf(props.getProperty(HOODIE_LOG_FILE_FORMAT_PROP_NAME));
+    }
     if (props.containsKey(HOODIE_RT_FILE_FORMAT_PROP_NAME)) {
       return HoodieFileFormat.valueOf(props.getProperty(HOODIE_RT_FILE_FORMAT_PROP_NAME));
     }
-    return DEFAULT_RT_FILE_FORMAT;
+    return DEFAULT_LOG_FILE_FORMAT;
   }
 
   /**

@@ -19,11 +19,11 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.5.1-SNAPSHOT</version>
+    <version>0.5.2-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>hudi-spark</artifactId>
+  <artifactId>hudi-spark_${scala.binary.version}</artifactId>
   <packaging>jar</packaging>
 
   <properties>
@@ -140,6 +140,10 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <groupId>org.scalastyle</groupId>
+        <artifactId>scalastyle-maven-plugin</artifactId>
+      </plugin>
     </plugins>
   </build>
 
@@ -186,13 +190,20 @@
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.module</groupId>
-      <artifactId>jackson-module-scala_2.11</artifactId>
+      <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
     </dependency>
 
     <!-- Avro -->
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
+      <exclusions>
+        <exclusion>
+          <!-- this version to conflict to spark-core_2.12 -->
+          <groupId>com.thoughtworks.paranamer</groupId>
+          <artifactId>paranamer</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Parquet -->
@@ -204,17 +215,17 @@
     <!-- Spark -->
     <dependency>
       <groupId>org.apache.spark</groupId>
-      <artifactId>spark-core_2.11</artifactId>
+      <artifactId>spark-core_${scala.binary.version}</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>
-      <artifactId>spark-sql_2.11</artifactId>
+      <artifactId>spark-sql_${scala.binary.version}</artifactId>
     </dependency>
 
     <!-- Spark (Packages) -->
     <dependency>
       <groupId>org.apache.spark</groupId>
-      <artifactId>spark-avro_2.11</artifactId>
+      <artifactId>spark-avro_${scala.binary.version}</artifactId>
       <scope>provided</scope>
     </dependency>
 
@@ -289,7 +300,7 @@
 
     <dependency>
       <groupId>org.scalatest</groupId>
-      <artifactId>scalatest_2.11</artifactId>
+      <artifactId>scalatest_${scala.binary.version}</artifactId>
       <version>${scalatest.version}</version>
       <scope>test</scope>
     </dependency>

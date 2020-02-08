@@ -32,8 +32,8 @@ import java.util.stream.Collectors;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class FileSliceDTO {
 
-  @JsonProperty("dataFile")
-  DataFileDTO dataFile;
+  @JsonProperty("baseFile")
+  BaseFileDTO baseFile;
   @JsonProperty("logFiles")
   List<LogFileDTO> logFiles;
   @JsonProperty("partition")
@@ -48,14 +48,14 @@ public class FileSliceDTO {
     dto.partitionPath = slice.getPartitionPath();
     dto.baseInstantTime = slice.getBaseInstantTime();
     dto.fileId = slice.getFileId();
-    dto.dataFile = slice.getDataFile().map(DataFileDTO::fromHoodieDataFile).orElse(null);
+    dto.baseFile = slice.getBaseFile().map(BaseFileDTO::fromHoodieBaseFile).orElse(null);
     dto.logFiles = slice.getLogFiles().map(LogFileDTO::fromHoodieLogFile).collect(Collectors.toList());
     return dto;
   }
 
   public static FileSlice toFileSlice(FileSliceDTO dto) {
     FileSlice slice = new FileSlice(dto.partitionPath, dto.baseInstantTime, dto.fileId);
-    slice.setDataFile(DataFileDTO.toHoodieDataFile(dto.dataFile));
+    slice.setBaseFile(BaseFileDTO.toHoodieBaseFile(dto.baseFile));
     dto.logFiles.stream().forEach(lf -> slice.addLogFile(LogFileDTO.toHoodieLogFile(lf)));
     return slice;
   }

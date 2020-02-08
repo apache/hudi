@@ -20,11 +20,11 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.5.1-SNAPSHOT</version>
+    <version>0.5.2-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-  <artifactId>hudi-utilities-bundle</artifactId>
+  <artifactId>hudi-utilities-bundle_${scala.binary.version}</artifactId>
   <packaging>jar</packaging>
 
   <properties>
@@ -67,8 +67,8 @@
                 <includes>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client</include>
-                  <include>org.apache.hudi:hudi-utilities</include>
-                  <include>org.apache.hudi:hudi-spark</include>
+                  <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
+                  <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-hive</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
@@ -85,8 +85,8 @@
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
 
-                  <include>com.twitter:bijection-avro_2.11</include>
-                  <include>com.twitter:bijection-core_2.11</include>
+                  <include>com.twitter:bijection-avro_${scala.binary.version}</include>
+                  <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.confluent:kafka-avro-serializer</include>
                   <include>io.confluent:common-config</include>
                   <include>io.confluent:common-utils</include>
@@ -94,8 +94,8 @@
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
                   <include>com.yammer.metrics:metrics-core</include>
-                  <include>org.apache.spark:spark-streaming-kafka-0-8_2.11</include>
-                  <include>org.apache.kafka:kafka_2.11</include>
+                  <include>org.apache.spark:spark-streaming-kafka-0-10_${scala.binary.version}</include>
+                  <include>org.apache.kafka:kafka_${scala.binary.version}</include>
                   <include>com.101tec:zkclient</include>
                   <include>org.apache.kafka:kafka-clients</include>
 
@@ -200,12 +200,12 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark</artifactId>
+      <artifactId>hudi-spark_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-utilities</artifactId>
+      <artifactId>hudi-utilities_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
     </dependency>
 

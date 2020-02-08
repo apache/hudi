@@ -66,8 +66,8 @@ public abstract class TimelineLayout implements Serializable {
     @Override
     public Stream<HoodieInstant> filterHoodieInstants(Stream<HoodieInstant> instantStream) {
       return instantStream.collect(Collectors.groupingBy(instant -> Pair.of(instant.getTimestamp(),
-          HoodieInstant.getComparableAction(instant.getAction())))).entrySet().stream()
-          .map(e -> e.getValue().stream().reduce((x, y) -> {
+          HoodieInstant.getComparableAction(instant.getAction())))).values().stream()
+          .map(hoodieInstants -> hoodieInstants.stream().reduce((x, y) -> {
             // Pick the one with the highest state
             if (x.getState().compareTo(y.getState()) >= 0) {
               return x;

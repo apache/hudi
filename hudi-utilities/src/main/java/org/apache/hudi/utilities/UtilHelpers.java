@@ -76,10 +76,10 @@ public class UtilHelpers {
   private static final Logger LOG = LogManager.getLogger(UtilHelpers.class);
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
-                                    SparkSession sparkSession, SchemaProvider schemaProvider) throws IOException {
+      SparkSession sparkSession, SchemaProvider schemaProvider) throws IOException {
     try {
       return (Source) ReflectionUtils.loadClass(sourceClass,
-          new Class<?>[]{TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class}, cfg,
+          new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class}, cfg,
           jssc, sparkSession, schemaProvider);
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);
@@ -87,7 +87,7 @@ public class UtilHelpers {
   }
 
   public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,
-                                                    JavaSparkContext jssc) throws IOException {
+      JavaSparkContext jssc) throws IOException {
     try {
       return schemaProviderClass == null ? null
           : (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
@@ -105,7 +105,6 @@ public class UtilHelpers {
   }
 
   /**
-   *
    */
   public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
     DFSPropertiesConfiguration conf;
@@ -145,7 +144,7 @@ public class UtilHelpers {
   /**
    * Parse Schema from file.
    *
-   * @param fs         File System
+   * @param fs File System
    * @param schemaFile Schema File
    */
   public static String parseSchema(FileSystem fs, String schemaFile) throws Exception {
@@ -181,9 +180,8 @@ public class UtilHelpers {
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
 
-    additionalConfigs.entrySet().forEach(e -> sparkConf.set(e.getKey(), e.getValue()));
-    SparkConf newSparkConf = HoodieWriteClient.registerClasses(sparkConf);
-    return newSparkConf;
+    additionalConfigs.forEach(sparkConf::set);
+    return HoodieWriteClient.registerClasses(sparkConf);
   }
 
   public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, Map<String, String> configs) {
@@ -196,7 +194,7 @@ public class UtilHelpers {
 
   /**
    * Build Spark Context for ingestion/compaction.
-   *
+   * 
    * @return
    */
   public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
@@ -208,13 +206,13 @@ public class UtilHelpers {
   /**
    * Build Hoodie write client.
    *
-   * @param jsc         Java Spark Context
-   * @param basePath    Base Path
-   * @param schemaStr   Schema
+   * @param jsc Java Spark Context
+   * @param basePath Base Path
+   * @param schemaStr Schema
    * @param parallelism Parallelism
    */
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-                                                     int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) throws Exception {
+      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())

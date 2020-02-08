@@ -46,7 +46,7 @@ public class SchedulerConfGenerator {
   public static final String SPARK_SCHEDULER_MODE_KEY = "spark.scheduler.mode";
   public static final String SPARK_SCHEDULER_ALLOCATION_FILE_KEY = "spark.scheduler.allocation.file";
 
-  private static String SPARK_SCHEDULING_PATTERN =
+  private static final String SPARK_SCHEDULING_PATTERN =
       "<?xml version=\"1.0\"?>\n<allocations>\n  <pool name=\"%s\">\n"
           + "    <schedulingMode>%s</schedulingMode>\n    <weight>%s</weight>\n    <minShare>%s</minShare>\n"
           + "  </pool>\n  <pool name=\"%s\">\n    <schedulingMode>%s</schedulingMode>\n"
@@ -71,7 +71,7 @@ public class SchedulerConfGenerator {
 
     Map<String, String> additionalSparkConfigs = new HashMap<>();
     if (sparkSchedulerMode.isPresent() && "FAIR".equals(sparkSchedulerMode.get()) && cfg.continuousMode
-        && cfg.storageType.equals(HoodieTableType.MERGE_ON_READ.name())) {
+        && cfg.tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       String sparkSchedulingConfFile = generateAndStoreConfig(cfg.deltaSyncSchedulingWeight,
           cfg.compactSchedulingWeight, cfg.deltaSyncSchedulingMinShare, cfg.compactSchedulingMinShare);
       additionalSparkConfigs.put(SPARK_SCHEDULER_ALLOCATION_FILE_KEY, sparkSchedulingConfFile);

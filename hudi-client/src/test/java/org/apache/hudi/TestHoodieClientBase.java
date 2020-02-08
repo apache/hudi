@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
@@ -48,6 +49,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.SQLContext;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -99,7 +101,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   protected HoodieReadClient getHoodieReadClient(String basePath) {
-    return new HoodieReadClient(jsc, basePath);
+    return new HoodieReadClient(jsc, basePath, SQLContext.getOrCreate(jsc.sc()));
   }
 
   /**
@@ -145,6 +147,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, IndexType indexType) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2)
+        .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
@@ -157,7 +160,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
 
   protected HoodieTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-    ((SyncableFileSystemView) (table.getRTFileSystemView())).reset();
+    ((SyncableFileSystemView) (table.getSliceView())).reset();
     return table;
   }
 

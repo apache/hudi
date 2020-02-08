@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -37,8 +38,8 @@ public class HoodieHiveUtil {
   public static final String HOODIE_START_COMMIT_PATTERN = "hoodie.%s.consume.start.timestamp";
   public static final String HOODIE_MAX_COMMIT_PATTERN = "hoodie.%s.consume.max.commits";
   public static final String INCREMENTAL_SCAN_MODE = "INCREMENTAL";
-  public static final String LATEST_SCAN_MODE = "LATEST";
-  public static final String DEFAULT_SCAN_MODE = LATEST_SCAN_MODE;
+  public static final String SNAPSHOT_SCAN_MODE = "SNAPSHOT";
+  public static final String DEFAULT_SCAN_MODE = SNAPSHOT_SCAN_MODE;
   public static final int DEFAULT_MAX_COMMITS = 1;
   public static final int MAX_COMMIT_ALL = -1;
   public static final int DEFAULT_LEVELS_TO_BASEPATH = 3;
@@ -60,13 +61,6 @@ public class HoodieHiveUtil {
     return job.getConfiguration().get(startCommitTimestampName);
   }
 
-  public static String readMode(JobContext job, String tableName) {
-    String modePropertyName = String.format(HOODIE_CONSUME_MODE_PATTERN, tableName);
-    String mode = job.getConfiguration().get(modePropertyName, DEFAULT_SCAN_MODE);
-    LOG.info(modePropertyName + ": " + mode);
-    return mode;
-  }
-
   public static Path getNthParent(Path path, int n) {
     Path parent = path;
     for (int i = 0; i < n; i++) {
@@ -84,8 +78,7 @@ public class HoodieHiveUtil {
         return (!matcher.find() ? null : matcher.group(1));
       }
       return null;
-    }).filter(s -> s != null)
-        .collect(Collectors.toList());
+    }).filter(Objects::nonNull).collect(Collectors.toList());
     if (result == null) {
       // Returns an empty list instead of null.
       result = new ArrayList<>();

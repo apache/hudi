@@ -81,7 +81,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   public void waitForFilesVisibility(String dirPath, List<String> files, FileVisibility event) throws TimeoutException {
     Path dir = new Path(dirPath);
     List<String> filesWithoutSchemeAndAuthority =
-        files.stream().map(f -> Path.getPathWithoutSchemeAndAuthority(new Path(f))).map(p -> p.toString())
+        files.stream().map(f -> Path.getPathWithoutSchemeAndAuthority(new Path(f))).map(Path::toString)
             .collect(Collectors.toList());
 
     retryTillSuccess((retryNum) -> {
@@ -89,7 +89,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
         LOG.info("Trying " + retryNum);
         FileStatus[] entries = fs.listStatus(dir);
         List<String> gotFiles = Arrays.stream(entries).map(e -> Path.getPathWithoutSchemeAndAuthority(e.getPath()))
-            .map(p -> p.toString()).collect(Collectors.toList());
+            .map(Path::toString).collect(Collectors.toList());
         List<String> candidateFiles = new ArrayList<>(filesWithoutSchemeAndAuthority);
         boolean altered = candidateFiles.removeAll(gotFiles);
 

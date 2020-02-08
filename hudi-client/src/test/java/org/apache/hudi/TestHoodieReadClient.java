@@ -18,13 +18,19 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.AnalysisException;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -73,6 +79,13 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
         });
   }
 
+  @Test(expected = IllegalStateException.class)
+  public void testReadROViewFailsWithoutSqlContext() {
+    HoodieReadClient readClient = new HoodieReadClient(jsc, getConfig());
+    JavaRDD<HoodieKey> recordsRDD = jsc.parallelize(new ArrayList<>(), 1);
+    readClient.readROView(recordsRDD, 1);
+  }
+
   /**
    * Helper to write new records using one of HoodieWriteClient's write API and use ReadClient to test filterExists()
    * API works correctly.
@@ -105,6 +118,31 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
         List<HoodieRecord> result = filteredRDD.collect();
         // Check results
         assertEquals(25, result.size());
+
+        // check path exists for written keys
+        JavaPairRDD<HoodieKey, Option<String>> keyToPathPair =
+                anotherReadClient.checkExists(recordsRDD.map(r -> r.getKey()));
+        JavaRDD<HoodieKey> keysWithPaths = keyToPathPair.filter(keyPath -> keyPath._2.isPresent())
+                .map(keyPath -> keyPath._1);
+        assertEquals(75, keysWithPaths.count());
+
+        // verify rows match inserted records
+        Dataset<Row> rows = anotherReadClient.readROView(keysWithPaths, 1);
+        assertEquals(75, rows.count());
+
+        JavaRDD<HoodieKey> keysWithoutPaths = keyToPathPair.filter(keyPath -> !keyPath._2.isPresent())
+                .map(keyPath -> keyPath._1);
+
+        try {
+          anotherReadClient.readROView(keysWithoutPaths, 1);
+        } catch (Exception e) {
+          // data frame reader throws exception for empty records. ignore the error.
+          assertEquals(e.getClass(), AnalysisException.class);
+        }
+
+        // Actual tests of getPendingCompactions method are in TestAsyncCompaction
+        // This is just testing empty list
+        assertEquals(0, anotherReadClient.getPendingCompactions().size());
       }
     }
   }

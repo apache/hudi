@@ -132,7 +132,7 @@ public class ObjectSizeCalculator {
 
 
   private final Set<Object> alreadyVisited = Sets.newIdentityHashSet();
-  private final Deque<Object> pending = new ArrayDeque<Object>(16 * 1024);
+  private final Deque<Object> pending = new ArrayDeque<>(16 * 1024);
   private long size;
 
   /**
@@ -268,7 +268,7 @@ public class ObjectSizeCalculator {
 
     public ClassSizeInfo(Class<?> clazz) {
       long fieldsSize = 0;
-      final List<Field> referenceFields = new LinkedList<Field>();
+      final List<Field> referenceFields = new LinkedList<>();
       for (Field f : clazz.getDeclaredFields()) {
         if (Modifier.isStatic(f.getModifiers())) {
           continue;
@@ -303,9 +303,7 @@ public class ObjectSizeCalculator {
         try {
           calc.enqueue(f.get(obj));
         } catch (IllegalAccessException e) {
-          final AssertionError ae = new AssertionError("Unexpected denial of access to " + f);
-          ae.initCause(e);
-          throw ae;
+          throw new AssertionError("Unexpected denial of access to " + f, e);
         }
       }
     }

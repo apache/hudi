@@ -135,6 +135,7 @@ public class HoodieWriteStat implements Serializable {
   /**
    * Total number of rollback blocks seen in a compaction operation.
    */
+  @Nullable
   private long totalRollbackBlocks;
 
   /**
@@ -290,7 +291,7 @@ public class HoodieWriteStat implements Serializable {
     return totalRollbackBlocks;
   }
 
-  public void setTotalRollbackBlocks(Long totalRollbackBlocks) {
+  public void setTotalRollbackBlocks(long totalRollbackBlocks) {
     this.totalRollbackBlocks = totalRollbackBlocks;
   }
 

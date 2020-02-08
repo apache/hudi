@@ -41,7 +41,7 @@ public class SerializationUtils {
 
   // Caching kryo serializer to avoid creating kryo instance for every serde operation
   private static final ThreadLocal<KryoSerializerInstance> SERIALIZER_REF =
-      ThreadLocal.withInitial(() -> new KryoSerializerInstance());
+      ThreadLocal.withInitial(KryoSerializerInstance::new);
 
   // Serialize
   // -----------------------------------------------------------------------
@@ -99,7 +99,7 @@ public class SerializationUtils {
       kryo.setRegistrationRequired(false);
     }
 
-    byte[] serialize(Object obj) throws IOException {
+    byte[] serialize(Object obj) {
       kryo.reset();
       baos.reset();
       Output output = new Output(baos);

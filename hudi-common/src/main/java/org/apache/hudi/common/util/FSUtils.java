@@ -70,12 +70,7 @@ public class FSUtils {
   private static final long MIN_ROLLBACK_TO_KEEP = 10;
   private static final String HOODIE_ENV_PROPS_PREFIX = "HOODIE_ENV_";
 
-  private static final PathFilter ALLOW_ALL_FILTER = new PathFilter() {
-    @Override
-    public boolean accept(Path file) {
-      return true;
-    }
-  };
+  private static final PathFilter ALLOW_ALL_FILTER = file -> true;
 
   public static Configuration prepareHadoopConf(Configuration conf) {
     conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
@@ -93,7 +88,7 @@ public class FSUtils {
 
   public static FileSystem getFs(String path, Configuration conf) {
     FileSystem fs;
-    conf = prepareHadoopConf(conf);
+    prepareHadoopConf(conf);
     try {
       fs = new Path(path).getFileSystem(conf);
     } catch (IOException e) {
@@ -198,7 +193,7 @@ public class FSUtils {
     return partitions;
   }
 
-  public static final List<String> getAllDataFilesForMarkers(FileSystem fs, String basePath, String instantTs,
+  public static List<String> getAllDataFilesForMarkers(FileSystem fs, String basePath, String instantTs,
       String markerDir) throws IOException {
     List<String> dataFiles = new LinkedList<>();
     processFiles(fs, markerDir, (status) -> {
@@ -226,8 +221,7 @@ public class FSUtils {
       boolean excludeMetaFolder) throws IOException {
     PathFilter pathFilter = excludeMetaFolder ? getExcludeMetaPathFilter() : ALLOW_ALL_FILTER;
     FileStatus[] topLevelStatuses = fs.listStatus(new Path(basePathStr));
-    for (int i = 0; i < topLevelStatuses.length; i++) {
-      FileStatus child = topLevelStatuses[i];
+    for (FileStatus child : topLevelStatuses) {
       if (child.isFile()) {
         boolean success = consumer.apply(child);
         if (!success) {
@@ -264,12 +258,7 @@ public class FSUtils {
 
   private static PathFilter getExcludeMetaPathFilter() {
     // Avoid listing and including any folders under the metafolder
-    return (path) -> {
-      if (path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)) {
-        return false;
-      }
-      return true;
-    };
+    return (path) -> !path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME);
   }
 
   public static String getInstantTime(String name) {
@@ -396,17 +385,14 @@ public class FSUtils {
 
   public static boolean isLogFile(Path logPath) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
-    if (!matcher.find()) {
-      return false;
-    }
-    return true;
+    return matcher.find();
   }
 
   /**
    * Get the latest log file written from the list of log files passed in.
    */
   public static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
-    return Option.fromJavaOptional(logFiles.sorted(HoodieLogFile.getReverseLogFileComparator()).findFirst());
+    return Option.fromJavaOptional(logFiles.min(HoodieLogFile.getReverseLogFileComparator()));
   }
 
   /**
@@ -480,9 +466,9 @@ public class FSUtils {
   public static void deleteOlderCleanMetaFiles(FileSystem fs, String metaPath, Stream<HoodieInstant> instants) {
     // TODO - this should be archived when archival is made general for all meta-data
     // skip MIN_CLEAN_TO_KEEP and delete rest
-    instants.skip(MIN_CLEAN_TO_KEEP).map(s -> {
+    instants.skip(MIN_CLEAN_TO_KEEP).forEach(s -> {
       try {
-        return fs.delete(new Path(metaPath, s.getFileName()), false);
+        fs.delete(new Path(metaPath, s.getFileName()), false);
       } catch (IOException e) {
         throw new HoodieIOException("Could not delete clean meta files" + s.getFileName(), e);
       }
@@ -492,9 +478,9 @@ public class FSUtils {
   public static void deleteOlderRollbackMetaFiles(FileSystem fs, String metaPath, Stream<HoodieInstant> instants) {
     // TODO - this should be archived when archival is made general for all meta-data
     // skip MIN_ROLLBACK_TO_KEEP and delete rest
-    instants.skip(MIN_ROLLBACK_TO_KEEP).map(s -> {
+    instants.skip(MIN_ROLLBACK_TO_KEEP).forEach(s -> {
       try {
-        return fs.delete(new Path(metaPath, s.getFileName()), false);
+        fs.delete(new Path(metaPath, s.getFileName()), false);
       } catch (IOException e) {
         throw new HoodieIOException("Could not delete rollback meta files " + s.getFileName(), e);
       }

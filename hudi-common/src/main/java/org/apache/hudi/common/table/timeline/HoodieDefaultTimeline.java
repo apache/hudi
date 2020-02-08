@@ -28,6 +28,7 @@ import com.google.common.collect.Sets;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
@@ -65,7 +66,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     final MessageDigest md;
     try {
       md = MessageDigest.getInstance(HASHING_ALGORITHM);
-      this.instants.stream().forEach(i -> md
+      this.instants.forEach(i -> md
           .update(StringUtils.joinUsingDelim("_", i.getTimestamp(), i.getAction(), i.getState().name()).getBytes()));
     } catch (NoSuchAlgorithmException nse) {
       throw new HoodieException(nse);
@@ -126,8 +127,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieDefaultTimeline findInstantsInRange(String startTs, String endTs) {
     return new HoodieDefaultTimeline(
-        instants.stream().filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), startTs, GREATER)
-            && HoodieTimeline.compareTimestamps(s.getTimestamp(), endTs, LESSER_OR_EQUAL)),
+        instants.stream().filter(s -> HoodieTimeline.isInRange(s.getTimestamp(), startTs, endTs)),
         details);
   }
 
@@ -141,6 +141,83 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline filter(Predicate<HoodieInstant> filter) {
     return new HoodieDefaultTimeline(instants.stream().filter(filter), details);
+  }
+
+  /**
+   * Get all instants (commits, delta commits) that produce new data, in the active timeline.
+   */
+  public HoodieTimeline getCommitsTimeline() {
+    return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION));
+  }
+
+  /**
+   * Get all instants (commits, delta commits, clean, savepoint, rollback) that result in actions, in the active
+   * timeline.
+   */
+  public HoodieTimeline getAllCommitsTimeline() {
+    return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION, COMPACTION_ACTION,
+            SAVEPOINT_ACTION, ROLLBACK_ACTION));
+  }
+
+  /**
+   * Get only pure commits (inflight and completed) in the active timeline.
+   */
+  public HoodieTimeline getCommitTimeline() {
+    return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION));
+  }
+
+  /**
+   * Get only the delta commits (inflight and completed) in the active timeline.
+   */
+  public HoodieTimeline getDeltaCommitTimeline() {
+    return new HoodieDefaultTimeline(filterInstantsByAction(DELTA_COMMIT_ACTION),
+            (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
+  }
+
+  /**
+   * Get a timeline of a specific set of actions. useful to create a merged timeline of multiple actions.
+   *
+   * @param actions actions allowed in the timeline
+   */
+  public HoodieTimeline getTimelineOfActions(Set<String> actions) {
+    return new HoodieDefaultTimeline(getInstants().filter(s -> actions.contains(s.getAction())),
+            (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
+  }
+
+  /**
+   * Get only the cleaner action (inflight and completed) in the active timeline.
+   */
+  public HoodieTimeline getCleanerTimeline() {
+    return new HoodieDefaultTimeline(filterInstantsByAction(CLEAN_ACTION),
+            (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
+  }
+
+  /**
+   * Get only the rollback action (inflight and completed) in the active timeline.
+   */
+  public HoodieTimeline getRollbackTimeline() {
+    return new HoodieDefaultTimeline(filterInstantsByAction(ROLLBACK_ACTION),
+            (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
+  }
+
+  /**
+   * Get only the save point action (inflight and completed) in the active timeline.
+   */
+  public HoodieTimeline getSavePointTimeline() {
+    return new HoodieDefaultTimeline(filterInstantsByAction(SAVEPOINT_ACTION),
+            (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
+  }
+
+  /**
+   * Get only the restore action (inflight and completed) in the active timeline.
+   */
+  public HoodieTimeline getRestoreTimeline() {
+    return new HoodieDefaultTimeline(filterInstantsByAction(RESTORE_ACTION),
+            (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
+  }
+
+  protected Stream<HoodieInstant> filterInstantsByAction(String action) {
+    return getInstants().filter(s -> s.getAction().equals(action));
   }
 
   @Override

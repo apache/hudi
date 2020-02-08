@@ -150,14 +150,14 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
       // Write them to corresponding avro logfiles
       HoodieTestUtils.writeRecordsToLogFiles(fs, metaClient.getBasePath(),
-          HoodieTestDataGenerator.avroSchemaWithMetadataFields, updatedRecords);
+          HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, updatedRecords);
 
       // Verify that all data file has one log file
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieTable.getHoodieTable(metaClient, config, jsc);
       for (String partitionPath : dataGen.getPartitionPaths()) {
         List<FileSlice> groupedLogFiles =
-            table.getRTFileSystemView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
+            table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
         for (FileSlice fileSlice : groupedLogFiles) {
           assertEquals("There should be 1 log file written for every data file", 1, fileSlice.getLogFiles().count());
         }
@@ -185,7 +185,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     return HoodieTableType.MERGE_ON_READ;
   }
 
-  // TODO - after modifying HoodieReadClient to support realtime tables - add more tests to make
+  // TODO - after modifying HoodieReadClient to support mor tables - add more tests to make
   // sure the data read is the updated data (compaction correctness)
   // TODO - add more test cases for compactions after a failed commit/compaction
 }

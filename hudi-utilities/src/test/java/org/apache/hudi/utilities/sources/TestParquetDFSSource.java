@@ -16,31 +16,38 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.TypedProperties;
-import org.apache.hudi.exception.HoodieKeyException;
 
-import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
+import org.junit.Before;
+
+import java.io.IOException;
+import java.util.List;
 
 /**
- * Simple Key generator for unpartitioned Hive Tables.
+ * Basic tests for {@link ParquetDFSSource}.
  */
-public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
+public class TestParquetDFSSource extends AbstractDFSSourceTestBase {
 
-  private static final String EMPTY_PARTITION = "";
-
-  public NonpartitionedKeyGenerator(TypedProperties props) {
-    super(props);
+  @Before
+  public void setup() throws Exception {
+    super.setup();
+    this.dfsRoot = dfsBasePath + "/parquetFiles";
+    this.fileSuffix = ".parquet";
   }
 
   @Override
-  public HoodieKey getKey(GenericRecord record) {
-    String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
-    if (recordKey == null || recordKey.isEmpty()) {
-      throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
-    }
-    return new HoodieKey(recordKey, EMPTY_PARTITION);
+  Source prepareDFSSource() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsRoot);
+    return new ParquetDFSSource(props, jsc, sparkSession, schemaProvider);
+  }
+
+  @Override
+  void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
+    Helpers.saveParquetToDFS(Helpers.toGenericRecords(records, dataGenerator), path);
   }
 }

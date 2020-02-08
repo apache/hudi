@@ -130,7 +130,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
 
   private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {
     try {
-      Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.avroSchema);
+      Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.AVRO_SCHEMA);
       return (GenericRecord) recordOpt.get();
     } catch (IOException e) {
       return null;

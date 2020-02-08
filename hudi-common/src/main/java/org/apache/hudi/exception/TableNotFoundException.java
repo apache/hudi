@@ -38,8 +38,7 @@ public class TableNotFoundException extends HoodieException {
     return "Hoodie table not found in path " + basePath;
   }
 
-  public static void checkTableValidity(FileSystem fs, Path basePathDir, Path metaPathDir)
-      throws TableNotFoundException {
+  public static void checkTableValidity(FileSystem fs, Path basePathDir, Path metaPathDir) {
     // Check if the base path is found
     try {
       if (!fs.exists(basePathDir) || !fs.isDirectory(basePathDir)) {

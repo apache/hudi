@@ -20,7 +20,7 @@ package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -85,7 +85,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
-    schemaHelper.getAllColumnFamilies().stream().forEach(rocksDB::addColumnFamily);
+    schemaHelper.getAllColumnFamilies().forEach(rocksDB::addColumnFamily);
     super.init(metaClient, visibleActiveTimeline);
     LOG.info("Created ROCKSDB based file-system view at " + config.getRocksdbBasePath());
   }
@@ -98,39 +98,39 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   @Override
   protected void resetPendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     rocksDB.writeBatch(batch -> {
-      operations.forEach(opPair -> {
-        rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingCompaction(),
-            schemaHelper.getKeyForPendingCompactionLookup(opPair.getValue().getFileGroupId()), opPair);
-      });
+      operations.forEach(opPair ->
+          rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingCompaction(),
+              schemaHelper.getKeyForPendingCompactionLookup(opPair.getValue().getFileGroupId()), opPair)
+      );
       LOG.info("Initializing pending compaction operations. Count=" + batch.count());
     });
   }
 
   @Override
   protected void addPendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
-    rocksDB.writeBatch(batch -> {
-      operations.forEach(opInstantPair -> {
-        Preconditions.checkArgument(!isPendingCompactionScheduledForFileId(opInstantPair.getValue().getFileGroupId()),
-            "Duplicate FileGroupId found in pending compaction operations. FgId :"
-                + opInstantPair.getValue().getFileGroupId());
-        rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingCompaction(),
-            schemaHelper.getKeyForPendingCompactionLookup(opInstantPair.getValue().getFileGroupId()), opInstantPair);
-      });
-    });
+    rocksDB.writeBatch(batch ->
+        operations.forEach(opInstantPair -> {
+          Preconditions.checkArgument(!isPendingCompactionScheduledForFileId(opInstantPair.getValue().getFileGroupId()),
+              "Duplicate FileGroupId found in pending compaction operations. FgId :"
+                  + opInstantPair.getValue().getFileGroupId());
+          rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingCompaction(),
+              schemaHelper.getKeyForPendingCompactionLookup(opInstantPair.getValue().getFileGroupId()), opInstantPair);
+        })
+    );
   }
 
   @Override
   void removePendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
-    rocksDB.writeBatch(batch -> {
-      operations.forEach(opInstantPair -> {
-        Preconditions.checkArgument(
-            getPendingCompactionOperationWithInstant(opInstantPair.getValue().getFileGroupId()) != null,
-            "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
-                + opInstantPair.getValue().getFileGroupId());
-        rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForPendingCompaction(),
-            schemaHelper.getKeyForPendingCompactionLookup(opInstantPair.getValue().getFileGroupId()));
-      });
-    });
+    rocksDB.writeBatch(batch ->
+        operations.forEach(opInstantPair -> {
+          Preconditions.checkArgument(
+              getPendingCompactionOperationWithInstant(opInstantPair.getValue().getFileGroupId()) != null,
+              "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
+                  + opInstantPair.getValue().getFileGroupId());
+          rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForPendingCompaction(),
+              schemaHelper.getKeyForPendingCompactionLookup(opInstantPair.getValue().getFileGroupId()));
+        })
+    );
   }
 
   @Override
@@ -170,17 +170,16 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         schemaHelper.getPrefixForDataFileViewByPartition(partitionPath));
 
     // Now add them
-    fileGroups.stream().forEach(fg -> {
-      rocksDB.writeBatch(batch -> {
-        fg.getAllFileSlicesIncludingInflight().forEach(fs -> {
-          rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
-          fs.getDataFile().ifPresent(df -> {
-            rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs),
-                df);
-          });
-        });
-      });
-    });
+    fileGroups.forEach(fg ->
+        rocksDB.writeBatch(batch ->
+            fg.getAllFileSlicesIncludingInflight().forEach(fs -> {
+              rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
+              fs.getBaseFile().ifPresent(df ->
+                  rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs), df)
+              );
+            })
+        )
+    );
 
     // record that partition is loaded.
     rocksDB.put(schemaHelper.getColFamilyForStoredPartitions(), lookupKey, Boolean.TRUE);
@@ -194,69 +193,66 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
    */
   protected void applyDeltaFileSlicesToPartitionView(String partition, List<HoodieFileGroup> deltaFileGroups,
       DeltaApplyMode mode) {
-    rocksDB.writeBatch(batch -> {
-      deltaFileGroups.stream().forEach(fg -> {
-        fg.getAllRawFileSlices().map(fs -> {
-          FileSlice oldSlice = getFileSlice(partition, fs.getFileId(), fs.getBaseInstantTime());
-          if (null == oldSlice) {
-            return fs;
-          } else {
-            // First remove the file-slice
-            LOG.info("Removing old Slice in DB. FS=" + oldSlice);
-            rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForView(),
-                schemaHelper.getKeyForSliceView(fg, oldSlice));
-            rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForView(),
-                schemaHelper.getKeyForDataFileView(fg, oldSlice));
+    rocksDB.writeBatch(batch ->
+        deltaFileGroups.forEach(fg ->
+            fg.getAllRawFileSlices().map(fs -> {
+              FileSlice oldSlice = getFileSlice(partition, fs.getFileId(), fs.getBaseInstantTime());
+              if (null == oldSlice) {
+                return fs;
+              } else {
+                // First remove the file-slice
+                LOG.info("Removing old Slice in DB. FS=" + oldSlice);
+                rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, oldSlice));
+                rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, oldSlice));
 
-            Map<String, HoodieLogFile> logFiles = oldSlice.getLogFiles()
-                .map(lf -> Pair.of(Path.getPathWithoutSchemeAndAuthority(lf.getPath()).toString(), lf))
-                .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-            Map<String, HoodieLogFile> deltaLogFiles =
-                fs.getLogFiles().map(lf -> Pair.of(Path.getPathWithoutSchemeAndAuthority(lf.getPath()).toString(), lf))
+                Map<String, HoodieLogFile> logFiles = oldSlice.getLogFiles()
+                    .map(lf -> Pair.of(Path.getPathWithoutSchemeAndAuthority(lf.getPath()).toString(), lf))
                     .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+                Map<String, HoodieLogFile> deltaLogFiles =
+                    fs.getLogFiles().map(lf -> Pair.of(Path.getPathWithoutSchemeAndAuthority(lf.getPath()).toString(), lf))
+                        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-            switch (mode) {
-              case ADD: {
-                FileSlice newFileSlice = new FileSlice(oldSlice.getFileGroupId(), oldSlice.getBaseInstantTime());
-                oldSlice.getDataFile().ifPresent(df -> newFileSlice.setDataFile(df));
-                fs.getDataFile().ifPresent(df -> newFileSlice.setDataFile(df));
-                Map<String, HoodieLogFile> newLogFiles = new HashMap<>(logFiles);
-                deltaLogFiles.entrySet().stream().filter(e -> !logFiles.containsKey(e.getKey()))
-                    .forEach(p -> newLogFiles.put(p.getKey(), p.getValue()));
-                newLogFiles.values().stream().forEach(lf -> newFileSlice.addLogFile(lf));
-                LOG.info("Adding back new File Slice after add FS=" + newFileSlice);
-                return newFileSlice;
-              }
-              case REMOVE: {
-                LOG.info("Removing old File Slice =" + fs);
-                FileSlice newFileSlice = new FileSlice(oldSlice.getFileGroupId(), oldSlice.getBaseInstantTime());
-                fs.getDataFile().orElseGet(() -> {
-                  oldSlice.getDataFile().ifPresent(df -> newFileSlice.setDataFile(df));
-                  return null;
-                });
+                switch (mode) {
+                  case ADD: {
+                    FileSlice newFileSlice = new FileSlice(oldSlice.getFileGroupId(), oldSlice.getBaseInstantTime());
+                    oldSlice.getBaseFile().ifPresent(newFileSlice::setBaseFile);
+                    fs.getBaseFile().ifPresent(newFileSlice::setBaseFile);
+                    Map<String, HoodieLogFile> newLogFiles = new HashMap<>(logFiles);
+                    deltaLogFiles.entrySet().stream().filter(e -> !logFiles.containsKey(e.getKey()))
+                        .forEach(p -> newLogFiles.put(p.getKey(), p.getValue()));
+                    newLogFiles.values().forEach(newFileSlice::addLogFile);
+                    LOG.info("Adding back new File Slice after add FS=" + newFileSlice);
+                    return newFileSlice;
+                  }
+                  case REMOVE: {
+                    LOG.info("Removing old File Slice =" + fs);
+                    FileSlice newFileSlice = new FileSlice(oldSlice.getFileGroupId(), oldSlice.getBaseInstantTime());
+                    fs.getBaseFile().orElseGet(() -> {
+                      oldSlice.getBaseFile().ifPresent(newFileSlice::setBaseFile);
+                      return null;
+                    });
 
-                deltaLogFiles.keySet().stream().forEach(p -> logFiles.remove(p));
-                // Add remaining log files back
-                logFiles.values().stream().forEach(lf -> newFileSlice.addLogFile(lf));
-                if (newFileSlice.getDataFile().isPresent() || (newFileSlice.getLogFiles().count() > 0)) {
-                  LOG.info("Adding back new file-slice after remove FS=" + newFileSlice);
-                  return newFileSlice;
+                    deltaLogFiles.keySet().forEach(logFiles::remove);
+                    // Add remaining log files back
+                    logFiles.values().forEach(newFileSlice::addLogFile);
+                    if (newFileSlice.getBaseFile().isPresent() || (newFileSlice.getLogFiles().count() > 0)) {
+                      LOG.info("Adding back new file-slice after remove FS=" + newFileSlice);
+                      return newFileSlice;
+                    }
+                    return null;
+                  }
+                  default:
+                    throw new IllegalStateException("Unknown diff apply mode=" + mode);
                 }
-                return null;
               }
-              default:
-                throw new IllegalStateException("Unknown diff apply mode=" + mode);
-            }
-          }
-        }).filter(Objects::nonNull).forEach(fs -> {
-          rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
-          fs.getDataFile().ifPresent(df -> {
-            rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs),
-                df);
-          });
-        });
-      });
-    });
+            }).filter(Objects::nonNull).forEach(fs -> {
+              rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
+              fs.getBaseFile().ifPresent(df ->
+                  rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs), df)
+              );
+            })
+        )
+    );
   }
 
   @Override
@@ -266,8 +262,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
-  Stream<HoodieDataFile> fetchAllDataFiles(String partitionPath) {
-    return rocksDB.<HoodieDataFile>prefixSearch(schemaHelper.getColFamilyForView(),
+  Stream<HoodieBaseFile> fetchAllBaseFiles(String partitionPath) {
+    return rocksDB.<HoodieBaseFile>prefixSearch(schemaHelper.getColFamilyForView(),
         schemaHelper.getPrefixForDataFileViewByPartition(partitionPath)).map(Pair::getValue);
   }
 
@@ -298,11 +294,11 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
-  protected Option<HoodieDataFile> fetchLatestDataFile(String partitionPath, String fileId) {
+  protected Option<HoodieBaseFile> fetchLatestBaseFile(String partitionPath, String fileId) {
     // Retries only file-slices of the file and filters for the latest
     return Option
         .ofNullable(rocksDB
-            .<HoodieDataFile>prefixSearch(schemaHelper.getColFamilyForView(),
+            .<HoodieBaseFile>prefixSearch(schemaHelper.getColFamilyForView(),
                 schemaHelper.getPrefixForDataFileViewByPartitionFile(partitionPath, fileId))
             .map(Pair::getValue).reduce(null,
                 (x, y) -> ((x == null) ? y
@@ -330,7 +326,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   private FileSlice getFileSlice(String partitionPath, String fileId, String instantTime) {
     String key = schemaHelper.getKeyForSliceView(partitionPath, fileId, instantTime);
-    return rocksDB.<FileSlice>get(schemaHelper.getColFamilyForView(), key);
+    return rocksDB.get(schemaHelper.getColFamilyForView(), key);
   }
 
   @Override

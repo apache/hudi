@@ -50,28 +50,24 @@ class DefaultSource extends RelationProvider
                               optParams: Map[String, String],
                               schema: StructType): BaseRelation = {
     // Add default options for unspecified read options keys.
-    val parameters = Map(VIEW_TYPE_OPT_KEY -> DEFAULT_VIEW_TYPE_OPT_VAL) ++ optParams
+    val parameters = Map(QUERY_TYPE_OPT_KEY -> DEFAULT_QUERY_TYPE_OPT_VAL) ++ translateViewTypesToQueryTypes(optParams)
 
     val path = parameters.get("path")
     if (path.isEmpty) {
       throw new HoodieException("'path' must be specified.")
     }
 
-    if (parameters(VIEW_TYPE_OPT_KEY).equals(VIEW_TYPE_REALTIME_OPT_VAL)) {
-      throw new HoodieException("Realtime view not supported yet via data source. Please use HiveContext route.")
-    }
-
-    if (parameters(VIEW_TYPE_OPT_KEY).equals(VIEW_TYPE_INCREMENTAL_OPT_VAL)) {
-      new IncrementalRelation(sqlContext, path.get, optParams, schema)
-    } else {
+    if (parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_SNAPSHOT_OPT_VAL)) {
       // this is just effectively RO view only, where `path` can contain a mix of
       // non-hoodie/hoodie path files. set the path filter up
       sqlContext.sparkContext.hadoopConfiguration.setClass(
         "mapreduce.input.pathFilter.class",
         classOf[HoodieROTablePathFilter],
-        classOf[org.apache.hadoop.fs.PathFilter]);
+        classOf[org.apache.hadoop.fs.PathFilter])
 
       log.info("Constructing hoodie (as parquet) data source with options :" + parameters)
+      log.warn("Snapshot view not supported yet via data source, for MERGE_ON_READ tables. " +
+        "Please query the Hive table registered using Spark SQL.")
       // simply return as a regular parquet relation
       DataSource.apply(
         sparkSession = sqlContext.sparkSession,
@@ -79,6 +75,10 @@ class DefaultSource extends RelationProvider
         className = "parquet",
         options = parameters)
         .resolveRelation()
+    } else if (parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
+      new IncrementalRelation(sqlContext, path.get, optParams, schema)
+    } else {
+      throw new HoodieException("Invalid query type :" + parameters(QUERY_TYPE_OPT_KEY))
     }
   }
 

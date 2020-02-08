@@ -46,6 +46,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Scans a log file and provides block level iterator on the log file Loads the entire block contents in memory Can emit
@@ -107,25 +108,22 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
    * Close the inputstream if not closed when the JVM exits.
    */
   private void addShutDownHook() {
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      @Override
-      public void run() {
-        try {
-          close();
-        } catch (Exception e) {
-          LOG.warn("unable to close input stream for log file " + logFile, e);
-          // fail silently for any sort of exception
-        }
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      try {
+        close();
+      } catch (Exception e) {
+        LOG.warn("unable to close input stream for log file " + logFile, e);
+        // fail silently for any sort of exception
       }
-    });
+    }));
   }
 
   // TODO : convert content and block length to long by using ByteBuffer, raw byte [] allows
   // for max of Integer size
   private HoodieLogBlock readBlock() throws IOException {
 
-    int blocksize = -1;
-    int type = -1;
+    int blocksize;
+    int type;
     HoodieLogBlockType blockType = null;
     Map<HeaderMetadataType, String> header = null;
 
@@ -190,7 +188,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
     // 9. Read the log block end position in the log file
     long blockEndPos = inputStream.getPos();
 
-    switch (blockType) {
+    switch (Objects.requireNonNull(blockType)) {
       // based on type read the block
       case AVRO_DATA_BLOCK:
         if (nextBlockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
@@ -278,10 +276,10 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
     }
   }
 
-  @Override
-  /**
+  /*
    * hasNext is not idempotent. TODO - Fix this. It is okay for now - PR
    */
+  @Override
   public boolean hasNext() {
     try {
       return readMagic();
@@ -315,10 +313,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
     long pos = inputStream.getPos();
     // 1. Read magic header from the start of the block
     inputStream.readFully(MAGIC_BUFFER, 0, 6);
-    if (!Arrays.equals(MAGIC_BUFFER, HoodieLogFormat.MAGIC)) {
-      return false;
-    }
-    return true;
+    return Arrays.equals(MAGIC_BUFFER, HoodieLogFormat.MAGIC);
   }
 
   @Override
