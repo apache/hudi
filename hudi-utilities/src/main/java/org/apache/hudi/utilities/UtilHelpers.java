@@ -266,9 +266,9 @@ public class UtilHelpers {
 
     if (tableExists) {
       JdbcDialect dialect = JdbcDialects.get(url);
-      try(PreparedStatement statement = conn.prepareStatement(dialect.getSchemaQuery(table))) {
+      try (PreparedStatement statement = conn.prepareStatement(dialect.getSchemaQuery(table))) {
         statement.setQueryTimeout(Integer.parseInt(options.get("timeout")));
-        try(ResultSet rs = statement.executeQuery()) {
+        try (ResultSet rs = statement.executeQuery()) {
           StructType structType;
           if (Boolean.parseBoolean(ioptions.get("nullable").get())) {
             structType = JdbcUtils.getSchema(rs, dialect, true);
