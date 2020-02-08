@@ -263,29 +263,20 @@ public class UtilHelpers {
     String table = jdbcOptions.tableOrQuery();
     JdbcOptionsInWrite jdbcOptionsInWrite = new JdbcOptionsInWrite(ioptions);
     boolean tableExists = JdbcUtils.tableExists(conn, jdbcOptionsInWrite);
+
     if (tableExists) {
       JdbcDialect dialect = JdbcDialects.get(url);
-      try {
-        PreparedStatement statement = conn.prepareStatement(dialect.getSchemaQuery(table));
-        try {
-          statement.setQueryTimeout(Integer.parseInt(options.get("timeout")));
-          ResultSet rs = statement.executeQuery();
-          try {
-            StructType structType;
-            if (Boolean.parseBoolean(ioptions.get("nullable").get())) {
-              structType = JdbcUtils.getSchema(rs, dialect, true);
-            } else {
-              structType = JdbcUtils.getSchema(rs, dialect, false);
-            }
-            return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
-          } finally {
-            rs.close();
+      try(PreparedStatement statement = conn.prepareStatement(dialect.getSchemaQuery(table))) {
+        statement.setQueryTimeout(Integer.parseInt(options.get("timeout")));
+        try(ResultSet rs = statement.executeQuery()) {
+          StructType structType;
+          if (Boolean.parseBoolean(ioptions.get("nullable").get())) {
+            structType = JdbcUtils.getSchema(rs, dialect, true);
+          } else {
+            structType = JdbcUtils.getSchema(rs, dialect, false);
           }
-        } finally {
-          statement.close();
+          return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
         }
-      } finally {
-        conn.close();
       }
     } else {
       throw new HoodieException(String.format("%s table does not exists!", table));
