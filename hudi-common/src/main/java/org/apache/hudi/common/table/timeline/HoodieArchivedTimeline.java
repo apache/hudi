@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
@@ -182,8 +183,11 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
           //read the avro blocks
           while (reader.hasNext()) {
             HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
-            // TODO If we can store additional metadata in datablock, we can skip parsing records
-            // (such as startTime, endTime of records in the block)
+            if (isDataOutOfRange(blk, filter)) {
+              // skip decoding this block because it is not in range
+              continue;
+            }
+
             List<IndexedRecord> records = blk.getRecords();
             // filter blocks in desired time window
             Stream<HoodieInstant> instantsInBlkStream = records.stream()
@@ -213,6 +217,18 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     } catch (IOException e) {
       throw new HoodieIOException(
               "Could not load archived commit timeline from path " + metaClient.getArchivePath(), e);
+    }
+  }
+
+  private boolean isDataOutOfRange(HoodieAvroDataBlock dataBlock, TimeRangeFilter filter) {
+    String minInstant = dataBlock.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.MIN_INSTANT_TIME);
+    String maxInstant = dataBlock.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.MAX_INSTANT_TIME);
+    if (minInstant == null || maxInstant == null || filter == null)  {
+      // old archived files may not have metadata headers. assume data is in range and filter later on.
+      return false;
+    } else {
+      return (HoodieTimeline.compareTimestamps(minInstant, filter.endTs, GREATER)
+              || HoodieTimeline.compareTimestamps(maxInstant, filter.startTs, LESSER));
     }
   }
 

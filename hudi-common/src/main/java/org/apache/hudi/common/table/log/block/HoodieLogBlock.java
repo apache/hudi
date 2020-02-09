@@ -121,7 +121,7 @@ public abstract class HoodieLogBlock {
    * new enums at the end.
    */
   public enum HeaderMetadataType {
-    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE
+    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE, MIN_INSTANT_TIME, MAX_INSTANT_TIME
   }
 
   /**

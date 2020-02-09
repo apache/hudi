@@ -61,6 +61,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -239,17 +240,17 @@ public class HoodieCommitArchiveLog {
     return success;
   }
 
-  public void archive(List<HoodieInstant> instants) throws HoodieCommitException {
+  private void archive(List<HoodieInstant> instants) throws HoodieCommitException {
     try {
       HoodieTimeline commitTimeline = metaClient.getActiveTimeline().getAllCommitsTimeline().filterCompletedInstants();
       Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
       LOG.info("Wrapper schema " + wrapperSchema.toString());
-      List<IndexedRecord> records = new ArrayList<>();
+      List<HoodieInstant> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         try {
-          records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
+          records.add(hoodieInstant);
           if (records.size() >= this.config.getCommitArchivalBatchSize()) {
-            writeToFile(wrapperSchema, records);
+            writeToFile(commitTimeline, wrapperSchema, records);
           }
         } catch (Exception e) {
           LOG.error("Failed to archive commits, .commit file: " + hoodieInstant.getFileName(), e);
@@ -258,7 +259,7 @@ public class HoodieCommitArchiveLog {
           }
         }
       }
-      writeToFile(wrapperSchema, records);
+      writeToFile(commitTimeline, wrapperSchema, records);
     } catch (Exception e) {
       throw new HoodieCommitException("Failed to archive commits", e);
     }
@@ -268,11 +269,27 @@ public class HoodieCommitArchiveLog {
     return archiveFilePath;
   }
 
-  private void writeToFile(Schema wrapperSchema, List<IndexedRecord> records) throws Exception {
+  private void updateMinMaxHeaders(Map<HeaderMetadataType, String> header, List<HoodieInstant> records)
+          throws Exception {
+    // find min max and add headers. sort by instant time ascending first and then by action
+    Collections.sort(records, HoodieInstant.COMPARATOR);
+    HoodieInstant minInstant = records.get(0);
+    HoodieInstant maxInstant = records.get(records.size() - 1);
+    header.put(HeaderMetadataType.MIN_INSTANT_TIME, minInstant.getTimestamp());
+    header.put(HeaderMetadataType.MAX_INSTANT_TIME, maxInstant.getTimestamp());
+  }
+
+  private void writeToFile(HoodieTimeline commitTimeline, Schema wrapperSchema,
+                           List<HoodieInstant> records) throws Exception {
     if (records.size() > 0) {
       Map<HeaderMetadataType, String> header = Maps.newHashMap();
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
-      HoodieAvroDataBlock block = new HoodieAvroDataBlock(records, header);
+      updateMinMaxHeaders(header, records);
+      List<IndexedRecord> indexedRecords = new ArrayList<>();
+      for (HoodieInstant instant : records) {
+        indexedRecords.add(convertToAvroRecord(commitTimeline, instant));
+      }
+      HoodieAvroDataBlock block = new HoodieAvroDataBlock(indexedRecords, header);
       this.writer = writer.appendBlock(block);
       records.clear();
     }

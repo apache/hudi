@@ -404,6 +404,27 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
     List<HoodieInstant> archivedInstants = Arrays.asList(instant1, instant2, instant3);
     assertEquals(new HashSet(archivedInstants), archivedTimeline.getInstants().collect(Collectors.toSet()));
+
+    // create another set of commit files and archive to same file
+    HoodieTestDataGenerator.createCommitFile(basePath, "6", dfs.getConf());
+    HoodieInstant instant6 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "6");
+    HoodieTestDataGenerator.createCommitFile(basePath, "7", dfs.getConf());
+    HoodieInstant instant7 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "7");
+    HoodieTestDataGenerator.createCommitFile(basePath, "8", dfs.getConf());
+    HoodieInstant instant8 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "8");
+    HoodieTestDataGenerator.createCommitFile(basePath, "9", dfs.getConf());
+    HoodieInstant instant9 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "9");
+
+    archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
+    result = archiveLog.archiveIfRequired(jsc);
+    assertTrue(result);
+
+    archivedTimeline.loadInstantDetailsInMemory("4", "6");
+    // verify that only instant details in range 4 to 6 are read
+    assertFalse(archivedTimeline.getInstantDetails(instant1).isPresent());
+    assertTrue(archivedTimeline.getInstantDetails(instant4).isPresent());
+    assertFalse(archivedTimeline.getInstantDetails(instant9).isPresent());
+
   }
 
   private void verifyInflightInstants(HoodieTableMetaClient metaClient, int expectedTotalInstants) {
