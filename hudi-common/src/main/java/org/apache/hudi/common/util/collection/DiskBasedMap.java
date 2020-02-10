@@ -223,8 +223,8 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   private synchronized R put(T key, R value, boolean flush) {
     try {
       byte[] val = SerializationUtils.serialize(value);
-      int valueSize = val.length;
-      long timestamp = System.currentTimeMillis();
+      Integer valueSize = val.length;
+      Long timestamp = System.currentTimeMillis();
       this.valueMetadataMap.put(key,
           new DiskBasedMap.ValueMetadata(this.filePath, valueSize, filePosition.get(), timestamp));
       byte[] serializedKey = SerializationUtils.serialize(key);
