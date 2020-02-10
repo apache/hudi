@@ -284,14 +284,6 @@ public class UtilHelpers {
     }
   }
 
-  /**
-   * Replace java map with scala immutable map.
-   * refers: https://stackoverflow.com/questions/11903167/convert-java-util-hashmap-to-scala-collection-immutable-map-in-java/11903737#11903737
-   * @param javaMap
-   * @param <K>
-   * @param <V>
-   * @return
-   */
   @SuppressWarnings("unchecked")
   private static <K, V> scala.collection.immutable.Map<K, V> toScalaImmutableMap(java.util.Map<K, V> javaMap) {
     final java.util.List<scala.Tuple2<K, V>> list = new java.util.ArrayList<>(javaMap.size());
