@@ -74,6 +74,12 @@ public class TestJdbcbasedSchemaProvider {
     }
   }
 
+  /**
+   * Initialize the H2 database and obtain a connection, then create a table as a test.
+   * Based on the characteristics of the H2 in-memory database, we do not need to display the initialized database.
+   * @throws SQLException
+   * @throws IOException
+   */
   private void initH2Database() throws SQLException, IOException {
     Connection conn = DriverManager.getConnection("jdbc:h2:mem:test_mem", "sa", "");
     PreparedStatement ps = conn.prepareStatement(UtilitiesTestBase.Helpers.readFile("delta-streamer-config/triprec.sql"));

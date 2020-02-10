@@ -41,10 +41,11 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
     // The JDBC URL to connect to. The source-specific connection properties may be specified in the URL.
     // e.g., jdbc:postgresql://localhost/test?user=fred&password=secret
     private static final String SOURCE_SCHEMA_JDBC_CONNECTION_URL = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.connection.url";
-    // The class name of the JDBC driver to use to connect to this URL.
+    // The class name of the JDBC driver to use to connect to this URL. such as org.h2.Driver
     private static final String SOURCE_SCHEMA_JDBC_DRIVER_TYPE = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.driver.type";
     private static final String SOURCE_SCHEMA_JDBC_USERNAME = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.username";
     private static final String SOURCE_SCHEMA_JDBC_PASSWORD = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.password";
+    // example : test_database.test1_table or test1_table
     private static final String SOURCE_SCHEMA_JDBC_DBTABLE = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.dbtable";
     // The number of seconds the driver will wait for a Statement object to execute to the given number of seconds.
     // Zero means there is no limit. In the write path, this option depends on how JDBC drivers implement the API setQueryTimeout,
