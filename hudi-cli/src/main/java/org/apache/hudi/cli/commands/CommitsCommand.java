@@ -100,8 +100,58 @@ public class CommitsCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows);
   }
 
+  private String printCommitsWithMetadata(HoodieDefaultTimeline timeline,
+                              final Integer limit, final String sortByField,
+                              final boolean descending,
+                              final boolean headerOnly) throws IOException {
+    final List<Comparable[]> rows = new ArrayList<>();
+
+    final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
+            .getInstants().collect(Collectors.toList());
+    // timeline can be read from multiple files. So sort is needed instead of reversing the collection
+    Collections.sort(commits, HoodieInstant.COMPARATOR.reversed());
+
+    for (int i = 0; i < commits.size(); i++) {
+      final HoodieInstant commit = commits.get(i);
+      final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+              timeline.getInstantDetails(commit).get(),
+              HoodieCommitMetadata.class);
+
+      for (Map.Entry<String, List<HoodieWriteStat>> partitionWriteStat :
+              commitMetadata.getPartitionToWriteStats().entrySet()) {
+        for (HoodieWriteStat hoodieWriteStat : partitionWriteStat.getValue()) {
+          rows.add(new Comparable[]{ commit.getAction(), commit.getTimestamp(), hoodieWriteStat.getPartitionPath(),
+                  hoodieWriteStat.getFileId(), hoodieWriteStat.getPrevCommit(), hoodieWriteStat.getNumWrites(),
+                  hoodieWriteStat.getNumInserts(), hoodieWriteStat.getNumDeletes(),
+                  hoodieWriteStat.getNumUpdateWrites(), hoodieWriteStat.getTotalWriteErrors(),
+                  hoodieWriteStat.getTotalLogBlocks(), hoodieWriteStat.getTotalCorruptLogBlock(),
+                  hoodieWriteStat.getTotalRollbackBlocks(), hoodieWriteStat.getTotalLogRecords(),
+                  hoodieWriteStat.getTotalUpdatedRecordsCompacted(), hoodieWriteStat.getTotalWriteBytes()
+          });
+        }
+      }
+    }
+
+    final Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
+    fieldNameToConverterMap.put("Total Bytes Written", entry -> {
+      return NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
+    });
+
+    TableHeader header = new TableHeader().addTableHeaderField("Action").addTableHeaderField("Instant")
+            .addTableHeaderField("Partition").addTableHeaderField("File Id").addTableHeaderField("Prev Instant")
+            .addTableHeaderField("Num Writes").addTableHeaderField("Num Inserts").addTableHeaderField("Num Deletes")
+            .addTableHeaderField("Num Update Writes").addTableHeaderField("Total Write Errors")
+            .addTableHeaderField("Total Log Blocks").addTableHeaderField("Total Corrupt LogBlocks")
+            .addTableHeaderField("Total Rollback Blocks").addTableHeaderField("Total Log Records")
+            .addTableHeaderField("Total Updated Records Compacted").addTableHeaderField("Total Write Bytes");
+
+    return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
+  }
+
   @CliCommand(value = "commits show", help = "Show the commits")
   public String showCommits(
+      @CliOption(key = {"includeExtraMetadata"}, help = "Include extra metadata",
+          unspecifiedDefaultValue = "false") final boolean includeExtraMetadata,
       @CliOption(key = {"limit"}, help = "Limit commits",
           unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
@@ -111,11 +161,17 @@ public class CommitsCommand implements CommandMarker {
       throws IOException {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    return printCommits(activeTimeline, limit, sortByField, descending, headerOnly);
+    if (includeExtraMetadata) {
+      return printCommitsWithMetadata(activeTimeline, limit, sortByField, descending, headerOnly);
+    } else  {
+      return printCommits(activeTimeline, limit, sortByField, descending, headerOnly);
+    }
   }
 
   @CliCommand(value = "commits show archived", help = "Show the archived commits")
   public String showArchivedCommits(
+          @CliOption(key = {"includeExtraMetadata"}, help = "Include extra metadata",
+                  unspecifiedDefaultValue = "false") final boolean includeExtraMetadata,
           @CliOption(key = {"startTs"},  mandatory = false, help = "start time for commits, default: now - 10 days")
           String startTs,
           @CliOption(key = {"endTs"},  mandatory = false, help = "end time for commits, default: now - 1 day")
@@ -138,8 +194,12 @@ public class CommitsCommand implements CommandMarker {
     HoodieArchivedTimeline archivedTimeline = HoodieCLI.getTableMetaClient().getArchivedTimeline();
     try {
       archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
-      return printCommits(archivedTimeline.findInstantsInRange(startTs, endTs),
-              limit, sortByField, descending, headerOnly);
+      HoodieDefaultTimeline timelineRange = archivedTimeline.findInstantsInRange(startTs, endTs);
+      if (includeExtraMetadata) {
+        return printCommitsWithMetadata(timelineRange, limit, sortByField, descending, headerOnly);
+      } else  {
+        return printCommits(timelineRange, limit, sortByField, descending, headerOnly);
+      }
     } finally {
       // clear the instant details from memory after printing to reduce usage
       archivedTimeline.clearInstantDetailsFromMemory(startTs, endTs);
