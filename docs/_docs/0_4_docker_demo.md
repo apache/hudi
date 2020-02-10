@@ -19,18 +19,17 @@ The steps have been tested on a Mac laptop
   * kafkacat : A command-line utility to publish/consume from kafka topics. Use `brew install kafkacat` to install kafkacat
   * /etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts
 
-
-```java
-   127.0.0.1 adhoc-1
-   127.0.0.1 adhoc-2
-   127.0.0.1 namenode
-   127.0.0.1 datanode1
-   127.0.0.1 hiveserver
-   127.0.0.1 hivemetastore
-   127.0.0.1 kafkabroker
-   127.0.0.1 sparkmaster
-   127.0.0.1 zookeeper
-```
+    ```java
+    127.0.0.1 adhoc-1
+    127.0.0.1 adhoc-2
+    127.0.0.1 namenode
+    127.0.0.1 datanode1
+    127.0.0.1 hiveserver
+    127.0.0.1 hivemetastore
+    127.0.0.1 kafkabroker
+    127.0.0.1 sparkmaster
+    127.0.0.1 zookeeper
+    ```
 
 Also, this has not been tested on some environments like Docker on Windows.
 
@@ -148,7 +147,6 @@ kafkacat -b kafkabroker -L -J | jq .
     }
   ]
 }
-
 ```
 
 ### Step 2: Incrementally ingest data from Kafka topic
@@ -162,12 +160,26 @@ automatically initializes the tables in the file-system if they do not exist yet
 docker exec -it adhoc-2 /bin/bash
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_cow table in HDFS
-spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --table-type COPY_ON_WRITE --source-class org.apache.hudi.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider
-
+spark-submit \
+  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE \
+  --table-type COPY_ON_WRITE \
+  --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
+  --source-ordering-field ts  \
+  --target-base-path /user/hive/warehouse/stock_ticks_cow \
+  --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties \
+  --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor table in HDFS
-spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --table-type MERGE_ON_READ --source-class org.apache.hudi.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider --disable-compaction
-
+spark-submit \
+  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE \
+  --table-type MERGE_ON_READ \
+  --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
+  --source-ordering-field ts \
+  --target-base-path /user/hive/warehouse/stock_ticks_mor \
+  --target-table stock_ticks_mor \
+  --props /var/demo/config/kafka-source.properties \
+  --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
+  --disable-compaction
 
 # As part of the setup (Look at setup_demo.sh), the configs needed for DeltaStreamer is uploaded to HDFS. The configs
 # contain mostly Kafa connectivity settings, the avro-schema to be used for ingesting along with key and partitioning fields.
@@ -194,18 +206,33 @@ inorder to run Hive queries against those tables.
 docker exec -it adhoc-2 /bin/bash
 
 # THis command takes in HIveServer URL and COW Hudi table location in HDFS and sync the HDFS state to Hive
-/var/hoodie/ws/hudi-hive/run_sync_tool.sh  --jdbc-url jdbc:hive2://hiveserver:10000 --user hive --pass hive --partitioned-by dt --base-path /user/hive/warehouse/stock_ticks_cow --database default --table stock_ticks_cow
+/var/hoodie/ws/hudi-hive/run_sync_tool.sh \
+  --jdbc-url jdbc:hive2://hiveserver:10000 \
+  --user hive \
+  --pass hive \
+  --partitioned-by dt \
+  --base-path /user/hive/warehouse/stock_ticks_cow \
+  --database default \
+  --table stock_ticks_cow
 .....
 2020-01-25 19:51:28,953 INFO  [main] hive.HiveSyncTool (HiveSyncTool.java:syncHoodieTable(129)) - Sync complete for stock_ticks_cow
 .....
 
 # Now run hive-sync for the second data-set in HDFS using Merge-On-Read (MOR table type)
-/var/hoodie/ws/hudi-hive/run_sync_tool.sh  --jdbc-url jdbc:hive2://hiveserver:10000 --user hive --pass hive --partitioned-by dt --base-path /user/hive/warehouse/stock_ticks_mor --database default --table stock_ticks_mor
+/var/hoodie/ws/hudi-hive/run_sync_tool.sh \
+  --jdbc-url jdbc:hive2://hiveserver:10000 \
+  --user hive \
+  --pass hive \
+  --partitioned-by dt \
+  --base-path /user/hive/warehouse/stock_ticks_mor \
+  --database default \
+  --table stock_ticks_mor
 ...
 2020-01-25 19:51:51,066 INFO  [main] hive.HiveSyncTool (HiveSyncTool.java:syncHoodieTable(129)) - Sync complete for stock_ticks_mor_ro
 ...
 2020-01-25 19:51:51,569 INFO  [main] hive.HiveSyncTool (HiveSyncTool.java:syncHoodieTable(129)) - Sync complete for stock_ticks_mor_rt
 ....
+
 exit
 ```
 After executing the above command, you will notice
@@ -223,7 +250,10 @@ parquet file for the first batch of data.
 
 ```java
 docker exec -it adhoc-2 /bin/bash
-beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat --hiveconf hive.stats.autogather=false
+beeline -u jdbc:hive2://hiveserver:10000 \
+  --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat \
+  --hiveconf hive.stats.autogather=false
+
 # List Tables
 0: jdbc:hive2://hiveserver:10000> show tables;
 +---------------------+--+
@@ -317,7 +347,6 @@ WARNING: Hive-on-MR is deprecated in Hive 2 and may not be available in the futu
 +----------------------+---------+----------------------+---------+------------+-----------+--+
 
 exit
-exit
 ```
 
 ### Step 4 (b): Run Spark-SQL Queries
@@ -326,7 +355,16 @@ running in spark-sql
 
 ```java
 docker exec -it adhoc-1 /bin/bash
-$SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --master local[2] --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --executor-memory 3G --num-executors 1  --packages org.apache.spark:spark-avro_2.11:2.4.4
+$SPARK_INSTALL/bin/spark-shell \
+  --jars $HUDI_SPARK_BUNDLE \
+  --master local[2] \
+  --driver-class-path $HADOOP_CONF_DIR \
+  --conf spark.sql.hive.convertMetastoreParquet=false \
+  --deploy-mode client \
+  --driver-memory 1G \
+  --executor-memory 3G \
+  --num-executors 1 \
+  --packages org.apache.spark:spark-avro_2.11:2.4.4
 ...
 
 Welcome to
@@ -340,7 +378,6 @@ Using Scala version 2.11.12 (OpenJDK 64-Bit Server VM, Java 1.8.0_212)
 Type in expressions to have them evaluated.
 Type :help for more information.
 
-scala>
 scala> spark.sql("show tables").show(100, false)
 +--------+------------------+-----------+
 |database|tableName         |isTemporary|
@@ -415,7 +452,6 @@ scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close 
 |20180924222155     |GOOG  |2018-08-31 09:59:00|6330  |1230.5   |1230.02 |
 |20180924222155     |GOOG  |2018-08-31 10:29:00|3391  |1230.1899|1230.085|
 +-------------------+------+-------------------+------+---------+--------+
-
 ```
 
 ### Step 4 (c): Run Presto Queries
@@ -521,11 +557,27 @@ cat docker/demo/data/batch_2.json | kafkacat -b kafkabroker -t stock_ticks -P
 docker exec -it adhoc-2 /bin/bash
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_cow table in HDFS
-spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --table-type COPY_ON_WRITE --source-class org.apache.hudi.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider
-
+spark-submit \
+  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE \
+  --table-type COPY_ON_WRITE \
+  --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
+  --source-ordering-field ts \
+  --target-base-path /user/hive/warehouse/stock_ticks_cow \
+  --target-table stock_ticks_cow \
+  --props /var/demo/config/kafka-source.properties \
+  --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor table in HDFS
-spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --table-type MERGE_ON_READ --source-class org.apache.hudi.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider --disable-compaction
+spark-submit \
+  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE \
+  --table-type MERGE_ON_READ \
+  --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
+  --source-ordering-field ts \
+  --target-base-path /user/hive/warehouse/stock_ticks_mor \
+  --target-table stock_ticks_mor \
+  --props /var/demo/config/kafka-source.properties \
+  --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
+  --disable-compaction
 
 exit
 ```
@@ -536,7 +588,7 @@ See `http://namenode:50070/explorer.html#/user/hive/warehouse/stock_ticks_cow/20
 With Merge-On-Read table, the second ingestion merely appended the batch to an unmerged delta (log) file.
 Take a look at the HDFS filesystem to get an idea: `http://namenode:50070/explorer.html#/user/hive/warehouse/stock_ticks_mor/2018/08/31`
 
-### Step 6(a): Run Hive Queries
+### Step 6 (a): Run Hive Queries
 
 With Copy-On-Write table, the Snapshot query immediately sees the changes as part of second batch once the batch
 got committed as each ingestion creates newer versions of parquet files.
@@ -548,7 +600,9 @@ latest committed data which is "10:59 a.m".
 
 ```java
 docker exec -it adhoc-2 /bin/bash
-beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat --hiveconf hive.stats.autogather=false
+beeline -u jdbc:hive2://hiveserver:10000 \
+  --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat \
+  --hiveconf hive.stats.autogather=false
 
 # Copy On Write Table:
 
@@ -610,16 +664,24 @@ WARNING: Hive-on-MR is deprecated in Hive 2 and may not be available in the futu
 +----------------------+---------+----------------------+---------+------------+-----------+--+
 
 exit
-exit
 ```
 
-### Step 6(b): Run Spark SQL Queries
+### Step 6 (b): Run Spark SQL Queries
 
 Running the same queries in Spark-SQL:
 
 ```java
 docker exec -it adhoc-1 /bin/bash
-bash-4.4# $SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1  --packages org.apache.spark:spark-avro_2.11:2.4.4
+$SPARK_INSTALL/bin/spark-shell \
+  --jars $HUDI_SPARK_BUNDLE \
+  --driver-class-path $HADOOP_CONF_DIR \
+  --conf spark.sql.hive.convertMetastoreParquet=false \
+  --deploy-mode client \
+  --driver-memory 1G \
+  --master local[2] \
+  --executor-memory 3G \
+  --num-executors 1 \
+  --packages org.apache.spark:spark-avro_2.11:2.4.4
 
 # Copy On Write Table:
 
@@ -646,45 +708,43 @@ As you can notice, the above queries now reflect the changes that came as part o
 
 # Read Optimized Query
 scala> spark.sql("select symbol, max(ts) from stock_ticks_mor_ro group by symbol HAVING symbol = 'GOOG'").show(100, false)
-+---------+----------------------+--+
++---------+----------------------+
 | symbol  |         _c1          |
-+---------+----------------------+--+
++---------+----------------------+
 | GOOG    | 2018-08-31 10:29:00  |
-+---------+----------------------+--+
++---------+----------------------+
 1 row selected (1.6 seconds)
 
 scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_mor_ro where  symbol = 'GOOG'").show(100, false)
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 | _hoodie_commit_time  | symbol  |          ts          | volume  |    open    |   close   |
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 | 20180924222155       | GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |
 | 20180924222155       | GOOG    | 2018-08-31 10:29:00  | 3391    | 1230.1899  | 1230.085  |
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 
 # Snapshot Query
 scala> spark.sql("select symbol, max(ts) from stock_ticks_mor_rt group by symbol HAVING symbol = 'GOOG'").show(100, false)
-+---------+----------------------+--+
++---------+----------------------+
 | symbol  |         _c1          |
-+---------+----------------------+--+
++---------+----------------------+
 | GOOG    | 2018-08-31 10:59:00  |
-+---------+----------------------+--+
++---------+----------------------+
 
 scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_mor_rt where  symbol = 'GOOG'").show(100, false)
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 | _hoodie_commit_time  | symbol  |          ts          | volume  |    open    |   close   |
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 | 20180924222155       | GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |
 | 20180924224537       | GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 
-exit
 exit
 ```
 
-### Step 6(c): Run Presto Queries
+### Step 6 (c): Run Presto Queries
 
 Running the same queries on Presto for ReadOptimized queries. 
-
 
 ```java
 docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
@@ -744,8 +804,7 @@ Splits: 17 total, 17 done (100.00%)
 presto:default> exit
 ```
 
-
-### Step 7 : Incremental Query for COPY-ON-WRITE Table
+### Step 7 (a): Incremental Query for COPY-ON-WRITE Table
 
 With 2 batches of data ingested, lets showcase the support for incremental queries in Hudi Copy-On-Write tables
 
@@ -753,7 +812,9 @@ Lets take the same projection query example
 
 ```java
 docker exec -it adhoc-2 /bin/bash
-beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat --hiveconf hive.stats.autogather=false
+beeline -u jdbc:hive2://hiveserver:10000 \
+  --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat \
+  --hiveconf hive.stats.autogather=false
 
 0: jdbc:hive2://hiveserver:10000> select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG';
 +----------------------+---------+----------------------+---------+------------+-----------+--+
@@ -777,10 +838,13 @@ candidate rows using hudi-managed metadata.
 
 ```java
 docker exec -it adhoc-2 /bin/bash
-beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat --hiveconf hive.stats.autogather=false
+beeline -u jdbc:hive2://hiveserver:10000 \
+  --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat \
+  --hiveconf hive.stats.autogather=false
+
 0: jdbc:hive2://hiveserver:10000> set hoodie.stock_ticks_cow.consume.mode=INCREMENTAL;
 No rows affected (0.009 seconds)
-0: jdbc:hive2://hiveserver:10000>  set hoodie.stock_ticks_cow.consume.max.commits=3;
+0: jdbc:hive2://hiveserver:10000> set hoodie.stock_ticks_cow.consume.max.commits=3;
 No rows affected (0.009 seconds)
 0: jdbc:hive2://hiveserver:10000> set hoodie.stock_ticks_cow.consume.start.timestamp=20180924064621;
 ```
@@ -800,10 +864,21 @@ Here is the incremental query :
 0: jdbc:hive2://hiveserver:10000>
 ```
 
-### Incremental Query with Spark SQL:
+### Step 7 (b): Incremental Query with Spark SQL:
+
 ```java
 docker exec -it adhoc-1 /bin/bash
-bash-4.4# $SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1  --packages org.apache.spark:spark-avro_2.11:2.4.4
+$SPARK_INSTALL/bin/spark-shell \
+  --jars $HUDI_SPARK_BUNDLE \
+  --driver-class-path $HADOOP_CONF_DIR \
+  --conf spark.sql.hive.convertMetastoreParquet=false \
+  --deploy-mode client \
+  --driver-memory 1G \
+  --master local[2] \
+  --executor-memory 3G \
+  --num-executors 1 \
+  --packages org.apache.spark:spark-avro_2.11:2.4.4
+
 Welcome to
       ____              __
      / __/__  ___ _____/ /__
@@ -829,14 +904,12 @@ scala> hoodieIncViewDF.registerTempTable("stock_ticks_cow_incr_tmp1")
 warning: there was one deprecation warning; re-run with -deprecation for details
 
 scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow_incr_tmp1 where  symbol = 'GOOG'").show(100, false);
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 | _hoodie_commit_time  | symbol  |          ts          | volume  |    open    |   close   |
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 | 20180924065039       | GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |
-+----------------------+---------+----------------------+---------+------------+-----------+--+
-
++----------------------+---------+----------------------+---------+------------+-----------+
 ```
-
 
 ### Step 8: Schedule and Run Compaction for Merge-On-Read table
 
@@ -845,7 +918,7 @@ Again, You can use Hudi CLI to manually schedule and run compaction
 
 ```java
 docker exec -it adhoc-1 /bin/bash
-root@adhoc-1:/opt#   /var/hoodie/ws/hudi-cli/hudi-cli.sh
+root@adhoc-1:/opt# /var/hoodie/ws/hudi-cli/hudi-cli.sh
 ...
 Table command getting loaded
 HoodieSplashScreen loaded
@@ -872,17 +945,11 @@ hudi->connect --path /user/hive/warehouse/stock_ticks_mor
 18/09/24 06:59:35 INFO table.HoodieTableConfig: Loading table properties from /user/hive/warehouse/stock_ticks_mor/.hoodie/hoodie.properties
 18/09/24 06:59:36 INFO table.HoodieTableMetaClient: Finished Loading Table of type MERGE_ON_READ(version=1) from /user/hive/warehouse/stock_ticks_mor
 Metadata for table stock_ticks_mor loaded
-
-# Ensure no compactions are present
-
 hoodie:stock_ticks_mor->compactions show all
-18/09/24 06:59:54 INFO timeline.HoodieActiveTimeline: Loaded instants [[20180924064636__clean__COMPLETED], [20180924064636__deltacommit__COMPLETED], [20180924065057__clean__COMPLETED], [20180924065057__deltacommit__COMPLETED]]
-    ___________________________________________________________________
-    | Compaction Instant Time| State    | Total FileIds to be Compacted|
-    |==================================================================|
-
-
-
+20/02/10 03:41:32 INFO timeline.HoodieActiveTimeline: Loaded instants [[20200210015059__clean__COMPLETED], [20200210015059__deltacommit__COMPLETED], [20200210022758__clean__COMPLETED], [20200210022758__deltacommit__COMPLETED], [==>20200210023843__compaction__REQUESTED]]
+___________________________________________________________________
+| Compaction Instant Time| State    | Total FileIds to be Compacted|
+|==================================================================|
 
 # Schedule a compaction. This will use Spark Launcher to schedule compaction
 hoodie:stock_ticks_mor->compaction schedule
@@ -898,23 +965,17 @@ hoodie:stock_ticks->connect --path /user/hive/warehouse/stock_ticks_mor
 18/09/24 07:01:16 INFO table.HoodieTableMetaClient: Finished Loading Table of type MERGE_ON_READ(version=1) from /user/hive/warehouse/stock_ticks_mor
 Metadata for table stock_ticks_mor loaded
 
-
-
 hoodie:stock_ticks_mor->compactions show all
 18/09/24 06:34:12 INFO timeline.HoodieActiveTimeline: Loaded instants [[20180924041125__clean__COMPLETED], [20180924041125__deltacommit__COMPLETED], [20180924042735__clean__COMPLETED], [20180924042735__deltacommit__COMPLETED], [==>20180924063245__compaction__REQUESTED]]
-    ___________________________________________________________________
-    | Compaction Instant Time| State    | Total FileIds to be Compacted|
-    |==================================================================|
-    | 20180924070031         | REQUESTED| 1                            |
-
-
-
+___________________________________________________________________
+| Compaction Instant Time| State    | Total FileIds to be Compacted|
+|==================================================================|
+| 20180924070031         | REQUESTED| 1                            |
 
 # Execute the compaction. The compaction instant value passed below must be the one displayed in the above "compactions show all" query
 hoodie:stock_ticks_mor->compaction run --compactionInstant  20180924070031 --parallelism 2 --sparkMemory 1G  --schemaFilePath /var/demo/config/schema.avsc --retry 1  
 ....
 Compaction successfully completed for 20180924070031
-
 
 ## Now check if compaction is completed
 
@@ -925,14 +986,12 @@ hoodie:stock_ticks_mor->connect --path /user/hive/warehouse/stock_ticks_mor
 18/09/24 07:03:00 INFO table.HoodieTableMetaClient: Finished Loading Table of type MERGE_ON_READ(version=1) from /user/hive/warehouse/stock_ticks_mor
 Metadata for table stock_ticks_mor loaded
 
-
-
 hoodie:stock_ticks->compactions show all
 18/09/24 07:03:15 INFO timeline.HoodieActiveTimeline: Loaded instants [[20180924064636__clean__COMPLETED], [20180924064636__deltacommit__COMPLETED], [20180924065057__clean__COMPLETED], [20180924065057__deltacommit__COMPLETED], [20180924070031__commit__COMPLETED]]
-    ___________________________________________________________________
-    | Compaction Instant Time| State    | Total FileIds to be Compacted|
-    |==================================================================|
-    | 20180924070031         | COMPLETED| 1                            |
+___________________________________________________________________
+| Compaction Instant Time| State    | Total FileIds to be Compacted|
+|==================================================================|
+| 20180924070031         | COMPLETED| 1                            |
 
 ```
 
@@ -945,7 +1004,9 @@ and the second commit time is 20180924070031
 
 ```java
 docker exec -it adhoc-2 /bin/bash
-beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat --hiveconf hive.stats.autogather=false
+beeline -u jdbc:hive2://hiveserver:10000 \
+  --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat \
+  --hiveconf hive.stats.autogather=false
 
 # Read Optimized Query
 0: jdbc:hive2://hiveserver:10000> select symbol, max(ts) from stock_ticks_mor_ro group by symbol HAVING symbol = 'GOOG';
@@ -998,7 +1059,7 @@ No rows affected (0.013 seconds)
 +----------------------+---------+----------------------+---------+------------+-----------+--+
 | 20180924070031       | GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |
 +----------------------+---------+----------------------+---------+------------+-----------+--+
-exit
+
 exit
 ```
 
@@ -1006,40 +1067,49 @@ exit
 
 ```java
 docker exec -it adhoc-1 /bin/bash
-bash-4.4# $SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1  --packages org.apache.spark:spark-avro_2.11:2.4.4
+$SPARK_INSTALL/bin/spark-shell \
+  --jars $HUDI_SPARK_BUNDLE \
+  --driver-class-path $HADOOP_CONF_DIR \
+  --conf spark.sql.hive.convertMetastoreParquet=false \
+  --deploy-mode client \
+  --driver-memory 1G \
+  --master local[2] \
+  --executor-memory 3G \
+  --num-executors 1 \
+  --packages org.apache.spark:spark-avro_2.11:2.4.4
 
 # Read Optimized Query
 scala> spark.sql("select symbol, max(ts) from stock_ticks_mor_ro group by symbol HAVING symbol = 'GOOG'").show(100, false)
-+---------+----------------------+--+
-| symbol  |         _c1          |
-+---------+----------------------+--+
++---------+----------------------+
+| symbol  |        max(ts)       |
++---------+----------------------+
 | GOOG    | 2018-08-31 10:59:00  |
-+---------+----------------------+--+
++---------+----------------------+
 1 row selected (1.6 seconds)
 
 scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_mor_ro where  symbol = 'GOOG'").show(100, false)
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 | _hoodie_commit_time  | symbol  |          ts          | volume  |    open    |   close   |
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 | 20180924064636       | GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |
 | 20180924070031       | GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 
 # Snapshot Query
 scala> spark.sql("select symbol, max(ts) from stock_ticks_mor_rt group by symbol HAVING symbol = 'GOOG'").show(100, false)
-+---------+----------------------+--+
-| symbol  |         _c1          |
-+---------+----------------------+--+
++---------+----------------------+
+| symbol  |     max(ts)          |
++---------+----------------------+
 | GOOG    | 2018-08-31 10:59:00  |
-+---------+----------------------+--+
++---------+----------------------+
 
 scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_mor_rt where  symbol = 'GOOG'").show(100, false)
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 | _hoodie_commit_time  | symbol  |          ts          | volume  |    open    |   close   |
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 | 20180924064636       | GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |
 | 20180924070031       | GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |
-+----------------------+---------+----------------------+---------+------------+-----------+--+
++----------------------+---------+----------------------+---------+------------+-----------+
 ```
 
 ### Step 11:  Presto Read Optimized queries on MOR table after compaction
@@ -1072,7 +1142,6 @@ Splits: 17 total, 17 done (100.00%)
 0:02 [197 rows, 613B] [98 rows/s, 307B/s]
 
 presto:default>
-
 ```
 
 
@@ -1097,7 +1166,7 @@ $ mvn docker-compose:down
 If you want to bring up the docker containers, use
 ```java
 $ cd hudi-integ-test
-$  mvn docker-compose:up -DdetachedMode=true
+$ mvn docker-compose:up -DdetachedMode=true
 ```
 
 Hudi is a library that is operated in a broader data analytics/ingestion environment
