@@ -208,11 +208,11 @@ public class CommitsCommand implements CommandMarker {
       for (HoodieWriteStat stat : stats) {
         if (stat.getPrevCommit().equals(HoodieWriteStat.NULL_COMMIT)) {
           totalFilesAdded += 1;
-          totalRecordsInserted += stat.getNumWrites();
         } else {
           totalFilesUpdated += 1;
           totalRecordsUpdated += stat.getNumUpdateWrites();
         }
+        totalRecordsInserted += stat.getNumInserts();
         totalBytesWritten += stat.getTotalWriteBytes();
         totalWriteErrors += stat.getTotalWriteErrors();
       }
