@@ -48,13 +48,13 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.execution.datasources.jdbc.DriverRegistry;
+import org.apache.spark.sql.execution.datasources.jdbc.DriverWrapper;
 import org.apache.spark.sql.execution.datasources.jdbc.JDBCOptions;
-import org.apache.spark.sql.execution.datasources.jdbc.JdbcOptionsInWrite;
 import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils;
 import org.apache.spark.sql.jdbc.JdbcDialect;
 import org.apache.spark.sql.jdbc.JdbcDialects;
 import org.apache.spark.sql.types.StructType;
-import scala.Tuple2;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -64,10 +64,15 @@ import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.DriverManager;
+import java.sql.Driver;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.Enumeration;
 
 /**
  * Bunch of helper methods.
@@ -249,6 +254,56 @@ public class UtilHelpers {
     return defaults;
   }
 
+  /**
+   * Returns a factory for creating connections to the given JDBC URL.
+   * @param options - JDBC options that contains url, table and other information.
+   * @return
+   * @throws SQLException if the driver could not open a JDBC connection.
+   */
+  private static Connection createConnectionFactory(Map<String, String> options) throws SQLException {
+    String driverClass = options.get(JDBCOptions.JDBC_DRIVER_CLASS());
+    DriverRegistry.register(driverClass);
+    Enumeration<Driver> drivers = DriverManager.getDrivers();
+    Driver driver = null;
+    while (drivers.hasMoreElements()) {
+      Driver d = drivers.nextElement();
+      if (d instanceof DriverWrapper) {
+        if (((DriverWrapper) d).wrapped().getClass().getCanonicalName().equals(driverClass)) {
+          driver = d;
+        }
+      } else if (d.getClass().getCanonicalName().equals(driverClass)) {
+        driver = d;
+      }
+      if (driver != null) {
+        break;
+      }
+    }
+
+    Preconditions.checkNotNull(driver, String.format("Did not find registered driver with class %s", driverClass));
+
+    Properties properties = new Properties();
+    properties.putAll(options);
+    Connection connect = null;
+    String url = options.get(JDBCOptions.JDBC_URL());
+    connect = driver.connect(url, properties);
+    Preconditions.checkNotNull(connect, String.format("The driver could not open a JDBC connection. Check the URL: %s", url));
+    return connect;
+  }
+
+  /**
+   * Returns true if the table already exists in the JDBC database.
+   */
+  private static Boolean tableExists(Connection conn, Map<String, String> options) {
+    JdbcDialect dialect = JdbcDialects.get(options.get(JDBCOptions.JDBC_URL()));
+    try (PreparedStatement statement = conn.prepareStatement(dialect.getTableExistsQuery(options.get(JDBCOptions.JDBC_TABLE_NAME())))) {
+      statement.setQueryTimeout(Integer.parseInt(options.get(JDBCOptions.JDBC_QUERY_TIMEOUT())));
+      statement.executeQuery();
+    } catch (SQLException e) {
+      return false;
+    }
+    return true;
+  }
+
   /***
    * call spark function get the schema through jdbc.
    * The code logic implementation refers to spark 2.4.x and spark 3.x.
@@ -257,21 +312,18 @@ public class UtilHelpers {
    * @throws Exception
    */
   public static Schema getJDBCSchema(Map<String, String> options) throws Exception {
-    scala.collection.immutable.Map<String, String> ioptions = toScalaImmutableMap(options);
-    JDBCOptions jdbcOptions = new JDBCOptions(ioptions);
-    Connection conn = JdbcUtils.createConnectionFactory(jdbcOptions).apply();
-    String url = jdbcOptions.url();
-    String table = jdbcOptions.tableOrQuery();
-    JdbcOptionsInWrite jdbcOptionsInWrite = new JdbcOptionsInWrite(ioptions);
-    boolean tableExists = JdbcUtils.tableExists(conn, jdbcOptionsInWrite);
+    Connection conn = createConnectionFactory(options);
+    String url = options.get(JDBCOptions.JDBC_URL());
+    String table = options.get(JDBCOptions.JDBC_TABLE_NAME());
+    boolean tableExists = tableExists(conn,options);
 
     if (tableExists) {
       JdbcDialect dialect = JdbcDialects.get(url);
       try (PreparedStatement statement = conn.prepareStatement(dialect.getSchemaQuery(table))) {
-        statement.setQueryTimeout(Integer.parseInt(options.get("timeout")));
+        statement.setQueryTimeout(Integer.parseInt(options.get("queryTimeout")));
         try (ResultSet rs = statement.executeQuery()) {
           StructType structType;
-          if (Boolean.parseBoolean(ioptions.get("nullable").get())) {
+          if (Boolean.parseBoolean(options.get("nullable"))) {
             structType = JdbcUtils.getSchema(rs, dialect, true);
           } else {
             structType = JdbcUtils.getSchema(rs, dialect, false);
@@ -282,15 +334,5 @@ public class UtilHelpers {
     } else {
       throw new HoodieException(String.format("%s table does not exists!", table));
     }
-  }
-
-  @SuppressWarnings("unchecked")
-  private static <K, V> scala.collection.immutable.Map<K, V> toScalaImmutableMap(java.util.Map<K, V> javaMap) {
-    final java.util.List<scala.Tuple2<K, V>> list = new java.util.ArrayList<>(javaMap.size());
-    for (final java.util.Map.Entry<K, V> entry : javaMap.entrySet()) {
-      list.add(scala.Tuple2.apply(entry.getKey(), entry.getValue()));
-    }
-    final scala.collection.Seq<Tuple2<K, V>> seq = scala.collection.JavaConverters.asScalaBufferConverter(list).asScala().toSeq();
-    return (scala.collection.immutable.Map<K, V>) scala.collection.immutable.Map$.MODULE$.apply(seq);
   }
 }

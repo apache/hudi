@@ -64,7 +64,7 @@ public class JdbcbasedSchemaProvider extends SchemaProvider {
     options.put("dbtable", props.getString(Config.SOURCE_SCHEMA_JDBC_DBTABLE));
     // the number of seconds the driver will wait for a Statement object to execute to the given
     // number of seconds. Zero means there is no limit.
-    options.put("timeout", props.getString(Config.SOURCE_SCHEMA_JDBC_TIMEOUT, "0"));
+    options.put("queryTimeout", props.getString(Config.SOURCE_SCHEMA_JDBC_TIMEOUT, "0"));
     options.put("nullable", props.getString(Config.SOURCE_SCHEMA_JDBC_NULLABLE, "true"));
   }
 
