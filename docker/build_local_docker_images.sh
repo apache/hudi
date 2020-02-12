@@ -16,6 +16,9 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
+SCRIPT_PATH=$(cd `dirname $0`; pwd)
+WS_ROOT=`dirname $SCRIPT_PATH`
+
 while true; do
     read -p  "Docker images can be downloaded from docker hub and seamlessly mounted with latest HUDI jars. Do you still want to build docker images from scratch ?" yn
     case $yn in
@@ -24,6 +27,6 @@ while true; do
         * ) echo "Please answer yes or no.";;
     esac
 done
-pushd ../
+pushd ${WS_ROOT}
 mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false
 popd
