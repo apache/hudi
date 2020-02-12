@@ -329,6 +329,7 @@
               <exclude>DISCLAIMER-WIP</exclude>
               <exclude>**/.*</exclude>
               <exclude>**/*.json</exclude>
+              <exclude>**/*.log</exclude>
               <exclude>**/*.sqltemplate</exclude>
               <exclude>**/compose_env</exclude>
               <exclude>**/*NOTICE*</exclude>
