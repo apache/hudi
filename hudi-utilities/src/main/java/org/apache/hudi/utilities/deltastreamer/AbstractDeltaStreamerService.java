@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 /**
- * Base Class for running delta-sync/compaction in separate thread and controlling their life-cyle.
+ * Base Class for running delta-sync/compaction in separate thread and controlling their life-cycle.
  */
 public abstract class AbstractDeltaStreamerService implements Serializable {
 
