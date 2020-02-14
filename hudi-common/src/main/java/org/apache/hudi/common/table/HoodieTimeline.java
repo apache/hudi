@@ -238,7 +238,7 @@ public interface HoodieTimeline extends Serializable {
    * Return true if specified timestamp is in range (startTs, endTs].
    */
   static boolean isInRange(String timestamp, String startTs, String endTs) {
-    return HoodieTimeline.compareTimestamps(timestamp, startTs, GREATER)
+    return HoodieTimeline.compareTimestamps(timestamp, startTs, GREATER_OR_EQUAL)
             && HoodieTimeline.compareTimestamps(timestamp, endTs, LESSER_OR_EQUAL);
   }
 

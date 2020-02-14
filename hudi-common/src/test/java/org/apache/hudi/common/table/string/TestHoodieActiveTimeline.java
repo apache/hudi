@@ -160,6 +160,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieTestUtils.assertStreamEquals("", Stream.of("09", "11"), timeline.getCommitTimeline().filterCompletedInstants()
         .findInstantsAfter("07", 2).getInstants().map(HoodieInstant::getTimestamp));
     assertFalse(timeline.empty());
+    assertEquals(1, timeline.getCommitTimeline().filterCompletedInstants().findInstantsInRange("05", "05").countInstants());
     assertFalse(timeline.getCommitTimeline().filterPendingExcludingCompaction().empty());
     assertEquals("", 12, timeline.countInstants());
     HoodieTimeline activeCommitTimeline = timeline.getCommitTimeline().filterCompletedInstants();
