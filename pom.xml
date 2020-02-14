@@ -891,6 +891,18 @@
       </dependency>
     </dependencies>
   </dependencyManagement>
+
+  <distributionManagement>
+    <repository>
+      <id>central</id>
+      <url>http://artifactory.uber.internal:4587/artifactory/libs-release-local/</url>
+    </repository>
+    <snapshotRepository>
+      <id>snapshots</id>
+      <url>http://artifactory.uber.internal:4587/artifactory/libs-snapshot-local/</url>
+    </snapshotRepository>
+  </distributionManagement>
+
   <repositories>
     <repository>
       <id>Maven Central</id>
