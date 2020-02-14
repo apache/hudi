@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.avro.Schema;
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.util.DFSPropertiesConfiguration;
@@ -27,6 +29,7 @@ import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -45,16 +48,31 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.execution.datasources.jdbc.DriverRegistry;
+import org.apache.spark.sql.execution.datasources.jdbc.DriverWrapper;
+import org.apache.spark.sql.execution.datasources.jdbc.JDBCOptions;
+import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils;
+import org.apache.spark.sql.jdbc.JdbcDialect;
+import org.apache.spark.sql.jdbc.JdbcDialects;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.DriverManager;
+import java.sql.Driver;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.Enumeration;
 
 /**
  * Bunch of helper methods.
@@ -234,5 +252,87 @@ public class UtilHelpers {
     TypedProperties defaults = new TypedProperties();
     defaults.load(in);
     return defaults;
+  }
+
+  /**
+   * Returns a factory for creating connections to the given JDBC URL.
+   * @param options - JDBC options that contains url, table and other information.
+   * @return
+   * @throws SQLException if the driver could not open a JDBC connection.
+   */
+  private static Connection createConnectionFactory(Map<String, String> options) throws SQLException {
+    String driverClass = options.get(JDBCOptions.JDBC_DRIVER_CLASS());
+    DriverRegistry.register(driverClass);
+    Enumeration<Driver> drivers = DriverManager.getDrivers();
+    Driver driver = null;
+    while (drivers.hasMoreElements()) {
+      Driver d = drivers.nextElement();
+      if (d instanceof DriverWrapper) {
+        if (((DriverWrapper) d).wrapped().getClass().getCanonicalName().equals(driverClass)) {
+          driver = d;
+        }
+      } else if (d.getClass().getCanonicalName().equals(driverClass)) {
+        driver = d;
+      }
+      if (driver != null) {
+        break;
+      }
+    }
+
+    Preconditions.checkNotNull(driver, String.format("Did not find registered driver with class %s", driverClass));
+
+    Properties properties = new Properties();
+    properties.putAll(options);
+    Connection connect = null;
+    String url = options.get(JDBCOptions.JDBC_URL());
+    connect = driver.connect(url, properties);
+    Preconditions.checkNotNull(connect, String.format("The driver could not open a JDBC connection. Check the URL: %s", url));
+    return connect;
+  }
+
+  /**
+   * Returns true if the table already exists in the JDBC database.
+   */
+  private static Boolean tableExists(Connection conn, Map<String, String> options) {
+    JdbcDialect dialect = JdbcDialects.get(options.get(JDBCOptions.JDBC_URL()));
+    try (PreparedStatement statement = conn.prepareStatement(dialect.getTableExistsQuery(options.get(JDBCOptions.JDBC_TABLE_NAME())))) {
+      statement.setQueryTimeout(Integer.parseInt(options.get(JDBCOptions.JDBC_QUERY_TIMEOUT())));
+      statement.executeQuery();
+    } catch (SQLException e) {
+      return false;
+    }
+    return true;
+  }
+
+  /***
+   * call spark function get the schema through jdbc.
+   * The code logic implementation refers to spark 2.4.x and spark 3.x.
+   * @param options
+   * @return
+   * @throws Exception
+   */
+  public static Schema getJDBCSchema(Map<String, String> options) throws Exception {
+    Connection conn = createConnectionFactory(options);
+    String url = options.get(JDBCOptions.JDBC_URL());
+    String table = options.get(JDBCOptions.JDBC_TABLE_NAME());
+    boolean tableExists = tableExists(conn,options);
+
+    if (tableExists) {
+      JdbcDialect dialect = JdbcDialects.get(url);
+      try (PreparedStatement statement = conn.prepareStatement(dialect.getSchemaQuery(table))) {
+        statement.setQueryTimeout(Integer.parseInt(options.get("queryTimeout")));
+        try (ResultSet rs = statement.executeQuery()) {
+          StructType structType;
+          if (Boolean.parseBoolean(options.get("nullable"))) {
+            structType = JdbcUtils.getSchema(rs, dialect, true);
+          } else {
+            structType = JdbcUtils.getSchema(rs, dialect, false);
+          }
+          return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
+        }
+      }
+    } else {
+      throw new HoodieException(String.format("%s table does not exists!", table));
+    }
   }
 }
