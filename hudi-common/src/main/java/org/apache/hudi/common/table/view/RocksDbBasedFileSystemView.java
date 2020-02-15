@@ -188,7 +188,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
-  /**
+  /*
    * This is overridden to incrementally apply file-slices to rocks DB
    */
   protected void applyDeltaFileSlicesToPartitionView(String partition, List<HoodieFileGroup> deltaFileGroups,

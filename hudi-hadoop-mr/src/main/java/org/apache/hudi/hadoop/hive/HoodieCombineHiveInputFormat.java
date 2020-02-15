@@ -21,7 +21,6 @@ package org.apache.hudi.hadoop.hive;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -381,7 +380,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       }
 
       // Use HiveInputFormat if any of the paths is not splittable
-      Class inputFormatClass = part.getInputFileFormatClass();
+      Class<?> inputFormatClass = part.getInputFileFormatClass();
       String inputFormatClassName = inputFormatClass.getName();
       InputFormat inputFormat = getInputFormatFromCache(inputFormatClass, job);
       LOG.info("Input Format => " + inputFormatClass.getName());
@@ -484,7 +483,6 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
   /**
    * Gets all the path indices that should not be combined.
    */
-  @VisibleForTesting
   public Set<Integer> getNonCombinablePathIndices(JobConf job, Path[] paths, int numThreads)
       throws ExecutionException, InterruptedException {
     LOG.info("Total number of paths: " + paths.length + ", launching " + numThreads
@@ -719,7 +717,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     CombineHiveInputSplit hsplit = (CombineHiveInputSplit) split;
 
     String inputFormatClassName = null;
-    Class inputFormatClass;
+    Class<?> inputFormatClass;
     try {
       inputFormatClassName = hsplit.inputFormatClassName();
       inputFormatClass = job.getClassByName(inputFormatClassName);
@@ -865,7 +863,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         }
       }
 
-      return (CombineFileSplit[]) inputSplitShims.toArray(new HadoopShimsSecure.InputSplitShim[inputSplitShims.size()]);
+      return inputSplitShims.toArray(new HadoopShimsSecure.InputSplitShim[inputSplitShims.size()]);
     }
 
     @Override

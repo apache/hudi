@@ -62,7 +62,6 @@ import static org.junit.Assert.fail;
 
 public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
-  private String schemaStr;
   private Schema schema;
 
   public TestHoodieGlobalBloomIndex() {
@@ -73,7 +72,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     initSparkContexts("TestHoodieGlobalBloomIndex");
     initPath();
     // We have some records to be tagged (two different partitions)
-    schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
+    String schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
     schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
     initMetaClient();
   }

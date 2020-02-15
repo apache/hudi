@@ -52,6 +52,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -407,11 +408,11 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
 
     // We create three parquet file, each having one record. (two different partitions)
     String filename1 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record1), schema, null, true);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Collections.singletonList(record1), schema, null, true);
     String filename2 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record2), schema, null, true);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Collections.singletonList(record2), schema, null, true);
     String filename3 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Arrays.asList(record4), schema, null, true);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Collections.singletonList(record4), schema, null, true);
 
     // We do the tag again
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -431,7 +432,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
           assertEquals(FSUtils.getFileId(filename2), record._2.get().getRight());
         }
       } else if (record._1.getRecordKey().equals("3eb5b87c-1fej-4edd-87b4-6ec96dc405a0")) {
-        assertTrue(!record._2.isPresent());
+        assertFalse(record._2.isPresent());
       }
     }
   }
@@ -456,7 +457,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         BloomFilterTypeCode.SIMPLE.name());
     filter.add(record2.getRecordKey());
     String filename =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record1), schema, filter, true);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Collections.singletonList(record1), schema, filter, true);
     assertTrue(filter.mightContain(record1.getRecordKey()));
     assertTrue(filter.mightContain(record2.getRecordKey()));
 
@@ -472,7 +473,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     // Check results
     for (HoodieRecord record : taggedRecordRDD.collect()) {
       if (record.getKey().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")) {
-        assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename)));
+        assertEquals(record.getCurrentLocation().getFileId(), FSUtils.getFileId(filename));
       } else if (record.getRecordKey().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0")) {
         assertFalse(record.isCurrentLocationKnown());
       }

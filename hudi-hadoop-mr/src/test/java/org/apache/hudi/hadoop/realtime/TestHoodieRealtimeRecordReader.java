@@ -37,7 +37,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.InputFormatTestUtil;
 
-import com.google.common.collect.Maps;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.IndexedRecord;
@@ -69,6 +68,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -109,7 +109,7 @@ public class TestHoodieRealtimeRecordReader {
         .overBaseCommit(baseCommit).withFs(fs).withLogVersion(logVersion).withLogWriteToken("1-0-1")
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
     // generate metadata
-    Map<HeaderMetadataType, String> header = Maps.newHashMap();
+    Map<HeaderMetadataType, String> header = new HashMap<>();
     header.put(HeaderMetadataType.INSTANT_TIME, newCommit);
     header.put(HeaderMetadataType.TARGET_INSTANT_TIME, rolledBackInstant);
     header.put(HeaderMetadataType.COMMAND_BLOCK_TYPE,
@@ -130,7 +130,7 @@ public class TestHoodieRealtimeRecordReader {
       records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
     }
     Schema writeSchema = records.get(0).getSchema();
-    Map<HeaderMetadataType, String> header = Maps.newHashMap();
+    Map<HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchema.toString());
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
@@ -144,7 +144,7 @@ public class TestHoodieRealtimeRecordReader {
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).overBaseCommit(baseCommit)
         .withLogVersion(logVersion).withFs(fs).build();
 
-    Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, oldCommit);
