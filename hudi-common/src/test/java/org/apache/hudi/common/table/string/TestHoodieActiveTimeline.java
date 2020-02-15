@@ -28,16 +28,17 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 
-import com.google.common.collect.Sets;
 import org.apache.hadoop.fs.Path;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
+import com.google.common.collect.Sets;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -177,11 +178,11 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   @Test
   public void testTimelineGetOperations() {
     List<HoodieInstant> allInstants = getAllInstants();
-    Supplier<Stream<HoodieInstant>> sup = () -> allInstants.stream();
+    Supplier<Stream<HoodieInstant>> sup = allInstants::stream;
     timeline = new HoodieActiveTimeline(metaClient, true);
     timeline.setInstants(allInstants);
 
-    /**
+    /*
      * Helper function to check HoodieTimeline only contains some type of Instant actions.
      * @param timeline The HoodieTimeline to check
      * @param actions The actions that should be present in the timeline being checked
@@ -197,13 +198,13 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
             Sets.newHashSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION));
     checkTimeline.accept(timeline.getCommitsAndCompactionTimeline(),
             Sets.newHashSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION));
-    checkTimeline.accept(timeline.getCommitTimeline(), Sets.newHashSet(HoodieTimeline.COMMIT_ACTION));
+    checkTimeline.accept(timeline.getCommitTimeline(), Collections.singleton(HoodieTimeline.COMMIT_ACTION));
 
-    checkTimeline.accept(timeline.getDeltaCommitTimeline(), Sets.newHashSet(HoodieTimeline.DELTA_COMMIT_ACTION));
-    checkTimeline.accept(timeline.getCleanerTimeline(), Sets.newHashSet(HoodieTimeline.CLEAN_ACTION));
-    checkTimeline.accept(timeline.getRollbackTimeline(), Sets.newHashSet(HoodieTimeline.ROLLBACK_ACTION));
-    checkTimeline.accept(timeline.getRestoreTimeline(), Sets.newHashSet(HoodieTimeline.RESTORE_ACTION));
-    checkTimeline.accept(timeline.getSavePointTimeline(), Sets.newHashSet(HoodieTimeline.SAVEPOINT_ACTION));
+    checkTimeline.accept(timeline.getDeltaCommitTimeline(), Collections.singleton(HoodieTimeline.DELTA_COMMIT_ACTION));
+    checkTimeline.accept(timeline.getCleanerTimeline(), Collections.singleton(HoodieTimeline.CLEAN_ACTION));
+    checkTimeline.accept(timeline.getRollbackTimeline(), Collections.singleton(HoodieTimeline.ROLLBACK_ACTION));
+    checkTimeline.accept(timeline.getRestoreTimeline(), Collections.singleton(HoodieTimeline.RESTORE_ACTION));
+    checkTimeline.accept(timeline.getSavePointTimeline(), Collections.singleton(HoodieTimeline.SAVEPOINT_ACTION));
     checkTimeline.accept(timeline.getAllCommitsTimeline(),
             Sets.newHashSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION,
                     HoodieTimeline.CLEAN_ACTION, HoodieTimeline.COMPACTION_ACTION,
@@ -212,8 +213,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // Get some random Instants
     Random rand = new Random();
     Set<String> randomInstants = sup.get().filter(i -> rand.nextBoolean())
-                                          .map(i -> i.getAction())
-                                          .collect(Collectors.toSet());
+                                          .map(HoodieInstant::getAction).collect(Collectors.toSet());
     checkTimeline.accept(timeline.getTimelineOfActions(randomInstants), randomInstants);
   }
 
@@ -318,7 +318,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
     timeline.setInstants(allInstants);
     timeline.createNewInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "2"));
-    allInstants.stream().map(i -> i.getTimestamp()).forEach(s -> assertTrue(timeline.containsOrBeforeTimelineStarts(s)));
+    allInstants.stream().map(HoodieInstant::getTimestamp).forEach(s -> assertTrue(timeline.containsOrBeforeTimelineStarts(s)));
     assertTrue(timeline.containsOrBeforeTimelineStarts("0"));
     assertFalse(timeline.containsOrBeforeTimelineStarts(String.valueOf(System.currentTimeMillis() + 1000)));
     assertFalse(timeline.getTimelineHash().isEmpty());
@@ -356,7 +356,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   @Test
   public void testFiltering() {
     List<HoodieInstant> allInstants = getAllInstants();
-    Supplier<Stream<HoodieInstant>> sup = () -> allInstants.stream();
+    Supplier<Stream<HoodieInstant>> sup = allInstants::stream;
 
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.setInstants(allInstants);
@@ -368,7 +368,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     Collections.reverse(v2);
     assertEquals(v1, v2);
 
-    /**
+    /*
      * Helper function to check HoodieTimeline only contains some type of Instant states.
      * @param timeline The HoodieTimeline to check
      * @param states The states that should be present in the timeline being checked
@@ -378,8 +378,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       sup.get().filter(i -> !states.contains(i.getState())).forEach(i -> assertFalse(timeline.containsInstant(i)));
     };
 
-    checkFilter.accept(timeline.filter(i -> false), Sets.newHashSet());
-    checkFilter.accept(timeline.filterInflights(), Sets.newHashSet(State.INFLIGHT));
+    checkFilter.accept(timeline.filter(i -> false), new HashSet<>());
+    checkFilter.accept(timeline.filterInflights(), Collections.singleton(State.INFLIGHT));
     checkFilter.accept(timeline.filterInflightsAndRequested(),
             Sets.newHashSet(State.INFLIGHT, State.REQUESTED));
 
@@ -387,7 +387,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // This cannot be done using checkFilter as it involves both states and actions
     final HoodieTimeline t1 = timeline.filterCompletedAndCompactionInstants();
     final Set<State> states = Sets.newHashSet(State.REQUESTED, State.COMPLETED);
-    final Set<String> actions = Sets.newHashSet(HoodieTimeline.COMPACTION_ACTION);
+    final Set<String> actions = Collections.singleton(HoodieTimeline.COMPACTION_ACTION);
     sup.get().filter(i -> states.contains(i.getState()) || actions.contains(i.getAction()))
         .forEach(i -> assertTrue(t1.containsInstant(i)));
     sup.get().filter(i -> !(states.contains(i.getState()) || actions.contains(i.getAction())))
@@ -395,9 +395,9 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
     // filterPendingCompactionTimeline
     final HoodieTimeline t2 = timeline.filterPendingCompactionTimeline();
-    sup.get().filter(i -> i.getAction() == HoodieTimeline.COMPACTION_ACTION)
+    sup.get().filter(i -> i.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
         .forEach(i -> assertTrue(t2.containsInstant(i)));
-    sup.get().filter(i -> i.getAction() != HoodieTimeline.COMPACTION_ACTION)
+    sup.get().filter(i -> !i.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
         .forEach(i -> assertFalse(t2.containsInstant(i)));
   }
 
@@ -407,7 +407,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
    */
   private List<HoodieInstant> getAllInstants() {
     timeline = new HoodieActiveTimeline(metaClient);
-    List<HoodieInstant> allInstants = new ArrayList<HoodieInstant>();
+    List<HoodieInstant> allInstants = new ArrayList<>();
     long commitTime = 1;
     for (State state : State.values()) {
       if (state == State.INVALID) {
@@ -417,19 +417,19 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         // Following are not valid combinations of actions and state so we should
         // not be generating them.
         if (state == State.REQUESTED) {
-          if (action == HoodieTimeline.SAVEPOINT_ACTION || action == HoodieTimeline.RESTORE_ACTION
-              || action == HoodieTimeline.ROLLBACK_ACTION) {
+          if (action.equals(HoodieTimeline.SAVEPOINT_ACTION) || action.equals(HoodieTimeline.RESTORE_ACTION)
+              || action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
             continue;
           }
         }
-        if (state == State.INFLIGHT && action == HoodieTimeline.ROLLBACK_ACTION) {
+        if (state == State.INFLIGHT && action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
           continue;
         }
-        if (state == State.COMPLETED && action == HoodieTimeline.ROLLBACK_ACTION) {
+        if (state == State.COMPLETED && action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
           continue;
         }
         // Compaction complete is called commit complete
-        if (state == State.COMPLETED && action == HoodieTimeline.COMPACTION_ACTION) {
+        if (state == State.COMPLETED && action.equals(HoodieTimeline.COMPACTION_ACTION)) {
           action = HoodieTimeline.COMMIT_ACTION;
         }
 

@@ -33,14 +33,15 @@ import org.apache.hudi.io.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.io.compact.strategy.UnBoundedPartitionAwareCompactionStrategy;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -57,11 +58,11 @@ public class TestHoodieCompactionStrategy {
 
   @Test
   public void testUnBounded() {
-    Map<Long, List<Long>> sizesMap = Maps.newHashMap();
-    sizesMap.put(120 * MB, Lists.newArrayList(60 * MB, 10 * MB, 80 * MB));
-    sizesMap.put(110 * MB, Lists.newArrayList());
-    sizesMap.put(100 * MB, Lists.newArrayList(MB));
-    sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
+    Map<Long, List<Long>> sizesMap = new HashMap<>();
+    sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
+    sizesMap.put(110 * MB, new ArrayList<>());
+    sizesMap.put(100 * MB, Collections.singletonList(MB));
+    sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
     UnBoundedCompactionStrategy strategy = new UnBoundedCompactionStrategy();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).build()).build();
@@ -72,11 +73,11 @@ public class TestHoodieCompactionStrategy {
 
   @Test
   public void testBoundedIOSimple() {
-    Map<Long, List<Long>> sizesMap = Maps.newHashMap();
-    sizesMap.put(120 * MB, Lists.newArrayList(60 * MB, 10 * MB, 80 * MB));
-    sizesMap.put(110 * MB, Lists.newArrayList());
-    sizesMap.put(100 * MB, Lists.newArrayList(MB));
-    sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
+    Map<Long, List<Long>> sizesMap = new HashMap<>();
+    sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
+    sizesMap.put(110 * MB, new ArrayList<>());
+    sizesMap.put(100 * MB, Collections.singletonList(MB));
+    sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
     BoundedIOCompactionStrategy strategy = new BoundedIOCompactionStrategy();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
         HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(400).build())
@@ -95,11 +96,11 @@ public class TestHoodieCompactionStrategy {
 
   @Test
   public void testLogFileSizeCompactionSimple() {
-    Map<Long, List<Long>> sizesMap = Maps.newHashMap();
-    sizesMap.put(120 * MB, Lists.newArrayList(60 * MB, 10 * MB, 80 * MB));
-    sizesMap.put(110 * MB, Lists.newArrayList());
-    sizesMap.put(100 * MB, Lists.newArrayList(MB));
-    sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
+    Map<Long, List<Long>> sizesMap = new HashMap<>();
+    sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
+    sizesMap.put(110 * MB, new ArrayList<>());
+    sizesMap.put(100 * MB, Collections.singletonList(MB));
+    sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
     LogFileSizeBasedCompactionStrategy strategy = new LogFileSizeBasedCompactionStrategy();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
         HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(400).build())
@@ -119,11 +120,11 @@ public class TestHoodieCompactionStrategy {
 
   @Test
   public void testDayBasedCompactionSimple() {
-    Map<Long, List<Long>> sizesMap = Maps.newHashMap();
-    sizesMap.put(120 * MB, Lists.newArrayList(60 * MB, 10 * MB, 80 * MB));
-    sizesMap.put(110 * MB, Lists.newArrayList());
-    sizesMap.put(100 * MB, Lists.newArrayList(MB));
-    sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
+    Map<Long, List<Long>> sizesMap = new HashMap<>();
+    sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
+    sizesMap.put(110 * MB, new ArrayList<>());
+    sizesMap.put(100 * MB, Collections.singletonList(MB));
+    sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
 
     Map<Long, String> keyToPartitionMap = new ImmutableMap.Builder().put(120 * MB, partitionPaths[2])
         .put(110 * MB, partitionPaths[2]).put(100 * MB, partitionPaths[1]).put(90 * MB, partitionPaths[0]).build();
@@ -147,13 +148,13 @@ public class TestHoodieCompactionStrategy {
 
   @Test
   public void testBoundedPartitionAwareCompactionSimple() {
-    Map<Long, List<Long>> sizesMap = Maps.newHashMap();
-    sizesMap.put(120 * MB, Lists.newArrayList(60 * MB, 10 * MB, 80 * MB));
-    sizesMap.put(110 * MB, Lists.newArrayList());
-    sizesMap.put(100 * MB, Lists.newArrayList(MB));
-    sizesMap.put(70 * MB, Lists.newArrayList(MB));
-    sizesMap.put(80 * MB, Lists.newArrayList(MB));
-    sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
+    Map<Long, List<Long>> sizesMap = new HashMap<>();
+    sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
+    sizesMap.put(110 * MB, new ArrayList<>());
+    sizesMap.put(100 * MB, Collections.singletonList(MB));
+    sizesMap.put(70 * MB, Collections.singletonList(MB));
+    sizesMap.put(80 * MB, Collections.singletonList(MB));
+    sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
 
     SimpleDateFormat format = new SimpleDateFormat("yyyy/MM/dd");
     Date today = new Date();
@@ -189,13 +190,13 @@ public class TestHoodieCompactionStrategy {
 
   @Test
   public void testUnboundedPartitionAwareCompactionSimple() {
-    Map<Long, List<Long>> sizesMap = Maps.newHashMap();
-    sizesMap.put(120 * MB, Lists.newArrayList(60 * MB, 10 * MB, 80 * MB));
-    sizesMap.put(110 * MB, Lists.newArrayList());
-    sizesMap.put(100 * MB, Lists.newArrayList(MB));
-    sizesMap.put(80 * MB, Lists.newArrayList(MB));
-    sizesMap.put(70 * MB, Lists.newArrayList(MB));
-    sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
+    Map<Long, List<Long>> sizesMap = new HashMap<>();
+    sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
+    sizesMap.put(110 * MB, new ArrayList<>());
+    sizesMap.put(100 * MB, Collections.singletonList(MB));
+    sizesMap.put(80 * MB, Collections.singletonList(MB));
+    sizesMap.put(70 * MB, Collections.singletonList(MB));
+    sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
 
     SimpleDateFormat format = new SimpleDateFormat("yyyy/MM/dd");
     Date today = new Date();

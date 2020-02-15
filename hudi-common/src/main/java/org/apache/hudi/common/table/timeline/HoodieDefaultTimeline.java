@@ -31,6 +31,7 @@ import org.apache.log4j.Logger;
 import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -95,9 +96,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public HoodieTimeline filterPendingExcludingCompaction() {
-    return new HoodieDefaultTimeline(instants.stream().filter(instant -> {
-      return (!instant.isCompleted()) && (!instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
-    }), details);
+    return new HoodieDefaultTimeline(instants.stream().filter(instant -> (!instant.isCompleted())
+            && (!instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION))), details);
   }
 
   @Override
@@ -107,9 +107,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public HoodieTimeline filterCompletedAndCompactionInstants() {
-    return new HoodieDefaultTimeline(instants.stream().filter(s -> {
-      return !s.isInflight() || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION);
-    }), details);
+    return new HoodieDefaultTimeline(instants.stream().filter(s -> !s.isInflight()
+            || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)), details);
   }
 
   @Override
@@ -127,8 +126,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieDefaultTimeline findInstantsInRange(String startTs, String endTs) {
     return new HoodieDefaultTimeline(
-        instants.stream().filter(s -> HoodieTimeline.isInRange(s.getTimestamp(), startTs, endTs)),
-        details);
+        instants.stream().filter(s -> HoodieTimeline.isInRange(s.getTimestamp(), startTs, endTs)), details);
   }
 
   @Override
@@ -163,7 +161,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    * Get only pure commits (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getCommitTimeline() {
-    return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION));
+    return getTimelineOfActions(Collections.singleton(COMMIT_ACTION));
   }
 
   /**

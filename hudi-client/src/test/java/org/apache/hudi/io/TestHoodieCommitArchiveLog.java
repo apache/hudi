@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import com.google.common.collect.Sets;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.junit.After;
@@ -39,6 +38,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -376,7 +376,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   }
 
   @Test
-  public void checkArchiveCommitTimeline() throws IOException, InterruptedException {
+  public void checkArchiveCommitTimeline() throws IOException {
     HoodieWriteConfig cfg =
             HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
                     .withParallelism(2, 2).forTable("test-trip-table")
@@ -403,12 +403,12 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
 
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
     List<HoodieInstant> archivedInstants = Arrays.asList(instant1, instant2, instant3);
-    assertEquals(new HashSet(archivedInstants), archivedTimeline.getInstants().collect(Collectors.toSet()));
+    assertEquals(new HashSet<>(archivedInstants), archivedTimeline.getInstants().collect(Collectors.toSet()));
   }
 
   private void verifyInflightInstants(HoodieTableMetaClient metaClient, int expectedTotalInstants) {
     HoodieTimeline timeline = metaClient.getActiveTimeline().reload()
-        .getTimelineOfActions(Sets.newHashSet(HoodieTimeline.CLEAN_ACTION)).filterInflights();
+        .getTimelineOfActions(Collections.singleton(HoodieTimeline.CLEAN_ACTION)).filterInflights();
     assertEquals("Loaded inflight clean actions and the count should match", expectedTotalInstants,
         timeline.countInstants());
   }

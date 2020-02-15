@@ -47,8 +47,6 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -351,7 +349,7 @@ public class HoodieTestUtils {
           .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
           .overBaseCommit(location.getInstantTime()).withFs(fs).build();
 
-        Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+        Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
         header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, location.getInstantTime());
         header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
         logWriter.appendBlock(new HoodieAvroDataBlock(value.stream().map(r -> {
@@ -372,7 +370,7 @@ public class HoodieTestUtils {
 
   public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath) throws IOException {
     RemoteIterator<LocatedFileStatus> itr = fs.listFiles(new Path(basePath), true);
-    List<FileStatus> returns = Lists.newArrayList();
+    List<FileStatus> returns = new ArrayList<>();
     while (itr.hasNext()) {
       LocatedFileStatus status = itr.next();
       if (status.getPath().getName().contains(".parquet")) {
