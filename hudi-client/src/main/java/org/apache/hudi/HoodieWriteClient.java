@@ -101,7 +101,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
 
   /**
-   * Create a wirte client, without cleaning up failed/inflight commits.
+   * Create a write client, without cleaning up failed/inflight commits.
    *
    * @param jsc Java Spark Context
    * @param clientConfig instance of HoodieWriteConfig
@@ -111,7 +111,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Create a wirte client, with new hudi index.
+   * Create a write client, with new hudi index.
    *
    * @param jsc Java Spark Context
    * @param clientConfig instance of HoodieWriteConfig
@@ -127,7 +127,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   *  Create a wirte client, allows to specify all parameters.
+   *  Create a write client, allows to specify all parameters.
    *
    * @param jsc Java Spark Context
    * @param clientConfig instance of HoodieWriteConfig
@@ -1054,7 +1054,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   /**
    * Perform compaction operations as specified in the compaction commit file.
    *
-   * @param compactionInstant Compacton Instant time
+   * @param compactionInstant Compaction Instant time
    * @param activeTimeline Active Timeline
    * @param autoCommit Commit after compaction
    * @return RDD of Write Status
