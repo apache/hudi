@@ -24,7 +24,6 @@ import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -220,7 +219,6 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
    * HoodieLogFormat V1.
    */
   @Deprecated
-  @VisibleForTesting
   public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema) {
     super(new HashMap<>(), new HashMap<>(), Option.empty(), Option.empty(), null, false);
     this.records = records;
@@ -264,7 +262,6 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
   }
 
   @Deprecated
-  @VisibleForTesting
   public byte[] getBytes(Schema schema) throws IOException {
 
     GenericDatumWriter<IndexedRecord> writer = new GenericDatumWriter<>(schema);

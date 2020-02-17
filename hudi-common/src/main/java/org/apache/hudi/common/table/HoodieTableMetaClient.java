@@ -84,7 +84,7 @@ public class HoodieTableMetaClient implements Serializable {
   private HoodieArchivedTimeline archivedTimeline;
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
 
-  public HoodieTableMetaClient(Configuration conf, String basePath) throws TableNotFoundException {
+  public HoodieTableMetaClient(Configuration conf, String basePath) {
     // Do not load any timeline by default
     this(conf, basePath, false);
   }
@@ -104,8 +104,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
-      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion, String payloadClassName)
-      throws TableNotFoundException {
+      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion, String payloadClassName) {
     LOG.info("Loading HoodieTableMetaClient from " + basePath);
     this.basePath = basePath;
     this.consistencyGuardConfig = consistencyGuardConfig;

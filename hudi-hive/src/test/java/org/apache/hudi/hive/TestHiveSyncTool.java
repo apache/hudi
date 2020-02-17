@@ -38,7 +38,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -47,7 +46,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-@SuppressWarnings("ConstantConditions")
 @RunWith(Parameterized.class)
 public class TestHiveSyncTool {
 
@@ -64,7 +62,7 @@ public class TestHiveSyncTool {
   }
 
   @Before
-  public void setUp() throws IOException, InterruptedException, URISyntaxException {
+  public void setUp() throws IOException, InterruptedException {
     TestUtil.setUp();
   }
 

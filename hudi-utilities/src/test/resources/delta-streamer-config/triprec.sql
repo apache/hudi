@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,24 +15,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.hudi.utilities.transform;
-
-import org.apache.hudi.common.util.TypedProperties;
-
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
-
-/**
- * Identity transformer.
- */
-public class IdentityTransformer implements Transformer {
-
-  @Override
-  public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
-      TypedProperties properties) {
-    return rowDataset;
-  }
-}
+CREATE TABLE triprec (
+    id          INT NOT NULL,
+    timestamp   DOUBLE,
+    rider       VARCHAR(200),
+    driver      VARCHAR(200),
+    begin_lat   DOUBLE,
+    begin_lon   DOUBLE,
+    end_lat     DOUBLE,
+    end_lon     DOUBLE,
+    fare        DOUBLE
+);

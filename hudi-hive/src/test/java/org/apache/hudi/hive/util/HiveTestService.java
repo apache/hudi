@@ -290,11 +290,11 @@ public class HiveTestService {
             ? new ChainedTTransportFactory(new TFramedTransport.Factory(), new TUGIContainingTransport.Factory())
             : new TUGIContainingTransport.Factory();
 
-        processor = new TUGIBasedProcessor<IHMSHandler>(handler);
+        processor = new TUGIBasedProcessor<>(handler);
         LOG.info("Starting DB backed MetaStore Server with SetUGI enabled");
       } else {
         transFactory = useFramedTransport ? new TFramedTransport.Factory() : new TTransportFactory();
-        processor = new TSetIpAddressProcessor<IHMSHandler>(handler);
+        processor = new TSetIpAddressProcessor<>(handler);
         LOG.info("Starting DB backed MetaStore Server");
       }
 
@@ -303,12 +303,7 @@ public class HiveTestService {
           .minWorkerThreads(minWorkerThreads).maxWorkerThreads(maxWorkerThreads);
 
       final TServer tServer = new TThreadPoolServer(args);
-      executorService.submit(new Runnable() {
-        @Override
-        public void run() {
-          tServer.serve();
-        }
-      });
+      executorService.submit(tServer::serve);
       return tServer;
     } catch (Throwable x) {
       throw new IOException(x);

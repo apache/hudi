@@ -531,7 +531,7 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   /**
-   * Async Compactor Service tha runs in separate thread. Currently, only one compactor is allowed to run at any time.
+   * Async Compactor Service that runs in separate thread. Currently, only one compactor is allowed to run at any time.
    */
   public static class AsyncCompactService extends AbstractDeltaStreamerService {
 

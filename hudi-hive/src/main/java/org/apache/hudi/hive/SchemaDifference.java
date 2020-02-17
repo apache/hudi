@@ -21,10 +21,10 @@ package org.apache.hudi.hive;
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import org.apache.parquet.schema.MessageType;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -85,9 +85,9 @@ public class SchemaDifference {
     public Builder(MessageType storageSchema, Map<String, String> tableSchema) {
       this.storageSchema = storageSchema;
       this.tableSchema = tableSchema;
-      deleteColumns = Lists.newArrayList();
-      updateColumnTypes = Maps.newHashMap();
-      addColumnTypes = Maps.newHashMap();
+      deleteColumns = new ArrayList<>();
+      updateColumnTypes = new HashMap<>();
+      addColumnTypes = new HashMap<>();
     }
 
     public Builder deleteTableColumn(String column) {

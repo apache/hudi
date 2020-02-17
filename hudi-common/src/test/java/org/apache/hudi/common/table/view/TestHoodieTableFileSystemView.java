@@ -41,7 +41,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -221,7 +220,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
    */
   public Stream<FileSlice> getLatestRawFileSlices(String partitionPath) {
     return fsView.getAllFileGroups(partitionPath).map(HoodieFileGroup::getLatestFileSlicesIncludingInflight)
-        .filter(fileSliceOpt -> fileSliceOpt.isPresent()).map(Option::get);
+        .filter(Option::isPresent).map(Option::get);
   }
 
   /**
@@ -234,7 +233,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
    * @param expTotalFileSlices Total number of file-slices across file-groups in the partition path
    * @param expTotalDataFiles Total number of data-files across file-groups in the partition path
    * @param includeInvalidAndInflight Whether view includes inflight and invalid file-groups.
-   * @throws Exception
+   * @throws Exception -
    */
   protected void testViewForFileSlicesWithAsyncCompaction(boolean skipCreatingDataFile, boolean isCompactionInFlight,
       int expTotalFileSlices, int expTotalDataFiles, boolean includeInvalidAndInflight) throws Exception {
@@ -322,7 +321,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       assertEquals("Expect only valid data-file", dataFileName, dataFiles.get(0).getFileName());
     }
 
-    /** Merge API Tests **/
+    // Merge API Tests
     List<FileSlice> fileSliceList =
         rtView.getLatestMergedFileSlicesBeforeOrOn(partitionPath, deltaInstantTime5).collect(Collectors.toList());
     assertEquals("Expect file-slice to be merged", 1, fileSliceList.size());
@@ -355,7 +354,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals("Log File Order check", fileName4, logFiles.get(0).getFileName());
     assertEquals("Log File Order check", fileName3, logFiles.get(1).getFileName());
 
-    /** Data Files API tests */
+    // Data Files API tests
     dataFiles = roView.getLatestBaseFiles().collect(Collectors.toList());
     if (skipCreatingDataFile) {
       assertEquals("Expect no data file to be returned", 0, dataFiles.size());
@@ -385,7 +384,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       dataFiles.forEach(df -> assertEquals("Expect data-file for instant 1 be returned", df.getCommitTime(), instantTime1));
     }
 
-    /** Inflight/Orphan File-groups needs to be in the view **/
+    // Inflight/Orphan File-groups needs to be in the view
 
     // There is a data-file with this inflight file-id
     final String inflightFileId1 = UUID.randomUUID().toString();
@@ -507,7 +506,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals("Log File Order check", fileName4, logFiles.get(0).getFileName());
     assertEquals("Log File Order check", fileName3, logFiles.get(1).getFileName());
 
-    /** Data Files API tests */
+    // Data Files API tests
     dataFiles = roView.getLatestBaseFiles().collect(Collectors.toList());
     assertEquals("Expect only one data-file to be sent", 1, dataFiles.size());
     dataFiles.forEach(df -> assertEquals("Expect data-file created by compaction be returned", df.getCommitTime(), compactionRequestedTime));
@@ -652,7 +651,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     List<HoodieBaseFile> dataFileList =
         roView.getLatestBaseFilesBeforeOrOn("2016/05/01", commitTime4).collect(Collectors.toList());
     assertEquals(3, dataFileList.size());
-    Set<String> filenames = Sets.newHashSet();
+    Set<String> filenames = new HashSet<>();
     for (HoodieBaseFile status : dataFileList) {
       filenames.add(status.getFileName());
     }
@@ -660,7 +659,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, fileId2)));
     assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)));
 
-    filenames = Sets.newHashSet();
+    filenames = new HashSet<>();
     List<HoodieLogFile> logFilesList = rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime4, true)
         .map(FileSlice::getLogFiles).flatMap(logFileList -> logFileList).collect(Collectors.toList());
     assertEquals(logFilesList.size(), 4);
@@ -679,7 +678,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     // Reset the max commit time
     List<HoodieBaseFile> dataFiles =
         roView.getLatestBaseFilesBeforeOrOn("2016/05/01", commitTime3).collect(Collectors.toList());
-    filenames = Sets.newHashSet();
+    filenames = new HashSet<>();
     for (HoodieBaseFile status : dataFiles) {
       filenames.add(status.getFileName());
     }
@@ -739,7 +738,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     for (HoodieFileGroup fileGroup : fileGroups) {
       String fileId = fileGroup.getFileGroupId().getFileId();
-      Set<String> filenames = Sets.newHashSet();
+      Set<String> filenames = new HashSet<>();
       fileGroup.getAllBaseFiles().forEach(dataFile -> {
         assertEquals("All same fileId should be grouped", fileId, dataFile.getFileId());
         filenames.add(dataFile.getFileName());
@@ -817,7 +816,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     List<HoodieBaseFile> dataFiles =
         roView.getLatestBaseFilesInRange(Lists.newArrayList(commitTime2, commitTime3)).collect(Collectors.toList());
     assertEquals(isLatestFileSliceOnly ? 2 : 3, dataFiles.size());
-    Set<String> filenames = Sets.newHashSet();
+    Set<String> filenames = new HashSet<>();
     for (HoodieBaseFile status : dataFiles) {
       filenames.add(status.getFileName());
     }
@@ -888,7 +887,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         roView.getLatestBaseFilesBeforeOrOn(partitionPath, commitTime2).collect(Collectors.toList());
     if (!isLatestFileSliceOnly) {
       assertEquals(2, dataFiles.size());
-      Set<String> filenames = Sets.newHashSet();
+      Set<String> filenames = new HashSet<>();
       for (HoodieBaseFile status : dataFiles) {
         filenames.add(status.getFileName());
       }
@@ -983,7 +982,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     List<HoodieBaseFile> statuses1 = roView.getLatestBaseFiles().collect(Collectors.toList());
     assertEquals(3, statuses1.size());
-    Set<String> filenames = Sets.newHashSet();
+    Set<String> filenames = new HashSet<>();
     for (HoodieBaseFile status : statuses1) {
       filenames.add(status.getFileName());
     }
@@ -1100,7 +1099,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals("One data-file is expected as there is only one file-group", 1, dataFiles.size());
     assertEquals("Expect only valid commit", "1", dataFiles.get(0).getCommitTime());
 
-    /** Merge API Tests **/
+    // Merge API Tests
     Arrays.asList(partitionPath1, partitionPath2, partitionPath3).forEach(partitionPath -> {
       List<FileSlice> fileSliceList =
           rtView.getLatestMergedFileSlicesBeforeOrOn(partitionPath, deltaInstantTime5).collect(Collectors.toList());
