@@ -101,7 +101,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   public static final String PROPS_FILENAME_TEST_SOURCE1 = "test-source1.properties";
   private static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
   private static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
-  private static final String PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
+  private static String PARQUET_SOURCE_ROOT;
   private static final int PARQUET_NUM_RECORDS = 5;
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
   public static KafkaTestUtils testUtils;
@@ -111,6 +111,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   @BeforeClass
   public static void initClass() throws Exception {
     UtilitiesTestBase.initClass(true);
+    PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
     testUtils = new KafkaTestUtils();
     testUtils.setup();
 
@@ -183,8 +184,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
 
     //Kafka source properties
-    props.setProperty("metadata.broker.list", testUtils.brokerAddress());
-    props.setProperty("auto.offset.reset", "smallest");
+    props.setProperty("bootstrap.servers", testUtils.brokerAddress());
+    props.setProperty("auto.offset.reset", "earliest");
     props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
     props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
     props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents", String.valueOf(5000));

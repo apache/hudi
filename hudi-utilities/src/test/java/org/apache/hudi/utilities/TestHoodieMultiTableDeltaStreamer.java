@@ -55,7 +55,7 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
       argsList.add(dfsBasePath + "/multi_table_dataset");
       argsList.add("--props");
       argsList.add(dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
-      argsList.add("--storage-type");
+      argsList.add("--table-type");
       argsList.add("COPY_ON_WRITE");
       argsList.add("--source-class");
       argsList.add(sourceClassName);
