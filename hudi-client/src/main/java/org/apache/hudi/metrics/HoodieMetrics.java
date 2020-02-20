@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.Timer;
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -187,7 +186,6 @@ public class HoodieMetrics {
     }
   }
 
-  @VisibleForTesting
   String getMetricsName(String action, String metric) {
     return config == null ? null : String.format("%s.%s.%s", tableName, action, metric);
   }

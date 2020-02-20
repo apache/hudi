@@ -16,7 +16,6 @@
 
 package org.apache.hudi.common.util;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -252,7 +251,6 @@ public class ObjectSizeCalculator {
     size += objectSize;
   }
 
-  @VisibleForTesting
   static long roundTo(long x, int multiple) {
     return ((x + multiple - 1) / multiple) * multiple;
   }
@@ -325,7 +323,6 @@ public class ObjectSizeCalculator {
     throw new AssertionError("Encountered unexpected primitive type " + type.getName());
   }
 
-  @VisibleForTesting
   static MemoryLayoutSpecification getEffectiveMemoryLayoutSpecification() {
     final String vmName = System.getProperty("java.vm.name");
     if (vmName == null || !(vmName.startsWith("Java HotSpot(TM) ") || vmName.startsWith("OpenJDK")

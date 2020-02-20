@@ -22,8 +22,6 @@ import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Comparator;
@@ -68,7 +66,6 @@ public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionS
         .filter(e -> comparator.compare(earliestPartitionPathToCompact, e) >= 0).collect(Collectors.toList());
   }
 
-  @VisibleForTesting
   public static Date getDateAtOffsetFromToday(int offset) {
     Calendar calendar = Calendar.getInstance();
     calendar.add(Calendar.DATE, offset);
