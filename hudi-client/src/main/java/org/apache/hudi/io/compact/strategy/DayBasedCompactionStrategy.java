@@ -23,8 +23,6 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Comparator;
@@ -55,7 +53,6 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
     }
   };
 
-  @VisibleForTesting
   public Comparator<String> getComparator() {
     return comparator;
   }

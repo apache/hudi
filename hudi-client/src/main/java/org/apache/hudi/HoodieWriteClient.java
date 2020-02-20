@@ -61,7 +61,6 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
 import com.codahale.metrics.Timer;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import org.apache.log4j.LogManager;
@@ -121,7 +120,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     this(jsc, clientConfig, rollbackPending, HoodieIndex.createIndex(clientConfig, jsc));
   }
 
-  @VisibleForTesting
   HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending, HoodieIndex index) {
     this(jsc, clientConfig, rollbackPending, index, Option.empty());
   }
@@ -1113,7 +1111,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @param inflightInstant Inflight Compaction Instant
    * @param table Hoodie Table
    */
-  @VisibleForTesting
   void rollbackInflightCompaction(HoodieInstant inflightInstant, HoodieTable table) throws IOException {
     table.rollback(jsc, inflightInstant, false);
     // Revert instant state file

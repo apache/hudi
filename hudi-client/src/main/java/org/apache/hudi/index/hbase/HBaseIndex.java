@@ -36,7 +36,6 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HRegionLocation;
@@ -114,7 +113,6 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     this.hBaseIndexQPSResourceAllocator = createQPSResourceAllocator(this.config);
   }
 
-  @VisibleForTesting
   public HBaseIndexQPSResourceAllocator createQPSResourceAllocator(HoodieWriteConfig config) {
     try {
       LOG.info("createQPSResourceAllocator :" + config.getHBaseQPSResourceAllocatorClass());
@@ -387,7 +385,6 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     }
   }
 
-  @VisibleForTesting
   public Tuple2<Long, Integer> getHBasePutAccessParallelism(final JavaRDD<WriteStatus> writeStatusRDD) {
     final JavaPairRDD<Long, Integer> insertOnlyWriteStatusRDD = writeStatusRDD
         .filter(w -> w.getStat().getNumInserts() > 0).mapToPair(w -> new Tuple2<>(w.getStat().getNumInserts(), 1));
@@ -497,7 +494,6 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     return false;
   }
 
-  @VisibleForTesting
   public void setHbaseConnection(Connection hbaseConnection) {
     HBaseIndex.hbaseConnection = hbaseConnection;
   }

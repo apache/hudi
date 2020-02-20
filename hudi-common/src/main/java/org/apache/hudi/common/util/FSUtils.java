@@ -28,7 +28,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -216,7 +215,6 @@ public class FSUtils {
    * @param excludeMetaFolder Exclude .hoodie folder
    * @throws IOException
    */
-  @VisibleForTesting
   static void processFiles(FileSystem fs, String basePathStr, Function<FileStatus, Boolean> consumer,
       boolean excludeMetaFolder) throws IOException {
     PathFilter pathFilter = excludeMetaFolder ? getExcludeMetaPathFilter() : ALLOW_ALL_FILTER;

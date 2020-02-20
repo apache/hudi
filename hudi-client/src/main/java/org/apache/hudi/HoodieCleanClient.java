@@ -37,7 +37,6 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 
 import com.codahale.metrics.Timer;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -108,7 +107,6 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
    * @param startCleanTime Cleaner Instant Time
    * @return Cleaner Plan if generated
    */
-  @VisibleForTesting
   protected Option<HoodieCleanerPlan> scheduleClean(String startCleanTime) {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
@@ -138,7 +136,6 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
    * @param table Hoodie Table
    * @param cleanInstant Cleaner Instant
    */
-  @VisibleForTesting
   protected HoodieCleanMetadata runClean(HoodieTable<T> table, HoodieInstant cleanInstant) {
     try {
       HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(table.getMetaClient(), cleanInstant);

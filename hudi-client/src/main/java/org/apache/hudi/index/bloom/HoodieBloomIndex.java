@@ -32,7 +32,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.HoodieRangeInfoHandle;
 import org.apache.hudi.table.HoodieTable;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -188,7 +187,6 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   /**
    * Load all involved files as <Partition, filename> pair RDD.
    */
-  @VisibleForTesting
   List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final JavaSparkContext jsc,
                                                              final HoodieTable hoodieTable) {
 
@@ -262,7 +260,6 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
    * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on
    * recordKey ranges in the index info.
    */
-  @VisibleForTesting
   JavaRDD<Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
@@ -289,7 +286,6 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
    * <p>
    * Make sure the parallelism is atleast the groupby parallelism for tagging location
    */
-  @VisibleForTesting
   JavaPairRDD<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD, int shuffleParallelism, HoodieTable hoodieTable,
