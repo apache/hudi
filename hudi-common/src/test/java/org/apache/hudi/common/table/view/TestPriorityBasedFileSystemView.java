@@ -51,7 +51,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @RunWith(MockitoJUnitRunner.class)
-public class PriorityBasedFileSystemViewTest extends TestCase {
+public class TestPriorityBasedFileSystemView extends TestCase {
 
   @Mock
   private SyncableFileSystemView primary;
