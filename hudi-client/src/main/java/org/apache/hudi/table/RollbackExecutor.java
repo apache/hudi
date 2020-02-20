@@ -32,7 +32,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.PathFilter;
@@ -47,6 +46,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import scala.Tuple2;
 
@@ -129,7 +129,7 @@ public class RollbackExecutor implements Serializable {
           // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
           // cloud-storage : HUDI-168
           Map<FileStatus, Long> filesToNumBlocksRollback = new HashMap<>();
-          filesToNumBlocksRollback.put(metaClient.getFs().getFileStatus(Preconditions.checkNotNull(writer).getLogFile().getPath()), 1L);
+          filesToNumBlocksRollback.put(metaClient.getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()), 1L);
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
                   HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
                           .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
@@ -215,7 +215,7 @@ public class RollbackExecutor implements Serializable {
 
   private Map<HeaderMetadataType, String> generateHeader(String commit) {
     // generate metadata
-    Map<HeaderMetadataType, String> header = Maps.newHashMap();
+    Map<HeaderMetadataType, String> header = new HashMap<>();
     header.put(HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().getTimestamp());
     header.put(HeaderMetadataType.TARGET_INSTANT_TIME, commit);
     header.put(HeaderMetadataType.COMMAND_BLOCK_TYPE,

@@ -268,11 +268,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
     this.seek(this.currentPosition);
 
     // if currentPosition is at start, EOF has been reached
-    if (this.currentPosition == this.validLastPosition) {
-      return false;
-    }
-
-    return true;
+    return this.currentPosition != this.validLastPosition;
   }
 
   /**

@@ -40,7 +40,6 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
-import com.google.common.collect.Lists;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -814,7 +813,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     roView.getAllBaseFiles("2016/05/01/");
 
     List<HoodieBaseFile> dataFiles =
-        roView.getLatestBaseFilesInRange(Lists.newArrayList(commitTime2, commitTime3)).collect(Collectors.toList());
+        roView.getLatestBaseFilesInRange(Arrays.asList(commitTime2, commitTime3)).collect(Collectors.toList());
     assertEquals(isLatestFileSliceOnly ? 2 : 3, dataFiles.size());
     Set<String> filenames = new HashSet<>();
     for (HoodieBaseFile status : dataFiles) {
@@ -828,7 +827,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     }
 
     List<FileSlice> slices =
-        rtView.getLatestFileSliceInRange(Lists.newArrayList(commitTime3, commitTime4)).collect(Collectors.toList());
+        rtView.getLatestFileSliceInRange(Arrays.asList(commitTime3, commitTime4)).collect(Collectors.toList());
     assertEquals(3, slices.size());
     for (FileSlice slice : slices) {
       if (slice.getFileId().equals(fileId1)) {

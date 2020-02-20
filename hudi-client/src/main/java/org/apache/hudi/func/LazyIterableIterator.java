@@ -33,7 +33,7 @@ import java.util.Iterator;
  */
 public abstract class LazyIterableIterator<I, O> implements Iterable<O>, Iterator<O> {
 
-  protected Iterator<I> inputItr = null;
+  protected Iterator<I> inputItr;
   private boolean consumed = false;
   private boolean startCalled = false;
   private boolean endCalled = false;

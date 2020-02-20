@@ -44,7 +44,6 @@ import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 
-import com.google.common.collect.Maps;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
@@ -56,6 +55,7 @@ import org.apache.spark.util.SizeEstimator;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -97,7 +97,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   // Max block size to limit to for a log block
   private int maxBlockSize = config.getLogFileDataBlockMaxSize();
   // Header metadata for a log block
-  private Map<HeaderMetadataType, String> header = Maps.newHashMap();
+  private Map<HeaderMetadataType, String> header = new HashMap<>();
   // Total number of new records inserted into the delta file
   private long insertRecordsWritten = 0;
 

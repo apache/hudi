@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.function.Function;
@@ -248,7 +249,7 @@ public class FSUtils {
   }
 
   public static String getFileExtension(String fullName) {
-    Preconditions.checkNotNull(fullName);
+    Objects.requireNonNull(fullName);
     String fileName = (new File(fullName)).getName();
     int dotIndex = fileName.indexOf('.');
     return dotIndex == -1 ? "" : fileName.substring(dotIndex);

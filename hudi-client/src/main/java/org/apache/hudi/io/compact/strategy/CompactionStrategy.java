@@ -28,9 +28,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.compact.HoodieMergeOnReadTableCompactor;
 
-import com.google.common.collect.Maps;
-
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -61,7 +60,7 @@ public abstract class CompactionStrategy implements Serializable {
    */
   public Map<String, Double> captureMetrics(HoodieWriteConfig writeConfig, Option<HoodieBaseFile> dataFile,
       String partitionPath, List<HoodieLogFile> logFiles) {
-    Map<String, Double> metrics = Maps.newHashMap();
+    Map<String, Double> metrics = new HashMap<>();
     long defaultMaxParquetFileSize = writeConfig.getParquetMaxFileSize();
     // Total size of all the log files
     Long totalLogFileSize = logFiles.stream().map(HoodieLogFile::getFileSize).filter(size -> size >= 0)

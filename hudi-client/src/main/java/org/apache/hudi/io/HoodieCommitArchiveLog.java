@@ -49,8 +49,6 @@ import org.apache.hudi.table.HoodieTable;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
@@ -61,7 +59,9 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -145,7 +145,7 @@ public class HoodieCommitArchiveLog {
     // TODO: Handle ROLLBACK_ACTION in future
     // ROLLBACK_ACTION is currently not defined in HoodieActiveTimeline
     HoodieTimeline cleanAndRollbackTimeline = table.getActiveTimeline()
-        .getTimelineOfActions(Sets.newHashSet(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants();
+        .getTimelineOfActions(Collections.singleton(HoodieTimeline.CLEAN_ACTION)).filterCompletedInstants();
     Stream<HoodieInstant> instants = cleanAndRollbackTimeline.getInstants()
         .collect(Collectors.groupingBy(HoodieInstant::getAction)).values().stream().map(hoodieInstants -> {
           if (hoodieInstants.size() > maxCommitsToKeep) {
@@ -270,7 +270,7 @@ public class HoodieCommitArchiveLog {
 
   private void writeToFile(Schema wrapperSchema, List<IndexedRecord> records) throws Exception {
     if (records.size() > 0) {
-      Map<HeaderMetadataType, String> header = Maps.newHashMap();
+      Map<HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
       HoodieAvroDataBlock block = new HoodieAvroDataBlock(records, header);
       this.writer = writer.appendBlock(block);

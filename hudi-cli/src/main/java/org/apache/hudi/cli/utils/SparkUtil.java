@@ -24,8 +24,6 @@ import org.apache.hudi.cli.commands.SparkMain;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.StringUtils;
 
-import com.google.common.base.Preconditions;
-
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
@@ -33,6 +31,7 @@ import org.apache.spark.launcher.SparkLauncher;
 import java.io.File;
 import java.net.URISyntaxException;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Utility functions dealing with Spark.
@@ -55,7 +54,7 @@ public class SparkUtil {
       sparkLauncher.setPropertiesFile(propertiesFile);
     }
     File libDirectory = new File(new File(currentJar).getParent(), "lib");
-    for (String library : Preconditions.checkNotNull(libDirectory.list())) {
+    for (String library : Objects.requireNonNull(libDirectory.list())) {
       sparkLauncher.addJar(new File(libDirectory, library).getAbsolutePath());
     }
     return sparkLauncher;
