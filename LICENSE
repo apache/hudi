@@ -215,7 +215,7 @@ License: http://www.apache.org/licenses/LICENSE-2.0
 
 This product includes code from Apache SystemML.
 
-* org.apache.hudi.func.LazyIterableIterator  adapted from org/apache/sysml/runtime/instructions/spark/data/LazyIterableIterator
+* org.apache.hudi.client.utils.LazyIterableIterator  adapted from org/apache/sysml/runtime/instructions/spark/data/LazyIterableIterator
 
 Copyright: 2015-2018 The Apache Software Foundation
 Home page: https://systemml.apache.org/

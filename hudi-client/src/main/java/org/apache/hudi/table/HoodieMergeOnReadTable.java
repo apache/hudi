@@ -38,11 +38,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.func.MergeOnReadLazyInsertIterable;
+import org.apache.hudi.execution.MergeOnReadLazyInsertIterable;
 import org.apache.hudi.io.HoodieAppendHandle;
-import org.apache.hudi.io.compact.HoodieMergeOnReadTableCompactor;
+import org.apache.hudi.table.compact.HoodieMergeOnReadTableCompactor;
 
 import com.google.common.base.Preconditions;
+import org.apache.hudi.table.rollback.RollbackExecutor;
+import org.apache.hudi.table.rollback.RollbackRequest;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;

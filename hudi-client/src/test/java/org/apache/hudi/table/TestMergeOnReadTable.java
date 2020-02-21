@@ -18,9 +18,9 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.HoodieClientTestHarness;
-import org.apache.hudi.HoodieReadClient;
-import org.apache.hudi.HoodieWriteClient;
+import org.apache.hudi.common.HoodieClientTestHarness;
+import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieMergeOnReadTestUtils;

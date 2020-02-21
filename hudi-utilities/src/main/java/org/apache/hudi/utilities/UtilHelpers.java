@@ -20,7 +20,7 @@ package org.apache.hudi.utilities;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.HoodieWriteClient;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.util.DFSPropertiesConfiguration;
 import org.apache.hudi.common.util.Option;

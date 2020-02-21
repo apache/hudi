@@ -18,8 +18,8 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.HoodieClientTestHarness;
-import org.apache.hudi.HoodieWriteClient;
+import org.apache.hudi.common.HoodieClientTestHarness;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;

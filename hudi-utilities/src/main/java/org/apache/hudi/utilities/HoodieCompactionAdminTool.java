@@ -18,9 +18,9 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.CompactionAdminClient;
-import org.apache.hudi.CompactionAdminClient.RenameOpResult;
-import org.apache.hudi.CompactionAdminClient.ValidationOpResult;
+import org.apache.hudi.client.CompactionAdminClient;
+import org.apache.hudi.client.CompactionAdminClient.RenameOpResult;
+import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;

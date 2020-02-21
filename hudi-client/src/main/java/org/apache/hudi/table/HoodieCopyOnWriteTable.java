@@ -46,10 +46,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.func.CopyOnWriteLazyInsertIterable;
-import org.apache.hudi.func.ParquetReaderIterator;
-import org.apache.hudi.func.SparkBoundedInMemoryExecutor;
-import org.apache.hudi.io.HoodieCleanHelper;
+import org.apache.hudi.execution.CopyOnWriteLazyInsertIterable;
+import org.apache.hudi.client.utils.ParquetReaderIterator;
+import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 
@@ -58,6 +57,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.table.rollback.RollbackExecutor;
+import org.apache.hudi.table.rollback.RollbackRequest;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -284,7 +285,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   @Override
   public HoodieCleanerPlan scheduleClean(JavaSparkContext jsc) {
     try {
-      HoodieCleanHelper cleaner = new HoodieCleanHelper(this, config);
+      CleanExecutor cleaner = new CleanExecutor(this, config);
       Option<HoodieInstant> earliestInstant = cleaner.getEarliestCommitToRetain();
 
       List<String> partitionsToClean = cleaner.getPartitionPathsToClean(earliestInstant);

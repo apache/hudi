@@ -18,7 +18,7 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.HoodieClientTestHarness;
+import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;

@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.HoodieWriteClient;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;

@@ -18,6 +18,7 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.util.ConsistencyGuard;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
