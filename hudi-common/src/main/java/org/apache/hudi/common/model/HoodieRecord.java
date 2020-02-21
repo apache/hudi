@@ -66,6 +66,10 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
    */
   private boolean sealed;
 
+  public HoodieRecord() {
+
+  }
+
   public HoodieRecord(HoodieKey key, T data) {
     this.key = key;
     this.data = data;

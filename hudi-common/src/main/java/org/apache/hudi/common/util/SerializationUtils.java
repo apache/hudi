@@ -18,6 +18,20 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.BinaryDecoder;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.DatumReader;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.exception.HoodieSerializationException;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -33,6 +47,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
 
 /**
  * {@link SerializationUtils} class internally uses {@link Kryo} serializer for serializing / deserializing objects.
@@ -42,9 +57,6 @@ public class SerializationUtils {
   // Caching kryo serializer to avoid creating kryo instance for every serde operation
   private static final ThreadLocal<KryoSerializerInstance> SERIALIZER_REF =
       ThreadLocal.withInitial(KryoSerializerInstance::new);
-
-  // Serialize
-  // -----------------------------------------------------------------------
 
   /**
    * <p>
@@ -86,6 +98,129 @@ public class SerializationUtils {
     return (T) SERIALIZER_REF.get().deserialize(objectData);
   }
 
+  public static class HoodieKeySerializer extends Serializer<HoodieKey> implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void write(Kryo kryo, Output output, HoodieKey hoodieKey) {
+      output.writeString(hoodieKey.getRecordKey());
+      output.writeString(hoodieKey.getPartitionPath());
+    }
+
+    @Override
+    public HoodieKey read(Kryo kryo, Input input, Class<HoodieKey> type) {
+      return new HoodieKey(input.readString(), input.readString());
+    }
+  }
+
+  public static class OverwriteWithLatestPayloadSerializer extends Serializer<OverwriteWithLatestAvroPayload> implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void write(Kryo kryo, Output output, OverwriteWithLatestAvroPayload payload) {
+      output.writeInt(payload.recordBytes.length);
+      output.writeBytes(payload.recordBytes);
+      kryo.writeClassAndObject(output, payload.orderingVal);
+    }
+
+    @Override
+    public OverwriteWithLatestAvroPayload read(Kryo kryo, Input input, Class<OverwriteWithLatestAvroPayload> type) {
+      int size = input.readInt();
+      byte[] recordBytes = new byte[size];
+      input.read(recordBytes);
+      Comparable orderingVal = (Comparable) kryo.readClassAndObject(input);
+      return new OverwriteWithLatestAvroPayload(recordBytes, orderingVal);
+    }
+  }
+
+  public static class HoodieRecordLocationSerializer extends Serializer<HoodieRecordLocation> implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void write(Kryo kryo, Output output, HoodieRecordLocation location) {
+      output.writeString(location.getInstantTime());
+      output.writeString(location.getFileId());
+    }
+
+    @Override
+    public HoodieRecordLocation read(Kryo kryo, Input input, Class<HoodieRecordLocation> type) {
+      return new HoodieRecordLocation(input.readString(), input.readString());
+    }
+  }
+
+  public static class HoodieRecordSerializer extends Serializer<HoodieRecord> implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void write(Kryo kryo, Output output, HoodieRecord record) {
+      kryo.writeObject(output, record.getKey());
+      kryo.writeClassAndObject(output, record.getData());
+      kryo.writeObject(output, record.getNewLocation().get());
+      kryo.writeObject(output, record.getCurrentLocation());
+    }
+
+    @Override
+    public HoodieRecord read(Kryo kryo, Input input, Class<HoodieRecord> type) {
+      HoodieKey key = kryo.readObject(input, HoodieKey.class);
+      HoodieRecordPayload payload = (HoodieRecordPayload) kryo.readClassAndObject(input);
+      HoodieRecordLocation newLocation = kryo.readObject(input, HoodieRecordLocation.class);
+      HoodieRecordLocation currentLocation = kryo.readObject(input, HoodieRecordLocation.class);
+
+      HoodieRecord record = new HoodieRecord(key, payload);
+      record.setNewLocation(newLocation);
+      record.setCurrentLocation(currentLocation);
+      return record;
+    }
+  }
+
+  public static class GenericDataRecordSerializer extends Serializer<GenericRecord> implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private void serializeDatum(Output output, GenericRecord object) throws IOException {
+
+      BinaryEncoder binaryEncoder = EncoderFactory.get().binaryEncoder(output, null);
+      Schema schema = object.getSchema();
+
+      byte[] bytes = schema.toString().getBytes(StandardCharsets.UTF_8);
+      output.writeInt(bytes.length);
+      output.write(bytes);
+
+      DatumWriter<GenericRecord> datumWriter = GenericData.get().createDatumWriter(schema);
+      datumWriter.write(object, binaryEncoder);
+
+      binaryEncoder.flush();
+
+    }
+
+    private GenericRecord deserializeDatum(Input input) throws IOException {
+      int length = input.readInt();
+      Schema schema = new Schema.Parser().parse(new String(input.readBytes(length)));
+
+      BinaryDecoder binaryDecoder = DecoderFactory.get().directBinaryDecoder(input, null);
+      DatumReader<GenericRecord> datumReader = GenericData.get().createDatumReader(schema);
+      return datumReader.read(null, binaryDecoder);
+
+    }
+
+    @Override
+    public void write(Kryo kryo, Output output, GenericRecord object) {
+      try {
+        serializeDatum(output, object);
+      } catch (IOException e) {
+        throw new RuntimeException();
+      }
+    }
+
+    @Override
+    public GenericRecord read(Kryo kryo, Input input, Class<GenericRecord> type) {
+      try {
+        return deserializeDatum(input);
+      } catch (IOException e) {
+        throw new RuntimeException();
+      }
+    }
+  }
+
   private static class KryoSerializerInstance implements Serializable {
     public static final int KRYO_SERIALIZER_INITIAL_BUFFER_SIZE = 1048576;
     private final Kryo kryo;
@@ -94,7 +229,15 @@ public class SerializationUtils {
 
     KryoSerializerInstance() {
       KryoInstantiator kryoInstantiator = new KryoInstantiator();
-      kryo = kryoInstantiator.newKryo();
+      // TODO: this kryo instantiation is much slower than a simple way below
+      //kryo = kryoInstantiator.newKryo();
+      kryo = new Kryo();
+      kryo.register(HoodieKey.class, new HoodieKeySerializer());
+      kryo.register(GenericData.Record.class, new GenericDataRecordSerializer());
+      kryo.register(HoodieRecord.class, new HoodieRecordSerializer());
+      kryo.register(HoodieRecordLocationSerializer.class, new HoodieRecordLocationSerializer());
+      kryo.register(OverwriteWithLatestAvroPayload.class, new OverwriteWithLatestPayloadSerializer());
+
       baos = new ByteArrayOutputStream(KRYO_SERIALIZER_INITIAL_BUFFER_SIZE);
       kryo.setRegistrationRequired(false);
     }
@@ -123,7 +266,7 @@ public class SerializationUtils {
 
       Kryo kryo = new KryoBase();
       // ensure that kryo doesn't fail if classes are not registered with kryo.
-      kryo.setRegistrationRequired(false);
+      kryo.setRegistrationRequired(true);
       // This would be used for object initialization if nothing else works out.
       kryo.setInstantiatorStrategy(new org.objenesis.strategy.StdInstantiatorStrategy());
       // Handle cases where we may have an odd classloader setup like with libjars

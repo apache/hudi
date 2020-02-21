@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -29,7 +30,6 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.HoodieAvroUtils;
-import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -58,7 +58,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergeHandle.class);
 
-  private Map<String, HoodieRecord<T>> keyToNewRecords;
+  private Map<String, T> keyToNewRecords;
   private Set<String> writtenRecordKeys;
   private HoodieStorageWriter<IndexedRecord> storageWriter;
   private Path newFilePath;
@@ -68,12 +68,15 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   private long updatedRecordsWritten = 0;
   private long insertRecordsWritten = 0;
   private boolean useWriterSchema;
+  private String partitionPath;
+  private String fileId;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       Iterator<HoodieRecord<T>> recordItr, String fileId) {
     super(config, commitTime, fileId, hoodieTable);
-    String partitionPath = init(fileId, recordItr);
-    init(fileId, partitionPath, hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
+    this.partitionPath = initSpillableMap(recordItr);
+    this.fileId = fileId;
+    init(hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
   }
 
   /**
@@ -82,10 +85,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       Map<String, HoodieRecord<T>> keyToNewRecords, String fileId, HoodieBaseFile dataFileToBeMerged) {
     super(config, commitTime, fileId, hoodieTable);
-    this.keyToNewRecords = keyToNewRecords;
+    this.keyToNewRecords = null; // hack to get it to compile. Compaction is now broken
     this.useWriterSchema = true;
-    init(fileId, keyToNewRecords.get(keyToNewRecords.keySet().stream().findFirst().get()).getPartitionPath(),
-        dataFileToBeMerged);
+    this.fileId = fileId;
+    this.partitionPath = keyToNewRecords.get(keyToNewRecords.keySet().stream().findFirst().get()).getPartitionPath();
+    init(dataFileToBeMerged);
   }
 
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
@@ -154,7 +158,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
-  private void init(String fileId, String partitionPath, HoodieBaseFile dataFileToBeMerged) {
+  private void init(HoodieBaseFile dataFileToBeMerged) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
@@ -197,13 +201,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   /**
    * Load the new incoming records in a map and return partitionPath.
    */
-  private String init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
+  private String initSpillableMap(Iterator<HoodieRecord<T>> newRecordsItr) {
     try {
       // Load the new records in a map
       long memoryForMerge = config.getMaxMemoryPerPartitionMerge();
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
-      this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(originalSchema));
+      this.keyToNewRecords = new ExternalSpillableMap<String, T>(memoryForMerge, config.getSpillableMapBasePath(),
+          new DefaultSizeEstimator(), new DefaultSizeEstimator<>());
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
@@ -211,18 +215,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> record = newRecordsItr.next();
       partitionPath = record.getPartitionPath();
-      // update the new location of the record, so we know where to find it next
-      record.unseal();
-      record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
-      record.seal();
-      // NOTE: Once Records are added to map (spillable-map), DO NOT change it as they won't persist
-      keyToNewRecords.put(record.getRecordKey(), record);
+      keyToNewRecords.put(record.getRecordKey(), record.getData());
     }
     LOG.info("Number of entries in MemoryBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
-        + "Total size in bytes of MemoryBasedMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + "Number of entries in DiskBasedMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + "Size of file spilled to disk => "
+        + " Total size in bytes of MemoryBasedMap => "
+        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + " Number of entries in DiskBasedMap => "
+        + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + " Size of file spilled to disk => "
         + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
     return partitionPath;
   }
@@ -268,7 +267,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     if (keyToNewRecords.containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
       // writing the first record. So make a copy of the record to be merged
-      HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(key));
+      HoodieRecord<T> hoodieRecord = new HoodieRecord<>(new HoodieKey(key, partitionPath), keyToNewRecords.get(key));
+      hoodieRecord.unseal();
+      hoodieRecord.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+      hoodieRecord.seal();
+
       try {
         Option<IndexedRecord> combinedAvroRecord =
             hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchema : originalSchema);
@@ -311,10 +314,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   public WriteStatus close() {
     try {
       // write out any pending records (this can happen when inserts are turned into updates)
-      Iterator<HoodieRecord<T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
-          ? ((ExternalSpillableMap)keyToNewRecords).iterator() : keyToNewRecords.values().iterator();
+      /**
+      Iterator<Map.Entry<String, T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
+          ? ((ExternalSpillableMap)keyToNewRecords).iterator() : keyToNewRecords.entrySet().iterator();
       while (newRecordsItr.hasNext()) {
-        HoodieRecord<T> hoodieRecord = newRecordsItr.next();
+        T payload = newRecordsItr.next();
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
           if (useWriterSchema) {
             writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchema));
@@ -324,6 +328,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
           insertRecordsWritten++;
         }
       }
+       */
       keyToNewRecords.clear();
       writtenRecordKeys.clear();
 

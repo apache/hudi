@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util.collection;
 
+import com.google.common.collect.Iterators;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.exception.HoodieIOException;
@@ -88,6 +89,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     this.currentInMemoryMapSize = 0L;
     this.keySizeEstimator = keySizeEstimator;
     this.valueSizeEstimator = valueSizeEstimator;
+    LOG.info("MaximumSizeInBytes:" + maxInMemorySizeInBytes + ", spilling to :" + baseFilePath);
   }
 
   private DiskBasedMap<T, R> getDiskBasedMap() {
@@ -108,8 +110,10 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   /**
    * A custom iterator to wrap over iterating in-memory + disk spilled data.
    */
-  public Iterator<R> iterator() {
-    return new IteratorWrapper<>(inMemoryMap.values().iterator(), getDiskBasedMap().iterator());
+  public Iterator<Pair<T,R>> iterator() {
+    return new IteratorWrapper<>(
+        Iterators.transform(inMemoryMap.entrySet().iterator(), (entry) -> Pair.of(entry.getKey(), entry.getValue())),
+        getDiskBasedMap().iterator());
   }
 
   /**
@@ -177,7 +181,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
         // At first, use the sizeEstimate of a record being inserted into the spillable map.
         // Note, the converter may over estimate the size of a record in the JVM
         this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
-        LOG.info("Estimated Payload size => " + estimatedPayloadSize);
+        LOG.info("Estimated Payload size => " + estimatedPayloadSize + " for " + key + "," + value);
       } else if (shouldEstimatePayloadSize && inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
         // Re-estimate the size of a record by calculating the size of the entire map containing
         // N entries and then dividing by the number of entries present (N). This helps to get a

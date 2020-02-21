@@ -35,6 +35,10 @@ public class HoodieRecordLocation implements Serializable {
     this.fileId = fileId;
   }
 
+  public HoodieRecordLocation() {
+    this(null, null);
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -54,11 +58,10 @@ public class HoodieRecordLocation implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieRecordLocation {");
-    sb.append("instantTime=").append(instantTime).append(", ");
-    sb.append("fileId=").append(fileId);
-    sb.append('}');
-    return sb.toString();
+    return "HoodieRecordLocation {"
+        + "instantTime=" + instantTime + ", "
+        + "fileId=" + fileId
+        + '}';
   }
 
   public String getInstantTime() {

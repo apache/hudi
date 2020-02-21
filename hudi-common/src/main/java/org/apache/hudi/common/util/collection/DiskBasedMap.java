@@ -53,7 +53,7 @@ import java.util.stream.Stream;
  * without any rollover support. It uses the following : 1) An in-memory map that tracks the key-> latest ValueMetadata.
  * 2) Current position in the file NOTE : Only String.class type supported for Key
  */
-public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Iterable<R> {
+public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Iterable<Pair<T,R>> {
 
   public static int BUFFER_SIZE = 128 * 1024;  // 128 KB
   private static final Logger LOG = LogManager.getLogger(DiskBasedMap.class);
@@ -167,8 +167,8 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
    * Custom iterator to iterate over values written to disk.
    */
   @Override
-  public Iterator<R> iterator() {
-    return new LazyFileIterable(filePath, valueMetadataMap).iterator();
+  public Iterator<Pair<T,R>> iterator() {
+    return new LazyFileIterable<T, R>(filePath, valueMetadataMap).iterator();
   }
 
   /**
@@ -204,6 +204,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     if (entry == null) {
       return null;
     }
+    R d =  get(entry);
     return get(entry);
   }
 

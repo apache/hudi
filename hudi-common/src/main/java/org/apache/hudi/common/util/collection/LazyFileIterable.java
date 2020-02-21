@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.BufferedRandomAccessFile;
 import org.apache.hudi.exception.HoodieException;
 
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -31,7 +32,7 @@ import java.util.stream.Collectors;
  * Iterable to lazily fetch values spilled to disk. This class uses BufferedRandomAccessFile to randomly access the position of
  * the latest value for a key spilled to disk and returns the result.
  */
-public class LazyFileIterable<T, R> implements Iterable<R> {
+public class LazyFileIterable<T, R> implements Iterable<Pair<T,R>> {
 
   // Used to access the value written at a specific position in the file
   private final String filePath;
@@ -44,7 +45,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
   }
 
   @Override
-  public Iterator<R> iterator() {
+  public Iterator<Pair<T,R>> iterator() {
     try {
       return new LazyFileIterator<>(filePath, inMemoryMetadataOfSpilledData);
     } catch (IOException io) {
@@ -55,7 +56,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
   /**
    * Iterator implementation for the iterable defined above.
    */
-  public class LazyFileIterator<T, R> implements Iterator<R> {
+  public class LazyFileIterator<T, R> implements Iterator<Pair<T, R>> {
 
     private final String filePath;
     private BufferedRandomAccessFile readOnlyFileHandle;
@@ -68,8 +69,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
 
       // sort the map in increasing order of offset of value so disk seek is only in one(forward) direction
       this.metadataIterator = map.entrySet().stream()
-          .sorted((Map.Entry<T, DiskBasedMap.ValueMetadata> o1, Map.Entry<T, DiskBasedMap.ValueMetadata> o2) -> o1
-              .getValue().getOffsetOfValue().compareTo(o2.getValue().getOffsetOfValue()))
+          .sorted(Comparator.comparing((Map.Entry<T, DiskBasedMap.ValueMetadata> o) -> o.getValue().getOffsetOfValue()))
           .collect(Collectors.toList()).iterator();
       this.addShutdownHook();
     }
@@ -84,12 +84,12 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
     }
 
     @Override
-    public R next() {
+    public Pair<T,R> next() {
       if (!hasNext()) {
         throw new IllegalStateException("next() called on EOF'ed stream. File :" + filePath);
       }
       Map.Entry<T, DiskBasedMap.ValueMetadata> entry = this.metadataIterator.next();
-      return DiskBasedMap.get(entry.getValue(), readOnlyFileHandle);
+      return Pair.of(entry.getKey(), DiskBasedMap.get(entry.getValue(), readOnlyFileHandle));
     }
 
     @Override
@@ -98,7 +98,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
     }
 
     @Override
-    public void forEachRemaining(Consumer<? super R> action) {
+    public void forEachRemaining(Consumer<? super Pair<T,R>> action) {
       action.accept(next());
     }
 

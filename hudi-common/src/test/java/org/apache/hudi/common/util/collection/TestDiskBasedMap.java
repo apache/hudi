@@ -18,22 +18,26 @@
 
 package org.apache.hudi.common.util.collection;
 
+import org.apache.avro.generic.GenericData;
 import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.AvroBinaryTestPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.util.HoodieAvroUtils;
-import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SchemaTestUtil;
-import org.apache.hudi.common.util.SpillableMapTestUtils;
-import org.apache.hudi.common.util.SpillableMapUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.util.HoodieAvroUtils;
+import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SchemaTestUtil;
+import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.common.util.SpillableMapTestUtils;
+import org.apache.hudi.common.util.SpillableMapUtils;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -42,12 +46,14 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.util.SchemaTestUtil.getSimpleSchema;
 import static org.junit.Assert.assertEquals;
@@ -145,6 +151,57 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testDiskBasedMapSerialization() throws Exception {
+    Schema longSchema = Schema.createRecord("hudi_schema","","", false,
+        Arrays.asList(new Schema.Field("id", Schema.create(Schema.Type.LONG), null, null)));
+
+    List<HoodieRecord> records = IntStream.range(0, 1000000)
+        .mapToObj(k -> {
+          GenericRecord gr = new GenericData.Record(longSchema);
+          gr.put("id", (long) k);
+          OverwriteWithLatestAvroPayload payload = new OverwriteWithLatestAvroPayload(gr, k);
+          HoodieRecord record = new HoodieRecord<>(new HoodieKey(k + "", "default"), payload);
+          record.unseal();
+          record.setCurrentLocation(new HoodieRecordLocation("20200402101048", UUID.randomUUID().toString()));
+          record.setNewLocation(new HoodieRecordLocation("2019375493949", UUID.randomUUID().toString()));
+          return record;
+        }).collect(Collectors.toList());
+
+    HoodieKey key = new HoodieKey("key", "path");
+    HoodieKey diskKey = SerializationUtils.deserialize(SerializationUtils.serialize(key));
+    assertEquals(key, diskKey);
+
+    HoodieRecordLocation location = new HoodieRecordLocation("383883", "f24");
+    HoodieRecordLocation diskLocation = SerializationUtils.deserialize(SerializationUtils.serialize(location));
+    assertEquals(location, diskLocation);
+
+    GenericRecord gr = new GenericData.Record(longSchema);
+    gr.put("id", (long) 127373);
+    OverwriteWithLatestAvroPayload payload = new OverwriteWithLatestAvroPayload(gr, 373737);
+    OverwriteWithLatestAvroPayload diskPayload = SerializationUtils.deserialize(SerializationUtils.serialize(payload));
+    assertEquals(payload, diskPayload);
+
+    HoodieRecord record1 = new HoodieRecord(key, payload);
+    record1.setCurrentLocation(location);
+    record1.setNewLocation(location);
+    HoodieRecord diskRecord = SerializationUtils.deserialize(SerializationUtils.serialize(record1));
+    assertEquals(record1, diskRecord);
+
+    DiskBasedMap<String, HoodieRecord> diskBasedMap = new DiskBasedMap<>("/tmp/diskmap");
+    long writeStartMs = System.currentTimeMillis();
+    for (HoodieRecord record : records) {
+      diskBasedMap.put(record.getRecordKey(), record);
+    }
+    System.err.println(">>> write took : " + (System.currentTimeMillis() - writeStartMs));
+
+    long readStartMs = System.currentTimeMillis();
+    for (HoodieRecord record : records) {
+      assertEquals(record, diskBasedMap.get(record.getRecordKey()));
+    }
+    System.err.println(">>> read took : " + (System.currentTimeMillis() - readStartMs));
+  }
+
+  @Test
   public void testSizeEstimator() throws IOException, URISyntaxException {
     Schema schema = SchemaTestUtil.getSimpleSchema();
 
@@ -198,7 +255,6 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
     long startTime = System.currentTimeMillis();
     SpillableMapUtils.computePayloadSize(record, sizeEstimator);
     long timeTaken = System.currentTimeMillis() - startTime;
-    System.out.println("Time taken :" + timeTaken);
     assertTrue(timeTaken < 100);
   }
 }

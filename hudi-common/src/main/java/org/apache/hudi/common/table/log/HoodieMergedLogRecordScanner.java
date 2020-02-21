@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import com.google.common.collect.Iterators;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
@@ -94,7 +96,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
 
   @Override
   public Iterator<HoodieRecord<? extends HoodieRecordPayload>> iterator() {
-    return records.iterator();
+    return Iterators.transform(records.iterator(), Pair::getRight);
   }
 
   public Map<String, HoodieRecord<? extends HoodieRecordPayload>> getRecords() {

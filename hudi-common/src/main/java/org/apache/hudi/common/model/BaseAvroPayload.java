@@ -26,6 +26,7 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Base class for all AVRO record based payloads, that can be ordered based on a field.
@@ -39,7 +40,7 @@ public abstract class BaseAvroPayload implements Serializable {
   /**
    * For purposes of preCombining.
    */
-  protected final Comparable orderingVal;
+  public final Comparable orderingVal;
 
   /**
    * Instantiate {@link BaseAvroPayload}.
@@ -57,5 +58,29 @@ public abstract class BaseAvroPayload implements Serializable {
     if (orderingVal == null) {
       throw new HoodieException("Ordering value is null for record: " + record);
     }
+  }
+
+  public BaseAvroPayload(byte[] recordBytes, Comparable orderingVal) {
+    this.recordBytes = recordBytes;
+    this.orderingVal = orderingVal;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+
+    BaseAvroPayload that = (BaseAvroPayload) o;
+    return Objects.deepEquals(this.recordBytes, that.recordBytes)
+        && Objects.equals(this.orderingVal, that.orderingVal);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(this.recordBytes, this.orderingVal);
   }
 }

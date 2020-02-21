@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util.collection;
 
+import com.google.common.collect.Iterators;
 import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -74,7 +75,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
-    Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
+    Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = Iterators.transform(records.iterator(), Pair::getRight);
     List<HoodieRecord> oRecords = new ArrayList<>();
     while (itr.hasNext()) {
       HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
@@ -94,7 +95,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
-    Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
+    Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = Iterators.transform(records.iterator(), Pair::getRight);
     while (itr.hasNext()) {
       HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
       assert recordKeys.contains(rec.getRecordKey());
@@ -185,7 +186,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
-    Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
+    Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = Iterators.transform(records.iterator(), Pair::getRight);
     while (itr.hasNext()) {
       throw new IOException("Testing failures...");
     }
