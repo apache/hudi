@@ -159,13 +159,12 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     Pair<List<Pair<String, FileSlice>>, HoodieCompactionPlan> inputAndPlan = buildCompactionPlan();
     HoodieCompactionPlan plan = inputAndPlan.getRight();
     List<HoodieCompactionOperation> originalOps = plan.getOperations();
-    List<HoodieCompactionOperation> regeneratedOps = originalOps.stream().map(op -> {
-      // Convert to CompactionOperation
-      return CompactionUtils.buildCompactionOperation(op);
-    }).map(op2 -> {
-      // Convert back to HoodieCompactionOperation and check for equality
-      return CompactionUtils.buildHoodieCompactionOperation(op2);
-    }).collect(Collectors.toList());
+    // Convert to CompactionOperation
+    // Convert back to HoodieCompactionOperation and check for equality
+    List<HoodieCompactionOperation> regeneratedOps = originalOps.stream()
+            .map(CompactionUtils::buildCompactionOperation)
+            .map(CompactionUtils::buildHoodieCompactionOperation)
+            .collect(Collectors.toList());
     Assert.assertTrue("Transformation did get tested", originalOps.size() > 0);
     Assert.assertEquals("All fields set correctly in transformations", originalOps, regeneratedOps);
   }
@@ -247,11 +246,9 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
           op.getDataFilePath());
     }
     List<String> paths = slice.getLogFiles().map(l -> l.getPath().toString()).collect(Collectors.toList());
-    IntStream.range(0, paths.size()).boxed().forEach(idx -> {
-      Assert.assertEquals("Log File Index " + idx,
-          version == COMPACTION_METADATA_VERSION_1 ? paths.get(idx) : new Path(paths.get(idx)).getName(),
-          op.getDeltaFilePaths().get(idx));
-    });
+    IntStream.range(0, paths.size()).boxed().forEach(idx -> Assert.assertEquals("Log File Index " + idx,
+        version == COMPACTION_METADATA_VERSION_1 ? paths.get(idx) : new Path(paths.get(idx)).getName(),
+        op.getDeltaFilePaths().get(idx)));
     Assert.assertEquals("Metrics set", METRICS, op.getMetrics());
   }
 

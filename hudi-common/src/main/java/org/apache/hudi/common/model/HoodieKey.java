@@ -18,9 +18,8 @@
 
 package org.apache.hudi.common.model;
 
-import com.google.common.base.Objects;
-
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * HoodieKey consists of
@@ -58,12 +57,12 @@ public class HoodieKey implements Serializable {
       return false;
     }
     HoodieKey otherKey = (HoodieKey) o;
-    return Objects.equal(recordKey, otherKey.recordKey) && Objects.equal(partitionPath, otherKey.partitionPath);
+    return Objects.equals(recordKey, otherKey.recordKey) && Objects.equals(partitionPath, otherKey.partitionPath);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(recordKey, partitionPath);
+    return Objects.hash(recordKey, partitionPath);
   }
 
   @Override

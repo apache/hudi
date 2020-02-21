@@ -20,13 +20,13 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 
-import com.google.common.collect.Maps;
 import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
@@ -37,7 +37,7 @@ public class TestHoodieWriteConfig {
   @Test
   public void testPropertyLoading() throws IOException {
     Builder builder = HoodieWriteConfig.newBuilder().withPath("/tmp");
-    Map<String, String> params = Maps.newHashMap();
+    Map<String, String> params = new HashMap<>();
     params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP, "1");
     params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP, "5");
     params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP, "2");

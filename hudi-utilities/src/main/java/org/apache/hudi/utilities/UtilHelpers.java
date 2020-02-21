@@ -68,11 +68,12 @@ import java.sql.SQLException;
 import java.sql.DriverManager;
 import java.sql.Driver;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
-import java.util.Enumeration;
 
 /**
  * Bunch of helper methods.
@@ -279,14 +280,14 @@ public class UtilHelpers {
       }
     }
 
-    Preconditions.checkNotNull(driver, String.format("Did not find registered driver with class %s", driverClass));
+    Objects.requireNonNull(driver, String.format("Did not find registered driver with class %s", driverClass));
 
     Properties properties = new Properties();
     properties.putAll(options);
-    Connection connect = null;
+    Connection connect;
     String url = options.get(JDBCOptions.JDBC_URL());
     connect = driver.connect(url, properties);
-    Preconditions.checkNotNull(connect, String.format("The driver could not open a JDBC connection. Check the URL: %s", url));
+    Objects.requireNonNull(connect, String.format("The driver could not open a JDBC connection. Check the URL: %s", url));
     return connect;
   }
 

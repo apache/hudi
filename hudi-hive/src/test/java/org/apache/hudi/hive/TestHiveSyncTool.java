@@ -24,7 +24,6 @@ import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent;
 import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent.PartitionEventType;
 import org.apache.hudi.hive.util.SchemaUtil;
 
-import com.google.common.collect.Lists;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
@@ -345,7 +344,7 @@ public class TestHiveSyncTool {
     HiveSyncConfig hiveSyncConfig = HiveSyncConfig.copy(TestUtil.hiveSyncConfig);
     hiveSyncConfig.partitionValueExtractorClass = MultiPartKeysValueExtractor.class.getCanonicalName();
     hiveSyncConfig.tableName = "multi_part_key";
-    hiveSyncConfig.partitionFields = Lists.newArrayList("year", "month", "day");
+    hiveSyncConfig.partitionFields = Arrays.asList("year", "month", "day");
     TestUtil.getCreatedTablesSet().add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
 
     HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);

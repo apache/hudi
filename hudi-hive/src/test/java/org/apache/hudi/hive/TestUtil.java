@@ -43,9 +43,6 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.hive.util.HiveTestService;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -68,6 +65,10 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -86,7 +87,7 @@ public class TestUtil {
   static HiveSyncConfig hiveSyncConfig;
   private static DateTimeFormatter dtfOut;
   static FileSystem fileSystem;
-  private static Set<String> createdTablesSet = Sets.newHashSet();
+  private static Set<String> createdTablesSet = new HashSet<>();
 
   public static void setUp() throws IOException, InterruptedException {
     if (dfsCluster == null) {
@@ -114,7 +115,7 @@ public class TestUtil {
     hiveSyncConfig.basePath = "/tmp/hdfs/TestHiveSyncTool/";
     hiveSyncConfig.assumeDatePartitioning = true;
     hiveSyncConfig.usePreApacheInputFormat = false;
-    hiveSyncConfig.partitionFields = Lists.newArrayList("datestr");
+    hiveSyncConfig.partitionFields = Collections.singletonList("datestr");
 
     dtfOut = DateTimeFormat.forPattern("yyyy/MM/dd");
 
@@ -249,7 +250,7 @@ public class TestUtil {
 
   private static List<HoodieWriteStat> createTestData(Path partPath, boolean isParquetSchemaSimple, String commitTime)
       throws IOException, URISyntaxException {
-    List<HoodieWriteStat> writeStats = Lists.newArrayList();
+    List<HoodieWriteStat> writeStats = new ArrayList<>();
     for (int i = 0; i < 5; i++) {
       // Create 5 files
       String fileId = UUID.randomUUID().toString();
@@ -297,7 +298,7 @@ public class TestUtil {
         .overBaseCommit(dataFile.getCommitTime()).withFs(fileSystem).build();
     List<IndexedRecord> records = (isLogSchemaSimple ? SchemaTestUtil.generateTestRecords(0, 100)
         : SchemaTestUtil.generateEvolvedTestRecords(100, 100));
-    Map<HeaderMetadataType, String> header = Maps.newHashMap();
+    Map<HeaderMetadataType, String> header = new HashMap<>(2);
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
