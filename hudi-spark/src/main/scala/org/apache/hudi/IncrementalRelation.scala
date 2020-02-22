@@ -17,6 +17,7 @@
 
 package org.apache.hudi
 
+import org.apache.hadoop.fs.GlobPattern
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -84,7 +85,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   val filters = {
     if (optParams.contains(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY)) {
-      val filterStr = optParams.get(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY).getOrElse("")
+      val filterStr = optParams.getOrElse(
+        DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY,
+        DataSourceReadOptions.DEFAULT_PUSH_DOWN_FILTERS_OPT_VAL)
       filterStr.split(",").filter(!_.isEmpty)
     } else {
       Array[String]()
@@ -100,17 +103,26 @@ class IncrementalRelation(val sqlContext: SQLContext,
         .get, classOf[HoodieCommitMetadata])
       fileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap
     }
+    val pathGlobPattern = optParams.getOrElse(
+      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY,
+      DataSourceReadOptions.DEFAULT_INCR_PATH_GLOB_OPT_VAL)
+    val filteredFullPath = if(!pathGlobPattern.equals(DataSourceReadOptions.DEFAULT_INCR_PATH_GLOB_OPT_VAL)) {
+      val globMatcher = new GlobPattern("*" + pathGlobPattern)
+      fileIdToFullPath.filter(p => globMatcher.matches(p._2))
+    } else {
+      fileIdToFullPath
+    }
     // unset the path filter, otherwise if end_instant_time is not the latest instant, path filter set for RO view
     // will filter out all the files incorrectly.
     sqlContext.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class")
     val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
-    if (fileIdToFullPath.isEmpty) {
+    if (filteredFullPath.isEmpty) {
       sqlContext.sparkContext.emptyRDD[Row]
     } else {
       log.info("Additional Filters to be applied to incremental source are :" + filters)
       filters.foldLeft(sqlContext.read.options(sOpts)
         .schema(latestSchema)
-        .parquet(fileIdToFullPath.values.toList: _*)
+        .parquet(filteredFullPath.values.toList: _*)
         .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp))
         .filter(String.format("%s <= '%s'",
           HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)))((e, f) => e.filter(f))
