@@ -21,8 +21,6 @@ package org.apache.hudi.hive.util;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
 import com.google.common.io.Files;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -53,7 +51,9 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -73,7 +73,7 @@ public class HiveTestService {
   private int serverPort = 9999;
   private boolean clean = true;
 
-  private Map<String, String> sysProps = Maps.newHashMap();
+  private Map<String, String> sysProps = new HashMap<>();
   private ExecutorService executorService;
   private TServer tServer;
   private HiveServer2 hiveServer;
@@ -87,7 +87,7 @@ public class HiveTestService {
   }
 
   public HiveServer2 start() throws IOException {
-    Preconditions.checkState(workDir != null, "The work dir must be set before starting cluster.");
+    Objects.requireNonNull(workDir, "The work dir must be set before starting cluster.");
 
     if (hadoopConf == null) {
       hadoopConf = HoodieTestUtils.getDefaultHadoopConf();

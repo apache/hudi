@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-/**
+/*
  * Simple utility to test validation conditions (to replace Guava's PreConditions)
  */
 public class ValidationUtils {
@@ -28,7 +28,7 @@ public class ValidationUtils {
    */
   public static void checkArgument(final boolean expression) {
     if (!expression) {
-     throw new IllegalArgumentException();
+      throw new IllegalArgumentException();
     }
   }
 
@@ -37,7 +37,7 @@ public class ValidationUtils {
    */
   public static void checkArgument(final boolean expression, final String errorMessage) {
     if (!expression) {
-     throw new IllegalArgumentException(errorMessage);
+      throw new IllegalArgumentException(errorMessage);
     }
   }
 
@@ -50,7 +50,7 @@ public class ValidationUtils {
    */
   public static void checkState(final boolean expression) {
     if (!expression) {
-     throw new IllegalStateException();
+      throw new IllegalStateException();
     }
   }
 
@@ -64,7 +64,7 @@ public class ValidationUtils {
    */
   public static void checkState(final boolean expression, String errorMessage) {
     if (!expression) {
-     throw new IllegalStateException(errorMessage);
+      throw new IllegalStateException(errorMessage);
     }
   }
 }

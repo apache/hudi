@@ -44,10 +44,10 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterators;
 import org.apache.hadoop.fs.Path;
@@ -201,7 +201,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     view1.sync();
     Map<String, List<String>> instantsToFiles;
 
-    /**
+    /*
      * Case where incremental syncing is catching up on more than one ingestion at a time
      */
     // Run 1 ingestion on MOR table (1 delta commits). View1 is now sync up to this point
@@ -222,7 +222,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     view3.sync();
     areViewsConsistent(view1, view2, partitions.size() * fileIdsPerPartition.size());
 
-    /**
+    /*
      * Case where a compaction is scheduled and then unscheduled
      */
     scheduleCompaction(view2, "15");
@@ -233,7 +233,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         getFileSystemView(new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath()));
     view4.sync();
 
-    /**
+    /*
      * Case where a compaction is scheduled, 2 ingestion happens and then a compaction happens
      */
     scheduleCompaction(view2, "16");
@@ -247,7 +247,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         getFileSystemView(new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath()));
     view5.sync();
 
-    /**
+    /*
      * Case where a clean happened and then rounds of ingestion and compaction happened
      */
     testCleans(view2, Collections.singletonList("19"),
@@ -266,7 +266,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         getFileSystemView(new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath()));
     view6.sync();
 
-    /**
+    /*
      * Case where multiple restores and ingestions happened
      */
     testRestore(view2, Collections.singletonList("25"), true, new HashMap<>(), Collections.singletonList("24"), "29", true);
@@ -528,7 +528,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       String newBaseInstant) throws IOException {
     HoodieInstant instant = new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstantTime);
     boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
-    Preconditions.checkArgument(deleted, "Unable to delete compaction instant.");
+    ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
 
     view.sync();
     Assert.assertEquals(newLastInstant, view.getLastInstant().get().getTimestamp());
@@ -719,7 +719,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);
     metaClient.getActiveTimeline().saveAsComplete(inflightInstant,
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-    /**
+    /*
     // Delete pending compaction if present
     metaClient.getFs().delete(new Path(metaClient.getMetaPath(),
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instant).getFileName()));

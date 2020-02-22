@@ -28,7 +28,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -115,11 +114,11 @@ public class FSUtils {
   }
 
   public static String translateMarkerToDataPath(String basePath, String markerPath, String instantTs) {
-    Preconditions.checkArgument(markerPath.endsWith(HoodieTableMetaClient.MARKER_EXTN));
+    ValidationUtils.checkArgument(markerPath.endsWith(HoodieTableMetaClient.MARKER_EXTN));
     String markerRootPath = Path.getPathWithoutSchemeAndAuthority(
         new Path(String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTs))).toString();
     int begin = markerPath.indexOf(markerRootPath);
-    Preconditions.checkArgument(begin >= 0,
+    ValidationUtils.checkArgument(begin >= 0,
         "Not in marker dir. Marker Path=" + markerPath + ", Expected Marker Root=" + markerRootPath);
     String rPath = markerPath.substring(begin + markerRootPath.length() + 1);
     return String.format("%s/%s%s", basePath, rPath.replace(HoodieTableMetaClient.MARKER_EXTN, ""),

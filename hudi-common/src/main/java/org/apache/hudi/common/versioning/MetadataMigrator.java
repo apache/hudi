@@ -19,9 +19,8 @@
 package org.apache.hudi.common.versioning;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-
-import com.google.common.base.Preconditions;
 
 import java.util.List;
 import java.util.Map;
@@ -75,8 +74,8 @@ public class MetadataMigrator<T> {
    * @return Metadata conforming to the target version
    */
   public T migrateToVersion(T metadata, int metadataVersion, int targetVersion) {
-    Preconditions.checkArgument(targetVersion >= oldestVersion);
-    Preconditions.checkArgument(targetVersion <= latestVersion);
+    ValidationUtils.checkArgument(targetVersion >= oldestVersion);
+    ValidationUtils.checkArgument(targetVersion <= latestVersion);
     if (metadataVersion == targetVersion) {
       return metadata;
     } else if (metadataVersion > targetVersion) {
