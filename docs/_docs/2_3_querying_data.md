@@ -150,3 +150,32 @@ Additionally, `HoodieReadClient` offers the following functionality using Hudi's
 
 Presto is a popular query engine, providing interactive query performance. Presto currently supports only read optimized queries on Hudi tables. 
 This requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation.
+
+## Impala(Not Officially Released)
+
+### Read optimized table
+
+Impala is able to query Hudi read optimized table as an [EXTERNAL TABLE](https://docs.cloudera.com/documentation/enterprise/6/6.3/topics/impala_tables.html#external_tables) on HDFS.  
+To create a Hudi read optimized table on Impala:
+```
+CREATE EXTERNAL TABLE database.table_name
+LIKE PARQUET '/path/to/load/xxx.parquet'
+STORED AS HUDIPARQUET
+LOCATION '/path/to/load';
+```
+Impala is able to take advantage of the physical partition structure to improve the query performance.
+To create a partitioned table, the folder should follow the naming convention like `year=2020/month=1`.
+Impala use `=` to separate partition name and partition value.  
+To create a partitioned Hudi read optimized table on Impala:
+```
+CREATE EXTERNAL TABLE database.table_name
+LIKE PARQUET '/path/to/load/xxx.parquet'
+PARTITION BY (year int, month int, day int)
+STORED AS HUDIPARQUET
+LOCATION '/path/to/load';
+ALTER TABLE database.table_name RECOVER PARTITIONS;
+```
+After Hudi made a new commit, refresh the Impala table to get the latest results.
+```
+REFRESH database.table_name
+```

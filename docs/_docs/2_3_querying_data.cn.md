@@ -145,3 +145,33 @@ scala> sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'
 
 Presto是一种常用的查询引擎，可提供交互式查询性能。 Hudi RO表可以在Presto中无缝查询。
 这需要在整个安装过程中将`hudi-presto-bundle` jar放入`<presto_install>/plugin/hive-hadoop2/`中。
+
+## Impala(此功能还未正式发布)
+
+### 读优化表
+
+Impala可以在HDFS上查询Hudi读优化表，作为一种 [EXTERNAL TABLE](https://docs.cloudera.com/documentation/enterprise/6/6.3/topics/impala_tables.html#external_tables) 的形式。  
+可以通过以下方式在Impala上建立Hudi读优化表:
+```
+CREATE EXTERNAL TABLE database.table_name
+LIKE PARQUET '/path/to/load/xxx.parquet'
+STORED AS HUDIPARQUET
+LOCATION '/path/to/load';
+```
+Impala可以利用合理的文件分区来提高查询的效率。
+如果想要建立分区的表，文件夹命名需要根据此种方式`year=2020/month=1`.
+Impala使用`=`来区分分区名和分区值.  
+可以通过以下方式在Impala上建立分区Hudi读优化表:
+```
+CREATE EXTERNAL TABLE database.table_name
+LIKE PARQUET '/path/to/load/xxx.parquet'
+PARTITION BY (year int, month int, day int)
+STORED AS HUDIPARQUET
+LOCATION '/path/to/load';
+ALTER TABLE database.table_name RECOVER PARTITIONS;
+```
+在Hudi成功写入一个新的提交后, 刷新Impala表来得到最新的结果.
+```
+REFRESH database.table_name
+```
+
