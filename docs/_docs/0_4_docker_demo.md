@@ -178,7 +178,7 @@ exit
 You can use HDFS web-browser to look at the tables
 `http://namenode:50070/explorer.html#/user/hive/warehouse/stock_ticks_cow`.
 
-You can explore the new partition folder created in the table along with a "deltacommit"
+You can explore the new partition folder created in the table along with a "commit" / "deltacommit"
 file under .hoodie which signals a successful commit.
 
 There will be a similar setup when you browse the MOR table
