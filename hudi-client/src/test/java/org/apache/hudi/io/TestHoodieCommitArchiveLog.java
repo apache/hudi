@@ -19,10 +19,14 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.HoodieClientTestHarness;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -205,6 +209,47 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
 
     // verify in-flight instants after archive
     verifyInflightInstants(metaClient, 2);
+  }
+
+  @Test
+  public void testArchiveTableWithLargeCleanFiles() throws IOException {
+    HoodieCompactionConfig compactionConfig = HoodieCompactionConfig.newBuilder().retainCommits(1)
+            .withCommitsArchivalMemSize(100 * 1024).withCommitsArchivalBatchSize(10).archiveCommitsWith(2, 4).build();
+
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+            .withCompactionConfig(compactionConfig)
+            .forTable("test-trip-table").build();
+    HoodieTestUtils.init(hadoopConf, basePath);
+
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "100", dfs.getConf(), 10000);
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "101", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "102", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "103", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "104", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "105", dfs.getConf());
+    HoodieTestUtils.createPendingCleanFiles(metaClient, "106", "107");
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
+    assertTrue(archiveLog.archiveIfRequired(jsc));
+
+    // check archived metadata files
+    FileStatus[] fsStatuses = metaClient.getFs().globStatus(
+            new Path(metaClient.getArchivePath() + "/.commits_.archive*"));
+
+    assertEquals(1, fsStatuses.length);
+    FileStatus fs = fsStatuses[0];
+    //read the archived file and make sure it has more than 1 block (even though number of records is < 10)
+    HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
+            new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
+    int numBlocks = 0;
+    //read the avro blocks
+    while (reader.hasNext()) {
+      reader.next();
+      numBlocks++;
+    }
+    assertTrue(numBlocks > 1);
   }
 
   @Test

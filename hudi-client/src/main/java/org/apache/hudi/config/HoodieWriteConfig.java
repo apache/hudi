@@ -303,6 +303,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieCompactionConfig.COMMITS_ARCHIVAL_BATCH_SIZE_PROP));
   }
 
+  public int getCommitArchivalMemSize() {
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.COMMITS_ARCHIVAL_MEM_SIZE_PROP));
+  }
+
   /**
    * index properties.
    */

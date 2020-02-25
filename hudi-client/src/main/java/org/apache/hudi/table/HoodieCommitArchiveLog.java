@@ -39,7 +39,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.AvroUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -77,11 +79,13 @@ public class HoodieCommitArchiveLog {
   private final HoodieTableMetaClient metaClient;
   private final HoodieWriteConfig config;
   private Writer writer;
+  private SizeEstimator sizeEstimator;
 
   public HoodieCommitArchiveLog(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.metaClient = metaClient;
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
+    this.sizeEstimator = new DefaultSizeEstimator();
   }
 
   private Writer openWriter() {
@@ -244,11 +248,23 @@ public class HoodieCommitArchiveLog {
       Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
       LOG.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
+      long totalInMemSize = 0;
       for (HoodieInstant hoodieInstant : instants) {
         try {
-          records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
-          if (records.size() >= this.config.getCommitArchivalBatchSize()) {
+          IndexedRecord record = convertToAvroRecord(commitTimeline, hoodieInstant);
+          totalInMemSize += this.sizeEstimator.sizeEstimate(record);
+          records.add(record);
+
+          boolean isMemSizeLarge = totalInMemSize > this.config.getCommitArchivalMemSize();
+          // archive if we reach batch size OR if in memory representation is too large
+          if (records.size() >= this.config.getCommitArchivalBatchSize() || isMemSizeLarge) {
+            if (isMemSizeLarge) {
+              // add log to record that we reached size limit before batch size
+              LOG.info("Archiving fewer records because memory size limit is reached "
+                      + totalInMemSize + " " + records.size());
+            }
             writeToFile(wrapperSchema, records);
+            totalInMemSize = 0;
           }
         } catch (Exception e) {
           LOG.error("Failed to archive commits, .commit file: " + hoodieInstant.getFileName(), e);

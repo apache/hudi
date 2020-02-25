@@ -291,7 +291,23 @@ public class HoodieTestUtils {
   }
 
   public static void createCleanFiles(HoodieTableMetaClient metaClient, String basePath,
-      String commitTime, Configuration configuration)
+                                      String commitTime, Configuration configuration) throws IOException {
+    createCleanFiles(metaClient, basePath, commitTime, configuration, 0);
+  }
+
+  public static void createCleanFiles(HoodieTableMetaClient metaClient, String basePath, String commitTime,
+              Configuration configuration, int numDeleteFailureToSimulate) throws IOException {
+
+    List<String> deleteFailures = new ArrayList<>();
+    for (int i = 0; i < numDeleteFailureToSimulate; i++) {
+      deleteFailures.add("failedPrefix" + rand.nextInt());
+    }
+
+    createCleanFiles(metaClient, basePath, commitTime, configuration, deleteFailures);
+  }
+
+  public static void createCleanFiles(HoodieTableMetaClient metaClient, String basePath,
+      String commitTime, Configuration configuration, List<String> deleteFailures)
       throws IOException {
     createPendingCleanFiles(metaClient, commitTime);
     Path commitFile = new Path(
@@ -300,7 +316,7 @@ public class HoodieTestUtils {
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
       HoodieCleanStat cleanStats = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
           DEFAULT_PARTITION_PATHS[rand.nextInt(DEFAULT_PARTITION_PATHS.length)], new ArrayList<>(), new ArrayList<>(),
-          new ArrayList<>(), commitTime);
+          deleteFailures, commitTime);
       // Create the clean metadata
 
       HoodieCleanMetadata cleanMetadata =
