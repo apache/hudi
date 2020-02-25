@@ -62,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -175,6 +176,21 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     for (WriteStatus status : statuses) {
       assertFalse("Errors found in write of " + status.getFileId(), status.hasErrors());
     }
+  }
+
+
+  void assertPartitionMetadataForRecords(List<HoodieRecord> inputRecords, FileSystem fs) throws IOException {
+    Set<String> partitionPathSet = inputRecords.stream()
+        .map(HoodieRecord::getPartitionPath)
+        .collect(Collectors.toSet());
+    assertPartitionMetadata(partitionPathSet.stream().toArray(String[]::new), fs);
+  }
+
+  void assertPartitionMetadataForKeys(List<HoodieKey> inputKeys, FileSystem fs) throws IOException {
+    Set<String> partitionPathSet = inputKeys.stream()
+        .map(HoodieKey::getPartitionPath)
+        .collect(Collectors.toSet());
+    assertPartitionMetadata(partitionPathSet.stream().toArray(String[]::new), fs);
   }
 
   /**
@@ -426,7 +442,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     assertNoWriteErrors(statuses);
 
     // check the partition metadata is written out
-    assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
+    assertPartitionMetadataForRecords(records, fs);
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
@@ -494,7 +510,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     assertNoWriteErrors(statuses);
 
     // check the partition metadata is written out
-    assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
+    assertPartitionMetadataForKeys(keysToDelete, fs);
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);

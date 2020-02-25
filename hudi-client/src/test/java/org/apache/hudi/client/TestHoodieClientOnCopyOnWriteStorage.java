@@ -408,7 +408,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertNoWriteErrors(statuses);
 
     // check the partition metadata is written out
-    assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
+    assertPartitionMetadataForRecords(inserts1, fs);
     String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
@@ -430,7 +430,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertNoWriteErrors(statuses1);
 
     // check the partition metadata is written out
-    assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
+    assertPartitionMetadataForRecords(updates1, fs);
     // Check the entire dataset has all records still
     fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
     for (int i = 0; i < fullPartitionPaths.length; i++) {

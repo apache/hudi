@@ -55,7 +55,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
   public void setUp() throws Exception {
     initPath();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath);
-    initSparkContexts("TestUpdateMapFunction");
+    initSparkContexts("TestUpdateSchemaEvolution");
   }
 
   @After
@@ -90,8 +90,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
       HoodieCreateHandle createHandle =
           new HoodieCreateHandle(config, "100", table, rowChange1.getPartitionPath(), "f1-0", insertRecords.iterator());
       createHandle.write();
-      WriteStatus insertResult = createHandle.close();
-      return insertResult;
+      return createHandle.close();
     }).collect();
 
     final Path commitFile = new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
@@ -136,7 +135,6 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
   }
 
   private HoodieWriteConfig makeHoodieClientConfig(String schema) throws Exception {
-    // Prepare the AvroParquetIO
     String schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream(schema));
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr).build();
   }
