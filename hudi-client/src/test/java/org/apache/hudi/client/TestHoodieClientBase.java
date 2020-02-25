@@ -178,7 +178,6 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     }
   }
 
-
   void assertPartitionMetadataForRecords(List<HoodieRecord> inputRecords, FileSystem fs) throws IOException {
     Set<String> partitionPathSet = inputRecords.stream()
         .map(HoodieRecord::getPartitionPath)
