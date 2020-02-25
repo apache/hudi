@@ -20,7 +20,7 @@ package org.apache.hudi.table.compact;
 
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.client.HoodieWriteClient;
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;

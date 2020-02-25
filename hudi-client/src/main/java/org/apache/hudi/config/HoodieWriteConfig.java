@@ -19,7 +19,7 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.client.HoodieWriteClient;
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;

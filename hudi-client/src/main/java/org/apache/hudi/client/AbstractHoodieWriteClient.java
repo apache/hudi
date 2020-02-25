@@ -20,7 +20,6 @@ package org.apache.hudi.client;
 
 import java.util.Collections;
 
-import org.apache.hudi.WriteStatus;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodieRollbackStat;

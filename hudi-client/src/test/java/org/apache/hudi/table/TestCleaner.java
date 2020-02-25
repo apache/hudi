@@ -19,7 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.client.TestHoodieClientBase;
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;

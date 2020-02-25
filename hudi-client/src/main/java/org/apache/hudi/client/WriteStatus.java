@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;

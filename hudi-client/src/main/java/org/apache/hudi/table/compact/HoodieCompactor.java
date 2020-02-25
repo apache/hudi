@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.compact;
 
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.config.HoodieWriteConfig;

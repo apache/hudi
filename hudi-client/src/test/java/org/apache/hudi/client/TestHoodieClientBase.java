@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.common.HoodieClientTestHarness;
-import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;

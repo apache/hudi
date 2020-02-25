@@ -53,14 +53,14 @@ import scala.Tuple2;
 /**
  * Performs Rollback of Hoodie Tables.
  */
-public class RollbackExecutor implements Serializable {
+public class RollbackHelper implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(RollbackExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(RollbackHelper.class);
 
   private final HoodieTableMetaClient metaClient;
   private final HoodieWriteConfig config;
 
-  public RollbackExecutor(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
+  public RollbackHelper(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
     this.metaClient = metaClient;
     this.config = config;
   }
@@ -68,8 +68,7 @@ public class RollbackExecutor implements Serializable {
   /**
    * Performs all rollback actions that we have collected in parallel.
    */
-  public List<HoodieRollbackStat> performRollback(JavaSparkContext jsc, HoodieInstant instantToRollback,
-                                           List<RollbackRequest> rollbackRequests) {
+  public List<HoodieRollbackStat> performRollback(JavaSparkContext jsc, HoodieInstant instantToRollback, List<RollbackRequest> rollbackRequests) {
 
     SerializablePathFilter filter = (path) -> {
       if (path.toString().contains(".parquet")) {

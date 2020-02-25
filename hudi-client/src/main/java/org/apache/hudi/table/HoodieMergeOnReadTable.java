@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.FileSlice;
@@ -43,7 +43,7 @@ import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.compact.HoodieMergeOnReadTableCompactor;
 
 import com.google.common.base.Preconditions;
-import org.apache.hudi.table.rollback.RollbackExecutor;
+import org.apache.hudi.table.rollback.RollbackHelper;
 import org.apache.hudi.table.rollback.RollbackRequest;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -196,7 +196,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
       LOG.info("Unpublished " + commit);
       List<RollbackRequest> rollbackRequests = generateRollbackRequests(jsc, instant);
       // TODO: We need to persist this as rollback workload and use it in case of partial failures
-      allRollbackStats = new RollbackExecutor(metaClient, config).performRollback(jsc, instant, rollbackRequests);
+      allRollbackStats = new RollbackHelper(metaClient, config).performRollback(jsc, instant, rollbackRequests);
     }
 
     // Delete Inflight instants if enabled

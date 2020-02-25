@@ -59,9 +59,9 @@ import java.util.stream.Collectors;
  * <p>
  * TODO: Should all cleaning be done based on {@link HoodieCommitMetadata}
  */
-public class CleanExecutor<T extends HoodieRecordPayload<T>> implements Serializable {
+public class CleanHelper<T extends HoodieRecordPayload<T>> implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(CleanExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(CleanHelper.class);
 
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
@@ -69,7 +69,7 @@ public class CleanExecutor<T extends HoodieRecordPayload<T>> implements Serializ
   private HoodieTable<T> hoodieTable;
   private HoodieWriteConfig config;
 
-  public CleanExecutor(HoodieTable<T> hoodieTable, HoodieWriteConfig config) {
+  public CleanHelper(HoodieTable<T> hoodieTable, HoodieWriteConfig config) {
     this.hoodieTable = hoodieTable;
     this.fileSystemView = hoodieTable.getHoodieView();
     this.commitTimeline = hoodieTable.getCompletedCommitTimeline();

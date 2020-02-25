@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -57,7 +57,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.table.rollback.RollbackExecutor;
+import org.apache.hudi.table.rollback.RollbackHelper;
 import org.apache.hudi.table.rollback.RollbackRequest;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -285,7 +285,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   @Override
   public HoodieCleanerPlan scheduleClean(JavaSparkContext jsc) {
     try {
-      CleanExecutor cleaner = new CleanExecutor(this, config);
+      CleanHelper cleaner = new CleanHelper(this, config);
       Option<HoodieInstant> earliestInstant = cleaner.getEarliestCommitToRetain();
 
       List<String> partitionsToClean = cleaner.getPartitionPathsToClean(earliestInstant);
@@ -371,7 +371,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       List<RollbackRequest> rollbackRequests = generateRollbackRequests(instant);
 
       //TODO: We need to persist this as rollback workload and use it in case of partial failures
-      stats = new RollbackExecutor(metaClient, config).performRollback(jsc, instant, rollbackRequests);
+      stats = new RollbackHelper(metaClient, config).performRollback(jsc, instant, rollbackRequests);
     }
     // Delete Inflight instant if enabled
     deleteInflightAndRequestedInstant(deleteInstants, activeTimeline, instant);
