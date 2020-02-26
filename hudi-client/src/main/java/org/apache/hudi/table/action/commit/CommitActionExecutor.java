@@ -23,21 +23,15 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
-import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.LazyInsertIterable;
-import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -50,14 +44,19 @@ import java.util.List;
 import java.util.Map;
 
 public abstract class CommitActionExecutor<T extends HoodieRecordPayload<T>>
-    extends BaseCommitActionExecutor<T> {
+    extends BaseCommitActionExecutor<T, HoodieWriteMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(CommitActionExecutor.class);
 
-  public CommitActionExecutor(JavaSparkContext jsc,
-      HoodieWriteConfig config, HoodieTable table,
-      String instantTime, WriteOperationType operationType) {
-    super(jsc, config, table, instantTime, operationType);
+  public CommitActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable table,
+                              String instantTime, WriteOperationType operationType) {
+    this(jsc, config, table, instantTime, operationType, Option.empty());
+  }
+
+  public CommitActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable table,
+                              String instantTime, WriteOperationType operationType,
+                              Option<Map<String, String>> extraMetadata) {
+    super(jsc, config, table, instantTime, operationType, extraMetadata);
   }
 
   @Override
@@ -87,22 +86,7 @@ public abstract class CommitActionExecutor<T extends HoodieRecordPayload<T>>
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-      try {
-        HoodieFileReader<IndexedRecord> storageReader =
-            HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), upsertHandle.getOldFilePath());
-        wrapper =
-            new SparkBoundedInMemoryExecutor(config, storageReader.getRecordIterator(upsertHandle.getWriterSchema()),
-            new UpdateHandler(upsertHandle), x -> x);
-        wrapper.execute();
-      } catch (Exception e) {
-        throw new HoodieException(e);
-      } finally {
-        upsertHandle.close();
-        if (null != wrapper) {
-          wrapper.shutdownNow();
-        }
-      }
+      MergeHelper.runMerge(table, upsertHandle);
     }
 
     // TODO(vc): This needs to be revisited
@@ -146,30 +130,5 @@ public abstract class CommitActionExecutor<T extends HoodieRecordPayload<T>>
   @Override
   public Partitioner getInsertPartitioner(WorkloadProfile profile) {
     return getUpsertPartitioner(profile);
-  }
-
-  /**
-   * Consumer that dequeues records from queue and sends to Merge Handle.
-   */
-  private static class UpdateHandler extends BoundedInMemoryQueueConsumer<GenericRecord, Void> {
-
-    private final HoodieMergeHandle upsertHandle;
-
-    private UpdateHandler(HoodieMergeHandle upsertHandle) {
-      this.upsertHandle = upsertHandle;
-    }
-
-    @Override
-    protected void consumeOneRecord(GenericRecord record) {
-      upsertHandle.write(record);
-    }
-
-    @Override
-    protected void finish() {}
-
-    @Override
-    protected Void getResult() {
-      return null;
-    }
   }
 }

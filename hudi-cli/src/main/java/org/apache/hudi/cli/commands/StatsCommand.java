@@ -118,7 +118,7 @@ public class StatsCommand implements CommandMarker {
 
     FileSystem fs = HoodieCLI.fs;
     String globPath = String.format("%s/%s/*", HoodieCLI.getTableMetaClient().getBasePath(), globRegex);
-    FileStatus[] statuses = fs.globStatus(new Path(globPath));
+    List<FileStatus> statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath));
 
     // max, min, #small files < 10MB, 50th, avg, 95th
     Histogram globalHistogram = new Histogram(new UniformReservoir(MAX_FILES));

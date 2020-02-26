@@ -201,6 +201,10 @@
                       <include>com.fasterxml.jackson.core:jackson-core</include>
                       <include>com.fasterxml.jackson.core:jackson-databind</include>
                       <include>org.apache.htrace:htrace-core</include>
+                      <include>org.apache.hbase:hbase-common</include>
+                      <include>org.apache.hbase:hbase-client</include>
+                      <include>org.apache.hbase:hbase-protocol</include>
+                      <include>org.apache.hbase:hbase-server</include>
                       <include>log4j:log4j</include>
                   </includes>
                 </artifactSet>

@@ -18,9 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-
 import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
@@ -53,6 +51,12 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     return COMPARABLE_ACTIONS.getOrDefault(action, action);
   }
 
+  public static String getTimelineFileExtension(String fileName) {
+    Objects.requireNonNull(fileName);
+    int dotIndex = fileName.indexOf('.');
+    return dotIndex == -1 ? "" : fileName.substring(dotIndex);
+  }
+
   /**
    * Instant State.
    */
@@ -77,7 +81,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   public HoodieInstant(FileStatus fileStatus) {
     // First read the instant timestamp. [==>20170101193025<==].commit
     String fileName = fileStatus.getPath().getName();
-    String fileExtension = FSUtils.getFileExtension(fileName);
+    String fileExtension = getTimelineFileExtension(fileName);
     timestamp = fileName.replace(fileExtension, "");
 
     // Next read the action for this marker

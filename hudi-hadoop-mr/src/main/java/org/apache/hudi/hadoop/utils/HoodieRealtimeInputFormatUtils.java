@@ -29,18 +29,22 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
+import org.apache.hudi.hadoop.realtime.RealtimeBootstrapBaseFileSplit;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.SplitLocationInfo;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +63,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
     // for all unique split parents, obtain all delta files based on delta commit timeline,
     // grouped on file id
-    List<HoodieRealtimeFileSplit> rtSplits = new ArrayList<>();
+    List<InputSplit> rtSplits = new ArrayList<>();
     partitionsToParquetSplits.keySet().forEach(partitionPath -> {
       // for each partition path obtain the data & log file groupings, then map back to inputsplits
       HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionPath);
@@ -78,19 +82,29 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
         // subgroup splits again by file id & match with log files.
         Map<String, List<FileSplit>> groupedInputSplits = partitionsToParquetSplits.get(partitionPath).stream()
             .collect(Collectors.groupingBy(split -> FSUtils.getFileId(split.getPath().getName())));
+        // Get the maxCommit from the last delta or compaction or commit - when bootstrapped from COW table
+        String maxCommitTime = metaClient.getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
+                HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
+            .filterCompletedInstants().lastInstant().get().getTimestamp();
         latestFileSlices.forEach(fileSlice -> {
           List<FileSplit> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
           dataFileSplits.forEach(split -> {
             try {
               List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
                   .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
-              // Get the maxCommit from the last delta or compaction or commit - when
-              // bootstrapped from COW table
-              String maxCommitTime = metaClient
-                  .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
-                      HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
-                  .filterCompletedInstants().lastInstant().get().getTimestamp();
-              rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths, maxCommitTime));
+              if (split instanceof BootstrapBaseFileSplit) {
+                BootstrapBaseFileSplit eSplit = (BootstrapBaseFileSplit) split;
+                String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
+                    .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];
+                String[] inMemoryHosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
+                    .filter(SplitLocationInfo::isInMemory).toArray(String[]::new) : new String[0];
+                FileSplit baseSplit = new FileSplit(eSplit.getPath(), eSplit.getStart(), eSplit.getLength(),
+                    hosts, inMemoryHosts);
+                rtSplits.add(new RealtimeBootstrapBaseFileSplit(baseSplit,metaClient.getBasePath(),
+                    logFilePaths, maxCommitTime, eSplit.getBootstrapFileSplit()));
+              } else {
+                rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths, maxCommitTime));
+              }
             } catch (IOException e) {
               throw new HoodieIOException("Error creating hoodie real time split ", e);
             }

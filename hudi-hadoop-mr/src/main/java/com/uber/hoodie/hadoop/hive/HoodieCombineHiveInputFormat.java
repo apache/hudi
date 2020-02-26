@@ -39,8 +39,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
   }
 
   @Override
-  protected org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim
-      createInputFormatShim() {
+  protected org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim createInputFormatShim() {
     return new HoodieCombineFileInputFormatShim<>();
   }
 

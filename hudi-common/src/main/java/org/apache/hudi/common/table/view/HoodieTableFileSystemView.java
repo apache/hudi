@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -57,6 +58,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    * PartitionPath + File-Id to pending compaction instant time.
    */
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction;
+
+  /**
+   * PartitionPath + File-Id to bootstrap base File (Index Only bootstrapped).
+   */
+  protected Map<HoodieFileGroupId, BootstrapBaseFileMapping> fgIdToBootstrapBaseFile;
 
   /**
    * Flag to determine if closed.
@@ -99,6 +105,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected void resetViewState() {
     this.fgIdToPendingCompaction = null;
     this.partitionToFileGroupsMap = null;
+    this.fgIdToBootstrapBaseFile = null;
   }
 
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
@@ -108,6 +115,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fileIdToPendingCompaction) {
     return fileIdToPendingCompaction;
+  }
+
+  protected Map<HoodieFileGroupId, BootstrapBaseFileMapping> createFileIdToBootstrapBaseFileMap(
+      Map<HoodieFileGroupId, BootstrapBaseFileMapping> fileGroupIdBootstrapBaseFileMap) {
+    return fileGroupIdBootstrapBaseFileMap;
   }
 
   /**
@@ -186,6 +198,48 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
+  protected boolean isBootstrapBaseFilePresentForFileId(HoodieFileGroupId fgId) {
+    return fgIdToBootstrapBaseFile.containsKey(fgId);
+  }
+
+  @Override
+  void resetBootstrapBaseFileMapping(Stream<BootstrapBaseFileMapping> bootstrapBaseFileStream) {
+    // Build fileId to bootstrap Data File
+    this.fgIdToBootstrapBaseFile = createFileIdToBootstrapBaseFileMap(bootstrapBaseFileStream
+        .collect(Collectors.toMap(BootstrapBaseFileMapping::getFileGroupId, x -> x)));
+  }
+
+  @Override
+  void addBootstrapBaseFileMapping(Stream<BootstrapBaseFileMapping> bootstrapBaseFileStream) {
+    bootstrapBaseFileStream.forEach(bootstrapBaseFile -> {
+      ValidationUtils.checkArgument(!fgIdToBootstrapBaseFile.containsKey(bootstrapBaseFile.getFileGroupId()),
+          "Duplicate FileGroupId found in bootstrap base file mapping. FgId :"
+              + bootstrapBaseFile.getFileGroupId());
+      fgIdToBootstrapBaseFile.put(bootstrapBaseFile.getFileGroupId(), bootstrapBaseFile);
+    });
+  }
+
+  @Override
+  void removeBootstrapBaseFileMapping(Stream<BootstrapBaseFileMapping> bootstrapBaseFileStream) {
+    bootstrapBaseFileStream.forEach(bootstrapBaseFile -> {
+      ValidationUtils.checkArgument(fgIdToBootstrapBaseFile.containsKey(bootstrapBaseFile.getFileGroupId()),
+          "Trying to remove a FileGroupId which is not found in bootstrap base file mapping. FgId :"
+              + bootstrapBaseFile.getFileGroupId());
+      fgIdToBootstrapBaseFile.remove(bootstrapBaseFile.getFileGroupId());
+    });
+  }
+
+  @Override
+  protected Option<BootstrapBaseFileMapping> getBootstrapBaseFile(HoodieFileGroupId fileGroupId) {
+    return Option.ofNullable(fgIdToBootstrapBaseFile.get(fileGroupId));
+  }
+
+  @Override
+  Stream<BootstrapBaseFileMapping> fetchBootstrapBaseFiles() {
+    return fgIdToBootstrapBaseFile.values().stream();
+  }
+
+  @Override
   protected Option<Pair<String, CompactionOperation>> getPendingCompactionOperationWithInstant(HoodieFileGroupId fgId) {
     return Option.ofNullable(fgIdToPendingCompaction.get(fgId));
   }
@@ -213,6 +267,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     super.reset();
     partitionToFileGroupsMap = null;
     fgIdToPendingCompaction = null;
+    fgIdToBootstrapBaseFile = null;
   }
 
   @Override

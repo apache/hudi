@@ -39,11 +39,10 @@ import java.util.stream.IntStream;
 
 public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
 
-  public static <T extends HoodieRecordPayload<T>> HoodieWriteMetadata bulkInsert(
-      JavaRDD<HoodieRecord<T>> inputRecords, String instantTime,
-      HoodieTable<T> table, HoodieWriteConfig config,
-      CommitActionExecutor<T> executor, boolean performDedupe,
-      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+  public static <T extends HoodieRecordPayload<T>> HoodieWriteMetadata bulkInsert(JavaRDD<HoodieRecord<T>> inputRecords, String instantTime,
+                                                                                  HoodieTable<T> table, HoodieWriteConfig config,
+                                                                                  CommitActionExecutor<T> executor, boolean performDedupe,
+                                                                                  Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
     // De-dupe/merge if needed

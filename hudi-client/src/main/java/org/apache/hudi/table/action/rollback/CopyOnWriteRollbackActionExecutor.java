@@ -82,6 +82,9 @@ public class CopyOnWriteRollbackActionExecutor extends BaseRollbackActionExecuto
       LOG.info("Clean out all base files generated for commit: " + resolvedInstant);
       stats = getRollbackStrategy().execute(resolvedInstant);
     }
+
+    dropBootstrapIndexIfNeeded(instantToRollback);
+
     // Delete Inflight instant if enabled
     deleteInflightAndRequestedInstant(deleteInstants, activeTimeline, resolvedInstant);
     LOG.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());

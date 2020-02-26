@@ -477,8 +477,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             .withBloomIndexUpdatePartitionPath(true)
             .withGlobalSimpleIndexUpdatePartitionPath(true)
             .build()).withTimelineLayoutVersion(VERSION_0).build();
-    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(), metaClient.getTableType(),
-        metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
+    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
+        metaClient.getTableType(), metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
         metaClient.getTableConfig().getPayloadClass(), VERSION_0);
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 

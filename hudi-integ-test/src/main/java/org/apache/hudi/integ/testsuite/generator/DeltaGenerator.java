@@ -40,6 +40,7 @@ import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriterAdapter;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriterFactory;
+import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -70,16 +71,13 @@ public class DeltaGenerator implements Serializable {
   private int batchId;
 
   public DeltaGenerator(DeltaConfig deltaOutputConfig, JavaSparkContext jsc, SparkSession sparkSession,
-      String schemaStr,
-      KeyGenerator keyGenerator) {
+                        String schemaStr, BuiltinKeyGenerator keyGenerator) {
     this.deltaOutputConfig = deltaOutputConfig;
     this.jsc = jsc;
     this.sparkSession = sparkSession;
     this.schemaStr = schemaStr;
-    this.recordRowKeyFieldNames = keyGenerator instanceof ComplexKeyGenerator ? ((ComplexKeyGenerator) keyGenerator)
-        .getRecordKeyFields() : Arrays.asList(((SimpleKeyGenerator) keyGenerator).getRecordKeyField());
-    this.partitionPathFieldNames = keyGenerator instanceof ComplexKeyGenerator ? ((ComplexKeyGenerator) keyGenerator)
-        .getPartitionPathFields() : Arrays.asList(((SimpleKeyGenerator) keyGenerator).getPartitionPathField());
+    this.recordRowKeyFieldNames = keyGenerator.getRecordKeyFields();
+    this.partitionPathFieldNames = keyGenerator.getPartitionPathFields();
   }
 
   public JavaRDD<DeltaWriteStats> writeRecords(JavaRDD<GenericRecord> records) {

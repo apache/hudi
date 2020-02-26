@@ -19,9 +19,11 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.avro.generic.GenericRecord;
@@ -34,6 +36,9 @@ import org.joda.time.format.DateTimeFormatter;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -57,6 +62,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   // TimeZone detailed settings reference
   // https://docs.oracle.com/javase/8/docs/api/java/util/TimeZone.html
   private final DateTimeZone outputDateTimeZone;
+
+  protected final boolean encodePartitionPath;
 
   /**
    * Supported configs.
@@ -82,7 +89,11 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   }
 
   public TimestampBasedKeyGenerator(TypedProperties config) throws IOException {
-    super(config);
+    this(config, config.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()));
+  }
+
+  public TimestampBasedKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
+    super(config, partitionPathField);
     String dateTimeParserClass = config.getString(Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParserImpl.class.getName());
     this.parser = DataSourceUtils.createDateTimeParser(config, dateTimeParserClass);
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
@@ -108,17 +119,13 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
       default:
         timeUnit = null;
     }
+    this.encodePartitionPath = config.getBoolean(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY(),
+        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL()));
   }
 
   @Override
-  public HoodieKey getKey(GenericRecord record) {
-    String recordKey = getRecordKey(record);
-    String partitionPath = getPartitionPath(record, partitionPathField);
-    return new HoodieKey(recordKey, partitionPath);
-  }
-
-  String getPartitionPath(GenericRecord record, String partitionPathField) {
-    Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathField, true);
+  public String getPartitionPath(GenericRecord record) {
+    Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, partitionPathField, true);
     if (partitionVal == null) {
       partitionVal = 1L;
     }
@@ -146,11 +153,18 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
         timeMs = inputFormatter.parseDateTime(partitionVal.toString()).getMillis();
       } else {
         throw new HoodieNotSupportedException(
-          "Unexpected type for partition field: " + partitionVal.getClass().getName());
+            "Unexpected type for partition field: " + partitionVal.getClass().getName());
       }
       DateTime timestamp = new DateTime(timeMs, outputDateTimeZone);
-      return hiveStylePartitioning ? partitionPathField + "=" + timestamp.toString(partitionFormatter)
-        : timestamp.toString(partitionFormatter);
+      String partitionPath = timestamp.toString(partitionFormatter);
+      if (encodePartitionPath) {
+        try {
+          partitionPath = URLEncoder.encode(partitionPath, StandardCharsets.UTF_8.toString());
+        } catch (UnsupportedEncodingException uoe) {
+          throw new HoodieException(uoe.getMessage(), uoe);
+        }
+      }
+      return hiveStylePartitioning ? partitionPathField + "=" + partitionPath : partitionPath;
     } catch (Exception e) {
       throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, e);
     }

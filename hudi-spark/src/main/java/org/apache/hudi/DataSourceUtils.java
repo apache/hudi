@@ -70,14 +70,6 @@ public class DataSourceUtils {
   private static final Logger LOG = LogManager.getLogger(DataSourceUtils.class);
 
   /**
-   * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
-   */
-  public static String getNestedFieldValAsString(GenericRecord record, String fieldName, boolean returnNullIfNotFound) {
-    Object obj = getNestedFieldVal(record, fieldName, returnNullIfNotFound);
-    return (obj == null) ? null : obj.toString();
-  }
-
-  /**
    * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c
    */
   public static Object getNestedFieldVal(GenericRecord record, String fieldName, boolean returnNullIfNotFound) {
@@ -108,8 +100,8 @@ public class DataSourceUtils {
       return null;
     } else {
       throw new HoodieException(
-        fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
-          + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+          fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
+              + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
     }
   }
 
@@ -202,12 +194,12 @@ public class DataSourceUtils {
    * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
    */
   private static Option<BulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
-          throws HoodieException {
+      throws HoodieException {
     String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
     try {
       return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
-              ? Option.empty() :
-              Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
+          ? Option.empty() :
+          Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
     } catch (Throwable e) {
       throw new HoodieException("Could not create UserDefinedBulkInsertPartitioner class " + bulkInsertPartitionerClass, e);
     }
@@ -343,7 +335,7 @@ public class DataSourceUtils {
         props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
             SlashEncodedDayPartitionValueExtractor.class.getName());
     hiveSyncConfig.useJdbc = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_USE_JDBC_OPT_KEY(),
-            DataSourceWriteOptions.DEFAULT_HIVE_USE_JDBC_OPT_VAL()));
+        DataSourceWriteOptions.DEFAULT_HIVE_USE_JDBC_OPT_VAL()));
     return hiveSyncConfig;
   }
 }

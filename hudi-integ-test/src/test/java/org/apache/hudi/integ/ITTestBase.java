@@ -162,7 +162,9 @@ public abstract class ITTestBase {
         .awaitCompletion();
     int exitCode = dockerClient.inspectExecCmd(createCmdResponse.getId()).exec().getExitCode();
     LOG.info("Exit code for command : " + exitCode);
-    LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
+    if (exitCode != 0) {
+      LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
+    }
     LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
 
     if (expectedToSucceed) {
@@ -240,6 +242,9 @@ public abstract class ITTestBase {
       String filePath = System.getProperty("java.io.tmpdir") + "/" + System.currentTimeMillis() + "-hive.log";
       FileIOUtils.writeStringToFile(hiveLogStr, filePath);
       LOG.info("Hive log saved up at  : " + filePath);
+      LOG.info("<===========  Full hive log ===============>\n"
+          + "\n" + hiveLogStr
+          + "\n <==========================================>");
     } catch (Exception e) {
       LOG.error("Unable to save up logs..", e);
     }
@@ -268,7 +273,7 @@ public abstract class ITTestBase {
       saveUpLogs();
     }
 
-    assertEquals(times, count, "Did not find output the expected number of times");
+    assertEquals(times, count, "Did not find output the expected number of times.");
   }
 
   public class TestExecStartResultCallback extends ExecStartResultCallback {
