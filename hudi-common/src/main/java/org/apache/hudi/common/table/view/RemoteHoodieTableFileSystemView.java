@@ -207,20 +207,18 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   @Override
   public Stream<HoodieBaseFile> getLatestBaseFiles(String partitionPath) {
     Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
-    try {
-      List<BaseFileDTO> dataFiles = executeRequest(LATEST_PARTITION_DATA_FILES_URL, paramsMap,
-          new TypeReference<List<BaseFileDTO>>() {}, RequestMethod.GET);
-      return dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile);
-    } catch (IOException e) {
-      throw new HoodieRemoteException(e);
-    }
+    return getLatestBaseFilesFromParams(paramsMap, LATEST_PARTITION_DATA_FILES_URL);
   }
 
   @Override
   public Stream<HoodieBaseFile> getLatestBaseFiles() {
     Map<String, String> paramsMap = getParams();
+    return getLatestBaseFilesFromParams(paramsMap, LATEST_ALL_DATA_FILES);
+  }
+
+  private Stream<HoodieBaseFile> getLatestBaseFilesFromParams(Map<String, String> paramsMap, String requestPath) {
     try {
-      List<BaseFileDTO> dataFiles = executeRequest(LATEST_ALL_DATA_FILES, paramsMap,
+      List<BaseFileDTO> dataFiles = executeRequest(requestPath, paramsMap,
           new TypeReference<List<BaseFileDTO>>() {}, RequestMethod.GET);
       return dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile);
     } catch (IOException e) {
@@ -231,13 +229,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   @Override
   public Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxCommitTime);
-    try {
-      List<BaseFileDTO> dataFiles = executeRequest(LATEST_DATA_FILES_BEFORE_ON_INSTANT_URL, paramsMap,
-          new TypeReference<List<BaseFileDTO>>() {}, RequestMethod.GET);
-      return dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile);
-    } catch (IOException e) {
-      throw new HoodieRemoteException(e);
-    }
+    return getLatestBaseFilesFromParams(paramsMap, LATEST_DATA_FILES_BEFORE_ON_INSTANT_URL);
   }
 
   @Override
@@ -257,25 +249,13 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public Stream<HoodieBaseFile> getLatestBaseFilesInRange(List<String> commitsToReturn) {
     Map<String, String> paramsMap =
         getParams(INSTANTS_PARAM, StringUtils.join(commitsToReturn.toArray(new String[0]), ","));
-    try {
-      List<BaseFileDTO> dataFiles = executeRequest(LATEST_DATA_FILES_RANGE_INSTANT_URL, paramsMap,
-          new TypeReference<List<BaseFileDTO>>() {}, RequestMethod.GET);
-      return dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile);
-    } catch (IOException e) {
-      throw new HoodieRemoteException(e);
-    }
+    return getLatestBaseFilesFromParams(paramsMap, LATEST_DATA_FILES_RANGE_INSTANT_URL);
   }
 
   @Override
   public Stream<HoodieBaseFile> getAllBaseFiles(String partitionPath) {
     Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
-    try {
-      List<BaseFileDTO> dataFiles =
-          executeRequest(ALL_DATA_FILES, paramsMap, new TypeReference<List<BaseFileDTO>>() {}, RequestMethod.GET);
-      return dataFiles.stream().map(BaseFileDTO::toHoodieBaseFile);
-    } catch (IOException e) {
-      throw new HoodieRemoteException(e);
-    }
+    return getLatestBaseFilesFromParams(paramsMap, ALL_DATA_FILES);
   }
 
   @Override
