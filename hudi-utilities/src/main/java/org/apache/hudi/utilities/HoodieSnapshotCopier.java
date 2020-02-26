@@ -52,6 +52,8 @@ import scala.Tuple2;
 /**
  * Hoodie snapshot copy job which copies latest files from all partitions to another place, for snapshot backup.
  */
+
+@Deprecated
 public class HoodieSnapshotCopier implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSnapshotCopier.class);
