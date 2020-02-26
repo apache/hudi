@@ -80,7 +80,6 @@ public class TestHoodieSnapshotExporter {
 
   @Test
   public void testSnapshotExporter() throws IOException {
-    cfg.outputPartitioner = "";
     // Insert Operation
     List<String> records = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100));
     Dataset<Row> inputDF = spark.read().json(new JavaSparkContext(spark.sparkContext()).parallelize(records, 2));
@@ -97,6 +96,14 @@ public class TestHoodieSnapshotExporter {
     long targetCount = spark.read().json(outputPath).count();
 
     assertTrue(sourceCount == targetCount);
+
+    // Test snapshotPrefix
+    long filterCount = inputDF.where("partition == '2015/03/16'").count();
+    cfg.snapshotPrefix = "2015/03/16";
+    hoodieSnapshotExporter.export(spark, cfg);
+    long targetFilterCount = spark.read().json(outputPath).count();
+    assertTrue(filterCount == targetFilterCount);
+
   }
 
   // for testEmptySnapshotCopy

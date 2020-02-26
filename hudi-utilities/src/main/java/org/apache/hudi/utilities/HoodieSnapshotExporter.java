@@ -33,7 +33,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * export the latest records of Hudi dataset to a set of external files (e.g., plain parquet files).
+ * Export the latest records of Hudi dataset to a set of external files (e.g., plain parquet files).
  */
 
 public class HoodieSnapshotExporter {
@@ -54,9 +54,6 @@ public class HoodieSnapshotExporter {
 
     @Parameter(names = {"--output-partition-field", "-opf"}, description = "A field to be used by Spark repartitioning")
     String outputPartitionField;
-
-    @Parameter(names = {"--output-partitioner", "-op"}, description = "A class to facilitate custom repartitioning")
-    String outputPartitioner;
   }
 
   public void export(SparkSession spark, Config cfg) throws IOException {
@@ -65,7 +62,6 @@ public class HoodieSnapshotExporter {
     String snapshotPrefix = cfg.snapshotPrefix;
     String outputFormat = cfg.outputFormat;
     String outputPartitionField = cfg.outputPartitionField;
-    String outputPartitioner = cfg.outputPartitioner;
     JavaSparkContext jsc = new JavaSparkContext(spark.sparkContext());
     FileSystem fs = FSUtils.getFs(sourceBasePath, jsc.hadoopConfiguration());
 
