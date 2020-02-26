@@ -82,11 +82,10 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"fare\",\"type\": {\"type\":\"record\", \"name\":\"fare\",\"fields\": ["
       + "{\"name\": \"amount\",\"type\": \"double\"},{\"name\": \"currency\", \"type\": \"string\"}]}},"
       + "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false} ]}";
-  public static String GROCERY_PURCHASE_SCHEMA = "{\"type\":\"record\",\"name\":\"purchaserec\",\"fields\":["
-      + "{\"name\":\"created_at\",\"type\":\"string\"},{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"timestamp\",\"type\":\"double\"},"
-      + "{\"name\":\"store\",\"type\":\"string\"},{\"name\":\"product_name\",\"type\":\"string\"},{\"name\":\"category\",\"type\":\"string\"},"
-      + "{\"name\":\"price\",\"type\":\"double\"}]}";
   public static String TRIP_UBER_EXAMPLE_SCHEMA = "{\"type\":\"record\",\"name\":\"tripuberrec\",\"fields\":["
+      + "{\"name\":\"timestamp\",\"type\":\"double\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
+      + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"}]}";
+  public static String TRIP_FG_EXAMPLE_SCHEMA = "{\"type\":\"record\",\"name\":\"tripfgrec\",\"fields\":["
       + "{\"name\":\"timestamp\",\"type\":\"double\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"}]}";
   public static String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
@@ -95,9 +94,8 @@ public class HoodieTestDataGenerator {
   public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_METADATA_FIELDS =
       HoodieAvroUtils.addMetadataFields(avroSchema);
-  public static Schema purchaseAvroSchema = new Schema.Parser().parse(GROCERY_PURCHASE_SCHEMA);
+  public static Schema avroFgSchema = new Schema.Parser().parse(TRIP_FG_EXAMPLE_SCHEMA);
   public static Schema avroUberSchema = new Schema.Parser().parse(TRIP_UBER_EXAMPLE_SCHEMA);
-  public static Schema avroSchemaWithMetadataFields = HoodieAvroUtils.addMetadataFields(avroSchema);
 
   private static Random rand = new Random(46474747);
 
@@ -131,10 +129,10 @@ public class HoodieTestDataGenerator {
   public TestRawTripPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime) throws IOException {
     if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
       return generateRandomValue(key, commitTime);
-    } else if (GROCERY_PURCHASE_SCHEMA.equals(schemaStr)) {
-      return generatePayloadForGrocerySchema(key, commitTime);
     } else if (TRIP_UBER_EXAMPLE_SCHEMA.equals(schemaStr)) {
       return generatePayloadForUberSchema(key, commitTime);
+    } else if (TRIP_FG_EXAMPLE_SCHEMA.equals(schemaStr)) {
+      return generatePayloadForFgSchema(key, commitTime);
     }
 
     return null;
@@ -149,20 +147,16 @@ public class HoodieTestDataGenerator {
   }
 
   /**
-   * Generates a new avro record with GROCERY_PURCHASE_SCHEMA, retaining the key if optionally provided.
-   */
-  public TestRawTripPayload generatePayloadForGrocerySchema(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord record = generateRecordForGrocerySchema(key.getRecordKey(), 0.0, "store-" + commitTime,
-        "product-" + commitTime, "category-" + commitTime, key.getPartitionPath());
-    return new TestRawTripPayload(record.toString(), key.getRecordKey(), key.getPartitionPath(), GROCERY_PURCHASE_SCHEMA);
-  }
-
-  /**
    * Generates a new avro record with TRIP_UBER_EXAMPLE_SCHEMA, retaining the key if optionally provided.
    */
   public TestRawTripPayload generatePayloadForUberSchema(HoodieKey key, String commitTime) throws IOException {
     GenericRecord rec = generateRecordForUberSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
     return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_UBER_EXAMPLE_SCHEMA);
+  }
+
+  public TestRawTripPayload generatePayloadForFgSchema(HoodieKey key, String commitTime) throws IOException {
+    GenericRecord rec = generateRecordForFgSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
+    return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_FG_EXAMPLE_SCHEMA);
   }
 
   /**
@@ -213,25 +207,20 @@ public class HoodieTestDataGenerator {
   }
 
   /*
-  Generate random record using GROCERY_PURCHASE_SCHEMA
-   */
-  public GenericRecord generateRecordForGrocerySchema(String id, double timestamp, String store, String product, String category, String partitionPath) {
-    GenericRecord record = new GenericData.Record(purchaseAvroSchema);
-    record.put("id", id);
-    record.put("created_at", partitionPath);
-    record.put("timestamp", timestamp);
-    record.put("store", store);
-    record.put("product_name", product);
-    record.put("category", category);
-    record.put("price", rand.nextDouble() * 100);
-    return record;
-  }
-
-  /*
   Generate random record using TRIP_UBER_EXAMPLE_SCHEMA
    */
   public GenericRecord generateRecordForUberSchema(String rowKey, String riderName, String driverName, double timestamp) {
     GenericRecord rec = new GenericData.Record(avroUberSchema);
+    rec.put("_row_key", rowKey);
+    rec.put("timestamp", timestamp);
+    rec.put("rider", riderName);
+    rec.put("driver", driverName);
+    rec.put("fare", rand.nextDouble() * 100);
+    return rec;
+  }
+
+  public GenericRecord generateRecordForFgSchema(String rowKey, String riderName, String driverName, double timestamp) {
+    GenericRecord rec = new GenericData.Record(avroFgSchema);
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
     rec.put("rider", riderName);

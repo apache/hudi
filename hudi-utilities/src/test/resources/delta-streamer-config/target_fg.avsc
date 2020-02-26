@@ -16,36 +16,24 @@
  * limitations under the License.
  */
 {
-  "type": "record",
-  "name": "purchaserec",
-  "fields": [
-    {
-      "name": "created_at",
-      "type": "string"
-    },
-    {
-      "name": "id",
-      "type": "string"
-    },
-    {
-      "name": "timestamp",
-      "type": "double"
-    },
-    {
-      "name": "store",
-      "type": "string"
-    },
-    {
-      "name": "product_name",
-      "type": "string"
-    },
-    {
-      "name": "category",
-      "type": "string"
-    },
-    {
-      "name": "price",
-      "type": "double"
-    }
-  ]
+  "type" : "record",
+  "name" : "tripuberrec",
+  "fields" : [
+  {
+    "name" : "timestamp",
+    "type" : "double"
+  }, {
+    "name" : "_row_key",
+    "type" : "string"
+  }, {
+    "name" : "rider",
+    "type" : "string"
+  }, {
+    "name" : "driver",
+    "type" : "string"
+  }, {
+    "name" : "fare",
+    "type" : "double"
+  } ]
 }
+

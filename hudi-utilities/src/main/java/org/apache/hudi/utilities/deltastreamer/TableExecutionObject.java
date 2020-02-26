@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.utilities.model.TableConfig;
 import org.apache.hudi.common.util.TypedProperties;
 
 import java.util.Objects;
@@ -29,9 +28,10 @@ import java.util.Objects;
  */
 public class TableExecutionObject {
 
-  private TableConfig tableConfig;
   private TypedProperties properties;
   private HoodieDeltaStreamer.Config config;
+  private String database;
+  private String tableName;
 
   public HoodieDeltaStreamer.Config getConfig() {
     return config;
@@ -41,12 +41,20 @@ public class TableExecutionObject {
     this.config = config;
   }
 
-  public TableConfig getTableConfig() {
-    return tableConfig;
+  public String getDatabase() {
+    return database;
   }
 
-  public void setTableConfig(TableConfig tableConfig) {
-    this.tableConfig = tableConfig;
+  public void setDatabase(String database) {
+    this.database = database;
+  }
+
+  public String getTableName() {
+    return tableName;
+  }
+
+  public void setTableName(String tableName) {
+    this.tableName = tableName;
   }
 
   public TypedProperties getProperties() {
@@ -67,12 +75,11 @@ public class TableExecutionObject {
     }
 
     TableExecutionObject that = (TableExecutionObject) o;
-    return Objects.equals(tableConfig, that.tableConfig)
-      && Objects.equals(properties, that.properties);
+    return Objects.equals(properties, that.properties);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(tableConfig, properties);
+    return Objects.hash(properties);
   }
 }

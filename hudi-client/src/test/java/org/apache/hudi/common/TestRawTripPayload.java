@@ -28,6 +28,8 @@ import org.apache.hudi.common.util.Option;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -45,6 +47,8 @@ import java.util.zip.InflaterInputStream;
  * src/test/resources/schema1.
  */
 public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayload> {
+
+  private static Logger logger = LogManager.getLogger(TestRawTripPayload.class);
 
   private static final transient ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private String partitionPath;

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hadoop.fs.FileUtil;
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.utilities.model.TableConfig;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
@@ -35,7 +35,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -51,93 +53,100 @@ public class HoodieMultiTableDeltaStreamer {
 
   private List<TableExecutionObject> tableExecutionObjects;
   private transient JavaSparkContext jssc;
-  private Set<String> successTopics;
-  private Set<String> failedTopics;
+  private Set<String> successTables;
+  private Set<String> failedTables;
 
-  public HoodieMultiTableDeltaStreamer(String[] args, JavaSparkContext jssc) {
+  public HoodieMultiTableDeltaStreamer(String[] args, JavaSparkContext jssc) throws IOException {
     this.tableExecutionObjects = new ArrayList<>();
-    this.successTopics = new HashSet<>();
-    this.failedTopics = new HashSet<>();
+    this.successTables = new HashSet<>();
+    this.failedTables = new HashSet<>();
     this.jssc = jssc;
-    String tableConfigFile = getCustomPropsFileName(args);
-    FileSystem fs = FSUtils.getFs(tableConfigFile, jssc.hadoopConfiguration());
-    List<TableConfig> configList = UtilHelpers.readTableConfig(fs, new Path(tableConfigFile)).getConfigs();
+    String commonPropsFile = getCommonPropsFileName(args);
+    String configFolder = getConfigFolder(args);
+    FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
+    configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
+    checkIfPropsFileAndConfigFolderExist(commonPropsFile, configFolder, fs);
+    TypedProperties properties = UtilHelpers.readConfig(fs, new Path(commonPropsFile), new ArrayList<>()).getConfig();
+    //get the tables to be ingested and their corresponding config files from this properties instance
+    populateTableExecutionObjectList(properties, configFolder, fs, args);
+  }
 
-    for (TableConfig config : configList) {
-      validateTableConfigObject(config);
-      populateTableExecutionObjectList(config, args);
+  private void checkIfPropsFileAndConfigFolderExist(String commonPropsFile, String configFolder, FileSystem fs) throws IOException {
+    if (!fs.exists(new Path(commonPropsFile))) {
+      throw new IllegalArgumentException("Please provide valid common config file path!");
+    }
+
+    if (!fs.exists(new Path(configFolder))) {
+      fs.mkdirs(new Path(configFolder));
     }
   }
 
-  /*
-  validate if given object has all the necessary fields.
-  Throws IllegalArgumentException if any of the required fields are missing
-   */
-  private void validateTableConfigObject(TableConfig config) {
-    if (Strings.isNullOrEmpty(config.getDatabase()) || Strings.isNullOrEmpty(config.getTableName()) || Strings.isNullOrEmpty(config.getPrimaryKeyField())
-        || Strings.isNullOrEmpty(config.getTopic())) {
-      throw new IllegalArgumentException("Please provide valid table config arguments!");
+  private void checkIfTableConfigFileExists(String configFolder, FileSystem fs, String configFilePath) throws IOException {
+    if (!fs.exists(new Path(configFilePath)) || !fs.isFile(new Path(configFilePath))) {
+      throw new IllegalArgumentException("Please provide valid table config file path!");
+    }
+
+    Path path = new Path(configFilePath);
+    Path filePathInConfigFolder = new Path(configFolder, path.getName());
+    if (!fs.exists(filePathInConfigFolder)) {
+      FileUtil.copy(fs, path, fs, filePathInConfigFolder, false, fs.getConf());
     }
   }
 
-  private void populateTableExecutionObjectList(TableConfig config, String[] args) {
+  //commonProps are passed as parameter which contain table to config file mapping
+  private void populateTableExecutionObjectList(TypedProperties properties, String configFolder, FileSystem fs, String[] args) throws IOException {
+    List<String> tablesToBeIngested = getTablesToBeIngested(properties);
     TableExecutionObject executionObject;
-    try {
+    for (String table : tablesToBeIngested) {
+      String[] tableWithDatabase = table.split("\\.");
+      String database = tableWithDatabase.length > 1 ? tableWithDatabase[0] : "default";
+      String currentTable = tableWithDatabase.length > 1 ? tableWithDatabase[1] : table;
+      String configProp = Constants.INGESTION_PREFIX + database + Constants.DELIMITER + currentTable + Constants.INGESTION_CONFIG_SUFFIX;
+      String configFilePath = properties.getString(configProp, configFolder + "/" + database + "_" + currentTable + Constants.DEFAULT_CONFIG_FILE_NAME_SUFFIX);
+      checkIfTableConfigFileExists(configFolder, fs, configFilePath);
+      TypedProperties tableProperties = UtilHelpers.readConfig(fs, new Path(configFilePath), new ArrayList<>()).getConfig();
+      properties.forEach((k,v) -> {
+        tableProperties.setProperty(k.toString(), v.toString());
+      });
       final Config cfg = new Config();
       String[] tableArgs = args.clone();
-      String targetBasePath = resetTarget(tableArgs, config.getDatabase(), config.getTableName());
+      String targetBasePath = resetTarget(tableArgs, database, currentTable);
       JCommander cmd = new JCommander(cfg);
       cmd.parse(tableArgs);
-      cfg.targetBasePath = Strings.isNullOrEmpty(config.getTargetBasePath()) ? targetBasePath : config.getTargetBasePath();
-      FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration());
-      TypedProperties typedProperties = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
-      populateIngestionProps(typedProperties, config);
-      populateSchemaProviderProps(cfg, typedProperties, config);
-      populateHiveSyncProps(cfg, typedProperties, config);
+      String overriddenTargetBasePath = tableProperties.getString(Constants.TARGET_BASE_PATH_PROP, "");
+      cfg.targetBasePath = Strings.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
+      if (cfg.enableHiveSync && Strings.isNullOrEmpty(tableProperties.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), ""))) {
+        throw new HoodieException("Hive sync table field not provided!");
+      }
+      populateSchemaProviderProps(cfg, tableProperties);
       executionObject = new TableExecutionObject();
+      executionObject.setProperties(tableProperties);
       executionObject.setConfig(cfg);
-      executionObject.setProperties(typedProperties);
-      executionObject.setTableConfig(config);
+      executionObject.setDatabase(database);
+      executionObject.setTableName(currentTable);
       this.tableExecutionObjects.add(executionObject);
-    } catch (Exception e) {
-      logger.error("Error while creating execution object for topic: " + config.getTopic(), e);
-      throw e;
     }
   }
 
-  private void populateSchemaProviderProps(Config cfg, TypedProperties typedProperties, TableConfig config) {
+  private List<String> getTablesToBeIngested(TypedProperties properties) {
+    String combinedTablesString = properties.getString(Constants.TABLES_TO_BE_INGESTED_PROP);
+    if (combinedTablesString == null) {
+      return new ArrayList<>();
+    }
+    String[] tablesArray = combinedTablesString.split(",");
+    return Arrays.asList(tablesArray);
+  }
+
+  private void populateSchemaProviderProps(Config cfg, TypedProperties typedProperties) {
     if (cfg.schemaProviderClassName.equals(SchemaRegistryProvider.class.getName())) {
       String schemaRegistryBaseUrl = typedProperties.getString(Constants.SCHEMA_REGISTRY_BASE_URL_PROP);
       String schemaRegistrySuffix = typedProperties.getString(Constants.SCHEMA_REGISTRY_URL_SUFFIX_PROP);
-      typedProperties.setProperty(Constants.SOURCE_SCHEMA_REGISTRY_URL_PROP, schemaRegistryBaseUrl + config.getTopic() + schemaRegistrySuffix);
-      typedProperties.setProperty(Constants.TARGET_SCHEMA_REGISTRY_URL_PROP, schemaRegistryBaseUrl + config.getTopic() + schemaRegistrySuffix);
+      typedProperties.setProperty(Constants.SOURCE_SCHEMA_REGISTRY_URL_PROP, schemaRegistryBaseUrl + typedProperties.getString(Constants.KAFKA_TOPIC_PROP) + schemaRegistrySuffix);
+      typedProperties.setProperty(Constants.TARGET_SCHEMA_REGISTRY_URL_PROP, schemaRegistryBaseUrl + typedProperties.getString(Constants.KAFKA_TOPIC_PROP) + schemaRegistrySuffix);
     }
   }
 
-  private void populateHiveSyncProps(Config cfg, TypedProperties typedProperties, TableConfig config) {
-    if (cfg.enableHiveSync && Strings.isNullOrEmpty(config.getHiveSyncTable())) {
-      throw new HoodieException("Hive sync table field not provided!");
-    }
-    typedProperties.setProperty(Constants.HIVE_SYNC_TABLE_PROP, config.getHiveSyncTable());
-    typedProperties.setProperty(Constants.HIVE_SYNC_DATABASE_NAME_PROP, Strings.isNullOrEmpty(config.getHiveSyncDatabase())
-        ? typedProperties.getString(Constants.HIVE_SYNC_DATABASE_NAME_PROP, DataSourceWriteOptions.DEFAULT_HIVE_DATABASE_OPT_VAL())
-        : config.getHiveSyncDatabase());
-    typedProperties.setProperty(DataSourceWriteOptions.HIVE_ASSUME_DATE_PARTITION_OPT_KEY(), String.valueOf(config.getAssumeDatePartitioningForHiveSync()));
-    typedProperties.setProperty(DataSourceWriteOptions.HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY(), String.valueOf(config.getUsePreApacheInputFormatForHiveSync()));
-  }
-
-  private void populateIngestionProps(TypedProperties typedProperties, TableConfig config) {
-    typedProperties.setProperty(Constants.KAFKA_TOPIC_PROP, config.getTopic());
-    typedProperties.setProperty(Constants.PARTITION_TIMESTAMP_TYPE_PROP, config.getPartitionTimestampType());
-    typedProperties.setProperty(Constants.PARTITION_FIELD_INPUT_FORMAT_PROP, config.getPartitionInputFormat());
-    typedProperties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), config.getPrimaryKeyField());
-    typedProperties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), config.getPartitionKeyField());
-    typedProperties.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(), Strings.isNullOrEmpty(config.getKeyGeneratorClassName())
-        ? typedProperties.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(), DataSourceWriteOptions.DEFAULT_KEYGENERATOR_CLASS_OPT_VAL())
-        : config.getKeyGeneratorClassName());
-  }
-
-  public static void main(String[] args) {
+  public static void main(String[] args) throws IOException {
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-delta-streamer", Constants.LOCAL_SPARK_MASTER);
     try {
       new HoodieMultiTableDeltaStreamer(args, jssc).sync();
@@ -146,20 +155,26 @@ public class HoodieMultiTableDeltaStreamer {
     }
   }
 
-  /**
-   * Gets customPropsFileName from given args.
-   * @param args
-   * @return
-   */
-  private static String getCustomPropsFileName(String[] args) {
-    String customPropsFileName = "custom_config.json";
+  private static String getCommonPropsFileName(String[] args) {
+    String commonPropsFileName = "common_props.properties";
     for (int i = 0; i < args.length; i++) {
-      if (args[i].equals(Constants.CUSTOM_PROPS_FILE_PROP)) {
-        customPropsFileName = args[i + 1];
+      if (args[i].equals(Constants.PROPS_FILE_PROP)) {
+        commonPropsFileName = args[i + 1];
         break;
       }
     }
-    return customPropsFileName;
+    return commonPropsFileName;
+  }
+
+  private static String getConfigFolder(String[] args) {
+    String configFolder = "";
+    for (int i = 0; i < args.length; i++) {
+      if (args[i].equals(Constants.CONFIG_FOLDER_PROP)) {
+        configFolder = args[i + 1];
+        break;
+      }
+    }
+    return configFolder;
   }
 
   /**
@@ -196,16 +211,16 @@ public class HoodieMultiTableDeltaStreamer {
     for (TableExecutionObject object : tableExecutionObjects) {
       try {
         new HoodieDeltaStreamer(object.getConfig(), jssc, object.getProperties()).sync();
-        successTopics.add(object.getTableConfig().getTopic());
+        successTables.add(object.getDatabase() + Constants.DELIMITER + object.getTableName());
       } catch (Exception e) {
-        logger.error("error while running CDCStreamer for topic: " + object.getTableConfig().getTopic(), e);
-        failedTopics.add(object.getTableConfig().getTopic());
+        logger.error("error while running MultiTableDeltaStreamer for table: " + object.getTableName(), e);
+        failedTables.add(object.getDatabase() + Constants.DELIMITER + object.getTableName());
       }
     }
 
-    logger.info("Ingestion was successful for topics: " + successTopics);
-    if (!failedTopics.isEmpty()) {
-      logger.info("Ingestion failed for topics: " + failedTopics);
+    logger.info("Ingestion was successful for topics: " + successTables);
+    if (!failedTables.isEmpty()) {
+      logger.info("Ingestion failed for topics: " + failedTables);
     }
   }
 
@@ -214,25 +229,28 @@ public class HoodieMultiTableDeltaStreamer {
     private static final String SOURCE_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
     private static final String TARGET_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
     public static final String HIVE_SYNC_TABLE_PROP = "hoodie.datasource.hive_sync.table";
-    private static final String PARTITION_TIMESTAMP_TYPE_PROP = "hoodie.deltastreamer.keygen.timebased.timestamp.type";
-    private static final String PARTITION_FIELD_INPUT_FORMAT_PROP = "hoodie.deltastreamer.keygen.timebased.input.dateformat";
     private static final String SCHEMA_REGISTRY_BASE_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.baseUrl";
     private static final String SCHEMA_REGISTRY_URL_SUFFIX_PROP = "hoodie.deltastreamer.schemaprovider.registry.urlSuffix";
-    private static final String HIVE_SYNC_DATABASE_NAME_PROP = "hoodie.datasource.hive_sync.database";
+    private static final String TABLES_TO_BE_INGESTED_PROP = "hoodie.deltastreamer.ingestion.tablesToBeIngested";
+    private static final String INGESTION_PREFIX = "hoodie.deltastreamer.ingestion.";
+    private static final String INGESTION_CONFIG_SUFFIX = ".configFile";
+    private static final String DEFAULT_CONFIG_FILE_NAME_SUFFIX = "_config.properties";
+    private static final String TARGET_BASE_PATH_PROP = "hoodie.deltastreamer.ingestion.targetBasePath";
     private static final String LOCAL_SPARK_MASTER = "local[2]";
     private static final String FILEDELIMITER = "/";
     private static final String DELIMITER = ".";
     private static final String TARGET_TABLE_ARG = "--target-table";
-    private static final String CUSTOM_PROPS_FILE_PROP = "--custom-props";
+    private static final String PROPS_FILE_PROP = "--props";
+    private static final String CONFIG_FOLDER_PROP = "--config-folder";
     private static final String BASE_PATH_PREFIX_PROP = "--base-path-prefix";
   }
 
-  public Set<String> getSuccessTopics() {
-    return successTopics;
+  public Set<String> getSuccessTables() {
+    return successTables;
   }
 
-  public Set<String> getFailedTopics() {
-    return failedTopics;
+  public Set<String> getFailedTables() {
+    return failedTables;
   }
 
   public List<TableExecutionObject> getTableExecutionObjects() {

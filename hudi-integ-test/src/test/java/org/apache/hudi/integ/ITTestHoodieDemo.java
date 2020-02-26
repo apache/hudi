@@ -48,6 +48,7 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private static final String COW_BASE_PATH = "/user/hive/warehouse/stock_ticks_cow";
   private static final String MOR_BASE_PATH = "/user/hive/warehouse/stock_ticks_mor";
+  private static final String CONFIG_FOLDER_PATH = "/user/hive/warehouse/config";
   private static final String COW_TABLE_NAME = "stock_ticks_cow";
   private static final String MOR_TABLE_NAME = "stock_ticks_mor";
 
@@ -121,14 +122,14 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --table-type COPY_ON_WRITE "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
-            + " --props /var/demo/config/dfs-source.properties "
+            + " --props /var/demo/config/dfs-source.properties --config-folder " + CONFIG_FOLDER_PATH
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
             + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME))
         .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
-            + " --props /var/demo/config/dfs-source.properties "
+            + " --props /var/demo/config/dfs-source.properties --config-folder " + CONFIG_FOLDER_PATH
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
             + " --disable-compaction " + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_TABLE_NAME))
         .build();
@@ -174,14 +175,14 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --table-type COPY_ON_WRITE "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
-            + " --props /var/demo/config/dfs-source.properties "
+            + " --props /var/demo/config/dfs-source.properties --config-folder " + CONFIG_FOLDER_PATH
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
             + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME))
         .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
-            + " --props /var/demo/config/dfs-source.properties "
+            + " --props /var/demo/config/dfs-source.properties --config-folder " + CONFIG_FOLDER_PATH
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
             + " --disable-compaction " + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_TABLE_NAME))
         .build();

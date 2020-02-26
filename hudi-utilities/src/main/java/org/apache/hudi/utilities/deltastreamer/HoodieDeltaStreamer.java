@@ -177,16 +177,15 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
     public String tableType;
 
+    @Parameter(names = {"--config-folder"}, description = "Path to folder which contains all the properties file", required = true)
+    public String configFolder;
+
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
         + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
         + "to individual classes, for supported properties.")
     public String propsFilePath =
         "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
-
-    @Parameter(names = {"--custom-props"}, description = "path to properties file on localfs or dfs, with configurations for "
-        + "individual onboarded tables")
-    public String customPropsFilePath = null;
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
