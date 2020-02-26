@@ -73,6 +73,12 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String METAFOLDER_NAME = ".hoodie";
   public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
   public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
+  public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_NAME = AUXILIARYFOLDER_NAME + File.separator + ".bootstrap";
+  public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_NAME = BOOTSTRAP_INDEX_ROOT_FOLDER_NAME + File.separator
+      + ".partitions";
+  public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_NAME = BOOTSTRAP_INDEX_ROOT_FOLDER_NAME + File.separator
+      + ".fileids";
+
   public static final String MARKER_EXTN = ".marker";
 
   private String basePath;
@@ -205,6 +211,20 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getMetaAuxiliaryPath() {
     return basePath + File.separator + AUXILIARYFOLDER_NAME;
+  }
+
+  /**
+   * @return Bootstrap Index By Partition Folder
+   */
+  public String getBootstrapIndexByPartitionFolderName() {
+    return getMetaAuxiliaryPath() + File.separator + BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_NAME;
+  }
+
+  /**
+   * @return Bootstrap Index By Hudi File Id Folder
+   */
+  public String getBootstrapIndexByFileIdFolderNameFolderName() {
+    return getMetaAuxiliaryPath() + File.separator + BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_NAME;
   }
 
   /**
@@ -375,12 +395,32 @@ public class HoodieTableMetaClient implements Serializable {
       fs.mkdirs(auxiliaryFolder);
     }
 
+    initializeBootstrapDirsIfNotExists(hadoopConf, basePath, fs);
     HoodieTableConfig.createHoodieProperties(fs, metaPathDir, props);
     // We should not use fs.getConf as this might be different from the original configuration
     // used to create the fs in unit tests
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
     LOG.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType() + " from " + basePath);
     return metaClient;
+  }
+
+  public static void initializeBootstrapDirsIfNotExists(Configuration hadoopConf,
+      String basePath, FileSystem fs) throws IOException {
+
+    // Create bootstrap index by partition folder if it does not exist
+    final Path bootstrap_index_folder_by_partition =
+        new Path(basePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_NAME);
+    if (!fs.exists(bootstrap_index_folder_by_partition)) {
+      fs.mkdirs(bootstrap_index_folder_by_partition);
+    }
+
+
+    // Create bootstrap index by partition folder if it does not exist
+    final Path bootstrap_index_folder_by_fileids =
+        new Path(basePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_NAME);
+    if (!fs.exists(bootstrap_index_folder_by_fileids)) {
+      fs.mkdirs(bootstrap_index_folder_by_fileids);
+    }
   }
 
   /**
@@ -523,6 +563,10 @@ public class HoodieTableMetaClient implements Serializable {
     sb.append(", tableType=").append(tableType);
     sb.append('}');
     return sb.toString();
+  }
+
+  public void initializeBootstrapDirsIfNotExists() throws IOException {
+    initializeBootstrapDirsIfNotExists(getHadoopConf(), basePath, getFs());
   }
 
   public void setBasePath(String basePath) {

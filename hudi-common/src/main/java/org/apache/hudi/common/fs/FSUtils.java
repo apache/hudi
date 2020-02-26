@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -109,6 +110,10 @@ public class FSUtils {
 
   public static String makeDataFileName(String instantTime, String writeToken, String fileId) {
     return String.format("%s_%s_%s.parquet", fileId, writeToken, instantTime);
+  }
+
+  public static String makeBootstrapIndexFileName(String instantTime, String fileId, String fileType) {
+    return String.format("%s_%s_%s.%s", fileId, "1-0-1", instantTime, fileType);
   }
 
   public static String makeMarkerFile(String instantTime, String writeToken, String fileId) {
@@ -544,5 +549,23 @@ public class FSUtils {
     return inputStream.getClass().getCanonicalName().equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream")
         || inputStream.getWrappedStream().getClass().getCanonicalName()
             .equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream");
+  }
+
+  /**
+   * Get the FS implementation for this table.
+   * @param path  Path String
+   * @param hadoopConf  Serializable Hadoop Configuration
+   * @param consistencyGuardConfig Consistency Guard Config
+   * @return HoodieWrapperFileSystem
+   */
+  public static HoodieWrapperFileSystem getFs(String path, SerializableConfiguration hadoopConf,
+      ConsistencyGuardConfig consistencyGuardConfig) {
+    FileSystem fileSystem = FSUtils.getFs(path, hadoopConf.newCopy());
+    //Preconditions.checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
+    //    "File System not expected to be that of HoodieWrapperFileSystem");
+    return new HoodieWrapperFileSystem(fileSystem,
+        consistencyGuardConfig.isConsistencyCheckEnabled()
+            ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig)
+            : new NoOpConsistencyGuard());
   }
 }
