@@ -18,15 +18,15 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.io.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.compact.strategy.CompactionStrategy;
 import org.apache.hudi.metrics.MetricsReporterType;
 
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;

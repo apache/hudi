@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common;
 
-import org.apache.hudi.HoodieReadClient;
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.filter.BloomFilter;
 import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
