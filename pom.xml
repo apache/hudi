@@ -115,6 +115,7 @@
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix></utilities.bundle.hive.shade.prefix>
     <argLine>-Xmx1024m -XX:MaxPermSize=256m</argLine>
+    <jacoco.version>0.8.5</jacoco.version>
   </properties>
 
   <scm>
@@ -264,7 +265,7 @@
         <plugin>
           <groupId>org.jacoco</groupId>
           <artifactId>jacoco-maven-plugin</artifactId>
-          <version>0.7.8</version>
+          <version>${jacoco.version}</version>
           <executions>
             <!--
                 Prepares the property pointing to the JaCoCo runtime agent which
@@ -275,10 +276,6 @@
               <goals>
                 <goal>prepare-agent</goal>
               </goals>
-              <configuration>
-                <!-- Sets the path to the file which contains the execution data. -->
-                <destFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</destFile>
-              </configuration>
             </execution>
             <!--
                 Ensures that the code coverage report for unit tests is created after
@@ -291,8 +288,6 @@
                 <goal>report</goal>
               </goals>
               <configuration>
-                <!-- Sets the path to the file which contains the execution data. -->
-                <dataFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</dataFile>
                 <!-- Sets the output directory for the code coverage report. -->
                 <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
               </configuration>
