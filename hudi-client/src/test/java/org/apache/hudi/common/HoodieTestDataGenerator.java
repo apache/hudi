@@ -578,7 +578,7 @@ public class HoodieTestDataGenerator {
         throw new HoodieIOException(e.getMessage(), e);
       }
     }
-
+    numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
     return result.stream();
   }
 
