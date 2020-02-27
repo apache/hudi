@@ -252,18 +252,16 @@ public class HoodieDeltaStreamer implements Serializable {
         + "https://spark.apache.org/docs/latest/job-scheduling.html")
     public Integer compactSchedulingMinShare = 0;
 
-    /**
-     * Compaction is enabled for MoR table by default. This flag disables it
-     */
     @Parameter(names = {"--disable-compaction"},
         description = "Compaction is enabled for MoR table by default. This flag disables it ")
     public Boolean forceDisableCompaction = false;
 
-    /**
-     * Resume Delta Streamer from this checkpoint.
-     */
     @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
     public String checkpoint = null;
+
+    @Parameter(names = {"--searchCheckpoint"}, description = "Search checkpoint in backward if no check point "
+            + "presents in the latest commit")
+    public Boolean searchCheckpoint = false;
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;

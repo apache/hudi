@@ -252,22 +252,7 @@ public class DeltaSync implements Serializable {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitTimelineOpt.isPresent()) {
-      Option<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
-      if (lastCommit.isPresent()) {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
-        if (cfg.checkpoint != null && !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
-          resumeCheckpointStr = Option.of(cfg.checkpoint);
-        } else if (commitMetadata.getMetadata(CHECKPOINT_KEY) != null) {
-          resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
-        } else {
-          throw new HoodieDeltaStreamerException(
-              "Unable to find previous checkpoint. Please double check if this table "
-                  + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
-                  + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
-                  + commitMetadata.toJsonString());
-        }
-      }
+      resumeCheckpointStr = retrieveCheckpointFromCommits(commitTimelineOpt);
     } else {
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
           cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName);
@@ -527,6 +512,47 @@ public class DeltaSync implements Serializable {
       LOG.info("Registering Schema :" + schemas);
       jssc.sc().getConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
     }
+  }
+
+  /**
+   * Search delta streamer checkpoint from the previous commits.
+   *
+   * @param commitTimelineOpt HoodieTimeline object
+   * @return checkpoint metadata as String
+   */
+  private Option<String> retrieveCheckpointFromCommits(Option<HoodieTimeline> commitTimelineOpt) throws Exception {
+    Option<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
+    if (lastCommit.isPresent()) {
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+              .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
+      // user-defined checkpoint appeared and not equal to the user-defined checkpoint of the last commit
+      if (cfg.checkpoint != null && !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
+        return Option.of(cfg.checkpoint);
+      }
+      int commitsToCheckCnt;
+      // search check point from previous commits in backward
+      if (cfg.searchCheckpoint) {
+        commitsToCheckCnt = commitTimelineOpt.get().countInstants();
+      } else {
+        commitsToCheckCnt = 1; // only check the last commit
+      }
+      Option<HoodieInstant> curCommit;
+      for (int i = 0; i < commitsToCheckCnt; ++i) {
+        curCommit = commitTimelineOpt.get().nthFromLastInstant(i);
+        commitMetadata = HoodieCommitMetadata
+                .fromBytes(commitTimelineOpt.get().getInstantDetails(curCommit.get()).get(), HoodieCommitMetadata.class);
+        if (commitMetadata.getMetadata(CHECKPOINT_KEY) != null) {
+          return Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
+        }
+      }
+      throw new HoodieDeltaStreamerException(
+              "Unable to find previous checkpoint. Please double check if this table was indeed built via delta streamer. "
+                      + "Set --searchCheckpoint to true to search the checkpoint from all previous commits"
+                      + "Last Commit :" + lastCommit
+                      + ", Instants :" + commitTimelineOpt.get().getInstants().collect(Collectors.toList())
+                      + ", CommitMetadata :" + commitMetadata.toJsonString());
+    }
+    return Option.empty();
   }
 
   /**
