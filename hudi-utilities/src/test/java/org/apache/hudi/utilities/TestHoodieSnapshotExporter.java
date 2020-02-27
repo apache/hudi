@@ -31,6 +31,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -42,7 +43,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class TestHoodieSnapshotExporter {
   private static String TEST_WRITE_TOKEN = "1-0-1";
@@ -71,22 +74,22 @@ public class TestHoodieSnapshotExporter {
     basePath = folder.getRoot().getAbsolutePath();
     fs = FSUtils.getFs(basePath, spark.sparkContext().hadoopConfiguration());
     commonOpts = new HashMap();
-    {
-      commonOpts.put("hoodie.insert.shuffle.parallelism", "4");
-      commonOpts.put("hoodie.upsert.shuffle.parallelism", "4");
-      commonOpts.put(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key");
-      commonOpts.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition");
-      commonOpts.put(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp");
-      commonOpts.put(HoodieWriteConfig.TABLE_NAME, "hoodie_test");
-    }
+
+    commonOpts.put("hoodie.insert.shuffle.parallelism", "4");
+    commonOpts.put("hoodie.upsert.shuffle.parallelism", "4");
+    commonOpts.put(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key");
+    commonOpts.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition");
+    commonOpts.put(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp");
+    commonOpts.put(HoodieWriteConfig.TABLE_NAME, "hoodie_test");
+
 
     cfg = new HoodieSnapshotExporter.Config();
-    {
-      cfg.basePath = basePath;
-      cfg.outputPath = outputPath = basePath + "/target";
-      cfg.outputFormat = "json";
-      cfg.outputPartitionField = "partition";
-    }
+
+    cfg.basePath = basePath;
+    cfg.outputPath = outputPath = basePath + "/target";
+    cfg.outputFormat = "json";
+    cfg.outputPartitionField = "partition";
+
   }
 
   @After

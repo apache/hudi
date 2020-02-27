@@ -1,12 +1,31 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.hudi.utilities;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import org.apache.commons.lang.StringUtils;
+
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -23,6 +42,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
+
 import scala.Tuple2;
 import scala.collection.JavaConversions;
 
@@ -84,7 +104,7 @@ public class HoodieSnapshotExporter {
     if (partitions.size() > 0) {
       List<String> dataFiles = new ArrayList<>();
 
-      if (StringUtils.isNotBlank(snapshotPrefix)) {
+      if (StringUtils.isNullOrEmpty(snapshotPrefix)) {
         for (String partition : partitions) {
           if (partition.contains(snapshotPrefix)) {
             dataFiles.addAll(fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp).map(f -> f.getPath()).collect(Collectors.toList()));
@@ -98,11 +118,20 @@ public class HoodieSnapshotExporter {
 
       if (!outputFormat.equalsIgnoreCase("hudi")) {
         // Do transformation
-        if (StringUtils.isNotBlank(outputPartitionField)) {
+        if (StringUtils.isNullOrEmpty(outputPartitionField)) {
           // A field to do simple Spark repartitioning
-          spark.read().parquet(JavaConversions.asScalaIterator(dataFiles.iterator()).toSeq()).repartition(new Column(outputPartitionField)).write().format(outputFormat).mode(SaveMode.Overwrite).save(targetBasePath);
+          spark.read().parquet(JavaConversions.asScalaIterator(dataFiles.iterator()).toSeq())
+              .repartition(new Column(outputPartitionField))
+              .write()
+              .format(outputFormat)
+              .mode(SaveMode.Overwrite)
+              .save(targetBasePath);
         } else {
-          spark.read().parquet(JavaConversions.asScalaIterator(dataFiles.iterator()).toSeq()).write().format(outputFormat).mode(SaveMode.Overwrite).save(targetBasePath);
+          spark.read().parquet(JavaConversions.asScalaIterator(dataFiles.iterator()).toSeq())
+              .write()
+              .format(outputFormat)
+              .mode(SaveMode.Overwrite)
+              .save(targetBasePath);
         }
       } else {
         // No transformation is needed for output format "HUDI", just copy the original files.
