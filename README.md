@@ -1,101 +1,76 @@
-## Site Documentation
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
 
-This folder contains resources that build the [Apache Hudi website](https://hudi.apache.org)
+       http://www.apache.org/licenses/LICENSE-2.0
 
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
 
-### Building docs
+# Apache Hudi (Incubating)
+Apache Hudi (Incubating) (pronounced Hoodie) stands for `Hadoop Upserts Deletes and Incrementals`. 
+Hudi manages the storage of large analytical datasets on DFS (Cloud stores, HDFS or any Hadoop FileSystem compatible storage).
 
-The site is based on a [Jekyll](https://jekyllrb.com/) theme hosted [here](https://github.com/mmistakes/minimal-mistakes/) with detailed instructions.
+<https://hudi.apache.org/>
 
-#### Docker
+[![Build Status](https://travis-ci.org/apache/incubator-hudi.svg?branch=master)](https://travis-ci.org/apache/incubator-hudi)
+[![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.apache.hudi/hudi/badge.svg)](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22org.apache.hudi%22)
+[![Join on Slack](https://img.shields.io/badge/slack-%23hudi-72eff8?logo=slack&color=48c628&label=Join%20on%20Slack)](https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE)
 
-Simply run `docker-compose build --no-cache && docker-compose up` from the `docs` folder and the site should be up & running at `http://localhost:4000`
+## Features
+* Upsert support with fast, pluggable indexing
+* Atomically publish data with rollback support
+* Snapshot isolation between writer & queries 
+* Savepoints for data recovery
+* Manages file sizes, layout using statistics
+* Async compaction of row & columnar data
+* Timeline metadata to track lineage
+ 
+Hudi supports three types of queries:
+ * **Snapshot Query** - Provides snapshot queries on real-time data, using a combination of columnar & row-based storage (e.g [Parquet](https://parquet.apache.org/) + [Avro](https://avro.apache.org/docs/current/mr.html)).
+ * **Incremental Query** - Provides a change stream with records inserted or updated after a point in time.
+ * **Read Optimized Query** - Provides excellent snapshot query performance via purely columnar storage (e.g. [Parquet](https://parquet.apache.org/)).
 
-To see edits reflect on the site, you may have to bounce the container
+Learn more about Hudi at [https://hudi.apache.org](https://hudi.apache.org)
 
- - Stop existing container by `ctrl+c` the docker-compose program
- - (or) alternatively via `docker stop docs_server_1`
- - Bring up container again using `docker-compose up`
+## Building Apache Hudi from source
 
-#### Host OS
+Prerequisites for building Apache Hudi:
 
-To build directly on host OS (\*nix), first you need to install
-
-- gem, ruby (using apt-get/brew)
-- bundler (`gem install bundler`)
-- jekyll (`gem install jekyll`)
-- Update bundler `bundle update --bundler`
-
-and then run the following commands from `docs` folder to install dependencies
-
-`bundle install`
-
-and serve a local site
-
-`bundle exec jekyll serve`
-
-### Submitting changes
-
-To submit changes to the docs, please make the changes on the `asf-site` branch, build the site locally, test it out and submit a pull request with the changes to .md and theme files under `docs`
-
-### Updating site
-
-At a regular cadence, one of the Hudi committers will regenerate the site. In order to do this, first build it locally, test and then move the generated site from `_site` locally to `docs/../content`. Submit changes as a PR.
-
-### Adding docs for version
-
-During each release, we must preserve the old version's docs so users on that version can refer to it. 
-Below documents the steps needed to do that. 
-
-#### Make a copy of current docs 
-
-Copy the docs as-is into another folder
-
-```
-cd docs/_docs
-export VERSION=0.5.0
-mkdir -p $VERSION && cp *.md $VERSION/
-```
-
-#### Rewrite links & add version to each page
-
-This step changes the permalink (location where these pages would be placed) with a version prefix and also changes links to each other.
+* Unix-like system (like Linux, Mac OS X)
+* Java 8 (Java 9 or 10 may work)
+* Git
+* Maven
 
 ```
-cd $VERSION
-sed -i "s/permalink: \/docs\//permalink: \/docs\/${VERSION}-/g" *.md
-sed -i "s/permalink: \/cn\/docs\//permalink: \/cn\/docs\/${VERSION}-/g" *.cn.md
-sed -i "s/](\/docs\//](\/docs\/${VERSION}-/g" *.md
-sed -i "s/](\/cn\/docs\//](\/cn\/docs\/${VERSION}-/g" *.cn.md
-sed -i "0,/---/s//---\nversion: ${VERSION}/" *.md
+# Checkout code and build
+git clone https://github.com/apache/incubator-hudi.git && cd incubator-hudi
+mvn clean package -DskipTests -DskipITs
 ```
 
-#### Reworking site navigation
-
-In `_config.yml`, add a new author section similar to `0.5.0_author`. Then, change `quick_link.html` with a if block to use this navigation, when the new version's page is rendered
-  
+To build the Javadoc for all Java and Scala classes:
 ```
-{%- if page.language == "0.5.0" -%}
-  {%- assign author = site.0.5.0_author -%}
-{%- else -%}
-  {%- assign author = site.author -%}
-{%- endif -%}
+# Javadoc generated under target/site/apidocs
+mvn clean javadoc:aggregate -Pjavadocs
 ```
 
-Then in `navigation.yml`, add a new section similar to `0.5.0_docs` (or the last release), with each link pointing to pages starting with `$VERSION-`. Change `nav_list` with else-if to 
-render the new version's equivalent navigation links. 
+### Build with Scala 2.12
+
+The default Scala version supported is 2.11. To build for Scala 2.12 version, build using `scala-2.12` profile
 
 ```
-{% if page.version %}
-    {% if page.version == "0.5.0" %}
-        {% assign navigation = site.data.navigation["0.5.0_docs"] %}
-    {% endif %}
-{% endif %}
+mvn clean package -DskipTests -DskipITs -Dscala-2.12
 ```
 
-#### Link to this version's doc
+## Quickstart
 
-
-
-
-
+Please visit [https://hudi.apache.org/docs/quick-start-guide.html](https://hudi.apache.org/docs/quick-start-guide.html) to quickly explore Hudi's capabilities using spark-shell. 
