@@ -58,6 +58,9 @@ author:
     - label: "Report Issues"
       icon: "fa fa-navicon"
       url: "https://issues.apache.org/jira/projects/HUDI/summary"
+    - label: "Report Security Issues"
+      icon: "fa fa-navicon"
+      url: "/security"
 
 cn_author:
   name             : "Quick Links"
@@ -81,6 +84,9 @@ cn_author:
     - label: "Report Issues"
       icon: "fa fa-navicon"
       url: "https://issues.apache.org/jira/projects/HUDI/summary"
+    - label: "Report Security Issues"
+      icon: "fa fa-navicon"
+      url: "/cn/security"
 
 
 0.5.0_author:
@@ -105,6 +111,9 @@ cn_author:
     - label: "Report Issues"
       icon: "fa fa-navicon"
       url: "https://issues.apache.org/jira/projects/HUDI/summary"
+    - label: "Report Security Issues"
+      icon: "fa fa-navicon"
+      url: "/security"
 
 
 # Layout Defaults
