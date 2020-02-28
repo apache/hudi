@@ -25,18 +25,15 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
-import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.WriteHandleFactory;
-import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
@@ -75,7 +72,8 @@ public class LazyInsertIterable<T extends HoodieRecordPayload>
   }
 
   // Used for caching HoodieRecord along with insertValue. We need this to offload computation work to buffering thread.
-  static class HoodieInsertValueGenResult<T extends HoodieRecord> {
+  public static class HoodieInsertValueGenResult<T extends HoodieRecord> {
+
     public T record;
     public Option<IndexedRecord> insertValue;
     // It caches the exception seen while fetching insert value.
@@ -128,52 +126,8 @@ public class LazyInsertIterable<T extends HoodieRecordPayload>
   protected void end() {}
 
   protected CopyOnWriteInsertHandler getInsertHandler() {
-    return new CopyOnWriteInsertHandler();
-  }
-
-  /**
-   * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles.
-   */
-  protected class CopyOnWriteInsertHandler
-      extends BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
-
-    protected final List<WriteStatus> statuses = new ArrayList<>();
-    protected HoodieWriteHandle handle;
-
-    @Override
-    protected void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> payload) {
-      final HoodieRecord insertPayload = payload.record;
-      // lazily initialize the handle, for the first time
-      if (handle == null) {
-        handle = writeHandleFactory.create(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),
-            idPrefix, sparkTaskContextSupplier);
-      }
-
-      if (handle.canWrite(payload.record)) {
-        // write the payload, if the handle has capacity
-        handle.write(insertPayload, payload.insertValue, payload.exception);
-      } else {
-        // handle is full.
-        statuses.add(handle.close());
-        // Need to handle the rejected payload & open new handle
-        handle = writeHandleFactory.create(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),
-            idPrefix, sparkTaskContextSupplier);
-        handle.write(insertPayload, payload.insertValue, payload.exception); // we should be able to write 1 payload.
-      }
-    }
-
-    @Override
-    protected void finish() {
-      if (handle != null) {
-        statuses.add(handle.close());
-      }
-      handle = null;
-      assert statuses.size() > 0;
-    }
-
-    @Override
-    protected List<WriteStatus> getResult() {
-      return statuses;
-    }
+    return new CopyOnWriteInsertHandler(
+        hoodieConfig, instantTime, hoodieTable, idPrefix,
+        sparkTaskContextSupplier, writeHandleFactory);
   }
 }

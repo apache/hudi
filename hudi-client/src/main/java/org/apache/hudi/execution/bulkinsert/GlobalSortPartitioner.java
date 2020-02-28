@@ -16,21 +16,30 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table;
+package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 
 import org.apache.spark.api.java.JavaRDD;
 
-/**
- * Repartition input records into at least expected number of output spark partitions. It should give below guarantees -
- * Output spark partition will have records from only one hoodie partition. - Average records per output spark
- * partitions should be almost equal to (#inputRecords / #outputSparkPartitions) to avoid possible skews.
- */
-public interface UserDefinedBulkInsertPartitioner<T extends HoodieRecordPayload> {
+public class GlobalSortPartitioner<T extends HoodieRecordPayload>
+    extends BulkInsertInternalPartitioner<T> {
 
-  JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions);
+  @Override
+  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
+      int outputSparkPartitions) {
+    // Now, sort the records and line them up nicely for loading.
+    return records.sortBy(record -> {
+      // Let's use "partitionPath + key" as the sort key. Spark, will ensure
+      // the records split evenly across RDD partitions, such that small partitions fit
+      // into 1 RDD partition, while big ones spread evenly across multiple RDD partitions
+      return String.format("%s+%s", record.getPartitionPath(), record.getRecordKey());
+    }, true, outputSparkPartitions);
+  }
 
-  boolean arePartitionRecordsSorted();
+  @Override
+  public boolean arePartitionRecordsSorted() {
+    return true;
+  }
 }

@@ -16,15 +16,14 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.execution;
+package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.execution.LazyInsertIterable;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.spark.api.java.function.Function2;
 
 import java.util.Iterator;
 import java.util.List;
@@ -32,24 +31,19 @@ import java.util.List;
 /**
  * Map function that handles a sorted stream of HoodieRecords.
  */
-public class BulkInsertMapFunction<T extends HoodieRecordPayload>
-    implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
+public class BulkInsertMapFunctionForSortedRecords<T extends HoodieRecordPayload>
+    extends BulkInsertMapFunction<T> {
 
-  private String instantTime;
-  private HoodieWriteConfig config;
-  private HoodieTable<T> hoodieTable;
-  private List<String> fileIDPrefixes;
-
-  public BulkInsertMapFunction(String instantTime, HoodieWriteConfig config, HoodieTable<T> hoodieTable,
-                               List<String> fileIDPrefixes) {
-    this.instantTime = instantTime;
-    this.config = config;
-    this.hoodieTable = hoodieTable;
-    this.fileIDPrefixes = fileIDPrefixes;
+  public BulkInsertMapFunctionForSortedRecords(String instantTime,
+      HoodieWriteConfig config,
+      HoodieTable<T> hoodieTable,
+      List<String> fileIDPrefixes) {
+    super(instantTime, config, hoodieTable, fileIDPrefixes);
   }
 
   @Override
-  public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> sortedRecordItr) {
+  public Iterator<List<WriteStatus>> call(Integer partition,
+      Iterator<HoodieRecord<T>> sortedRecordItr) {
     return new LazyInsertIterable<>(sortedRecordItr, config, instantTime, hoodieTable,
         fileIDPrefixes.get(partition), hoodieTable.getSparkTaskContextSupplier());
   }

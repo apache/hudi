@@ -16,21 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table;
+package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 
 import org.apache.spark.api.java.JavaRDD;
 
-/**
- * Repartition input records into at least expected number of output spark partitions. It should give below guarantees -
- * Output spark partition will have records from only one hoodie partition. - Average records per output spark
- * partitions should be almost equal to (#inputRecords / #outputSparkPartitions) to avoid possible skews.
- */
-public interface UserDefinedBulkInsertPartitioner<T extends HoodieRecordPayload> {
+public class NonSortPartitioner<T extends HoodieRecordPayload>
+    extends BulkInsertInternalPartitioner<T> {
 
-  JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions);
+  @Override
+  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
+      int outputSparkPartitions) {
+    return records.coalesce(outputSparkPartitions, true);
+  }
 
-  boolean arePartitionRecordsSorted();
+  @Override
+  public boolean arePartitionRecordsSorted() {
+    return false;
+  }
 }

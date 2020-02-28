@@ -290,6 +290,23 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     assertEquals("6", allWriteStatusMergedMetadataMap.get("InputRecordCount_1506582000"));
   }
 
+  private int getStatusIndex(List<WriteStatus> statuses, String partitionPath) {
+    for (int i = 0; i < statuses.size(); i++) {
+      if (statuses.get(i).getPartitionPath().equals(partitionPath)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private void verifyStatusResult(List<WriteStatus> statuses, String partitionPath,
+      int numRecords) {
+    int partitionIndex = getStatusIndex(statuses, partitionPath);
+    assertTrue(partitionIndex >= 0);
+    assertEquals(0, statuses.get(partitionIndex).getFailedRecords().size());
+    assertEquals(numRecords, statuses.get(partitionIndex).getTotalRecords());
+  }
+
   @Test
   public void testInsertRecords() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfig();
@@ -312,12 +329,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
     // TODO: check the actual files and make sure 11 records, total were written.
     assertEquals(2, returnedStatuses.size());
-    assertEquals("2016/01/31", returnedStatuses.get(0).getPartitionPath());
-    assertEquals(0, returnedStatuses.get(0).getFailedRecords().size());
-    assertEquals(10, returnedStatuses.get(0).getTotalRecords());
-    assertEquals("2016/02/01", returnedStatuses.get(1).getPartitionPath());
-    assertEquals(0, returnedStatuses.get(0).getFailedRecords().size());
-    assertEquals(1, returnedStatuses.get(1).getTotalRecords());
+    verifyStatusResult(returnedStatuses, "2016/01/31", 10);
+    verifyStatusResult(returnedStatuses, "2016/02/01", 1);
 
     // Case 2:
     // 1 record for partition 1, 5 record for partition 2, 1 records for partition 3.
@@ -334,14 +347,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     }).flatMap(x -> HoodieClientTestUtils.collectStatuses(x).iterator()).collect();
 
     assertEquals(3, returnedStatuses.size());
-    assertEquals("2016/01/31", returnedStatuses.get(0).getPartitionPath());
-    assertEquals(1, returnedStatuses.get(0).getTotalRecords());
-
-    assertEquals("2016/02/01", returnedStatuses.get(1).getPartitionPath());
-    assertEquals(5, returnedStatuses.get(1).getTotalRecords());
-
-    assertEquals("2016/02/02", returnedStatuses.get(2).getPartitionPath());
-    assertEquals(1, returnedStatuses.get(2).getTotalRecords());
+    verifyStatusResult(returnedStatuses, "2016/01/31", 1);
+    verifyStatusResult(returnedStatuses, "2016/02/01", 5);
+    verifyStatusResult(returnedStatuses, "2016/02/02", 1);
   }
 
   @Test
