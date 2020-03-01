@@ -39,7 +39,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.Column;
+import org.apache.spark.sql.DataFrameWriter;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
 
@@ -60,33 +61,28 @@ public class HoodieSnapshotExporter {
   private static final Logger LOG = LogManager.getLogger(HoodieSnapshotExporter.class);
 
   public static class Config implements Serializable {
-    @Parameter(names = {"--source-base-path", "-sbp"}, description = "Base path for the source Hudi dataset to be snapshotted", required = true)
-    String basePath = null;
+    @Parameter(names = {"--source-base-path"}, description = "Base path for the source Hudi dataset to be snapshotted", required = true)
+    String sourceBasePath = null;
 
-    @Parameter(names = {"--target-base-path", "-tbp"}, description = "Base path for the target output files (snapshots)", required = true)
-    String outputPath = null;
+    @Parameter(names = {"--target-base-path"}, description = "Base path for the target output files (snapshots)", required = true)
+    String targetOutputPath = null;
 
-    @Parameter(names = {"--snapshot-prefix", "-sp"}, description = "Snapshot prefix or directory under the target base path in order to segregate different snapshots")
+    @Parameter(names = {"--snapshot-prefix"}, description = "Snapshot prefix or directory under the target base path in order to segregate different snapshots")
     String snapshotPrefix;
 
-    @Parameter(names = {"--output-format", "-of"}, description = "e.g. Hudi or Parquet", required = true)
+    @Parameter(names = {"--output-format"}, description = "e.g. Hudi or Parquet", required = true)
     String outputFormat;
 
-    @Parameter(names = {"--output-partition-field", "-opf"}, description = "A field to be used by Spark repartitioning")
+    @Parameter(names = {"--output-partition-field"}, description = "A field to be used by Spark repartitioning")
     String outputPartitionField;
   }
 
   public void export(SparkSession spark, Config cfg) throws IOException {
-    String sourceBasePath = cfg.basePath;
-    String targetBasePath = cfg.outputPath;
-    String snapshotPrefix = cfg.snapshotPrefix;
-    String outputFormat = cfg.outputFormat;
-    String outputPartitionField = cfg.outputPartitionField;
     JavaSparkContext jsc = new JavaSparkContext(spark.sparkContext());
-    FileSystem fs = FSUtils.getFs(sourceBasePath, jsc.hadoopConfiguration());
+    FileSystem fs = FSUtils.getFs(cfg.sourceBasePath, jsc.hadoopConfiguration());
 
     final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
-    final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs.getConf(), sourceBasePath);
+    final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs.getConf(), cfg.sourceBasePath);
     final TableFileSystemView.BaseFileOnlyView fsView = new HoodieTableFileSystemView(tableMetadata,
         tableMetadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
     // Get the latest commit
@@ -100,13 +96,13 @@ public class HoodieSnapshotExporter {
     LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
         latestCommitTimestamp));
 
-    List<String> partitions = FSUtils.getAllPartitionPaths(fs, sourceBasePath, false);
+    List<String> partitions = FSUtils.getAllPartitionPaths(fs, cfg.sourceBasePath, false);
     if (partitions.size() > 0) {
       List<String> dataFiles = new ArrayList<>();
 
-      if (!StringUtils.isNullOrEmpty(snapshotPrefix)) {
+      if (!StringUtils.isNullOrEmpty(cfg.snapshotPrefix)) {
         for (String partition : partitions) {
-          if (partition.contains(snapshotPrefix)) {
+          if (partition.contains(cfg.snapshotPrefix)) {
             dataFiles.addAll(fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp).map(f -> f.getPath()).collect(Collectors.toList()));
           }
         }
@@ -116,42 +112,40 @@ public class HoodieSnapshotExporter {
         }
       }
 
-      if (!outputFormat.equalsIgnoreCase("hudi")) {
+      if (!cfg.outputFormat.equalsIgnoreCase("hudi")) {
         // Do transformation
-        if (!StringUtils.isNullOrEmpty(outputPartitionField)) {
+        DataFrameWriter<Row> write = spark.read().parquet(JavaConversions.asScalaIterator(dataFiles.iterator()).toSeq())
+                .write();
+        if (!StringUtils.isNullOrEmpty(cfg.outputPartitionField)) {
           // A field to do simple Spark repartitioning
-          spark.read().parquet(JavaConversions.asScalaIterator(dataFiles.iterator()).toSeq())
-              .repartition(new Column(outputPartitionField))
-              .write()
-              .format(outputFormat)
+          write.partitionBy(cfg.outputPartitionField)
+              .format(cfg.outputFormat)
               .mode(SaveMode.Overwrite)
-              .save(targetBasePath);
+              .save(cfg.targetOutputPath);
         } else {
-          spark.read().parquet(JavaConversions.asScalaIterator(dataFiles.iterator()).toSeq())
-              .write()
-              .format(outputFormat)
+          write.format(cfg.outputFormat)
               .mode(SaveMode.Overwrite)
-              .save(targetBasePath);
+              .save(cfg.targetOutputPath);
         }
       } else {
         // No transformation is needed for output format "HUDI", just copy the original files.
 
         // Make sure the output directory is empty
-        Path outputPath = new Path(targetBasePath);
+        Path outputPath = new Path(cfg.targetOutputPath);
         if (fs.exists(outputPath)) {
           LOG.warn(String.format("The output path %s targetBasePath already exists, deleting", outputPath));
-          fs.delete(new Path(targetBasePath), true);
+          fs.delete(new Path(cfg.targetOutputPath), true);
         }
 
         jsc.parallelize(partitions, partitions.size()).flatMap(partition -> {
           // Only take latest version files <= latestCommit.
-          FileSystem fs1 = FSUtils.getFs(sourceBasePath, serConf.newCopy());
+          FileSystem fs1 = FSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
           List<Tuple2<String, String>> filePaths = new ArrayList<>();
           dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile)));
 
           // also need to copy over partition metadata
           Path partitionMetaFile =
-              new Path(new Path(sourceBasePath, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
+              new Path(new Path(cfg.sourceBasePath, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
           if (fs1.exists(partitionMetaFile)) {
             filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
           }
@@ -160,8 +154,8 @@ public class HoodieSnapshotExporter {
         }).foreach(tuple -> {
           String partition = tuple._1();
           Path sourceFilePath = new Path(tuple._2());
-          Path toPartitionPath = new Path(targetBasePath, partition);
-          FileSystem ifs = FSUtils.getFs(targetBasePath, serConf.newCopy());
+          Path toPartitionPath = new Path(cfg.targetOutputPath, partition);
+          FileSystem ifs = FSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
 
           if (!ifs.exists(toPartitionPath)) {
             ifs.mkdirs(toPartitionPath);
@@ -173,7 +167,7 @@ public class HoodieSnapshotExporter {
         // Also copy the .commit files
         LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
         FileStatus[] commitFilesToCopy =
-            fs.listStatus(new Path(sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME), (commitFilePath) -> {
+            fs.listStatus(new Path(cfg.sourceBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME), (commitFilePath) -> {
               if (commitFilePath.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
                 return true;
               } else {
@@ -184,7 +178,7 @@ public class HoodieSnapshotExporter {
             });
         for (FileStatus commitStatus : commitFilesToCopy) {
           Path targetFilePath =
-              new Path(targetBasePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitStatus.getPath().getName());
+              new Path(cfg.targetOutputPath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitStatus.getPath().getName());
           if (!fs.exists(targetFilePath.getParent())) {
             fs.mkdirs(targetFilePath.getParent());
           }

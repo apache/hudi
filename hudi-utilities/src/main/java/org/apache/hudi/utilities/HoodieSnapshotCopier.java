@@ -51,6 +51,8 @@ import scala.Tuple2;
 
 /**
  * Hoodie snapshot copy job which copies latest files from all partitions to another place, for snapshot backup.
+ *
+ * @deprecated please using HoodieSnapshotExporter instead this
  */
 
 @Deprecated

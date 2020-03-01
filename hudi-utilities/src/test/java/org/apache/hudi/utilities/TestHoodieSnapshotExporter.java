@@ -50,14 +50,14 @@ import static org.junit.Assert.assertTrue;
 public class TestHoodieSnapshotExporter {
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
-  public SparkSession spark = null;
-  public HoodieTestDataGenerator dataGen = null;
-  public String basePath = null;
-  public String outputPath = null;
-  public String rootPath = null;
-  public FileSystem fs = null;
-  public Map commonOpts;
-  public HoodieSnapshotExporter.Config cfg;
+  private SparkSession spark = null;
+  private HoodieTestDataGenerator dataGen = null;
+  private String basePath = null;
+  private String outputPath = null;
+  private String rootPath = null;
+  private FileSystem fs = null;
+  private Map commonOpts;
+  private HoodieSnapshotExporter.Config cfg;
   private JavaSparkContext jsc = null;
 
   @Before
@@ -85,8 +85,8 @@ public class TestHoodieSnapshotExporter {
 
     cfg = new HoodieSnapshotExporter.Config();
 
-    cfg.basePath = basePath;
-    cfg.outputPath = outputPath = basePath + "/target";
+    cfg.sourceBasePath = basePath;
+    cfg.targetOutputPath = outputPath = basePath + "/target";
     cfg.outputFormat = "json";
     cfg.outputPartitionField = "partition";
 
