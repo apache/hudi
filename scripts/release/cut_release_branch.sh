@@ -73,7 +73,7 @@ echo "next_release: ${NEXT_VERSION_IN_BASE_BRANCH}"
 echo "working master branch: ${MASTER_BRANCH}"
 echo "working release branch: ${RELEASE_BRANCH}"
 echo "local repo dir: ~/${LOCAL_CLONE_DIR}/${HUDI_ROOT_DIR}"
-echo "RC_NUM: $RC_NUM
+echo "RC_NUM: $RC_NUM"
 echo "==============================================================="
 
 cd ~
