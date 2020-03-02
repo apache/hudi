@@ -18,8 +18,10 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.common.HoodieClientTestHarness;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.TestRawTripPayload;
@@ -41,9 +43,6 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.table.HoodieCopyOnWriteTable.UpsertPartitioner;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
@@ -53,6 +52,7 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import scala.Tuple2;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -60,8 +60,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import scala.Tuple2;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -209,8 +207,8 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     final HoodieCopyOnWriteTable newTable = new HoodieCopyOnWriteTable(config, jsc);
     List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return newTable.handleUpdate(newCommitTime, updatedRecord1.getCurrentLocation().getFileId(),
-          updatedRecords.iterator());
+      return newTable.handleUpdate(newCommitTime, updatedRecord1.getPartitionPath(),
+              updatedRecord1.getCurrentLocation().getFileId(), updatedRecords.iterator());
     }).flatMap(x -> HoodieClientTestUtils.collectStatuses(x).iterator()).collect();
 
     // Check the updated file
@@ -470,7 +468,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
-        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
+            .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     final HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
     String commitTime = "000";
@@ -484,13 +482,15 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     String fileId = writeStatus.getFileId();
     metaClient.getFs().create(new Path(basePath + "/.hoodie/000.commit")).close();
     final HoodieCopyOnWriteTable table2 = new HoodieCopyOnWriteTable(config, jsc);
-
     final List<HoodieRecord> updates =
-        dataGen.generateUpdatesWithHoodieAvroPayload(commitTime, writeStatus.getWrittenRecords());
+            dataGen.generateUpdatesWithHoodieAvroPayload(commitTime, inserts);
 
-    jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return table2.handleUpdate("001", fileId, updates.iterator());
+    String partitionPath = updates.get(0).getPartitionPath();
+    long numRecordsInPartition = updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
+    final List<List<WriteStatus>> updateStatus = jsc.parallelize(Arrays.asList(1)).map(x -> {
+      return table.handleUpdate(commitTime, partitionPath, fileId, updates.iterator());
     }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();
+    assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
 
   @After

@@ -40,6 +40,7 @@ import org.apache.parquet.avro.AvroReadSupport;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Test;
 //import org.junit.Test;
 
 import java.util.ArrayList;
@@ -116,7 +117,8 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
       updateRecords.add(record1);
 
       try {
-        HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config2, "101", table2, updateRecords.iterator(), fileId);
+        HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config2, "101", table2,
+                updateRecords.iterator(), record1.getPartitionPath(), fileId);
         Configuration conf = new Configuration();
         AvroReadSupport.setAvroReadSchema(conf, mergeHandle.getWriterSchema());
         List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(conf,
