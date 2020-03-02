@@ -22,6 +22,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.util.FSUtils;
@@ -47,12 +48,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class TestHoodieSnapshotExporter {
+public class TestHoodieSnapshotExporter extends HoodieCommonTestHarness {
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
   private SparkSession spark = null;
   private HoodieTestDataGenerator dataGen = null;
-  private String basePath = null;
   private String outputPath = null;
   private String rootPath = null;
   private FileSystem fs = null;
@@ -69,7 +69,6 @@ public class TestHoodieSnapshotExporter {
         .getOrCreate();
     jsc = new JavaSparkContext(spark.sparkContext());
     dataGen = new HoodieTestDataGenerator();
-    TemporaryFolder folder = new TemporaryFolder();
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
     fs = FSUtils.getFs(basePath, spark.sparkContext().hadoopConfiguration());
@@ -93,7 +92,7 @@ public class TestHoodieSnapshotExporter {
   }
 
   @After
-  public void cleanup() throws Exception {
+  public void cleanup() {
     if (spark != null) {
       spark.stop();
     }
@@ -125,6 +124,10 @@ public class TestHoodieSnapshotExporter {
     long targetFilterCount = spark.read().json(outputPath).count();
     assertTrue(filterCount == targetFilterCount);
 
+    // Test Invalid OutputFormat
+    cfg.outputFormat = "foo";
+    int isError = hoodieSnapshotExporter.export(spark, cfg);
+    assertTrue(isError == -1);
   }
 
   // for testEmptySnapshotCopy
@@ -223,5 +226,4 @@ public class TestHoodieSnapshotExporter {
 
     assertTrue(fs.exists(new Path(outputPath + "/_SUCCESS")));
   }
-
 }
