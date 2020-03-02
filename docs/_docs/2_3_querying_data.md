@@ -9,10 +9,10 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 
 Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained [before](/docs/concepts.html#query-types). 
 Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi's custom inputformats. Once the proper hudi
-bundle has been provided, the table can be queried by popular query engines like Hive, Spark SQL, Spark datasource and Presto.
+bundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and Presto.
 
 Specifically, following Hive tables are registered based off [table name](/docs/configurations.html#TABLE_NAME_OPT_KEY) 
-and [table type](/docs/configurations.html#TABLE_TYPE_OPT_KEY) passed during write.   
+and [table type](/docs/configurations.html#TABLE_TYPE_OPT_KEY) configs passed during write.   
 
 If `table name = hudi_trips` and `table type = COPY_ON_WRITE`, then we get: 
  - `hudi_trips` supports snapshot query and incremental query on the table backed by `HoodieParquetInputFormat`, exposing purely columnar data.
@@ -20,36 +20,38 @@ If `table name = hudi_trips` and `table type = COPY_ON_WRITE`, then we get:
 
 If `table name = hudi_trips` and `table type = MERGE_ON_READ`, then we get:
  - `hudi_trips_rt` supports snapshot query and incremental query (providing near-real time data) on the table  backed by `HoodieParquetRealtimeInputFormat`, exposing merged view of base and log data.
- - `hudi_trips_ro` supports read optimized query on the table backed by `HoodieParquetInputFormat`, exposing purely columnar data.
- 
+ - `hudi_trips_ro` supports read optimized query on the table backed by `HoodieParquetInputFormat`, exposing purely columnar data stored in base files.
 
-As discussed in the concepts section, the one key primitive needed for [incrementally processing](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop),
+As discussed in the concepts section, the one key capability needed for [incrementally processing](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop),
 is obtaining a change stream/log from a table. Hudi tables can be queried incrementally, which means you can get ALL and ONLY the updated & new rows 
 since a specified instant time. This, together with upserts, is particularly useful for building data pipelines where 1 or more source Hudi tables are incrementally queried (streams/facts),
 joined with other tables (tables/dimensions), to [write out deltas](/docs/writing_data.html) to a target Hudi table. Incremental queries are realized by querying one of the tables above, 
 with special configurations that indicates to query planning that only incremental data needs to be fetched out of the table. 
 
 
-## SUPPORT MATRIX
+## Support Matrix
 
-### COPY_ON_WRITE tables
+Following tables show whether a given query is supported on specific query engine.
+
+### Copy-On-Write tables
   
-||Snapshot|Incremental|Read Optimized|
-||--------|-----------|--------------|
-|**Hive**|Y|Y|N/A|
-|**Spark SQL**|Y|Y|N/A|
-|**Spark datasource**|Y|Y|N/A|
-|**Presto**|Y|N|N/A|
+|Query Engine|Snapshot Queries|Incremental Queries|
+|------------|--------|-----------|
+|**Hive**|Y|Y|
+|**Spark SQL**|Y|Y|
+|**Spark Datasource**|Y|Y|
+|**Presto**|Y|N|
 
-### MERGE_ON_READ tables
+Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 
-||Snapshot|Incremental|Read Optimized|
-||--------|-----------|--------------|
+### Merge-On-Read tables
+
+|Query Engine|Snapshot Queries|Incremental Queries|Read Optimized Queries|
+|------------|--------|-----------|--------------|
 |**Hive**|Y|Y|Y|
 |**Spark SQL**|Y|Y|Y|
-|**Spark datasource**|N|N|Y|
+|**Spark Datasource**|N|N|Y|
 |**Presto**|N|N|Y|
-
 
 In sections, below we will discuss specific setup to access different query types from different query engines. 
 
@@ -103,13 +105,11 @@ would ensure Map Reduce execution is chosen for a Hive query, which combines par
 separated) and calls InputFormat.listStatus() only once with all those partitions.
 
 ## Spark SQL
-Supports all query types across both Hudi table types, relying on the custom Hudi input formats again like Hive. 
-Typically notebook users and spark-shell users leverage spark sql for querying Hudi tables. Please add hudi-spark-bundle 
-as described above via --jars or --packages.
+Once the Hudi tables have been registered to the Hive metastore, it can be queried using the Spark-Hive integration. It supports all query types across both Hudi table types, 
+relying on the custom Hudi input formats again like Hive. Typically notebook users and spark-shell users leverage spark sql for querying Hudi tables. Please add hudi-spark-bundle as described above via --jars or --packages.
  
-### Snapshot query {#spark-snapshot-query}
-By default, Spark SQL will try to use its own parquet reader instead of Hive SerDe when reading from Hive metastore parquet tables. 
-However, for MERGE_ON_READ tables which has both parquet and avro data, this default setting needs to be turned off using set `spark.sql.hive.convertMetastoreParquet=false`. 
+By default, Spark SQL will try to use its own parquet reader instead of Hive SerDe when reading from Hive metastore parquet tables. However, for MERGE_ON_READ tables which has 
+both parquet and avro data, this default setting needs to be turned off using set `spark.sql.hive.convertMetastoreParquet=false`. 
 This will force Spark to fallback to using the Hive Serde to read the data (planning/executions is still Spark). 
 
 ```java
@@ -126,23 +126,30 @@ If using spark's built in support, additionally a path filter needs to be pushed
 spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.class", classOf[org.apache.hudi.hadoop.HoodieROTablePathFilter], classOf[org.apache.hadoop.fs.PathFilter]);
 ```
 
-### Incremental querying {#spark-incr-query}
-Incremental queries work like hive incremental queries. The `hudi-spark` module offers the DataSource API, a more elegant way to query data from Hudi table and process it via Spark.
-A sample incremental query, that will obtain all records written since `beginInstantTime`, looks like below.
+## Spark Datasource
+
+The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi COPY_ON_WRITE tables can be queried via Spark datasource similar to how standard 
+datasources work (e.g: `spark.read.parquet`). Both snapshot querying and incremental querying are supported here. Typically spark jobs require adding `--jars <path to jar>/hudi-spark-bundle_2.11-<hudi version>.jar` to classpath of drivers 
+and executors. Alternatively, hudi-spark-bundle can also fetched via the `--packages` options (e.g: `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating`).
+
+
+### Incremental query {#spark-incr-query}
+Of special interest to spark pipelines, is Hudi's ability to support incremental queries, like below. A sample incremental query, that will obtain all records written since `beginInstantTime`, looks like below.
+Thanks to Hudi's support for record level change streams, these incremental pipelines often offer 10x efficiency over batch counterparts, by only processing the changed records.
+The following snippet shows how to obtain all records changed after `beginInstantTime` and run some SQL on them.
 
 ```java
  Dataset<Row> hudiIncQueryDF = spark.read()
      .format("org.apache.hudi")
-     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(),
-             DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
-     .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(),
-            <beginInstantTime>)
+     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+     .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), <beginInstantTime>)
      .load(tablePath); // For incremental query, pass in the root/base path of table
      
 hudiIncQueryDF.createOrReplaceTempView("hudi_trips_incremental")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
 ```
 
+For examples, refer to [Setup spark-shell in quickstart](/docs/quick-start-guide.html#setup-spark-shell). 
 Please refer to [configurations](/docs/configurations.html#spark-datasource) section, to view all datasource options.
 
 Additionally, `HoodieReadClient` offers the following functionality using Hudi's implicit indexing.
@@ -150,27 +157,20 @@ Additionally, `HoodieReadClient` offers the following functionality using Hudi's
 | **API** | **Description** |
 |-------|--------|
 | read(keys) | Read out the data corresponding to the keys as a DataFrame, using Hudi's own index for faster lookup |
-| filterExists() | Filter out already existing records from the provided RDD[HoodieRecord]. Useful for de-duplication |
+| filterExists() | Filter out already existing records from the provided `RDD[HoodieRecord]`. Useful for de-duplication |
 | checkExists(keys) | Check if the provided keys exist in a Hudi table |
-
-## Spark datasource
-
-Hudi COPY_ON_WRITE tables can be queried via Spark datasource similar to how standard datasources work (e.g: `spark.read.parquet`). 
-Both snapshot querying and incremental querying are supported here. Typically spark jobs require adding `--jars <path to jar>/hudi-spark-bundle_2.11:0.5.1-incubating`
-to classpath of drivers and executors. When using spark shell instead of `--jars`, `--packages` can also be used to fetch the hudi-spark-bundle like this: `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating`
-For examples, refer to [Setup spark-shell in quickstart](/docs/quick-start-guide.html#setup-spark-shell).
 
 ## Presto
 
-Presto is a popular query engine, providing interactive query performance. Presto currently supports snapshot queries on
-COPY_ON_WRITE and read optimized queries on MERGE_ON_READ Hudi tables. This requires the `hudi-presto-bundle` jar
-to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation.
+Presto is a popular query engine, providing interactive query performance. Presto currently supports snapshot queries on COPY_ON_WRITE and read optimized queries 
+on MERGE_ON_READ Hudi tables. This requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation.
 
-## Impala(Not Officially Released)
+## Impala (Not Officially Released)
 
-### Read optimized table
+### Snapshot Query
 
-Impala is able to query Hudi read optimized table as an [EXTERNAL TABLE](https://docs.cloudera.com/documentation/enterprise/6/6.3/topics/impala_tables.html#external_tables) on HDFS.  
+Impala is able to query Hudi Copy-on-write table as an [EXTERNAL TABLE](https://docs.cloudera.com/documentation/enterprise/6/6.3/topics/impala_tables.html#external_tables) on HDFS.  
+
 To create a Hudi read optimized table on Impala:
 ```
 CREATE EXTERNAL TABLE database.table_name
