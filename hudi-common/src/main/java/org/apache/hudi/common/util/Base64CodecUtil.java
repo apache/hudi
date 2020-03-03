@@ -23,24 +23,24 @@ import java.util.Base64;
 
 public final class Base64CodecUtil {
 
-    /**
-     * Decodes data from the input string into using the encoding scheme.
-     *
-     * @param serString
-     * @return A newly-allocated byte array containing the decoded bytes.
-     */
-    public static byte[] decode(String serString) {
-        return Base64.getDecoder().decode(serString.getBytes(StandardCharsets.UTF_8));
-    }
+  /**
+   * Decodes data from the input string into using the encoding scheme.
+   *
+   * @param serString
+   * @return A newly-allocated byte array containing the decoded bytes.
+   */
+  public static byte[] decode(String serString) {
+    return Base64.getDecoder().decode(serString.getBytes(StandardCharsets.UTF_8));
+  }
 
-    /**
-     * Encodes all bytes from the specified byte array into String using StandardCharsets.UTF_8.
-     *
-     * @param data byte[] source data
-     * @return base64 encoded data
-     */
-    public static String encode(byte[] data) {
-        return new String(Base64.getEncoder().encode(data), StandardCharsets.UTF_8);
-    }
+  /**
+   * Encodes all bytes from the specified byte array into String using StandardCharsets.UTF_8.
+   *
+   * @param data byte[] source data
+   * @return base64 encoded data
+   */
+  public static String encode(byte[] data) {
+    return new String(Base64.getEncoder().encode(data), StandardCharsets.UTF_8);
+  }
 
 }

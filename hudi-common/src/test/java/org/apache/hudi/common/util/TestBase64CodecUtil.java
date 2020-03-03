@@ -26,22 +26,22 @@ import java.util.UUID;
 
 public class TestBase64CodecUtil {
 
-    @Test
-    public void testCodec() {
+  @Test
+  public void testCodec() {
 
-        int times = 100;
-        UUID uuid = UUID.randomUUID();
+    int times = 100;
+    UUID uuid = UUID.randomUUID();
 
-        for (int i = 0; i < times; i++) {
+    for (int i = 0; i < times; i++) {
 
-            byte[] originalData = uuid.toString().getBytes(StandardCharsets.UTF_8);
+      byte[] originalData = uuid.toString().getBytes(StandardCharsets.UTF_8);
 
-            String encodeData = Base64CodecUtil.encode(originalData);
-            byte[] decodeData = Base64CodecUtil.decode(encodeData);
+      String encodeData = Base64CodecUtil.encode(originalData);
+      byte[] decodeData = Base64CodecUtil.decode(encodeData);
 
-            Assert.assertArrayEquals(originalData, decodeData);
-        }
-
+      Assert.assertArrayEquals(originalData, decodeData);
     }
+
+  }
 
 }
