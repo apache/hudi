@@ -158,6 +158,9 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     this.output.write(footerBytes);
     // 9. Write the total size of the log block (including magic) which is everything written
     // until now (for reverse pointer)
+    // Update: this information is now used in determining if a block is corrupt by comparing to the
+    //   block size in header. This change assumes that the block size will be the last data written
+    //   to a block. Read will break if any data is written past this point for a block.
     this.output.writeLong(this.output.size() - currentSize);
     // Flush every block to disk
     flush();
