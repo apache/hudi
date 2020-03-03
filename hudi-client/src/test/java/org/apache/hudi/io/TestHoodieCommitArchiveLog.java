@@ -430,19 +430,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
 
-    Class<?> clazz  = HoodieCommitArchiveLog.class;
-    try {
-      Method commitMetadataConverter = clazz.getDeclaredMethod("commitMetadataConverter", HoodieCommitMetadata.class);
-      commitMetadataConverter.setAccessible(true);
-      org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata =
-          (org.apache.hudi.avro.model.HoodieCommitMetadata) commitMetadataConverter.invoke(archiveLog, hoodieCommitMetadata);
-      assertEquals(expectedCommitMetadata.getOperationType(), WriteOperationType.INSERT.toString());
-    } catch (NoSuchMethodException e) {
-      assertTrue(e.getMessage(), false);
-    } catch (IllegalAccessException e) {
-      assertTrue(e.getMessage(), false);
-    } catch (InvocationTargetException e) {
-      assertTrue(e.getMessage(), false);
-    }
+    org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata = archiveLog.commitMetadataConverter(hoodieCommitMetadata);
+    assertEquals(expectedCommitMetadata.getOperationType(), WriteOperationType.INSERT.toString());
   }
 }
