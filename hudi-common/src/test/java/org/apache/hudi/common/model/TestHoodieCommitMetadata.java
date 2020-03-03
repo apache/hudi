@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.FileIOUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -45,5 +46,26 @@ public class TestHoodieCommitMetadata {
     // Make sure timing metrics are not written to instant file
     Assert.assertEquals(0, (long) metadata.getTotalScanTime());
     Assert.assertTrue(metadata.getTotalLogFilesCompacted() > 0);
+  }
+
+  @Test
+  public void testCompatibilityWithoutOperationType() throws Exception {
+    // test compatibility of old version file
+    String serializedCommitMetadata =
+        FileIOUtils.readAsUTFString(TestHoodieCommitMetadata.class.getResourceAsStream("/old-version.commit"));
+    HoodieCommitMetadata metadata =
+        HoodieCommitMetadata.fromJsonString(serializedCommitMetadata, HoodieCommitMetadata.class);
+    Assert.assertTrue(metadata.getOperationType() == WriteOperationType.UNKNOWN);
+
+    // test operate type
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.INSERT);
+    Assert.assertTrue(commitMetadata.getOperationType() == WriteOperationType.INSERT);
+
+    // test serialized
+    serializedCommitMetadata = commitMetadata.toJsonString();
+    metadata =
+      HoodieCommitMetadata.fromJsonString(serializedCommitMetadata, HoodieCommitMetadata.class);
+    Assert.assertTrue(metadata.getOperationType() == WriteOperationType.INSERT);
   }
 }

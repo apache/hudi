@@ -49,6 +49,8 @@ public class HoodieCommitMetadata implements Serializable {
 
   private Map<String, String> extraMetadata;
 
+  private WriteOperationType operationType = WriteOperationType.UNKNOWN;
+
   // for ser/deser
   public HoodieCommitMetadata() {
     this(false);
@@ -104,6 +106,14 @@ public class HoodieCommitMetadata implements Serializable {
       }
     }
     return filePaths;
+  }
+
+  public void setOperationType(WriteOperationType type) {
+    this.operationType = type;
+  }
+
+  public WriteOperationType getOperationType() {
+    return this.operationType;
   }
 
   public HashMap<String, String> getFileIdAndFullPaths(String basePath) {

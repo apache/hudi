@@ -345,6 +345,7 @@
               <exclude>**/*LICENSE*</exclude>
               <exclude>**/dependency-reduced-pom.xml</exclude>
               <exclude>**/test/resources/*.data</exclude>
+              <exclude>**/test/resources/*.commit</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
             </excludes>

@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.TableFileSystemView.BaseFileOnlyView;
@@ -97,7 +98,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private final transient HoodieMetrics metrics;
   private final transient HoodieCleanClient<T> cleanClient;
   private transient Timer.Context compactionTimer;
-
 
   /**
    * Create a write client, without cleaning up failed/inflight commits.
@@ -174,7 +174,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(OperationType.UPSERT);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT);
+    setOperationType(WriteOperationType.UPSERT);
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -203,7 +204,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(OperationType.UPSERT_PREPPED);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT_PREPPED);
+    setOperationType(WriteOperationType.UPSERT_PREPPED);
     try {
       return upsertRecordsInternal(preppedRecords, commitTime, table, true);
     } catch (Throwable e) {
@@ -225,7 +227,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(OperationType.INSERT);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT);
+    setOperationType(WriteOperationType.INSERT);
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -252,7 +255,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(OperationType.INSERT_PREPPED);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT_PREPPED);
+    setOperationType(WriteOperationType.INSERT_PREPPED);
     try {
       return upsertRecordsInternal(preppedRecords, commitTime, table, false);
     } catch (Throwable e) {
@@ -295,7 +299,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String commitTime,
       Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx(OperationType.BULK_INSERT);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT);
+    setOperationType(WriteOperationType.BULK_INSERT);
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -328,7 +333,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime,
       Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx(OperationType.BULK_INSERT_PREPPED);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED);
+    setOperationType(WriteOperationType.BULK_INSERT_PREPPED);
     try {
       return bulkInsertInternal(preppedRecords, commitTime, table, bulkInsertPartitioner);
     } catch (Throwable e) {
@@ -341,14 +347,15 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied commitTime {@link HoodieKey}s will be
-   * deduped and non existant keys will be removed before deleting.
+   * de-duped and non existent keys will be removed before deleting.
    *
    * @param keys {@link List} of {@link HoodieKey}s to be deleted
    * @param commitTime Commit time handle
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> delete(JavaRDD<HoodieKey> keys, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(OperationType.DELETE);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.DELETE);
+    setOperationType(WriteOperationType.DELETE);
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieKey> dedupedKeys =
@@ -435,6 +442,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
           metadata.addWriteStat(path.toString(), writeStat);
         });
       });
+      metadata.setOperationType(getOperationType());
 
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       String commitActionType = table.getMetaClient().getCommitActionType();
