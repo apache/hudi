@@ -491,15 +491,26 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // create a block with
     outputStream.write(HoodieLogFormat.MAGIC);
     // Write out a length that does not confirm with the content
-    outputStream.writeLong(1000);
+    outputStream.writeLong(474);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
     outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     // Write out a length that does not confirm with the content
-    outputStream.writeLong(500);
-    // Write out some bytes
+    outputStream.writeLong(400);
+    // Write out incomplete content
     outputStream.write("something-random".getBytes());
     outputStream.flush();
     outputStream.close();
+
+    // Append a proper block that is of the missing length of the corrupted block
+    writer =
+            HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+                    .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
+    records = SchemaTestUtil.generateTestRecords(0, 10);
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
+    dataBlock = new HoodieAvroDataBlock(records, header);
+    writer = writer.appendBlock(dataBlock);
+    writer.close();
+
 
     // First round of reads - we should be able to read the first block and then EOF
     Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
@@ -508,6 +519,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertTrue("We should have corrupted block next", reader.hasNext());
     HoodieLogBlock block = reader.next();
     assertEquals("The read block should be a corrupt block", HoodieLogBlockType.CORRUPT_BLOCK, block.getBlockType());
+    assertTrue("Third block should be available", reader.hasNext());
+    reader.next();
     assertFalse("There should be no more block left", reader.hasNext());
 
     reader.close();
@@ -542,6 +555,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertTrue("First block should be available", reader.hasNext());
     reader.next();
     assertTrue("We should get the 1st corrupted block next", reader.hasNext());
+    reader.next();
+    assertTrue("Third block should be available", reader.hasNext());
     reader.next();
     assertTrue("We should get the 2nd corrupted block next", reader.hasNext());
     block = reader.next();
