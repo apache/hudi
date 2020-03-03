@@ -41,6 +41,8 @@ Following tables show whether a given query is supported on specific query engin
 |**Spark SQL**|Y|Y|
 |**Spark Datasource**|Y|Y|
 |**Presto**|Y|N|
+|**Impala**|Y|N|
+
 
 Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 
@@ -52,6 +54,8 @@ Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 |**Spark SQL**|Y|Y|Y|
 |**Spark Datasource**|N|N|Y|
 |**Presto**|N|N|Y|
+|**Impala**|N|N|N|
+
 
 In sections, below we will discuss specific setup to access different query types from different query engines. 
 
