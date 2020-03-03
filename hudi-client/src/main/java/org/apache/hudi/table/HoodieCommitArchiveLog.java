@@ -331,7 +331,7 @@ public class HoodieCommitArchiveLog {
     return archivedMetaWrapper;
   }
 
-  private org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadataConverter(
+  public org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadataConverter(
       HoodieCommitMetadata hoodieCommitMetadata) {
     ObjectMapper mapper = new ObjectMapper();
     // Need this to ignore other public get() methods
