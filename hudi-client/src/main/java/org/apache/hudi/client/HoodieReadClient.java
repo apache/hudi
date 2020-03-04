@@ -25,8 +25,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -35,6 +35,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -46,6 +47,8 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.StructType;
 
+import java.io.IOException;
+import java.io.Serializable;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -56,7 +59,7 @@ import scala.Tuple2;
 /**
  * Provides an RDD based API for accessing/filtering Hoodie tables, based on keys.
  */
-public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
+public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializable, AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieReadClient.class);
 
@@ -65,9 +68,20 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
    * basepath pointing to the table. Until, then just always assume a BloomIndex
    */
   private final transient HoodieIndex<T> index;
-  private final HoodieTimeline commitTimeline;
   private HoodieTable hoodieTable;
   private transient Option<SQLContext> sqlContextOpt;
+  protected final transient FileSystem fs;
+  protected final transient JavaSparkContext jsc;
+  protected final HoodieWriteConfig config;
+  protected final String basePath;
+
+  /**
+   * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
+   * able to take advantage of the cached file-system view. New completed actions will be synced automatically in an
+   * incremental fashion.
+   */
+  private transient Option<EmbeddedTimelineService> timelineServer;
+  private final boolean shouldStopTimelineServer;
 
   /**
    * @param basePath path to Hoodie table
@@ -108,12 +122,17 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
    */
   public HoodieReadClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineService) {
-    super(jsc, clientConfig, timelineService);
+    this.fs = FSUtils.getFs(clientConfig.getBasePath(), jsc.hadoopConfiguration());
+    this.jsc = jsc;
+    this.basePath = clientConfig.getBasePath();
+    this.config = clientConfig;
+    this.timelineServer = timelineService;
+    shouldStopTimelineServer = !timelineServer.isPresent();
+    startEmbeddedServerView();
     final String basePath = clientConfig.getBasePath();
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
     this.hoodieTable = HoodieTable.getHoodieTable(metaClient, clientConfig, jsc);
-    this.commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
     this.index = HoodieIndex.createIndex(clientConfig, jsc);
     this.sqlContextOpt = Option.empty();
   }
@@ -141,6 +160,43 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
       return Option.of(dataFile.getPath());
     } else {
       return Option.empty();
+    }
+  }
+
+  private synchronized void startEmbeddedServerView() {
+    if (config.isEmbeddedTimelineServerEnabled()) {
+      if (!timelineServer.isPresent()) {
+        // Run Embedded Timeline Server
+        LOG.info("Starting Timeline service !!");
+        timelineServer = Option.of(new EmbeddedTimelineService(jsc.hadoopConfiguration(), jsc.getConf(),
+            config.getClientSpecifiedViewStorageConfig()));
+        try {
+          timelineServer.get().startServer();
+          // Allow executor to find this newly instantiated timeline service
+          config.setViewStorageConfig(timelineServer.get().getRemoteFileSystemViewConfig());
+        } catch (IOException e) {
+          LOG.warn("Unable to start timeline service. Proceeding as if embedded server is disabled", e);
+          stopEmbeddedServerView(false);
+        }
+      } else {
+        LOG.info("Timeline Server already running. Not restarting the service");
+      }
+    } else {
+      LOG.info("Embedded Timeline Server is disabled. Not starting timeline service");
+    }
+  }
+
+  private synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {
+    if (timelineServer.isPresent() && shouldStopTimelineServer) {
+      // Stop only if owner
+      LOG.info("Stopping Timeline service !!");
+      timelineServer.get().stop();
+    }
+
+    timelineServer = Option.empty();
+    // Reset Storage Config to Client specified config
+    if (resetViewStorageConfig) {
+      config.resetViewStorageConfig();
     }
   }
 
@@ -216,5 +272,10 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
         .map(
             instantWorkloadPair -> Pair.of(instantWorkloadPair.getKey().getTimestamp(), instantWorkloadPair.getValue()))
         .collect(Collectors.toList());
+  }
+
+  @Override
+  public void close() throws Exception {
+    stopEmbeddedServerView(true);
   }
 }
