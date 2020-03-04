@@ -101,21 +101,22 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   // Total number of new records inserted into the delta file
   private long insertRecordsWritten = 0;
 
-  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable, String fileId,
-      Iterator<HoodieRecord<T>> recordItr) {
+  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
+                            String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     super(config, commitTime, fileId, hoodieTable);
     writeStatus.setStat(new HoodieDeltaWriteStat());
+    this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.recordItr = recordItr;
   }
 
-  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable, String fileId) {
-    this(config, commitTime, hoodieTable, fileId, null);
+  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
+                            String partitionPath, String fileId) {
+    this(config, commitTime, hoodieTable, partitionPath, fileId, null);
   }
 
   private void init(HoodieRecord record) {
     if (doInit) {
-      this.partitionPath = record.getPartitionPath();
       // extract some information from the first record
       SliceView rtView = hoodieTable.getSliceView();
       Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
@@ -295,6 +296,13 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   private void writeToBuffer(HoodieRecord<T> record) {
+    if (!partitionPath.equals(record.getPartitionPath())) {
+      writeStatus.markFailure(record, new HoodieUpsertException("mismatched partition path"),
+              record.getData().getMetadata());
+
+      return;
+    }
+
     // update the new location of the record, so we know where to find it next
     record.unseal();
     record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
