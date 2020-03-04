@@ -390,28 +390,52 @@ Property: `hoodie.compaction.payload.class` <br/>
 
 
 ### Metrics configs
-Enables reporting of Hudi metrics to graphite.
+Enables reporting on Hudi metrics.
 [withMetricsConfig](#withMetricsConfig) (HoodieMetricsConfig) <br/>
-<span style="color:grey">Hudi publishes metrics on every commit, clean, rollback etc.</span>
+<span style="color:grey">Hudi publishes metrics on every commit, clean, rollback etc.The following sections list the supported reporters.</span>
 
-#### on(metricsOn = true) {#on} 
-Property: `hoodie.metrics.on` <br/>
+#### GRAPHITE
+
+##### on(metricsOn = true) {#on}
+`hoodie.metrics.on` <br/>
 <span style="color:grey">Turn sending metrics on/off. on by default.</span>
 
-#### withReporterType(reporterType = GRAPHITE) {#withReporterType} 
+##### withReporterType(reporterType = GRAPHITE) {#withReporterType}
 Property: `hoodie.metrics.reporter.type` <br/>
-<span style="color:grey">Type of metrics reporter. Graphite is the default and the only value suppported.</span>
+<span style="color:grey">Type of metrics reporter.</span>
 
-#### toGraphiteHost(host = localhost) {#toGraphiteHost} 
+##### toGraphiteHost(host = localhost) {#toGraphiteHost}
 Property: `hoodie.metrics.graphite.host` <br/>
 <span style="color:grey">Graphite host to connect to</span>
 
-#### onGraphitePort(port = 4756) {#onGraphitePort} 
+##### onGraphitePort(port = 4756) {#onGraphitePort}
 Property: `hoodie.metrics.graphite.port` <br/>
 <span style="color:grey">Graphite port to connect to</span>
 
-#### usePrefix(prefix = "") {#usePrefix} 
+##### usePrefix(prefix = "") {#usePrefix}
 Property: `hoodie.metrics.graphite.metric.prefix` <br/>
+<span style="color:grey">Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g</span>
+
+#### JMX
+
+##### on(metricsOn = true) {#on}
+`hoodie.metrics.on` <br/>
+<span style="color:grey">Turn sending metrics on/off. on by default.</span>
+
+##### withReporterType(reporterType = JMX) {#withReporterType}
+Property: `hoodie.metrics.reporter.type` <br/>
+<span style="color:grey">Type of metrics reporter.</span>
+
+##### toJmxHost(host = localhost) {#toJmxHost}
+Property: `hoodie.metrics.jmx.host` <br/>
+<span style="color:grey">Jmx host to connect to</span>
+
+##### onJmxPort(port = 1000-5000) {#onJmxPort}
+Property: `hoodie.metrics.jmx.port` <br/>
+<span style="color:grey">Jmx port to connect to</span>
+
+##### usePrefix(prefix = "") {#usePrefix}
+Property: `hoodie.metrics.jmx.metric.prefix` <br/>
 <span style="color:grey">Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g</span>
     
 ### Memory configs

@@ -425,28 +425,52 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 
     
 ### 指标配置
-能够将Hudi指标报告给graphite。
+配置Hudi指标报告。
 [withMetricsConfig](#withMetricsConfig) (HoodieMetricsConfig) <br/>
 <span style="color:grey">Hudi会发布有关每次提交、清理、回滚等的指标。</span>
 
-#### on(metricsOn = true) {#on} 
+#### GRAPHITE
+
+##### on(metricsOn = true) {#on}
 属性：`hoodie.metrics.on` <br/>
 <span style="color:grey">打开或关闭发送指标。默认情况下处于启用状态。</span>
 
-#### withReporterType(reporterType = GRAPHITE) {#withReporterType} 
+##### withReporterType(reporterType = GRAPHITE) {#withReporterType}
 属性：`hoodie.metrics.reporter.type` <br/>
-<span style="color:grey">指标报告者的类型。默认使用graphite，也是唯一支持的类型。</span>
+<span style="color:grey">指标报告者的类型。默认使用graphite。</span>
 
-#### toGraphiteHost(host = localhost) {#toGraphiteHost} 
+##### toGraphiteHost(host = localhost) {#toGraphiteHost}
 属性：`hoodie.metrics.graphite.host` <br/>
 <span style="color:grey">要连接的graphite主机</span>
 
-#### onGraphitePort(port = 4756) {#onGraphitePort} 
+##### onGraphitePort(port = 4756) {#onGraphitePort}
 属性：`hoodie.metrics.graphite.port` <br/>
 <span style="color:grey">要连接的graphite端口</span>
 
-#### usePrefix(prefix = "") {#usePrefix} 
+##### usePrefix(prefix = "") {#usePrefix}
 属性：`hoodie.metrics.graphite.metric.prefix` <br/>
+<span style="color:grey">适用于所有指标的标准前缀。这有助于添加如数据中心、环境等信息</span>
+
+#### JMX
+
+##### on(metricsOn = true) {#on}
+属性：`hoodie.metrics.on` <br/>
+<span style="color:grey">打开或关闭发送指标。默认情况下处于启用状态。</span>
+
+##### withReporterType(reporterType = JMX) {#withReporterType}
+属性：`hoodie.metrics.reporter.type` <br/>
+<span style="color:grey">指标报告者的类型。</span>
+
+##### toJmxHost(host = localhost) {#toJmxHost}
+属性：`hoodie.metrics.jmx.host` <br/>
+<span style="color:grey">要连接的Jmx主机</span>
+
+##### onJmxPort(port = 1000-5000) {#onJmxPort}
+属性：`hoodie.metrics.graphite.port` <br/>
+<span style="color:grey">要连接的Jmx端口</span>
+
+##### usePrefix(prefix = "") {#usePrefix}
+属性：`hoodie.metrics.jmx.metric.prefix` <br/>
 <span style="color:grey">适用于所有指标的标准前缀。这有助于添加如数据中心、环境等信息</span>
     
 ### 内存配置
