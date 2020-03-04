@@ -18,7 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.TestHoodieClientBase;
+import org.apache.hudi.client.TestHoodieClientBase;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;

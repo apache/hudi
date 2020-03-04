@@ -18,7 +18,7 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.FSUtils;

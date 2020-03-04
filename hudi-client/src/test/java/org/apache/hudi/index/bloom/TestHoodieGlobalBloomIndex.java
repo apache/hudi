@@ -18,7 +18,7 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.HoodieClientTestHarness;
+import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -33,7 +33,6 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import com.google.common.collect.Lists;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -43,6 +42,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -117,11 +117,11 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     HoodieRecord record4 =
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
-    HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", "2_0_20160401010101.parquet", Lists.newArrayList(),
+    HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", "2_0_20160401010101.parquet", new ArrayList<>(),
         schema, null, false);
-    HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", "1_0_20150312101010.parquet", Lists.newArrayList(),
+    HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", "1_0_20150312101010.parquet", new ArrayList<>(),
         schema, null, false);
-    HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", "3_0_20150312101010.parquet", Arrays.asList(record1),
+    HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", "3_0_20150312101010.parquet", Collections.singletonList(record1),
         schema, null, false);
     HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", "4_0_20150312101010.parquet",
         Arrays.asList(record2, record3, record4), schema, null, false);
@@ -252,7 +252,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
         HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", Collections.singletonList(record1),
                 schema, null, false);
     String filename1 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Lists.newArrayList(),
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", new ArrayList<>(),
                 schema, null, false);
     String filename2 =
         HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record2),

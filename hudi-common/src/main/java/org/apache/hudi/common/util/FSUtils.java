@@ -28,7 +28,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -48,6 +47,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.function.Function;
@@ -216,7 +216,6 @@ public class FSUtils {
    * @param excludeMetaFolder Exclude .hoodie folder
    * @throws IOException
    */
-  @VisibleForTesting
   static void processFiles(FileSystem fs, String basePathStr, Function<FileStatus, Boolean> consumer,
       boolean excludeMetaFolder) throws IOException {
     PathFilter pathFilter = excludeMetaFolder ? getExcludeMetaPathFilter() : ALLOW_ALL_FILTER;
@@ -250,7 +249,7 @@ public class FSUtils {
   }
 
   public static String getFileExtension(String fullName) {
-    Preconditions.checkNotNull(fullName);
+    Objects.requireNonNull(fullName);
     String fileName = (new File(fullName)).getName();
     int dotIndex = fileName.indexOf('.');
     return dotIndex == -1 ? "" : fileName.substring(dotIndex);

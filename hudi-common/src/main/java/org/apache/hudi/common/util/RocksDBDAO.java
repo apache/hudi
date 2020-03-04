@@ -22,7 +22,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -450,7 +449,6 @@ public class RocksDBDAO {
     }
   }
 
-  @VisibleForTesting
   String getRocksDBBasePath() {
     return rocksDBBasePath;
   }

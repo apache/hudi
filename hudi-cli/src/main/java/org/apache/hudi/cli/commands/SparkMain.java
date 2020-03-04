@@ -18,15 +18,15 @@
 
 package org.apache.hudi.cli.commands;
 
-import com.google.common.base.Strings;
-import org.apache.hudi.HoodieWriteClient;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.io.compact.strategy.UnBoundedCompactionStrategy;
+import org.apache.hudi.table.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.HDFSParquetImporter.Config;
 import org.apache.hudi.utilities.HoodieCleaner;
@@ -81,7 +81,7 @@ public class SparkMain {
       case UPSERT:
         assert (args.length >= 12);
         String propsFilePath = null;
-        if (!Strings.isNullOrEmpty(args[11])) {
+        if (!StringUtils.isNullOrEmpty(args[11])) {
           propsFilePath = args[11];
         }
         List<String> configs = new ArrayList<>();
@@ -94,7 +94,7 @@ public class SparkMain {
       case COMPACT_RUN:
         assert (args.length >= 9);
         propsFilePath = null;
-        if (!Strings.isNullOrEmpty(args[8])) {
+        if (!StringUtils.isNullOrEmpty(args[8])) {
           propsFilePath = args[8];
         }
         configs = new ArrayList<>();
@@ -107,7 +107,7 @@ public class SparkMain {
       case COMPACT_SCHEDULE:
         assert (args.length >= 6);
         propsFilePath = null;
-        if (!Strings.isNullOrEmpty(args[5])) {
+        if (!StringUtils.isNullOrEmpty(args[5])) {
           propsFilePath = args[5];
         }
         configs = new ArrayList<>();
@@ -142,7 +142,7 @@ public class SparkMain {
       case CLEAN:
         assert (args.length >= 5);
         propsFilePath = null;
-        if (!Strings.isNullOrEmpty(args[3])) {
+        if (!StringUtils.isNullOrEmpty(args[3])) {
           propsFilePath = args[3];
         }
         configs = new ArrayList<>();

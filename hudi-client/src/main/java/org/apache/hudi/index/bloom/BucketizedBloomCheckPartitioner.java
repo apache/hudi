@@ -20,7 +20,6 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.util.collection.Pair;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.hash.Hashing;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -152,7 +151,6 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     return candidatePartitions.get(idx);
   }
 
-  @VisibleForTesting
   Map<String, List<Integer>> getFileGroupToPartitions() {
     return fileGroupToPartitions;
   }

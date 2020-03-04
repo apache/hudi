@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.FileSlice;
@@ -38,12 +38,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.func.MergeOnReadLazyInsertIterable;
+import org.apache.hudi.execution.MergeOnReadLazyInsertIterable;
 import org.apache.hudi.io.HoodieAppendHandle;
-import org.apache.hudi.io.compact.HoodieMergeOnReadTableCompactor;
+import org.apache.hudi.table.compact.HoodieMergeOnReadTableCompactor;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import org.apache.hudi.table.rollback.RollbackHelper;
+import org.apache.hudi.table.rollback.RollbackRequest;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -195,7 +196,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
       LOG.info("Unpublished " + commit);
       List<RollbackRequest> rollbackRequests = generateRollbackRequests(jsc, instant);
       // TODO: We need to persist this as rollback workload and use it in case of partial failures
-      allRollbackStats = new RollbackExecutor(metaClient, config).performRollback(jsc, instant, rollbackRequests);
+      allRollbackStats = new RollbackHelper(metaClient, config).performRollback(jsc, instant, rollbackRequests);
     }
 
     // Delete Inflight instants if enabled
@@ -409,7 +410,6 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     }
 
     // TODO (NA) : Make this static part of utility
-    @VisibleForTesting
     public long convertLogFilesSizeToExpectedParquetSize(List<HoodieLogFile> hoodieLogFiles) {
       long totalSizeOfLogFiles = hoodieLogFiles.stream().map(HoodieLogFile::getFileSize)
           .filter(size -> size > 0).reduce(Long::sum).orElse(0L);

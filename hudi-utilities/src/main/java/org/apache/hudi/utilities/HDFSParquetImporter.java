@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieJsonPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -35,7 +35,6 @@ import com.beust.jcommander.IValueValidator;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -120,7 +119,6 @@ public class HDFSParquetImporter implements Serializable {
     return ret;
   }
 
-  @VisibleForTesting
   protected int dataImport(JavaSparkContext jsc) throws IOException {
     try {
       if (fs.exists(new Path(cfg.targetPath))) {

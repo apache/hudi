@@ -23,7 +23,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.func.LazyIterableIterator;
+import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.io.HoodieKeyLookupHandle.KeyLookupResult;
 import org.apache.hudi.table.HoodieTable;

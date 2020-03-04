@@ -103,7 +103,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
         unixTime = ((Float) partitionVal).longValue();
       } else if (partitionVal instanceof Long) {
         unixTime = (Long) partitionVal;
-      } else if (partitionVal instanceof String) {
+      } else if (partitionVal instanceof CharSequence) {
         unixTime = inputDateFormat.parse(partitionVal.toString()).getTime() / 1000;
       } else {
         throw new HoodieNotSupportedException(

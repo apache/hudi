@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>0.5.2-SNAPSHOT</version>
+  <version>0.6.0-SNAPSHOT</version>
   <description>Apache Hudi (incubating) brings stream style processing on big data</description>
   <url>https://github.com/apache/incubator-hudi</url>
   <name>Hudi</name>
@@ -115,6 +115,7 @@
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix></utilities.bundle.hive.shade.prefix>
     <argLine>-Xmx1024m -XX:MaxPermSize=256m</argLine>
+    <jacoco.version>0.8.5</jacoco.version>
   </properties>
 
   <scm>
@@ -126,6 +127,19 @@
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>2.2.1</version>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals>
+              <goal>jar-no-fork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
@@ -251,7 +265,7 @@
         <plugin>
           <groupId>org.jacoco</groupId>
           <artifactId>jacoco-maven-plugin</artifactId>
-          <version>0.7.8</version>
+          <version>${jacoco.version}</version>
           <executions>
             <!--
                 Prepares the property pointing to the JaCoCo runtime agent which
@@ -262,10 +276,6 @@
               <goals>
                 <goal>prepare-agent</goal>
               </goals>
-              <configuration>
-                <!-- Sets the path to the file which contains the execution data. -->
-                <destFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</destFile>
-              </configuration>
             </execution>
             <!--
                 Ensures that the code coverage report for unit tests is created after
@@ -278,8 +288,6 @@
                 <goal>report</goal>
               </goals>
               <configuration>
-                <!-- Sets the path to the file which contains the execution data. -->
-                <dataFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</dataFile>
                 <!-- Sets the output directory for the code coverage report. -->
                 <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
               </configuration>
@@ -337,6 +345,7 @@
               <exclude>**/*LICENSE*</exclude>
               <exclude>**/dependency-reduced-pom.xml</exclude>
               <exclude>**/test/resources/*.data</exclude>
+              <exclude>**/test/resources/*.commit</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
             </excludes>

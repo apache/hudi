@@ -30,7 +30,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -59,7 +58,6 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
    * Load all involved files as <Partition, filename> pair RDD from all partitions in the table.
    */
   @Override
-  @VisibleForTesting
   List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final JavaSparkContext jsc,
                                                              final HoodieTable hoodieTable) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
@@ -83,7 +81,6 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
    */
 
   @Override
-  @VisibleForTesting
   JavaRDD<Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {

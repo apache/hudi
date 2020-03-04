@@ -20,8 +20,8 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
-import org.apache.hudi.io.compact.strategy.CompactionStrategy;
-import org.apache.hudi.io.compact.strategy.LogFileSizeBasedCompactionStrategy;
+import org.apache.hudi.table.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
 import com.google.common.base.Preconditions;
 

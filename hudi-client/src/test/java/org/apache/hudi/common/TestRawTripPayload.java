@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common;
 
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;

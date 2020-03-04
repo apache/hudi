@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.SchemaTestUtil;
 
-import com.google.common.collect.Maps;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -45,6 +44,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -97,7 +97,7 @@ public class TestHoodieLogFormatAppendFailure {
 
     // Some data & append.
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 10);
-    Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>(2);
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);

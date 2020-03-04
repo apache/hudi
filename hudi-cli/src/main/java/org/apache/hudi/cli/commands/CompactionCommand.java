@@ -18,8 +18,8 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.CompactionAdminClient.RenameOpResult;
-import org.apache.hudi.CompactionAdminClient.ValidationOpResult;
+import org.apache.hudi.client.CompactionAdminClient.RenameOpResult;
+import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.cli.HoodieCLI;
@@ -42,7 +42,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.func.OperationResult;
+import org.apache.hudi.table.compact.OperationResult;
 import org.apache.hudi.utilities.UtilHelpers;
 
 import org.apache.hadoop.fs.FSDataInputStream;

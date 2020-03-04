@@ -18,9 +18,8 @@
 
 package org.apache.hudi.index.bloom;
 
-import com.google.common.base.Objects;
-
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Metadata about a given file group, useful for index lookup.
@@ -80,14 +79,14 @@ public class BloomIndexFileInfo implements Serializable {
     }
 
     BloomIndexFileInfo that = (BloomIndexFileInfo) o;
-    return Objects.equal(that.fileId, fileId) && Objects.equal(that.minRecordKey, minRecordKey)
-        && Objects.equal(that.maxRecordKey, maxRecordKey);
+    return Objects.equals(that.fileId, fileId) && Objects.equals(that.minRecordKey, minRecordKey)
+        && Objects.equals(that.maxRecordKey, maxRecordKey);
 
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(fileId, minRecordKey, maxRecordKey);
+    return Objects.hash(fileId, minRecordKey, maxRecordKey);
   }
 
   @Override

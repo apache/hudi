@@ -18,8 +18,6 @@
 
 package org.apache.hudi.hive.util;
 
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -42,6 +40,8 @@ import org.apache.parquet.schema.Type;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -67,7 +67,7 @@ public class SchemaUtil {
     }
     LOG.info("Getting schema difference for " + tableSchema + "\r\n\r\n" + newTableSchema);
     SchemaDifference.Builder schemaDiffBuilder = SchemaDifference.newBuilder(storageSchema, tableSchema);
-    Set<String> tableColumns = Sets.newHashSet();
+    Set<String> tableColumns = new HashSet<>();
 
     for (Map.Entry<String, String> field : tableSchema.entrySet()) {
       String fieldName = field.getKey().toLowerCase();
@@ -140,7 +140,7 @@ public class SchemaUtil {
    * @return : Hive Table schema read from parquet file MAP[String,String]
    */
   public static Map<String, String> convertParquetSchemaToHiveSchema(MessageType messageType) throws IOException {
-    Map<String, String> schema = Maps.newLinkedHashMap();
+    Map<String, String> schema = new LinkedHashMap<>();
     List<Type> parquetFields = messageType.getFields();
     for (Type parquetType : parquetFields) {
       StringBuilder result = new StringBuilder();
