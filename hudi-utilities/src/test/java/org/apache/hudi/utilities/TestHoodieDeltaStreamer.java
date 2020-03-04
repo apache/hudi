@@ -106,6 +106,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final int PARQUET_NUM_RECORDS = 5;
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
   public static KafkaTestUtils testUtils;
+  private static boolean printReadKeys = false;
 
   private static int parquetTestNum = 1;
 
@@ -296,7 +297,22 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     }
 
     static void assertRecordCount(long expected, String tablePath, SQLContext sqlContext) {
-      long recordCount = sqlContext.read().format("org.apache.hudi").load(tablePath).count();
+      Dataset<Row> set = sqlContext.read().format("org.apache.hudi").load(tablePath);
+      //set.show();
+      long recordCount = set.count();
+      if (recordCount >= 3193 && !printReadKeys) {
+        LOG.debug("#keys in HoodieTestDataGenerator: " + HoodieTestDataGenerator.allKeys.size());
+        //set.foreach(row -> {
+        //LOG.debug(row.get(row.fieldIndex("_row_key")));
+        //LOG.debug("is it present: " + HoodieTestDataGenerator.allKeys.contains(row.get(row.fieldIndex("_row_key")).toString()));
+        //HoodieTestDataGenerator.allKeys.remove(row.get(row.fieldIndex("_row_key")).toString());
+        //});
+        //LOG.info("Hoodie all keys size: " + HoodieTestDataGenerator.allKeys.size());
+        //LOG.info("keys not consumed: " + HoodieTestDataGenerator.allKeys);
+        printReadKeys = true;
+        //Set<String> copySet = new HashSet<>();
+        //copySet = HoodieTestDataGenerator.allKeys;
+      }
       assertEquals(expected, recordCount);
     }
 
@@ -474,7 +490,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       TestHelpers.assertRecordCount(totalRecords + 200, tableBasePath + "/*/*.parquet", sqlContext);
       TestHelpers.assertDistanceCount(totalRecords + 200, tableBasePath + "/*/*.parquet", sqlContext);
       return true;
-    }, 180);
+    }, 240);
     ds.shutdownGracefully();
     dsFuture.get();
   }

@@ -117,11 +117,11 @@ public abstract class AbstractBaseTestSource extends AvroSource {
           + maxUniqueKeys);
       // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
       deleteStream = dataGenerator.generateUniqueDeleteRecordStream(commitTime, 50).map(AbstractBaseTestSource::toGenericRecord);
-      updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+      updateStream = dataGenerator.generateUniqueUpdatesStreamV2(commitTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .map(AbstractBaseTestSource::toGenericRecord);
     } else {
       LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
-      updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+      updateStream = dataGenerator.generateUniqueUpdatesStreamV2(commitTime, numUpdates, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
           .map(AbstractBaseTestSource::toGenericRecord);
     }
     Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)

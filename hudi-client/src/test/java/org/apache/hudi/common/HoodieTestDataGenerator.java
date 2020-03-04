@@ -40,6 +40,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -67,6 +69,7 @@ public class HoodieTestDataGenerator {
 
   // based on examination of sample file, the schema produces the following per record size
   public static final int SIZE_PER_RECORD = 50 * 1024;
+  private static Logger logger = LogManager.getLogger(HoodieTestDataGenerator.class);
   public static final String DEFAULT_FIRST_PARTITION_PATH = "2016/03/15";
   public static final String DEFAULT_SECOND_PARTITION_PATH = "2015/03/16";
   public static final String DEFAULT_THIRD_PARTITION_PATH = "2015/03/17";
@@ -104,6 +107,9 @@ public class HoodieTestDataGenerator {
   private final String[] partitionPaths;
   //maintains the count of existing keys schema wise
   private Map<String, Integer> numKeysBySchema;
+  public static Set<String> allKeys = new HashSet<>();
+  private boolean printKeys = false;
+  private final List<Integer> indexGettingDeleted = new ArrayList<>();
 
   public HoodieTestDataGenerator(String[] partitionPaths) {
     this(partitionPaths, new HashMap<>());
@@ -143,6 +149,11 @@ public class HoodieTestDataGenerator {
    */
   public static TestRawTripPayload generateRandomValue(HoodieKey key, String commitTime) throws IOException {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
+    return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+  }
+
+  public static TestRawTripPayload generateRandomValueV2(HoodieKey key, String commitTime) throws IOException {
+    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 1.0);
     return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
 
@@ -311,10 +322,15 @@ public class HoodieTestDataGenerator {
       HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
       KeyPartition kp = new KeyPartition();
       kp.key = key;
+      allKeys.add(key.getRecordKey());
       kp.partitionPath = partitionPath;
       populateKeysBySchema(schemaStr, currSize + i, kp);
       incrementNumExistingKeysBySchema(schemaStr);
       try {
+        if (allKeys.size() == 3200 && !printKeys) {
+          logger.debug("printing all the keys: " + allKeys.toString());
+          printKeys = true;
+        }
         return new HoodieRecord(key, generateRandomValueAsPerSchema(schemaStr, key, commitTime));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
@@ -503,9 +519,51 @@ public class HoodieTestDataGenerator {
         index = (index + 1) % numExistingKeys;
         kp = existingKeys.get(index);
       }
+      logger.debug("key getting updated: " + kp.key.getRecordKey());
       used.add(kp);
       try {
         return new HoodieRecord(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, commitTime));
+      } catch (IOException e) {
+        throw new HoodieIOException(e.getMessage(), e);
+      }
+    });
+  }
+
+  public Stream<HoodieRecord> generateUniqueUpdatesStreamV2(String commitTime, Integer n, String schemaStr) {
+    final Set<KeyPartition> used = new HashSet<>();
+    int numExistingKeys = numKeysBySchema.getOrDefault(schemaStr, 0);
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
+    if (n > numExistingKeys) {
+      throw new IllegalArgumentException("Requested unique updates is greater than number of available keys");
+    }
+
+    return IntStream.range(0, n).boxed().map(i -> {
+      KeyPartition kp;
+      if (i < 50) {
+        int index = numExistingKeys == 1 ? 0 : rand.nextInt(49);
+        int actualIndex = indexGettingDeleted.get(index);
+        kp = existingKeys.get(actualIndex);
+        // Find the available keyPartition starting from randomly chosen one.
+        while (used.contains(kp)) {
+          index = (index + 1) % 50;
+          actualIndex = indexGettingDeleted.get(index);
+          kp = existingKeys.get(actualIndex);
+        }
+        logger.debug("key getting updated in v2 if: " + kp.key.getRecordKey());
+        used.add(kp);
+      } else {
+        int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
+        kp = existingKeys.get(index);
+        // Find the available keyPartition starting from randomly chosen one.
+        while (used.contains(kp)) {
+          index = (index + 1) % numExistingKeys;
+          kp = existingKeys.get(index);
+        }
+        logger.debug("key getting updated in v2 else: " + kp.key.getRecordKey());
+        used.add(kp);
+      }
+      try {
+        return new HoodieRecord(kp.key, generateRandomValueV2(kp.key, commitTime));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -571,6 +629,8 @@ public class HoodieTestDataGenerator {
       }
       existingKeys.remove(kp);
       numExistingKeys--;
+      indexGettingDeleted.add(index);
+      logger.debug("key getting deleted: " + kp.key.getRecordKey());
       used.add(kp);
       try {
         result.add(new HoodieRecord(kp.key, generateRandomDeleteValue(kp.key, commitTime)));
