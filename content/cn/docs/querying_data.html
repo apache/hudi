@@ -350,6 +350,11 @@
     </ul>
   </li>
   <li><a href="#presto">Presto</a></li>
+  <li><a href="#impala此功能还未正式发布">Impala(此功能还未正式发布)</a>
+    <ul>
+      <li><a href="#读优化表">读优化表</a></li>
+    </ul>
+  </li>
 </ul>
           </nav>
         </aside>
@@ -571,6 +576,33 @@ Upsert实用程序（<code class="highlighter-rouge">HoodieDeltaStreamer</code>�
 
 <p>Presto是一种常用的查询引擎，可提供交互式查询性能。 Hudi RO表可以在Presto中无缝查询。
 这需要在整个安装过程中将<code class="highlighter-rouge">hudi-presto-bundle</code> jar放入<code class="highlighter-rouge">&lt;presto_install&gt;/plugin/hive-hadoop2/</code>中。</p>
+
+<h2 id="impala此功能还未正式发布">Impala(此功能还未正式发布)</h2>
+
+<h3 id="读优化表">读优化表</h3>
+
+<p>Impala可以在HDFS上查询Hudi读优化表，作为一种 <a href="https://docs.cloudera.com/documentation/enterprise/6/6.3/topics/impala_tables.html#external_tables">EXTERNAL TABLE</a> 的形式。<br />
+可以通过以下方式在Impala上建立Hudi读优化表:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>CREATE EXTERNAL TABLE database.table_name
+LIKE PARQUET '/path/to/load/xxx.parquet'
+STORED AS HUDIPARQUET
+LOCATION '/path/to/load';
+</code></pre></div></div>
+<p>Impala可以利用合理的文件分区来提高查询的效率。
+如果想要建立分区的表，文件夹命名需要根据此种方式<code class="highlighter-rouge">year=2020/month=1</code>.
+Impala使用<code class="highlighter-rouge">=</code>来区分分区名和分区值.<br />
+可以通过以下方式在Impala上建立分区Hudi读优化表:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>CREATE EXTERNAL TABLE database.table_name
+LIKE PARQUET '/path/to/load/xxx.parquet'
+PARTITION BY (year int, month int, day int)
+STORED AS HUDIPARQUET
+LOCATION '/path/to/load';
+ALTER TABLE database.table_name RECOVER PARTITIONS;
+</code></pre></div></div>
+<p>在Hudi成功写入一个新的提交后, 刷新Impala表来得到最新的结果.</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>REFRESH database.table_name
+</code></pre></div></div>
+
 
       </section>
 

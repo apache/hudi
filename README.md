@@ -61,6 +61,17 @@ mkdir -p $VERSION && cp *.md $VERSION/
 
 This step changes the permalink (location where these pages would be placed) with a version prefix and also changes links to each other.
 
+Mac users please use these commands:
+```
+cd $VERSION
+sed -i '' -e "s/permalink: \/docs\//permalink: \/docs\/${VERSION}-/g" *.md
+sed -i '' -e "s/permalink: \/cn\/docs\//permalink: \/cn\/docs\/${VERSION}-/g" *.cn.md
+sed -i '' -e "s/](\/docs\//](\/docs\/${VERSION}-/g" *.md
+sed -i '' -e "s/](\/cn\/docs\//](\/cn\/docs\/${VERSION}-/g" *.cn.md
+for f in *.md; do [ -f $f ] &&  sed -i '' -e "1s/^//p; 1s/^.*/version: ${VERSION}/" $f; done
+```
+
+Non Mac please use these:
 ```
 cd $VERSION
 sed -i "s/permalink: \/docs\//permalink: \/docs\/${VERSION}-/g" *.md
@@ -93,6 +104,14 @@ render the new version's equivalent navigation links.
 {% endif %}
 ```
 
+Final steps:
+ - In `_config.yml` add a new subsection under `previous_docs: ` for this version similar to `  - version: 0.5.0`
+ - Edit `docs/_pages.index.md` to point to the latest release. Change the text of latest release and edit the href 
+ link to point to the release tag in github.
+ - in `docs/_pages/releases.md` Add a new section on the very top for this release. Refer to `Release 0.5.0-incubating` 
+ for reference. Ensure the links for github release tag, docs, source release, raw release notes are pointing to this 
+ latest release. Also include following subsections - `Download Information`, `Release Highlights` and `Raw Release Notes`.
+ 
 #### Link to this version's doc
 
 
