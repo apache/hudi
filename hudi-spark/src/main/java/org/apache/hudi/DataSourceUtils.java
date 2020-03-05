@@ -223,7 +223,8 @@ public class DataSourceUtils {
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
                                                      HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> timelineService) {
-    try (HoodieReadClient client = new HoodieReadClient<>(jssc, writeConfig, timelineService)) {
+    try {
+      HoodieReadClient client = new HoodieReadClient<>(jssc, writeConfig, timelineService);
       return client.tagLocation(incomingHoodieRecords)
           .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
     } catch (TableNotFoundException e) {

@@ -67,6 +67,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
   private final transient HoodieIndex<T> index;
   private HoodieTable hoodieTable;
   private transient Option<SQLContext> sqlContextOpt;
+  private final transient JavaSparkContext jsc;
 
   /**
    * @param basePath path to Hoodie table
@@ -107,6 +108,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    */
   public HoodieReadClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineService) {
+    this.jsc = jsc;
     final String basePath = clientConfig.getBasePath();
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
