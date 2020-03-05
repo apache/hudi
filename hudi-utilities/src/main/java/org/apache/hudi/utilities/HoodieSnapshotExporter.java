@@ -126,11 +126,11 @@ public class HoodieSnapshotExporter {
         // A field to do simple Spark repartitioning
         DataFrameWriter<Row> write = null;
         Dataset<Row> original = spark.read().parquet(JavaConversions.asScalaIterator(dataFiles.iterator()).toSeq());
-        List<Column> needColumns = Arrays.asList(original.columns()).stream().filter(col -> !col.contains("_hoodie_")).map(col -> new Column(col)).collect(Collectors.toList());
+        List<Column> needColumns = Arrays.asList(original.columns()).stream().filter(col -> !col.startsWith("_hoodie_")).map(col -> new Column(col)).collect(Collectors.toList());
         Dataset<Row> reader = original.select(JavaConversions.asScalaIterator(needColumns.iterator()).toSeq());
         if (!StringUtils.isNullOrEmpty(cfg.outputPartitionField)) {
           write = reader.repartition(new Column(cfg.outputPartitionField))
-              .write();
+              .write().partitionBy(cfg.outputPartitionField);
         } else {
           write = reader.write();
         }
@@ -220,7 +220,7 @@ public class HoodieSnapshotExporter {
     new JCommander(cfg, null, args);
 
     // Create a spark job to do the snapshot export
-    SparkSession spark = SparkSession.builder().appName("Hoodie-snapshot-exporter").master("local[2]")
+    SparkSession spark = SparkSession.builder().appName("Hoodie-snapshot-exporter")
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").getOrCreate();
     LOG.info("Initializing spark job.");
 
