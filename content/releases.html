@@ -154,6 +154,10 @@
 
           
         
+          <li><a href="/security" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Security Issues</a></li>
+
+          
+        
       
     </ul>
   </div>
@@ -206,7 +210,7 @@
           </nav>
         </aside>
         
-        <h2 id="release-051-incubating-docs"><a href="https://github.com/apache/incubator-hudi/releases/tag/release-0.5.1-incubating">Release 0.5.1-incubating</a> (<a href="/docs/quick-start-guide.html">docs</a>)</h2>
+        <h2 id="release-051-incubating-docs"><a href="https://github.com/apache/incubator-hudi/releases/tag/release-0.5.1-incubating">Release 0.5.1-incubating</a> (<a href="/docs/0.5.1-quick-start-guide.html">docs</a>)</h2>
 
 <h3 id="download-information">Download Information</h3>
 <ul>
@@ -231,25 +235,24 @@ Note that scala_version here is one of (2.11, 2.12).</li>
   <li>With 0.5.1, we added functionality to stop using renames for Hudi timeline metadata operations. This feature is automatically enabled for newly created Hudi tables. For existing tables, this feature is turned off by default. Please read this <a href="https://hudi.apache.org/docs/deployment.html#upgrading">section</a>, before enabling this feature for existing hudi tables.
 To enable the new hudi timeline layout which avoids renames, use the write config “hoodie.timeline.layout.version=1”. Alternatively, you can use “repair overwrite-hoodie-props” to append the line “hoodie.timeline.layout.version=1” to hoodie.properties. Note that in any case, upgrade hudi readers (query engines) first with 0.5.1-incubating release before upgrading writer.</li>
   <li>CLI supports <code class="highlighter-rouge">repair overwrite-hoodie-props</code> to overwrite the table’s hoodie.properties with specified file, for one-time updates to table name or even enabling the new timeline layout above. Note that few queries may temporarily fail while the overwrite happens (few milliseconds).</li>
-  <li>DeltaStreamer CLI parameter for capturing table type is changed from –storage-type to –table-type. Refer to <a href="https://cwiki.apache.org/confluence/display/HUDI/Design+And+Architecture">wiki</a> with more latest terminologies.</li>
+  <li>DeltaStreamer CLI parameter for capturing table type is changed from <code class="highlighter-rouge">--storage-type</code> to <code class="highlighter-rouge">--table-type</code>. Refer to <a href="https://cwiki.apache.org/confluence/display/HUDI/Design+And+Architecture">wiki</a> with more latest terminologies.</li>
   <li>Configuration Value change for Kafka Reset Offset Strategies. Enum values are changed from LARGEST to LATEST, SMALLEST to EARLIEST for configuring Kafka reset offset strategies with configuration(auto.offset.reset) in deltastreamer.</li>
   <li>When using spark-shell to give a quick peek at Hudi, please provide <code class="highlighter-rouge">--packages org.apache.spark:spark-avro_2.11:2.4.4</code>, more details would refer to <a href="https://hudi.apache.org/docs/quick-start-guide.html">latest quickstart docs</a></li>
   <li>Key generator moved to separate package under org.apache.hudi.keygen. If you are using overridden key generator classes (configuration (“hoodie.datasource.write.keygenerator.class”)) that comes with hudi package, please ensure the fully qualified class name is changed accordingly.</li>
   <li>Hive Sync tool will register RO tables for MOR with a _ro suffix, so query with _ro suffix. You would use <code class="highlighter-rouge">--skip-ro-suffix</code> in sync config in sync config to retain the old naming without the _ro suffix.</li>
-  <li>With 0.5.1, hudi-hadoop-mr-bundle which is used by query engines such as presto and hive includes shaded avro package to support hudi real time queries through these engines. Hudi supports pluggable logic for merging of records. Users provide their own implementation of <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecordPayload.java">HoodieRecordPayload</a>.
-If you are using this feature, you need to relocate the avro dependencies in your custom record payload class to be consistent with internal hudi shading. You need to add the following relocation when shading the package containing the record payload implementation.</li>
-</ul>
+  <li>
+    <p>With 0.5.1, hudi-hadoop-mr-bundle which is used by query engines such as presto and hive includes shaded avro package to support hudi real time queries through these engines. Hudi supports pluggable logic for merging of records. Users provide their own implementation of <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecordPayload.java">HoodieRecordPayload</a>.
+If you are using this feature, you need to relocate the avro dependencies in your custom record payload class to be consistent with internal hudi shading. You need to add the following relocation when shading the package containing the record payload implementation.</p>
 
-<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;relocation&gt;</span>
-    <span class="nt">&lt;pattern&gt;</span>org.apache.avro.<span class="nt">&lt;/pattern&gt;</span>
-    <span class="nt">&lt;shadedPattern&gt;</span>org.apache.hudi.org.apache.avro.<span class="nt">&lt;/shadedPattern&gt;</span>
+    <div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;relocation&gt;</span>
+  <span class="nt">&lt;pattern&gt;</span>org.apache.avro.<span class="nt">&lt;/pattern&gt;</span>
+  <span class="nt">&lt;shadedPattern&gt;</span>org.apache.hudi.org.apache.avro.<span class="nt">&lt;/shadedPattern&gt;</span>
 <span class="nt">&lt;/relocation&gt;</span>
-</code></pre></div></div>
-
-<ul>
+</code></pre></div>    </div>
+  </li>
   <li>Better delete support in DeltaStreamer, please refer to <a href="https://cwiki.apache.org/confluence/display/HUDI/2020/01/15/Delete+support+in+Hudi">blog</a> for more info.</li>
   <li>Support for AWS Database Migration Service(DMS) in DeltaStreamer, please refer to <a href="https://cwiki.apache.org/confluence/display/HUDI/2020/01/20/Change+Capture+Using+AWS+Database+Migration+Service+and+Hudi">blog</a> for more info.</li>
-  <li>Support for DynamicBloomFilter. This is turned off by default, to enable the DynamicBloomFilter, please use the index config “hoodie.bloom.index.filter.type=DYNAMIC_V0”.</li>
+  <li>Support for DynamicBloomFilter. This is turned off by default, to enable the DynamicBloomFilter, please use the index config <code class="highlighter-rouge">hoodie.bloom.index.filter.type=DYNAMIC_V0</code>.</li>
 </ul>
 
 <h3 id="raw-release-notes">Raw Release Notes</h3>

@@ -154,6 +154,10 @@
 
           
         
+          <li><a href="/security" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Security Issues</a></li>
+
+          
+        
       
     </ul>
   </div>
@@ -307,7 +311,14 @@ so that the community can contribute at large and help implement it much quickly
   <li>Once you finalize on a project/task, please open a new JIRA or assign an existing one to yourself.
     <ul>
       <li>Almost all PRs should be linked to a JIRA. It’s always good to have a JIRA upfront to avoid duplicating efforts.</li>
-      <li>If the changes are minor, then <code class="highlighter-rouge">[MINOR]</code> prefix can be added to Pull Request title without a JIRA.</li>
+      <li>If the changes are minor, then <code class="highlighter-rouge">[MINOR]</code> prefix can be added to Pull Request title without a JIRA. Below are some tips to judge <strong>MINOR</strong> Pull Request :
+        <ul>
+          <li>trivial fixes (for example, a typo, a broken link, intellisense or an obvious error)</li>
+          <li>the change does not alter functionality or performance in any way</li>
+          <li>changed lines less than 100</li>
+          <li>obviously judge that the PR would pass without waiting for CI / CD verification</li>
+        </ul>
+      </li>
       <li>But, you may be asked to file a JIRA, if reviewer deems it necessary</li>
     </ul>
   </li>

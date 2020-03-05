@@ -5,8 +5,10 @@
   {%- assign author = site.author -%}
 {%- endif -%}
 
-{%- if page.language == "0.5.0" -%}
+{%- if page.version == "0.5.0" -%}
   {%- assign author = site.0.5.0_author -%}
+{%- elsif page.version == "0.5.1" -%}
+  {%- assign author = site.0.5.1_author -%}
 {%- else -%}
   {%- assign author = site.author -%}
 {%- endif -%}

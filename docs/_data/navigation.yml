@@ -163,3 +163,70 @@ cn_docs:
       - title: "版权信息"
         url: /cn/docs/0.5.0-privacy.html
 
+0.5.1_docs:
+  - title: Getting Started
+    children:
+      - title: "Quick Start"
+        url: /docs/0.5.1-quick-start-guide.html
+      - title: "Use Cases"
+        url: /docs/0.5.1-use_cases.html
+      - title: "Talks & Powered By"
+        url: /docs/0.5.1-powered_by.html
+      - title: "Comparison"
+        url: /docs/0.5.1-comparison.html
+      - title: "Docker Demo"
+        url: /docs/0.5.1-docker_demo.html
+  - title: Documentation
+    children:
+      - title: "Concepts"
+        url: /docs/0.5.1-concepts.html
+      - title: "Writing Data"
+        url: /docs/0.5.1-writing_data.html
+      - title: "Querying Data"
+        url: /docs/0.5.1-querying_data.html
+      - title: "Configuration"
+        url: /docs/0.5.1-configurations.html
+      - title: "Performance"
+        url: /docs/0.5.1-performance.html
+      - title: "Deployment"
+        url: /docs/0.5.1-deployment.html
+  - title: INFO
+    children:
+      - title: "Docs Versions"
+        url: /docs/0.5.1-docs-versions.html
+      - title: "Privacy Policy"
+        url: /docs/0.5.1-privacy.html
+
+0.5.1_cn_docs:
+  - title: 入门指南
+    children:
+      - title: "快速开始"
+        url: /cn/docs/0.5.1-quick-start-guide.html
+      - title: "使用案例"
+        url: /cn/docs/0.5.1-use_cases.html
+      - title: "演讲 & hudi 用户"
+        url: /cn/docs/0.5.1-powered_by.html
+      - title: "对比"
+        url: /cn/docs/0.5.1-comparison.html
+      - title: "Docker 示例"
+        url: /cn/docs/0.5.1-docker_demo.html
+  - title: 帮助文档
+    children:
+      - title: "概念"
+        url: /cn/docs/0.5.1-concepts.html
+      - title: "写入数据"
+        url: /cn/docs/0.5.1-writing_data.html
+      - title: "查询数据"
+        url: /cn/docs/0.5.1-querying_data.html
+      - title: "配置"
+        url: /cn/docs/0.5.1-configurations.html
+      - title: "性能"
+        url: /cn/docs/0.5.1-performance.html
+      - title: "管理"
+        url: /cn/docs/0.5.1-deployment.html
+  - title: 其他信息
+    children:
+      - title: "文档版本"
+        url: /cn/docs/0.5.1-docs-versions.html
+      - title: "版权信息"
+        url: /cn/docs/0.5.1-privacy.html
