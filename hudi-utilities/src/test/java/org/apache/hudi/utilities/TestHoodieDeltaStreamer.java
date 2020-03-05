@@ -98,6 +98,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
   private static final Random RANDOM = new Random();
   private static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
+  private static final String PROPS_FILENAME_TEST_SOURCE_CONTINUOUS = "test-source-continuous.properties";
   public static final String PROPS_FILENAME_TEST_SOURCE1 = "test-source1.properties";
   public static final String PROPS_INVALID_HIVE_SYNC_TEST_SOURCE1 = "test-invalid-hive-sync-source1.properties";
   private static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
@@ -150,6 +151,9 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
         MultiPartKeysValueExtractor.class.getName());
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE);
+
+    props.setProperty(TestSourceConfig.CONTINUOUS_MODE_ENABLED, String.valueOf(true));
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE_CONTINUOUS);
 
     // Properties used for the delta-streamer which incrementally pulls from upstream Hudi source table and writes to
     // downstream hudi table
@@ -231,6 +235,10 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op) {
       return makeConfig(basePath, op, TripsWithDistanceTransformer.class.getName());
+    }
+
+    static HoodieDeltaStreamer.Config makeConfig(String basePath, String propsFileName, Operation op) {
+      return makeConfig(basePath, op, TripsWithDistanceTransformer.class.getName(), propsFileName, false);
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, String transformerClassName) {
@@ -466,7 +474,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     int totalRecords = 3000;
 
     // Initial bulk insert
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.UPSERT);
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, PROPS_FILENAME_TEST_SOURCE_CONTINUOUS, Operation.UPSERT);
     cfg.continuousMode = true;
     cfg.tableType = tableType.name();
     cfg.configs.add(String.format("%s=%d", TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, totalRecords));

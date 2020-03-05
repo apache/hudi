@@ -31,6 +31,9 @@ public class TestSourceConfig {
   public static final String MAX_UNIQUE_RECORDS_PROP = "hoodie.deltastreamer.source.test.max_unique_records";
   public static final Integer DEFAULT_MAX_UNIQUE_RECORDS = Integer.MAX_VALUE;
 
+  public static final String CONTINUOUS_MODE_ENABLED = "hoodie.deltastreamer.test.enableContinuousMode";
+  public static final Boolean DEFAULT_CONTINUOUS_MODE_ENABLED = false;
+
   // Use Rocks DB for storing datagen keys
   public static final String USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS =
       "hoodie.deltastreamer.source.test.datagen.use_rocksdb_for_storing_existing_keys";
