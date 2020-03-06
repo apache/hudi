@@ -20,6 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.AvroBinaryTestPayload;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -42,9 +43,11 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -182,6 +185,28 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
         .collect(Collectors.toList());
     payloadSize = SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema));
     assertTrue(payloadSize > 0);
+  }
+
+  @Test
+  public void testPutAll() throws IOException, URISyntaxException {
+    DiskBasedMap<String, HoodieRecord> records = new DiskBasedMap<>(basePath);
+    List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    Map<String, HoodieRecord> recordMap = new HashMap<String, HoodieRecord>();
+    iRecords.forEach(r -> {
+      String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+      String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+      HoodieRecord value = new HoodieRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
+      recordMap.put(key, value);
+    });
+
+    records.putAll(recordMap);
+    // make sure records have spilled to disk
+    assertTrue(records.sizeOfFileOnDiskInBytes() > 0);
+
+    // make sure all added records are present
+    for (Map.Entry<String, HoodieRecord> entry : records.entrySet()) {
+      assertTrue(recordMap.containsKey(entry.getKey()));
+    }
   }
 
   /**
