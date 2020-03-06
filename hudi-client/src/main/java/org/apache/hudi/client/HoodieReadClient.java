@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -46,6 +45,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.StructType;
 
+import java.io.Serializable;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -56,7 +56,7 @@ import scala.Tuple2;
 /**
  * Provides an RDD based API for accessing/filtering Hoodie tables, based on keys.
  */
-public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
+public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieReadClient.class);
 
@@ -65,9 +65,9 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
    * basepath pointing to the table. Until, then just always assume a BloomIndex
    */
   private final transient HoodieIndex<T> index;
-  private final HoodieTimeline commitTimeline;
   private HoodieTable hoodieTable;
   private transient Option<SQLContext> sqlContextOpt;
+  private final transient JavaSparkContext jsc;
 
   /**
    * @param basePath path to Hoodie table
@@ -108,12 +108,11 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
    */
   public HoodieReadClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineService) {
-    super(jsc, clientConfig, timelineService);
+    this.jsc = jsc;
     final String basePath = clientConfig.getBasePath();
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
     this.hoodieTable = HoodieTable.getHoodieTable(metaClient, clientConfig, jsc);
-    this.commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
     this.index = HoodieIndex.createIndex(clientConfig, jsc);
     this.sqlContextOpt = Option.empty();
   }
