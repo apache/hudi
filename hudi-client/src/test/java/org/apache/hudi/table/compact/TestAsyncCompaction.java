@@ -92,9 +92,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   public void testRollbackForInflightCompaction() throws Exception {
     // Rollback inflight compaction
     HoodieWriteConfig cfg = getConfig(false);
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);
-         HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());) {
-
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);) {
+      HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
       String compactionInstantTime = "005";
@@ -155,9 +154,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
 
     int numRecs = 2000;
 
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);
-         HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());) {
-
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);) {
+      HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
       records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
           new ArrayList<>());
@@ -197,9 +195,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   public void testInflightCompaction() throws Exception {
     // There is inflight compaction. Subsequent compaction run must work correctly
     HoodieWriteConfig cfg = getConfig(true);
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);
-         HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());) {
-
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);) {
+      HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
       String compactionInstantTime = "005";
@@ -351,9 +348,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   public void testCompactionAfterTwoDeltaCommits() throws Exception {
     // No Delta Commits after compaction request
     HoodieWriteConfig cfg = getConfig(true);
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);
-         HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());) {
-
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);) {
+      HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
       String compactionInstantTime = "005";
@@ -373,9 +369,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   public void testInterleavedCompaction() throws Exception {
     // Case: Two delta commits before and after compaction schedule
     HoodieWriteConfig cfg = getConfig(true);
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);
-         HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());) {
-
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg, true);) {
+      HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
       String compactionInstantTime = "005";

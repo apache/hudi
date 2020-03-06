@@ -96,8 +96,8 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
    */
   private void testReadFilterExist(HoodieWriteConfig config,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn) throws Exception {
-    try (HoodieWriteClient writeClient = getHoodieWriteClient(config);
-        HoodieReadClient readClient = getHoodieReadClient(config.getBasePath());) {
+    try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
+      HoodieReadClient readClient = getHoodieReadClient(config.getBasePath());
       String newCommitTime = writeClient.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
@@ -113,37 +113,36 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
       // Verify there are no errors
       assertNoWriteErrors(statuses);
 
-      try (HoodieReadClient anotherReadClient = getHoodieReadClient(config.getBasePath());) {
-        filteredRDD = anotherReadClient.filterExists(recordsRDD);
-        List<HoodieRecord> result = filteredRDD.collect();
-        // Check results
-        assertEquals(25, result.size());
+      HoodieReadClient anotherReadClient = getHoodieReadClient(config.getBasePath());
+      filteredRDD = anotherReadClient.filterExists(recordsRDD);
+      List<HoodieRecord> result = filteredRDD.collect();
+      // Check results
+      assertEquals(25, result.size());
 
-        // check path exists for written keys
-        JavaPairRDD<HoodieKey, Option<String>> keyToPathPair =
-                anotherReadClient.checkExists(recordsRDD.map(r -> r.getKey()));
-        JavaRDD<HoodieKey> keysWithPaths = keyToPathPair.filter(keyPath -> keyPath._2.isPresent())
-                .map(keyPath -> keyPath._1);
-        assertEquals(75, keysWithPaths.count());
+      // check path exists for written keys
+      JavaPairRDD<HoodieKey, Option<String>> keyToPathPair =
+              anotherReadClient.checkExists(recordsRDD.map(r -> r.getKey()));
+      JavaRDD<HoodieKey> keysWithPaths = keyToPathPair.filter(keyPath -> keyPath._2.isPresent())
+              .map(keyPath -> keyPath._1);
+      assertEquals(75, keysWithPaths.count());
 
-        // verify rows match inserted records
-        Dataset<Row> rows = anotherReadClient.readROView(keysWithPaths, 1);
-        assertEquals(75, rows.count());
+      // verify rows match inserted records
+      Dataset<Row> rows = anotherReadClient.readROView(keysWithPaths, 1);
+      assertEquals(75, rows.count());
 
-        JavaRDD<HoodieKey> keysWithoutPaths = keyToPathPair.filter(keyPath -> !keyPath._2.isPresent())
-                .map(keyPath -> keyPath._1);
+      JavaRDD<HoodieKey> keysWithoutPaths = keyToPathPair.filter(keyPath -> !keyPath._2.isPresent())
+              .map(keyPath -> keyPath._1);
 
-        try {
-          anotherReadClient.readROView(keysWithoutPaths, 1);
-        } catch (Exception e) {
-          // data frame reader throws exception for empty records. ignore the error.
-          assertEquals(e.getClass(), AnalysisException.class);
-        }
-
-        // Actual tests of getPendingCompactions method are in TestAsyncCompaction
-        // This is just testing empty list
-        assertEquals(0, anotherReadClient.getPendingCompactions().size());
+      try {
+        anotherReadClient.readROView(keysWithoutPaths, 1);
+      } catch (Exception e) {
+        // data frame reader throws exception for empty records. ignore the error.
+        assertEquals(e.getClass(), AnalysisException.class);
       }
+
+      // Actual tests of getPendingCompactions method are in TestAsyncCompaction
+      // This is just testing empty list
+      assertEquals(0, anotherReadClient.getPendingCompactions().size());
     }
   }
 
