@@ -498,7 +498,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       TestHelpers.assertRecordCount(totalRecords + 200, tableBasePath + "/*/*.parquet", sqlContext);
       TestHelpers.assertDistanceCount(totalRecords + 200, tableBasePath + "/*/*.parquet", sqlContext);
       return true;
-    }, 240);
+    }, 360);
     ds.shutdownGracefully();
     dsFuture.get();
   }
