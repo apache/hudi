@@ -94,7 +94,7 @@
     <metrics.version>4.1.1</metrics.version>
     <spark.version>2.4.4</spark.version>
     <avro.version>1.8.2</avro.version>
-    <scala.version>2.11.8</scala.version>
+    <scala.version>2.11.12</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
     <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
