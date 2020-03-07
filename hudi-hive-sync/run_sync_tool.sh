@@ -31,7 +31,7 @@ fi
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 #Ensure we pick the right jar even for hive11 builds
-HUDI_HIVE_UBER_JAR=`ls -c $DIR/../packaging/hudi-hive-bundle/target/hudi-hive-*.jar | grep -v source | head -1`
+HUDI_HIVE_UBER_JAR=`ls -c $DIR/../packaging/hudi-hive-sync-bundle/target/hudi-hive-sync-*.jar | grep -v source | head -1`
 
 if [ -z "$HADOOP_CONF_DIR" ]; then
   echo "setting hadoop conf dir"
