@@ -44,7 +44,7 @@
     <module>hudi-timeline-service</module>
     <module>hudi-utilities</module>
     <module>packaging/hudi-hadoop-mr-bundle</module>
-    <module>packaging/hudi-hive-bundle</module>
+    <module>packaging/hudi-hive-sync-bundle</module>
     <module>packaging/hudi-spark-bundle</module>
     <module>packaging/hudi-presto-bundle</module>
     <module>packaging/hudi-utilities-bundle</module>

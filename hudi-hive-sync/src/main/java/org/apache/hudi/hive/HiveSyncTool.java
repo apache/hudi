@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 
 /**
  * Tool to sync a hoodie HDFS table with a hive metastore table. Either use it as a api
- * HiveSyncTool.syncHoodieTable(HiveSyncConfig) or as a command line java -cp hoodie-hive.jar HiveSyncTool [args]
+ * HiveSyncTool.syncHoodieTable(HiveSyncConfig) or as a command line java -cp hoodie-hive-sync.jar HiveSyncTool [args]
  * <p>
  * This utility will get the schema from the latest commit and will sync hive table schema Also this will sync the
  * partitions incrementally (all the partitions modified since the last commit)
