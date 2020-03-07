@@ -206,7 +206,7 @@ inorder to run Hive queries against those tables.
 docker exec -it adhoc-2 /bin/bash
 
 # THis command takes in HIveServer URL and COW Hudi table location in HDFS and sync the HDFS state to Hive
-/var/hoodie/ws/hudi-hive/run_sync_tool.sh \
+/var/hoodie/ws/hudi-hive-sync/run_sync_tool.sh \
   --jdbc-url jdbc:hive2://hiveserver:10000 \
   --user hive \
   --pass hive \
@@ -219,7 +219,7 @@ docker exec -it adhoc-2 /bin/bash
 .....
 
 # Now run hive-sync for the second data-set in HDFS using Merge-On-Read (MOR table type)
-/var/hoodie/ws/hudi-hive/run_sync_tool.sh \
+/var/hoodie/ws/hudi-hive-sync/run_sync_tool.sh \
   --jdbc-url jdbc:hive2://hiveserver:10000 \
   --user hive \
   --pass hive \
