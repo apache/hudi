@@ -192,13 +192,13 @@ inorder to run Hive queries against those datasets.
 docker exec -it adhoc-2 /bin/bash
 
 # THis command takes in HIveServer URL and COW Hudi Dataset location in HDFS and sync the HDFS state to Hive
-/var/hoodie/ws/hudi-hive/run_sync_tool.sh  --jdbc-url jdbc:hive2://hiveserver:10000 --user hive --pass hive --partitioned-by dt --base-path /user/hive/warehouse/stock_ticks_cow --database default --table stock_ticks_cow
+/var/hoodie/ws/hudi-hive-sync/run_sync_tool.sh  --jdbc-url jdbc:hive2://hiveserver:10000 --user hive --pass hive --partitioned-by dt --base-path /user/hive/warehouse/stock_ticks_cow --database default --table stock_ticks_cow
 .....
 2018-09-24 22:22:45,568 INFO  [main] hive.HiveSyncTool (HiveSyncTool.java:syncHoodieTable(112)) - Sync complete for stock_ticks_cow
 .....
 
 # Now run hive-sync for the second data-set in HDFS using Merge-On-Read (MOR storage)
-/var/hoodie/ws/hudi-hive/run_sync_tool.sh  --jdbc-url jdbc:hive2://hiveserver:10000 --user hive --pass hive --partitioned-by dt --base-path /user/hive/warehouse/stock_ticks_mor --database default --table stock_ticks_mor
+/var/hoodie/ws/hudi-hive-sync/run_sync_tool.sh  --jdbc-url jdbc:hive2://hiveserver:10000 --user hive --pass hive --partitioned-by dt --base-path /user/hive/warehouse/stock_ticks_mor --database default --table stock_ticks_mor
 ...
 2018-09-24 22:23:09,171 INFO  [main] hive.HiveSyncTool (HiveSyncTool.java:syncHoodieTable(112)) - Sync complete for stock_ticks_mor
 ...
