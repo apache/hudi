@@ -59,6 +59,8 @@ import java.util.stream.Collectors;
 
 /**
  * Export the latest records of Hudi dataset to a set of external files (e.g., plain parquet files).
+ *
+ * @experimental This export is an experimental tool. If you want to export hudi to hudi, please use HoodieSnapshotCopier.
  */
 
 public class HoodieSnapshotExporter {
@@ -71,7 +73,7 @@ public class HoodieSnapshotExporter {
     @Parameter(names = {"--target-base-path"}, description = "Base path for the target output files (snapshots)", required = true)
     String targetOutputPath = null;
 
-    @Parameter(names = {"--snapshot-prefix"}, description = "Snapshot prefix or directory under the target base path in order to segregate different snapshots")
+    @Parameter(names = {"--snapshot-prefix"}, description = "Snapshot prefix or directory under the source Hudi dataset to be exported")
     String snapshotPrefix;
 
     @Parameter(names = {"--output-format"}, description = "e.g. Hudi or Parquet", required = true)
