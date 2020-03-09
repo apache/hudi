@@ -117,13 +117,6 @@ public class TestHoodieSnapshotExporter extends HoodieCommonTestHarness {
 
     assertTrue(sourceCount == targetCount);
 
-    // Test snapshotPrefix
-    long filterCount = inputDF.where("partition == '2015/03/16'").count();
-    cfg.snapshotPrefix = "2015/03/16";
-    hoodieSnapshotExporter.export(spark, cfg);
-    long targetFilterCount = spark.read().json(outputPath).count();
-    assertTrue(filterCount == targetFilterCount);
-
     // Test Invalid OutputFormat
     cfg.outputFormat = "foo";
     int isError = hoodieSnapshotExporter.export(spark, cfg);

@@ -73,9 +73,6 @@ public class HoodieSnapshotExporter {
     @Parameter(names = {"--target-base-path"}, description = "Base path for the target output files (snapshots)", required = true)
     String targetOutputPath = null;
 
-    @Parameter(names = {"--snapshot-prefix"}, description = "Snapshot prefix or directory under the source Hudi dataset to be exported")
-    String snapshotPrefix;
-
     @Parameter(names = {"--output-format"}, description = "e.g. Hudi or Parquet", required = true)
     String outputFormat;
 
@@ -106,17 +103,10 @@ public class HoodieSnapshotExporter {
     if (partitions.size() > 0) {
       List<String> dataFiles = new ArrayList<>();
 
-      if (!StringUtils.isNullOrEmpty(cfg.snapshotPrefix)) {
-        for (String partition : partitions) {
-          if (partition.contains(cfg.snapshotPrefix)) {
-            dataFiles.addAll(fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp).map(f -> f.getPath()).collect(Collectors.toList()));
-          }
-        }
-      } else {
-        for (String partition : partitions) {
-          dataFiles.addAll(fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp).map(f -> f.getPath()).collect(Collectors.toList()));
-        }
+      for (String partition : partitions) {
+        dataFiles.addAll(fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp).map(f -> f.getPath()).collect(Collectors.toList()));
       }
+
       try {
         DataSource.lookupDataSource(cfg.outputFormat, spark.sessionState().conf());
       } catch (Exception e) {
