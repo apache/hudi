@@ -337,7 +337,7 @@
             </licenseFamilies>
             <excludes>
               <exclude>NOTICE</exclude>
-              <exclude>DISCLAIMER-STANDARD</exclude>
+              <exclude>DISCLAIMER</exclude>
               <exclude>**/.*</exclude>
               <exclude>**/*.json</exclude>
               <exclude>**/*.log</exclude>
