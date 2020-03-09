@@ -357,7 +357,7 @@ public class DeltaSync implements Serializable {
     if (cfg.filterDupes) {
       // turn upserts to insert
       cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
-      records = DataSourceUtils.dropDuplicates(jssc, records, writeClient.getConfig(), writeClient.getTimelineServer());
+      records = DataSourceUtils.dropDuplicates(jssc, records, writeClient.getConfig());
     }
 
     boolean isEmpty = records.isEmpty();
