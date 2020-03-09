@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -72,18 +71,10 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
   /**
    * @param basePath path to Hoodie table
    */
-  public HoodieReadClient(JavaSparkContext jsc, String basePath, Option<EmbeddedTimelineService> timelineService) {
+  public HoodieReadClient(JavaSparkContext jsc, String basePath) {
     this(jsc, HoodieWriteConfig.newBuilder().withPath(basePath)
         // by default we use HoodieBloomIndex
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build(),
-        timelineService);
-  }
-
-  /**
-   * @param basePath path to Hoodie table
-   */
-  public HoodieReadClient(JavaSparkContext jsc, String basePath) {
-    this(jsc, basePath, Option.empty());
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build());
   }
 
   /**
@@ -100,14 +91,6 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    * @param clientConfig instance of HoodieWriteConfig
    */
   public HoodieReadClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig) {
-    this(jsc, clientConfig, Option.empty());
-  }
-
-  /**
-   * @param clientConfig instance of HoodieWriteConfig
-   */
-  public HoodieReadClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
-      Option<EmbeddedTimelineService> timelineService) {
     this.jsc = jsc;
     final String basePath = clientConfig.getBasePath();
     // Create a Hoodie table which encapsulated the commits and files visible

@@ -134,7 +134,7 @@ private[hudi] object HoodieSparkSqlWriter {
           DataSourceUtils.dropDuplicates(
             jsc,
             hoodieAllIncomingRecords,
-            mapAsJavaMap(parameters), client.getTimelineServer)
+            mapAsJavaMap(parameters))
         } else {
           hoodieAllIncomingRecords
         }
