@@ -62,7 +62,6 @@ import java.util.stream.Collectors;
  *
  * @experimental This export is an experimental tool. If you want to export hudi to hudi, please use HoodieSnapshotCopier.
  */
-
 public class HoodieSnapshotExporter {
   private static final Logger LOG = LogManager.getLogger(HoodieSnapshotExporter.class);
 
