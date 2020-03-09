@@ -107,11 +107,11 @@ fi
 echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
 ### END: Binary Files Check
 
-### Checking for DISCLAIMER-WIP
-echo "Checking for DISCLAIMERi-WIP"
-disclaimerFile="./DISCLAIMER-WIP"
+### Checking for DISCLAIMER
+echo "Checking for DISCLAIMER"
+disclaimerFile="./DISCLAIMER"
 if [ ! -f "$disclaimerFile" ]; then
-  echo "DISCLAIMER-WIP file missing"
+  echo "DISCLAIMER file missing"
   exit -1
 fi
 echo -e "\t\tDISCLAIMER file exists ? [OK]\n"
