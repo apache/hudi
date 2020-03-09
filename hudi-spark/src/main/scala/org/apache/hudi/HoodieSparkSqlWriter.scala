@@ -131,10 +131,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
       val hoodieRecords =
         if (parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean) {
-          DataSourceUtils.dropDuplicates(
-            jsc,
-            hoodieAllIncomingRecords,
-            mapAsJavaMap(parameters))
+          DataSourceUtils.dropDuplicates(jsc, hoodieAllIncomingRecords, mapAsJavaMap(parameters))
         } else {
           hoodieAllIncomingRecords
         }
