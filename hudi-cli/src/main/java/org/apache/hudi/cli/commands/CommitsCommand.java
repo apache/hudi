@@ -173,7 +173,7 @@ public class CommitsCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "commits show archived", help = "Show the archived commits")
+  @CliCommand(value = "commits showarchived", help = "Show the archived commits")
   public String showArchivedCommits(
           @CliOption(key = {"includeExtraMetadata"}, help = "Include extra metadata",
                   unspecifiedDefaultValue = "false") final boolean includeExtraMetadata,
