@@ -18,11 +18,10 @@
 
 package org.apache.hudi.common.bloom.filter;
 
+import org.apache.hudi.common.util.Base64CodecUtil;
 import org.apache.hudi.exception.HoodieIndexException;
 
 import org.apache.hadoop.util.bloom.Key;
-
-import javax.xml.bind.DatatypeConverter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -66,7 +65,7 @@ public class SimpleBloomFilter implements BloomFilter {
    */
   public SimpleBloomFilter(String serString) {
     this.filter = new org.apache.hadoop.util.bloom.BloomFilter();
-    byte[] bytes = DatatypeConverter.parseBase64Binary(serString);
+    byte[] bytes = Base64CodecUtil.decode(serString);
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
     try {
       this.filter.readFields(dis);
@@ -103,7 +102,7 @@ public class SimpleBloomFilter implements BloomFilter {
       filter.write(dos);
       byte[] bytes = baos.toByteArray();
       dos.close();
-      return DatatypeConverter.printBase64Binary(bytes);
+      return Base64CodecUtil.encode(bytes);
     } catch (IOException e) {
       throw new HoodieIndexException("Could not serialize BloomFilter instance", e);
     }

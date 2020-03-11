@@ -759,54 +759,54 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
 
       List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
       JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
-      try (HoodieReadClient readClient = new HoodieReadClient(jsc, config);) {
-        updatedRecords = readClient.tagLocation(updatedRecordsRDD).collect();
 
-        // Write them to corresponding avro logfiles
-        HoodieTestUtils.writeRecordsToLogFiles(metaClient.getFs(), metaClient.getBasePath(),
-            HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, updatedRecords);
+      HoodieReadClient readClient = new HoodieReadClient(jsc, config);
+      updatedRecords = readClient.tagLocation(updatedRecordsRDD).collect();
 
-        // Verify that all data file has one log file
-        metaClient = HoodieTableMetaClient.reload(metaClient);
-        HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-        // In writeRecordsToLogFiles, no commit files are getting added, so resetting file-system view state
-        ((SyncableFileSystemView) (table.getSliceView())).reset();
+      // Write them to corresponding avro logfiles
+      HoodieTestUtils.writeRecordsToLogFiles(metaClient.getFs(), metaClient.getBasePath(),
+          HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, updatedRecords);
 
-        for (String partitionPath : dataGen.getPartitionPaths()) {
-          List<FileSlice> groupedLogFiles =
-              table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
-          for (FileSlice fileSlice : groupedLogFiles) {
-            assertEquals("There should be 1 log file written for every data file", 1, fileSlice.getLogFiles().count());
-          }
+      // Verify that all data file has one log file
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      // In writeRecordsToLogFiles, no commit files are getting added, so resetting file-system view state
+      ((SyncableFileSystemView) (table.getSliceView())).reset();
+
+      for (String partitionPath : dataGen.getPartitionPaths()) {
+        List<FileSlice> groupedLogFiles =
+            table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
+        for (FileSlice fileSlice : groupedLogFiles) {
+          assertEquals("There should be 1 log file written for every data file", 1, fileSlice.getLogFiles().count());
         }
+      }
 
-        // Mark 2nd delta-instant as completed
-        metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(State.INFLIGHT,
-            HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime));
-        metaClient.getActiveTimeline().saveAsComplete(
-            new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
+      // Mark 2nd delta-instant as completed
+      metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(State.INFLIGHT,
+          HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime));
+      metaClient.getActiveTimeline().saveAsComplete(
+          new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
-        // Do a compaction
-        String compactionInstantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
-        JavaRDD<WriteStatus> result = writeClient.compact(compactionInstantTime);
+      // Do a compaction
+      String compactionInstantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
+      JavaRDD<WriteStatus> result = writeClient.compact(compactionInstantTime);
 
-        // Verify that recently written compacted data file has no log file
-        metaClient = HoodieTableMetaClient.reload(metaClient);
-        table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-        HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+      // Verify that recently written compacted data file has no log file
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
 
-        assertTrue("Compaction commit should be > than last insert", HoodieTimeline
-            .compareTimestamps(timeline.lastInstant().get().getTimestamp(), newCommitTime, HoodieTimeline.GREATER));
+      assertTrue("Compaction commit should be > than last insert", HoodieTimeline
+          .compareTimestamps(timeline.lastInstant().get().getTimestamp(), newCommitTime, HoodieTimeline.GREATER));
 
-        for (String partitionPath : dataGen.getPartitionPaths()) {
-          List<FileSlice> groupedLogFiles =
-              table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
-          for (FileSlice slice : groupedLogFiles) {
-            assertEquals("After compaction there should be no log files visible on a full view", 0, slice.getLogFiles().count());
-          }
-          List<WriteStatus> writeStatuses = result.collect();
-          assertTrue(writeStatuses.stream().anyMatch(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath)));
+      for (String partitionPath : dataGen.getPartitionPaths()) {
+        List<FileSlice> groupedLogFiles =
+            table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
+        for (FileSlice slice : groupedLogFiles) {
+          assertEquals("After compaction there should be no log files visible on a full view", 0, slice.getLogFiles().count());
         }
+        List<WriteStatus> writeStatuses = result.collect();
+        assertTrue(writeStatuses.stream().anyMatch(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath)));
       }
     }
   }

@@ -39,12 +39,12 @@
     <module>hudi-cli</module>
     <module>hudi-client</module>
     <module>hudi-hadoop-mr</module>
-    <module>hudi-hive</module>
+    <module>hudi-hive-sync</module>
     <module>hudi-spark</module>
     <module>hudi-timeline-service</module>
     <module>hudi-utilities</module>
     <module>packaging/hudi-hadoop-mr-bundle</module>
-    <module>packaging/hudi-hive-bundle</module>
+    <module>packaging/hudi-hive-sync-bundle</module>
     <module>packaging/hudi-spark-bundle</module>
     <module>packaging/hudi-presto-bundle</module>
     <module>packaging/hudi-utilities-bundle</module>
@@ -94,7 +94,7 @@
     <metrics.version>4.1.1</metrics.version>
     <spark.version>2.4.4</spark.version>
     <avro.version>1.8.2</avro.version>
-    <scala.version>2.11.8</scala.version>
+    <scala.version>2.11.12</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
     <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
@@ -112,6 +112,8 @@
     <main.basedir>${project.basedir}</main.basedir>
     <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
     <spark.bundle.hive.shade.prefix></spark.bundle.hive.shade.prefix>
+    <spark.bundle.avro.scope>compile</spark.bundle.avro.scope>
+    <spark.bundle.spark.shade.prefix>org.apache.hudi.spark.</spark.bundle.spark.shade.prefix>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix></utilities.bundle.hive.shade.prefix>
     <argLine>-Xmx1024m -XX:MaxPermSize=256m</argLine>
@@ -335,7 +337,7 @@
             </licenseFamilies>
             <excludes>
               <exclude>NOTICE</exclude>
-              <exclude>DISCLAIMER-WIP</exclude>
+              <exclude>DISCLAIMER</exclude>
               <exclude>**/.*</exclude>
               <exclude>**/*.json</exclude>
               <exclude>**/*.log</exclude>
@@ -428,7 +430,7 @@
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
-        <version>${fasterxml.version}.1</version>
+        <version>${fasterxml.version}.3</version>
       </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.datatype</groupId>

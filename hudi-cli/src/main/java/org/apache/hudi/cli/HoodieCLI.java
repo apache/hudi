@@ -18,6 +18,8 @@
 
 package org.apache.hudi.cli;
 
+import org.apache.hudi.cli.utils.SparkTempViewProvider;
+import org.apache.hudi.cli.utils.TempViewProvider;
 import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
@@ -43,6 +45,7 @@ public class HoodieCLI {
   protected static HoodieTableMetaClient tableMetadata;
   public static HoodieTableMetaClient syncTableMetadata;
   public static TimelineLayoutVersion layoutVersion;
+  private static TempViewProvider tempViewProvider;
 
   /**
    * Enum for CLI state.
@@ -103,6 +106,14 @@ public class HoodieCLI {
       throw new NullPointerException("There is no hudi table. Please use connect command to set table first");
     }
     return tableMetadata;
+  }
+
+  public static synchronized TempViewProvider getTempViewProvider() {
+    if (tempViewProvider == null) {
+      tempViewProvider = new SparkTempViewProvider(HoodieCLI.class.getSimpleName());
+    }
+
+    return tempViewProvider;
   }
 
 }

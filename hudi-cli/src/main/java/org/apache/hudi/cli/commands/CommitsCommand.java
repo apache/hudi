@@ -33,7 +33,6 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.NumericUtils;
-
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
@@ -59,7 +58,8 @@ public class CommitsCommand implements CommandMarker {
   private String printCommits(HoodieDefaultTimeline timeline,
                               final Integer limit, final String sortByField,
                               final boolean descending,
-                              final boolean headerOnly) throws IOException {
+                              final boolean headerOnly,
+                              final String tempTableName) throws IOException {
     final List<Comparable[]> rows = new ArrayList<>();
 
     final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
@@ -96,13 +96,16 @@ public class CommitsCommand implements CommandMarker {
             .addTableHeaderField("Total Records Written")
             .addTableHeaderField("Total Update Records Written")
             .addTableHeaderField("Total Errors");
-    return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows);
+
+    return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending,
+            limit, headerOnly, rows, tempTableName);
   }
 
   private String printCommitsWithMetadata(HoodieDefaultTimeline timeline,
                               final Integer limit, final String sortByField,
                               final boolean descending,
-                              final boolean headerOnly) throws IOException {
+                              final boolean headerOnly,
+                              final String tempTableName) throws IOException {
     final List<Comparable[]> rows = new ArrayList<>();
 
     final List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
@@ -144,13 +147,16 @@ public class CommitsCommand implements CommandMarker {
             .addTableHeaderField("Total Rollback Blocks").addTableHeaderField("Total Log Records")
             .addTableHeaderField("Total Updated Records Compacted").addTableHeaderField("Total Write Bytes");
 
-    return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
+    return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending,
+            limit, headerOnly, rows, tempTableName);
   }
 
   @CliCommand(value = "commits show", help = "Show the commits")
   public String showCommits(
       @CliOption(key = {"includeExtraMetadata"}, help = "Include extra metadata",
           unspecifiedDefaultValue = "false") final boolean includeExtraMetadata,
+      @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
+          unspecifiedDefaultValue = "") final String exportTableName,
       @CliOption(key = {"limit"}, help = "Limit commits",
           unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
@@ -161,9 +167,9 @@ public class CommitsCommand implements CommandMarker {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     if (includeExtraMetadata) {
-      return printCommitsWithMetadata(activeTimeline, limit, sortByField, descending, headerOnly);
+      return printCommitsWithMetadata(activeTimeline, limit, sortByField, descending, headerOnly, exportTableName);
     } else  {
-      return printCommits(activeTimeline, limit, sortByField, descending, headerOnly);
+      return printCommits(activeTimeline, limit, sortByField, descending, headerOnly, exportTableName);
     }
   }
 
@@ -171,6 +177,8 @@ public class CommitsCommand implements CommandMarker {
   public String showArchivedCommits(
           @CliOption(key = {"includeExtraMetadata"}, help = "Include extra metadata",
                   unspecifiedDefaultValue = "false") final boolean includeExtraMetadata,
+          @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
+                  unspecifiedDefaultValue = "") final String exportTableName,
           @CliOption(key = {"startTs"},  mandatory = false, help = "start time for commits, default: now - 10 days")
           String startTs,
           @CliOption(key = {"endTs"},  mandatory = false, help = "end time for commits, default: now - 1 day")
@@ -195,9 +203,9 @@ public class CommitsCommand implements CommandMarker {
       archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
       HoodieDefaultTimeline timelineRange = archivedTimeline.findInstantsInRange(startTs, endTs);
       if (includeExtraMetadata) {
-        return printCommitsWithMetadata(timelineRange, limit, sortByField, descending, headerOnly);
+        return printCommitsWithMetadata(timelineRange, limit, sortByField, descending, headerOnly, exportTableName);
       } else  {
-        return printCommits(timelineRange, limit, sortByField, descending, headerOnly);
+        return printCommits(timelineRange, limit, sortByField, descending, headerOnly, exportTableName);
       }
     } finally {
       // clear the instant details from memory after printing to reduce usage
@@ -237,7 +245,10 @@ public class CommitsCommand implements CommandMarker {
   }
 
   @CliCommand(value = "commit showpartitions", help = "Show partition level details of a commit")
-  public String showCommitPartitions(@CliOption(key = {"commit"}, help = "Commit to show") final String commitTime,
+  public String showCommitPartitions(
+      @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
+          unspecifiedDefaultValue = "") final String exportTableName,
+      @CliOption(key = {"commit"}, help = "Commit to show") final String commitTime,
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
@@ -287,11 +298,15 @@ public class CommitsCommand implements CommandMarker {
         .addTableHeaderField("Total Records Inserted").addTableHeaderField("Total Records Updated")
         .addTableHeaderField("Total Bytes Written").addTableHeaderField("Total Errors");
 
-    return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows);
+    return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending,
+        limit, headerOnly, rows, exportTableName);
   }
 
   @CliCommand(value = "commit showfiles", help = "Show file level details of a commit")
-  public String showCommitFiles(@CliOption(key = {"commit"}, help = "Commit to show") final String commitTime,
+  public String showCommitFiles(
+      @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
+          unspecifiedDefaultValue = "") final String exportTableName,
+      @CliOption(key = {"commit"}, help = "Commit to show") final String commitTime,
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
@@ -323,7 +338,8 @@ public class CommitsCommand implements CommandMarker {
         .addTableHeaderField("Total Records Written").addTableHeaderField("Total Bytes Written")
         .addTableHeaderField("Total Errors").addTableHeaderField("File Size");
 
-    return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
+    return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending,
+        limit, headerOnly, rows, exportTableName);
   }
 
   @CliCommand(value = "commits compare", help = "Compare commits with another Hoodie table")

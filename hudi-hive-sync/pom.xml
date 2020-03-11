@@ -23,7 +23,7 @@
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>hudi-hive</artifactId>
+  <artifactId>hudi-hive-sync</artifactId>
   <packaging>jar</packaging>
 
   <properties>

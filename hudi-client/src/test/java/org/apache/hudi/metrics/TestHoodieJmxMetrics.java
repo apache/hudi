@@ -21,6 +21,7 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import static org.apache.hudi.metrics.Metrics.registerGauge;
@@ -31,9 +32,9 @@ import static org.mockito.Mockito.when;
 /**
  * Test for the Jmx metrics report.
  */
-public class TestHoodieJmxMetrics extends TestHoodieMetrics {
+public class TestHoodieJmxMetrics {
 
-  @Override
+  @Before
   public void start() {
     HoodieWriteConfig config = mock(HoodieWriteConfig.class);
     when(config.isMetricsOn()).thenReturn(true);
