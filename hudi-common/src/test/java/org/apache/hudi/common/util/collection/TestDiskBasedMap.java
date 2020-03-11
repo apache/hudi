@@ -191,7 +191,7 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
   public void testPutAll() throws IOException, URISyntaxException {
     DiskBasedMap<String, HoodieRecord> records = new DiskBasedMap<>(basePath);
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    Map<String, HoodieRecord> recordMap = new HashMap<String, HoodieRecord>();
+    Map<String, HoodieRecord> recordMap = new HashMap<>();
     iRecords.forEach(r -> {
       String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
