@@ -130,6 +130,16 @@ public class SavepointsCommand implements CommandMarker {
   @CliCommand(value = "savepoint delete", help = "Delete the savepoint")
   public String deleteSavepoint(@CliOption(key = {"commit"}, help = "Delete a savepoint") final String commitTime) throws Exception {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieTimeline completedInstants = metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants();
+    if (completedInstants.empty()) {
+      throw new HoodieException("There are no completed savepoint to run delete");
+    }
+    HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, commitTime);
+
+    if (!completedInstants.containsInstant(savePoint)) {
+      return "Commit " + commitTime + " not found in Commits " + completedInstants;
+    }
+
     JavaSparkContext jsc = SparkUtil.initJavaSparkConf("Delete Savepoint");
     HoodieWriteClient client = createHoodieClient(jsc, metaClient.getBasePath());
     client.deleteSavepoint(commitTime);
