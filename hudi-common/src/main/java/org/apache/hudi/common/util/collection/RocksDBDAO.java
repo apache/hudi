@@ -75,9 +75,6 @@ public class RocksDBDAO {
    * Create RocksDB if not initialized.
    */
   private RocksDB getRocksDB() {
-    if (null == rocksDB) {
-      init();
-    }
     return rocksDB;
   }
 
