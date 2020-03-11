@@ -126,8 +126,8 @@ public class CompactionCommand implements CommandMarker {
     return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly);
   }
 
-  @CliCommand(value = "compactions show archived", help = "Shows compaction details for specified time window")
-  public String compactionShowArchived(
+  @CliCommand(value = "compactions showarchived", help = "Shows compaction details for specified time window")
+  public String compactionsShowArchived(
           @CliOption(key = {"includeExtraMetadata"}, help = "Include extra metadata",
                   unspecifiedDefaultValue = "false") final boolean includeExtraMetadata,
           @CliOption(key = {"startTs"},  mandatory = false, help = "start time for compactions, default: now - 10 days")
@@ -160,7 +160,7 @@ public class CompactionCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "compaction show archived", help = "Shows compaction details for a specific compaction instant")
+  @CliCommand(value = "compaction showarchived", help = "Shows compaction details for a specific compaction instant")
   public String compactionShowArchived(
           @CliOption(key = "instant", mandatory = true,
                   help = "instant time") final String compactionInstantTime,
