@@ -111,7 +111,6 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
   @BeforeClass
   public static void initClass() throws Exception {
-    LOG.info("dfsbasePath: " + dfsBasePath);
     UtilitiesTestBase.initClass(true);
     PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
     testUtils = new KafkaTestUtils();
@@ -230,10 +229,6 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op) {
       return makeConfig(basePath, op, TripsWithDistanceTransformer.class.getName());
-    }
-
-    static HoodieDeltaStreamer.Config makeConfig(String basePath, String propsFileName, Operation op) {
-      return makeConfig(basePath, op, TripsWithDistanceTransformer.class.getName(), propsFileName, false);
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, String transformerClassName) {
@@ -454,7 +449,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     int totalRecords = 3000;
 
     // Initial bulk insert
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, PROPS_FILENAME_TEST_SOURCE, Operation.UPSERT);
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.UPSERT);
     cfg.continuousMode = true;
     cfg.tableType = tableType.name();
     cfg.configs.add(String.format("%s=%d", TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, totalRecords));

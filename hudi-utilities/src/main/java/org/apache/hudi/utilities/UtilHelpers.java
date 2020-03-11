@@ -35,7 +35,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.transform.Transformer;
-import org.apache.hudi.utilities.util.DFSTablePropertiesConfiguration;
 
 import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -132,21 +131,6 @@ public class UtilHelpers {
     }
 
     return conf;
-  }
-
-  /**
-   * Creates DFSTablePropertiesConfiguration object for parsing TableConfig objects from given file.
-   *
-   * @param fs
-   * @param cfgPath
-   * @return DFSTablePropertiesConfiguration
-   */
-  public static DFSTablePropertiesConfiguration readTableConfig(FileSystem fs, Path cfgPath) {
-    try {
-      return new DFSTablePropertiesConfiguration(cfgPath.getFileSystem(fs.getConf()), cfgPath);
-    } catch (Exception e) {
-      throw new HoodieException("Unable to read props file at :" + cfgPath, e);
-    }
   }
 
   public static TypedProperties buildProperties(List<String> props) {

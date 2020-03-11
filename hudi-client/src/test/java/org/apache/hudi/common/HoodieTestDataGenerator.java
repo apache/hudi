@@ -149,11 +149,6 @@ public class HoodieTestDataGenerator {
     return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
 
-  public static TestRawTripPayload generateRandomValueV2(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 1.0);
-    return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
-  }
-
   /**
    * Generates a new avro record with TRIP_UBER_EXAMPLE_SCHEMA, retaining the key if optionally provided.
    */
@@ -561,40 +556,6 @@ public class HoodieTestDataGenerator {
    * @param n          Number of unique records
    * @return stream of hoodie records for delete
    */
-  /*
-  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String commitTime, Integer n) {
-    final Set<KeyPartition> used = new HashSet<>();
-    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-    Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-    if (n > numExistingKeys) {
-      throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
-    }
-
-    List<HoodieRecord> result = new ArrayList<>();
-    for (int i = 0; i < n; i++) {
-      int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
-      KeyPartition kp = existingKeys.get(index);
-      // Find the available keyPartition starting from randomly chosen one.
-      while (used.contains(kp)) {
-        index = (index + 1) % numExistingKeys;
-        kp = existingKeys.get(index);
-      }
-      existingKeys.remove(kp);
-      numExistingKeys--;
-      indexGettingDeleted.add(index);
-      logger.debug("key getting deleted: " + kp.key.getRecordKey());
-      used.add(kp);
-      try {
-        result.add(new HoodieRecord(kp.key, generateRandomDeleteValue(kp.key, commitTime)));
-      } catch (IOException e) {
-        throw new HoodieIOException(e.getMessage(), e);
-      }
-    }
-    numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
-    return result.stream();
-  }
-  */
-
   public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String commitTime, Integer n) {
     final Set<KeyPartition> used = new HashSet<>();
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);

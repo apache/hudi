@@ -273,7 +273,7 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_PASS_OPT_VAL = "hive"
   val DEFAULT_HIVE_URL_OPT_VAL = "jdbc:hive2://localhost:10000"
   val DEFAULT_HIVE_PARTITION_FIELDS_OPT_VAL = ""
-  val DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL: String = classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName
+  val DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL = classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName
   val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = "false"
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
 }

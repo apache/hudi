@@ -144,7 +144,6 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
    */
   public void write(HoodieRecord record, Option<IndexedRecord> avroRecord, Option<Exception> exception) {
     Option recordMetadata = record.getData().getMetadata();
-    LOG.debug("got the key while writing: " + record.getKey().getRecordKey());
     if (exception.isPresent() && exception.get() instanceof Throwable) {
       // Not throwing exception from here, since we don't want to fail the entire job for a single record
       writeStatus.markFailure(record, exception.get(), recordMetadata);
