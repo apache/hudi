@@ -50,8 +50,13 @@ public class InputFormatTestUtil {
     basePath.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
     File partitionPath = basePath.newFolder("2016", "05", "01");
+    return simulateInserts(partitionPath, "fileId1", numberOfFiles, commitNumber);
+  }
+
+  public static File simulateInserts(File partitionPath, String fileId, int numberOfFiles, String commitNumber)
+          throws IOException {
     for (int i = 0; i < numberOfFiles; i++) {
-      File dataFile = new File(partitionPath, FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i));
+      File dataFile = new File(partitionPath, FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, fileId + i));
       dataFile.createNewFile();
     }
     return partitionPath;
