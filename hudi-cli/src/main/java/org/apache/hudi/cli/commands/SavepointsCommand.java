@@ -76,17 +76,17 @@ public class SavepointsCommand implements CommandMarker {
       return "Commit " + commitTime + " not found in Commits " + timeline;
     }
 
-    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("Create Savepoint");
-    HoodieWriteClient client = createHoodieClient(jsc, metaClient.getBasePath());
     String result;
-    if (client.savepoint(commitTime, user, comments)) {
-      // Refresh the current
-      refreshMetaClient();
-      result = String.format("The commit \"%s\" has been savepointed.", commitTime);
-    } else {
-      result = String.format("Failed: Could not savepoint commit \"%s\".", commitTime);
+    try (JavaSparkContext jsc = SparkUtil.initJavaSparkConf("Create Savepoint")) {
+      HoodieWriteClient client = createHoodieClient(jsc, metaClient.getBasePath());
+      if (client.savepoint(commitTime, user, comments)) {
+        // Refresh the current
+        refreshMetaClient();
+        result = String.format("The commit \"%s\" has been savepointed.", commitTime);
+      } else {
+        result = String.format("Failed: Could not savepoint commit \"%s\".", commitTime);
+      }
     }
-    jsc.close();
     return result;
   }
 
@@ -140,10 +140,11 @@ public class SavepointsCommand implements CommandMarker {
       return "Commit " + commitTime + " not found in Commits " + completedInstants;
     }
 
-    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("Delete Savepoint");
-    HoodieWriteClient client = createHoodieClient(jsc, metaClient.getBasePath());
-    client.deleteSavepoint(commitTime);
-    jsc.close();
+    try (JavaSparkContext jsc = SparkUtil.initJavaSparkConf("Delete Savepoint")) {
+      HoodieWriteClient client = createHoodieClient(jsc, metaClient.getBasePath());
+      client.deleteSavepoint(commitTime);
+      refreshMetaClient();
+    }
     return "Savepoint " + commitTime + " deleted";
   }
 
