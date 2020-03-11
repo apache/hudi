@@ -127,6 +127,16 @@ public class SavepointsCommand implements CommandMarker {
     return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
   }
 
+  @CliCommand(value = "savepoint delete", help = "Delete the savepoint")
+  public String deleteSavepoint(@CliOption(key = {"commit"}, help = "Delete a savepoint") final String commitTime) throws Exception {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("Delete Savepoint");
+    HoodieWriteClient client = createHoodieClient(jsc, metaClient.getBasePath());
+    client.deleteSavepoint(commitTime);
+    jsc.close();
+    return "Savepoint " + commitTime + " deleted";
+  }
+
   private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
