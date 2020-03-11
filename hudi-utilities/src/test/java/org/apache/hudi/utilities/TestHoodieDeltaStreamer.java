@@ -98,7 +98,6 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
   private static final Random RANDOM = new Random();
   private static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
-  private static final String PROPS_FILENAME_TEST_SOURCE_CONTINUOUS = "test-source-continuous.properties";
   public static final String PROPS_FILENAME_TEST_SOURCE1 = "test-source1.properties";
   public static final String PROPS_INVALID_HIVE_SYNC_TEST_SOURCE1 = "test-invalid-hive-sync-source1.properties";
   private static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
@@ -107,7 +106,6 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final int PARQUET_NUM_RECORDS = 5;
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
   public static KafkaTestUtils testUtils;
-  private static boolean printReadKeys = false;
 
   private static int parquetTestNum = 1;
 
@@ -151,9 +149,6 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
         MultiPartKeysValueExtractor.class.getName());
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE);
-
-    props.setProperty(TestSourceConfig.CONTINUOUS_MODE_ENABLED, String.valueOf(true));
-    UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE_CONTINUOUS);
 
     // Properties used for the delta-streamer which incrementally pulls from upstream Hudi source table and writes to
     // downstream hudi table
@@ -305,22 +300,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     }
 
     static void assertRecordCount(long expected, String tablePath, SQLContext sqlContext) {
-      Dataset<Row> set = sqlContext.read().format("org.apache.hudi").load(tablePath);
-      //set.show();
-      long recordCount = set.count();
-      if (recordCount >= 3193 && !printReadKeys) {
-        LOG.debug("#keys in HoodieTestDataGenerator: " + HoodieTestDataGenerator.allKeys.size());
-        //set.foreach(row -> {
-        //LOG.debug(row.get(row.fieldIndex("_row_key")));
-        //LOG.debug("is it present: " + HoodieTestDataGenerator.allKeys.contains(row.get(row.fieldIndex("_row_key")).toString()));
-        //HoodieTestDataGenerator.allKeys.remove(row.get(row.fieldIndex("_row_key")).toString());
-        //});
-        //LOG.info("Hoodie all keys size: " + HoodieTestDataGenerator.allKeys.size());
-        //LOG.info("keys not consumed: " + HoodieTestDataGenerator.allKeys);
-        printReadKeys = true;
-        //Set<String> copySet = new HashSet<>();
-        //copySet = HoodieTestDataGenerator.allKeys;
-      }
+      long recordCount = sqlContext.read().format("org.apache.hudi").load(tablePath).count();
       assertEquals(expected, recordCount);
     }
 
@@ -474,7 +454,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     int totalRecords = 3000;
 
     // Initial bulk insert
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, PROPS_FILENAME_TEST_SOURCE_CONTINUOUS, Operation.UPSERT);
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, PROPS_FILENAME_TEST_SOURCE, Operation.UPSERT);
     cfg.continuousMode = true;
     cfg.tableType = tableType.name();
     cfg.configs.add(String.format("%s=%d", TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, totalRecords));
@@ -495,10 +475,10 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       } else {
         TestHelpers.assertAtleastNCompactionCommits(5, tableBasePath, dfs);
       }
-      TestHelpers.assertRecordCount(totalRecords + 200, tableBasePath + "/*/*.parquet", sqlContext);
-      TestHelpers.assertDistanceCount(totalRecords + 200, tableBasePath + "/*/*.parquet", sqlContext);
+      TestHelpers.assertRecordCount(totalRecords, tableBasePath + "/*/*.parquet", sqlContext);
+      TestHelpers.assertDistanceCount(totalRecords, tableBasePath + "/*/*.parquet", sqlContext);
       return true;
-    }, 360);
+    }, 180);
     ds.shutdownGracefully();
     dsFuture.get();
   }

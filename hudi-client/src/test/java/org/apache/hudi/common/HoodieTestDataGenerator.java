@@ -87,10 +87,10 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false} ]}";
   public static String TRIP_UBER_EXAMPLE_SCHEMA = "{\"type\":\"record\",\"name\":\"tripuberrec\",\"fields\":["
       + "{\"name\":\"timestamp\",\"type\":\"double\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
-      + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"}]}";
+      + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
   public static String TRIP_FG_EXAMPLE_SCHEMA = "{\"type\":\"record\",\"name\":\"tripfgrec\",\"fields\":["
       + "{\"name\":\"timestamp\",\"type\":\"double\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
-      + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"}]}";
+      + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
   public static String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
   public static final String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,"
       + "struct<amount:double,currency:string>,boolean";
@@ -107,9 +107,6 @@ public class HoodieTestDataGenerator {
   private final String[] partitionPaths;
   //maintains the count of existing keys schema wise
   private Map<String, Integer> numKeysBySchema;
-  public static Set<String> allKeys = new HashSet<>();
-  private boolean printKeys = false;
-  private final List<Integer> indexGettingDeleted = new ArrayList<>();
 
   public HoodieTestDataGenerator(String[] partitionPaths) {
     this(partitionPaths, new HashMap<>());
@@ -227,6 +224,7 @@ public class HoodieTestDataGenerator {
     rec.put("rider", riderName);
     rec.put("driver", driverName);
     rec.put("fare", rand.nextDouble() * 100);
+    rec.put("_hoodie_is_deleted", false);
     return rec;
   }
 
@@ -237,6 +235,7 @@ public class HoodieTestDataGenerator {
     rec.put("rider", riderName);
     rec.put("driver", driverName);
     rec.put("fare", rand.nextDouble() * 100);
+    rec.put("_hoodie_is_deleted", false);
     return rec;
   }
 
@@ -322,15 +321,10 @@ public class HoodieTestDataGenerator {
       HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
       KeyPartition kp = new KeyPartition();
       kp.key = key;
-      allKeys.add(key.getRecordKey());
       kp.partitionPath = partitionPath;
       populateKeysBySchema(schemaStr, currSize + i, kp);
       incrementNumExistingKeysBySchema(schemaStr);
       try {
-        if (allKeys.size() == 3200 && !printKeys) {
-          logger.debug("printing all the keys: " + allKeys.toString());
-          printKeys = true;
-        }
         return new HoodieRecord(key, generateRandomValueAsPerSchema(schemaStr, key, commitTime));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
@@ -529,47 +523,6 @@ public class HoodieTestDataGenerator {
     });
   }
 
-  public Stream<HoodieRecord> generateUniqueUpdatesStreamV2(String commitTime, Integer n, String schemaStr) {
-    final Set<KeyPartition> used = new HashSet<>();
-    int numExistingKeys = numKeysBySchema.getOrDefault(schemaStr, 0);
-    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
-    if (n > numExistingKeys) {
-      throw new IllegalArgumentException("Requested unique updates is greater than number of available keys");
-    }
-
-    return IntStream.range(0, n).boxed().map(i -> {
-      KeyPartition kp;
-      if (i < 50) {
-        int index = numExistingKeys == 1 ? 0 : rand.nextInt(49);
-        int actualIndex = indexGettingDeleted.get(index);
-        kp = existingKeys.get(actualIndex);
-        // Find the available keyPartition starting from randomly chosen one.
-        while (used.contains(kp)) {
-          index = (index + 1) % 50;
-          actualIndex = indexGettingDeleted.get(index);
-          kp = existingKeys.get(actualIndex);
-        }
-        logger.debug("key getting updated in v2 if: " + kp.key.getRecordKey());
-        used.add(kp);
-      } else {
-        int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
-        kp = existingKeys.get(index);
-        // Find the available keyPartition starting from randomly chosen one.
-        while (used.contains(kp)) {
-          index = (index + 1) % numExistingKeys;
-          kp = existingKeys.get(index);
-        }
-        logger.debug("key getting updated in v2 else: " + kp.key.getRecordKey());
-        used.add(kp);
-      }
-      try {
-        return new HoodieRecord(kp.key, generateRandomValueV2(kp.key, commitTime));
-      } catch (IOException e) {
-        throw new HoodieIOException(e.getMessage(), e);
-      }
-    });
-  }
-
   /**
    * Generates deduped delete of keys previously inserted, randomly distributed across the keys above.
    *
@@ -580,26 +533,24 @@ public class HoodieTestDataGenerator {
     final Set<KeyPartition> used = new HashSet<>();
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
     Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-
     if (n > numExistingKeys) {
       throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
     }
 
     List<HoodieKey> result = new ArrayList<>();
     for (int i = 0; i < n; i++) {
-      int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
-      KeyPartition kp = existingKeys.get(index);
-      // Find the available keyPartition starting from randomly chosen one.
-      while (used.contains(kp)) {
+      int index = rand.nextInt(numExistingKeys);
+      while (!existingKeys.containsKey(index)) {
         index = (index + 1) % numExistingKeys;
-        kp = existingKeys.get(index);
       }
-      existingKeys.remove(kp);
+      KeyPartition kp = existingKeys.remove(index);
+      existingKeys.put(index, existingKeys.get(numExistingKeys - 1));
+      existingKeys.remove(numExistingKeys - 1);
       numExistingKeys--;
       used.add(kp);
       result.add(kp.key);
     }
-
+    numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
     return result.stream();
   }
 
@@ -610,6 +561,7 @@ public class HoodieTestDataGenerator {
    * @param n          Number of unique records
    * @return stream of hoodie records for delete
    */
+  /*
   public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String commitTime, Integer n) {
     final Set<KeyPartition> used = new HashSet<>();
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
@@ -631,6 +583,36 @@ public class HoodieTestDataGenerator {
       numExistingKeys--;
       indexGettingDeleted.add(index);
       logger.debug("key getting deleted: " + kp.key.getRecordKey());
+      used.add(kp);
+      try {
+        result.add(new HoodieRecord(kp.key, generateRandomDeleteValue(kp.key, commitTime)));
+      } catch (IOException e) {
+        throw new HoodieIOException(e.getMessage(), e);
+      }
+    }
+    numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
+    return result.stream();
+  }
+  */
+
+  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String commitTime, Integer n) {
+    final Set<KeyPartition> used = new HashSet<>();
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    if (n > numExistingKeys) {
+      throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
+    }
+
+    List<HoodieRecord> result = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      int index = rand.nextInt(numExistingKeys);
+      while (!existingKeys.containsKey(index)) {
+        index = (index + 1) % numExistingKeys;
+      }
+      KeyPartition kp = existingKeys.remove(index);
+      existingKeys.put(index, existingKeys.get(numExistingKeys - 1));
+      existingKeys.remove(numExistingKeys - 1);
+      numExistingKeys--;
       used.add(kp);
       try {
         result.add(new HoodieRecord(kp.key, generateRandomDeleteValue(kp.key, commitTime)));

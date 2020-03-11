@@ -241,10 +241,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) indexedRecord.get());
         storageWriter.writeAvroWithMetadata(recordWithMetadataInSchema, hoodieRecord);
-        LOG.info("key getting updated in update flow: " + hoodieRecord.getKey().getRecordKey());
         recordsWritten++;
       } else {
-        LOG.info("key getting deleted in update flow: " + hoodieRecord.getKey().getRecordKey());
         recordsDeleted++;
       }
 

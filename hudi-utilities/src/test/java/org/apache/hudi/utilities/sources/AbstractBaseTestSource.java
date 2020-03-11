@@ -85,8 +85,6 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     int maxUniqueKeys =
         props.getInteger(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, TestSourceConfig.DEFAULT_MAX_UNIQUE_RECORDS);
 
-    boolean continuousModeEnabled = props.getBoolean(TestSourceConfig.CONTINUOUS_MODE_ENABLED, TestSourceConfig.DEFAULT_CONTINUOUS_MODE_ENABLED);
-
     HoodieTestDataGenerator dataGenerator = dataGeneratorMap.get(partition);
 
     // generate `sourceLimit` number of upserts each time.
@@ -119,22 +117,12 @@ public abstract class AbstractBaseTestSource extends AvroSource {
           + maxUniqueKeys);
       // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
       deleteStream = dataGenerator.generateUniqueDeleteRecordStream(commitTime, 50).map(AbstractBaseTestSource::toGenericRecord);
-      if (continuousModeEnabled) {
-        updateStream = dataGenerator.generateUniqueUpdatesStreamV2(commitTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-          .map(AbstractBaseTestSource::toGenericRecord);
-      } else {
-        updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-          .map(AbstractBaseTestSource::toGenericRecord);
-      }
+      updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .map(AbstractBaseTestSource::toGenericRecord);
     } else {
       LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
-      if (continuousModeEnabled) {
-        updateStream = dataGenerator.generateUniqueUpdatesStreamV2(commitTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-          .map(AbstractBaseTestSource::toGenericRecord);
-      } else {
-        updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-          .map(AbstractBaseTestSource::toGenericRecord);
-      }
+      updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .map(AbstractBaseTestSource::toGenericRecord);
     }
     Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .map(AbstractBaseTestSource::toGenericRecord);
