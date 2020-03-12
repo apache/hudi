@@ -15,7 +15,6 @@ language: cn
 
 ### Migration Guide for this release
  * Write Client restructuring has moved classes around ([HUDI-554](https://issues.apache.org/jira/browse/HUDI-554)). Package `client` now has all the various client classes, that do the transaction management. `func` renamed to `execution` and some helpers moved to `client/utils`. All compaction code under `io` now under `table/compact`. Rollback code under `table/rollback` and in general all code for individual operations under `table`. This change only affects the apps/projects depending on hudi-client. Users of deltastreamer/datasource will not need to change anything.
- * In 0.5.1, the community restructured the package of key generators. The key generator related classes have been moved from `org.apache.hudi` to `org.apache.hudi.keygen`. 
 
 ### Release Highlights
  * Support for overwriting the payload implementation in `hoodie.properties` via specifying the `hoodie.compaction.payload.class` config option. Previously, once the payload class is set once in `hoodie.properties`, it cannot be changed. In some cases, if a code refactor is done and the jar updated, one may need to pass the new payload class name.
@@ -34,11 +33,14 @@ temp_query --sql "select Instant, NumInserts, NumWrites from satishkotha_debug w
 ### Raw Release Notes
   The raw release notes are available [here](https://issues.apache.org/jira/projects/HUDI/versions/12346606#release-report-tab-body)
 
-## [Release 0.5.0-incubating](https://github.com/apache/incubator-hudi/releases/tag/release-0.5.0-incubating)
+## [Release 0.5.1-incubating](https://github.com/apache/incubator-hudi/releases/tag/release-0.5.1-incubating) ([docs](/docs/0.5.1-quick-start-guide.html))
 
 ### Download Information
- * Source Release : [Apache Hudi(incubating) 0.5.0-incubating Source Release](https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz) ([asc](https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc), [sha512](https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512))
+ * Source Release : [Apache Hudi(incubating) 0.5.1-incubating Source Release](https://www.apache.org/dist/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz) ([asc](https://www.apache.org/dist/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc), [sha512](https://www.apache.org/dist/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512))
  * Apache Hudi (incubating) jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
+
+### Migration Guide for this release
+ * In 0.5.1, the community restructured the package of key generators. The key generator related classes have been moved from `org.apache.hudi` to `org.apache.hudi.keygen`. 
 
 ### Release Highlights
  * Package and format renaming from com.uber.hoodie to org.apache.hudi (See migration guide section below)
