@@ -25,6 +25,14 @@
                 {% assign menu_label = "文档菜单" %}
             {% endif %}
     {% endif %}
+    {% elsif page.version == "0.5.2" %}
+            {% assign navigation = site.data.navigation["0.5.2_docs"] %}
+
+            {% if page.language == "cn" %}
+                {% assign navigation = site.data.navigation["0.5.2_cn_docs"] %}
+                {% assign menu_label = "文档菜单" %}
+            {% endif %}
+    {% endif %}
 {% endif %}
 
 <nav class="nav__list">

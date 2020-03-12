@@ -14,6 +14,9 @@ previous_docs:
   - version: Latest
     en: /docs/quick-start-guide.html
     cn: /cn/docs/quick-start-guide.html
+  - version: 0.5.2
+    en: /docs/0.5.2-quick-start-guide.html
+    cn: /cn/docs/0.5.2-quick-start-guide.html
   - version: 0.5.1
     en: /docs/0.5.1-quick-start-guide.html
     cn: /cn/docs/0.5.1-quick-start-guide.html
@@ -125,6 +128,32 @@ cn_author:
     - label: "Documentation"
       icon: "fa fa-book"
       url: "/docs/0.5.1-quick-start-guide"
+    - label: "Technical Wiki"
+      icon: "fa fa-wikipedia-w"
+      url: "https://cwiki.apache.org/confluence/display/HUDI"
+    - label: "Contribution Guide"
+      icon: "fa fa-thumbs-o-up"
+      url: "/contributing"
+    - label: "Join on Slack"
+      icon: "fa fa-slack"
+      url: "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"
+    - label: "Fork on GitHub"
+      icon: "fa fa-github"
+      url: "https://github.com/apache/incubator-hudi"
+    - label: "Report Issues"
+      icon: "fa fa-navicon"
+      url: "https://issues.apache.org/jira/projects/HUDI/summary"
+    - label: "Report Security Issues"
+      icon: "fa fa-navicon"
+      url: "/security"
+
+0.5.2_author:
+  name             : "Quick Links"
+  bio              : "Hudi *ingests* & *manages* storage of large analytical datasets over DFS."
+  links:
+    - label: "Documentation"
+      icon: "fa fa-book"
+      url: "/docs/0.5.2-quick-start-guide"
     - label: "Technical Wiki"
       icon: "fa fa-wikipedia-w"
       url: "https://cwiki.apache.org/confluence/display/HUDI"
