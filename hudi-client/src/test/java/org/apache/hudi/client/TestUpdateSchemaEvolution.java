@@ -56,6 +56,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     initPath();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath);
     initSparkContexts("TestUpdateSchemaEvolution");
+    initFileSystem();
   }
 
   @After
