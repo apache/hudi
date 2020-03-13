@@ -20,11 +20,11 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.Option;
 
-import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * A Single Record managed by Hoodie.
@@ -141,13 +141,13 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
       return false;
     }
     HoodieRecord that = (HoodieRecord) o;
-    return Objects.equal(key, that.key) && Objects.equal(data, that.data)
-        && Objects.equal(currentLocation, that.currentLocation) && Objects.equal(newLocation, that.newLocation);
+    return Objects.equals(key, that.key) && Objects.equals(data, that.data)
+        && Objects.equals(currentLocation, that.currentLocation) && Objects.equals(newLocation, that.newLocation);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(key, data, currentLocation, newLocation);
+    return Objects.hash(key, data, currentLocation, newLocation);
   }
 
   @Override

@@ -74,7 +74,7 @@ public class HoodieTestDataGenerator {
   public static final String[] DEFAULT_PARTITION_PATHS =
       {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH};
   public static final int DEFAULT_PARTITION_DEPTH = 3;
-  public static String TRIP_EXAMPLE_SCHEMA = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
+  public static final String TRIP_EXAMPLE_SCHEMA = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"double\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
       + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
@@ -82,13 +82,14 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"fare\",\"type\": {\"type\":\"record\", \"name\":\"fare\",\"fields\": ["
       + "{\"name\": \"amount\",\"type\": \"double\"},{\"name\": \"currency\", \"type\": \"string\"}]}},"
       + "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false} ]}";
-  public static String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
-  public static String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,"
+  public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
+  public static final String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,"
                                                   + "struct<amount:double,currency:string>,boolean";
-  public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
-  public static Schema avroSchemaWithMetadataFields = HoodieAvroUtils.addMetadataFields(avroSchema);
+  public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+  public static final Schema AVRO_SCHEMA_WITH_METADATA_FIELDS =
+      HoodieAvroUtils.addMetadataFields(AVRO_SCHEMA);
 
-  private static Random rand = new Random(46474747);
+  private static final Random RAND = new Random(46474747);
 
   private final Map<Integer, KeyPartition> existingKeys;
   private final String[] partitionPaths;
@@ -145,18 +146,18 @@ public class HoodieTestDataGenerator {
 
   public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
                                                     double timestamp, boolean isDeleteRecord) {
-    GenericRecord rec = new GenericData.Record(avroSchema);
+    GenericRecord rec = new GenericData.Record(AVRO_SCHEMA);
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
     rec.put("rider", riderName);
     rec.put("driver", driverName);
-    rec.put("begin_lat", rand.nextDouble());
-    rec.put("begin_lon", rand.nextDouble());
-    rec.put("end_lat", rand.nextDouble());
-    rec.put("end_lon", rand.nextDouble());
+    rec.put("begin_lat", RAND.nextDouble());
+    rec.put("begin_lon", RAND.nextDouble());
+    rec.put("end_lat", RAND.nextDouble());
+    rec.put("end_lon", RAND.nextDouble());
 
-    GenericRecord fareRecord = new GenericData.Record(avroSchema.getField("fare").schema());
-    fareRecord.put("amount", rand.nextDouble() * 100);
+    GenericRecord fareRecord = new GenericData.Record(AVRO_SCHEMA.getField("fare").schema());
+    fareRecord.put("amount", RAND.nextDouble() * 100);
     fareRecord.put("currency", "USD");
     rec.put("fare", fareRecord);
 
@@ -209,13 +210,10 @@ public class HoodieTestDataGenerator {
     Path commitFile =
         new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
     FileSystem fs = FSUtils.getFs(basePath, configuration);
-    FSDataOutputStream os = fs.create(commitFile, true);
-    HoodieCompactionPlan workload = new HoodieCompactionPlan();
-    try {
+    try (FSDataOutputStream os = fs.create(commitFile, true)) {
+      HoodieCompactionPlan workload = new HoodieCompactionPlan();
       // Write empty commit metadata
       os.writeBytes(new String(AvroUtils.serializeCompactionPlan(workload).get(), StandardCharsets.UTF_8));
-    } finally {
-      os.close();
     }
   }
 
@@ -224,13 +222,10 @@ public class HoodieTestDataGenerator {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeSavePointFileName(commitTime));
     FileSystem fs = FSUtils.getFs(basePath, configuration);
-    FSDataOutputStream os = fs.create(commitFile, true);
-    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    try {
+    try (FSDataOutputStream os = fs.create(commitFile, true)) {
+      HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
       // Write empty commit metadata
       os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-    } finally {
-      os.close();
     }
   }
 
@@ -248,7 +243,7 @@ public class HoodieTestDataGenerator {
     int currSize = getNumExistingKeys();
 
     return IntStream.range(0, n).boxed().map(i -> {
-      String partitionPath = partitionPaths[rand.nextInt(partitionPaths.length)];
+      String partitionPath = partitionPaths[RAND.nextInt(partitionPaths.length)];
       HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
       KeyPartition kp = new KeyPartition();
       kp.key = key;
@@ -277,7 +272,7 @@ public class HoodieTestDataGenerator {
     List<HoodieRecord> inserts = new ArrayList<>();
     int currSize = getNumExistingKeys();
     for (int i = 0; i < limit; i++) {
-      String partitionPath = partitionPaths[rand.nextInt(partitionPaths.length)];
+      String partitionPath = partitionPaths[RAND.nextInt(partitionPaths.length)];
       HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
       HoodieRecord record = new HoodieRecord(key, generateAvroPayload(key, commitTime));
       inserts.add(record);
@@ -367,7 +362,7 @@ public class HoodieTestDataGenerator {
   public List<HoodieRecord> generateUpdates(String commitTime, Integer n) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (int i = 0; i < n; i++) {
-      KeyPartition kp = existingKeys.get(rand.nextInt(numExistingKeys - 1));
+      KeyPartition kp = existingKeys.get(RAND.nextInt(numExistingKeys - 1));
       HoodieRecord record = generateUpdateRecord(kp.key, commitTime);
       updates.add(record);
     }
@@ -404,13 +399,12 @@ public class HoodieTestDataGenerator {
    */
   public Stream<HoodieRecord> generateUniqueUpdatesStream(String commitTime, Integer n) {
     final Set<KeyPartition> used = new HashSet<>();
-
     if (n > numExistingKeys) {
       throw new IllegalArgumentException("Requested unique updates is greater than number of available keys");
     }
 
     return IntStream.range(0, n).boxed().map(i -> {
-      int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
+      int index = numExistingKeys == 1 ? 0 : RAND.nextInt(numExistingKeys - 1);
       KeyPartition kp = existingKeys.get(index);
       // Find the available keyPartition starting from randomly chosen one.
       while (used.contains(kp)) {
@@ -434,24 +428,24 @@ public class HoodieTestDataGenerator {
    */
   public Stream<HoodieKey> generateUniqueDeleteStream(Integer n) {
     final Set<KeyPartition> used = new HashSet<>();
-
     if (n > numExistingKeys) {
       throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
     }
 
-    return IntStream.range(0, n).boxed().map(i -> {
-      int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
-      KeyPartition kp = existingKeys.get(index);
-      // Find the available keyPartition starting from randomly chosen one.
-      while (used.contains(kp)) {
+    List<HoodieKey> result = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      int index = RAND.nextInt(numExistingKeys);
+      while (!existingKeys.containsKey(index)) {
         index = (index + 1) % numExistingKeys;
-        kp = existingKeys.get(index);
       }
-      existingKeys.remove(kp);
+      KeyPartition kp = existingKeys.remove(index);
+      existingKeys.put(index, existingKeys.get(numExistingKeys - 1));
+      existingKeys.remove(numExistingKeys - 1);
       numExistingKeys--;
       used.add(kp);
-      return kp.key;
-    });
+      result.add(kp.key);
+    }
+    return result.stream();
   }
 
   /**
@@ -463,28 +457,29 @@ public class HoodieTestDataGenerator {
    */
   public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String commitTime, Integer n) {
     final Set<KeyPartition> used = new HashSet<>();
-
     if (n > numExistingKeys) {
       throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
     }
 
-    return IntStream.range(0, n).boxed().map(i -> {
-      int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
-      KeyPartition kp = existingKeys.get(index);
-      // Find the available keyPartition starting from randomly chosen one.
-      while (used.contains(kp)) {
+    List<HoodieRecord> result = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      int index = RAND.nextInt(numExistingKeys);
+      while (!existingKeys.containsKey(index)) {
         index = (index + 1) % numExistingKeys;
-        kp = existingKeys.get(index);
       }
-      existingKeys.remove(kp);
+      // swap chosen index with last index and remove last entry. 
+      KeyPartition kp = existingKeys.remove(index);
+      existingKeys.put(index, existingKeys.get(numExistingKeys - 1));
+      existingKeys.remove(numExistingKeys - 1);
       numExistingKeys--;
       used.add(kp);
       try {
-        return new HoodieRecord(kp.key, generateRandomDeleteValue(kp.key, commitTime));
+        result.add(new HoodieRecord(kp.key, generateRandomDeleteValue(kp.key, commitTime)));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
-    });
+    }
+    return result.stream();
   }
 
   public String[] getPartitionPaths() {

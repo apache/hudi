@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.HoodieWriteClient;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -64,7 +64,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -156,13 +155,11 @@ public class HoodieDeltaStreamer implements Serializable {
         required = true)
     public String targetBasePath;
 
-    // TODO: How to obtain hive configs to register?
     @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
     public String targetTableName;
 
-    @Parameter(names = {"--storage-type"}, description = "Type of Storage. COPY_ON_WRITE (or) MERGE_ON_READ",
-        required = true)
-    public String storageType;
+    @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
+    public String tableType;
 
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
@@ -270,12 +267,12 @@ public class HoodieDeltaStreamer implements Serializable {
 
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
-          && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(storageType));
+          && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
     }
 
     public boolean isInlineCompactionEnabled() {
       return !continuousMode && !forceDisableCompaction
-          && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(storageType));
+          && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
     }
   }
 
@@ -349,10 +346,10 @@ public class HoodieDeltaStreamer implements Serializable {
             new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath, false);
         tableType = meta.getTableType();
         // This will guarantee there is no surprise with table type
-        Preconditions.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.storageType)),
-            "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.storageType);
+        Preconditions.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.tableType)),
+            "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.tableType);
       } else {
-        tableType = HoodieTableType.valueOf(cfg.storageType);
+        tableType = HoodieTableType.valueOf(cfg.tableType);
       }
 
       this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
@@ -435,7 +432,7 @@ public class HoodieDeltaStreamer implements Serializable {
         HoodieTableMetaClient meta =
             new HoodieTableMetaClient(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath, true);
         List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
-        pending.stream().forEach(hoodieInstant -> asyncCompactService.enqueuePendingCompaction(hoodieInstant));
+        pending.forEach(hoodieInstant -> asyncCompactService.enqueuePendingCompaction(hoodieInstant));
         asyncCompactService.start((error) -> {
           // Shutdown DeltaSync
           shutdown(false);
@@ -481,7 +478,7 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   /**
-   * Async Compactor Service tha runs in separate thread. Currently, only one compactor is allowed to run at any time.
+   * Async Compactor Service that runs in separate thread. Currently, only one compactor is allowed to run at any time.
    */
   public static class AsyncCompactService extends AbstractDeltaStreamerService {
 
@@ -495,7 +492,6 @@ public class HoodieDeltaStreamer implements Serializable {
     public AsyncCompactService(JavaSparkContext jssc, HoodieWriteClient client) {
       this.jssc = jssc;
       this.compactor = new Compactor(client, jssc);
-      // TODO: HUDI-157 : Only allow 1 compactor to run in parallel till Incremental View on MOR is fully implemented.
       this.maxConcurrentCompaction = 1;
     }
 
@@ -550,29 +546,27 @@ public class HoodieDeltaStreamer implements Serializable {
     @Override
     protected Pair<CompletableFuture, ExecutorService> startService() {
       ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentCompaction);
-      List<CompletableFuture<Boolean>> compactionFutures =
-          IntStream.range(0, maxConcurrentCompaction).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
-            try {
-              // Set Compactor Pool Name for allowing users to prioritize compaction
-              LOG.info("Setting Spark Pool name for compaction to " + SchedulerConfGenerator.COMPACT_POOL_NAME);
-              jssc.setLocalProperty("spark.scheduler.pool", SchedulerConfGenerator.COMPACT_POOL_NAME);
+      return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentCompaction).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
+        try {
+          // Set Compactor Pool Name for allowing users to prioritize compaction
+          LOG.info("Setting Spark Pool name for compaction to " + SchedulerConfGenerator.COMPACT_POOL_NAME);
+          jssc.setLocalProperty("spark.scheduler.pool", SchedulerConfGenerator.COMPACT_POOL_NAME);
 
-              while (!isShutdownRequested()) {
-                final HoodieInstant instant = fetchNextCompactionInstant();
-                if (null != instant) {
-                  compactor.compact(instant);
-                }
-              }
-              LOG.info("Compactor shutting down properly!!");
-            } catch (InterruptedException ie) {
-              LOG.warn("Compactor executor thread got interrupted exception. Stopping", ie);
-            } catch (IOException e) {
-              LOG.error("Compactor executor failed", e);
-              throw new HoodieIOException(e.getMessage(), e);
+          while (!isShutdownRequested()) {
+            final HoodieInstant instant = fetchNextCompactionInstant();
+            if (null != instant) {
+              compactor.compact(instant);
             }
-            return true;
-          }, executor)).collect(Collectors.toList());
-      return Pair.of(CompletableFuture.allOf(compactionFutures.stream().toArray(CompletableFuture[]::new)), executor);
+          }
+          LOG.info("Compactor shutting down properly!!");
+        } catch (InterruptedException ie) {
+          LOG.warn("Compactor executor thread got interrupted exception. Stopping", ie);
+        } catch (IOException e) {
+          LOG.error("Compactor executor failed", e);
+          throw new HoodieIOException(e.getMessage(), e);
+        }
+        return true;
+      }, executor)).toArray(CompletableFuture[]::new)), executor);
     }
   }
 

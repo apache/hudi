@@ -84,7 +84,7 @@ public class HoodieTableMetaClient implements Serializable {
   private HoodieArchivedTimeline archivedTimeline;
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
 
-  public HoodieTableMetaClient(Configuration conf, String basePath) throws TableNotFoundException {
+  public HoodieTableMetaClient(Configuration conf, String basePath) {
     // Do not load any timeline by default
     this(conf, basePath, false);
   }
@@ -104,8 +104,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
-      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion, String payloadClassName)
-      throws TableNotFoundException {
+      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion, String payloadClassName) {
     LOG.info("Loading HoodieTableMetaClient from " + basePath);
     this.basePath = basePath;
     this.consistencyGuardConfig = consistencyGuardConfig;
@@ -117,7 +116,14 @@ public class HoodieTableMetaClient implements Serializable {
     TableNotFoundException.checkTableValidity(fs, basePathDir, metaPathDir);
     this.tableConfig = new HoodieTableConfig(fs, metaPath, payloadClassName);
     this.tableType = tableConfig.getTableType();
-    this.timelineLayoutVersion = layoutVersion.orElse(tableConfig.getTimelineLayoutVersion());
+    Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
+    if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
+      // Ensure layout version passed in config is not lower than the one seen in hoodie.properties
+      Preconditions.checkArgument(layoutVersion.get().compareTo(tableConfigVersion.get()) >= 0,
+          "Layout Version defined in hoodie properties has higher version (" + tableConfigVersion.get()
+              + ") than the one passed in config (" + layoutVersion.get() + ")");
+    }
+    this.timelineLayoutVersion = layoutVersion.orElseGet(() -> tableConfig.getTimelineLayoutVersion().get());
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
     LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
@@ -299,7 +305,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to initialize a given path, as a given storage type and table name.
+   * Helper method to initialize a given path, as a given type and table name.
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
       HoodieTableType tableType, String tableName, String payloadClassName) throws IOException {
@@ -374,7 +380,15 @@ public class HoodieTableMetaClient implements Serializable {
     return metaClient;
   }
 
-  // HELPER METHODS TO CREATE META FILE NAMES
+  /**
+   * Helper method to scan all hoodie-instant metafiles.
+   *
+   * @param fs The file system implementation for this table
+   * @param metaPath The meta path where meta files are stored
+   * @param nameFilter The name filter to filter meta files
+   * @return An array of meta FileStatus
+   * @throws IOException In case of failure
+   */
   public static FileStatus[] scanFiles(FileSystem fs, Path metaPath, PathFilter nameFilter) throws IOException {
     return fs.listStatus(metaPath, nameFilter);
   }
@@ -437,7 +451,7 @@ public class HoodieTableMetaClient implements Serializable {
       case MERGE_ON_READ:
         return HoodieActiveTimeline.DELTA_COMMIT_ACTION;
       default:
-        throw new HoodieException("Could not commit on unknown storage type " + this.getTableType());
+        throw new HoodieException("Could not commit on unknown table type " + this.getTableType());
     }
   }
 

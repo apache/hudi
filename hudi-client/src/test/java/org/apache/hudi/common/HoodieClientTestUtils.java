@@ -18,20 +18,20 @@
 
 package org.apache.hudi.common;
 
-import org.apache.hudi.HoodieReadClient;
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.filter.BloomFilter;
 import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
 import org.apache.hudi.common.bloom.filter.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.TableFileSystemView.ReadOptimizedView;
+import org.apache.hudi.common.table.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.FSUtils;
@@ -203,10 +203,10 @@ public class HoodieClientTestUtils {
     try {
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
       for (String path : paths) {
-        ReadOptimizedView fileSystemView = new HoodieTableFileSystemView(metaClient,
+        BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
             metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new Path(path)));
-        List<HoodieDataFile> latestFiles = fileSystemView.getLatestDataFiles().collect(Collectors.toList());
-        for (HoodieDataFile file : latestFiles) {
+        List<HoodieBaseFile> latestFiles = fileSystemView.getLatestBaseFiles().collect(Collectors.toList());
+        for (HoodieBaseFile file : latestFiles) {
           filteredPaths.add(file.getPath());
         }
       }

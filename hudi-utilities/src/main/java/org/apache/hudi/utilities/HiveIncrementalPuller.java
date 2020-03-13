@@ -61,7 +61,6 @@ import java.util.stream.Collectors;
 public class HiveIncrementalPuller {
 
   private static final Logger LOG = LogManager.getLogger(HiveIncrementalPuller.class);
-  private static String driverName = "org.apache.hive.jdbc.HiveDriver";
 
   public static class Config extends AbstractCommandConfig {
 
@@ -94,6 +93,7 @@ public class HiveIncrementalPuller {
   }
 
   static {
+    String driverName = "org.apache.hive.jdbc.HiveDriver";
     try {
       Class.forName(driverName);
     } catch (ClassNotFoundException e) {
@@ -216,8 +216,7 @@ public class HiveIncrementalPuller {
     // Set the from commit time
     executeStatement("set hoodie." + config.sourceTable + ".consume.start.timestamp=" + config.fromCommitTime, stmt);
     // Set number of commits to pull
-    executeStatement("set hoodie." + config.sourceTable + ".consume.max.commits=" + config.maxCommits,
-        stmt);
+    executeStatement("set hoodie." + config.sourceTable + ".consume.max.commits=" + config.maxCommits, stmt);
   }
 
   private boolean deleteHDFSPath(FileSystem fs, String path) throws IOException {
@@ -231,7 +230,7 @@ public class HiveIncrementalPuller {
   }
 
   private String inferCommitTime(FileSystem fs) throws IOException {
-    LOG.info("FromCommitTime not specified. Trying to infer it from Hoodie dataset " + config.targetDb + "."
+    LOG.info("FromCommitTime not specified. Trying to infer it from Hoodie table " + config.targetDb + "."
         + config.targetTable);
     String targetDataLocation = getTableLocation(config.targetDb, config.targetTable);
     return scanForCommitTime(fs, targetDataLocation);

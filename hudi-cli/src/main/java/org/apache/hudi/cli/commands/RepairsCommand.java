@@ -24,6 +24,7 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
 
@@ -34,8 +35,16 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
 /**
  * CLI command to display and trigger repair options.
@@ -104,5 +113,34 @@ public class RepairsCommand implements CommandMarker {
     }
 
     return HoodiePrintHelper.print(new String[] {"Partition Path", "Metadata Present?", "Action"}, rows);
+  }
+
+  @CliCommand(value = "repair overwrite-hoodie-props", help = "Overwrite hoodie.properties with provided file. Risky operation. Proceed with caution!")
+  public String overwriteHoodieProperties(
+      @CliOption(key = {"new-props-file"}, help = "Path to a properties file on local filesystem to overwrite the table's hoodie.properties with")
+      final String overwriteFilePath) throws IOException {
+
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    Properties newProps = new Properties();
+    newProps.load(new FileInputStream(new File(overwriteFilePath)));
+    Map<String, String> oldProps = client.getTableConfig().getProps();
+    Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
+    HoodieTableConfig.createHoodieProperties(client.getFs(), metaPathDir, newProps);
+
+    TreeSet<String> allPropKeys = new TreeSet<>();
+    allPropKeys.addAll(newProps.keySet().stream().map(Object::toString).collect(Collectors.toSet()));
+    allPropKeys.addAll(oldProps.keySet());
+
+    String[][] rows = new String[allPropKeys.size()][];
+    int ind = 0;
+    for (String propKey : allPropKeys) {
+      String[] row = new String[]{
+          propKey,
+          oldProps.getOrDefault(propKey, "null"),
+          newProps.getOrDefault(propKey, "null").toString()
+      };
+      rows[ind++] = row;
+    }
+    return HoodiePrintHelper.print(new String[] {"Property", "Old Value", "New Value"}, rows);
   }
 }

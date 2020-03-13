@@ -21,7 +21,6 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
-import com.google.common.base.Preconditions;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -32,6 +31,7 @@ import javax.management.remote.JMXServiceURL;
 import java.io.Closeable;
 import java.lang.management.ManagementFactory;
 import java.rmi.registry.LocateRegistry;
+import java.util.Objects;
 
 /**
  * Implementation of Jmx reporter, which used to report jmx metric.
@@ -67,7 +67,7 @@ public class JmxMetricsReporter extends MetricsReporter {
   @Override
   public void start() {
     try {
-      Preconditions.checkNotNull(connector, "Cannot start as the jmxReporter is null.");
+      Objects.requireNonNull(connector, "Cannot start as the jmxReporter is null.");
       connector.start();
     } catch (Exception e) {
       throw new HoodieException(e);

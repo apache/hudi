@@ -157,7 +157,7 @@ public class InputPathHandlerTest {
   @Test
   public void testInputPathHandler() throws IOException {
     inputPathHandler = new InputPathHandler(dfs.getConf(), inputPaths.toArray(
-        new Path[inputPaths.size()]), incrementalTables);
+        new Path[0]), incrementalTables);
     List<Path> actualPaths = inputPathHandler.getGroupedIncrementalPaths().values().stream()
         .flatMap(List::stream).collect(Collectors.toList());
     assertTrue(actualComparesToExpected(actualPaths, incrementalPaths));

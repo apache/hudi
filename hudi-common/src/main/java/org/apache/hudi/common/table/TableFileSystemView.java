@@ -20,7 +20,7 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -37,57 +37,57 @@ import java.util.stream.Stream;
 public interface TableFileSystemView {
 
   /**
-   * ReadOptimizedView with methods to only access latest version of file for the instant(s) passed.
+   * Methods to only access latest version of file for the instant(s) passed.
    */
-  interface ReadOptimizedViewWithLatestSlice {
+  interface BaseFileOnlyViewWithLatestSlice {
 
     /**
      * Stream all the latest data files in the given partition.
      */
-    Stream<HoodieDataFile> getLatestDataFiles(String partitionPath);
+    Stream<HoodieBaseFile> getLatestBaseFiles(String partitionPath);
 
     /**
      * Get Latest data file for a partition and file-Id.
      */
-    Option<HoodieDataFile> getLatestDataFile(String partitionPath, String fileId);
+    Option<HoodieBaseFile> getLatestBaseFile(String partitionPath, String fileId);
 
     /**
      * Stream all the latest data files, in the file system view.
      */
-    Stream<HoodieDataFile> getLatestDataFiles();
+    Stream<HoodieBaseFile> getLatestBaseFiles();
 
     /**
      * Stream all the latest version data files in the given partition with precondition that commitTime(file) before
      * maxCommitTime.
      */
-    Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath, String maxCommitTime);
+    Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime);
 
     /**
      * Stream all the latest data files pass.
      */
-    Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn);
+    Stream<HoodieBaseFile> getLatestBaseFilesInRange(List<String> commitsToReturn);
   }
 
   /**
-   * ReadOptimizedView - methods to provide a view of columnar data files only.
+   * Methods to provide a view of base files only.
    */
-  interface ReadOptimizedView extends ReadOptimizedViewWithLatestSlice {
+  interface BaseFileOnlyView extends BaseFileOnlyViewWithLatestSlice {
     /**
      * Stream all the data file versions grouped by FileId for a given partition.
      */
-    Stream<HoodieDataFile> getAllDataFiles(String partitionPath);
+    Stream<HoodieBaseFile> getAllBaseFiles(String partitionPath);
 
     /**
      * Get the version of data file matching the instant time in the given partition.
      */
-    Option<HoodieDataFile> getDataFileOn(String partitionPath, String instantTime, String fileId);
+    Option<HoodieBaseFile> getBaseFileOn(String partitionPath, String instantTime, String fileId);
 
   }
 
   /**
-   * RealtimeView with methods to only access latest version of file-slice for the instant(s) passed.
+   * Methods to only access latest version of file-slice for the instant(s) passed.
    */
-  interface RealtimeViewWithLatestSlice {
+  interface SliceViewWithLatestSlice {
 
     /**
      * Stream all the latest file slices in the given partition.
@@ -131,9 +131,9 @@ public interface TableFileSystemView {
   }
 
   /**
-   * RealtimeView - methods to access a combination of columnar data files + log files with real time data.
+   * Methods to access a combination of base files + log file slices.
    */
-  interface RealtimeView extends RealtimeViewWithLatestSlice {
+  interface SliceView extends SliceViewWithLatestSlice {
 
     /**
      * Stream all the file slices for a given partition, latest or not.

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieJsonPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,7 +34,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import com.beust.jcommander.IValueValidator;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -56,6 +55,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
@@ -115,7 +115,6 @@ public class HDFSParquetImporter implements Serializable {
     return ret;
   }
 
-  @VisibleForTesting
   protected int dataImport(JavaSparkContext jsc) throws IOException {
     try {
       if (fs.exists(new Path(cfg.targetPath))) {
@@ -156,8 +155,7 @@ public class HDFSParquetImporter implements Serializable {
     AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(), (new Schema.Parser().parse(schemaStr)));
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
-    return jsc
-        .newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class, GenericRecord.class,
+    return jsc.newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class, GenericRecord.class,
             job.getConfiguration())
         // To reduce large number of tasks.
         .coalesce(16 * cfg.parallelism).map(entry -> {
@@ -213,7 +211,7 @@ public class HDFSParquetImporter implements Serializable {
     List<String> validCommands = Arrays.asList("insert", "upsert", "bulkinsert");
 
     @Override
-    public void validate(String name, String value) throws ParameterException {
+    public void validate(String name, String value) {
       if (value == null || !validCommands.contains(value.toLowerCase())) {
         throw new ParameterException(
             String.format("Invalid command: value:%s: supported commands:%s", value, validCommands));
@@ -223,10 +221,10 @@ public class HDFSParquetImporter implements Serializable {
 
   public static class FormatValidator implements IValueValidator<String> {
 
-    List<String> validFormats = Arrays.asList("parquet");
+    List<String> validFormats = Collections.singletonList("parquet");
 
     @Override
-    public void validate(String name, String value) throws ParameterException {
+    public void validate(String name, String value) {
       if (value == null || !validFormats.contains(value)) {
         throw new ParameterException(
             String.format("Invalid format type: value:%s: supported formats:%s", value, validFormats));
@@ -237,7 +235,7 @@ public class HDFSParquetImporter implements Serializable {
   public static class Config extends AbstractCommandConfig {
 
     @Parameter(names = {"--command", "-c"}, description = "Write command Valid values are insert(default)/upsert/bulkinsert",
-        required = false, validateValueWith = CommandValidator.class)
+        validateValueWith = CommandValidator.class)
     public String command = "INSERT";
     @Parameter(names = {"--src-path", "-sp"}, description = "Base path for the input table", required = true)
     public String srcPath = null;
@@ -256,8 +254,7 @@ public class HDFSParquetImporter implements Serializable {
     public int parallelism = 1;
     @Parameter(names = {"--schema-file", "-sf"}, description = "path for Avro schema file", required = true)
     public String schemaFile = null;
-    @Parameter(names = {"--format", "-f"}, description = "Format for the input data.",
-        validateValueWith = FormatValidator.class)
+    @Parameter(names = {"--format", "-f"}, description = "Format for the input data.", validateValueWith = FormatValidator.class)
     public String format = null;
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = null;

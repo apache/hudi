@@ -24,6 +24,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.client.{HoodieWriteClient, WriteStatus}
 import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
@@ -58,7 +59,7 @@ private[hudi] object HoodieSparkSqlWriter {
       case Some(ser) if ser.equals("org.apache.spark.serializer.KryoSerializer") =>
       case _ => throw new HoodieException("hoodie only support org.apache.spark.serializer.KryoSerializer as spark.serializer")
     }
-    val storageType = parameters(STORAGE_TYPE_OPT_KEY)
+    val tableType = parameters(TABLE_TYPE_OPT_KEY)
     val operation =
     // It does not make sense to allow upsert() operation if INSERT_DROP_DUPS_OPT_KEY is true
     // Auto-correct the operation to "insert" if OPERATION_OPT_KEY is set to "upsert" wrongly
@@ -77,7 +78,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
     val jsc = new JavaSparkContext(sparkContext)
     val basePath = new Path(parameters("path"))
-    val commitTime = HoodieActiveTimeline.createNewInstantTime();
+    val commitTime = HoodieActiveTimeline.createNewInstantTime()
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     var exists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
 
@@ -119,7 +120,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
       // Create the table if not present
       if (!exists) {
-        HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get, storageType,
+        HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get, tableType,
           tblName.get, "archived", parameters(PAYLOAD_CLASS_OPT_KEY))
       }
 
@@ -130,10 +131,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
       val hoodieRecords =
         if (parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean) {
-          DataSourceUtils.dropDuplicates(
-            jsc,
-            hoodieAllIncomingRecords,
-            mapAsJavaMap(parameters), client.getTimelineServer)
+          DataSourceUtils.dropDuplicates(jsc, hoodieAllIncomingRecords, mapAsJavaMap(parameters))
         } else {
           hoodieAllIncomingRecords
         }
@@ -192,7 +190,7 @@ private[hudi] object HoodieSparkSqlWriter {
     */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
     Map(OPERATION_OPT_KEY -> DEFAULT_OPERATION_OPT_VAL,
-      STORAGE_TYPE_OPT_KEY -> DEFAULT_STORAGE_TYPE_OPT_VAL,
+      TABLE_TYPE_OPT_KEY -> DEFAULT_TABLE_TYPE_OPT_VAL,
       PRECOMBINE_FIELD_OPT_KEY -> DEFAULT_PRECOMBINE_FIELD_OPT_VAL,
       PAYLOAD_CLASS_OPT_KEY -> DEFAULT_PAYLOAD_OPT_VAL,
       RECORDKEY_FIELD_OPT_KEY -> DEFAULT_RECORDKEY_FIELD_OPT_VAL,
@@ -212,7 +210,7 @@ private[hudi] object HoodieSparkSqlWriter {
       HIVE_PARTITION_FIELDS_OPT_KEY -> DEFAULT_HIVE_PARTITION_FIELDS_OPT_VAL,
       HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY -> DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL,
       HIVE_STYLE_PARTITIONING_OPT_KEY -> DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL
-    ) ++ parameters
+    ) ++ translateStorageTypeToTableType(parameters)
   }
 
   def toProperties(params: Map[String, String]): TypedProperties = {
@@ -282,7 +280,7 @@ private[hudi] object HoodieSparkSqlWriter {
       client.close()
       commitSuccess && syncHiveSucess
     } else {
-      log.error(s"$operation failed with ${errorCount} errors :");
+      log.error(s"$operation failed with $errorCount errors :")
       if (log.isTraceEnabled) {
         log.trace("Printing out the top 100 errors")
         writeStatuses.rdd.filter(ws => ws.hasErrors)

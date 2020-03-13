@@ -27,11 +27,13 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.ServerSocket;
 
 /**
  * An HDFS minicluster service implementation.
@@ -45,12 +47,6 @@ public class HdfsTestService {
    */
   private Configuration hadoopConf;
   private String workDir;
-  private String bindIP = "127.0.0.1";
-  private int namenodeRpcPort = 8020;
-  private int namenodeHttpPort = 50070;
-  private int datanodePort = 50010;
-  private int datanodeIpcPort = 50020;
-  private int datanodeHttpPort = 50075;
 
   /**
    * Embedded HDFS cluster.
@@ -65,6 +61,14 @@ public class HdfsTestService {
     return hadoopConf;
   }
 
+  private static int nextFreePort() {
+    try (ServerSocket socket = new ServerSocket(0)) {
+      return socket.getLocalPort();
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to find next free port", e);
+    }
+  }
+
   public MiniDFSCluster start(boolean format) throws IOException {
     Preconditions.checkState(workDir != null, "The work dir must be set before starting cluster.");
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
@@ -77,9 +81,15 @@ public class HdfsTestService {
       FileIOUtils.deleteDirectory(file);
     }
 
+    int namenodeRpcPort = nextFreePort();
+    int datanodePort = nextFreePort();
+    int datanodeIpcPort = nextFreePort();
+    int datanodeHttpPort = nextFreePort();
+
     // Configure and start the HDFS cluster
     // boolean format = shouldFormatDFSCluster(localDFSLocation, clean);
-    hadoopConf = configureDFSCluster(hadoopConf, localDFSLocation, bindIP, namenodeRpcPort,
+    String bindIP = "127.0.0.1";
+    configureDFSCluster(hadoopConf, localDFSLocation, bindIP, namenodeRpcPort,
         datanodePort, datanodeIpcPort, datanodeHttpPort);
     miniDfsCluster = new MiniDFSCluster.Builder(hadoopConf).numDataNodes(1).format(format).checkDataNodeAddrConfig(true)
         .checkDataNodeHostConfig(true).build();

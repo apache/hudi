@@ -69,8 +69,8 @@ public class CompactionUtils {
     builder.setFileId(fileSlice.getFileId());
     builder.setBaseInstantTime(fileSlice.getBaseInstantTime());
     builder.setDeltaFilePaths(fileSlice.getLogFiles().map(lf -> lf.getPath().getName()).collect(Collectors.toList()));
-    if (fileSlice.getDataFile().isPresent()) {
-      builder.setDataFilePath(fileSlice.getDataFile().get().getFileName());
+    if (fileSlice.getBaseFile().isPresent()) {
+      builder.setDataFilePath(fileSlice.getBaseFile().get().getFileName());
     }
 
     if (metricsCaptureFunction.isPresent()) {
@@ -90,7 +90,7 @@ public class CompactionUtils {
       Option<Map<String, String>> extraMetadata,
       Option<Function<Pair<String, FileSlice>, Map<String, Double>>> metricsCaptureFunction) {
     HoodieCompactionPlan.Builder builder = HoodieCompactionPlan.newBuilder();
-    extraMetadata.ifPresent(m -> builder.setExtraMetadata(m));
+    extraMetadata.ifPresent(builder::setExtraMetadata);
 
     builder.setOperations(partitionFileSlicePairs.stream()
         .map(pfPair -> buildFromFileSlice(pfPair.getKey(), pfPair.getValue(), metricsCaptureFunction))
@@ -140,7 +140,7 @@ public class CompactionUtils {
       throws IOException {
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
     HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
-        metaClient.getActiveTimeline().readPlanAsBytes(
+        metaClient.getActiveTimeline().readCompactionPlanAsBytes(
             HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
     return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
   }
@@ -157,25 +157,23 @@ public class CompactionUtils {
 
     Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> fgIdToPendingCompactionWithInstantMap =
         new HashMap<>();
-    pendingCompactionPlanWithInstants.stream().flatMap(instantPlanPair -> {
-      return getPendingCompactionOperations(instantPlanPair.getKey(), instantPlanPair.getValue());
-    }).forEach(pair -> {
-      // Defensive check to ensure a single-fileId does not have more than one pending compaction with different
-      // file slices. If we find a full duplicate we assume it is caused by eventual nature of the move operation
-      // on some DFSs.
-      if (fgIdToPendingCompactionWithInstantMap.containsKey(pair.getKey())) {
-        HoodieCompactionOperation operation = pair.getValue().getValue();
-        HoodieCompactionOperation anotherOperation =
-            fgIdToPendingCompactionWithInstantMap.get(pair.getKey()).getValue();
+    pendingCompactionPlanWithInstants.stream().flatMap(instantPlanPair ->
+        getPendingCompactionOperations(instantPlanPair.getKey(), instantPlanPair.getValue())).forEach(pair -> {
+          // Defensive check to ensure a single-fileId does not have more than one pending compaction with different
+          // file slices. If we find a full duplicate we assume it is caused by eventual nature of the move operation
+          // on some DFSs.
+          if (fgIdToPendingCompactionWithInstantMap.containsKey(pair.getKey())) {
+            HoodieCompactionOperation operation = pair.getValue().getValue();
+            HoodieCompactionOperation anotherOperation = fgIdToPendingCompactionWithInstantMap.get(pair.getKey()).getValue();
 
-        if (!operation.equals(anotherOperation)) {
-          String msg = "Hudi File Id (" + pair.getKey() + ") has more than 1 pending compactions. Instants: "
-              + pair.getValue() + ", " + fgIdToPendingCompactionWithInstantMap.get(pair.getKey());
-          throw new IllegalStateException(msg);
-        }
-      }
-      fgIdToPendingCompactionWithInstantMap.put(pair.getKey(), pair.getValue());
-    });
+            if (!operation.equals(anotherOperation)) {
+              String msg = "Hudi File Id (" + pair.getKey() + ") has more than 1 pending compactions. Instants: "
+                  + pair.getValue() + ", " + fgIdToPendingCompactionWithInstantMap.get(pair.getKey());
+              throw new IllegalStateException(msg);
+            }
+          }
+          fgIdToPendingCompactionWithInstantMap.put(pair.getKey(), pair.getValue());
+        });
     return fgIdToPendingCompactionWithInstantMap;
   }
 
@@ -183,10 +181,8 @@ public class CompactionUtils {
       HoodieInstant instant, HoodieCompactionPlan compactionPlan) {
     List<HoodieCompactionOperation> ops = compactionPlan.getOperations();
     if (null != ops) {
-      return ops.stream().map(op -> {
-        return Pair.of(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()),
-            Pair.of(instant.getTimestamp(), op));
-      });
+      return ops.stream().map(op -> Pair.of(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()),
+          Pair.of(instant.getTimestamp(), op)));
     } else {
       return Stream.empty();
     }

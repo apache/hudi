@@ -16,13 +16,6 @@
 
 package org.apache.hudi.common.util;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
-import com.google.common.collect.Sets;
-
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.reflect.Array;
@@ -30,9 +23,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -122,17 +119,10 @@ public class ObjectSizeCalculator {
   // added.
   private final int superclassFieldPadding;
 
-  private final LoadingCache<Class<?>, ClassSizeInfo> classSizeInfos =
-      CacheBuilder.newBuilder().build(new CacheLoader<Class<?>, ClassSizeInfo>() {
-        @Override
-        public ClassSizeInfo load(Class<?> clazz) {
-          return new ClassSizeInfo(clazz);
-        }
-      });
+  private final Map<Class<?>, ClassSizeInfo> classSizeInfos = new IdentityHashMap<>();
 
-
-  private final Set<Object> alreadyVisited = Sets.newIdentityHashSet();
-  private final Deque<Object> pending = new ArrayDeque<Object>(16 * 1024);
+  private final Set<Object> alreadyVisited = Collections.newSetFromMap(new IdentityHashMap<>());
+  private final Deque<Object> pending = new ArrayDeque<>(16 * 1024);
   private long size;
 
   /**
@@ -141,7 +131,7 @@ public class ObjectSizeCalculator {
    * @param memoryLayoutSpecification a description of the JVM memory layout.
    */
   public ObjectSizeCalculator(MemoryLayoutSpecification memoryLayoutSpecification) {
-    Preconditions.checkNotNull(memoryLayoutSpecification);
+    Objects.requireNonNull(memoryLayoutSpecification);
     arrayHeaderSize = memoryLayoutSpecification.getArrayHeaderSize();
     objectHeaderSize = memoryLayoutSpecification.getObjectHeaderSize();
     objectPadding = memoryLayoutSpecification.getObjectPadding();
@@ -176,6 +166,15 @@ public class ObjectSizeCalculator {
     }
   }
 
+  private ClassSizeInfo getClassSizeInfo(final Class<?> clazz) {
+    ClassSizeInfo csi = classSizeInfos.get(clazz);
+    if (csi == null) {
+      csi = new ClassSizeInfo(clazz);
+      classSizeInfos.put(clazz, csi);
+    }
+    return csi;
+  }
+
   private void visit(Object obj) {
     if (alreadyVisited.contains(obj)) {
       return;
@@ -188,7 +187,7 @@ public class ObjectSizeCalculator {
       if (clazz.isArray()) {
         visitArray(obj);
       } else {
-        classSizeInfos.getUnchecked(clazz).visit(obj, this);
+        getClassSizeInfo(clazz).visit(obj, this);
       }
     }
   }
@@ -252,7 +251,6 @@ public class ObjectSizeCalculator {
     size += objectSize;
   }
 
-  @VisibleForTesting
   static long roundTo(long x, int multiple) {
     return ((x + multiple - 1) / multiple) * multiple;
   }
@@ -268,7 +266,7 @@ public class ObjectSizeCalculator {
 
     public ClassSizeInfo(Class<?> clazz) {
       long fieldsSize = 0;
-      final List<Field> referenceFields = new LinkedList<Field>();
+      final List<Field> referenceFields = new LinkedList<>();
       for (Field f : clazz.getDeclaredFields()) {
         if (Modifier.isStatic(f.getModifiers())) {
           continue;
@@ -284,7 +282,7 @@ public class ObjectSizeCalculator {
       }
       final Class<?> superClass = clazz.getSuperclass();
       if (superClass != null) {
-        final ClassSizeInfo superClassInfo = classSizeInfos.getUnchecked(superClass);
+        final ClassSizeInfo superClassInfo = getClassSizeInfo(superClass);
         fieldsSize += roundTo(superClassInfo.fieldsSize, superclassFieldPadding);
         referenceFields.addAll(Arrays.asList(superClassInfo.referenceFields));
       }
@@ -303,9 +301,7 @@ public class ObjectSizeCalculator {
         try {
           calc.enqueue(f.get(obj));
         } catch (IllegalAccessException e) {
-          final AssertionError ae = new AssertionError("Unexpected denial of access to " + f);
-          ae.initCause(e);
-          throw ae;
+          throw new AssertionError("Unexpected denial of access to " + f, e);
         }
       }
     }
@@ -327,7 +323,6 @@ public class ObjectSizeCalculator {
     throw new AssertionError("Encountered unexpected primitive type " + type.getName());
   }
 
-  @VisibleForTesting
   static MemoryLayoutSpecification getEffectiveMemoryLayoutSpecification() {
     final String vmName = System.getProperty("java.vm.name");
     if (vmName == null || !(vmName.startsWith("Java HotSpot(TM) ") || vmName.startsWith("OpenJDK")

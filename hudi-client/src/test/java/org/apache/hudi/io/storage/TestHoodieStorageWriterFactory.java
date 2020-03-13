@@ -18,7 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.TestHoodieClientBase;
+import org.apache.hudi.client.TestHoodieClientBase;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -45,14 +45,14 @@ public class TestHoodieStorageWriterFactory extends TestHoodieClientBase {
     final HoodieWriteConfig cfg = getConfig();
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
     HoodieStorageWriter<IndexedRecord> parquetWriter = HoodieStorageWriterFactory.getStorageWriter(commitTime,
-        parquetPath, table, cfg, HoodieTestDataGenerator.avroSchema);
+        parquetPath, table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA);
     Assert.assertTrue(parquetWriter instanceof HoodieParquetWriter);
 
     // other file format exception.
     final Path logPath = new Path(basePath + "/partition/path/f.b51192a8-574b-4a85-b246-bcfec03ac8bf_100.log.2_1-0-1");
     try {
       HoodieStorageWriter<IndexedRecord> logWriter = HoodieStorageWriterFactory.getStorageWriter(commitTime, logPath,
-          table, cfg, HoodieTestDataGenerator.avroSchema);
+          table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA);
       fail("should fail since log storage writer is not supported yet.");
     } catch (Exception e) {
       Assert.assertTrue(e instanceof UnsupportedOperationException);

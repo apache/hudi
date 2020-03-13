@@ -56,6 +56,10 @@ public interface HoodieTimeline extends Serializable {
   String REQUESTED_EXTENSION = ".requested";
   String RESTORE_ACTION = "restore";
 
+  String[] VALID_ACTIONS_IN_TIMELINE = {COMMIT_ACTION, DELTA_COMMIT_ACTION,
+      CLEAN_ACTION, SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,
+      COMPACTION_ACTION};
+
   String COMMIT_EXTENSION = "." + COMMIT_ACTION;
   String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
   String CLEAN_EXTENSION = "." + CLEAN_ACTION;
@@ -228,6 +232,14 @@ public interface HoodieTimeline extends Serializable {
 
   static boolean compareTimestamps(String commit1, String commit2, BiPredicate<String, String> predicateToApply) {
     return predicateToApply.test(commit1, commit2);
+  }
+
+  /**
+   * Return true if specified timestamp is in range (startTs, endTs].
+   */
+  static boolean isInRange(String timestamp, String startTs, String endTs) {
+    return HoodieTimeline.compareTimestamps(timestamp, startTs, GREATER)
+            && HoodieTimeline.compareTimestamps(timestamp, endTs, LESSER_OR_EQUAL);
   }
 
   static HoodieInstant getCompletedInstant(final HoodieInstant instant) {

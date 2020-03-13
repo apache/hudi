@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.FileSlice;
@@ -38,12 +38,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.func.MergeOnReadLazyInsertIterable;
+import org.apache.hudi.execution.MergeOnReadLazyInsertIterable;
 import org.apache.hudi.io.HoodieAppendHandle;
-import org.apache.hudi.io.compact.HoodieRealtimeTableCompactor;
+import org.apache.hudi.table.compact.HoodieMergeOnReadTableCompactor;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import org.apache.hudi.table.rollback.RollbackHelper;
+import org.apache.hudi.table.rollback.RollbackRequest;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -61,7 +62,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Implementation of a more real-time read-optimized Hoodie Table where
+ * Implementation of a more real-time Hoodie Table the provides tradeoffs on read and write cost/amplification.
+ *
  * <p>
  * INSERTS - Same as HoodieCopyOnWriteTable - Produce new files, block aligned to desired size (or) Merge with the
  * smallest existing file, to expand it
@@ -142,10 +144,10 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     }
 
     LOG.info("Compacting merge on read table " + config.getBasePath());
-    HoodieRealtimeTableCompactor compactor = new HoodieRealtimeTableCompactor();
+    HoodieMergeOnReadTableCompactor compactor = new HoodieMergeOnReadTableCompactor();
     try {
       return compactor.generateCompactionPlan(jsc, this, config, instantTime,
-          ((SyncableFileSystemView) getRTFileSystemView()).getPendingCompactionOperations()
+          ((SyncableFileSystemView) getSliceView()).getPendingCompactionOperations()
               .map(instantTimeCompactionopPair -> instantTimeCompactionopPair.getValue().getFileGroupId())
               .collect(Collectors.toSet()));
 
@@ -157,7 +159,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   @Override
   public JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String compactionInstantTime,
       HoodieCompactionPlan compactionPlan) {
-    HoodieRealtimeTableCompactor compactor = new HoodieRealtimeTableCompactor();
+    HoodieMergeOnReadTableCompactor compactor = new HoodieMergeOnReadTableCompactor();
     try {
       return compactor.compact(jsc, compactionPlan, this, config, compactionInstantTime);
     } catch (IOException e) {
@@ -194,7 +196,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
       LOG.info("Unpublished " + commit);
       List<RollbackRequest> rollbackRequests = generateRollbackRequests(jsc, instant);
       // TODO: We need to persist this as rollback workload and use it in case of partial failures
-      allRollbackStats = new RollbackExecutor(metaClient, config).performRollback(jsc, instant, rollbackRequests);
+      allRollbackStats = new RollbackHelper(metaClient, config).performRollback(jsc, instant, rollbackRequests);
     }
 
     // Delete Inflight instants if enabled
@@ -344,10 +346,10 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
         if (!index.canIndexLogFiles()) {
           // TODO : choose last N small files since there can be multiple small files written to a single partition
           // by different spark partitions in a single batch
-          Option<FileSlice> smallFileSlice = Option.fromJavaOptional(getRTFileSystemView()
+          Option<FileSlice> smallFileSlice = Option.fromJavaOptional(getSliceView()
                   .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), false)
-                  .filter(fileSlice -> fileSlice.getLogFiles().count() < 1 && fileSlice.getDataFile().get().getFileSize() < config.getParquetSmallFileLimit())
-                  .min((FileSlice left, FileSlice right) -> left.getDataFile().get().getFileSize() < right.getDataFile().get().getFileSize() ? -1 : 1));
+                  .filter(fileSlice -> fileSlice.getLogFiles().count() < 1 && fileSlice.getBaseFile().get().getFileSize() < config.getParquetSmallFileLimit())
+                  .min((FileSlice left, FileSlice right) -> left.getBaseFile().get().getFileSize() < right.getBaseFile().get().getFileSize() ? -1 : 1));
           if (smallFileSlice.isPresent()) {
             allSmallFileSlices.add(smallFileSlice.get());
           }
@@ -355,7 +357,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
           // If we can index log files, we can add more inserts to log files for fileIds including those under
           // pending compaction.
           List<FileSlice> allFileSlices =
-              getRTFileSystemView().getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
+              getSliceView().getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
                   .collect(Collectors.toList());
           for (FileSlice fileSlice : allFileSlices) {
             if (isSmallFile(fileSlice)) {
@@ -366,9 +368,9 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
         // Create SmallFiles from the eligible file slices
         for (FileSlice smallFileSlice : allSmallFileSlices) {
           SmallFile sf = new SmallFile();
-          if (smallFileSlice.getDataFile().isPresent()) {
+          if (smallFileSlice.getBaseFile().isPresent()) {
             // TODO : Move logic of file name, file id, base commit time handling inside file slice
-            String filename = smallFileSlice.getDataFile().get().getFileName();
+            String filename = smallFileSlice.getBaseFile().get().getFileName();
             sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
             sf.sizeBytes = getTotalFileSize(smallFileSlice);
             smallFileLocations.add(sf);
@@ -394,10 +396,10 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     }
 
     private long getTotalFileSize(FileSlice fileSlice) {
-      if (!fileSlice.getDataFile().isPresent()) {
+      if (!fileSlice.getBaseFile().isPresent()) {
         return convertLogFilesSizeToExpectedParquetSize(fileSlice.getLogFiles().collect(Collectors.toList()));
       } else {
-        return fileSlice.getDataFile().get().getFileSize()
+        return fileSlice.getBaseFile().get().getFileSize()
             + convertLogFilesSizeToExpectedParquetSize(fileSlice.getLogFiles().collect(Collectors.toList()));
       }
     }
@@ -408,7 +410,6 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     }
 
     // TODO (NA) : Make this static part of utility
-    @VisibleForTesting
     public long convertLogFilesSizeToExpectedParquetSize(List<HoodieLogFile> hoodieLogFiles) {
       long totalSizeOfLogFiles = hoodieLogFiles.stream().map(HoodieLogFile::getFileSize)
           .filter(size -> size > 0).reduce(Long::sum).orElse(0L);
@@ -428,7 +429,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     // used to write the new log files. In this case, the commit time for the log file is the compaction requested time.
     // But the index (global) might store the baseCommit of the parquet and not the requested, hence get the
     // baseCommit always by listing the file slice
-    Map<String, String> fileIdToBaseCommitTimeForLogMap = this.getRTFileSystemView().getLatestFileSlices(partitionPath)
+    Map<String, String> fileIdToBaseCommitTimeForLogMap = this.getSliceView().getLatestFileSlices(partitionPath)
         .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));
     return commitMetadata.getPartitionToWriteStats().get(partitionPath).stream().filter(wStat -> {
 

@@ -161,14 +161,20 @@ public class UtilitiesTestBase {
     // to get hold of resources bundled with jar
     private static ClassLoader classLoader = Helpers.class.getClassLoader();
 
-    public static void copyToDFS(String testResourcePath, FileSystem fs, String targetPath) throws IOException {
+    public static String readFile(String testResourcePath) throws IOException {
       BufferedReader reader =
           new BufferedReader(new InputStreamReader(classLoader.getResourceAsStream(testResourcePath)));
-      PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
+      StringBuffer sb = new StringBuffer();
       String line;
       while ((line = reader.readLine()) != null) {
-        os.println(line);
+        sb.append(line + "\n");
       }
+      return sb.toString();
+    }
+
+    public static void copyToDFS(String testResourcePath, FileSystem fs, String targetPath) throws IOException {
+      PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
+      os.print(readFile(testResourcePath));
       os.flush();
       os.close();
     }
@@ -189,7 +195,7 @@ public class UtilitiesTestBase {
 
     public static void saveParquetToDFS(List<GenericRecord> records, Path targetFile) throws IOException {
       try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(targetFile)
-          .withSchema(HoodieTestDataGenerator.avroSchema).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {
+          .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {
         for (GenericRecord record : records) {
           writer.write(record);
         }
@@ -205,7 +211,7 @@ public class UtilitiesTestBase {
 
     public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {
       try {
-        Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.avroSchema);
+        Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.AVRO_SCHEMA);
         return (GenericRecord) recordOpt.get();
       } catch (IOException e) {
         return null;

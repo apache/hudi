@@ -21,7 +21,7 @@ import java.util.stream.Collectors
 
 import com.beust.jcommander.Parameter
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
-import org.apache.hudi.common.model.{HoodieDataFile, HoodieRecord}
+import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.FSUtils
@@ -78,7 +78,7 @@ class DedupeSparkJob(cfg: DedupeConfig, sqlContext: SQLContext, fs: FileSystem) 
 
     val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"${cfg.basePath}/${cfg.duplicatedPartitionPath}"))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
-    val latestFiles: java.util.List[HoodieDataFile] = fsView.getLatestDataFiles().collect(Collectors.toList[HoodieDataFile]())
+    val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
     val filteredStatuses = latestFiles.map(f => f.getPath)
     LOG.info(s" List of files under partition: ${} =>  ${filteredStatuses.mkString(" ")}")
 
@@ -130,7 +130,7 @@ class DedupeSparkJob(cfg: DedupeConfig, sqlContext: SQLContext, fs: FileSystem) 
     val allFiles = fs.listStatus(new Path(s"${cfg.basePath}/${cfg.duplicatedPartitionPath}"))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
 
-    val latestFiles: java.util.List[HoodieDataFile] = fsView.getLatestDataFiles().collect(Collectors.toList[HoodieDataFile]())
+    val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
 
     val fileNameToPathMap = latestFiles.map(f => (f.getFileId, new Path(f.getPath))).toMap
     val dupeFixPlan = planDuplicateFix()

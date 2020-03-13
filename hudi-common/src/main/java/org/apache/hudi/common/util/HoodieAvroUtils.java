@@ -43,6 +43,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -84,7 +85,7 @@ public class HoodieAvroUtils {
   public static GenericRecord bytesToAvro(byte[] bytes, Schema schema) throws IOException {
     BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, reuseDecoder.get());
     reuseDecoder.set(decoder);
-    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<GenericRecord>(schema);
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
     return reader.read(null, decoder);
   }
 
@@ -141,7 +142,7 @@ public class HoodieAvroUtils {
     Schema.Field recordKeyField =
         new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
     Schema recordKeySchema = Schema.createRecord("HoodieRecordKey", "", "", false);
-    recordKeySchema.setFields(Arrays.asList(recordKeyField));
+    recordKeySchema.setFields(Collections.singletonList(recordKeyField));
     return recordKeySchema;
   }
 
@@ -166,9 +167,8 @@ public class HoodieAvroUtils {
    * @param newFieldNames Null Field names to be added
    */
   public static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {
-    List<Field> newFields = schema.getFields().stream().map(field -> {
-      return new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue());
-    }).collect(Collectors.toList());
+    List<Field> newFields = schema.getFields().stream()
+        .map(field -> new Field(field.name(), field.schema(), field.doc(), field.defaultValue())).collect(Collectors.toList());
     for (String newField : newFieldNames) {
       newFields.add(new Schema.Field(newField, METADATA_FIELD_SCHEMA, "", NullNode.getInstance()));
     }

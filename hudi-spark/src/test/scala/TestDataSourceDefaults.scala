@@ -19,7 +19,8 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.model.{EmptyHoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.util.{Option, SchemaTestUtil, TypedProperties}
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
-import org.apache.hudi.{ComplexKeyGenerator, DataSourceWriteOptions, SimpleKeyGenerator}
+import org.apache.hudi.keygen.{ComplexKeyGenerator, GlobalDeleteKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.DataSourceWriteOptions
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.scalatest.junit.AssertionsForJUnit
@@ -30,7 +31,7 @@ import org.scalatest.junit.AssertionsForJUnit
 class TestDataSourceDefaults extends AssertionsForJUnit {
 
   val schema = SchemaTestUtil.getComplexEvolvedSchema
-  var baseRecord: GenericRecord = null
+  var baseRecord: GenericRecord = _
 
   @Before def initialize(): Unit = {
     baseRecord = SchemaTestUtil
@@ -59,10 +60,9 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
       new SimpleKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: IllegalArgumentException => {
+      case e: IllegalArgumentException =>
         // do nothing
-      }
-    };
+    }
 
     // recordkey field not specified
     try {
@@ -71,10 +71,9 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
       new SimpleKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: IllegalArgumentException => {
+      case e: IllegalArgumentException =>
         // do nothing
-      }
-    };
+    }
 
     // nested field as record key and partition path
     val hk2 = new SimpleKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.isAdmin", "false"))
@@ -88,14 +87,13 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
         .getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: HoodieException => {
+      case e: HoodieException =>
         // do nothing
-      }
-    };
+    }
 
     // if partition path can't be found, return default partition path
     val hk3 = new SimpleKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere", "false"))
-      .getKey(baseRecord);
+      .getKey(baseRecord)
     assertEquals("default", hk3.getPartitionPath)
 
     // if enable hive style partitioning
@@ -154,10 +152,9 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
       new ComplexKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: IllegalArgumentException => {
+      case e: IllegalArgumentException =>
         // do nothing
-      }
-    };
+    }
 
     // recordkey field not specified
     try {
@@ -166,10 +163,9 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
       new ComplexKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: IllegalArgumentException => {
+      case e: IllegalArgumentException =>
         // do nothing
-      }
-    };
+    }
 
     // nested field as record key and partition path
     val hk2 = new ComplexKeyGenerator(getKeyConfig("testNestedRecord.userId,testNestedRecord.isAdmin", "testNestedRecord.userId,testNestedRecord.isAdmin", "false"))
@@ -183,14 +179,13 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
         .getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: HoodieException => {
+      case e: HoodieException =>
         // do nothing
-      }
-    };
+    }
 
     // if partition path can't be found, return default partition path
     val hk3 = new ComplexKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere", "false"))
-      .getKey(baseRecord);
+      .getKey(baseRecord)
     assertEquals("default", hk3.getPartitionPath)
 
     // if enable hive style partitioning
@@ -222,6 +217,77 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
     } catch {
       case e: HoodieKeyException =>
         // do nothing
+    }
+
+    // reset name and field1 values.
+    baseRecord.put("name", "name1")
+    baseRecord.put("field1", "field1")
+    val hk7 = new ComplexKeyGenerator(getKeyConfig("field1, name", "field1, name", "false")).getKey(baseRecord)
+    assertEquals("field1:field1,name:name1", hk7.getRecordKey)
+    assertEquals("field1/name1", hk7.getPartitionPath)
+
+    val hk8 = new ComplexKeyGenerator(getKeyConfig("field1,", "field1,", "false")).getKey(baseRecord)
+    assertEquals("field1:field1", hk8.getRecordKey)
+    assertEquals("field1", hk8.getPartitionPath)
+  }
+
+  @Test def testGlobalDeleteKeyGenerator() = {
+    // top level, partition value included but not actually used
+    val hk1 = new GlobalDeleteKeyGenerator(getKeyConfig("field1,name", "field1,name", "false")).getKey(baseRecord)
+    assertEquals("field1:field1,name:name1", hk1.getRecordKey)
+    assertEquals("", hk1.getPartitionPath)
+
+    // top level, partition value not included
+    val props = new TypedProperties()
+    props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "field1,name")
+    val hk2 = new GlobalDeleteKeyGenerator(props).getKey(baseRecord)
+    assertEquals("field1:field1,name:name1", hk2.getRecordKey)
+    assertEquals("", hk2.getPartitionPath)
+
+    // if one part of the record key is empty, replace with "__empty__"
+    baseRecord.put("name", "")
+    val hk3 = new GlobalDeleteKeyGenerator(getKeyConfig("field1,name", "field1,name", "false")).getKey(baseRecord)
+    assertEquals("field1:field1,name:__empty__", hk3.getRecordKey)
+    assertEquals("", hk3.getPartitionPath)
+
+    // if one part of the record key is null, replace with "__null__"
+    baseRecord.put("name", null)
+    val hk4 = new GlobalDeleteKeyGenerator(getKeyConfig("field1,name", "field1,name", "false")).getKey(baseRecord)
+    assertEquals("field1:field1,name:__null__", hk4.getRecordKey)
+    assertEquals("", hk4.getPartitionPath)
+
+    // recordkey field not specified
+    try {
+      val props = new TypedProperties()
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionField")
+      new GlobalDeleteKeyGenerator(props).getKey(baseRecord)
+      fail("Should have errored out")
+    } catch {
+      case e: IllegalArgumentException =>
+        // do nothing
+    }
+
+    // Nested record key not found
+    try {
+      new GlobalDeleteKeyGenerator(getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false"))
+        .getKey(baseRecord)
+      fail("Should have errored out")
+    } catch {
+      case e: HoodieException =>
+        // do nothing
+    }
+
+    // if all parts of the composite record key are null/empty, throw error
+    try {
+      baseRecord.put("name", "")
+      baseRecord.put("field1", null)
+      val props = new TypedProperties()
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "field1,name")
+      new GlobalDeleteKeyGenerator(props).getKey(baseRecord)
+      fail("Should have errored out")
+    } catch {
+      case e: HoodieKeyException =>
+      // do nothing
     }
   }
 

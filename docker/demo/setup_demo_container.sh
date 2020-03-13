@@ -1,4 +1,4 @@
-################################################################################
+
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
 #  distributed with this work for additional information
@@ -14,11 +14,10 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 # limitations under the License.
-################################################################################
 
 echo "Copying spark default config and setting up configs"
 cp /var/hoodie/ws/docker/demo/config/spark-defaults.conf $SPARK_CONF_DIR/.
 hadoop fs -mkdir -p /var/demo/
 hadoop fs -mkdir -p /tmp/spark-events
 hadoop fs -copyFromLocal  -f /var/hoodie/ws/docker/demo/config /var/demo/.
-chmod +x /var/hoodie/ws/hudi-hive/run_sync_tool.sh
+chmod +x /var/hoodie/ws/hudi-hive-sync/run_sync_tool.sh

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.HoodieWriteClient;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -44,11 +44,6 @@ public class HoodieCleaner {
   private final Config cfg;
 
   /**
-   * Filesystem used.
-   */
-  private transient FileSystem fs;
-
-  /**
    * Spark context.
    */
   private transient JavaSparkContext jssc;
@@ -61,7 +56,10 @@ public class HoodieCleaner {
   public HoodieCleaner(Config cfg, JavaSparkContext jssc) {
     this.cfg = cfg;
     this.jssc = jssc;
-    this.fs = FSUtils.getFs(cfg.basePath, jssc.hadoopConfiguration());
+    /*
+     * Filesystem used.
+     */
+    FileSystem fs = FSUtils.getFs(cfg.basePath, jssc.hadoopConfiguration());
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
         : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
     LOG.info("Creating Cleaner with configs : " + props.toString());

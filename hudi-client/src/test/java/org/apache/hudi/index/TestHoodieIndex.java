@@ -18,7 +18,7 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.HoodieClientTestHarness;
+import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;

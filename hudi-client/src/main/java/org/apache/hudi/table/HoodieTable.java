@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
@@ -33,6 +33,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.table.TableFileSystemView;
+import org.apache.hudi.common.table.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.table.TableFileSystemView.SliceView;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
@@ -145,16 +147,16 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Get the read optimized view of the file system for this table.
+   * Get the base file only view of the file system for this table.
    */
-  public TableFileSystemView.ReadOptimizedView getROFileSystemView() {
+  public BaseFileOnlyView getBaseFileOnlyView() {
     return getViewManager().getFileSystemView(metaClient.getBasePath());
   }
 
   /**
-   * Get the real time view of the file system for this table.
+   * Get the full view of the file system for this table.
    */
-  public TableFileSystemView.RealtimeView getRTFileSystemView() {
+  public SliceView getSliceView() {
     return getViewManager().getFileSystemView(metaClient.getBasePath());
   }
 

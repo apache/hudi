@@ -122,7 +122,7 @@ public class TestHoodieParquetInputFormat {
       throws IOException {
     List<HoodieWriteStat> writeStats = HoodieTestUtils.generateFakeHoodieWriteStat(1);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    writeStats.stream().forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
+    writeStats.forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
     File file = new File(basePath.getRoot().toString() + "/.hoodie/", commitNumber + ".commit");
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
@@ -221,8 +221,8 @@ public class TestHoodieParquetInputFormat {
     String defaultmode = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, "db3.first_trips");
     conf.set(defaultmode, HoodieHiveUtil.DEFAULT_SCAN_MODE);
     List<String> actualincrTables = HoodieHiveUtil.getIncrementalTableNames(Job.getInstance(conf));
-    for (int i = 0; i < expectedincrTables.length; i++) {
-      assertTrue(actualincrTables.contains(expectedincrTables[i]));
+    for (String expectedincrTable : expectedincrTables) {
+      assertTrue(actualincrTables.contains(expectedincrTable));
     }
   }
 
