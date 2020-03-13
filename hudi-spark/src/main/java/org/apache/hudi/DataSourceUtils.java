@@ -241,6 +241,13 @@ public class DataSourceUtils {
     return new HoodieRecord<>(hKey, payload);
   }
 
+  /**
+   * Drop duplicate records from incoming records.
+   *
+   * @param jssc                  JavaSparkContext
+   * @param incomingHoodieRecords HoodieRecords to deduplicate
+   * @param writeConfig           HoodieWriteConfig
+   */
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
                                                      HoodieWriteConfig writeConfig) {

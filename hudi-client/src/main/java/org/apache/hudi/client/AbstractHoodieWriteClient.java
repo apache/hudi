@@ -225,6 +225,12 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     return index;
   }
 
+  /**
+   * Get HoodieTable and init {@link Timer.Context}.
+   *
+   * @param operationType write operation type
+   * @return HoodieTable
+   */
   protected HoodieTable getTableAndInitCtx(WriteOperationType operationType) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     if (operationType == WriteOperationType.DELETE) {

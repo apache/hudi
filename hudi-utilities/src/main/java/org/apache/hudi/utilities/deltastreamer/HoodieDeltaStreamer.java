@@ -70,7 +70,7 @@ import java.util.stream.IntStream;
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
  * table. Does not maintain any state, queries at runtime to see how far behind the target table is from the source
  * table. This can be overriden to force sync from a timestamp.
- *
+ * <p>
  * In continuous mode, DeltaStreamer runs in loop-mode going through the below operations (a) pull-from-source (b)
  * write-to-sink (c) Schedule Compactions if needed (d) Conditionally Sync to Hive each cycle. For MOR table with
  * continuous mode enabled, a separate compactor thread is allocated to execute compactions
@@ -154,7 +154,7 @@ public class HoodieDeltaStreamer implements Serializable {
     UPSERT, INSERT, BULK_INSERT
   }
 
-  protected static class OperationConvertor implements IStringConverter<Operation> {
+  protected static class OperationConverter implements IStringConverter<Operation> {
 
     @Override
     public Operation convert(String value) throws ParameterException {
@@ -223,7 +223,7 @@ public class HoodieDeltaStreamer implements Serializable {
     public long sourceLimit = Long.MAX_VALUE;
 
     @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
-        + "is purely new data/inserts to gain speed)", converter = OperationConvertor.class)
+        + "is purely new data/inserts to gain speed)", converter = OperationConverter.class)
     public Operation operation = Operation.UPSERT;
 
     @Parameter(names = {"--filter-dupes"},
