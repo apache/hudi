@@ -63,12 +63,21 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
    */
   private HashSet<String> nonHoodiePathCache;
 
+  /**
+   * Hadoop configurations for the FileSystem.
+   */
+  private Configuration conf;
 
   private transient FileSystem fs;
 
   public HoodieROTablePathFilter() {
-    hoodiePathCache = new HashMap<>();
-    nonHoodiePathCache = new HashSet<>();
+    this(new Configuration());
+  }
+
+  public HoodieROTablePathFilter(Configuration conf) {
+    this.hoodiePathCache = new HashMap<>();
+    this.nonHoodiePathCache = new HashSet<>();
+    this.conf = conf;
   }
 
   /**
@@ -93,7 +102,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
     Path folder = null;
     try {
       if (fs == null) {
-        fs = path.getFileSystem(new Configuration());
+        fs = path.getFileSystem(conf);
       }
 
       // Assumes path is a file
