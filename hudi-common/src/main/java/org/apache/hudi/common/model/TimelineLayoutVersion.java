@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.model;
 
-import com.google.common.base.Preconditions;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.Serializable;
 import java.util.Objects;
@@ -37,8 +37,8 @@ public class TimelineLayoutVersion implements Serializable, Comparable<TimelineL
   private Integer version;
 
   public TimelineLayoutVersion(Integer version) {
-    Preconditions.checkArgument(version <= CURR_VERSION);
-    Preconditions.checkArgument(version >= VERSION_0);
+    ValidationUtils.checkArgument(version <= CURR_VERSION);
+    ValidationUtils.checkArgument(version >= VERSION_0);
     this.version = version;
   }
 

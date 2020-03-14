@@ -20,10 +20,9 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.table.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.compact.strategy.LogFileSizeBasedCompactionStrategy;
-
-import com.google.common.base.Preconditions;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -121,12 +120,9 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
     private final Properties props = new Properties();
 
     public Builder fromFile(File propertiesFile) throws IOException {
-      FileReader reader = new FileReader(propertiesFile);
-      try {
+      try (FileReader reader = new FileReader(propertiesFile)) {
         this.props.load(reader);
         return this;
-      } finally {
-        reader.close();
       }
     }
 
@@ -292,8 +288,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       int maxInstantsToKeep = Integer.parseInt(props.getProperty(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP));
       int cleanerCommitsRetained =
           Integer.parseInt(props.getProperty(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP));
-      Preconditions.checkArgument(maxInstantsToKeep > minInstantsToKeep);
-      Preconditions.checkArgument(minInstantsToKeep > cleanerCommitsRetained,
+      ValidationUtils.checkArgument(maxInstantsToKeep > minInstantsToKeep);
+      ValidationUtils.checkArgument(minInstantsToKeep > cleanerCommitsRetained,
           String.format(
               "Increase %s=%d to be greater than %s=%d. Otherwise, there is risk of incremental pull "
                   + "missing data from few instants.",

@@ -21,7 +21,6 @@ package org.apache.hudi.common.minicluster;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 
-import com.google.common.base.Preconditions;
 import com.google.common.io.Files;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -33,6 +32,7 @@ import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Objects;
 import java.net.ServerSocket;
 
 /**
@@ -70,7 +70,7 @@ public class HdfsTestService {
   }
 
   public MiniDFSCluster start(boolean format) throws IOException {
-    Preconditions.checkState(workDir != null, "The work dir must be set before starting cluster.");
+    Objects.requireNonNull(workDir, "The work dir must be set before starting cluster.");
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
 
     // If clean, then remove the work dir so we can start fresh.

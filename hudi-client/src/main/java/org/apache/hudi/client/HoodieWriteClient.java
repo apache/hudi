@@ -42,6 +42,7 @@ import org.apache.hudi.common.util.AvroUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -61,7 +62,6 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
 import com.codahale.metrics.Timer;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -580,7 +580,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       }
 
       // Cannot allow savepoint time on a commit that could have been cleaned
-      Preconditions.checkArgument(
+      ValidationUtils.checkArgument(
           HoodieTimeline.compareTimestamps(commitTime, lastCommitRetained, HoodieTimeline.GREATER_OR_EQUAL),
           "Could not savepoint commit " + commitTime + " as this is beyond the lookup window " + lastCommitRetained);
 
@@ -696,8 +696,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     // Make sure the rollback was successful
     Option<HoodieInstant> lastInstant =
         activeTimeline.reload().getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants().lastInstant();
-    Preconditions.checkArgument(lastInstant.isPresent());
-    Preconditions.checkArgument(lastInstant.get().getTimestamp().equals(savepointTime),
+    ValidationUtils.checkArgument(lastInstant.isPresent());
+    ValidationUtils.checkArgument(lastInstant.get().getTimestamp().equals(savepointTime),
         savepointTime + "is not the last commit after rolling back " + commitsToRollback + ", last commit was "
             + lastInstant.get().getTimestamp());
     return true;
@@ -868,7 +868,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTableMetaClient metaClient = createMetaClient(true);
     // if there are pending compactions, their instantTime must not be greater than that of this instant time
     metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().ifPresent(latestPending ->
-        Preconditions.checkArgument(
+        ValidationUtils.checkArgument(
             HoodieTimeline.compareTimestamps(latestPending.getTimestamp(), instantTime, HoodieTimeline.LESSER),
         "Latest pending compaction instant time must be earlier than this instant time. Latest Compaction :"
             + latestPending + ",  Ingesting at " + instantTime));
@@ -901,7 +901,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTableMetaClient metaClient = createMetaClient(true);
     // if there are inflight writes, their instantTime must not be less than that of compaction instant time
     metaClient.getCommitsTimeline().filterPendingExcludingCompaction().firstInstant().ifPresent(earliestInflight -> {
-      Preconditions.checkArgument(
+      ValidationUtils.checkArgument(
           HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), instantTime, HoodieTimeline.GREATER),
           "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
               + ", Compaction scheduled at " + instantTime);
@@ -911,7 +911,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
         .getActiveTimeline().getCommitsAndCompactionTimeline().getInstants().filter(instant -> HoodieTimeline
             .compareTimestamps(instant.getTimestamp(), instantTime, HoodieTimeline.GREATER_OR_EQUAL))
         .collect(Collectors.toList());
-    Preconditions.checkArgument(conflictingInstants.isEmpty(),
+    ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
         "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"
             + conflictingInstants);
     HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);

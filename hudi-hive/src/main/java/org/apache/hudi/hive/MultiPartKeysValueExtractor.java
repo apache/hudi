@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hive;
 
-import com.google.common.base.Preconditions;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import java.util.Arrays;
 import java.util.List;
@@ -35,7 +35,7 @@ public class MultiPartKeysValueExtractor implements PartitionValueExtractor {
     return Arrays.stream(splits).map(s -> {
       if (s.contains("=")) {
         String[] moreSplit = s.split("=");
-        Preconditions.checkArgument(moreSplit.length == 2, "Partition Field (" + s + ") not in expected format");
+        ValidationUtils.checkArgument(moreSplit.length == 2, "Partition Field (" + s + ") not in expected format");
         return moreSplit[1];
       }
       return s;
