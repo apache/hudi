@@ -132,6 +132,7 @@ public class HoodieSnapshotExporter {
         // No transformation is needed for output format "HUDI", just copy the original files.
         copySnapshot(jsc, fs, cfg, partitions, dataFiles, latestCommitTimestamp, serConf);
       }
+      createSuccessTag(fs, cfg.targetOutputPath);
     } else {
       LOG.info("The job has 0 partition to copy.");
     }
@@ -202,6 +203,14 @@ public class HoodieSnapshotExporter {
             String.format("The target output commit file (%s targetBasePath) already exists.", targetFilePath));
       }
       FileUtil.copy(fs, commitStatus.getPath(), fs, targetFilePath, false, fs.getConf());
+    }
+  }
+
+  private void createSuccessTag(FileSystem fs, String targetOutputPath) throws IOException {
+    Path successTagPath = new Path(targetOutputPath + "/_SUCCESS");
+    if (!fs.exists(successTagPath)) {
+      LOG.info(String.format("Creating _SUCCESS under target output path: %s", targetOutputPath));
+      fs.createNewFile(successTagPath);
     }
   }
 

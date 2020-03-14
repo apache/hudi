@@ -40,122 +40,149 @@ import org.apache.spark.sql.SparkSession;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.experimental.runners.Enclosed;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class TestHoodieSnapshotExporter extends HoodieClientTestHarness {
+@RunWith(Enclosed.class)
+public class TestHoodieSnapshotExporter {
 
-  private static final Logger LOG = LogManager.getLogger(TestHoodieSnapshotExporter.class);
-  private static final int NUM_RECORDS = 100;
-  private static final String COMMIT_TIME = "20200101000000";
-  private static final String PARTITION_PATH = "2020/01/01";
-  private static final String TABLE_NAME = "testing";
-  private String sourcePath;
-  private String targetPath;
+  static class ExporterTestHarness extends HoodieClientTestHarness {
 
-  @Before
-  public void setUp() throws Exception {
-    initSparkContexts();
-    initDFS();
-    dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH});
+    static final Logger LOG = LogManager.getLogger(ExporterTestHarness.class);
+    static final int NUM_RECORDS = 100;
+    static final String COMMIT_TIME = "20200101000000";
+    static final String PARTITION_PATH = "2020/01/01";
+    static final String TABLE_NAME = "testing";
+    String sourcePath;
+    String targetPath;
 
-    // Initialize test data dirs
-    sourcePath = dfsBasePath + "/source/";
-    targetPath = dfsBasePath + "/target/";
-    dfs.mkdirs(new Path(sourcePath));
-    dfs.mkdirs(new Path(targetPath));
-    HoodieTableMetaClient
-        .initTableType(jsc.hadoopConfiguration(), sourcePath, HoodieTableType.COPY_ON_WRITE, TABLE_NAME,
-            HoodieAvroPayload.class.getName());
+    @Before
+    public void setUp() throws Exception {
+      initSparkContexts();
+      initDFS();
+      dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH});
 
-    // Prepare data as source Hudi dataset
-    HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);
-    HoodieWriteClient hdfsWriteClient = new HoodieWriteClient(jsc, cfg);
-    hdfsWriteClient.startCommitWithTime(COMMIT_TIME);
-    List<HoodieRecord> records = dataGen.generateInserts(COMMIT_TIME, NUM_RECORDS);
-    JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
-    hdfsWriteClient.bulkInsert(recordsRDD, COMMIT_TIME);
-    hdfsWriteClient.close();
+      // Initialize test data dirs
+      sourcePath = dfsBasePath + "/source/";
+      targetPath = dfsBasePath + "/target/";
+      dfs.mkdirs(new Path(sourcePath));
+      dfs.mkdirs(new Path(targetPath));
+      HoodieTableMetaClient
+          .initTableType(jsc.hadoopConfiguration(), sourcePath, HoodieTableType.COPY_ON_WRITE, TABLE_NAME,
+              HoodieAvroPayload.class.getName());
 
-    RemoteIterator<LocatedFileStatus> itr = dfs.listFiles(new Path(sourcePath), true);
-    while (itr.hasNext()) {
-      LOG.info(">>> Prepared test file: " + itr.next().getPath());
+      // Prepare data as source Hudi dataset
+      HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);
+      HoodieWriteClient hdfsWriteClient = new HoodieWriteClient(jsc, cfg);
+      hdfsWriteClient.startCommitWithTime(COMMIT_TIME);
+      List<HoodieRecord> records = dataGen.generateInserts(COMMIT_TIME, NUM_RECORDS);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      hdfsWriteClient.bulkInsert(recordsRDD, COMMIT_TIME);
+      hdfsWriteClient.close();
+
+      RemoteIterator<LocatedFileStatus> itr = dfs.listFiles(new Path(sourcePath), true);
+      while (itr.hasNext()) {
+        LOG.info(">>> Prepared test file: " + itr.next().getPath());
+      }
+    }
+
+    @After
+    public void tearDown() throws Exception {
+      cleanupSparkContexts();
+      cleanupDFS();
+      cleanupTestDataGenerator();
+    }
+
+    private HoodieWriteConfig getHoodieWriteConfig(String basePath) {
+      return HoodieWriteConfig.newBuilder()
+          .withPath(basePath)
+          .withEmbeddedTimelineServerEnabled(false)
+          .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+          .withParallelism(2, 2)
+          .withBulkInsertParallelism(2)
+          .forTable(TABLE_NAME)
+          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
+          .build();
     }
   }
 
-  @After
-  public void tearDown() throws Exception {
-    cleanupSparkContexts();
-    cleanupDFS();
-    cleanupTestDataGenerator();
+  public static class TestHoodieSnapshotExporterForHudi extends ExporterTestHarness {
+
+    @Test
+    public void testExportAsHudi() throws IOException {
+      HoodieSnapshotExporter.Config cfg = new Config();
+      cfg.sourceBasePath = sourcePath;
+      cfg.targetOutputPath = targetPath;
+      cfg.outputFormat = "hudi";
+      new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+
+      // Check results
+      assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".clean")));
+      assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".clean.inflight")));
+      assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".clean.requested")));
+      assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit")));
+      assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit.requested")));
+      assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".inflight")));
+      assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/hoodie.properties")));
+      String partition = targetPath + "/" + PARTITION_PATH;
+      long numParquetFiles = Arrays.stream(dfs.listStatus(new Path(partition)))
+          .filter(fileStatus -> fileStatus.getPath().toString().endsWith(".parquet"))
+          .count();
+      assertTrue("There should exist at least 1 parquet file.", numParquetFiles >= 1);
+      assertEquals(NUM_RECORDS, sqlContext.read().parquet(partition).count());
+      assertTrue(dfs.exists(new Path(partition + "/.hoodie_partition_metadata")));
+      assertTrue(dfs.exists(new Path(targetPath + "/_SUCCESS")));
+    }
+
+    @Test
+    public void testExportEmptyDataset() throws IOException {
+      // delete all source data
+      dfs.delete(new Path(sourcePath + "/" + PARTITION_PATH), true);
+
+      // export
+      HoodieSnapshotExporter.Config cfg = new Config();
+      cfg.sourceBasePath = sourcePath;
+      cfg.targetOutputPath = targetPath;
+      cfg.outputFormat = "hudi";
+      new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+
+      // Check results
+      assertEquals("Target path should be empty.", 0, dfs.listStatus(new Path(targetPath)).length);
+      assertFalse(dfs.exists(new Path(targetPath + "/_SUCCESS")));
+    }
   }
 
-  private HoodieWriteConfig getHoodieWriteConfig(String basePath) {
-    return HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withEmbeddedTimelineServerEnabled(false)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(2, 2)
-        .withBulkInsertParallelism(2)
-        .forTable(TABLE_NAME)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
-        .build();
-  }
+  @RunWith(Parameterized.class)
+  public static class TestHoodieSnapshotExporterForNonHudi extends ExporterTestHarness {
 
-  @Test
-  public void testExportAsParquet() throws IOException {
-    HoodieSnapshotExporter.Config cfg = new Config();
-    cfg.sourceBasePath = sourcePath;
-    cfg.targetOutputPath = targetPath;
-    cfg.outputFormat = "parquet";
-    new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
-    assertEquals(NUM_RECORDS, sqlContext.read().parquet(targetPath).count());
-    assertTrue(dfs.exists(new Path(targetPath + "/_SUCCESS")));
-  }
+    @Parameters
+    public static Iterable<String[]> formats() {
+      return Arrays.asList(new String[][] {{"json"}, {"parquet"}});
+    }
 
-  @Test
-  public void testExportAsHudi() throws IOException {
-    HoodieSnapshotExporter.Config cfg = new Config();
-    cfg.sourceBasePath = sourcePath;
-    cfg.targetOutputPath = targetPath;
-    cfg.outputFormat = "hudi";
-    new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+    @Parameter
+    public String format;
 
-    // Check results
-    assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".clean")));
-    assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".clean.inflight")));
-    assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".clean.requested")));
-    assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit")));
-    assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".commit.requested")));
-    assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".inflight")));
-    assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/hoodie.properties")));
-    String partition = targetPath + "/" + PARTITION_PATH;
-    long numParquetFiles = Arrays.stream(dfs.listStatus(new Path(partition)))
-        .filter(fileStatus -> fileStatus.getPath().toString().endsWith(".parquet"))
-        .count();
-    assertTrue("There should exist at least 1 parquet file.", numParquetFiles >= 1);
-    assertEquals(NUM_RECORDS, sqlContext.read().parquet(partition).count());
-    assertTrue(dfs.exists(new Path(partition + "/.hoodie_partition_metadata")));
-  }
-
-  @Test
-  public void testExportEmptyDataset() throws IOException {
-    // delete all source data
-    dfs.delete(new Path(sourcePath + "/" + PARTITION_PATH), true);
-
-    // export
-    HoodieSnapshotExporter.Config cfg = new Config();
-    cfg.sourceBasePath = sourcePath;
-    cfg.targetOutputPath = targetPath;
-    cfg.outputFormat = "hudi";
-    new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
-
-    // Check results
-    assertEquals("Target path should be empty.", 0, dfs.listStatus(new Path(targetPath)).length);
+    @Test
+    public void testExportAsNonHudi() throws IOException {
+      HoodieSnapshotExporter.Config cfg = new Config();
+      cfg.sourceBasePath = sourcePath;
+      cfg.targetOutputPath = targetPath;
+      cfg.outputFormat = format;
+      new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+      assertEquals(NUM_RECORDS, sqlContext.read().format(format).load(targetPath).count());
+      assertTrue(dfs.exists(new Path(targetPath + "/_SUCCESS")));
+    }
   }
 }
