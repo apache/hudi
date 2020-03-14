@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.client.WriteStatus;
@@ -49,7 +50,6 @@ import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.codahale.metrics.Timer;
-import com.google.common.base.Preconditions;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -502,10 +502,10 @@ public class DeltaSync implements Serializable {
     HoodieWriteConfig config = builder.build();
 
     // Validate what deltastreamer assumes of write-config to be really safe
-    Preconditions.checkArgument(config.isInlineCompaction() == cfg.isInlineCompactionEnabled());
-    Preconditions.checkArgument(!config.shouldAutoCommit());
-    Preconditions.checkArgument(config.shouldCombineBeforeInsert() == cfg.filterDupes);
-    Preconditions.checkArgument(config.shouldCombineBeforeUpsert());
+    ValidationUtils.checkArgument(config.isInlineCompaction() == cfg.isInlineCompactionEnabled());
+    ValidationUtils.checkArgument(!config.shouldAutoCommit());
+    ValidationUtils.checkArgument(config.shouldCombineBeforeInsert() == cfg.filterDupes);
+    ValidationUtils.checkArgument(config.shouldCombineBeforeUpsert());
 
     return config;
   }

@@ -37,7 +37,7 @@ public class TestHoodieWriteConfig {
   @Test
   public void testPropertyLoading() throws IOException {
     Builder builder = HoodieWriteConfig.newBuilder().withPath("/tmp");
-    Map<String, String> params = new HashMap<>();
+    Map<String, String> params = new HashMap<>(3);
     params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP, "1");
     params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP, "5");
     params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP, "2");

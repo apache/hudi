@@ -18,9 +18,8 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.DefaultHoodieConfig;
-
-import com.google.common.base.Preconditions;
 
 import java.io.File;
 import java.io.FileReader;
@@ -192,7 +191,7 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
       // Validations
       FileSystemViewStorageType.valueOf(props.getProperty(FILESYSTEM_VIEW_STORAGE_TYPE));
       FileSystemViewStorageType.valueOf(props.getProperty(FILESYSTEM_SECONDARY_VIEW_STORAGE_TYPE));
-      Preconditions.checkArgument(Integer.parseInt(props.getProperty(FILESYSTEM_VIEW_REMOTE_PORT)) > 0);
+      ValidationUtils.checkArgument(Integer.parseInt(props.getProperty(FILESYSTEM_VIEW_REMOTE_PORT)) > 0);
       return new FileSystemViewStorageConfig(props);
     }
   }

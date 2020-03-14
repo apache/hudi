@@ -25,15 +25,16 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -134,15 +135,14 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   @Override
   protected void resetPendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     // Build fileId to Pending Compaction Instants
-    this.fgIdToPendingCompaction = createFileIdToPendingCompactionMap(operations.map(entry -> {
-      return Pair.of(entry.getValue().getFileGroupId(), Pair.of(entry.getKey(), entry.getValue()));
-    }).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
+    this.fgIdToPendingCompaction = createFileIdToPendingCompactionMap(operations.map(entry ->
+      Pair.of(entry.getValue().getFileGroupId(), Pair.of(entry.getKey(), entry.getValue()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
   }
 
   @Override
   protected void addPendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     operations.forEach(opInstantPair -> {
-      Preconditions.checkArgument(!fgIdToPendingCompaction.containsKey(opInstantPair.getValue().getFileGroupId()),
+      ValidationUtils.checkArgument(!fgIdToPendingCompaction.containsKey(opInstantPair.getValue().getFileGroupId()),
           "Duplicate FileGroupId found in pending compaction operations. FgId :"
               + opInstantPair.getValue().getFileGroupId());
       fgIdToPendingCompaction.put(opInstantPair.getValue().getFileGroupId(),
@@ -153,7 +153,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   @Override
   protected void removePendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     operations.forEach(opInstantPair -> {
-      Preconditions.checkArgument(fgIdToPendingCompaction.containsKey(opInstantPair.getValue().getFileGroupId()),
+      ValidationUtils.checkArgument(fgIdToPendingCompaction.containsKey(opInstantPair.getValue().getFileGroupId()),
           "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
               + opInstantPair.getValue().getFileGroupId());
       fgIdToPendingCompaction.remove(opInstantPair.getValue().getFileGroupId());
@@ -166,8 +166,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    */
   @Override
   Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partition) {
-    final List<HoodieFileGroup> fileGroups = new ArrayList<>();
-    fileGroups.addAll(partitionToFileGroupsMap.get(partition));
+    final List<HoodieFileGroup> fileGroups = new ArrayList<>(partitionToFileGroupsMap.get(partition));
     return fileGroups.stream();
   }
 
@@ -200,9 +199,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   @Override
   public Stream<HoodieFileGroup> fetchAllStoredFileGroups() {
-    return partitionToFileGroupsMap.values().stream().flatMap(fg -> {
-      return fg.stream();
-    });
+    return partitionToFileGroupsMap.values().stream().flatMap(Collection::stream);
   }
 
   @Override

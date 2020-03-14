@@ -26,14 +26,14 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.FailSafeConsistencyGuard;
+import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.NoOpConsistencyGuard;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.exception.HoodieException;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -119,7 +119,7 @@ public class HoodieTableMetaClient implements Serializable {
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
       // Ensure layout version passed in config is not lower than the one seen in hoodie.properties
-      Preconditions.checkArgument(layoutVersion.get().compareTo(tableConfigVersion.get()) >= 0,
+      ValidationUtils.checkArgument(layoutVersion.get().compareTo(tableConfigVersion.get()) >= 0,
           "Layout Version defined in hoodie properties has higher version (" + tableConfigVersion.get()
               + ") than the one passed in config (" + layoutVersion.get() + ")");
     }
@@ -233,7 +233,7 @@ public class HoodieTableMetaClient implements Serializable {
   public HoodieWrapperFileSystem getFs() {
     if (fs == null) {
       FileSystem fileSystem = FSUtils.getFs(metaPath, hadoopConf.newCopy());
-      Preconditions.checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
+      ValidationUtils.checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
           "File System not expected to be that of HoodieWrapperFileSystem");
       fs = new HoodieWrapperFileSystem(fileSystem,
           consistencyGuardConfig.isConsistencyCheckEnabled()

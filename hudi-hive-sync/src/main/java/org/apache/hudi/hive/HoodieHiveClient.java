@@ -28,12 +28,12 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hive.util.SchemaUtil;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -179,7 +179,7 @@ public class HoodieHiveClient {
    */
   private String getPartitionClause(String partition) {
     List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-    Preconditions.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
+    ValidationUtils.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
         "Partition key parts " + syncConfig.partitionFields + " does not match with partition values " + partitionValues
             + ". Check partition strategy. ");
     List<String> partBuilder = new ArrayList<>();
