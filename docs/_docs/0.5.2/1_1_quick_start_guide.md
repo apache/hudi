@@ -18,7 +18,7 @@ From the extracted directory run spark-shell with Hudi as:
 
 ```scala
 spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
-  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
+  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.2-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -209,7 +209,7 @@ Note: Only `Append` mode is supported for delete operation.
 
 You can also do the quickstart by [building hudi yourself](https://github.com/apache/incubator-hudi#building-apache-hudi-from-source), 
 and using `--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar` in the spark-shell command above
-instead of `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/incubator-hudi#build-with-scala-212)
+instead of `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.2-incubating`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/incubator-hudi#build-with-scala-212)
 for more info.
 
 Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 
