@@ -37,7 +37,7 @@ With Merge_On_Read Table, Hudi ingestion needs to also take care of compacting d
 Here is an example invocation for reading from kafka topic in a single-run mode and writing to Merge On Read table type in a yarn cluster.
 
 ```java
-[hoodie]$ spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.5.1-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
+[hoodie]$ spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.5.2-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
  --master yarn \
  --deploy-mode cluster \
  --num-executors 10 \
@@ -85,7 +85,7 @@ Here is an example invocation for reading from kafka topic in a single-run mode 
 Here is an example invocation for reading from kafka topic in a continuous mode and writing to Merge On Read table type in a yarn cluster.
 
 ```java
-[hoodie]$ spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.5.1-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
+[hoodie]$ spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.5.2-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
  --master yarn \
  --deploy-mode cluster \
  --num-executors 10 \

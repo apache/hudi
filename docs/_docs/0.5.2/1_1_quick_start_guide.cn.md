@@ -15,7 +15,7 @@ Hudi适用于Spark-2.x版本。您可以按照[此处](https://spark.apache.org/
 在提取的目录中，使用spark-shell运行Hudi：
 
 ```scala
-bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle:0.5.2-incubating --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
 设置表名、基本路径和数据生成器来为本指南生成记录。
@@ -153,7 +153,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 您也可以通过[自己构建hudi](https://github.com/apache/incubator-hudi#building-apache-hudi-from-source)来快速开始，
 并在spark-shell命令中使用`--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar`，
-而不是`--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating`
+而不是`--packages org.apache.hudi:hudi-spark-bundle:0.5.2-incubating`
 
 
 这里我们使用Spark演示了Hudi的功能。但是，Hudi可以支持多种存储类型/视图，并且可以从Hive，Spark，Presto等查询引擎中查询Hudi数据集。
