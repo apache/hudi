@@ -18,7 +18,10 @@
 
 package org.apache.hudi.cli;
 
+import org.apache.hudi.common.HoodieClientTestHarness;
+import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.springframework.shell.Bootstrap;
 import org.springframework.shell.core.JLineShellComponent;
@@ -26,7 +29,7 @@ import org.springframework.shell.core.JLineShellComponent;
 /**
  * Class to start Bootstrap and JLineShellComponent.
  */
-public abstract class AbstractShellIntegrationTest {
+public abstract class AbstractShellIntegrationTest extends HoodieClientTestHarness {
   private static JLineShellComponent shell;
 
   @BeforeClass
@@ -38,6 +41,16 @@ public abstract class AbstractShellIntegrationTest {
   @AfterClass
   public static void shutdown() {
     shell.stop();
+  }
+
+  @Before
+  public void setup() throws Exception {
+    initResources();
+  }
+
+  @After
+  public void teardown() throws Exception {
+    cleanupResources();
   }
 
   protected static JLineShellComponent getShell() {
