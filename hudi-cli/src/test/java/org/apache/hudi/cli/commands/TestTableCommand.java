@@ -37,8 +37,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class TestTableCommand extends AbstractShellIntegrationTest {
 
+  /**
+   * Test Cases for create, desc and connect table.
+   */
   @Test
-  public void testCreateTable() {
+  public void testCreateAndConnectTable() {
     // Prepare
     String tableName = "test_table";
     HoodieCLI.conf = jsc.hadoopConfiguration();
@@ -79,6 +82,9 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     assertEquals(new Integer(1), HoodieCLI.layoutVersion.getVersion());
   }
 
+  /**
+   * Test Cases for create table with specified values.
+   */
   @Test
   public void testCreateWithSpecifiedValues() {
     // Prepare
