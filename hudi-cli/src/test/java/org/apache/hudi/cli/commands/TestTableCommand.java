@@ -23,7 +23,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
-import org.junit.*;
+import org.junit.Test;
 import org.springframework.shell.core.CommandResult;
 
 import java.io.File;
@@ -47,13 +47,13 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
 
     // Test create
     CommandResult cr = getShell().executeCommand(
-      "create --path "+ tablePath + " --tableName " + tableName);
+        "create --path " + tablePath + " --tableName " + tableName);
     assertEquals("Metadata for table " + tableName + " loaded", cr.getResult().toString());
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     assertEquals(metaPath, client.getArchivePath());
     assertEquals(tablePath, client.getBasePath());
     assertEquals(metaPath, client.getMetaPath());
-    assertEquals(HoodieTableType.COPY_ON_WRITE , client.getTableType());
+    assertEquals(HoodieTableType.COPY_ON_WRITE, client.getTableType());
     assertEquals(new Integer(1), client.getTimelineLayoutVersion().getVersion());
 
     // Test desc
@@ -67,8 +67,8 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     // Test connect with specified values
     // Check specified values
     cr = getShell().executeCommand(
-      "connect --path " + tablePath + " --initialCheckIntervalMs 3000 " +
-        "--maxWaitIntervalMs 40000 --maxCheckIntervalMs 8");
+        "connect --path " + tablePath + " --initialCheckIntervalMs 3000 "
+          + "--maxWaitIntervalMs 40000 --maxCheckIntervalMs 8");
     assertTrue(cr.isSuccess());
     ConsistencyGuardConfig conf = HoodieCLI.consistencyGuardConfig;
     assertEquals(3000, conf.getInitialConsistencyCheckIntervalMs());
@@ -89,13 +89,13 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
 
     // Test create with specified values
     CommandResult cr = getShell().executeCommand(
-      "create --path "+ tablePath + " --tableName " + tableName +
-        " --tableType MERGE_ON_READ --archiveLogFolder archive");
+        "create --path " + tablePath + " --tableName " + tableName
+          + " --tableType MERGE_ON_READ --archiveLogFolder archive");
     assertEquals("Metadata for table " + tableName + " loaded", cr.getResult().toString());
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     assertEquals(metaPath + File.separator + "archive", client.getArchivePath());
     assertEquals(tablePath, client.getBasePath());
     assertEquals(metaPath, client.getMetaPath());
-    assertEquals(HoodieTableType.MERGE_ON_READ , client.getTableType());
+    assertEquals(HoodieTableType.MERGE_ON_READ, client.getTableType());
   }
 }
