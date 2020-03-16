@@ -54,7 +54,7 @@ public class TableCommand implements CommandMarker {
           help = "Enable eventual consistency") final boolean eventuallyConsistent,
       @CliOption(key = {"initialCheckIntervalMs"}, unspecifiedDefaultValue = "2000",
           help = "Initial wait time for eventual consistency") final Integer initialConsistencyIntervalMs,
-      @CliOption(key = {"maxCheckIntervalMs"}, unspecifiedDefaultValue = "300000",
+      @CliOption(key = {"maxWaitIntervalMs"}, unspecifiedDefaultValue = "300000",
           help = "Max wait time for eventual consistency") final Integer maxConsistencyIntervalMs,
       @CliOption(key = {"maxCheckIntervalMs"}, unspecifiedDefaultValue = "7",
           help = "Max checks for eventual consistency") final Integer maxConsistencyChecks)
