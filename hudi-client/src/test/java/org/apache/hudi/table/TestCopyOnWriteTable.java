@@ -208,7 +208,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     final HoodieCopyOnWriteTable newTable = new HoodieCopyOnWriteTable(config, jsc);
     List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       return newTable.handleUpdate(newCommitTime, updatedRecord1.getPartitionPath(),
-              updatedRecord1.getCurrentLocation().getFileId(), updatedRecords.iterator());
+          updatedRecord1.getCurrentLocation().getFileId(), updatedRecords.iterator());
     }).flatMap(x -> HoodieClientTestUtils.collectStatuses(x).iterator()).collect();
 
     // Check the updated file

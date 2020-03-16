@@ -136,7 +136,8 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
     // If the dataFile is present, there is a base parquet file present, perform updates else perform inserts into a
     // new base parquet file.
     if (oldDataFileOpt.isPresent()) {
-      result = hoodieCopyOnWriteTable.handleUpdate(commitTime, operation.getFileId(), scanner.getRecords(),
+      result = hoodieCopyOnWriteTable.handleUpdate(commitTime, operation.getPartitionPath(),
+              operation.getFileId(), scanner.getRecords(),
           oldDataFileOpt.get());
     } else {
       result = hoodieCopyOnWriteTable.handleInsert(commitTime, operation.getPartitionPath(), operation.getFileId(),

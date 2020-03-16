@@ -74,7 +74,6 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   // Buffer for holding records (to be deleted) in memory before they are flushed to disk
   private List<HoodieKey> keysToDelete = new ArrayList<>();
 
-  private String partitionPath;
   private Iterator<HoodieRecord<T>> recordItr;
   // Total number of records written during an append
   private long recordsWritten = 0;
@@ -103,9 +102,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
 
   public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
-    super(config, commitTime, fileId, hoodieTable);
+    super(config, commitTime, partitionPath, fileId, hoodieTable);
     writeStatus.setStat(new HoodieDeltaWriteStat());
-    this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.recordItr = recordItr;
   }

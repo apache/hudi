@@ -1207,6 +1207,9 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
     }
   }
 
+  /**
+   * Test to validate invoking table.handleUpdate() with input records from multiple partitions will fail.
+   */
   @Test
   public void testHandleUpdateWithMultiplePartitions() throws Exception {
     HoodieWriteConfig cfg = getConfig(true);
@@ -1273,14 +1276,13 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
         return hoodieTable.handleUpdate(newDeleteTime, partitionPath, fileId, fewRecordsForDelete.iterator());
       }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();
 
-      // Verify there are  errors
+      // Verify there are  errors because records are from multiple partitions (but handleUpdate is invoked for
+      // specific partition)
       WriteStatus status = deleteStatus.get(0).get(0);
       assertTrue(status.hasErrors());
       long numRecordsInPartition = fewRecordsForDelete.stream().filter(u ->
               u.getPartitionPath().equals(partitionPath)).count();
       assertEquals(fewRecordsForDelete.size() - numRecordsInPartition, status.getTotalErrorRecords());
-
-
     }
   }
 

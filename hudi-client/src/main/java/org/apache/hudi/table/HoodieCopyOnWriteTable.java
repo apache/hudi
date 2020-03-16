@@ -184,10 +184,10 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     return handleUpdateInternal(upsertHandle, commitTime, fileId);
   }
 
-  public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileId,
+  public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String partitionPath, String fileId,
       Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(commitTime, fileId, keyToNewRecords, oldDataFile);
+    HoodieMergeHandle upsertHandle = getUpdateHandle(commitTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
     return handleUpdateInternal(upsertHandle, commitTime, fileId);
   }
 
@@ -226,9 +226,10 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     return new HoodieMergeHandle<>(config, commitTime, this, recordItr, partitionPath, fileId);
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String commitTime, String fileId,
+  protected HoodieMergeHandle getUpdateHandle(String commitTime, String partitionPath, String fileId,
       Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
-    return new HoodieMergeHandle<>(config, commitTime, this, keyToNewRecords, fileId, dataFileToBeMerged);
+    return new HoodieMergeHandle<>(config, commitTime, this, keyToNewRecords,
+            partitionPath, fileId, dataFileToBeMerged);
   }
 
   public Iterator<List<WriteStatus>> handleInsert(String commitTime, String idPfx, Iterator<HoodieRecord<T>> recordItr)
