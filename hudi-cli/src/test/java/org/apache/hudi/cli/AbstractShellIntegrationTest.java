@@ -30,7 +30,7 @@ public abstract class AbstractShellIntegrationTest {
   private static JLineShellComponent shell;
 
   @BeforeClass
-  public static void startUp() throws InterruptedException {
+  public static void startup() {
     Bootstrap bootstrap = new Bootstrap();
     shell = bootstrap.getJLineShellComponent();
   }
@@ -40,7 +40,7 @@ public abstract class AbstractShellIntegrationTest {
     shell.stop();
   }
 
-  public static JLineShellComponent getShell() {
+  protected static JLineShellComponent getShell() {
     return shell;
   }
 }
