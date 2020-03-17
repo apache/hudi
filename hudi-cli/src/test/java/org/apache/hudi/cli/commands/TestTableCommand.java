@@ -48,7 +48,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     String tablePath = basePath + File.separator + tableName;
     String metaPath = tablePath + File.separator + METAFOLDER_NAME;
 
-    // Test create
+    // Test create default
     CommandResult cr = getShell().executeCommand(
         "create --path " + tablePath + " --tableName " + tableName);
     assertEquals("Metadata for table " + tableName + " loaded", cr.getResult().toString());
