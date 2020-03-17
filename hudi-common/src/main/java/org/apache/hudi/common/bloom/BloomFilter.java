@@ -18,10 +18,12 @@
 
 package org.apache.hudi.common.bloom;
 
+import java.io.Serializable;
+
 /**
  * A Bloom filter interface.
  */
-public interface BloomFilter {
+public interface BloomFilter extends Serializable {
 
   /**
    * Add a key to the {@link BloomFilter}.

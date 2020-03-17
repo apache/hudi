@@ -464,6 +464,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH));
   }
 
+  public int getBloomIndexV2Parallelism() {
+    return Integer.parseInt(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_V2_PARALLELISM_PROP));
+  }
+
+  public long getBloomIndexV2BufferMaxSize() {
+    return Long.parseLong(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_V2_BUFFER_MAX_SIZE_PROP));
+  }
+
   public int getSimpleIndexParallelism() {
     return Integer.parseInt(props.getProperty(HoodieIndexConfig.SIMPLE_INDEX_PARALLELISM_PROP));
   }

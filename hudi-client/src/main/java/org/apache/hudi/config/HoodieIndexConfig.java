@@ -74,6 +74,13 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String BLOOM_INDEX_KEYS_PER_BUCKET_PROP = "hoodie.bloom.index.keys.per.bucket";
   public static final String DEFAULT_BLOOM_INDEX_KEYS_PER_BUCKET = "10000000";
 
+  public static final String BLOOM_INDEX_V2_PARALLELISM_PROP = "hoodie.bloom.index.v2.parallelism";
+  public static final String DEFAULT_BLOOM_V2_INDEX_PARALLELISM = "80";
+
+  public static final String BLOOM_INDEX_V2_BUFFER_MAX_SIZE_PROP = "hoodie.bloom.index.v2.buffer.max.size";
+  // 512MB 512 * 1024 *1024
+  public static final String DEFAULT_BLOOM_INDEX_V2_BUFFER_MAX_SIZE_PROP = "536870912";
+
   // ***** HBase Index Configs *****
   public static final String HBASE_ZKQUORUM_PROP = "hoodie.index.hbase.zkquorum";
   public static final String HBASE_ZKPORT_PROP = "hoodie.index.hbase.zkport";
@@ -274,6 +281,10 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           DEFAULT_GLOBAL_SIMPLE_INDEX_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(SIMPLE_INDEX_UPDATE_PARTITION_PATH),
           SIMPLE_INDEX_UPDATE_PARTITION_PATH, DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH);
+      setDefaultOnCondition(props, !props.contains(BLOOM_INDEX_V2_PARALLELISM_PROP),
+              BLOOM_INDEX_V2_PARALLELISM_PROP, DEFAULT_BLOOM_V2_INDEX_PARALLELISM);
+      setDefaultOnCondition(props, !props.contains(BLOOM_INDEX_V2_BUFFER_MAX_SIZE_PROP),
+              BLOOM_INDEX_V2_BUFFER_MAX_SIZE_PROP, DEFAULT_BLOOM_INDEX_V2_BUFFER_MAX_SIZE_PROP);
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;

@@ -24,8 +24,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.io.HoodieKeyLookupHandle;
-import org.apache.hudi.io.HoodieKeyLookupHandle.KeyLookupResult;
+import org.apache.hudi.io.HoodieKeyAndBloomLookupHandle;
+import org.apache.hudi.io.HoodieKeyAndBloomLookupHandle.KeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.function.Function2;
@@ -59,7 +59,7 @@ public class HoodieBloomIndexCheckFunction
 
   class LazyKeyCheckIterator extends LazyIterableIterator<Tuple2<String, HoodieKey>, List<KeyLookupResult>> {
 
-    private HoodieKeyLookupHandle keyLookupHandle;
+    private HoodieKeyAndBloomLookupHandle keyLookupHandle;
 
     LazyKeyCheckIterator(Iterator<Tuple2<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
       super(filePartitionRecordKeyTripletItr);
@@ -70,9 +70,9 @@ public class HoodieBloomIndexCheckFunction
     }
 
     @Override
-    protected List<HoodieKeyLookupHandle.KeyLookupResult> computeNext() {
+    protected List<HoodieKeyAndBloomLookupHandle.KeyLookupResult> computeNext() {
 
-      List<HoodieKeyLookupHandle.KeyLookupResult> ret = new ArrayList<>();
+      List<HoodieKeyAndBloomLookupHandle.KeyLookupResult> ret = new ArrayList<>();
       try {
         // process one file in each go.
         while (inputItr.hasNext()) {
@@ -84,7 +84,7 @@ public class HoodieBloomIndexCheckFunction
 
           // lazily init state
           if (keyLookupHandle == null) {
-            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair);
+            keyLookupHandle = new HoodieKeyAndBloomLookupHandle(config, hoodieTable, partitionPathFilePair);
           }
 
           // if continue on current file
@@ -93,7 +93,7 @@ public class HoodieBloomIndexCheckFunction
           } else {
             // do the actual checking of file & break out
             ret.add(keyLookupHandle.getLookupResult());
-            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair);
+            keyLookupHandle = new HoodieKeyAndBloomLookupHandle(config, hoodieTable, partitionPathFilePair);
             keyLookupHandle.addKey(recordKey);
             break;
           }
