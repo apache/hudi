@@ -98,7 +98,8 @@ public class HoodieSnapshotExporter {
     @Parameter(names = {"--target-output-path"}, description = "Base path for the target output files (snapshots)", required = true)
     String targetOutputPath;
 
-    @Parameter(names = {"--output-format"}, description = "json, parquet, hudi", required = true, validateValueWith = OutputFormatValidator.class)
+    @Parameter(names = {"--output-format"}, description = "Output format for the exported dataset; accept these values: json|parquet|hudi", required = true,
+        validateValueWith = OutputFormatValidator.class)
     String outputFormat;
 
     @Parameter(names = {"--output-partition-field"}, description = "A field to be used by Spark repartitioning")
