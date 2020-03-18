@@ -29,13 +29,20 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.Config;
+import org.apache.hudi.utilities.HoodieSnapshotExporter.OutputFormatValidator;
+import org.apache.hudi.utilities.HoodieSnapshotExporter.Partitioner;
 
+import com.beust.jcommander.ParameterException;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Column;
+import org.apache.spark.sql.DataFrameWriter;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.junit.After;
 import org.junit.Before;
@@ -52,6 +59,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Enclosed.class)
@@ -62,7 +70,7 @@ public class TestHoodieSnapshotExporter {
     static final Logger LOG = LogManager.getLogger(ExporterTestHarness.class);
     static final int NUM_RECORDS = 100;
     static final String COMMIT_TIME = "20200101000000";
-    static final String PARTITION_PATH = "2020/01/01";
+    static final String PARTITION_PATH = "2020";
     static final String TABLE_NAME = "testing";
     String sourcePath;
     String targetPath;
@@ -119,12 +127,19 @@ public class TestHoodieSnapshotExporter {
 
   public static class TestHoodieSnapshotExporterForHudi extends ExporterTestHarness {
 
-    @Test
-    public void testExportAsHudi() throws IOException {
-      HoodieSnapshotExporter.Config cfg = new Config();
+    private HoodieSnapshotExporter.Config cfg;
+
+    @Before
+    public void setUp() throws Exception {
+      super.setUp();
+      cfg = new Config();
       cfg.sourceBasePath = sourcePath;
       cfg.targetOutputPath = targetPath;
-      cfg.outputFormat = "hudi";
+      cfg.outputFormat = OutputFormatValidator.HUDI;
+    }
+
+    @Test
+    public void testExportAsHudi() throws IOException {
       new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
 
       // Check results
@@ -151,10 +166,6 @@ public class TestHoodieSnapshotExporter {
       dfs.delete(new Path(sourcePath + "/" + PARTITION_PATH), true);
 
       // export
-      HoodieSnapshotExporter.Config cfg = new Config();
-      cfg.sourceBasePath = sourcePath;
-      cfg.targetOutputPath = targetPath;
-      cfg.outputFormat = "hudi";
       new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
 
       // Check results
@@ -183,6 +194,87 @@ public class TestHoodieSnapshotExporter {
       new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
       assertEquals(NUM_RECORDS, sqlContext.read().format(format).load(targetPath).count());
       assertTrue(dfs.exists(new Path(targetPath + "/_SUCCESS")));
+    }
+  }
+
+  public static class TestHoodieSnapshotExporterForRepartitioning extends ExporterTestHarness {
+
+    private static final String PARTITION_NAME = "year";
+
+    public static class UserDefinedPartitioner implements Partitioner {
+
+      @Override
+      public DataFrameWriter<Row> partition(Dataset<Row> source) {
+        return source
+            .withColumnRenamed(HoodieRecord.PARTITION_PATH_METADATA_FIELD, PARTITION_NAME)
+            .repartition(new Column(PARTITION_NAME))
+            .write()
+            .partitionBy(PARTITION_NAME);
+      }
+    }
+
+    private HoodieSnapshotExporter.Config cfg;
+
+    @Before
+    public void setUp() throws Exception {
+      super.setUp();
+      cfg = new Config();
+      cfg.sourceBasePath = sourcePath;
+      cfg.targetOutputPath = targetPath;
+      cfg.outputFormat = "json";
+    }
+
+    @Test
+    public void testExportWithPartitionField() throws IOException {
+      // `driver` field is set in HoodieTestDataGenerator
+      cfg.outputPartitionField = "driver";
+      new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+
+      assertEquals(NUM_RECORDS, sqlContext.read().format("json").load(targetPath).count());
+      assertTrue(dfs.exists(new Path(targetPath + "/_SUCCESS")));
+      assertTrue(dfs.listStatus(new Path(targetPath)).length > 1);
+    }
+
+    @Test
+    public void testExportForUserDefinedPartitioner() throws IOException {
+      cfg.outputPartitioner = UserDefinedPartitioner.class.getName();
+      new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+
+      assertEquals(NUM_RECORDS, sqlContext.read().format("json").load(targetPath).count());
+      assertTrue(dfs.exists(new Path(targetPath + "/_SUCCESS")));
+      assertTrue(dfs.exists(new Path(String.format("%s/%s=%s", targetPath, PARTITION_NAME, PARTITION_PATH))));
+    }
+  }
+
+  @RunWith(Parameterized.class)
+  public static class TestHoodieSnapshotExporterInputValidation {
+
+    @Parameters
+    public static Iterable<Object[]> data() {
+      return Arrays.asList(new Object[][] {
+          {"json", true}, {"parquet", true}, {"hudi", true},
+          {"JSON", false}, {"foo", false}, {null, false}, {"", false}
+      });
+    }
+
+    @Parameter
+    public String format;
+    @Parameter(1)
+    public boolean isValid;
+
+    @Test
+    public void testValidateOutputFormat() {
+      Throwable t = null;
+      try {
+        new OutputFormatValidator().validate(null, format);
+      } catch (Exception e) {
+        t = e;
+      }
+      if (isValid) {
+        assertNull(t);
+      } else {
+        assertTrue(t instanceof ParameterException);
+      }
     }
   }
 }
