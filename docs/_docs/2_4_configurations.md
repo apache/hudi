@@ -221,7 +221,11 @@ Following configs control indexing behavior, which tags incoming records as eith
 
 [withIndexConfig](#withIndexConfig) (HoodieIndexConfig) <br/>
 <span style="color:grey">This is pluggable to have a external index (HBase) or use the default bloom filter stored in the Parquet files</span>
-        
+
+#### withIndexClass(indexClass = "x.y.z.UserDefinedIndex") {#withIndexClass}
+Property: `hoodie.index.class` <br/>
+<span style="color:grey">Full path of user-defined index class and must be a subclass of HoodieIndex class. It will take precedence over the `hoodie.index.type` configuration if specified</span>
+
 #### withIndexType(indexType = BLOOM) {#withIndexType}
 Property: `hoodie.index.type` <br/>
 <span style="color:grey">Type of index to use. Default is Bloom filter. Possible options are [BLOOM | HBASE | INMEMORY]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files</span>

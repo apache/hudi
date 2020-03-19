@@ -230,6 +230,10 @@ Hudi将有关提交、保存点、清理审核日志等的所有主要元数据�
 
 [withIndexConfig](#withIndexConfig) (HoodieIndexConfig) <br/>
 <span style="color:grey">可插入以具有外部索引（HBase）或使用存储在Parquet文件中的默认布隆过滤器（bloom filter）</span>
+
+#### withIndexClass(indexClass = "x.y.z.UserDefinedIndex") {#withIndexClass}
+属性：`hoodie.index.class` <br/>
+<span style="color:grey">用户自定义索引的全路径名，索引类必须为HoodieIndex的子类，当指定该配置时，其会优先于`hoodie.index.type`配置</span>
         
 #### withIndexType(indexType = BLOOM) {#withIndexType}
 属性：`hoodie.index.type` <br/>
