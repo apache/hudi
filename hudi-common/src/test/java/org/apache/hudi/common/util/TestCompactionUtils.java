@@ -84,6 +84,8 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     HoodieCompactionPlan newPlan = migrator.upgradeToLatest(plan, plan.getVersion());
     Assert.assertEquals(LATEST_COMPACTION_METADATA_VERSION, newPlan.getVersion());
     testFileSlicesCompactionPlanEquality(inputAndPlan.getKey(), newPlan);
+    HoodieCompactionPlan latestPlan = migrator.migrateToVersion(oldPlan, oldPlan.getVersion(), newPlan.getVersion());
+    testFileSlicesCompactionPlanEquality(inputAndPlan.getKey(), latestPlan);
   }
 
   @Test
