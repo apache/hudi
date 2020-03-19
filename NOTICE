@@ -68,6 +68,67 @@ LongAdder), which was released with the following comments:
 
 --------------------------------------------------------------------------------
 
+This product includes code from https://github.com/twitter/commons/blob/master/src/java/com/twitter/common/objectsize/ObjectSizeCalculator.java with the following license
+
+=================================================================================================
+ Copyright 2011 Twitter, Inc.
+ -------------------------------------------------------------------------------------------------
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this work except in compliance with the License.
+ You may obtain a copy of the License in the LICENSE file, or at:
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+=================================================================================================
+
+This product includes code from Apache Spark
+
+* org.apache.hudi.AvroConversionHelper copied from classes in org/apache/spark/sql/avro package
+
+Copyright: 2014 and onwards The Apache Software Foundation
+Home page: http://spark.apache.org/
+License: http://www.apache.org/licenses/LICENSE-2.0
+
+--------------------------------------------------------------------------------
+
+This product includes code from https://github.com/big-data-europe/README
+
+* docker/hoodie/hadoop/base/entrypoint.sh copied from https://github.com/big-data-europe/docker-hadoop/blob/master/base/entrypoint.sh
+
+which is under the MIT license (https://github.com/big-data-europe/README#license)
+
+The MIT License (MIT)
+
+Copyright (c) 2015 TENFORCE BVBA, INSTITUT FUR ANGEWANDTE INFORMATIK EV,
+NATIONAL CENTER FOR SCIENTIFIC RESEARCH "DEMOKRITOS", SEMANTIC WEB COMPANY
+GMBH, FRAUNHOFER-GESELLSCHAFT ZUR FOERDERUNG DER ANGEWANDTEN FORSCHUNG E.V,
+ETHNIKO KAI KAPODISTRIAKO PANEPISTIMIO ATHINON, GEIE ERCIM
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------------
+
 Apache Hadoop
 Copyright 2006 and onwards The Apache Software Foundation.
 
@@ -193,3 +254,11 @@ http://hdrhistogram.org
 
 JCTools
 http://jctools.github.io/JCTools/
+
+--------------------------------------------------------------------------------
+
+Apache Commons Lang
+Copyright 2001-2020 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
