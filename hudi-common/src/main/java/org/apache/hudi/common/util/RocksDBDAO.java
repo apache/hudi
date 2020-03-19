@@ -22,7 +22,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import com.google.common.base.Preconditions;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.rocksdb.AbstractImmutableNativeReference;
@@ -105,7 +104,7 @@ public class RocksDBDAO {
       FileIOUtils.mkdir(new File(rocksDBBasePath));
       rocksDB = RocksDB.open(dbOptions, rocksDBBasePath, managedColumnFamilies, managedHandles);
 
-      Preconditions.checkArgument(managedHandles.size() == managedColumnFamilies.size(),
+      ValidationUtils.checkArgument(managedHandles.size() == managedColumnFamilies.size(),
           "Unexpected number of handles are returned");
       for (int index = 0; index < managedHandles.size(); index++) {
         ColumnFamilyHandle handle = managedHandles.get(index);
@@ -113,7 +112,7 @@ public class RocksDBDAO {
         String familyNameFromHandle = new String(handle.getName());
         String familyNameFromDescriptor = new String(descriptor.getName());
 
-        Preconditions.checkArgument(familyNameFromDescriptor.equals(familyNameFromHandle),
+        ValidationUtils.checkArgument(familyNameFromDescriptor.equals(familyNameFromHandle),
             "Family Handles not in order with descriptors");
         managedHandlesMap.put(familyNameFromHandle, handle);
         managedDescriptorMap.put(familyNameFromDescriptor, descriptor);
@@ -297,7 +296,7 @@ public class RocksDBDAO {
    * @param <T> Type of object stored.
    */
   public <T extends Serializable> T get(String columnFamilyName, String key) {
-    Preconditions.checkArgument(!closed);
+    ValidationUtils.checkArgument(!closed);
     try {
       byte[] val = getRocksDB().get(managedHandlesMap.get(columnFamilyName), key.getBytes());
       return val == null ? null : SerializationUtils.deserialize(val);
@@ -314,7 +313,7 @@ public class RocksDBDAO {
    * @param <T> Type of object stored.
    */
   public <K extends Serializable, T extends Serializable> T get(String columnFamilyName, K key) {
-    Preconditions.checkArgument(!closed);
+    ValidationUtils.checkArgument(!closed);
     try {
       byte[] val = getRocksDB().get(managedHandlesMap.get(columnFamilyName), SerializationUtils.serialize(key));
       return val == null ? null : SerializationUtils.deserialize(val);
@@ -331,7 +330,7 @@ public class RocksDBDAO {
    * @param <T> Type of value stored
    */
   public <T extends Serializable> Stream<Pair<String, T>> prefixSearch(String columnFamilyName, String prefix) {
-    Preconditions.checkArgument(!closed);
+    ValidationUtils.checkArgument(!closed);
     final HoodieTimer timer = new HoodieTimer();
     timer.startTimer();
     long timeTakenMicro = 0;
@@ -360,7 +359,7 @@ public class RocksDBDAO {
    * @param <T> Type of value stored
    */
   public <T extends Serializable> void prefixDelete(String columnFamilyName, String prefix) {
-    Preconditions.checkArgument(!closed);
+    ValidationUtils.checkArgument(!closed);
     LOG.info("Prefix DELETE (query=" + prefix + ") on " + columnFamilyName);
     final RocksIterator it = getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName));
     it.seek(prefix.getBytes());
@@ -396,7 +395,7 @@ public class RocksDBDAO {
    * @param columnFamilyName Column family name
    */
   public void addColumnFamily(String columnFamilyName) {
-    Preconditions.checkArgument(!closed);
+    ValidationUtils.checkArgument(!closed);
 
     managedDescriptorMap.computeIfAbsent(columnFamilyName, colFamilyName -> {
       try {
@@ -416,7 +415,7 @@ public class RocksDBDAO {
    * @param columnFamilyName Column Family Name
    */
   public void dropColumnFamily(String columnFamilyName) {
-    Preconditions.checkArgument(!closed);
+    ValidationUtils.checkArgument(!closed);
 
     managedDescriptorMap.computeIfPresent(columnFamilyName, (colFamilyName, descriptor) -> {
       ColumnFamilyHandle handle = managedHandlesMap.get(colFamilyName);

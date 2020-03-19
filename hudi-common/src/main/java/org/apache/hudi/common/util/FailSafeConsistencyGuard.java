@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -47,7 +46,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   public FailSafeConsistencyGuard(FileSystem fs, ConsistencyGuardConfig consistencyGuardConfig) {
     this.fs = fs;
     this.consistencyGuardConfig = consistencyGuardConfig;
-    Preconditions.checkArgument(consistencyGuardConfig.isConsistencyCheckEnabled());
+    ValidationUtils.checkArgument(consistencyGuardConfig.isConsistencyCheckEnabled());
   }
 
   @Override
@@ -115,8 +114,8 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
    * 
    * @param filePath File Path
    * @param visibility Visibility
-   * @return
-   * @throws IOException
+   * @return true (if file visible in Path), false (otherwise)
+   * @throws IOException -
    */
   private boolean checkFileVisibility(Path filePath, FileVisibility visibility) throws IOException {
     try {

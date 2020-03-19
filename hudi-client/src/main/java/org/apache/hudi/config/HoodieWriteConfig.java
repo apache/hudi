@@ -96,7 +96,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String MAX_CONSISTENCY_CHECKS_PROP = "hoodie.consistency.check.max_checks";
   private static int DEFAULT_MAX_CONSISTENCY_CHECKS = 7;
 
-
   private ConsistencyGuardConfig consistencyGuardConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
@@ -310,6 +309,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return HoodieIndex.IndexType.valueOf(props.getProperty(HoodieIndexConfig.INDEX_TYPE_PROP));
   }
 
+  public String getIndexClass() {
+    return props.getProperty(HoodieIndexConfig.INDEX_CLASS_PROP);
+  }
+
   public int getBloomFilterNumEntries() {
     return Integer.parseInt(props.getProperty(HoodieIndexConfig.BLOOM_FILTER_NUM_ENTRIES));
   }
@@ -497,8 +500,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HoodieMetricsConfig.JMX_HOST);
   }
 
-  public int getJmxPort() {
-    return Integer.parseInt(props.getProperty(HoodieMetricsConfig.JMX_PORT));
+  public String getJmxPort() {
+    return props.getProperty(HoodieMetricsConfig.JMX_PORT);
   }
 
   /**

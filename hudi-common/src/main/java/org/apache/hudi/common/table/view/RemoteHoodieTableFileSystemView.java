@@ -34,12 +34,12 @@ import org.apache.hudi.common.table.timeline.dto.InstantDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieRemoteException;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.base.Preconditions;
 import org.apache.http.client.fluent.Request;
 import org.apache.http.client.fluent.Response;
 import org.apache.http.client.utils.URIBuilder;
@@ -134,14 +134,12 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   private <T> T executeRequest(String requestPath, Map<String, String> queryParameters, TypeReference reference,
       RequestMethod method) throws IOException {
-    Preconditions.checkArgument(!closed, "View already closed");
+    ValidationUtils.checkArgument(!closed, "View already closed");
 
     URIBuilder builder =
         new URIBuilder().setHost(serverHost).setPort(serverPort).setPath(requestPath).setScheme("http");
 
-    queryParameters.entrySet().stream().forEach(entry -> {
-      builder.addParameter(entry.getKey(), entry.getValue());
-    });
+    queryParameters.forEach(builder::addParameter);
 
     // Adding mandatory parameters - Last instants affecting file-slice
     timeline.lastInstant().ifPresent(instant -> builder.addParameter(LAST_INSTANT_TS, instant.getTimestamp()));
@@ -149,7 +147,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
     String url = builder.toString();
     LOG.info("Sending request : (" + url + ")");
-    Response response = null;
+    Response response;
     int timeout = 1000 * 300; // 5 min timeout
     switch (method) {
       case GET:
@@ -197,7 +195,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = new HashMap<>();
     paramsMap.put(BASEPATH_PARAM, basePath);
     paramsMap.put(PARTITION_PARAM, partitionPath);
-    Preconditions.checkArgument(paramNames.length == paramVals.length);
+    ValidationUtils.checkArgument(paramNames.length == paramVals.length);
     for (int i = 0; i < paramNames.length; i++) {
       paramsMap.put(paramNames[i], paramVals[i]);
     }

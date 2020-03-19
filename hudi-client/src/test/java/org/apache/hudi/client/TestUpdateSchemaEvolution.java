@@ -40,6 +40,7 @@ import org.apache.parquet.avro.AvroReadSupport;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Test;
 //import org.junit.Test;
 
 import java.util.ArrayList;
@@ -55,6 +56,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     initPath();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath);
     initSparkContexts("TestUpdateSchemaEvolution");
+    initFileSystem();
   }
 
   @After
@@ -62,7 +64,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     cleanupSparkContexts();
   }
 
-  //@Test
+  @Test
   public void testSchemaEvolutionOnUpdate() throws Exception {
     // Create a bunch of records with a old version of schema
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");

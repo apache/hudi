@@ -29,9 +29,9 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RocksDBDAO;
 import org.apache.hudi.common.util.RocksDBSchemaHelper;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -110,7 +110,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   protected void addPendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     rocksDB.writeBatch(batch ->
         operations.forEach(opInstantPair -> {
-          Preconditions.checkArgument(!isPendingCompactionScheduledForFileId(opInstantPair.getValue().getFileGroupId()),
+          ValidationUtils.checkArgument(!isPendingCompactionScheduledForFileId(opInstantPair.getValue().getFileGroupId()),
               "Duplicate FileGroupId found in pending compaction operations. FgId :"
                   + opInstantPair.getValue().getFileGroupId());
           rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingCompaction(),
@@ -123,7 +123,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   void removePendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     rocksDB.writeBatch(batch ->
         operations.forEach(opInstantPair -> {
-          Preconditions.checkArgument(
+          ValidationUtils.checkArgument(
               getPendingCompactionOperationWithInstant(opInstantPair.getValue().getFileGroupId()) != null,
               "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
                   + opInstantPair.getValue().getFileGroupId());

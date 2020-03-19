@@ -37,6 +37,9 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String INDEX_TYPE_PROP = "hoodie.index.type";
   public static final String DEFAULT_INDEX_TYPE = HoodieIndex.IndexType.BLOOM.name();
 
+  public static final String INDEX_CLASS_PROP = "hoodie.index.class";
+  public static final String DEFAULT_INDEX_CLASS = "";
+
   // ***** Bloom Index configs *****
   public static final String BLOOM_FILTER_NUM_ENTRIES = "hoodie.index.bloom.num_entries";
   public static final String DEFAULT_BLOOM_FILTER_NUM_ENTRIES = "60000";
@@ -114,6 +117,11 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
     public Builder withIndexType(HoodieIndex.IndexType indexType) {
       props.setProperty(INDEX_TYPE_PROP, indexType.name());
+      return this;
+    }
+
+    public Builder withIndexClass(String indexClass) {
+      props.setProperty(INDEX_CLASS_PROP, indexClass);
       return this;
     }
 
@@ -195,6 +203,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
     public HoodieIndexConfig build() {
       HoodieIndexConfig config = new HoodieIndexConfig(props);
       setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP), INDEX_TYPE_PROP, DEFAULT_INDEX_TYPE);
+      setDefaultOnCondition(props, !props.containsKey(INDEX_CLASS_PROP), INDEX_CLASS_PROP, DEFAULT_INDEX_CLASS);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_NUM_ENTRIES), BLOOM_FILTER_NUM_ENTRIES,
           DEFAULT_BLOOM_FILTER_NUM_ENTRIES);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_FPP), BLOOM_FILTER_FPP, DEFAULT_BLOOM_FILTER_FPP);

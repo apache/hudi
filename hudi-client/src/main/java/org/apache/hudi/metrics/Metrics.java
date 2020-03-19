@@ -33,6 +33,7 @@ import java.io.Closeable;
  * This is the main class of the metrics system.
  */
 public class Metrics {
+
   private static final Logger LOG = LogManager.getLogger(Metrics.class);
 
   private static volatile boolean initialized = false;
@@ -47,11 +48,12 @@ public class Metrics {
     if (reporter == null) {
       throw new RuntimeException("Cannot initialize Reporter.");
     }
-    // reporter.start();
+    reporter.start();
 
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       try {
         reporter.report();
+        reporter.stop();
         Closeables.close(reporter.getReporter(), true);
       } catch (Exception e) {
         e.printStackTrace();
