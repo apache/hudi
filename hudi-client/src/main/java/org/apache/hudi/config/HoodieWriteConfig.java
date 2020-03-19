@@ -30,7 +30,6 @@ import org.apache.hudi.table.compact.strategy.CompactionStrategy;
 import org.apache.hudi.metrics.MetricsReporterType;
 
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.apache.spark.storage.StorageLevel;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -67,7 +66,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_COMBINE_BEFORE_UPSERT = "true";
   private static final String COMBINE_BEFORE_DELETE_PROP = "hoodie.combine.before.delete";
   private static final String DEFAULT_COMBINE_BEFORE_DELETE = "true";
-  private static final String WRITE_STATUS_STORAGE_LEVEL = "hoodie.write.status.storage.level";
+  public static final String WRITE_STATUS_STORAGE_LEVEL = "hoodie.write.status.storage.level";
   private static final String DEFAULT_WRITE_STATUS_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
   private static final String HOODIE_AUTO_COMMIT_PROP = "hoodie.auto.commit";
   private static final String DEFAULT_HOODIE_AUTO_COMMIT = "true";
@@ -181,10 +180,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean shouldCombineBeforeDelete() {
     return Boolean.parseBoolean(props.getProperty(COMBINE_BEFORE_DELETE_PROP));
-  }
-
-  public StorageLevel getWriteStatusStorageLevel() {
-    return StorageLevel.fromString(props.getProperty(WRITE_STATUS_STORAGE_LEVEL));
   }
 
   public String getWriteStatusClassName() {
@@ -426,10 +421,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_KEYS_PER_BUCKET_PROP));
   }
 
-  public StorageLevel getBloomIndexInputStorageLevel() {
-    return StorageLevel.fromString(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
-  }
-
   public boolean getBloomIndexUpdatePartitionPath() {
     return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH));
   }
@@ -565,6 +556,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isMemoryConfigSet = false;
     private boolean isViewConfigSet = false;
     private boolean isConsistencyGuardSet = false;
+    private boolean isEngineConfigSet = false;
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -743,6 +735,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP, DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED);
 
       // Make sure the props is propagated
+      setDefaultOnCondition(props, !isEngineConfigSet, HoodieEngineConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCompactionConfigSet,

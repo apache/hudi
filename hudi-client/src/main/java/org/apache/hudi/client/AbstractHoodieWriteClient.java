@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import java.util.Collections;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.config.ConfigHelpers;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -50,6 +51,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.storage.StorageLevel;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -115,7 +117,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       String commitTime) {
     // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
     // RDD actions that are performed after updating the index.
-    writeStatusRDD = writeStatusRDD.persist(config.getWriteStatusStorageLevel());
+    StorageLevel storageLevel =
+        ConfigHelpers.<StorageLevel>createConfig(config.getProps()).getWriteStatusStorageLevel();
+    writeStatusRDD = writeStatusRDD.persist(storageLevel);
     Timer.Context indexTimer = metrics.getIndexCtx();
     // Update the index back
     JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, jsc, table);

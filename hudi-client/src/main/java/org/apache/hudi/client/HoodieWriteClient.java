@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.client.config.ConfigHelpers;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -1077,7 +1078,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     JavaRDD<WriteStatus> statuses = table.compact(jsc, compactionInstant.getTimestamp(), compactionPlan);
     // Force compaction action
-    statuses.persist(config.getWriteStatusStorageLevel());
+    StorageLevel storageLevel =
+        ConfigHelpers.<StorageLevel>createConfig(config.getProps()).getWriteStatusStorageLevel();
+    statuses.persist(storageLevel);
     // pass extra-metada so that it gets stored in commit file automatically
     commitCompaction(statuses, table, compactionInstant.getTimestamp(), autoCommit,
         Option.ofNullable(compactionPlan.getExtraMetadata()));
