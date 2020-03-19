@@ -500,8 +500,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HoodieMetricsConfig.JMX_HOST);
   }
 
-  public int getJmxPort() {
-    return Integer.parseInt(props.getProperty(HoodieMetricsConfig.JMX_PORT));
+  public String getJmxPort() {
+    return props.getProperty(HoodieMetricsConfig.JMX_PORT);
   }
 
   /**
