@@ -56,6 +56,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
   String dfsRoot;
   String fileSuffix;
   HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+  boolean useFlattenedSchema = false;
 
   @BeforeClass
   public static void initClass() throws Exception {
@@ -105,7 +106,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
    */
   Path generateOneFile(String filename, String commitTime, int n) throws IOException {
     Path path = new Path(dfsRoot, filename + fileSuffix);
-    writeNewDataToFile(dataGenerator.generateInserts(commitTime, n), path);
+    writeNewDataToFile(dataGenerator.generateInserts(commitTime, n, useFlattenedSchema), path);
     return path;
   }
 
