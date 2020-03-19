@@ -225,7 +225,7 @@ Following configs control indexing behavior, which tags incoming records as eith
 
 ##### withIndexClass(indexClass = "x.y.z.UserDefinedIndex") {#withIndexClass}
 Property: `hoodie.index.class` <br/>
-<span style="color:grey">Full path of user-defined index class and must extends HoodieIndex class. It will take precedence over the `hoodie.index.type` configuration if specified</span>
+<span style="color:grey">Full path of user-defined index class and must be a subclass of HoodieIndex class. It will take precedence over the `hoodie.index.type` configuration if specified</span>
 
 ##### withIndexType(indexType = BLOOM) {#withIndexType}
 Property: `hoodie.index.type` <br/>
