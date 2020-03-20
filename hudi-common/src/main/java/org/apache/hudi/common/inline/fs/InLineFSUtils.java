@@ -16,14 +16,15 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.inline.fs;
+package org.apache.hudi.common.inline.fs;
 
 import org.apache.hadoop.fs.Path;
 
 /**
- * Utils to parse InlineFileSystem paths.
- * Inline FS format: "inlinefs:/<path_to_outer_file>/<outer_file_scheme>/<start_offset>/<length>"
- * "inlinefs:/<path_to_outer_file>/<outer_file_scheme>/inline_file/?start_offset=start_offset>&length=<length>"
+ * Utils to parse InLineFileSystem paths.
+ * Inline FS format:
+ * "inlinefs://<path_to_outer_file>/<outer_file_scheme>/inline_file/?start_offset=start_offset>&length=<length>"
+ * Eg: "inlinefs://<path_to_outer_file>/s3a/inline_file/?start_offset=20&length=40"
  */
 public class InLineFSUtils {
 
@@ -33,11 +34,11 @@ public class InLineFSUtils {
   private static final String EQUALS_STR = "=";
 
   /**
-   * Fetch embedded inline file path from outer path.
+   * Fetch inline file path from outer path.
    * Eg
    * Input:
-   * Path = file:/file1, origScheme: file, startOffset = 20, length = 40
-   * Output: "inlinefs:/file1/file/inline_file/?start_offset=20&length=40"
+   * Path = s3a://file1, origScheme: file, startOffset = 20, length = 40
+   * Output: "inlinefs:/file1/s3a/inline_file/?start_offset=20&length=40"
    *
    * @param outerPath
    * @param origScheme
@@ -45,50 +46,55 @@ public class InLineFSUtils {
    * @param inLineLength
    * @return
    */
-  public static Path getEmbeddedInLineFilePath(Path outerPath, String origScheme, long inLineStartOffset, long inLineLength) {
+  public static Path getInlineFilePath(Path outerPath, String origScheme, long inLineStartOffset, long inLineLength) {
     String subPath = outerPath.toString().substring(outerPath.toString().indexOf(":") + 1);
     return new Path(
-        InlineFileSystem.SCHEME + "://" + subPath + "/" + origScheme + "/" + INLINE_FILE_STR + "/"
-            + "?" + START_OFFSET_STR + EQUALS_STR + inLineStartOffset + "&" + LENGTH_STR + EQUALS_STR + inLineLength
+        InLineFileSystem.SCHEME + "://" + subPath + "/" + origScheme + "/" + INLINE_FILE_STR
+            + "/" + "?" + START_OFFSET_STR + EQUALS_STR + inLineStartOffset
+            + "&" + LENGTH_STR + EQUALS_STR + inLineLength
     );
   }
 
   /**
-   * Eg input : "inlinefs:/file1/file/inline_file/?start_offset=20&length=40".
-   * Output : "file:/file1"
+   * Inline file format
+   * "inlinefs://<path_to_outer_file>/<outer_file_scheme>/inline_file/?start_offset=start_offset>&length=<length>"
+   * Outer File format
+   * "<outer_file_scheme>://<path_to_outer_file>"
    *
-   * @param inlinePath
-   * @param outerScheme
+   * Eg input : "inlinefs://file1/sa3/inline_file/?start_offset=20&length=40".
+   * Output : "sa3://file1"
+   *
+   * @param inlinePath inline file system path
    * @return
    */
-  public static Path getOuterfilePathFromInlinePath(Path inlinePath, String outerScheme) {
+  public static Path getOuterfilePathFromInlinePath(Path inlinePath) {
     String scheme = inlinePath.getParent().getParent().getName();
     Path basePath = inlinePath.getParent().getParent().getParent();
-    return new Path(basePath.toString().replaceFirst(outerScheme, scheme));
+    return new Path(basePath.toString().replaceFirst(InLineFileSystem.SCHEME, scheme));
   }
 
   /**
-   * Eg input : "inlinefs:/file1/file/inline_file/?start_offset=20&length=40".
+   * Eg input : "inlinefs://file1/s3a/inline_file/?start_offset=20&length=40".
    * output: 20
    *
    * @param inlinePath
    * @return
    */
   public static int startOffset(Path inlinePath) {
-    String pathName = inlinePath.getName();
-    return Integer.parseInt(pathName.substring(pathName.indexOf('=') + 1, pathName.indexOf('&')));
+    String[] slices = inlinePath.toString().split("[?&=]");
+    return Integer.parseInt(slices[2]);
   }
 
   /**
-   * Eg input : "inlinefs:/file1/file/inline_file/?start_offset=20&length=40".
+   * Eg input : "inlinefs:/file1/s3a/inline_file/?start_offset=20&length=40".
    * Output: 40
    *
    * @param inlinePath
    * @return
    */
   public static int length(Path inlinePath) {
-    String pathName = inlinePath.getName();
-    return Integer.parseInt(pathName.substring(pathName.lastIndexOf('=') + 1));
+    String[] slices = inlinePath.toString().split("[?&=]");
+    return Integer.parseInt(slices[4]);
   }
 
 }

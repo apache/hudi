@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.inline.fs;
+package org.apache.hudi.common.inline.fs;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -27,8 +27,8 @@ import org.junit.Test;
 import java.io.IOException;
 import java.net.URI;
 
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.RANDOM;
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.RANDOM;
+import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.getRandomOuterInMemPath;
 
 /**
  * Unit tests {@link InMemoryFileSystem}.

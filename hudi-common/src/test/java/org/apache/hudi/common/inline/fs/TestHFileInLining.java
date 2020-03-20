@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.inline.fs;
+package org.apache.hudi.common.inline.fs;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -42,15 +42,15 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.FILE_SCHEME;
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.RANDOM;
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.getPhantomFile;
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.FILE_SCHEME;
+import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.RANDOM;
+import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.getPhantomFile;
+import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.getRandomOuterInMemPath;
 
 /**
- * Tests {@link InlineFileSystem} using HFile writer and reader.
+ * Tests {@link InLineFileSystem} to inline HFile.
  */
-public class TestHFileReadWriteFlow {
+public class TestHFileInLining {
 
   private final Configuration inMemoryConf;
   private final Configuration inlineConf;
@@ -59,11 +59,11 @@ public class TestHFileReadWriteFlow {
   private int maxRows = 100 + RANDOM.nextInt(1000);
   private Path generatedPath;
 
-  public TestHFileReadWriteFlow() {
+  public TestHFileInLining() {
     inMemoryConf = new Configuration();
     inMemoryConf.set("fs." + InMemoryFileSystem.SCHEME + ".impl", InMemoryFileSystem.class.getName());
     inlineConf = new Configuration();
-    inlineConf.set("fs." + InlineFileSystem.SCHEME + ".impl", InlineFileSystem.class.getName());
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
   }
 
   @After
@@ -103,7 +103,7 @@ public class TestHFileReadWriteFlow {
     // Generate phantom inline file
     Path inlinePath = getPhantomFile(outerPath, startOffset, inlineLength);
 
-    InlineFileSystem inlineFileSystem = (InlineFileSystem) inlinePath.getFileSystem(inlineConf);
+    InLineFileSystem inlineFileSystem = (InLineFileSystem) inlinePath.getFileSystem(inlineConf);
     FSDataInputStream fin = inlineFileSystem.open(inlinePath);
 
     HFile.Reader reader = HFile.createReader(inlineFileSystem, inlinePath, cacheConf, inlineConf);
@@ -158,9 +158,7 @@ public class TestHFileReadWriteFlow {
   }
 
   private FSDataOutputStream createFSOutput(Path name, Configuration conf) throws IOException {
-    //if (fs.exists(name)) fs.delete(name, true);
-    FSDataOutputStream fout = name.getFileSystem(conf).create(name);
-    return fout;
+    return name.getFileSystem(conf).create(name);
   }
 
   private void writeRecords(HFile.Writer writer) throws IOException {

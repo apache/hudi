@@ -19,6 +19,9 @@
 package org.apache.hudi.utilities.inline.fs;
 
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.inline.fs.FileSystemTestUtils;
+import org.apache.hudi.common.inline.fs.InLineFileSystem;
+import org.apache.hudi.common.inline.fs.InMemoryFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.avro.generic.GenericRecord;
@@ -40,24 +43,25 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.FILE_SCHEME;
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.getPhantomFile;
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.FILE_SCHEME;
+import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.getPhantomFile;
+import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.getRandomOuterInMemPath;
 
 /**
- * Tests {@link InlineFileSystem} with Parquet writer and reader.
+ * Tests {@link InLineFileSystem} with Parquet writer and reader. hudi-common can't access HoodieTestDataGenerator.
+ * Hence keeping this test in hudi-utilities.
  */
-public class TestParquetReadWriteFlow {
+public class TestParquetInLining {
 
   private final Configuration inMemoryConf;
   private final Configuration inlineConf;
   private Path generatedPath;
 
-  public TestParquetReadWriteFlow() {
+  public TestParquetInLining() {
     inMemoryConf = new Configuration();
     inMemoryConf.set("fs." + InMemoryFileSystem.SCHEME + ".impl", InMemoryFileSystem.class.getName());
     inlineConf = new Configuration();
-    inlineConf.set("fs." + InlineFileSystem.SCHEME + ".impl", InlineFileSystem.class.getName());
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
   }
 
   @After

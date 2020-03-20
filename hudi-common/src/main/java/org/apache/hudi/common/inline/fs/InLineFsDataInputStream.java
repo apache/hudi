@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.inline.fs;
+package org.apache.hudi.common.inline.fs;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.ReadOption;
@@ -31,13 +31,13 @@ import java.util.EnumSet;
  * Inline {@link FSDataInputStream}. A startOffset that is passed in is assumed to be the start of the InputStream.
  * All operations are handled having the {@code startOffset} as starting point.
  */
-public class InlineFsDataInputStream extends FSDataInputStream {
+public class InLineFsDataInputStream extends FSDataInputStream {
 
   private final int startOffset;
   private final FSDataInputStream outerStream;
   private final int length;
 
-  public InlineFsDataInputStream(int startOffset, FSDataInputStream outerStream, int length) {
+  public InLineFsDataInputStream(int startOffset, FSDataInputStream outerStream, int length) {
     super(outerStream.getWrappedStream());
     this.startOffset = startOffset;
     this.outerStream = outerStream;

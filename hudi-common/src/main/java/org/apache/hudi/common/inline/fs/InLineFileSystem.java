@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.inline.fs;
+package org.apache.hudi.common.inline.fs;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -41,9 +41,9 @@ import java.net.URI;
  * this gracefully eg. the parquet summary metadata reading. TODO: If this shows promise, also support directly writing
  * the inlined file to the underneath file without buffer
  */
-public class InlineFileSystem extends FileSystem {
+public class InLineFileSystem extends FileSystem {
 
-  static final String SCHEME = "inlinefs";
+  public static final String SCHEME = "inlinefs";
   private Configuration conf = null;
 
   @Override
@@ -63,10 +63,10 @@ public class InlineFileSystem extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path inlinePath, int bufferSize) throws IOException {
-    Path outerPath = InLineFSUtils.getOuterfilePathFromInlinePath(inlinePath, getScheme());
+    Path outerPath = InLineFSUtils.getOuterfilePathFromInlinePath(inlinePath);
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FSDataInputStream outerStream = outerFs.open(outerPath, bufferSize);
-    return new InlineFsDataInputStream(InLineFSUtils.startOffset(inlinePath), outerStream, InLineFSUtils.length(inlinePath));
+    return new InLineFsDataInputStream(InLineFSUtils.startOffset(inlinePath), outerStream, InLineFSUtils.length(inlinePath));
   }
 
   @Override
@@ -80,7 +80,7 @@ public class InlineFileSystem extends FileSystem {
 
   @Override
   public FileStatus getFileStatus(Path inlinePath) throws IOException {
-    Path outerPath = InLineFSUtils.getOuterfilePathFromInlinePath(inlinePath, getScheme());
+    Path outerPath = InLineFSUtils.getOuterfilePathFromInlinePath(inlinePath);
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FileStatus status = outerFs.getFileStatus(outerPath);
     FileStatus toReturn = new FileStatus(InLineFSUtils.length(inlinePath), status.isDirectory(), status.getReplication(), status.getBlockSize(),

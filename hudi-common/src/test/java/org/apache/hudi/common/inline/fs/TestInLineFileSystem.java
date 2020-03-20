@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.inline.fs;
+package org.apache.hudi.common.inline.fs;
 
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -38,19 +38,19 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.RANDOM;
-import static org.apache.hudi.utilities.inline.fs.FileSystemTestUtils.getRandomOuterFSPath;
+import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.RANDOM;
+import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.getRandomOuterFSPath;
 
 /**
- * Tests {@link InlineFileSystem}.
+ * Tests {@link InLineFileSystem}.
  */
-public class TestInlineFileSystem {
+public class TestInLineFileSystem {
   private Configuration conf;
   private List<Path> listOfGeneratedPaths;
 
-  public TestInlineFileSystem() {
+  public TestInLineFileSystem() {
     conf = new Configuration();
-    conf.set("fs." + InlineFileSystem.SCHEME + ".impl", InlineFileSystem.class.getName());
+    conf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
     this.listOfGeneratedPaths = new ArrayList<>();
   }
 
@@ -99,7 +99,7 @@ public class TestInlineFileSystem {
       Pair<Long, Integer> startOffsetLengthPair = startOffsetLengthPairs.get(i);
       byte[] expectedBytes = expectedByteArrays.get(i);
       Path inlinePath = FileSystemTestUtils.getPhantomFile(outerPath, startOffsetLengthPair.getLeft(), startOffsetLengthPair.getRight());
-      InlineFileSystem inlineFileSystem = (InlineFileSystem) inlinePath.getFileSystem(conf);
+      InLineFileSystem inlineFileSystem = (InLineFileSystem) inlinePath.getFileSystem(conf);
       FSDataInputStream fsDataInputStream = inlineFileSystem.open(inlinePath);
       Assert.assertTrue(inlineFileSystem.exists(inlinePath));
       verifyFileStatus(expectedFileStatus, inlinePath, startOffsetLengthPair.getRight(), inlineFileSystem.getFileStatus(inlinePath));
@@ -110,8 +110,8 @@ public class TestInlineFileSystem {
       fsDataInputStream.readFully(0, actualBytes);
       Assert.assertArrayEquals(expectedBytes, actualBytes);
       fsDataInputStream.close();
-      Assert.assertEquals(InlineFileSystem.SCHEME, inlineFileSystem.getScheme());
-      Assert.assertEquals(URI.create(InlineFileSystem.SCHEME), inlineFileSystem.getUri());
+      Assert.assertEquals(InLineFileSystem.SCHEME, inlineFileSystem.getScheme());
+      Assert.assertEquals(URI.create(InLineFileSystem.SCHEME), inlineFileSystem.getUri());
     }
   }
 
@@ -119,7 +119,7 @@ public class TestInlineFileSystem {
   public void testFileSystemApis() throws IOException {
     OuterPathInfo outerPathInfo = generateOuterFileAndGetInfo(1000);
     Path inlinePath = FileSystemTestUtils.getPhantomFile(outerPathInfo.outerPath, outerPathInfo.startOffset, outerPathInfo.length);
-    InlineFileSystem inlineFileSystem = (InlineFileSystem) inlinePath.getFileSystem(conf);
+    InLineFileSystem inlineFileSystem = (InLineFileSystem) inlinePath.getFileSystem(conf);
     FSDataInputStream fsDataInputStream = inlineFileSystem.open(inlinePath);
     byte[] actualBytes = new byte[outerPathInfo.expectedBytes.length];
     // verify pos
@@ -130,15 +130,19 @@ public class TestInlineFileSystem {
     // read partial data
     // test read(long position, byte[] buffer, int offset, int length)
     actualBytes = new byte[100];
-    fsDataInputStream.read(0, actualBytes, 10, 20);
+    fsDataInputStream.read(0, actualBytes, 10, 10);
     verifyArrayEquality(outerPathInfo.expectedBytes, 0, 10, actualBytes, 10, 10);
     actualBytes = new byte[310];
     fsDataInputStream.read(25, actualBytes, 100, 210);
     verifyArrayEquality(outerPathInfo.expectedBytes, 25, 210, actualBytes, 100, 210);
     // give length to read > than actual inline content
     actualBytes = new byte[1100];
-    fsDataInputStream.read(0, actualBytes, 0, 1100);
-    verifyArrayEquality(outerPathInfo.expectedBytes, 0, 1000, actualBytes, 0, 1000);
+    try {
+      fsDataInputStream.read(0, actualBytes, 0, 1101);
+      Assert.fail("Should have thrown IndexOutOfBoundsException");
+    } catch (IndexOutOfBoundsException e) {
+      // no op
+    }
 
     // test readFully(long position, byte[] buffer, int offset, int length)
     actualBytes = new byte[100];
@@ -149,8 +153,12 @@ public class TestInlineFileSystem {
     verifyArrayEquality(outerPathInfo.expectedBytes, 25, 210, actualBytes, 100, 210);
     // give length to read > than actual inline content
     actualBytes = new byte[1100];
-    fsDataInputStream.readFully(0, actualBytes, 0, 1100);
-    verifyArrayEquality(outerPathInfo.expectedBytes, 0, 1000, actualBytes, 0, 1000);
+    try {
+      fsDataInputStream.readFully(0, actualBytes, 0, 1101);
+      Assert.fail("Should have thrown IndexOutOfBoundsException");
+    } catch (IndexOutOfBoundsException e) {
+      // no op
+    }
 
     // test readFully(long position, byte[] buffer)
     actualBytes = new byte[100];
