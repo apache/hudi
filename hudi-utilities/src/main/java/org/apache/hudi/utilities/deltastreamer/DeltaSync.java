@@ -168,7 +168,6 @@ public class DeltaSync implements Serializable {
     this.tableType = tableType;
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
     this.props = props;
-    LOG.info("Creating delta streamer with configs : " + props.toString());
     this.schemaProvider = schemaProvider;
 
     refreshTimeline();
