@@ -95,6 +95,10 @@ public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializa
     return partitionPathStatMap.keySet();
   }
 
+  public HashMap<String, WorkloadStat> getPartitionPathStatMap() {
+    return partitionPathStatMap;
+  }
+
   public WorkloadStat getWorkloadStat(String partitionPath) {
     return partitionPathStatMap.get(partitionPath);
   }

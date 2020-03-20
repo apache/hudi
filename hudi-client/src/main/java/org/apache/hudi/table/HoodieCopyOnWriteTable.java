@@ -523,12 +523,14 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
     BucketType bucketType;
     String fileIdPrefix;
+    String partitionPath;
 
     @Override
     public String toString() {
       final StringBuilder sb = new StringBuilder("BucketInfo {");
       sb.append("bucketType=").append(bucketType).append(", ");
-      sb.append("fileIdPrefix=").append(fileIdPrefix);
+      sb.append("fileIdPrefix=").append(fileIdPrefix).append(", ");
+      sb.append("partitionPath=").append(partitionPath);
       sb.append('}');
       return sb.toString();
     }
@@ -585,18 +587,22 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
     private void assignUpdates(WorkloadProfile profile) {
       // each update location gets a partition
-      WorkloadStat gStat = profile.getGlobalStat();
-      for (Map.Entry<String, Pair<String, Long>> updateLocEntry : gStat.getUpdateLocationToCount().entrySet()) {
-        addUpdateBucket(updateLocEntry.getKey());
+      Set<Map.Entry<String, WorkloadStat>> partitionStatEntries = profile.getPartitionPathStatMap().entrySet();
+      for (Map.Entry<String, WorkloadStat> partitionStat : partitionStatEntries) {
+        for (Map.Entry<String, Pair<String, Long>> updateLocEntry :
+                partitionStat.getValue().getUpdateLocationToCount().entrySet()) {
+          addUpdateBucket(partitionStat.getKey(), updateLocEntry.getKey());
+        }
       }
     }
 
-    private int addUpdateBucket(String fileIdHint) {
+    private int addUpdateBucket(String partitionPath, String fileIdHint) {
       int bucket = totalBuckets;
       updateLocationToBucket.put(fileIdHint, bucket);
       BucketInfo bucketInfo = new BucketInfo();
       bucketInfo.bucketType = BucketType.UPDATE;
       bucketInfo.fileIdPrefix = fileIdHint;
+      bucketInfo.partitionPath = partitionPath;
       bucketInfoMap.put(totalBuckets, bucketInfo);
       totalBuckets++;
       return bucket;
@@ -631,7 +637,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
                 bucket = updateLocationToBucket.get(smallFile.location.getFileId());
                 LOG.info("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
               } else {
-                bucket = addUpdateBucket(smallFile.location.getFileId());
+                bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId());
                 LOG.info("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
               }
               bucketNumbers.add(bucket);
@@ -655,6 +661,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
               recordsPerBucket.add(totalUnassignedInserts / insertBuckets);
               BucketInfo bucketInfo = new BucketInfo();
               bucketInfo.bucketType = BucketType.INSERT;
+              bucketInfo.partitionPath = partitionPath;
               bucketInfo.fileIdPrefix = FSUtils.createNewFileIdPfx();
               bucketInfoMap.put(totalBuckets, bucketInfo);
               totalBuckets++;
