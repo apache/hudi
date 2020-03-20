@@ -366,7 +366,7 @@ Compaction successfully repaired
 ```
 
 
-## [指标](docs/configurations.html#metrics-configs) {#metrics}
+## [指标](cn/docs/configurations.html#metrics-configs) {#metrics}
 
 为Hudi Client配置正确的数据集名称和指标环境后，它将生成以下graphite指标，以帮助调试hudi数据集
 
