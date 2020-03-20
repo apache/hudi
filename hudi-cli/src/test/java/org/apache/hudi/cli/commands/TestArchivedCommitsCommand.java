@@ -1,0 +1,195 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.cli.commands;
+
+import org.apache.hudi.cli.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.HoodieCLI;
+import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.cli.common.HoodieTestCommandDataGenerator;
+import org.apache.hudi.cli.common.HoodieTestCommitOperate;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieCommitArchiveLog;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.springframework.shell.core.CommandResult;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * Test Cases for {@link ArchivedCommitsCommand}.
+ */
+public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
+
+  private String tablePath;
+
+  @Before
+  public void init() throws IOException {
+    initDFS();
+    jsc.hadoopConfiguration().addResource(dfs.getConf());
+    HoodieCLI.conf = dfs.getConf();
+
+    // Create table and connect
+    String tableName = "test_table";
+    tablePath = basePath + File.separator + tableName;
+    new TableCommand().createTable(
+        tablePath, tableName,
+        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+
+    metaClient = HoodieCLI.getTableMetaClient();
+
+    // Generate archive
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
+        .withSchema(HoodieTestCommandDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
+        .forTable("test-trip-table").build();
+
+    // Create six commits
+    for (int i = 100; i < 106; i++) {
+      String timestamp = String.valueOf(i);
+      // Requested Compaction
+      HoodieTestCommandDataGenerator.createCompactionAuxiliaryMetadata(tablePath,
+          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), dfs.getConf());
+      // Inflight Compaction
+      HoodieTestCommandDataGenerator.createCompactionAuxiliaryMetadata(tablePath,
+          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), dfs.getConf());
+      HoodieTestCommandDataGenerator.createCommitFileWithMetadata(tablePath, timestamp, dfs.getConf());
+    }
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    // reload the timeline and get all the commits before archive
+    HoodieTimeline timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
+    assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
+
+    // archive
+    HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
+    assertTrue(archiveLog.archiveIfRequired(jsc));
+  }
+
+  @After
+  public void clean() throws IOException {
+    cleanupDFS();
+  }
+
+  /**
+   * Test for command: show archived commit stats.
+   */
+  @Test
+  public void testShowArchivedCommits() {
+    CommandResult cr = getShell().executeCommand("show archived commit stats");
+    assertTrue(cr.isSuccess());
+
+    TableHeader header = new TableHeader().addTableHeaderField("action").addTableHeaderField("instant")
+        .addTableHeaderField("partition").addTableHeaderField("file_id").addTableHeaderField("prev_instant")
+        .addTableHeaderField("num_writes").addTableHeaderField("num_inserts").addTableHeaderField("num_deletes")
+        .addTableHeaderField("num_update_writes").addTableHeaderField("total_log_files")
+        .addTableHeaderField("total_log_blocks").addTableHeaderField("total_corrupt_log_blocks")
+        .addTableHeaderField("total_rollback_blocks").addTableHeaderField("total_log_records")
+        .addTableHeaderField("total_updated_records_compacted").addTableHeaderField("total_write_bytes")
+        .addTableHeaderField("total_write_errors");
+
+    // Generate expected data
+    final List<Comparable[]> rows = new ArrayList<>();
+    for (int i = 100; i < 104; i++) {
+      String instant = String.valueOf(i);
+      for (int j = 0; j < 3; j++) {
+        Comparable[] defaultComp = new Comparable[]{"commit", instant,
+            HoodieTestCommandDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
+            HoodieTestCommandDataGenerator.DEFAULT_FILEID,
+            HoodieTestCommandDataGenerator.DEFAULT_PRE_COMMIT,
+            HoodieTestCommandDataGenerator.DEFAULT_NUM_WRITES,
+            HoodieTestCommandDataGenerator.DEFAULT_OTHER_VALUE,
+            HoodieTestCommandDataGenerator.DEFAULT_OTHER_VALUE,
+            HoodieTestCommandDataGenerator.DEFAULT_NUM_UPDATE_WRITES,
+            HoodieTestCommandDataGenerator.DEFAULT_NULL_VALUE,
+            HoodieTestCommandDataGenerator.DEFAULT_TOTAL_LOG_BLOCKS,
+            HoodieTestCommandDataGenerator.DEFAULT_OTHER_VALUE,
+            HoodieTestCommandDataGenerator.DEFAULT_OTHER_VALUE,
+            HoodieTestCommandDataGenerator.DEFAULT_TOTAL_LOG_RECORDS,
+            HoodieTestCommandDataGenerator.DEFAULT_OTHER_VALUE,
+            HoodieTestCommandDataGenerator.DEFAULT_TOTAL_WRITE_BYTES,
+            HoodieTestCommandDataGenerator.DEFAULT_OTHER_VALUE};
+        rows.add(defaultComp.clone());
+        defaultComp[2] = HoodieTestCommandDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+        rows.add(defaultComp);
+      }
+    }
+
+    String expectedResult = HoodiePrintHelper.print(
+        header, new HashMap<>(), "", false, -1, false, rows);
+    assertEquals(expectedResult, cr.getResult().toString());
+  }
+
+  /**
+   * Test for command: show archived commits.
+   */
+  @Test
+  public void testShowCommits() throws IOException {
+    CommandResult cr = getShell().executeCommand("show archived commits");
+    assertTrue(cr.isSuccess());
+    System.out.println(cr.getResult().toString());
+    final List<Comparable[]> rows = new ArrayList<>();
+
+    // Test default skipMetadata and limit 10
+    TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("CommitType");
+    for (int i = 100; i < 103; i++) {
+      String instant = String.valueOf(i);
+      Comparable[] result = new Comparable[]{instant, "commit"};
+      rows.add(result);
+      rows.add(result);
+      rows.add(result);
+    }
+    rows.add(new Comparable[]{"103", "commit"});
+    String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 10, false, rows);
+    assertEquals(expected, cr.getResult().toString());
+
+    // Test with Metadata and no limit
+    cr = getShell().executeCommand("show archived commits --skipMetadata false --limit -1");
+    assertTrue(cr.isSuccess());
+
+    rows.clear();
+
+    HoodieCommitMetadata metadata = HoodieTestCommandDataGenerator.generateCommitMetadata(tablePath);
+    for (int i = 100; i < 104; i++) {
+      String instant = String.valueOf(i);
+      // Since HoodiePrintHelper order data by default, need to order commitMetadata
+      Comparable[] result = new Comparable[]{instant, "commit", HoodieTestCommitOperate.commitMetadataConverterOrdered(metadata)};
+      rows.add(result);
+      rows.add(result);
+      rows.add(result);
+    }
+    header = header.addTableHeaderField("CommitDetails");
+    expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
+    assertEquals(expected, cr.getResult().toString());
+  }
+}
