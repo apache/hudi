@@ -528,7 +528,7 @@ Compaction successfully repaired
 ```
 
 
-## Monitoring
+## [Metrics](docs/configurations.html#metrics-configs) {#metrics}
 
 Once the Hudi writer is configured with the right table and environment for metrics, it produces the following graphite metrics, that aid in debugging hudi tables
 
