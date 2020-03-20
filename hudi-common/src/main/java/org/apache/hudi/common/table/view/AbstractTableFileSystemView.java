@@ -346,14 +346,14 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
-  public final Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionStr, String maxCommitTime) {
+  public final Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionStr, String maxInstantTime) {
     try {
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
       return fetchAllStoredFileGroups(partitionPath)
           .map(fileGroup -> Option.fromJavaOptional(fileGroup.getAllBaseFiles()
-              .filter(baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), maxCommitTime,
+              .filter(baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), maxInstantTime,
                   HoodieTimeline.LESSER_OR_EQUAL))
               .filter(df -> !isBaseFileDueToPendingCompaction(df)).findFirst()))
           .filter(Option::isPresent).map(Option::get);
@@ -469,13 +469,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
-  public final Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionStr, String maxCommitTime,
+  public final Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionStr, String maxInstantTime,
       boolean includeFileSlicesInPendingCompaction) {
     try {
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
-      Stream<FileSlice> fileSliceStream = fetchLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime);
+      Stream<FileSlice> fileSliceStream = fetchLatestFileSlicesBeforeOrOn(partitionPath, maxInstantTime);
       if (includeFileSlicesInPendingCompaction) {
         return fileSliceStream.map(this::filterBaseFileAfterPendingCompaction);
       } else {

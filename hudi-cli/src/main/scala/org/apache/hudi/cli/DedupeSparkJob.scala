@@ -147,11 +147,11 @@ class DedupeSparkJob(basePath: String,
 
     // 2. Remove duplicates from the bad files
     dupeFixPlan.foreach { case (fileName, keysToSkip) =>
-      val commitTime = FSUtils.getCommitTime(fileNameToPathMap(fileName).getName)
+      val instantTime = FSUtils.getCommitTime(fileNameToPathMap(fileName).getName)
       val badFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}.bad")
       val newFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}")
       LOG.info(" Skipping and writing new file for : " + fileName)
-      SparkHelpers.skipKeysAndWriteNewFile(commitTime, fs, badFilePath, newFilePath, dupeFixPlan(fileName))
+      SparkHelpers.skipKeysAndWriteNewFile(instantTime, fs, badFilePath, newFilePath, dupeFixPlan(fileName))
       fs.delete(badFilePath, false)
     }
 

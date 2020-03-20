@@ -215,13 +215,13 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
     List<String> keysToBeUpdated = new ArrayList<>();
     keysToBeUpdated.add(key);
-    // Update the commitTime for this record
+    // Update the instantTime for this record
     List<IndexedRecord> updatedRecords =
         SchemaTestUtil.updateHoodieTestRecords(keysToBeUpdated, recordsToUpdate, newCommitTime);
     // Upsert this updated record
     SpillableMapTestUtils.upsertRecords(updatedRecords, records);
     GenericRecord gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
-    // The record returned for this key should have the updated commitTime
+    // The record returned for this key should have the updated instantTime
     assert newCommitTime.contentEquals(gRecord.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
 
     // Get a record from the disk based map
@@ -233,12 +233,12 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     newCommitTime = HoodieActiveTimeline.createNewInstantTime();
     keysToBeUpdated = new ArrayList<>();
     keysToBeUpdated.add(key);
-    // Update the commitTime for this record
+    // Update the instantTime for this record
     updatedRecords = SchemaTestUtil.updateHoodieTestRecords(keysToBeUpdated, recordsToUpdate, newCommitTime);
     // Upsert this updated record
     SpillableMapTestUtils.upsertRecords(updatedRecords, records);
     gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
-    // The record returned for this key should have the updated commitTime
+    // The record returned for this key should have the updated instantTime
     assert newCommitTime.contentEquals(gRecord.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
   }
 

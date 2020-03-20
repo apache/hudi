@@ -225,8 +225,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
-    Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxCommitTime);
+  public Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxInstantTime) {
+    Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxInstantTime);
     return getLatestBaseFilesFromParams(paramsMap, LATEST_DATA_FILES_BEFORE_ON_INSTANT_URL);
   }
 
@@ -293,11 +293,11 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime,
+  public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime,
       boolean includeFileSlicesInPendingCompaction) {
     Map<String, String> paramsMap = getParamsWithAdditionalParams(partitionPath,
         new String[] {MAX_INSTANT_PARAM, INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM},
-        new String[] {maxCommitTime, String.valueOf(includeFileSlicesInPendingCompaction)});
+        new String[] {maxInstantTime, String.valueOf(includeFileSlicesInPendingCompaction)});
     try {
       List<FileSliceDTO> dataFiles = executeRequest(LATEST_SLICES_BEFORE_ON_INSTANT_URL, paramsMap,
           new TypeReference<List<FileSliceDTO>>() {}, RequestMethod.GET);

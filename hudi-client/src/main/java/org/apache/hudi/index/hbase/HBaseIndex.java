@@ -176,12 +176,12 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   private boolean checkIfValidCommit(HoodieTableMetaClient metaClient, String commitTs) {
-    HoodieTimeline commitTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
+    HoodieTimeline instantTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
     // Check if the last commit ts for this row is 1) present in the timeline or
     // 2) is less than the first commit ts in the timeline
-    return !commitTimeline.empty()
-        && (commitTimeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTs))
-            || HoodieTimeline.compareTimestamps(commitTimeline.firstInstant().get().getTimestamp(), commitTs,
+    return !instantTimeline.empty()
+        && (instantTimeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTs))
+            || HoodieTimeline.compareTimestamps(instantTimeline.firstInstant().get().getTimestamp(), commitTs,
                 HoodieTimeline.GREATER));
   }
 
@@ -465,7 +465,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   @Override
-  public boolean rollbackCommit(String commitTime) {
+  public boolean rollbackCommit(String instantTime) {
     // Rollback in HbaseIndex is managed via method {@link #checkIfValidCommit()}
     return true;
   }

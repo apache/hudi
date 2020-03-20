@@ -99,12 +99,12 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
   }
 
   private List<WriteStatus> compact(HoodieCopyOnWriteTable hoodieCopyOnWriteTable, HoodieTableMetaClient metaClient,
-      HoodieWriteConfig config, CompactionOperation operation, String commitTime) throws IOException {
+      HoodieWriteConfig config, CompactionOperation operation, String instantTime) throws IOException {
     FileSystem fs = metaClient.getFs();
 
     Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
     LOG.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
-        + " for commit " + commitTime);
+        + " for commit " + instantTime);
     // TODO - FIX THIS
     // Reads the entire avro file. Always only specific blocks should be read from the avro file
     // (failure recover).
@@ -136,10 +136,10 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
     // If the dataFile is present, there is a base parquet file present, perform updates else perform inserts into a
     // new base parquet file.
     if (oldDataFileOpt.isPresent()) {
-      result = hoodieCopyOnWriteTable.handleUpdate(commitTime, operation.getFileId(), scanner.getRecords(),
+      result = hoodieCopyOnWriteTable.handleUpdate(instantTime, operation.getFileId(), scanner.getRecords(),
           oldDataFileOpt.get());
     } else {
-      result = hoodieCopyOnWriteTable.handleInsert(commitTime, operation.getPartitionPath(), operation.getFileId(),
+      result = hoodieCopyOnWriteTable.handleInsert(instantTime, operation.getPartitionPath(), operation.getFileId(),
           scanner.iterator());
     }
     Iterable<List<WriteStatus>> resultIterable = () -> result;

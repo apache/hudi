@@ -123,14 +123,14 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   }
 
   private HoodieInstant readCommit(GenericRecord record, boolean loadDetails) {
-    final String commitTime  = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
+    final String instantTime  = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
     if (loadDetails) {
       Option.ofNullable(record.get(getMetadataKey(action))).map(actionData ->
-              this.readCommits.put(commitTime, actionData.toString().getBytes(StandardCharsets.UTF_8))
+              this.readCommits.put(instantTime, actionData.toString().getBytes(StandardCharsets.UTF_8))
       );
     }
-    return new HoodieInstant(false, action, commitTime);
+    return new HoodieInstant(false, action, instantTime);
   }
 
   private String getMetadataKey(String action) {

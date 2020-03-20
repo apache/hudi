@@ -98,15 +98,15 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileId, Iterator<HoodieRecord<T>> recordItr)
+  public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String fileId, Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
-    LOG.info("Merging updates for commit " + commitTime + " for file " + fileId);
+    LOG.info("Merging updates for commit " + instantTime + " for file " + fileId);
 
     if (!index.canIndexLogFiles() && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
-      LOG.info("Small file corrections for updates for commit " + commitTime + " for file " + fileId);
-      return super.handleUpdate(commitTime, fileId, recordItr);
+      LOG.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);
+      return super.handleUpdate(instantTime, fileId, recordItr);
     } else {
-      HoodieAppendHandle<T> appendHandle = new HoodieAppendHandle<>(config, commitTime, this, fileId, recordItr);
+      HoodieAppendHandle<T> appendHandle = new HoodieAppendHandle<>(config, instantTime, this, fileId, recordItr);
       appendHandle.doAppend();
       appendHandle.close();
       return Collections.singletonList(Collections.singletonList(appendHandle.getWriteStatus())).iterator();
@@ -114,13 +114,13 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String commitTime, String idPfx, Iterator<HoodieRecord<T>> recordItr)
+  public Iterator<List<WriteStatus>> handleInsert(String instantTime, String idPfx, Iterator<HoodieRecord<T>> recordItr)
       throws Exception {
     // If canIndexLogFiles, write inserts to log files else write inserts to parquet files
     if (index.canIndexLogFiles()) {
-      return new MergeOnReadLazyInsertIterable<>(recordItr, config, commitTime, this, idPfx);
+      return new MergeOnReadLazyInsertIterable<>(recordItr, config, instantTime, this, idPfx);
     } else {
-      return super.handleInsert(commitTime, idPfx, recordItr);
+      return super.handleInsert(instantTime, idPfx, recordItr);
     }
   }
 
@@ -425,7 +425,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     ValidationUtils.checkArgument(rollbackInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
 
     // wStat.getPrevCommit() might not give the right commit time in the following
-    // scenario : If a compaction was scheduled, the new commitTime associated with the requested compaction will be
+    // scenario : If a compaction was scheduled, the new instantTime associated with the requested compaction will be
     // used to write the new log files. In this case, the commit time for the log file is the compaction requested time.
     // But the index (global) might store the baseCommit of the parquet and not the requested, hence get the
     // baseCommit always by listing the file slice

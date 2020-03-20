@@ -168,7 +168,7 @@ public abstract class AbstractHoodieLogRecordScanner {
             // Consider the following scenario
             // (Time 0, C1, Task T1) -> Running
             // (Time 1, C1, Task T1) -> Failed (Wrote either a corrupt block or a correct
-            // DataBlock (B1) with commitTime C1
+            // DataBlock (B1) with instantTime C1
             // (Time 2, C1, Task T1.2) -> Running (Task T1 was retried and the attempt number is 2)
             // (Time 3, C1, Task T1.2) -> Finished (Wrote a correct DataBlock B2)
             // Now a logFile L1 can have 2 correct Datablocks (B1 and B2) which are the same.

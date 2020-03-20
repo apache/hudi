@@ -130,8 +130,8 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
-  public Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
-    return execute(partitionPath, maxCommitTime, preferredView::getLatestBaseFilesBeforeOrOn,
+  public Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxInstantTime) {
+    return execute(partitionPath, maxInstantTime, preferredView::getLatestBaseFilesBeforeOrOn,
         secondaryView::getLatestBaseFilesBeforeOrOn);
   }
 
@@ -167,9 +167,9 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
-  public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime,
+  public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime,
       boolean includeFileSlicesInPendingCompaction) {
-    return execute(partitionPath, maxCommitTime, includeFileSlicesInPendingCompaction,
+    return execute(partitionPath, maxInstantTime, includeFileSlicesInPendingCompaction,
         preferredView::getLatestFileSlicesBeforeOrOn, secondaryView::getLatestFileSlicesBeforeOrOn);
   }
 

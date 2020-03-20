@@ -215,8 +215,8 @@ public class HoodieSnapshotExporter {
           if (commitFilePath.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
             return true;
           } else {
-            String commitTime = FSUtils.getCommitFromCommitFile(commitFilePath.getName());
-            return HoodieTimeline.compareTimestamps(commitTime, latestCommitTimestamp,
+            String instantTime = FSUtils.getCommitFromCommitFile(commitFilePath.getName());
+            return HoodieTimeline.compareTimestamps(instantTime, latestCommitTimestamp,
                 HoodieTimeline.LESSER_OR_EQUAL);
           }
         });

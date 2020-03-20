@@ -123,14 +123,14 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime1, 1, TEST_WRITE_TOKEN);
     new File(basePath + "/" + partitionPath + "/" + fileName1).createNewFile();
     new File(basePath + "/" + partitionPath + "/" + fileName2).createNewFile();
-    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieActiveTimeline instantTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
     HoodieInstant deltaInstant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime1);
     HoodieInstant deltaInstant3 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime2);
 
-    saveAsComplete(commitTimeline, instant1, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant2, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant3, Option.empty());
+    saveAsComplete(instantTimeline, instant1, Option.empty());
+    saveAsComplete(instantTimeline, deltaInstant2, Option.empty());
+    saveAsComplete(instantTimeline, deltaInstant3, Option.empty());
 
     refreshFsView();
 
@@ -256,14 +256,14 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime1, 1, TEST_WRITE_TOKEN);
     new File(basePath + "/" + partitionPath + "/" + fileName1).createNewFile();
     new File(basePath + "/" + partitionPath + "/" + fileName2).createNewFile();
-    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieActiveTimeline instantTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
     HoodieInstant deltaInstant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime1);
     HoodieInstant deltaInstant3 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime2);
 
-    saveAsComplete(commitTimeline, instant1, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant2, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant3, Option.empty());
+    saveAsComplete(instantTimeline, instant1, Option.empty());
+    saveAsComplete(instantTimeline, deltaInstant2, Option.empty());
+    saveAsComplete(instantTimeline, deltaInstant3, Option.empty());
 
     refreshFsView();
     List<FileSlice> fileSlices = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
@@ -279,11 +279,11 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       new File(basePath + "/" + partitionPath + "/" + compactDataFileName).createNewFile();
       compactionInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionRequestedTime);
       HoodieInstant requested = HoodieTimeline.getCompactionRequestedInstant(compactionInstant.getTimestamp());
-      commitTimeline.saveToCompactionRequested(requested, AvroUtils.serializeCompactionPlan(compactionPlan));
-      commitTimeline.transitionCompactionRequestedToInflight(requested);
+      instantTimeline.saveToCompactionRequested(requested, AvroUtils.serializeCompactionPlan(compactionPlan));
+      instantTimeline.transitionCompactionRequestedToInflight(requested);
     } else {
       compactionInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionRequestedTime);
-      commitTimeline.saveToCompactionRequested(compactionInstant, AvroUtils.serializeCompactionPlan(compactionPlan));
+      instantTimeline.saveToCompactionRequested(compactionInstant, AvroUtils.serializeCompactionPlan(compactionPlan));
     }
 
     // View immediately after scheduling compaction
@@ -308,8 +308,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     new File(basePath + "/" + partitionPath + "/" + fileName4).createNewFile();
     HoodieInstant deltaInstant4 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime4);
     HoodieInstant deltaInstant5 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime5);
-    saveAsComplete(commitTimeline, deltaInstant4, Option.empty());
-    saveAsComplete(commitTimeline, deltaInstant5, Option.empty());
+    saveAsComplete(instantTimeline, deltaInstant4, Option.empty());
+    saveAsComplete(instantTimeline, deltaInstant5, Option.empty());
     refreshFsView();
 
     List<HoodieBaseFile> dataFiles = roView.getAllBaseFiles(partitionPath).collect(Collectors.toList());
@@ -406,9 +406,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         inflightDeltaInstantTime, 0, TEST_WRITE_TOKEN);
     new File(basePath + "/" + partitionPath + "/" + inflightLogFileName).createNewFile();
     // Mark instant as inflight
-    commitTimeline.createNewInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION,
+    instantTimeline.createNewInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION,
         inflightDeltaInstantTime));
-    commitTimeline.transitionRequestedToInflight(new HoodieInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION,
+    instantTimeline.transitionRequestedToInflight(new HoodieInstant(State.REQUESTED, HoodieTimeline.DELTA_COMMIT_ACTION,
         inflightDeltaInstantTime), Option.empty());
     refreshFsView();
 
@@ -479,10 +479,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       // For inflight compaction, we already create a data-file to test concurrent inflight case.
       // If we skipped creating data file corresponding to compaction commit, create it now
       new File(basePath + "/" + partitionPath + "/" + compactDataFileName).createNewFile();
-      commitTimeline.createNewInstant(compactionInstant);
+      instantTimeline.createNewInstant(compactionInstant);
     }
 
-    commitTimeline.saveAsComplete(compactionInstant, Option.empty());
+    instantTimeline.saveAsComplete(compactionInstant, Option.empty());
     refreshFsView();
     // populate the cache
     roView.getAllBaseFiles(partitionPath);

@@ -87,7 +87,7 @@ public class ArchivedCommitsCommand implements CommandMarker {
           .flatMap(r -> {
             HoodieCommitMetadata metadata = (HoodieCommitMetadata) SpecificData.get()
                 .deepCopy(HoodieCommitMetadata.SCHEMA$, r.get("hoodieCommitMetadata"));
-            final String instantTime = r.get("commitTime").toString();
+            final String instantTime = r.get("instantTime").toString();
             final String action = r.get("actionType").toString();
             return metadata.getPartitionToWriteStats().values().stream().flatMap(hoodieWriteStats -> hoodieWriteStats.stream().map(hoodieWriteStat -> {
               List<Comparable> row = new ArrayList<>();

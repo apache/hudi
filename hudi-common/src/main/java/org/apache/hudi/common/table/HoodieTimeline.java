@@ -142,7 +142,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Create a new Timeline with all the instants after startTs.
    */
-  HoodieTimeline findInstantsAfter(String commitTime, int numCommits);
+  HoodieTimeline findInstantsAfter(String instantTime, int numCommits);
 
   /**
    * Custom Filter of Instants.
@@ -280,16 +280,16 @@ public interface HoodieTimeline extends Serializable {
     return new HoodieInstant(true, instant.getAction(), instant.getTimestamp());
   }
 
-  static String makeCommitFileName(String commitTime) {
-    return StringUtils.join(commitTime, HoodieTimeline.COMMIT_EXTENSION);
+  static String makeCommitFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.COMMIT_EXTENSION);
   }
 
-  static String makeInflightCommitFileName(String commitTime) {
-    return StringUtils.join(commitTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
+  static String makeInflightCommitFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
   }
 
-  static String makeRequestedCommitFileName(String commitTime) {
-    return StringUtils.join(commitTime, HoodieTimeline.REQUESTED_COMMIT_EXTENSION);
+  static String makeRequestedCommitFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_COMMIT_EXTENSION);
   }
 
   static String makeCleanerFileName(String instant) {
@@ -312,28 +312,28 @@ public interface HoodieTimeline extends Serializable {
     return StringUtils.join(instant, HoodieTimeline.INFLIGHT_ROLLBACK_EXTENSION);
   }
 
-  static String makeInflightSavePointFileName(String commitTime) {
-    return StringUtils.join(commitTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION);
+  static String makeInflightSavePointFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION);
   }
 
-  static String makeSavePointFileName(String commitTime) {
-    return StringUtils.join(commitTime, HoodieTimeline.SAVEPOINT_EXTENSION);
+  static String makeSavePointFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.SAVEPOINT_EXTENSION);
   }
 
-  static String makeInflightDeltaFileName(String commitTime) {
-    return StringUtils.join(commitTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
+  static String makeInflightDeltaFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
   }
 
-  static String makeRequestedDeltaFileName(String commitTime) {
-    return StringUtils.join(commitTime, HoodieTimeline.REQUESTED_DELTA_COMMIT_EXTENSION);
+  static String makeRequestedDeltaFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_DELTA_COMMIT_EXTENSION);
   }
 
-  static String makeInflightCompactionFileName(String commitTime) {
-    return StringUtils.join(commitTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
+  static String makeInflightCompactionFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
   }
 
-  static String makeRequestedCompactionFileName(String commitTime) {
-    return StringUtils.join(commitTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
+  static String makeRequestedCompactionFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
   }
 
   static String makeRestoreFileName(String instant) {
@@ -344,8 +344,8 @@ public interface HoodieTimeline extends Serializable {
     return StringUtils.join(instant, HoodieTimeline.INFLIGHT_RESTORE_EXTENSION);
   }
 
-  static String makeDeltaFileName(String commitTime) {
-    return commitTime + HoodieTimeline.DELTA_COMMIT_EXTENSION;
+  static String makeDeltaFileName(String instantTime) {
+    return instantTime + HoodieTimeline.DELTA_COMMIT_EXTENSION;
   }
 
   static String getCommitFromCommitFile(String commitFileName) {

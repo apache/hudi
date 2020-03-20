@@ -160,8 +160,8 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
     return sb.toString();
   }
 
-  public static String generateSequenceId(String commitTime, int partitionId, long recordIndex) {
-    return commitTime + "_" + partitionId + "_" + recordIndex;
+  public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
+    return instantTime + "_" + partitionId + "_" + recordIndex;
   }
 
   public String getPartitionPath() {

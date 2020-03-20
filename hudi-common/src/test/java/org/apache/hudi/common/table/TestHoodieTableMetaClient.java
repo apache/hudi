@@ -59,15 +59,15 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieTableMetaClient deseralizedMetaClient =
         HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
     assertNotNull(deseralizedMetaClient);
-    HoodieActiveTimeline commitTimeline = deseralizedMetaClient.getActiveTimeline();
+    HoodieActiveTimeline instantTimeLine = deseralizedMetaClient.getActiveTimeline();
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
-    commitTimeline.createNewInstant(instant);
-    commitTimeline.saveAsComplete(instant, Option.of("test-detail".getBytes()));
-    commitTimeline = commitTimeline.reload();
+    instantTimeLine.createNewInstant(instant);
+    instantTimeLine.saveAsComplete(instant, Option.of("test-detail".getBytes()));
+    instantTimeLine = instantTimeLine.reload();
     HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
-    assertEquals("Commit should be 1 and completed", completedInstant, commitTimeline.getInstants().findFirst().get());
+    assertEquals("Commit should be 1 and completed", completedInstant, instantTimeLine.getInstants().findFirst().get());
     assertArrayEquals("Commit value should be \"test-detail\"", "test-detail".getBytes(),
-        commitTimeline.getInstantDetails(completedInstant).get());
+        instantTimeLine.getInstantDetails(completedInstant).get());
   }
 
   @Test

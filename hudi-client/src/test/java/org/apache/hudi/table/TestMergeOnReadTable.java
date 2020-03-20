@@ -840,11 +840,11 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
 
       Assert.assertTrue(numLogFiles > 0);
       // Do a compaction
-      String commitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
-      statuses = writeClient.compact(commitTime);
+      String instantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
+      statuses = writeClient.compact(instantTime);
       assertEquals(statuses.map(status -> status.getStat().getPath().contains("parquet")).count(), numLogFiles);
       Assert.assertEquals(statuses.count(), numLogFiles);
-      writeClient.commitCompaction(commitTime, statuses, Option.empty());
+      writeClient.commitCompaction(instantTime, statuses, Option.empty());
     }
   }
 
@@ -992,14 +992,14 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       instant = new HoodieInstant(State.INFLIGHT, commitActionType, "000");
       activeTimeline.saveAsComplete(instant, Option.empty());
 
-      String commitTime = "001";
-      client.startCommitWithTime(commitTime);
+      String instantTime = "001";
+      client.startCommitWithTime(instantTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
+      List<HoodieRecord> records = dataGen.generateInserts(instantTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-      JavaRDD<WriteStatus> statuses = client.insert(writeRecords, commitTime);
-      assertTrue("Commit should succeed", client.commit(commitTime, statuses));
+      JavaRDD<WriteStatus> statuses = client.insert(writeRecords, instantTime);
+      assertTrue("Commit should succeed", client.commit(instantTime, statuses));
 
       // Read from commit file
       table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
@@ -1019,12 +1019,12 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       }
       Assert.assertEquals(inserts, 200);
 
-      commitTime = "002";
-      client.startCommitWithTime(commitTime);
-      records = dataGen.generateUpdates(commitTime, records);
+      instantTime = "002";
+      client.startCommitWithTime(instantTime);
+      records = dataGen.generateUpdates(instantTime, records);
       writeRecords = jsc.parallelize(records, 1);
-      statuses = client.upsert(writeRecords, commitTime);
-      assertTrue("Commit should succeed", client.commit(commitTime, statuses));
+      statuses = client.upsert(writeRecords, instantTime);
+      assertTrue("Commit should succeed", client.commit(instantTime, statuses));
 
       // Read from commit file
       table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
@@ -1048,7 +1048,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       Assert.assertEquals(inserts, 200);
       Assert.assertEquals(upserts, 200);
 
-      client.rollback(commitTime);
+      client.rollback(instantTime);
 
       // Read from commit file
       table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
@@ -1085,14 +1085,14 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       Map<String, Long> fileIdToInsertsMap = new HashMap<>();
       Map<String, Long> fileIdToUpsertsMap = new HashMap<>();
 
-      String commitTime = "000";
-      client.startCommitWithTime(commitTime);
+      String instantTime = "000";
+      client.startCommitWithTime(instantTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
+      List<HoodieRecord> records = dataGen.generateInserts(instantTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-      JavaRDD<WriteStatus> statuses = client.insert(writeRecords, commitTime);
-      assertTrue("Commit should succeed", client.commit(commitTime, statuses));
+      JavaRDD<WriteStatus> statuses = client.insert(writeRecords, instantTime);
+      assertTrue("Commit should succeed", client.commit(instantTime, statuses));
 
       // Read from commit file
       HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
@@ -1114,14 +1114,14 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       }
       Assert.assertEquals(inserts, 200);
 
-      commitTime = "001";
-      client.startCommitWithTime(commitTime);
+      instantTime = "001";
+      client.startCommitWithTime(instantTime);
       // generate updates + inserts. inserts should be handled into small files
-      records = dataGen.generateUpdates(commitTime, records);
-      records.addAll(dataGen.generateInserts(commitTime, 200));
+      records = dataGen.generateUpdates(instantTime, records);
+      records.addAll(dataGen.generateInserts(instantTime, 200));
       writeRecords = jsc.parallelize(records, 1);
-      statuses = client.upsert(writeRecords, commitTime);
-      assertTrue("Commit should succeed", client.commit(commitTime, statuses));
+      statuses = client.upsert(writeRecords, instantTime);
+      assertTrue("Commit should succeed", client.commit(instantTime, statuses));
 
       // Read from commit file
       table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
@@ -1149,10 +1149,10 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       Assert.assertEquals(upserts, 200);
 
       // Test small file handling after compaction
-      commitTime = "002";
-      client.scheduleCompactionAtInstant(commitTime, Option.of(metadata.getExtraMetadata()));
-      statuses = client.compact(commitTime);
-      client.commitCompaction(commitTime, statuses, Option.empty());
+      instantTime = "002";
+      client.scheduleCompactionAtInstant(instantTime, Option.of(metadata.getExtraMetadata()));
+      statuses = client.compact(instantTime);
+      client.commitCompaction(instantTime, statuses, Option.empty());
 
       // Read from commit file
       table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
@@ -1173,14 +1173,14 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       }
 
       // Write inserts + updates
-      commitTime = "003";
-      client.startCommitWithTime(commitTime);
+      instantTime = "003";
+      client.startCommitWithTime(instantTime);
       // generate updates + inserts. inserts should be handled into small files
-      records = dataGen.generateUpdates(commitTime, records);
-      records.addAll(dataGen.generateInserts(commitTime, 200));
+      records = dataGen.generateUpdates(instantTime, records);
+      records.addAll(dataGen.generateInserts(instantTime, 200));
       writeRecords = jsc.parallelize(records, 1);
-      statuses = client.upsert(writeRecords, commitTime);
-      assertTrue("Commit should succeed", client.commit(commitTime, statuses));
+      statuses = client.upsert(writeRecords, instantTime);
+      assertTrue("Commit should succeed", client.commit(instantTime, statuses));
 
       // Read from commit file
       table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);

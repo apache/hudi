@@ -43,7 +43,7 @@ import static org.mockito.Mockito.when;
 
 public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
 
-  private final String commitTime = HoodieActiveTimeline.createNewInstantTime();
+  private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
 
   @Before
   public void setUp() throws Exception {
@@ -58,7 +58,7 @@ public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
   @Test
   public void testExecutor() {
 
-    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(commitTime, 100);
+    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);

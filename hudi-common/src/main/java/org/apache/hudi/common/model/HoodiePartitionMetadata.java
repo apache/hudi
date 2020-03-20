@@ -65,9 +65,9 @@ public class HoodiePartitionMetadata {
   /**
    * Construct metadata object to be written out.
    */
-  public HoodiePartitionMetadata(FileSystem fs, String commitTime, Path basePath, Path partitionPath) {
+  public HoodiePartitionMetadata(FileSystem fs, String instantTime, Path basePath, Path partitionPath) {
     this(fs, partitionPath);
-    props.setProperty(COMMIT_TIME_KEY, commitTime);
+    props.setProperty(COMMIT_TIME_KEY, instantTime);
     props.setProperty(PARTITION_DEPTH_KEY, String.valueOf(partitionPath.depth() - basePath.depth()));
   }
 

@@ -96,23 +96,23 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
   }
 
   /**
-   * Commit changes performed at the given commitTime marker.
+   * Commit changes performed at the given instantTime marker.
    */
-  public boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses) {
-    return commit(commitTime, writeStatuses, Option.empty());
+  public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses) {
+    return commit(instantTime, writeStatuses, Option.empty());
   }
 
   /**
-   * Commit changes performed at the given commitTime marker.
+   * Commit changes performed at the given instantTime marker.
    */
-  public boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses,
+  public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata) {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    return commit(commitTime, writeStatuses, extraMetadata, metaClient.getCommitActionType());
+    return commit(instantTime, writeStatuses, extraMetadata, metaClient.getCommitActionType());
   }
 
   protected JavaRDD<WriteStatus> updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD, HoodieTable<T> table,
-      String commitTime) {
+      String instantTime) {
     // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
     // RDD actions that are performed after updating the index.
     writeStatusRDD = writeStatusRDD.persist(config.getWriteStatusStorageLevel());
@@ -121,26 +121,26 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, jsc, table);
     metrics.updateIndexMetrics(UPDATE_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
     // Trigger the insert and collect statuses
-    commitOnAutoCommit(commitTime, statuses, table.getMetaClient().getCommitActionType());
+    commitOnAutoCommit(instantTime, statuses, table.getMetaClient().getCommitActionType());
     return statuses;
   }
 
-  protected void commitOnAutoCommit(String commitTime, JavaRDD<WriteStatus> resultRDD, String actionType) {
+  protected void commitOnAutoCommit(String instantTime, JavaRDD<WriteStatus> resultRDD, String actionType) {
     if (config.shouldAutoCommit()) {
-      LOG.info("Auto commit enabled: Committing " + commitTime);
-      boolean commitResult = commit(commitTime, resultRDD, Option.empty(), actionType);
+      LOG.info("Auto commit enabled: Committing " + instantTime);
+      boolean commitResult = commit(instantTime, resultRDD, Option.empty(), actionType);
       if (!commitResult) {
-        throw new HoodieCommitException("Failed to commit " + commitTime);
+        throw new HoodieCommitException("Failed to commit " + instantTime);
       }
     } else {
-      LOG.info("Auto commit disabled for " + commitTime);
+      LOG.info("Auto commit disabled for " + instantTime);
     }
   }
 
-  private boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses,
+  private boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata, String actionType) {
 
-    LOG.info("Commiting " + commitTime);
+    LOG.info("Commiting " + instantTime);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
 
@@ -152,7 +152,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     updateMetadataAndRollingStats(actionType, metadata, stats);
 
     // Finalize write
-    finalizeWrite(table, commitTime, stats);
+    finalizeWrite(table, instantTime, stats);
 
     // add in extra metadata
     if (extraMetadata.isPresent()) {
@@ -162,23 +162,23 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     metadata.setOperationType(operationType);
 
     try {
-      activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, commitTime),
+      activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
 
-      postCommit(metadata, commitTime, extraMetadata);
+      postCommit(metadata, instantTime, extraMetadata);
 
       if (writeContext != null) {
         long durationInMs = metrics.getDurationInMs(writeContext.stop());
-        metrics.updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(commitTime).getTime(), durationInMs,
+        metrics.updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(instantTime).getTime(), durationInMs,
             metadata, actionType);
         writeContext = null;
       }
-      LOG.info("Committed " + commitTime);
+      LOG.info("Committed " + instantTime);
     } catch (IOException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + commitTime,
+      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
     } catch (ParseException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + commitTime
+      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime
           + "Instant time is not of valid format", e);
     }
     return true;
@@ -344,7 +344,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     HoodieTable<T> table = HoodieTable.getHoodieTable(
         createMetaClient(true), config, jsc);
     HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
-    HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
+    HoodieTimeline instantTimeline = table.getCompletedCommitsTimeline();
     // Check if any of the commits is a savepoint - do not allow rollback on those commits
     List<String> savepoints = table.getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
@@ -355,7 +355,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       }
     });
 
-    if (commitTimeline.empty() && inflightAndRequestedCommitTimeline.empty()) {
+    if (instantTimeline.empty() && inflightAndRequestedCommitTimeline.empty()) {
       // nothing to rollback
       LOG.info("No commits to rollback " + commitToRollback);
     }
@@ -363,8 +363,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     // Make sure only the last n commits are being rolled back
     // If there is a commit in-between or after that is not rolled back, then abort
 
-    if ((commitToRollback != null) && !commitTimeline.empty()
-        && !commitTimeline.findInstantsAfter(commitToRollback, Integer.MAX_VALUE).empty()) {
+    if ((commitToRollback != null) && !instantTimeline.empty()
+        && !instantTimeline.findInstantsAfter(commitToRollback, Integer.MAX_VALUE).empty()) {
       throw new HoodieRollbackException(
           "Found commits after time :" + commitToRollback + ", please rollback greater commits first");
     }

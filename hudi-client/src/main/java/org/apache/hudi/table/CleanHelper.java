@@ -64,7 +64,7 @@ public class CleanHelper<T extends HoodieRecordPayload<T>> implements Serializab
   private static final Logger LOG = LogManager.getLogger(CleanHelper.class);
 
   private final SyncableFileSystemView fileSystemView;
-  private final HoodieTimeline commitTimeline;
+  private final HoodieTimeline instantTimeline;
   private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingCompactionOperations;
   private HoodieTable<T> hoodieTable;
   private HoodieWriteConfig config;
@@ -72,7 +72,7 @@ public class CleanHelper<T extends HoodieRecordPayload<T>> implements Serializab
   public CleanHelper(HoodieTable<T> hoodieTable, HoodieWriteConfig config) {
     this.hoodieTable = hoodieTable;
     this.fileSystemView = hoodieTable.getHoodieView();
-    this.commitTimeline = hoodieTable.getCompletedCommitTimeline();
+    this.instantTimeline = hoodieTable.getCompletedCommitTimeline();
     this.config = config;
     this.fgIdToPendingCompactionOperations =
         ((SyncableFileSystemView) hoodieTable.getSliceView()).getPendingCompactionOperations()
@@ -194,7 +194,7 @@ public class CleanHelper<T extends HoodieRecordPayload<T>> implements Serializab
         .flatMap(s -> hoodieTable.getSavepointedDataFiles(s)).collect(Collectors.toList());
 
     // determine if we have enough commits, to start cleaning.
-    if (commitTimeline.countInstants() > commitsRetained) {
+    if (instantTimeline.countInstants() > commitsRetained) {
       HoodieInstant earliestCommitToRetain = getEarliestCommitToRetain().get();
       List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
       for (HoodieFileGroup fileGroup : fileGroups) {
@@ -245,18 +245,18 @@ public class CleanHelper<T extends HoodieRecordPayload<T>> implements Serializab
   }
 
   /**
-   * Gets the latest version < commitTime. This version file could still be used by queries.
+   * Gets the latest version < instantTime. This version file could still be used by queries.
    */
-  private String getLatestVersionBeforeCommit(List<FileSlice> fileSliceList, HoodieInstant commitTime) {
+  private String getLatestVersionBeforeCommit(List<FileSlice> fileSliceList, HoodieInstant instantTime) {
     for (FileSlice file : fileSliceList) {
       String fileCommitTime = file.getBaseInstantTime();
-      if (HoodieTimeline.compareTimestamps(commitTime.getTimestamp(), fileCommitTime, HoodieTimeline.GREATER)) {
-        // fileList is sorted on the reverse, so the first commit we find <= commitTime is the
+      if (HoodieTimeline.compareTimestamps(instantTime.getTimestamp(), fileCommitTime, HoodieTimeline.GREATER)) {
+        // fileList is sorted on the reverse, so the first commit we find <= instantTime is the
         // one we want
         return fileCommitTime;
       }
     }
-    // There is no version of this file which is <= commitTime
+    // There is no version of this file which is <= instantTime
     return null;
   }
 
@@ -285,8 +285,8 @@ public class CleanHelper<T extends HoodieRecordPayload<T>> implements Serializab
     Option<HoodieInstant> earliestCommitToRetain = Option.empty();
     int commitsRetained = config.getCleanerCommitsRetained();
     if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_COMMITS
-        && commitTimeline.countInstants() > commitsRetained) {
-      earliestCommitToRetain = commitTimeline.nthInstant(commitTimeline.countInstants() - commitsRetained);
+        && instantTimeline.countInstants() > commitsRetained) {
+      earliestCommitToRetain = instantTimeline.nthInstant(instantTimeline.countInstants() - commitsRetained);
     }
     return earliestCommitToRetain;
   }

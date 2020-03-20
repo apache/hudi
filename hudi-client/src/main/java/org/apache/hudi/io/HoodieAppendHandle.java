@@ -101,16 +101,16 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   // Total number of new records inserted into the delta file
   private long insertRecordsWritten = 0;
 
-  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable, String fileId,
+  public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable, String fileId,
       Iterator<HoodieRecord<T>> recordItr) {
-    super(config, commitTime, fileId, hoodieTable);
+    super(config, instantTime, fileId, hoodieTable);
     writeStatus.setStat(new HoodieDeltaWriteStat());
     this.fileId = fileId;
     this.recordItr = recordItr;
   }
 
-  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable, String fileId) {
-    this(config, commitTime, hoodieTable, fileId, null);
+  public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable, String fileId) {
+    this(config, instantTime, hoodieTable, fileId, null);
   }
 
   private void init(HoodieRecord record) {
@@ -119,7 +119,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
       // extract some information from the first record
       SliceView rtView = hoodieTable.getSliceView();
       Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
-      // Set the base commit time as the current commitTime for new inserts into log files
+      // Set the base commit time as the current instantTime for new inserts into log files
       String baseInstantTime = instantTime;
       if (fileSlice.isPresent()) {
         baseInstantTime = fileSlice.get().getBaseInstantTime();

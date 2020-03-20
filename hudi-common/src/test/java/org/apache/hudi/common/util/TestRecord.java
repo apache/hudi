@@ -74,28 +74,28 @@ public class TestRecord implements Serializable {
   private TestNestedRecord testNestedRecord;
   private String[] stringArray;
 
-  public TestRecord(String commitTime, int recordNumber, String fileId) {
-    this._hoodie_commit_time = commitTime;
+  public TestRecord(String instantTime, int recordNumber, String fileId) {
+    this._hoodie_commit_time = instantTime;
     this._hoodie_record_key = "key" + recordNumber;
-    this._hoodie_partition_path = commitTime;
+    this._hoodie_partition_path = instantTime;
     this._hoodie_file_name = fileId;
-    this._hoodie_commit_seqno = commitTime + recordNumber;
+    this._hoodie_commit_seqno = instantTime + recordNumber;
 
-    String commitTimeSuffix = "@" + commitTime;
-    int commitHashCode = commitTime.hashCode();
+    String instantTimeSuffix = "@" + instantTime;
+    int commitHashCode = instantTime.hashCode();
 
     this.field1 = "field" + recordNumber;
-    this.field2 = "field" + recordNumber + commitTimeSuffix;
+    this.field2 = "field" + recordNumber + instantTimeSuffix;
     this.name = "name" + recordNumber;
     this.favoriteIntNumber = recordNumber + commitHashCode;
     this.favoriteNumber = (long) (recordNumber + commitHashCode);
     this.favoriteFloatNumber = (float) ((recordNumber + commitHashCode) / 1024.0);
     this.favoriteDoubleNumber = (recordNumber + commitHashCode) / 1024.0;
     this.tags = new HashMap<>();
-    this.tags.put("mapItem1", new TestMapItemRecord("item" + recordNumber, "item" + recordNumber + commitTimeSuffix));
-    this.tags.put("mapItem2", new TestMapItemRecord("item2" + recordNumber, "item2" + recordNumber + commitTimeSuffix));
-    this.testNestedRecord = new TestNestedRecord(false, "UserId" + recordNumber + commitTimeSuffix);
-    this.stringArray = new String[] {"stringArray0" + commitTimeSuffix, "stringArray1" + commitTimeSuffix};
+    this.tags.put("mapItem1", new TestMapItemRecord("item" + recordNumber, "item" + recordNumber + instantTimeSuffix));
+    this.tags.put("mapItem2", new TestMapItemRecord("item2" + recordNumber, "item2" + recordNumber + instantTimeSuffix));
+    this.testNestedRecord = new TestNestedRecord(false, "UserId" + recordNumber + instantTimeSuffix);
+    this.stringArray = new String[] {"stringArray0" + instantTimeSuffix, "stringArray1" + instantTimeSuffix};
   }
 
   public String toJsonString() throws IOException {

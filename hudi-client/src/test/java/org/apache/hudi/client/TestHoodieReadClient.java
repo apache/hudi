@@ -74,8 +74,8 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   @Test
   public void testReadFilterExistAfterBulkInsertPrepped() throws Exception {
     testReadFilterExist(getConfigBuilder().withBulkInsertParallelism(1).build(),
-        (writeClient, recordRDD, commitTime) -> {
-          return writeClient.bulkInsertPreppedRecords(recordRDD, commitTime, Option.empty());
+        (writeClient, recordRDD, instantTime) -> {
+          return writeClient.bulkInsertPreppedRecords(recordRDD, instantTime, Option.empty());
         });
   }
 
@@ -178,8 +178,8 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   @Test
   public void testTagLocationAfterBulkInsertPrepped() throws Exception {
     testTagLocation(
-        getConfigBuilder().withBulkInsertParallelism(1).build(), (writeClient, recordRDD, commitTime) -> writeClient
-            .bulkInsertPreppedRecords(recordRDD, commitTime, Option.empty()),
+        getConfigBuilder().withBulkInsertParallelism(1).build(), (writeClient, recordRDD, instantTime) -> writeClient
+            .bulkInsertPreppedRecords(recordRDD, instantTime, Option.empty()),
         HoodieWriteClient::upsertPreppedRecords, true);
   }
 
@@ -217,9 +217,9 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
       String prevCommitTime = newCommitTime;
       newCommitTime = "004";
       numRecords = 100;
-      String commitTimeBetweenPrevAndNew = "002";
+      String instantTimeBetweenPrevAndNew = "002";
       result = updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
-          Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, updateFn, isPrepped, true,
+          Option.of(Arrays.asList(instantTimeBetweenPrevAndNew)), initCommitTime, numRecords, updateFn, isPrepped, true,
           numRecords, 200, 2);
       recordRDD =
           jsc.parallelize(result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)

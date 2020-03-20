@@ -88,24 +88,24 @@ public class HiveIncrPullSource extends AvroSource {
 
     LOG.info("Looking for commits ");
 
-    FileStatus[] commitTimePaths = fs.listStatus(new Path(incrPullRootPath));
-    List<String> commitTimes = new ArrayList<>(commitTimePaths.length);
-    for (FileStatus commitTimePath : commitTimePaths) {
-      String[] splits = commitTimePath.getPath().toString().split("/");
-      commitTimes.add(splits[splits.length - 1]);
+    FileStatus[] instantTimePaths = fs.listStatus(new Path(incrPullRootPath));
+    List<String> instantTimes = new ArrayList<>(instantTimePaths.length);
+    for (FileStatus instantTimePath : instantTimePaths) {
+      String[] splits = instantTimePath.getPath().toString().split("/");
+      instantTimes.add(splits[splits.length - 1]);
     }
-    Collections.sort(commitTimes);
-    LOG.info("Retrieved commit times " + commitTimes);
+    Collections.sort(instantTimes);
+    LOG.info("Retrieved commit times " + instantTimes);
 
     if (!latestTargetCommit.isPresent()) {
       // start from the beginning
-      return Option.of(commitTimes.get(0));
+      return Option.of(instantTimes.get(0));
     }
 
-    for (String commitTime : commitTimes) {
+    for (String instantTime : instantTimes) {
       // TODO(vc): Add an option to delete consumed commits
-      if (commitTime.compareTo(latestTargetCommit.get()) > 0) {
-        return Option.of(commitTime);
+      if (instantTime.compareTo(latestTargetCommit.get()) > 0) {
+        return Option.of(instantTime);
       }
     }
     return Option.empty();

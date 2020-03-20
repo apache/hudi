@@ -57,10 +57,10 @@ public interface TableFileSystemView {
     Stream<HoodieBaseFile> getLatestBaseFiles();
 
     /**
-     * Stream all the latest version data files in the given partition with precondition that commitTime(file) before
-     * maxCommitTime.
+     * Stream all the latest version data files in the given partition with precondition that instantTime(file) before
+     * maxInstantTime.
      */
-    Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime);
+    Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxInstantTime);
 
     /**
      * Stream all the latest data files pass.
@@ -105,13 +105,13 @@ public interface TableFileSystemView {
     Stream<FileSlice> getLatestUnCompactedFileSlices(String partitionPath);
 
     /**
-     * Stream all latest file slices in given partition with precondition that commitTime(file) before maxCommitTime.
+     * Stream all latest file slices in given partition with precondition that instantTime(file) before maxInstantTime.
      *
      * @param partitionPath Partition path
-     * @param maxCommitTime Max Instant Time
+     * @param maxInstantTime Max Instant Time
      * @param includeFileSlicesInPendingCompaction include file-slices that are in pending compaction
      */
-    Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime,
+    Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime,
         boolean includeFileSlicesInPendingCompaction);
 
     /**
