@@ -35,8 +35,8 @@ public class TestHoodieAvroUtils {
       + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
       + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"},"
-    + "{\"name\": \"new_col1\", \"type\": \"string\", \"default\": \"dummy_val\"},"
-    + "{\"name\": \"new_col2\", \"type\": [\"int\", \"null\"]}]}";
+      + "{\"name\": \"new_col1\", \"type\": \"string\", \"default\": \"dummy_val\"},"
+      + "{\"name\": \"new_col2\", \"type\": [\"int\", \"null\"]}]}";
 
   @Test
   public void testPropsPresent() {
