@@ -98,15 +98,17 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileId, Iterator<HoodieRecord<T>> recordItr)
+  public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String partitionPath,
+                                                  String fileId, Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
     LOG.info("Merging updates for commit " + commitTime + " for file " + fileId);
 
     if (!index.canIndexLogFiles() && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
       LOG.info("Small file corrections for updates for commit " + commitTime + " for file " + fileId);
-      return super.handleUpdate(commitTime, fileId, recordItr);
+      return super.handleUpdate(commitTime, partitionPath, fileId, recordItr);
     } else {
-      HoodieAppendHandle<T> appendHandle = new HoodieAppendHandle<>(config, commitTime, this, fileId, recordItr);
+      HoodieAppendHandle<T> appendHandle = new HoodieAppendHandle<>(config, commitTime, this,
+              partitionPath, fileId, recordItr);
       appendHandle.doAppend();
       appendHandle.close();
       return Collections.singletonList(Collections.singletonList(appendHandle.getWriteStatus())).iterator();

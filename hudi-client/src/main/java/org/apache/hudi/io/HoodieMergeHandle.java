@@ -70,9 +70,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   private boolean useWriterSchema;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
-      Iterator<HoodieRecord<T>> recordItr, String fileId) {
-    super(config, commitTime, fileId, hoodieTable);
-    String partitionPath = init(fileId, recordItr);
+      Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId) {
+    super(config, commitTime, partitionPath, fileId, hoodieTable);
+    init(fileId, recordItr);
     init(fileId, partitionPath, hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
   }
 
@@ -80,12 +80,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
    * Called by compactor code path.
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
-      Map<String, HoodieRecord<T>> keyToNewRecords, String fileId, HoodieBaseFile dataFileToBeMerged) {
-    super(config, commitTime, fileId, hoodieTable);
+      Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
+      HoodieBaseFile dataFileToBeMerged) {
+    super(config, commitTime, partitionPath, fileId, hoodieTable);
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchema = true;
-    init(fileId, keyToNewRecords.get(keyToNewRecords.keySet().stream().findFirst().get()).getPartitionPath(),
-        dataFileToBeMerged);
+    init(fileId, this.partitionPath, dataFileToBeMerged);
   }
 
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
@@ -143,7 +143,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   /**
    * Load the new incoming records in a map and return partitionPath.
    */
-  private String init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
+  private void init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
     try {
       // Load the new records in a map
       long memoryForMerge = config.getMaxMemoryPerPartitionMerge();
@@ -153,10 +153,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
-    String partitionPath = null;
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> record = newRecordsItr.next();
-      partitionPath = record.getPartitionPath();
       // update the new location of the record, so we know where to find it next
       record.unseal();
       record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
@@ -170,7 +168,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
         + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + "Number of entries in DiskBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + "Size of file spilled to disk => "
         + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
-    return partitionPath;
   }
 
   private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
@@ -182,6 +179,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
   private boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
     Option recordMetadata = hoodieRecord.getData().getMetadata();
+    if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
+      HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
+          + hoodieRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
+      writeStatus.markFailure(hoodieRecord, failureEx, recordMetadata);
+      return false;
+    }
     try {
       if (indexedRecord.isPresent()) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
