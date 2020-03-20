@@ -84,11 +84,4 @@ public class SparkConfig<T> extends AbstractConfig<T> {
   public T getBloomIndexInputStorageLevel() {
     return (T) StorageLevel.fromString(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
   }
-
-  public static void main(String[] args) {
-    Properties properties = new Properties();
-    properties.put(WRITE_STATUS_STORAGE_LEVEL, "MEMORY_AND_DISK_SER");
-    SparkConfig<StorageLevel> config = new SparkConfig<>(properties);
-    StorageLevel storageLevel = config.getWriteStatusStorageLevel();
-  }
 }
