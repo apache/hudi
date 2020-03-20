@@ -81,6 +81,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.spark.api.java.function.PairFunction;
 import scala.Tuple2;
 
 /**
@@ -142,16 +143,16 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Partitioner getUpsertPartitioner(WorkloadProfile profile) {
+  public Partitioner getUpsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc) {
     if (profile == null) {
       throw new HoodieUpsertException("Need workload profile to construct the upsert partitioner.");
     }
-    return new UpsertPartitioner(profile);
+    return new UpsertPartitioner(profile, jsc);
   }
 
   @Override
-  public Partitioner getInsertPartitioner(WorkloadProfile profile) {
-    return getUpsertPartitioner(profile);
+  public Partitioner getInsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc) {
+    return getUpsertPartitioner(profile, jsc);
   }
 
   @Override
@@ -573,14 +574,14 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
      */
     protected HoodieRollingStatMetadata rollingStatMetadata;
 
-    UpsertPartitioner(WorkloadProfile profile) {
+    UpsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc) {
       updateLocationToBucket = new HashMap<>();
       partitionPathToInsertBuckets = new HashMap<>();
       bucketInfoMap = new HashMap<>();
       globalStat = profile.getGlobalStat();
       rollingStatMetadata = getRollingStats();
       assignUpdates(profile);
-      assignInserts(profile);
+      assignInserts(profile, jsc);
 
       LOG.info("Total Buckets :" + totalBuckets + ", buckets info => " + bucketInfoMap + ", \n"
           + "Partition to insert buckets => " + partitionPathToInsertBuckets + ", \n"
@@ -610,18 +611,24 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       return bucket;
     }
 
-    private void assignInserts(WorkloadProfile profile) {
+    private void assignInserts(WorkloadProfile profile, JavaSparkContext jsc) {
       // for new inserts, compute buckets depending on how many records we have for each partition
       Set<String> partitionPaths = profile.getPartitionPaths();
       long averageRecordSize =
           averageBytesPerRecord(metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants(),
               config.getCopyOnWriteRecordSizeEstimate());
       LOG.info("AvgRecordSize => " + averageRecordSize);
+
+      Map<String, List<SmallFile>> partitionSmallFilesMap =
+              getSmallFilesForPartitions(new ArrayList<String>(partitionPaths), jsc);
+
       for (String partitionPath : partitionPaths) {
         WorkloadStat pStat = profile.getWorkloadStat(partitionPath);
         if (pStat.getNumInserts() > 0) {
 
-          List<SmallFile> smallFiles = getSmallFiles(partitionPath);
+          List<SmallFile> smallFiles = partitionSmallFilesMap.get(partitionPath);
+          this.smallFiles.addAll(smallFiles);
+
           LOG.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
 
           long totalUnassignedInserts = pStat.getNumInserts();
@@ -684,6 +691,18 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       }
     }
 
+    private Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths, JavaSparkContext jsc) {
+
+      Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
+      if (partitionPaths != null && partitionPaths.size() > 0) {
+        JavaRDD<String> partitionPathRdds = jsc.parallelize(partitionPaths, partitionPaths.size());
+        partitionSmallFilesMap = partitionPathRdds.mapToPair((PairFunction<String, String, List<SmallFile>>)
+            partitionPath -> new Tuple2<>(partitionPath, getSmallFiles(partitionPath))).collectAsMap();
+      }
+
+      return partitionSmallFilesMap;
+    }
+
     /**
      * Returns a list of small files in the given partition path.
      */
@@ -706,8 +725,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
             sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
             sf.sizeBytes = file.getFileSize();
             smallFileLocations.add(sf);
-            // Update the global small files list
-            smallFiles.add(sf);
           }
         }
       }

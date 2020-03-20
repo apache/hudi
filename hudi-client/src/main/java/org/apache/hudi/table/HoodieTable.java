@@ -115,12 +115,12 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   /**
    * Provides a partitioner to perform the upsert operation, based on the workload profile.
    */
-  public abstract Partitioner getUpsertPartitioner(WorkloadProfile profile);
+  public abstract Partitioner getUpsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc);
 
   /**
    * Provides a partitioner to perform the insert operation, based on the workload profile.
    */
-  public abstract Partitioner getInsertPartitioner(WorkloadProfile profile);
+  public abstract Partitioner getInsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc);
 
   /**
    * Return whether this HoodieTable implementation can benefit from workload profiling.
