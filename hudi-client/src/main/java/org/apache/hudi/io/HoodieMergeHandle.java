@@ -234,7 +234,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   private boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
     Option recordMetadata = hoodieRecord.getData().getMetadata();
     if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
-      writeStatus.markFailure(hoodieRecord, new HoodieUpsertException("mismatched partition path"), recordMetadata);
+      HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
+          + hoodieRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
+      writeStatus.markFailure(hoodieRecord, failureEx, recordMetadata);
       return false;
     }
     try {

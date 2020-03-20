@@ -295,9 +295,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
 
   private void writeToBuffer(HoodieRecord<T> record) {
     if (!partitionPath.equals(record.getPartitionPath())) {
-      writeStatus.markFailure(record, new HoodieUpsertException("mismatched partition path"),
-              record.getData().getMetadata());
-
+      HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
+          + record.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
+      writeStatus.markFailure(record, failureEx, record.getData().getMetadata());
       return;
     }
 
