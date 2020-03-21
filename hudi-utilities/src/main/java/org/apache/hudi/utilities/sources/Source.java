@@ -33,7 +33,6 @@ import java.io.Serializable;
  * Represents a source from which we can tail data. Assumes a constructor that takes properties.
  */
 public abstract class Source<T> implements Serializable {
-  private static final Logger LOG = LogManager.getLogger(Source.class);
 
   public enum SourceType {
     JSON, AVRO, ROW
