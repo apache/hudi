@@ -63,28 +63,28 @@ public class SavepointsCommand implements CommandMarker {
   }
 
   @CliCommand(value = "savepoint create", help = "Savepoint a commit")
-  public String savepoint(@CliOption(key = {"commit"}, help = "Commit to savepoint") final String instantTime,
+  public String savepoint(@CliOption(key = {"commit"}, help = "Commit to savepoint") final String commitTime,
       @CliOption(key = {"user"}, unspecifiedDefaultValue = "default", help = "User who is creating the savepoint") final String user,
       @CliOption(key = {"comments"}, unspecifiedDefaultValue = "default", help = "Comments for creating the savepoint") final String comments)
       throws Exception {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
+    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
 
     if (!timeline.containsInstant(commitInstant)) {
-      return "Commit " + instantTime + " not found in Commits " + timeline;
+      return "Commit " + commitTime + " not found in Commits " + timeline;
     }
 
     String result;
     try (JavaSparkContext jsc = SparkUtil.initJavaSparkConf("Create Savepoint")) {
       HoodieWriteClient client = createHoodieClient(jsc, metaClient.getBasePath());
-      if (client.savepoint(instantTime, user, comments)) {
+      if (client.savepoint(commitTime, user, comments)) {
         // Refresh the current
         refreshMetaClient();
-        result = String.format("The commit \"%s\" has been savepointed.", instantTime);
+        result = String.format("The commit \"%s\" has been savepointed.", commitTime);
       } else {
-        result = String.format("Failed: Could not savepoint commit \"%s\".", instantTime);
+        result = String.format("Failed: Could not savepoint commit \"%s\".", commitTime);
       }
     }
     return result;

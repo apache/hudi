@@ -168,7 +168,7 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Obtain the latest file slice, upto a instantTime i.e < maxInstantTime.
+   * Obtain the latest file slice, upto an instantTime i.e < maxInstantTime.
    * 
    * @param maxInstantTime Max Instant Time
    * @return

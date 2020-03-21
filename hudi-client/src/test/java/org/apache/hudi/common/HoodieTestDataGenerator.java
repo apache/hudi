@@ -129,7 +129,7 @@ public class HoodieTestDataGenerator {
    * retaining the key if optionally provided.
    *
    * @param key  Hoodie key.
-   * @param instantTime  Commit time to use.
+   * @param instantTime  Instant time to use.
    * @return  Raw paylaod of a test record.
    * @throws IOException
    */
@@ -409,7 +409,7 @@ public class HoodieTestDataGenerator {
    * Generates new updates, randomly distributed across the keys above. There can be duplicates within the returned
    * list
    *
-   * @param instantTime Commit Timestamp
+   * @param instantTime Instant Timestamp
    * @param n          Number of updates (including dups)
    * @return list of hoodie record updates
    */
@@ -426,7 +426,7 @@ public class HoodieTestDataGenerator {
   /**
    * Generates deduped updates of keys previously inserted, randomly distributed across the keys above.
    *
-   * @param instantTime Commit Timestamp
+   * @param instantTime Instant Timestamp
    * @param n          Number of unique records
    * @return list of hoodie record updates
    */
