@@ -124,7 +124,7 @@ public class HoodieDeltaStreamer implements Serializable {
         throw ex;
       } finally {
         deltaSyncService.close();
-        LOG.info("Shut down deltastreamer");
+        LOG.info("Shut down delta streamer");
       }
     }
   }
