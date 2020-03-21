@@ -28,10 +28,10 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock.HoodieCommandBl
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.PathFilter;
@@ -147,7 +147,7 @@ public class RollbackHelper implements Serializable {
    * @return Merged HoodieRollbackStat
    */
   private HoodieRollbackStat mergeRollbackStat(HoodieRollbackStat stat1, HoodieRollbackStat stat2) {
-    Preconditions.checkArgument(stat1.getPartitionPath().equals(stat2.getPartitionPath()));
+    ValidationUtils.checkArgument(stat1.getPartitionPath().equals(stat2.getPartitionPath()));
     final List<String> successDeleteFiles = new ArrayList<>();
     final List<String> failedDeleteFiles = new ArrayList<>();
     final Map<FileStatus, Long> commandBlocksCount = new HashMap<>();

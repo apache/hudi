@@ -21,10 +21,10 @@ package org.apache.hudi.common.versioning.clean;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.versioning.AbstractMigratorBase;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.Path;
 
 import java.util.List;
@@ -46,7 +46,7 @@ public class CleanV2MigrationHandler extends AbstractMigratorBase<HoodieCleanMet
 
   @Override
   public HoodieCleanMetadata upgradeFrom(HoodieCleanMetadata input) {
-    Preconditions.checkArgument(input.getVersion() == 1,
+    ValidationUtils.checkArgument(input.getVersion() == 1,
         "Input version is " + input.getVersion() + ". Must be 1");
     HoodieCleanMetadata metadata = new HoodieCleanMetadata();
     metadata.setEarliestCommitToRetain(input.getEarliestCommitToRetain());

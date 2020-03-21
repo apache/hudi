@@ -21,9 +21,9 @@ package org.apache.hudi.common.util.queue;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import com.google.common.base.Preconditions;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -262,7 +262,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
 
     @Override
     public O next() {
-      Preconditions.checkState(hasNext() && this.nextRecord != null);
+      ValidationUtils.checkState(hasNext() && this.nextRecord != null);
       final O ret = this.nextRecord;
       this.nextRecord = null;
       return ret;

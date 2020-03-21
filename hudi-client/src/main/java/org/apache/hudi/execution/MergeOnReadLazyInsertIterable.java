@@ -52,7 +52,8 @@ public class MergeOnReadLazyInsertIterable<T extends HoodieRecordPayload> extend
       List<WriteStatus> statuses = new ArrayList<>();
       // lazily initialize the handle, for the first time
       if (handle == null) {
-        handle = new HoodieAppendHandle(hoodieConfig, commitTime, hoodieTable, getNextFileId(idPrefix));
+        handle = new HoodieAppendHandle(hoodieConfig, commitTime, hoodieTable,
+                insertPayload.getPartitionPath(), getNextFileId(idPrefix));
       }
       if (handle.canWrite(insertPayload)) {
         // write the payload, if the handle has capacity
@@ -62,7 +63,8 @@ public class MergeOnReadLazyInsertIterable<T extends HoodieRecordPayload> extend
         handle.close();
         statuses.add(handle.getWriteStatus());
         // Need to handle the rejected payload & open new handle
-        handle = new HoodieAppendHandle(hoodieConfig, commitTime, hoodieTable, getNextFileId(idPrefix));
+        handle = new HoodieAppendHandle(hoodieConfig, commitTime, hoodieTable,
+                insertPayload.getPartitionPath(), getNextFileId(idPrefix));
         handle.write(insertPayload, payload.insertValue, payload.exception); // we should be able to write 1 payload.
       }
     }

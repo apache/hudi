@@ -124,14 +124,15 @@ public abstract class AbstractBaseTestSource extends AvroSource {
       updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .map(AbstractBaseTestSource::toGenericRecord);
     }
-    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts, false, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .map(AbstractBaseTestSource::toGenericRecord);
+
     return Stream.concat(deleteStream, Stream.concat(updateStream, insertStream));
   }
 
   private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
     try {
-      Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(HoodieTestDataGenerator.avroSchema);
+      Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA);
       return (GenericRecord) recordOpt.get();
     } catch (IOException e) {
       return null;

@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -42,7 +43,6 @@ import org.apache.hudi.execution.MergeOnReadLazyInsertIterable;
 import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.compact.HoodieMergeOnReadTableCompactor;
 
-import com.google.common.base.Preconditions;
 import org.apache.hudi.table.rollback.RollbackHelper;
 import org.apache.hudi.table.rollback.RollbackRequest;
 import org.apache.log4j.LogManager;
@@ -98,15 +98,17 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileId, Iterator<HoodieRecord<T>> recordItr)
+  public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String partitionPath,
+                                                  String fileId, Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
     LOG.info("Merging updates for commit " + commitTime + " for file " + fileId);
 
     if (!index.canIndexLogFiles() && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
       LOG.info("Small file corrections for updates for commit " + commitTime + " for file " + fileId);
-      return super.handleUpdate(commitTime, fileId, recordItr);
+      return super.handleUpdate(commitTime, partitionPath, fileId, recordItr);
     } else {
-      HoodieAppendHandle<T> appendHandle = new HoodieAppendHandle<>(config, commitTime, this, fileId, recordItr);
+      HoodieAppendHandle<T> appendHandle = new HoodieAppendHandle<>(config, commitTime, this,
+              partitionPath, fileId, recordItr);
       appendHandle.doAppend();
       appendHandle.close();
       return Collections.singletonList(Collections.singletonList(appendHandle.getWriteStatus())).iterator();
@@ -422,7 +424,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
 
   private List<RollbackRequest> generateAppendRollbackBlocksAction(String partitionPath, HoodieInstant rollbackInstant,
       HoodieCommitMetadata commitMetadata) {
-    Preconditions.checkArgument(rollbackInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
+    ValidationUtils.checkArgument(rollbackInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
 
     // wStat.getPrevCommit() might not give the right commit time in the following
     // scenario : If a compaction was scheduled, the new commitTime associated with the requested compaction will be
@@ -439,9 +441,9 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
 
       if (validForRollback) {
         // For sanity, log instant time can never be less than base-commit on which we are rolling back
-        Preconditions
+        ValidationUtils
             .checkArgument(HoodieTimeline.compareTimestamps(fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId()),
-                rollbackInstant.getTimestamp(), HoodieTimeline.LESSER_OR_EQUAL));
+              rollbackInstant.getTimestamp(), HoodieTimeline.LESSER_OR_EQUAL));
       }
 
       return validForRollback && HoodieTimeline.compareTimestamps(fileIdToBaseCommitTimeForLogMap.get(

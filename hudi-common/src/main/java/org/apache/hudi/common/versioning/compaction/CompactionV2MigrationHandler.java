@@ -21,9 +21,9 @@ package org.apache.hudi.common.versioning.compaction;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.versioning.AbstractMigratorBase;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.Path;
 
 import java.util.ArrayList;
@@ -48,17 +48,16 @@ public class CompactionV2MigrationHandler extends AbstractMigratorBase<HoodieCom
 
   @Override
   public HoodieCompactionPlan upgradeFrom(HoodieCompactionPlan input) {
-    Preconditions.checkArgument(input.getVersion() == 1, "Input version is " + input.getVersion() + ". Must be 1");
+    ValidationUtils.checkArgument(input.getVersion() == 1, "Input version is " + input.getVersion() + ". Must be 1");
     HoodieCompactionPlan compactionPlan = new HoodieCompactionPlan();
     List<HoodieCompactionOperation> v2CompactionOperationList = new ArrayList<>();
     if (null != input.getOperations()) {
-      v2CompactionOperationList = input.getOperations().stream().map(inp -> {
-        return HoodieCompactionOperation.newBuilder().setBaseInstantTime(inp.getBaseInstantTime())
+      v2CompactionOperationList = input.getOperations().stream().map(inp ->
+        HoodieCompactionOperation.newBuilder().setBaseInstantTime(inp.getBaseInstantTime())
             .setFileId(inp.getFileId()).setPartitionPath(inp.getPartitionPath()).setMetrics(inp.getMetrics())
-            .setDataFilePath(new Path(inp.getDataFilePath()).getName()).setDeltaFilePaths(
+            .setDataFilePath(inp.getDataFilePath() == null ? null : new Path(inp.getDataFilePath()).getName()).setDeltaFilePaths(
                 inp.getDeltaFilePaths().stream().map(s -> new Path(s).getName()).collect(Collectors.toList()))
-            .build();
-      }).collect(Collectors.toList());
+        .build()).collect(Collectors.toList());
     }
     compactionPlan.setOperations(v2CompactionOperationList);
     compactionPlan.setExtraMetadata(input.getExtraMetadata());

@@ -31,13 +31,13 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.AvroUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 
 import com.codahale.metrics.Timer;
-import com.google.common.base.Preconditions;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -147,7 +147,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
 
   private HoodieCleanMetadata runClean(HoodieTable<T> table, HoodieInstant cleanInstant,
       HoodieCleanerPlan cleanerPlan) {
-    Preconditions.checkArgument(
+    ValidationUtils.checkArgument(
         cleanInstant.getState().equals(State.REQUESTED) || cleanInstant.getState().equals(State.INFLIGHT));
 
     try {

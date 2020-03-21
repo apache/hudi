@@ -52,11 +52,14 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
   protected final Schema writerSchema;
   protected HoodieTimer timer;
   protected final WriteStatus writeStatus;
+  protected final String partitionPath;
   protected final String fileId;
   protected final String writeToken;
 
-  public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String fileId, HoodieTable<T> hoodieTable) {
+  public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
+                           String fileId, HoodieTable<T> hoodieTable) {
     super(config, instantTime, hoodieTable);
+    this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.writeToken = makeSparkWriteToken();
     this.originalSchema = new Schema.Parser().parse(config.getSchema());

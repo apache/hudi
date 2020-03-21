@@ -35,14 +35,13 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;
 import org.apache.hudi.table.HoodieTable;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -56,6 +55,7 @@ import org.apache.spark.util.AccumulatorV2;
 import org.apache.spark.util.LongAccumulator;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -125,7 +125,7 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
         config.getCompactionReverseLogReadEnabled(), config.getMaxDFSStreamBufferSize(),
         config.getSpillableMapBasePath());
     if (!scanner.iterator().hasNext()) {
-      return Lists.<WriteStatus>newArrayList();
+      return new ArrayList<>();
     }
 
     Option<HoodieBaseFile> oldDataFileOpt =
@@ -136,7 +136,8 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
     // If the dataFile is present, there is a base parquet file present, perform updates else perform inserts into a
     // new base parquet file.
     if (oldDataFileOpt.isPresent()) {
-      result = hoodieCopyOnWriteTable.handleUpdate(commitTime, operation.getFileId(), scanner.getRecords(),
+      result = hoodieCopyOnWriteTable.handleUpdate(commitTime, operation.getPartitionPath(),
+              operation.getFileId(), scanner.getRecords(),
           oldDataFileOpt.get());
     } else {
       result = hoodieCopyOnWriteTable.handleInsert(commitTime, operation.getPartitionPath(), operation.getFileId(),
@@ -169,7 +170,7 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
     jsc.sc().register(totalLogFiles);
     jsc.sc().register(totalFileSlices);
 
-    Preconditions.checkArgument(hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ,
+    ValidationUtils.checkArgument(hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ,
         "Can only compact table of type " + HoodieTableType.MERGE_ON_READ + " and not "
             + hoodieTable.getMetaClient().getTableType().name());
 
@@ -214,7 +215,7 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
     // compactions only
     HoodieCompactionPlan compactionPlan = config.getCompactionStrategy().generateCompactionPlan(config, operations,
         CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()));
-    Preconditions.checkArgument(
+    ValidationUtils.checkArgument(
         compactionPlan.getOperations().stream().noneMatch(
             op -> fgIdsInPendingCompactions.contains(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))),
         "Bad Compaction Plan. FileId MUST NOT have multiple pending compactions. "

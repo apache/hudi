@@ -48,6 +48,6 @@ public class TestParquetDFSSource extends AbstractDFSSourceTestBase {
 
   @Override
   void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
-    Helpers.saveParquetToDFS(Helpers.toGenericRecords(records, dataGenerator), path);
+    Helpers.saveParquetToDFS(Helpers.toGenericRecords(records), path);
   }
 }

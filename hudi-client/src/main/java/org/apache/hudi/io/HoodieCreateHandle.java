@@ -57,7 +57,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
 
   public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String partitionPath, String fileId) {
-    super(config, commitTime, fileId, hoodieTable);
+    super(config, commitTime, partitionPath, fileId, hoodieTable);
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
 

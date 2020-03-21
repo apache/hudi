@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.DFSPropertiesConfiguration;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -36,7 +37,6 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.transform.Transformer;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -137,7 +137,7 @@ public class UtilHelpers {
     TypedProperties properties = new TypedProperties();
     props.forEach(x -> {
       String[] kv = x.split("=");
-      Preconditions.checkArgument(kv.length == 2);
+      ValidationUtils.checkArgument(kv.length == 2);
       properties.setProperty(kv[0], kv[1]);
     });
     return properties;

@@ -22,10 +22,10 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.versioning.AbstractMigratorBase;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.Path;
 
 import java.util.Map;
@@ -52,7 +52,7 @@ public class CleanV1MigrationHandler extends AbstractMigratorBase<HoodieCleanMet
 
   @Override
   public HoodieCleanMetadata downgradeFrom(HoodieCleanMetadata input) {
-    Preconditions.checkArgument(input.getVersion() == 2,
+    ValidationUtils.checkArgument(input.getVersion() == 2,
         "Input version is " + input.getVersion() + ". Must be 2");
     final Path basePath = new Path(metaClient.getBasePath());
 
@@ -81,16 +81,13 @@ public class CleanV1MigrationHandler extends AbstractMigratorBase<HoodieCleanMet
           return Pair.of(partitionPath, cleanPartitionMetadata);
         }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    HoodieCleanMetadata metadata = HoodieCleanMetadata.newBuilder()
+    return HoodieCleanMetadata.newBuilder()
         .setEarliestCommitToRetain(input.getEarliestCommitToRetain())
         .setStartCleanTime(input.getStartCleanTime())
         .setTimeTakenInMillis(input.getTimeTakenInMillis())
         .setTotalFilesDeleted(input.getTotalFilesDeleted())
         .setPartitionMetadata(partitionMetadataMap)
         .setVersion(getManagedVersion()).build();
-
-    return metadata;
-
   }
 
   private static String convertToV1Path(Path basePath, String partitionPath, String fileName) {
