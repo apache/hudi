@@ -85,7 +85,11 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
     // If there are inflight(failed) or previously requested clean operation, first perform them
     table.getCleanTimeline().filterInflightsAndRequested().getInstants().forEach(hoodieInstant -> {
       LOG.info("There were previously unfinished cleaner operations. Finishing Instant=" + hoodieInstant);
-      runClean(table, hoodieInstant);
+      try {
+        runClean(table, hoodieInstant);
+      } catch (Exception e) {
+        LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
+      }
     });
 
     Option<HoodieCleanerPlan> cleanerPlanOpt = scheduleClean(startCleanTime);
