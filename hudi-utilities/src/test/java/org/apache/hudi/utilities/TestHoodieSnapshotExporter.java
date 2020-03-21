@@ -31,6 +31,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.Config;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.OutputFormatValidator;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.Partitioner;
+import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
 
 import com.beust.jcommander.ParameterException;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -85,7 +86,6 @@ public class TestHoodieSnapshotExporter {
       sourcePath = dfsBasePath + "/source/";
       targetPath = dfsBasePath + "/target/";
       dfs.mkdirs(new Path(sourcePath));
-      dfs.mkdirs(new Path(targetPath));
       HoodieTableMetaClient
           .initTableType(jsc.hadoopConfiguration(), sourcePath, HoodieTableType.COPY_ON_WRITE, TABLE_NAME,
               HoodieAvroPayload.class.getName());
@@ -166,11 +166,18 @@ public class TestHoodieSnapshotExporter {
       dfs.delete(new Path(sourcePath + "/" + PARTITION_PATH), true);
 
       // export
-      new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+      Throwable t = null;
+      try {
+        new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+      } catch (Exception e) {
+        t = e;
+      } finally {
+        assertTrue(t instanceof HoodieSnapshotExporterException);
+        assertEquals("The source dataset has 0 partition to snapshot.", t.getMessage());
+      }
 
       // Check results
-      assertEquals("Target path should be empty.", 0, dfs.listStatus(new Path(targetPath)).length);
-      assertFalse(dfs.exists(new Path(targetPath + "/_SUCCESS")));
+      assertFalse(dfs.exists(new Path(targetPath)));
     }
   }
 
