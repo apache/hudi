@@ -31,7 +31,7 @@ import java.util.HashMap;
 /**
  * Wrap AvroWriterSupport for plugging in the bloom filter.
  */
-public class HoodieAvroWriteSupport extends AvroWriteSupport {
+public class HoodieAvroWriteSupport extends AvroWriteSupport<Object> {
 
   private BloomFilter bloomFilter;
   private String minRecordKey;
@@ -44,7 +44,7 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
   public static final String HOODIE_BLOOM_FILTER_TYPE_CODE = "hoodie_bloom_filter_type_code";
 
   public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, BloomFilter bloomFilter) {
-    super(schema, avroSchema);
+    super(schema, avroSchema, null);
     this.bloomFilter = bloomFilter;
   }
 
