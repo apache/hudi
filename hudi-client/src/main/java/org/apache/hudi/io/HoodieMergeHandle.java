@@ -69,9 +69,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   private long insertRecordsWritten = 0;
   private boolean useWriterSchema;
 
-  public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
+  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
       Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId) {
-    super(config, commitTime, partitionPath, fileId, hoodieTable);
+    super(config, instantTime, partitionPath, fileId, hoodieTable);
     init(fileId, recordItr);
     init(fileId, partitionPath, hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
   }
@@ -79,10 +79,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   /**
    * Called by compactor code path.
    */
-  public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
+  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
       Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
       HoodieBaseFile dataFileToBeMerged) {
-    super(config, commitTime, partitionPath, fileId, hoodieTable);
+    super(config, instantTime, partitionPath, fileId, hoodieTable);
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchema = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);

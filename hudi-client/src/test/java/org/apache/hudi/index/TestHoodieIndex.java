@@ -125,7 +125,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     }
 
     @Override
-    public boolean rollbackCommit(String commitTime) {
+    public boolean rollbackCommit(String instantTime) {
       return false;
     }
 

@@ -361,16 +361,16 @@ public class DeltaSync implements Serializable {
 
     boolean isEmpty = records.isEmpty();
 
-    String commitTime = startCommit();
-    LOG.info("Starting commit  : " + commitTime);
+    String instantTime = startCommit();
+    LOG.info("Starting commit  : " + instantTime);
 
     JavaRDD<WriteStatus> writeStatusRDD;
     if (cfg.operation == Operation.INSERT) {
-      writeStatusRDD = writeClient.insert(records, commitTime);
+      writeStatusRDD = writeClient.insert(records, instantTime);
     } else if (cfg.operation == Operation.UPSERT) {
-      writeStatusRDD = writeClient.upsert(records, commitTime);
+      writeStatusRDD = writeClient.upsert(records, instantTime);
     } else if (cfg.operation == Operation.BULK_INSERT) {
-      writeStatusRDD = writeClient.bulkInsert(records, commitTime);
+      writeStatusRDD = writeClient.bulkInsert(records, instantTime);
     } else {
       throw new HoodieDeltaStreamerException("Unknown operation :" + cfg.operation);
     }
@@ -391,9 +391,9 @@ public class DeltaSync implements Serializable {
             + totalErrorRecords + "/" + totalRecords);
       }
 
-      boolean success = writeClient.commit(commitTime, writeStatusRDD, Option.of(checkpointCommitMetadata));
+      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata));
       if (success) {
-        LOG.info("Commit " + commitTime + " successful!");
+        LOG.info("Commit " + instantTime + " successful!");
 
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
@@ -407,8 +407,8 @@ public class DeltaSync implements Serializable {
           hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
         }
       } else {
-        LOG.info("Commit " + commitTime + " failed!");
-        throw new HoodieException("Commit " + commitTime + " failed!");
+        LOG.info("Commit " + instantTime + " failed!");
+        throw new HoodieException("Commit " + instantTime + " failed!");
       }
     } else {
       LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
@@ -420,8 +420,8 @@ public class DeltaSync implements Serializable {
         }
       });
       // Rolling back instant
-      writeClient.rollback(commitTime);
-      throw new HoodieException("Commit " + commitTime + " failed and rolled-back !");
+      writeClient.rollback(instantTime);
+      throw new HoodieException("Commit " + instantTime + " failed and rolled-back !");
     }
     long overallTimeMs = overallTimerContext != null ? overallTimerContext.stop() : 0;
 

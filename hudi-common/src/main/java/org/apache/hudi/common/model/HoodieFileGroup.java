@@ -160,15 +160,15 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Obtain the latest file slice, upto a commitTime i.e <= maxCommitTime.
+   * Obtain the latest file slice, upto a instantTime i.e <= maxInstantTime.
    */
-  public Option<FileSlice> getLatestFileSliceBeforeOrOn(String maxCommitTime) {
+  public Option<FileSlice> getLatestFileSliceBeforeOrOn(String maxInstantTime) {
     return Option.fromJavaOptional(getAllFileSlices().filter(slice -> HoodieTimeline
-        .compareTimestamps(slice.getBaseInstantTime(), maxCommitTime, HoodieTimeline.LESSER_OR_EQUAL)).findFirst());
+        .compareTimestamps(slice.getBaseInstantTime(), maxInstantTime, HoodieTimeline.LESSER_OR_EQUAL)).findFirst());
   }
 
   /**
-   * Obtain the latest file slice, upto a commitTime i.e < maxInstantTime.
+   * Obtain the latest file slice, upto a instantTime i.e < maxInstantTime.
    * 
    * @param maxInstantTime Max Instant Time
    * @return

@@ -245,18 +245,18 @@ public class CleanHelper<T extends HoodieRecordPayload<T>> implements Serializab
   }
 
   /**
-   * Gets the latest version < commitTime. This version file could still be used by queries.
+   * Gets the latest version < instantTime. This version file could still be used by queries.
    */
-  private String getLatestVersionBeforeCommit(List<FileSlice> fileSliceList, HoodieInstant commitTime) {
+  private String getLatestVersionBeforeCommit(List<FileSlice> fileSliceList, HoodieInstant instantTime) {
     for (FileSlice file : fileSliceList) {
       String fileCommitTime = file.getBaseInstantTime();
-      if (HoodieTimeline.compareTimestamps(commitTime.getTimestamp(), fileCommitTime, HoodieTimeline.GREATER)) {
-        // fileList is sorted on the reverse, so the first commit we find <= commitTime is the
+      if (HoodieTimeline.compareTimestamps(instantTime.getTimestamp(), fileCommitTime, HoodieTimeline.GREATER)) {
+        // fileList is sorted on the reverse, so the first commit we find <= instantTime is the
         // one we want
         return fileCommitTime;
       }
     }
-    // There is no version of this file which is <= commitTime
+    // There is no version of this file which is <= instantTime
     return null;
   }
 

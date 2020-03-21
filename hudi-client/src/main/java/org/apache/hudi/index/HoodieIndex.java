@@ -98,9 +98,9 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
       HoodieTable<T> hoodieTable) throws HoodieIndexException;
 
   /**
-   * Rollback the efffects of the commit made at commitTime.
+   * Rollback the efffects of the commit made at instantTime.
    */
-  public abstract boolean rollbackCommit(String commitTime);
+  public abstract boolean rollbackCommit(String instantTime);
 
   /**
    * An index is `global` if {@link HoodieKey} to fileID mapping, does not depend on the `partitionPath`. Such an

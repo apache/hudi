@@ -80,7 +80,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     super(props, sparkContext, sparkSession, schemaProvider);
   }
 
-  protected static Stream<GenericRecord> fetchNextBatch(TypedProperties props, int sourceLimit, String commitTime,
+  protected static Stream<GenericRecord> fetchNextBatch(TypedProperties props, int sourceLimit, String instantTime,
                                                         int partition) {
     int maxUniqueKeys =
         props.getInteger(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, TestSourceConfig.DEFAULT_MAX_UNIQUE_RECORDS);
@@ -116,14 +116,14 @@ public abstract class AbstractBaseTestSource extends AvroSource {
       LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + (numUpdates - 50) + ", NumDeletes=50, maxUniqueRecords="
           + maxUniqueKeys);
       // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
-      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(commitTime, 50).map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
-      updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates - 50).map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 50).map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50).map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
     } else {
       LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
-      updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates)
+      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates)
           .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
     }
-    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts, false)
+    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(instantTime, numInserts, false)
         .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
     return Stream.concat(deleteStream, Stream.concat(updateStream, insertStream));
   }

@@ -131,9 +131,9 @@ public class TestCleaner extends TestHoodieClientBase {
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, client.getConfig(), jsc);
 
     assertFalse(table.getCompletedCommitsTimeline().empty());
-    String commitTime = table.getCompletedCommitsTimeline().getInstants().findFirst().get().getTimestamp();
+    String instantTime = table.getCompletedCommitsTimeline().getInstants().findFirst().get().getTimestamp();
     assertFalse(table.getCompletedCleanTimeline().empty());
-    assertEquals("The clean instant should be the same as the commit instant", commitTime,
+    assertEquals("The clean instant should be the same as the commit instant", instantTime,
         table.getCompletedCleanTimeline().getInstants().findFirst().get().getTimestamp());
 
     HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
@@ -173,7 +173,7 @@ public class TestCleaner extends TestHoodieClientBase {
   @Test
   public void testBulkInsertPreppedAndCleanByVersions() throws Exception {
     testInsertAndCleanByVersions(
-        (client, recordRDD, commitTime) -> client.bulkInsertPreppedRecords(recordRDD, commitTime, Option.empty()),
+        (client, recordRDD, instantTime) -> client.bulkInsertPreppedRecords(recordRDD, instantTime, Option.empty()),
         HoodieWriteClient::upsertPreppedRecords, true);
   }
 
@@ -325,7 +325,7 @@ public class TestCleaner extends TestHoodieClientBase {
   @Test
   public void testBulkInsertPreppedAndCleanByCommits() throws Exception {
     testInsertAndCleanByCommits(
-        (client, recordRDD, commitTime) -> client.bulkInsertPreppedRecords(recordRDD, commitTime, Option.empty()),
+        (client, recordRDD, instantTime) -> client.bulkInsertPreppedRecords(recordRDD, instantTime, Option.empty()),
         HoodieWriteClient::upsertPreppedRecords, true);
   }
 
@@ -598,7 +598,7 @@ public class TestCleaner extends TestHoodieClientBase {
 
   @Test
   public void testUpgradeDowngrade() {
-    String commitTime = "000";
+    String instantTime = "000";
 
     String partition1 = DEFAULT_PARTITION_PATHS[0];
     String partition2 = DEFAULT_PARTITION_PATHS[1];
@@ -616,7 +616,7 @@ public class TestCleaner extends TestHoodieClientBase {
     // create partition1 clean stat.
     HoodieCleanStat cleanStat1 = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
         partition1, deletePathPatterns1, successDeleteFiles1,
-        failedDeleteFiles1, commitTime);
+        failedDeleteFiles1, instantTime);
 
     List<String> deletePathPatterns2 = new ArrayList<>();
     List<String> successDeleteFiles2 = new ArrayList<>();
@@ -625,7 +625,7 @@ public class TestCleaner extends TestHoodieClientBase {
     // create partition2 empty clean stat.
     HoodieCleanStat cleanStat2 = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
         partition2, deletePathPatterns2, successDeleteFiles2,
-        failedDeleteFiles2, commitTime);
+        failedDeleteFiles2, instantTime);
 
     // map with absolute file path.
     Map<String, Tuple3> oldExpected = new HashMap<>();
@@ -639,7 +639,7 @@ public class TestCleaner extends TestHoodieClientBase {
     newExpected.put(partition2, new Tuple3<>(deletePathPatterns2, successDeleteFiles2, failedDeleteFiles2));
 
     HoodieCleanMetadata metadata =
-        CleanerUtils.convertCleanMetadata(metaClient, commitTime, Option.of(0L), Arrays.asList(cleanStat1, cleanStat2));
+        CleanerUtils.convertCleanMetadata(metaClient, instantTime, Option.of(0L), Arrays.asList(cleanStat1, cleanStat2));
     metadata.setVersion(CleanerUtils.CLEAN_METADATA_VERSION_1);
 
     // NOw upgrade and check
@@ -1107,15 +1107,15 @@ public class TestCleaner extends TestHoodieClientBase {
   /**
    * Utility method to create temporary data files.
    *
-   * @param commitTime Commit Timestamp
+   * @param instantTime Commit Timestamp
    * @param numFiles Number for files to be generated
    * @return generated files
    * @throws IOException in case of error
    */
-  private List<String> createMarkerFiles(String commitTime, int numFiles) throws IOException {
+  private List<String> createMarkerFiles(String instantTime, int numFiles) throws IOException {
     List<String> files = new ArrayList<>();
     for (int i = 0; i < numFiles; i++) {
-      files.add(HoodieTestUtils.createNewMarkerFile(basePath, "2019/03/29", commitTime));
+      files.add(HoodieTestUtils.createNewMarkerFile(basePath, "2019/03/29", instantTime));
     }
     return files;
   }

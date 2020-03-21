@@ -59,7 +59,7 @@ import static org.mockito.Mockito.when;
 
 public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
 
-  private final String commitTime = HoodieActiveTimeline.createNewInstantTime();
+  private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
 
   @Before
   public void setUp() throws Exception {
@@ -79,7 +79,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
   @Test(timeout = 60000)
   public void testRecordReading() throws Exception {
     final int numRecords = 128;
-    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(commitTime, numRecords);
+    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, numRecords);
     final BoundedInMemoryQueue<HoodieRecord, HoodieInsertValueGenResult<HoodieRecord>> queue =
         new BoundedInMemoryQueue(FileIOUtils.KB, getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA));
     // Produce
@@ -126,7 +126,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
     Map<String, Tuple2<Integer, Integer>> keyToProducerAndIndexMap = new HashMap<>();
 
     for (int i = 0; i < numProducers; i++) {
-      List<HoodieRecord> pRecs = dataGen.generateInserts(commitTime, numRecords);
+      List<HoodieRecord> pRecs = dataGen.generateInserts(instantTime, numRecords);
       int j = 0;
       for (HoodieRecord r : pRecs) {
         Assert.assertTrue(!keyToProducerAndIndexMap.containsKey(r.getRecordKey()));
@@ -209,7 +209,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
   @Test(timeout = 60000)
   public void testMemoryLimitForBuffering() throws Exception {
     final int numRecords = 128;
-    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(commitTime, numRecords);
+    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, numRecords);
     // maximum number of records to keep in memory.
     final int recordLimit = 5;
     final SizeEstimator<HoodieInsertValueGenResult<HoodieRecord>> sizeEstimator = new DefaultSizeEstimator<>();
@@ -258,7 +258,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
   @Test(timeout = 60000)
   public void testException() throws Exception {
     final int numRecords = 256;
-    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(commitTime, numRecords);
+    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, numRecords);
     final SizeEstimator<Tuple2<HoodieRecord, Option<IndexedRecord>>> sizeEstimator = new DefaultSizeEstimator<>();
     // queue memory limit
     HoodieInsertValueGenResult<HoodieRecord> payload =
