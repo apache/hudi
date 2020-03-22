@@ -31,7 +31,7 @@ import java.util.Map;
 /**
  * Utility methods to commit instant for test.
  */
-public class HoodieTestCommitOperate {
+public class HoodieTestCommitUtilities {
 
   /**
    * Converter HoodieCommitMetadata to avro format and ordered by partition.

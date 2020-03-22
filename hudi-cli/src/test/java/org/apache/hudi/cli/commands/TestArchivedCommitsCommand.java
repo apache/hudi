@@ -22,8 +22,8 @@ import org.apache.hudi.cli.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.common.HoodieTestCommandDataGenerator;
-import org.apache.hudi.cli.common.HoodieTestCommitOperate;
+import org.apache.hudi.cli.common.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.cli.common.HoodieTestCommitUtilities;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
@@ -70,7 +70,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
 
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
-        .withSchema(HoodieTestCommandDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
         .forTable("test-trip-table").build();
 
@@ -78,12 +78,12 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     for (int i = 100; i < 106; i++) {
       String timestamp = String.valueOf(i);
       // Requested Compaction
-      HoodieTestCommandDataGenerator.createCompactionAuxiliaryMetadata(tablePath,
+      HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
           new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), dfs.getConf());
       // Inflight Compaction
-      HoodieTestCommandDataGenerator.createCompactionAuxiliaryMetadata(tablePath,
+      HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
           new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), dfs.getConf());
-      HoodieTestCommandDataGenerator.createCommitFileWithMetadata(tablePath, timestamp, dfs.getConf());
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, dfs.getConf());
     }
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -124,23 +124,23 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
       String instant = String.valueOf(i);
       for (int j = 0; j < 3; j++) {
         Comparable[] defaultComp = new Comparable[]{"commit", instant,
-            HoodieTestCommandDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
-            HoodieTestCommandDataGenerator.DEFAULT_FILEID,
-            HoodieTestCommandDataGenerator.DEFAULT_PRE_COMMIT,
-            HoodieTestCommandDataGenerator.DEFAULT_NUM_WRITES,
-            HoodieTestCommandDataGenerator.DEFAULT_OTHER_VALUE,
-            HoodieTestCommandDataGenerator.DEFAULT_OTHER_VALUE,
-            HoodieTestCommandDataGenerator.DEFAULT_NUM_UPDATE_WRITES,
-            HoodieTestCommandDataGenerator.DEFAULT_NULL_VALUE,
-            HoodieTestCommandDataGenerator.DEFAULT_TOTAL_LOG_BLOCKS,
-            HoodieTestCommandDataGenerator.DEFAULT_OTHER_VALUE,
-            HoodieTestCommandDataGenerator.DEFAULT_OTHER_VALUE,
-            HoodieTestCommandDataGenerator.DEFAULT_TOTAL_LOG_RECORDS,
-            HoodieTestCommandDataGenerator.DEFAULT_OTHER_VALUE,
-            HoodieTestCommandDataGenerator.DEFAULT_TOTAL_WRITE_BYTES,
-            HoodieTestCommandDataGenerator.DEFAULT_OTHER_VALUE};
+            HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH,
+            HoodieTestCommitMetadataGenerator.DEFAULT_FILEID,
+            HoodieTestCommitMetadataGenerator.DEFAULT_PRE_COMMIT,
+            HoodieTestCommitMetadataGenerator.DEFAULT_NUM_WRITES,
+            HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
+            HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
+            HoodieTestCommitMetadataGenerator.DEFAULT_NUM_UPDATE_WRITES,
+            HoodieTestCommitMetadataGenerator.DEFAULT_NULL_VALUE,
+            HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_LOG_BLOCKS,
+            HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
+            HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
+            HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_LOG_RECORDS,
+            HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE,
+            HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_WRITE_BYTES,
+            HoodieTestCommitMetadataGenerator.DEFAULT_OTHER_VALUE};
         rows.add(defaultComp.clone());
-        defaultComp[2] = HoodieTestCommandDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+        defaultComp[2] = HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH;
         rows.add(defaultComp);
       }
     }
@@ -157,7 +157,6 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
   public void testShowCommits() throws IOException {
     CommandResult cr = getShell().executeCommand("show archived commits");
     assertTrue(cr.isSuccess());
-    System.out.println(cr.getResult().toString());
     final List<Comparable[]> rows = new ArrayList<>();
 
     // Test default skipMetadata and limit 10
@@ -179,11 +178,11 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
 
     rows.clear();
 
-    HoodieCommitMetadata metadata = HoodieTestCommandDataGenerator.generateCommitMetadata(tablePath);
+    HoodieCommitMetadata metadata = HoodieTestCommitMetadataGenerator.generateCommitMetadata(tablePath);
     for (int i = 100; i < 104; i++) {
       String instant = String.valueOf(i);
       // Since HoodiePrintHelper order data by default, need to order commitMetadata
-      Comparable[] result = new Comparable[]{instant, "commit", HoodieTestCommitOperate.commitMetadataConverterOrdered(metadata)};
+      Comparable[] result = new Comparable[]{instant, "commit", HoodieTestCommitUtilities.commitMetadataConverterOrdered(metadata)};
       rows.add(result);
       rows.add(result);
       rows.add(result);

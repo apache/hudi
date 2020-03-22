@@ -42,7 +42,7 @@ import java.util.Map;
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
  */
-public class HoodieTestCommandDataGenerator extends HoodieTestDataGenerator {
+public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
 
   // default commit metadata value
   public static final String DEFAULT_PATH = "path";
@@ -101,12 +101,10 @@ public class HoodieTestCommandDataGenerator extends HoodieTestDataGenerator {
       .build());
   }
 
-
-
   /**
    * Method to generate commit metadata.
    */
-  public static HoodieCommitMetadata generateCommitMetadata(Map<String, List<String>> partitionToFilePaths) {
+  private static HoodieCommitMetadata generateCommitMetadata(Map<String, List<String>> partitionToFilePaths) {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     partitionToFilePaths.forEach((key, value) -> value.forEach(f -> {
       HoodieWriteStat writeStat = new HoodieWriteStat();
