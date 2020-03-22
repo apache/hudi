@@ -45,7 +45,6 @@ import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameWriter;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -143,7 +142,7 @@ public class TestHoodieSnapshotExporter {
 
     @Test
     public void testExportAsHudi() throws IOException {
-      new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+      new HoodieSnapshotExporter().export(jsc, cfg);
 
       // Check results
       assertTrue(dfs.exists(new Path(targetPath + "/.hoodie/" + COMMIT_TIME + ".clean")));
@@ -185,7 +184,7 @@ public class TestHoodieSnapshotExporter {
       // export
       Throwable t = null;
       try {
-        new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+        new HoodieSnapshotExporter().export(jsc, cfg);
       } catch (Exception e) {
         t = e;
       } finally {
@@ -209,7 +208,7 @@ public class TestHoodieSnapshotExporter {
       // export
       Throwable t = null;
       try {
-        new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+        new HoodieSnapshotExporter().export(jsc, cfg);
       } catch (Exception e) {
         t = e;
       } finally {
@@ -230,7 +229,7 @@ public class TestHoodieSnapshotExporter {
       // export
       Throwable t = null;
       try {
-        new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+        new HoodieSnapshotExporter().export(jsc, cfg);
       } catch (Exception e) {
         t = e;
       } finally {
@@ -261,7 +260,7 @@ public class TestHoodieSnapshotExporter {
       cfg.sourceBasePath = sourcePath;
       cfg.targetOutputPath = targetPath;
       cfg.outputFormat = format;
-      new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+      new HoodieSnapshotExporter().export(jsc, cfg);
       assertEquals(NUM_RECORDS, sqlContext.read().format(format).load(targetPath).count());
       assertTrue(dfs.exists(new Path(targetPath + "/_SUCCESS")));
     }
@@ -298,7 +297,7 @@ public class TestHoodieSnapshotExporter {
     public void testExportWithPartitionField() throws IOException {
       // `driver` field is set in HoodieTestDataGenerator
       cfg.outputPartitionField = "driver";
-      new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+      new HoodieSnapshotExporter().export(jsc, cfg);
 
       assertEquals(NUM_RECORDS, sqlContext.read().format("json").load(targetPath).count());
       assertTrue(dfs.exists(new Path(targetPath + "/_SUCCESS")));
@@ -308,7 +307,7 @@ public class TestHoodieSnapshotExporter {
     @Test
     public void testExportForUserDefinedPartitioner() throws IOException {
       cfg.outputPartitioner = UserDefinedPartitioner.class.getName();
-      new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+      new HoodieSnapshotExporter().export(jsc, cfg);
 
       assertEquals(NUM_RECORDS, sqlContext.read().format("json").load(targetPath).count());
       assertTrue(dfs.exists(new Path(targetPath + "/_SUCCESS")));

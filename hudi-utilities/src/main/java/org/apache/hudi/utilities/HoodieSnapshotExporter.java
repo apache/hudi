@@ -45,13 +45,14 @@ import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameWriter;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
-import org.apache.spark.sql.SparkSession;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -112,8 +113,7 @@ public class HoodieSnapshotExporter {
     String outputPartitioner = null;
   }
 
-  public void export(SparkSession spark, Config cfg) throws IOException {
-    JavaSparkContext jsc = new JavaSparkContext(spark.sparkContext());
+  public void export(JavaSparkContext jsc, Config cfg) throws IOException {
     FileSystem fs = FSUtils.getFs(cfg.sourceBasePath, jsc.hadoopConfiguration());
 
     if (outputPathExists(fs, cfg)) {
@@ -135,7 +135,7 @@ public class HoodieSnapshotExporter {
     if (cfg.outputFormat.equals(OutputFormatValidator.HUDI)) {
       exportAsHudi(jsc, cfg, partitions, latestCommitTimestamp);
     } else {
-      exportAsNonHudi(spark, cfg, partitions, latestCommitTimestamp);
+      exportAsNonHudi(jsc, cfg, partitions, latestCommitTimestamp);
     }
     createSuccessTag(fs, cfg);
   }
@@ -162,7 +162,7 @@ public class HoodieSnapshotExporter {
     }
   }
 
-  private void exportAsNonHudi(SparkSession spark, Config cfg, List<String> partitions, String latestCommitTimestamp) {
+  private void exportAsNonHudi(JavaSparkContext jsc, Config cfg, List<String> partitions, String latestCommitTimestamp) {
     Partitioner defaultPartitioner = dataset -> {
       Dataset<Row> hoodieDroppedDataset = dataset.drop(JavaConversions.asScalaIterator(HoodieRecord.HOODIE_META_COLUMNS.iterator()).toSeq());
       return StringUtils.isNullOrEmpty(cfg.outputPartitionField)
@@ -174,7 +174,6 @@ public class HoodieSnapshotExporter {
         ? defaultPartitioner
         : ReflectionUtils.loadClass(cfg.outputPartitioner);
 
-    final JavaSparkContext jsc = new JavaSparkContext(spark.sparkContext());
     final BaseFileOnlyView fsView = getBaseFileOnlyView(jsc, cfg);
     Iterator<String> exportingFilePaths = jsc
         .parallelize(partitions, partitions.size())
@@ -183,7 +182,7 @@ public class HoodieSnapshotExporter {
             .map(HoodieBaseFile::getPath).iterator())
         .toLocalIterator();
 
-    Dataset<Row> sourceDataset = spark.read().parquet(JavaConversions.asScalaIterator(exportingFilePaths).toSeq());
+    Dataset<Row> sourceDataset = new SQLContext(jsc).read().parquet(JavaConversions.asScalaIterator(exportingFilePaths).toSeq());
     partitioner.partition(sourceDataset)
         .format(cfg.outputFormat)
         .mode(SaveMode.Overwrite)
@@ -256,19 +255,18 @@ public class HoodieSnapshotExporter {
   }
 
   public static void main(String[] args) throws IOException {
-    // Take input configs
     final Config cfg = new Config();
     new JCommander(cfg, null, args);
 
-    // Create a spark job to do the snapshot export
-    SparkSession spark = SparkSession.builder().appName("Hoodie-snapshot-exporter")
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").getOrCreate();
+    SparkConf sparkConf = new SparkConf().setAppName("Hoodie-snapshot-exporter");
+    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     LOG.info("Initializing spark job.");
 
-    HoodieSnapshotExporter hoodieSnapshotExporter = new HoodieSnapshotExporter();
-    hoodieSnapshotExporter.export(spark, cfg);
-
-    // Stop the job
-    spark.stop();
+    try {
+      new HoodieSnapshotExporter().export(jsc, cfg);
+    } finally {
+      jsc.stop();
+    }
   }
 }
