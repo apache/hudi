@@ -417,17 +417,4 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     }
   }
 
-  /**
-   * Refers to different operation types.
-   */
-  enum OperationType {
-    INSERT,
-    INSERT_PREPPED,
-    UPSERT,
-    UPSERT_PREPPED,
-    DELETE,
-    BULK_INSERT,
-    BULK_INSERT_PREPPED,
-    BOOTSTRAP
-  }
 }
