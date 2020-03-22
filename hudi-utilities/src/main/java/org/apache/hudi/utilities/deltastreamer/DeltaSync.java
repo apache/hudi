@@ -303,7 +303,6 @@ public class DeltaSync implements Serializable {
                 t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
       }
 
-      // Use Transformed Row's schema if not overridden
       // Use Transformed Row's schema if not overridden. If target schema is not specified
       // default to RowBasedSchemaProvider
       schemaProvider = this.schemaProvider == null || this.schemaProvider.getTargetSchema() == null
