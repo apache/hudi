@@ -342,9 +342,10 @@ public class DeltaSync implements Serializable {
   /**
    * Perform Hoodie Write. Run Cleaner, schedule compaction and syncs to hive if needed.
    *
-   * @param records       Input Records
-   * @param checkpointStr Checkpoint String
-   * @param metrics       Metrics
+   * @param records             Input Records
+   * @param checkpointStr       Checkpoint String
+   * @param metrics             Metrics
+   * @param overallTimerContext Timer Context
    * @return Option Compaction instant if one is scheduled
    */
   private Option<String> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
