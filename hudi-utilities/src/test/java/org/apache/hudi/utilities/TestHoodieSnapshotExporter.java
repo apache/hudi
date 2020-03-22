@@ -34,6 +34,7 @@ import org.apache.hudi.utilities.HoodieSnapshotExporter.Partitioner;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
 
 import com.beust.jcommander.ParameterException;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
@@ -57,9 +58,11 @@ import org.junit.runners.Parameterized.Parameters;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -159,9 +162,68 @@ public class TestHoodieSnapshotExporter {
       assertTrue(dfs.exists(new Path(partition + "/.hoodie_partition_metadata")));
       assertTrue(dfs.exists(new Path(targetPath + "/_SUCCESS")));
     }
+  }
+
+  public static class TestHoodieSnapshotExporterForEarlyAbort extends ExporterTestHarness {
+
+    private HoodieSnapshotExporter.Config cfg;
+
+    @Before
+    public void setUp() throws Exception {
+      super.setUp();
+      cfg = new Config();
+      cfg.sourceBasePath = sourcePath;
+      cfg.targetOutputPath = targetPath;
+      cfg.outputFormat = OutputFormatValidator.HUDI;
+    }
 
     @Test
-    public void testExportEmptyDataset() throws IOException {
+    public void testExportWhenTargetPathExists() throws IOException {
+      // make target output path present
+      dfs.mkdirs(new Path(targetPath));
+
+      // export
+      Throwable t = null;
+      try {
+        new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+      } catch (Exception e) {
+        t = e;
+      } finally {
+        assertNotNull(t);
+        assertTrue(t instanceof HoodieSnapshotExporterException);
+        assertEquals("The target output path already exists.", t.getMessage());
+      }
+    }
+
+    @Test
+    public void testExportDatasetWithNoCommit() throws IOException {
+      // delete commit files
+      List<Path> commitFiles = Arrays.stream(dfs.listStatus(new Path(sourcePath + "/.hoodie")))
+          .map(FileStatus::getPath)
+          .filter(filePath -> filePath.getName().endsWith(".commit"))
+          .collect(Collectors.toList());
+      for (Path p : commitFiles) {
+        dfs.delete(p, false);
+      }
+
+      // export
+      Throwable t = null;
+      try {
+        new HoodieSnapshotExporter().export(SparkSession.builder().config(jsc.getConf()).getOrCreate(), cfg);
+      } catch (Exception e) {
+        t = e;
+      } finally {
+        assertNotNull(t);
+        assertTrue(t instanceof HoodieSnapshotExporterException);
+        assertEquals("No commits present. Nothing to snapshot.", t.getMessage());
+      }
+
+      // Check results
+      assertFalse(dfs.exists(new Path(targetPath)));
+    }
+
+    @Test
+    public void testExportDatasetWithNoPartition() throws IOException {
       // delete all source data
       dfs.delete(new Path(sourcePath + "/" + PARTITION_PATH), true);
 
@@ -172,6 +234,7 @@ public class TestHoodieSnapshotExporter {
       } catch (Exception e) {
         t = e;
       } finally {
+        assertNotNull(t);
         assertTrue(t instanceof HoodieSnapshotExporterException);
         assertEquals("The source dataset has 0 partition to snapshot.", t.getMessage());
       }
