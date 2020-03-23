@@ -18,11 +18,9 @@
 
 package org.apache.hudi.cli.common;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hudi.avro.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieRollingStatMetadata;
+import org.apache.hudi.table.HoodieCommitArchiveLog;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,22 +36,7 @@ public class HoodieTestCommitUtilities {
    */
   public static org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadataConverterOrdered(
       HoodieCommitMetadata hoodieCommitMetadata) {
-    return orderCommitMetadata(commitMetadataConverter(hoodieCommitMetadata));
-  }
-
-  /**
-   * Converter HoodieCommitMetadata to avro format.
-   */
-  public static org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadataConverter(
-      HoodieCommitMetadata hoodieCommitMetadata) {
-    ObjectMapper mapper = new ObjectMapper();
-    // Need this to ignore other public get() methods
-    mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    org.apache.hudi.avro.model.HoodieCommitMetadata avroMetaData =
-        mapper.convertValue(hoodieCommitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
-    // Do not archive Rolling Stats, cannot set to null since AVRO will throw null pointer
-    avroMetaData.getExtraMetadata().put(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, "");
-    return avroMetaData;
+    return orderCommitMetadata(HoodieCommitArchiveLog.convertCommitMetadata(hoodieCommitMetadata));
   }
 
   /**

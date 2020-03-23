@@ -88,12 +88,11 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // reload the timeline and get all the commits before archive
-    HoodieTimeline timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
-    assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
+    metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
 
     // archive
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
-    assertTrue(archiveLog.archiveIfRequired(jsc));
+    archiveLog.archiveIfRequired(jsc);
   }
 
   @After

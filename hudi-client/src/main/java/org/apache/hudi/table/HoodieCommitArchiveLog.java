@@ -295,7 +295,7 @@ public class HoodieCommitArchiveLog {
       case HoodieTimeline.COMMIT_ACTION: {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
-        archivedMetaWrapper.setHoodieCommitMetadata(commitMetadataConverter(commitMetadata));
+        archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
         break;
       }
@@ -314,7 +314,7 @@ public class HoodieCommitArchiveLog {
       case HoodieTimeline.DELTA_COMMIT_ACTION: {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
-        archivedMetaWrapper.setHoodieCommitMetadata(commitMetadataConverter(commitMetadata));
+        archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
         break;
       }
@@ -331,7 +331,7 @@ public class HoodieCommitArchiveLog {
     return archivedMetaWrapper;
   }
 
-  public org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadataConverter(
+  public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(
       HoodieCommitMetadata hoodieCommitMetadata) {
     ObjectMapper mapper = new ObjectMapper();
     // Need this to ignore other public get() methods
