@@ -407,7 +407,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   private List<HoodieInstant> getAllInstants() {
     timeline = new HoodieActiveTimeline(metaClient);
     List<HoodieInstant> allInstants = new ArrayList<>();
-    long commitTime = 1;
+    long instantTime = 1;
     for (State state : State.values()) {
       if (state == State.INVALID) {
         continue;
@@ -432,7 +432,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
           action = HoodieTimeline.COMMIT_ACTION;
         }
 
-        allInstants.add(new HoodieInstant(state, action, String.format("%03d", commitTime++)));
+        allInstants.add(new HoodieInstant(state, action, String.format("%03d", instantTime++)));
       }
     }
     return allInstants;

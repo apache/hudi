@@ -46,16 +46,16 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
     extends LazyIterableIterator<HoodieRecord<T>, List<WriteStatus>> {
 
   protected final HoodieWriteConfig hoodieConfig;
-  protected final String commitTime;
+  protected final String instantTime;
   protected final HoodieTable<T> hoodieTable;
   protected final String idPrefix;
   protected int numFilesWritten;
 
   public CopyOnWriteLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
-      String commitTime, HoodieTable<T> hoodieTable, String idPrefix) {
+                                       String instantTime, HoodieTable<T> hoodieTable, String idPrefix) {
     super(sortedRecordItr);
     this.hoodieConfig = config;
-    this.commitTime = commitTime;
+    this.instantTime = instantTime;
     this.hoodieTable = hoodieTable;
     this.idPrefix = idPrefix;
     this.numFilesWritten = 0;
@@ -136,7 +136,7 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
       final HoodieRecord insertPayload = payload.record;
       // lazily initialize the handle, for the first time
       if (handle == null) {
-        handle = new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, insertPayload.getPartitionPath(),
+        handle = new HoodieCreateHandle(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),
             getNextFileId(idPrefix));
       }
 
@@ -147,7 +147,7 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
         // handle is full.
         statuses.add(handle.close());
         // Need to handle the rejected payload & open new handle
-        handle = new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, insertPayload.getPartitionPath(),
+        handle = new HoodieCreateHandle(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),
             getNextFileId(idPrefix));
         handle.write(insertPayload, payload.insertValue, payload.exception); // we should be able to write 1 payload.
       }

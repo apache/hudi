@@ -465,7 +465,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   @Override
-  public boolean rollbackCommit(String commitTime) {
+  public boolean rollbackCommit(String instantTime) {
     // Rollback in HbaseIndex is managed via method {@link #checkIfValidCommit()}
     return true;
   }

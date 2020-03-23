@@ -74,8 +74,8 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   @Test
   public void testReadFilterExistAfterBulkInsertPrepped() throws Exception {
     testReadFilterExist(getConfigBuilder().withBulkInsertParallelism(1).build(),
-        (writeClient, recordRDD, commitTime) -> {
-          return writeClient.bulkInsertPreppedRecords(recordRDD, commitTime, Option.empty());
+        (writeClient, recordRDD, instantTime) -> {
+          return writeClient.bulkInsertPreppedRecords(recordRDD, instantTime, Option.empty());
         });
   }
 
@@ -178,8 +178,8 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   @Test
   public void testTagLocationAfterBulkInsertPrepped() throws Exception {
     testTagLocation(
-        getConfigBuilder().withBulkInsertParallelism(1).build(), (writeClient, recordRDD, commitTime) -> writeClient
-            .bulkInsertPreppedRecords(recordRDD, commitTime, Option.empty()),
+        getConfigBuilder().withBulkInsertParallelism(1).build(), (writeClient, recordRDD, instantTime) -> writeClient
+            .bulkInsertPreppedRecords(recordRDD, instantTime, Option.empty()),
         HoodieWriteClient::upsertPreppedRecords, true);
   }
 

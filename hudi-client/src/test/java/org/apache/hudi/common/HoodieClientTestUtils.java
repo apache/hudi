@@ -115,30 +115,30 @@ public class HoodieClientTestUtils {
     return toReturn;
   }
 
-  private static void fakeMetaFile(String basePath, String commitTime, String suffix) throws IOException {
+  private static void fakeMetaFile(String basePath, String instantTime, String suffix) throws IOException {
     String parentPath = basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME;
     new File(parentPath).mkdirs();
-    new File(parentPath + "/" + commitTime + suffix).createNewFile();
+    new File(parentPath + "/" + instantTime + suffix).createNewFile();
   }
 
-  public static void fakeCommitFile(String basePath, String commitTime) throws IOException {
-    fakeMetaFile(basePath, commitTime, HoodieTimeline.COMMIT_EXTENSION);
+  public static void fakeCommitFile(String basePath, String instantTime) throws IOException {
+    fakeMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
   }
 
-  public static void fakeInFlightFile(String basePath, String commitTime) throws IOException {
-    fakeMetaFile(basePath, commitTime, HoodieTimeline.INFLIGHT_EXTENSION);
+  public static void fakeInFlightFile(String basePath, String instantTime) throws IOException {
+    fakeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_EXTENSION);
   }
 
-  public static void fakeDataFile(String basePath, String partitionPath, String commitTime, String fileId)
+  public static void fakeDataFile(String basePath, String partitionPath, String instantTime, String fileId)
       throws Exception {
-    fakeDataFile(basePath, partitionPath, commitTime, fileId, 0);
+    fakeDataFile(basePath, partitionPath, instantTime, fileId, 0);
   }
 
-  public static void fakeDataFile(String basePath, String partitionPath, String commitTime, String fileId, long length)
+  public static void fakeDataFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
       throws Exception {
     String parentPath = String.format("%s/%s", basePath, partitionPath);
     new File(parentPath).mkdirs();
-    String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(commitTime, "1-0-1", fileId));
+    String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(instantTime, "1-0-1", fileId));
     new File(path).createNewFile();
     new RandomAccessFile(path, "rw").setLength(length);
   }
@@ -161,19 +161,19 @@ public class HoodieClientTestUtils {
   }
 
   public static Dataset<Row> readCommit(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
-                                        String commitTime) {
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
+                                        String instantTime) {
+    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
     if (!commitTimeline.containsInstant(commitInstant)) {
-      throw new HoodieException("No commit exists at " + commitTime);
+      throw new HoodieException("No commit exists at " + instantTime);
     }
     try {
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
       LOG.info("Path :" + paths.values());
       return sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]))
-          .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime));
+          .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime));
     } catch (Exception e) {
-      throw new HoodieException("Error reading commit " + commitTime, e);
+      throw new HoodieException("Error reading commit " + instantTime, e);
     }
   }
 
@@ -225,16 +225,16 @@ public class HoodieClientTestUtils {
     }
     HoodieAvroWriteSupport writeSupport =
         new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
-    String commitTime = FSUtils.getCommitTime(filename);
+    String instantTime = FSUtils.getCommitTime(filename);
     HoodieParquetConfig config = new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP,
         ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
         HoodieTestUtils.getDefaultHadoopConf(), Double.valueOf(HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO));
     HoodieParquetWriter writer =
-        new HoodieParquetWriter(commitTime, new Path(basePath + "/" + partitionPath + "/" + filename), config, schema);
+        new HoodieParquetWriter(instantTime, new Path(basePath + "/" + partitionPath + "/" + filename), config, schema);
     int seqId = 1;
     for (HoodieRecord record : records) {
       GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
-      HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, commitTime, "" + seqId++);
+      HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, instantTime, "" + seqId++);
       HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), filename);
       writer.writeAvro(record.getRecordKey(), avroRecord);
       filter.add(record.getRecordKey());
@@ -243,7 +243,7 @@ public class HoodieClientTestUtils {
 
     if (createCommitTime) {
       HoodieTestUtils.createMetadataFolder(basePath);
-      HoodieTestUtils.createCommitFiles(basePath, commitTime);
+      HoodieTestUtils.createCommitFiles(basePath, instantTime);
     }
     return filename;
   }
@@ -251,10 +251,10 @@ public class HoodieClientTestUtils {
   public static String writeParquetFile(String basePath, String partitionPath, List<HoodieRecord> records,
                                         Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException, InterruptedException {
     Thread.sleep(1000);
-    String commitTime = HoodieTestUtils.makeNewCommitTime();
+    String instantTime = HoodieTestUtils.makeNewCommitTime();
     String fileId = UUID.randomUUID().toString();
-    String filename = FSUtils.makeDataFileName(commitTime, "1-0-1", fileId);
-    HoodieTestUtils.createCommitFiles(basePath, commitTime);
+    String filename = FSUtils.makeDataFileName(instantTime, "1-0-1", fileId);
+    HoodieTestUtils.createCommitFiles(basePath, instantTime);
     return HoodieClientTestUtils.writeParquetFile(basePath, partitionPath, filename, records, schema, filter,
         createCommitTime);
   }

@@ -78,7 +78,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
     val jsc = new JavaSparkContext(sparkContext)
     val basePath = new Path(parameters("path"))
-    val commitTime = HoodieActiveTimeline.createNewInstantTime()
+    val instantTime = HoodieActiveTimeline.createNewInstantTime()
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     var exists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
 
@@ -140,8 +140,8 @@ private[hudi] object HoodieSparkSqlWriter {
         log.info("new batch has no new records, skipping...")
         (true, common.util.Option.empty())
       }
-      client.startCommitWithTime(commitTime)
-      val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, commitTime, operation)
+      client.startCommitWithTime(instantTime)
+      val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation)
       (writeStatuses, client)
     } else {
 
@@ -172,14 +172,14 @@ private[hudi] object HoodieSparkSqlWriter {
       )
 
       // Issue deletes
-      client.startCommitWithTime(commitTime)
-      val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, commitTime)
+      client.startCommitWithTime(instantTime)
+      val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, instantTime)
       (writeStatuses, client)
     }
 
     // Check for errors and commit the write.
-    val writeSuccessful = checkWriteStatus(writeStatuses, parameters, writeClient, commitTime, basePath, operation, jsc)
-    (writeSuccessful, common.util.Option.ofNullable(commitTime))
+    val writeSuccessful = checkWriteStatus(writeStatuses, parameters, writeClient, instantTime, basePath, operation, jsc)
+    (writeSuccessful, common.util.Option.ofNullable(instantTime))
   }
 
   /**
@@ -246,7 +246,7 @@ private[hudi] object HoodieSparkSqlWriter {
   private def checkWriteStatus(writeStatuses: JavaRDD[WriteStatus],
                                parameters: Map[String, String],
                                client: HoodieWriteClient[_],
-                               commitTime: String,
+                               instantTime: String,
                                basePath: Path,
                                operation: String,
                                jsc: JavaSparkContext): Boolean = {
@@ -256,17 +256,17 @@ private[hudi] object HoodieSparkSqlWriter {
       val metaMap = parameters.filter(kv =>
         kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX_OPT_KEY)))
       val commitSuccess = if (metaMap.isEmpty) {
-        client.commit(commitTime, writeStatuses)
+        client.commit(instantTime, writeStatuses)
       } else {
-        client.commit(commitTime, writeStatuses,
+        client.commit(instantTime, writeStatuses,
           common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
       }
 
       if (commitSuccess) {
-        log.info("Commit " + commitTime + " successful!")
+        log.info("Commit " + instantTime + " successful!")
       }
       else {
-        log.info("Commit " + commitTime + " failed!")
+        log.info("Commit " + instantTime + " failed!")
       }
 
       val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)

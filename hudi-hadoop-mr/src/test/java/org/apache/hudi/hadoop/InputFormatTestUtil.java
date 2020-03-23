@@ -170,10 +170,10 @@ public class InputFormatTestUtil {
   }
 
   private static Iterable<? extends GenericRecord> generateAvroRecords(Schema schema, int numberOfRecords,
-      String commitTime, String fileId) throws IOException {
+      String instantTime, String fileId) throws IOException {
     List<GenericRecord> records = new ArrayList<>(numberOfRecords);
     for (int i = 0; i < numberOfRecords; i++) {
-      records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, commitTime, fileId));
+      records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, instantTime, fileId));
     }
     return records;
   }

@@ -86,7 +86,7 @@ public class CleansCommand implements CommandMarker {
   }
 
   @CliCommand(value = "clean showpartitions", help = "Show partition level details of a clean")
-  public String showCleanPartitions(@CliOption(key = {"clean"}, help = "clean to show") final String commitTime,
+  public String showCleanPartitions(@CliOption(key = {"clean"}, help = "clean to show") final String instantTime,
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
@@ -96,10 +96,10 @@ public class CleansCommand implements CommandMarker {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
-    HoodieInstant cleanInstant = new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, commitTime);
+    HoodieInstant cleanInstant = new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, instantTime);
 
     if (!timeline.containsInstant(cleanInstant)) {
-      return "Clean " + commitTime + " not found in metadata " + timeline;
+      return "Clean " + instantTime + " not found in metadata " + timeline;
     }
 
     HoodieCleanMetadata cleanMetadata =

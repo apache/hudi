@@ -39,18 +39,18 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 public class HoodieStorageWriterFactory {
 
   public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> getStorageWriter(
-      String commitTime, Path path, HoodieTable<T> hoodieTable, HoodieWriteConfig config, Schema schema)
+      String instantTime, Path path, HoodieTable<T> hoodieTable, HoodieWriteConfig config, Schema schema)
       throws IOException {
     final String name = path.getName();
     final String extension = FSUtils.isLogFile(path) ? HOODIE_LOG.getFileExtension() : FSUtils.getFileExtension(name);
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetStorageWriter(commitTime, path, config, schema, hoodieTable);
+      return newParquetStorageWriter(instantTime, path, config, schema, hoodieTable);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
   private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(
-      String commitTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable)
+      String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable)
       throws IOException {
     BloomFilter filter = BloomFilterFactory
         .createBloomFilter(config.getBloomFilterNumEntries(), config.getBloomFilterFPP(),
@@ -63,6 +63,6 @@ public class HoodieStorageWriterFactory {
         config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
         hoodieTable.getHadoopConf(), config.getParquetCompressionRatio());
 
-    return new HoodieParquetWriter<>(commitTime, path, parquetConfig, schema);
+    return new HoodieParquetWriter<>(instantTime, path, parquetConfig, schema);
   }
 }

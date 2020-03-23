@@ -50,10 +50,10 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   private final HoodieWrapperFileSystem fs;
   private final long maxFileSize;
   private final HoodieAvroWriteSupport writeSupport;
-  private final String commitTime;
+  private final String instantTime;
   private final Schema schema;
 
-  public HoodieParquetWriter(String commitTime, Path file, HoodieParquetConfig parquetConfig, Schema schema)
+  public HoodieParquetWriter(String instantTime, Path file, HoodieParquetConfig parquetConfig, Schema schema)
       throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
         ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),
@@ -70,7 +70,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     this.maxFileSize = parquetConfig.getMaxFileSize()
         + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
     this.writeSupport = parquetConfig.getWriteSupport();
-    this.commitTime = commitTime;
+    this.instantTime = instantTime;
     this.schema = schema;
   }
 
@@ -85,10 +85,10 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   @Override
   public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
     String seqId =
-        HoodieRecord.generateSequenceId(commitTime, TaskContext.getPartitionId(), recordIndex.getAndIncrement());
+        HoodieRecord.generateSequenceId(instantTime, TaskContext.getPartitionId(), recordIndex.getAndIncrement());
     HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, record.getRecordKey(), record.getPartitionPath(),
         file.getName());
-    HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, commitTime, seqId);
+    HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);
     super.write(avroRecord);
     writeSupport.add(record.getRecordKey());
   }

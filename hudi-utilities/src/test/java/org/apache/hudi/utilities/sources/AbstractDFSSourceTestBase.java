@@ -99,14 +99,14 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
    * Generates a batch of test data and writes the data to a file.
    *
    * @param filename  The name of the file.
-   * @param commitTime  The commit time.
+   * @param instantTime  The commit time.
    * @param n  The number of records to generate.
    * @return  The file path.
    * @throws IOException
    */
-  Path generateOneFile(String filename, String commitTime, int n) throws IOException {
+  Path generateOneFile(String filename, String instantTime, int n) throws IOException {
     Path path = new Path(dfsRoot, filename + fileSuffix);
-    writeNewDataToFile(dataGenerator.generateInserts(commitTime, n, useFlattenedSchema), path);
+    writeNewDataToFile(dataGenerator.generateInserts(instantTime, n, useFlattenedSchema), path);
     return path;
   }
 

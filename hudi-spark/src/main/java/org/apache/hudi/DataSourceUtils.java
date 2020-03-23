@@ -196,20 +196,20 @@ public class DataSourceUtils {
   }
 
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-                                                      String commitTime, String operation) {
+                                                      String instantTime, String operation) {
     if (operation.equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL())) {
-      return client.bulkInsert(hoodieRecords, commitTime);
+      return client.bulkInsert(hoodieRecords, instantTime);
     } else if (operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())) {
-      return client.insert(hoodieRecords, commitTime);
+      return client.insert(hoodieRecords, instantTime);
     } else {
       // default is upsert
-      return client.upsert(hoodieRecords, commitTime);
+      return client.upsert(hoodieRecords, instantTime);
     }
   }
 
   public static JavaRDD<WriteStatus> doDeleteOperation(HoodieWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
-                                                       String commitTime) {
-    return client.delete(hoodieKeys, commitTime);
+                                                       String instantTime) {
+    return client.delete(hoodieKeys, instantTime);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
