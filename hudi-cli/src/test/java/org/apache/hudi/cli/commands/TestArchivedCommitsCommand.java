@@ -181,7 +181,8 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     for (int i = 100; i < 104; i++) {
       String instant = String.valueOf(i);
       // Since HoodiePrintHelper order data by default, need to order commitMetadata
-      Comparable[] result = new Comparable[]{instant, "commit", HoodieTestCommitUtilities.orderConvertedCommitMetadata(metadata)};
+      Comparable[] result = new Comparable[]{
+          instant, "commit", HoodieTestCommitUtilities.convertAndOrderCommitMetadata(metadata)};
       rows.add(result);
       rows.add(result);
       rows.add(result);

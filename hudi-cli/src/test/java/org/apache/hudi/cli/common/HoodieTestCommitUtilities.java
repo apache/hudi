@@ -34,7 +34,7 @@ public class HoodieTestCommitUtilities {
   /**
    * Converter HoodieCommitMetadata to avro format and ordered by partition.
    */
-  public static org.apache.hudi.avro.model.HoodieCommitMetadata orderConvertedCommitMetadata(
+  public static org.apache.hudi.avro.model.HoodieCommitMetadata convertAndOrderCommitMetadata(
       HoodieCommitMetadata hoodieCommitMetadata) {
     return orderCommitMetadata(HoodieCommitArchiveLog.convertCommitMetadata(hoodieCommitMetadata));
   }
