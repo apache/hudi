@@ -53,29 +53,37 @@ class DefaultSource extends RelationProvider
     // Add default options for unspecified read options keys.
     val parameters = Map(QUERY_TYPE_OPT_KEY -> DEFAULT_QUERY_TYPE_OPT_VAL) ++ translateViewTypesToQueryTypes(optParams)
 
+    // TODO: Determine whether table is bootstrapped or not
+    val isBootstrapped = true
+
     val path = parameters.get("path")
     if (path.isEmpty) {
       throw new HoodieException("'path' must be specified.")
     }
 
     if (parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_SNAPSHOT_OPT_VAL)) {
-      // this is just effectively RO view only, where `path` can contain a mix of
-      // non-hoodie/hoodie path files. set the path filter up
-      sqlContext.sparkContext.hadoopConfiguration.setClass(
-        "mapreduce.input.pathFilter.class",
-        classOf[HoodieROTablePathFilter],
-        classOf[org.apache.hadoop.fs.PathFilter])
 
-      log.info("Constructing hoodie (as parquet) data source with options :" + parameters)
-      log.warn("Snapshot view not supported yet via data source, for MERGE_ON_READ tables. " +
-        "Please query the Hive table registered using Spark SQL.")
-      // simply return as a regular parquet relation
-      DataSource.apply(
-        sparkSession = sqlContext.sparkSession,
-        userSpecifiedSchema = Option(schema),
-        className = "parquet",
-        options = parameters)
-        .resolveRelation()
+      if (isBootstrapped) {
+        new HudiBootstrapRelation(sqlContext, schema, path.get, optParams)
+      } else {
+        // this is just effectively RO view only, where `path` can contain a mix of
+        // non-hoodie/hoodie path files. set the path filter up
+        sqlContext.sparkContext.hadoopConfiguration.setClass(
+          "mapreduce.input.pathFilter.class",
+          classOf[HoodieROTablePathFilter],
+          classOf[org.apache.hadoop.fs.PathFilter])
+
+        log.info("Constructing hoodie (as parquet) data source with options :" + parameters)
+        log.warn("Snapshot view not supported yet via data source, for MERGE_ON_READ tables. " +
+          "Please query the Hive table registered using Spark SQL.")
+        // simply return as a regular parquet relation
+        DataSource.apply(
+          sparkSession = sqlContext.sparkSession,
+          userSpecifiedSchema = Option(schema),
+          className = "parquet",
+          options = parameters)
+          .resolveRelation()
+      }
     } else if (parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
       new IncrementalRelation(sqlContext, path.get, optParams, schema)
     } else {
