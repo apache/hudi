@@ -21,7 +21,7 @@ package org.apache.hudi.client;
 import java.util.Collections;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.client.config.ConfigHelpers;
+import org.apache.hudi.client.utils.ConfigUtils;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -117,8 +117,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       String commitTime) {
     // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
     // RDD actions that are performed after updating the index.
-    StorageLevel storageLevel =
-        ConfigHelpers.<StorageLevel>createConfig(config.getProps()).getWriteStatusStorageLevel();
+    StorageLevel storageLevel = ConfigUtils.getWriteStatusStorageLevel(config.getProps());
+
     writeStatusRDD = writeStatusRDD.persist(storageLevel);
     Timer.Context indexTimer = metrics.getIndexCtx();
     // Update the index back

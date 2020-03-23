@@ -735,7 +735,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP, DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED);
 
       // Make sure the props is propagated
-      setDefaultOnCondition(props, !isEngineConfigSet, HoodieEngineConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCompactionConfigSet,

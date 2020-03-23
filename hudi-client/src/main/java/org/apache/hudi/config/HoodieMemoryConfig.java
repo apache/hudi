@@ -18,8 +18,7 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.client.config.AbstractConfig;
-import org.apache.hudi.client.config.ConfigHelpers;
+import org.apache.hudi.client.utils.ConfigUtils;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -114,8 +113,7 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
     }
 
     private long getMaxMemoryAllowedForMerge(String maxMemoryFraction) {
-      AbstractConfig abstractConfig = ConfigHelpers.createConfig(props);
-      return abstractConfig.getMaxMemoryAllowedForMerge(maxMemoryFraction);
+      return ConfigUtils.getMaxMemoryAllowedForMerge(props, maxMemoryFraction);
     }
 
     public HoodieMemoryConfig build() {
