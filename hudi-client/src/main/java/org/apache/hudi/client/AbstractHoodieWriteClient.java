@@ -118,7 +118,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
     // RDD actions that are performed after updating the index.
     StorageLevel storageLevel = ConfigUtils.getWriteStatusStorageLevel(config.getProps());
-
     writeStatusRDD = writeStatusRDD.persist(storageLevel);
     Timer.Context indexTimer = metrics.getIndexCtx();
     // Update the index back
