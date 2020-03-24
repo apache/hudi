@@ -1,0 +1,41 @@
+language: ruby
+rvm:
+  - 2.6.3
+
+env:
+  global:
+    - GIT_USER="CI BOT"
+    - GIT_EMAIL="cibot@hudi.apache.org"
+    - GIT_REPO="apache"
+    - GIT_PROJECT="incubator-hudi"
+    - GIT_BRANCH="asf-site"
+    - DOCS_ROOT="`pwd`/docs"
+
+before_install:
+  - if [ "$(git show -s --format=%ae)" = "${GIT_EMAIL}" ]; then echo "avoid recursion, ignore ..."; exit 0; fi
+  - git config --global user.name ${GIT_USER}
+  - git config --global user.email ${GIT_EMAIL}
+  - git remote add hudi https://${GIT_TOKEN}@github.com/${GIT_REPO}/${GIT_PROJECT}.git
+  - git checkout -b pr
+  - git pull --rebase hudi asf-site
+
+script:
+  - pushd ${DOCS_ROOT}
+  - gem install bundler:2.0.2
+  - bundle install
+  - bundle update --bundler
+  - bundle exec jekyll build _config.yml --source . --destination _site
+  - popd
+
+after_success:
+  - echo $TRAVIS_PULL_REQUEST
+  - 'if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then echo "ignore push build result for per submit"; exit 0; fi'
+  - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then echo "pushing build result ..."; fi'
+  - mkdir test-content && \cp -rf ${DOCS_ROOT}/_site/* test-content
+  - git add -A
+  - git commit -am "Travis CI build asf-site"
+  - git push hudi pr:asf-site
+
+branches:
+  only:
+    - asf-site
