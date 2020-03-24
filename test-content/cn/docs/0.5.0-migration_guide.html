@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Migration Guide - Apache Hudi</title>
+<meta name="description" content="Hudi maintains metadata such as commit timeline and indexes to manage a dataset. The commit timelines helps to understand the actions happening on a dataset as well as the current state of a dataset. Indexes are used by Hudi to maintain a record key to file id mapping to efficiently locate a record. At the moment, Hudi supports writing only parquet columnar formats.To be able to start using Hudi for your existing dataset, you will need to migrate your existing dataset into a Hudi managed dataset. There are a couple of ways to achieve this.">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Migration Guide">
+<meta property="og:url" content="https://hudi.apache.org/cn/docs/0.5.0-migration_guide.html">
+
+
+  <meta property="og:description" content="Hudi maintains metadata such as commit timeline and indexes to manage a dataset. The commit timelines helps to understand the actions happening on a dataset as well as the current state of a dataset. Indexes are used by Hudi to maintain a record key to file id mapping to efficiently locate a record. At the moment, Hudi supports writing only parquet columnar formats.To be able to start using Hudi for your existing dataset, you will need to migrate your existing dataset into a Hudi managed dataset. There are a couple of ways to achieve this.">
+
+
+
+
+
+  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/cn/docs/quick-start-guide.html" target="_self" >文档</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/community.html" target="_self" >社区</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/activity.html" target="_self" >动态</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/releases.html" target="_self" >发布</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/incubator-hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+
+  
+
+    
+      
+
+
+
+
+
+
+
+<nav class="nav__list">
+  
+  <input id="ac-toc" name="accordion-toc" type="checkbox" />
+  <label for="ac-toc">文档菜单</label>
+  <ul class="nav__items">
+    
+      <li>
+        
+          <span class="nav__sub-title">入门指南</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-quick-start-guide.html" class="">快速开始</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-use_cases.html" class="">使用案例</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-powered_by.html" class="">演讲 & hudi 用户</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-comparison.html" class="">对比</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-docker_demo.html" class="">Docker 示例</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">帮助文档</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-concepts.html" class="">概念</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-writing_data.html" class="">写入数据</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-querying_data.html" class="">查询数据</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-configurations.html" class="">配置</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-performance.html" class="">性能</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-admin_guide.html" class="">管理</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">其他信息</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-docs-versions.html" class="">文档版本</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.0-privacy.html" class="">版权信息</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+  </ul>
+</nav>
+    
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Migration Guide
+</h1>
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+          <style>
+            .page {
+              padding-right: 0 !important;
+            }
+          </style>
+        
+        <p>Hudi maintains metadata such as commit timeline and indexes to manage a dataset. The commit timelines helps to understand the actions happening on a dataset as well as the current state of a dataset. Indexes are used by Hudi to maintain a record key to file id mapping to efficiently locate a record. At the moment, Hudi supports writing only parquet columnar formats.
+To be able to start using Hudi for your existing dataset, you will need to migrate your existing dataset into a Hudi managed dataset. There are a couple of ways to achieve this.</p>
+
+<h2 id="approaches">Approaches</h2>
+
+<h3 id="use-hudi-for-new-partitions-alone">Use Hudi for new partitions alone</h3>
+
+<p>Hudi can be used to manage an existing dataset without affecting/altering the historical data already present in the
+dataset. Hudi has been implemented to be compatible with such a mixed dataset with a caveat that either the complete
+Hive partition is Hudi managed or not. Thus the lowest granularity at which Hudi manages a dataset is a Hive
+partition. Start using the datasource API or the WriteClient to write to the dataset and make sure you start writing
+to a new partition or convert your last N partitions into Hudi instead of the entire table. Note, since the historical
+ partitions are not managed by HUDI, none of the primitives provided by HUDI work on the data in those partitions. More concretely, one cannot perform upserts or incremental pull on such older partitions not managed by the HUDI dataset.
+Take this approach if your dataset is an append only type of dataset and you do not expect to perform any updates to existing (or non Hudi managed) partitions.</p>
+
+<h3 id="convert-existing-dataset-to-hudi">Convert existing dataset to Hudi</h3>
+
+<p>Import your existing dataset into a Hudi managed dataset. Since all the data is Hudi managed, none of the limitations
+ of Approach 1 apply here. Updates spanning any partitions can be applied to this dataset and Hudi will efficiently
+ make the update available to queries. Note that not only do you get to use all Hudi primitives on this dataset,
+ there are other additional advantages of doing this. Hudi automatically manages file sizes of a Hudi managed dataset
+ . You can define the desired file size when converting this dataset and Hudi will ensure it writes out files
+ adhering to the config. It will also ensure that smaller files later get corrected by routing some new inserts into
+ small files rather than writing new small ones thus maintaining the health of your cluster.</p>
+
+<p>There are a few options when choosing this approach.</p>
+
+<p><strong>Option 1</strong>
+Use the HDFSParquetImporter tool. As the name suggests, this only works if your existing dataset is in parquet file format.
+This tool essentially starts a Spark Job to read the existing parquet dataset and converts it into a HUDI managed dataset by re-writing all the data.</p>
+
+<p><strong>Option 2</strong>
+For huge datasets, this could be as simple as :</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="n">partition</span> <span class="n">in</span> <span class="o">[</span><span class="n">list</span> <span class="n">of</span> <span class="n">partitions</span> <span class="n">in</span> <span class="n">source</span> <span class="n">dataset</span><span class="o">]</span> <span class="o">{</span>
+        <span class="n">val</span> <span class="n">inputDF</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="na">read</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"any_input_format"</span><span class="o">).</span><span class="na">load</span><span class="o">(</span><span class="s">"partition_path"</span><span class="o">)</span>
+        <span class="n">inputDF</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">).</span><span class="na">option</span><span class="o">()....</span><span class="na">save</span><span class="o">(</span><span class="s">"basePath"</span><span class="o">)</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<p><strong>Option 3</strong>
+Write your own custom logic of how to load an existing dataset into a Hudi managed one. Please read about the RDD API
+ <a href="/cn/docs/0.5.0-quick-start-guide.html">here</a>. Using the HDFSParquetImporter Tool. Once hudi has been built via <code class="highlighter-rouge">mvn clean install -DskipTests</code>, the shell can be
+fired by via <code class="highlighter-rouge">cd hudi-cli &amp;&amp; ./hudi-cli.sh</code>.</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hudi</span><span class="o">-&gt;</span><span class="n">hdfsparquetimport</span>
+        <span class="o">--</span><span class="n">upsert</span> <span class="kc">false</span>
+        <span class="o">--</span><span class="n">srcPath</span> <span class="o">/</span><span class="n">user</span><span class="o">/</span><span class="n">parquet</span><span class="o">/</span><span class="n">dataset</span><span class="o">/</span><span class="n">basepath</span>
+        <span class="o">--</span><span class="n">targetPath</span>
+        <span class="o">/</span><span class="n">user</span><span class="o">/</span><span class="n">hoodie</span><span class="o">/</span><span class="n">dataset</span><span class="o">/</span><span class="n">basepath</span>
+        <span class="o">--</span><span class="n">tableName</span> <span class="n">hoodie_table</span>
+        <span class="o">--</span><span class="n">tableType</span> <span class="no">COPY_ON_WRITE</span>
+        <span class="o">--</span><span class="n">rowKeyField</span> <span class="n">_row_key</span>
+        <span class="o">--</span><span class="n">partitionPathField</span> <span class="n">partitionStr</span>
+        <span class="o">--</span><span class="n">parallelism</span> <span class="mi">1500</span>
+        <span class="o">--</span><span class="n">schemaFilePath</span> <span class="o">/</span><span class="n">user</span><span class="o">/</span><span class="n">table</span><span class="o">/</span><span class="n">schema</span>
+        <span class="o">--</span><span class="n">format</span> <span class="n">parquet</span>
+        <span class="o">--</span><span class="n">sparkMemory</span> <span class="mi">6</span><span class="n">g</span>
+        <span class="o">--</span><span class="n">retry</span> <span class="mi">2</span>
+</code></pre></div></div>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <a class="footer-link-img" href="https://apache.org">
+        <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+      </a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the Apache License, Version 2.0.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+      <br>
+      Apache Hudi is an effort undergoing incubation at The Apache Software Foundation (ASF), sponsored by the <a href="http://incubator.apache.org/">Apache Incubator</a>.
+      Incubation is required of all newly accepted projects until a further review indicates that the infrastructure, communications, and decision making process have
+      stabilized in a manner consistent with other successful ASF projects. While incubation status is not necessarily a
+      reflection of the completeness or stability of the code, it does indicate that the project has yet to be fully endorsed by the ASF.
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+
+  </body>
+</html>

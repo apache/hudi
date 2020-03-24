@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>配置 - Apache Hudi</title>
+<meta name="description" content="该页面介绍了几种配置写入或读取Hudi数据集的作业的方法。简而言之，您可以在几个级别上控制行为。">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="配置">
+<meta property="og:url" content="https://hudi.apache.org/cn/docs/configurations.html">
+
+
+  <meta property="og:description" content="该页面介绍了几种配置写入或读取Hudi数据集的作业的方法。简而言之，您可以在几个级别上控制行为。">
+
+
+
+
+
+  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/cn/docs/quick-start-guide.html" target="_self" >文档</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/community.html" target="_self" >社区</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/activity.html" target="_self" >动态</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/releases.html" target="_self" >发布</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/incubator-hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+
+  
+
+    
+      
+
+
+
+
+
+
+
+<nav class="nav__list">
+  
+  <input id="ac-toc" name="accordion-toc" type="checkbox" />
+  <label for="ac-toc">文档菜单</label>
+  <ul class="nav__items">
+    
+      <li>
+        
+          <span class="nav__sub-title">入门指南</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/quick-start-guide.html" class="">快速开始</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/use_cases.html" class="">使用案例</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/powered_by.html" class="">演讲 & hudi 用户</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/comparison.html" class="">对比</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/docker_demo.html" class="">Docker 示例</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">帮助文档</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/concepts.html" class="">概念</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/writing_data.html" class="">写入数据</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/querying_data.html" class="">查询数据</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/configurations.html" class="active">配置</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/performance.html" class="">性能</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/deployment.html" class="">管理</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">其他信息</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/docs-versions.html" class="">文档版本</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/privacy.html" class="">版权信息</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+  </ul>
+</nav>
+    
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">配置
+</h1>
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#与云存储连接">与云存储连接</a></li>
+  <li><a href="#spark-datasource">Spark数据源配置</a>
+    <ul>
+      <li><a href="#写选项">写选项</a></li>
+      <li><a href="#读选项">读选项</a></li>
+    </ul>
+  </li>
+  <li><a href="#writeclient-configs">WriteClient 配置</a>
+    <ul>
+      <li><a href="#索引配置">索引配置</a></li>
+      <li><a href="#存储选项">存储选项</a></li>
+      <li><a href="#压缩配置">压缩配置</a></li>
+      <li><a href="#指标配置">指标配置</a></li>
+      <li><a href="#内存配置">内存配置</a></li>
+    </ul>
+  </li>
+</ul>
+          </nav>
+        </aside>
+        
+        <p>该页面介绍了几种配置写入或读取Hudi数据集的作业的方法。
+简而言之，您可以在几个级别上控制行为。</p>
+
+<ul>
+  <li><strong><a href="#spark-datasource">Spark数据源配置</a></strong> : 这些配置控制Hudi Spark数据源，提供如下功能：
+ 定义键和分区、选择写操作、指定如何合并记录或选择要读取的视图类型。</li>
+  <li><strong><a href="#writeclient-configs">WriteClient 配置</a></strong> : 在内部，Hudi数据源使用基于RDD的<code class="highlighter-rouge">HoodieWriteClient</code> API
+ 真正执行对存储的写入。 这些配置可对文件大小、压缩（compression）、并行度、压缩（compaction）、写入模式、清理等底层方面进行完全控制。
+ 尽管Hudi提供了合理的默认设置，但在不同情形下，可能需要对这些配置进行调整以针对特定的工作负载进行优化。</li>
+  <li><strong><a href="#PAYLOAD_CLASS_OPT_KEY">RecordPayload 配置</a></strong> : 这是Hudi提供的最底层的定制。
+ RecordPayload定义了如何根据传入的新记录和存储的旧记录来产生新值以进行插入更新。
+ Hudi提供了诸如<code class="highlighter-rouge">OverwriteWithLatestAvroPayload</code>的默认实现，该实现仅使用最新或最后写入的记录来更新存储。
+ 在数据源和WriteClient级别，都可以将其重写为扩展<code class="highlighter-rouge">HoodieRecordPayload</code>类的自定义类。</li>
+</ul>
+
+<h2 id="与云存储连接">与云存储连接</h2>
+
+<p>无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。</p>
+
+<ul>
+  <li><a href="/cn/docs/s3_hoodie.html">AWS S3</a> <br />
+S3和Hudi协同工作所需的配置。</li>
+  <li><a href="/cn/docs/gcs_hoodie.html">Google Cloud Storage</a> <br />
+GCS和Hudi协同工作所需的配置。</li>
+</ul>
+
+<h2 id="spark-datasource">Spark数据源配置</h2>
+
+<p>可以通过将以下选项传递到<code class="highlighter-rouge">option(k,v)</code>方法中来配置使用数据源的Spark作业。
+实际的数据源级别配置在下面列出。</p>
+
+<h3 id="写选项">写选项</h3>
+
+<p>另外，您可以使用<code class="highlighter-rouge">options()</code>或<code class="highlighter-rouge">option(k,v)</code>方法直接传递任何WriteClient级别的配置。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">inputDF</span><span class="o">.</span><span class="na">write</span><span class="o">()</span>
+<span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
+<span class="o">.</span><span class="na">options</span><span class="o">(</span><span class="n">clientOpts</span><span class="o">)</span> <span class="c1">// 任何Hudi客户端选项都可以传入</span>
+<span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">RECORDKEY_FIELD_OPT_KEY</span><span class="o">(),</span> <span class="s">"_row_key"</span><span class="o">)</span>
+<span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">(),</span> <span class="s">"partition"</span><span class="o">)</span>
+<span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">(),</span> <span class="s">"timestamp"</span><span class="o">)</span>
+<span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">HoodieWriteConfig</span><span class="o">.</span><span class="na">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">)</span>
+<span class="o">.</span><span class="na">mode</span><span class="o">(</span><span class="nc">SaveMode</span><span class="o">.</span><span class="na">Append</span><span class="o">)</span>
+<span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
+</code></pre></div></div>
+
+<p>用于通过<code class="highlighter-rouge">write.format.option(...)</code>写入数据集的选项</p>
+
+<h4 id="TABLE_NAME_OPT_KEY">TABLE_NAME_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.table.name</code> [必须]<br />
+  <span style="color:grey">Hive表名，用于将数据集注册到其中。</span></p>
+
+<h4 id="OPERATION_OPT_KEY">OPERATION_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.operation</code>, 默认值：<code class="highlighter-rouge">upsert</code><br />
+  <span style="color:grey">是否为写操作进行插入更新、插入或批量插入。使用<code class="highlighter-rouge">bulkinsert</code>将新数据加载到表中，之后使用<code class="highlighter-rouge">upsert</code>或<code class="highlighter-rouge">insert</code>。
+  批量插入使用基于磁盘的写入路径来扩展以加载大量输入，而无需对其进行缓存。</span></p>
+
+<h4 id="STORAGE_TYPE_OPT_KEY">STORAGE_TYPE_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.storage.type</code>, 默认值：<code class="highlighter-rouge">COPY_ON_WRITE</code> <br />
+  <span style="color:grey">此写入的基础数据的存储类型。两次写入之间不能改变。</span></p>
+
+<h4 id="PRECOMBINE_FIELD_OPT_KEY">PRECOMBINE_FIELD_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.precombine.field</code>, 默认值：<code class="highlighter-rouge">ts</code> <br />
+  <span style="color:grey">实际写入之前在preCombining中使用的字段。
+  当两个记录具有相同的键值时，我们将使用Object.compareTo(..)从precombine字段中选择一个值最大的记录。</span></p>
+
+<h4 id="PAYLOAD_CLASS_OPT_KEY">PAYLOAD_CLASS_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.payload.class</code>, 默认值：<code class="highlighter-rouge">org.apache.hudi.OverwriteWithLatestAvroPayload</code> <br />
+  <span style="color:grey">使用的有效载荷类。如果您想在插入更新或插入时使用自己的合并逻辑，请重写此方法。
+  这将使得<code class="highlighter-rouge">PRECOMBINE_FIELD_OPT_VAL</code>设置的任何值无效</span></p>
+
+<h4 id="RECORDKEY_FIELD_OPT_KEY">RECORDKEY_FIELD_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.recordkey.field</code>, 默认值：<code class="highlighter-rouge">uuid</code> <br />
+  <span style="color:grey">记录键字段。用作<code class="highlighter-rouge">HoodieKey</code>中<code class="highlighter-rouge">recordKey</code>部分的值。
+  实际值将通过在字段值上调用.toString()来获得。可以使用点符号指定嵌套字段，例如：<code class="highlighter-rouge">a.b.c</code></span></p>
+
+<h4 id="PARTITIONPATH_FIELD_OPT_KEY">PARTITIONPATH_FIELD_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.partitionpath.field</code>, 默认值：<code class="highlighter-rouge">partitionpath</code> <br />
+  <span style="color:grey">分区路径字段。用作<code class="highlighter-rouge">HoodieKey</code>中<code class="highlighter-rouge">partitionPath</code>部分的值。
+  通过调用.toString()获得实际的值</span></p>
+
+<h4 id="KEYGENERATOR_CLASS_OPT_KEY">KEYGENERATOR_CLASS_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.keygenerator.class</code>, 默认值：<code class="highlighter-rouge">org.apache.hudi.SimpleKeyGenerator</code> <br />
+  <span style="color:grey">键生成器类，实现从输入的<code class="highlighter-rouge">Row</code>对象中提取键</span></p>
+
+<h4 id="COMMIT_METADATA_KEYPREFIX_OPT_KEY">COMMIT_METADATA_KEYPREFIX_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.commitmeta.key.prefix</code>, 默认值：<code class="highlighter-rouge">_</code> <br />
+  <span style="color:grey">以该前缀开头的选项键会自动添加到提交/增量提交的元数据中。
+  这对于与hudi时间轴一致的方式存储检查点信息很有用</span></p>
+
+<h4 id="INSERT_DROP_DUPS_OPT_KEY">INSERT_DROP_DUPS_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.insert.drop.duplicates</code>, 默认值：<code class="highlighter-rouge">false</code> <br />
+  <span style="color:grey">如果设置为true，则在插入操作期间从传入DataFrame中过滤掉所有重复记录。</span></p>
+
+<h4 id="HIVE_SYNC_ENABLED_OPT_KEY">HIVE_SYNC_ENABLED_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.hive_sync.enable</code>, 默认值：<code class="highlighter-rouge">false</code> <br />
+  <span style="color:grey">设置为true时，将数据集注册并同步到Apache Hive Metastore</span></p>
+
+<h4 id="HIVE_DATABASE_OPT_KEY">HIVE_DATABASE_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.hive_sync.database</code>, 默认值：<code class="highlighter-rouge">default</code> <br />
+  <span style="color:grey">要同步到的数据库</span></p>
+
+<h4 id="HIVE_TABLE_OPT_KEY">HIVE_TABLE_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.hive_sync.table</code>, [Required] <br />
+  <span style="color:grey">要同步到的表</span></p>
+
+<h4 id="HIVE_USER_OPT_KEY">HIVE_USER_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.hive_sync.username</code>, 默认值：<code class="highlighter-rouge">hive</code> <br />
+  <span style="color:grey">要使用的Hive用户名</span></p>
+
+<h4 id="HIVE_PASS_OPT_KEY">HIVE_PASS_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.hive_sync.password</code>, 默认值：<code class="highlighter-rouge">hive</code> <br />
+  <span style="color:grey">要使用的Hive密码</span></p>
+
+<h4 id="HIVE_URL_OPT_KEY">HIVE_URL_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.hive_sync.jdbcurl</code>, 默认值：<code class="highlighter-rouge">jdbc:hive2://localhost:10000</code> <br />
+  <span style="color:grey">Hive metastore url</span></p>
+
+<h4 id="HIVE_PARTITION_FIELDS_OPT_KEY">HIVE_PARTITION_FIELDS_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.hive_sync.partition_fields</code>, 默认值：<code class="highlighter-rouge"> </code> <br />
+  <span style="color:grey">数据集中用于确定Hive分区的字段。</span></p>
+
+<h4 id="HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY">HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.hive_sync.partition_extractor_class</code>, 默认值：<code class="highlighter-rouge">org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor</code> <br />
+  <span style="color:grey">用于将分区字段值提取到Hive分区列中的类。</span></p>
+
+<h4 id="HIVE_ASSUME_DATE_PARTITION_OPT_KEY">HIVE_ASSUME_DATE_PARTITION_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.hive_sync.assume_date_partitioning</code>, 默认值：<code class="highlighter-rouge">false</code> <br />
+  <span style="color:grey">假设分区格式是yyyy/mm/dd</span></p>
+
+<h3 id="读选项">读选项</h3>
+
+<p>用于通过<code class="highlighter-rouge">read.format.option(...)</code>读取数据集的选项</p>
+
+<h4 id="VIEW_TYPE_OPT_KEY">VIEW_TYPE_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.view.type</code>, 默认值：<code class="highlighter-rouge">read_optimized</code> <br />
+<span style="color:grey">是否需要以某种模式读取数据，增量模式（自InstantTime以来的新数据）
+（或）读优化模式（基于列数据获取最新视图）
+（或）实时模式（基于行和列数据获取最新视图）</span></p>
+
+<h4 id="BEGIN_INSTANTTIME_OPT_KEY">BEGIN_INSTANTTIME_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.read.begin.instanttime</code>, [在增量模式下必须] <br />
+<span style="color:grey">开始增量提取数据的即时时间。这里的instanttime不必一定与时间轴上的即时相对应。
+取出以<code class="highlighter-rouge">instant_time &gt; BEGIN_INSTANTTIME</code>写入的新数据。
+例如：’20170901080000’将获取2017年9月1日08:00 AM之后写入的所有新数据。</span></p>
+
+<h4 id="END_INSTANTTIME_OPT_KEY">END_INSTANTTIME_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.read.end.instanttime</code>, 默认值：最新即时（即从开始即时获取所有新数据） <br />
+<span style="color:grey">限制增量提取的数据的即时时间。取出以<code class="highlighter-rouge">instant_time &lt;= END_INSTANTTIME</code>写入的新数据。</span></p>
+
+<h2 id="writeclient-configs">WriteClient 配置</h2>
+
+<p>直接使用RDD级别api进行编程的Jobs可以构建一个<code class="highlighter-rouge">HoodieWriteConfig</code>对象，并将其传递给<code class="highlighter-rouge">HoodieWriteClient</code>构造函数。
+HoodieWriteConfig可以使用以下构建器模式构建。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nc">HoodieWriteConfig</span> <span class="n">cfg</span> <span class="o">=</span> <span class="nc">HoodieWriteConfig</span><span class="o">.</span><span class="na">newBuilder</span><span class="o">()</span>
+        <span class="o">.</span><span class="na">withPath</span><span class="o">(</span><span class="n">basePath</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">forTable</span><span class="o">(</span><span class="n">tableName</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">withSchema</span><span class="o">(</span><span class="n">schemaStr</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">withProps</span><span class="o">(</span><span class="n">props</span><span class="o">)</span> <span class="c1">// 从属性文件传递原始k、v对。</span>
+        <span class="o">.</span><span class="na">withCompactionConfig</span><span class="o">(</span><span class="nc">HoodieCompactionConfig</span><span class="o">.</span><span class="na">newBuilder</span><span class="o">().</span><span class="na">withXXX</span><span class="o">(...).</span><span class="na">build</span><span class="o">())</span>
+        <span class="o">.</span><span class="na">withIndexConfig</span><span class="o">(</span><span class="nc">HoodieIndexConfig</span><span class="o">.</span><span class="na">newBuilder</span><span class="o">().</span><span class="na">withXXX</span><span class="o">(...).</span><span class="na">build</span><span class="o">())</span>
+        <span class="o">...</span>
+        <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+</code></pre></div></div>
+
+<p>以下各节介绍了写配置的不同方面，并解释了最重要的配置及其属性名称和默认值。</p>
+
+<h4 id="withPath">withPath(hoodie_base_path)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.base.path</code> [必须] <br />
+<span style="color:grey">创建所有数据分区所依据的基本DFS路径。
+始终在前缀中明确指明存储方式（例如hdfs://，s3://等）。
+Hudi将有关提交、保存点、清理审核日志等的所有主要元数据存储在基本目录下的.hoodie目录中。</span></p>
+
+<h4 id="withSchema">withSchema(schema_str)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.avro.schema</code> [必须]<br />
+<span style="color:grey">这是数据集的当前读取器的avro模式（schema）。
+这是整个模式的字符串。HoodieWriteClient使用此模式传递到HoodieRecordPayload的实现，以从源格式转换为avro记录。
+在更新过程中重写记录时也使用此模式。</span></p>
+
+<h4 id="forTable">forTable(table_name)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.table.name</code> [必须] <br />
+ <span style="color:grey">数据集的表名，将用于在Hive中注册。每次运行需要相同。</span></p>
+
+<h4 id="withBulkInsertParallelism">withBulkInsertParallelism(bulk_insert_parallelism = 1500)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.bulkinsert.shuffle.parallelism</code><br />
+<span style="color:grey">批量插入旨在用于较大的初始导入，而此处的并行度决定了数据集中文件的初始数量。
+调整此值以达到在初始导入期间所需的最佳尺寸。</span></p>
+
+<h4 id="withParallelism">withParallelism(insert_shuffle_parallelism = 1500, upsert_shuffle_parallelism = 1500)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.insert.shuffle.parallelism</code>, <code class="highlighter-rouge">hoodie.upsert.shuffle.parallelism</code><br />
+<span style="color:grey">最初导入数据后，此并行度将控制用于读取输入记录的初始并行度。
+确保此值足够高，例如：1个分区用于1 GB的输入数据</span></p>
+
+<h4 id="combineInput">combineInput(on_insert = false, on_update=true)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.combine.before.insert</code>, <code class="highlighter-rouge">hoodie.combine.before.upsert</code><br />
+<span style="color:grey">在DFS中插入或更新之前先组合输入RDD并将多个部分记录合并为单个记录的标志</span></p>
+
+<h4 id="withWriteStatusStorageLevel">withWriteStatusStorageLevel(level = MEMORY_AND_DISK_SER)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.write.status.storage.level</code><br />
+<span style="color:grey">HoodieWriteClient.insert和HoodieWriteClient.upsert返回一个持久的RDD[WriteStatus]，
+这是因为客户端可以选择检查WriteStatus并根据失败选择是否提交。这是此RDD的存储级别的配置</span></p>
+
+<h4 id="withAutoCommit">withAutoCommit(autoCommit = true)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.auto.commit</code><br />
+<span style="color:grey">插入和插入更新后，HoodieWriteClient是否应该自动提交。
+客户端可以选择关闭自动提交，并在”定义的成功条件”下提交</span></p>
+
+<h4 id="withAssumeDatePartitioning">withAssumeDatePartitioning(assumeDatePartitioning = false)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.assume.date.partitioning</code><br />
+<span style="color:grey">HoodieWriteClient是否应该假设数据按日期划分，即从基本路径划分为三个级别。
+这是支持&lt;0.3.1版本创建的表的一个补丁。最终将被删除</span></p>
+
+<h4 id="withConsistencyCheckEnabled">withConsistencyCheckEnabled(enabled = false)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.consistency.check.enabled</code><br />
+<span style="color:grey">HoodieWriteClient是否应该执行其他检查，以确保写入的文件在基础文件系统/存储上可列出。
+将其设置为true可以解决S3的最终一致性模型，并确保作为提交的一部分写入的所有数据均能准确地用于查询。</span></p>
+
+<h3 id="索引配置">索引配置</h3>
+<p>以下配置控制索引行为，该行为将传入记录标记为对较旧记录的插入或更新。</p>
+
+<p><a href="#withIndexConfig">withIndexConfig</a> (HoodieIndexConfig) <br />
+<span style="color:grey">可插入以具有外部索引（HBase）或使用存储在Parquet文件中的默认布隆过滤器（bloom filter）</span></p>
+
+<h4 id="withIndexClass">withIndexClass(indexClass = “x.y.z.UserDefinedIndex”)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.index.class</code> <br />
+<span style="color:grey">用户自定义索引的全路径名，索引类必须为HoodieIndex的子类，当指定该配置时，其会优先于<code class="highlighter-rouge">hoodie.index.type</code>配置</span></p>
+
+<h4 id="withIndexType">withIndexType(indexType = BLOOM)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.index.type</code> <br />
+<span style="color:grey">要使用的索引类型。默认为布隆过滤器。可能的选项是[BLOOM | HBASE | INMEMORY]。
+布隆过滤器消除了对外部系统的依赖，并存储在Parquet数据文件的页脚中</span></p>
+
+<h4 id="bloomFilterNumEntries">bloomFilterNumEntries(numEntries = 60000)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.index.bloom.num_entries</code> <br />
+<span style="color:grey">仅在索引类型为BLOOM时适用。<br />这是要存储在布隆过滤器中的条目数。
+我们假设maxParquetFileSize为128MB，averageRecordSize为1024B，因此，一个文件中的记录总数约为130K。
+默认值（60000）大约是此近似值的一半。<a href="https://issues.apache.org/jira/browse/HUDI-56">HUDI-56</a>
+描述了如何动态地对此进行计算。
+警告：将此值设置得太低，将产生很多误报，并且索引查找将必须扫描比其所需的更多的文件；如果将其设置得非常高，将线性增加每个数据文件的大小（每50000个条目大约4KB）。</span></p>
+
+<h4 id="bloomFilterFPP">bloomFilterFPP(fpp = 0.000000001)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.index.bloom.fpp</code> <br />
+<span style="color:grey">仅在索引类型为BLOOM时适用。<br />根据条目数允许的错误率。
+这用于计算应为布隆过滤器分配多少位以及哈希函数的数量。通常将此值设置得很低（默认值：0.000000001），我们希望在磁盘空间上进行权衡以降低误报率</span></p>
+
+<h4 id="bloomIndexPruneByRanges">bloomIndexPruneByRanges(pruneRanges = true)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.bloom.index.prune.by.ranges</code> <br />
+<span style="color:grey">仅在索引类型为BLOOM时适用。<br />为true时，从文件框定信息，可以加快索引查找的速度。 如果键具有单调递增的前缀，例如时间戳，则特别有用。</span></p>
+
+<h4 id="bloomIndexUseCaching">bloomIndexUseCaching(useCaching = true)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.bloom.index.use.caching</code> <br />
+<span style="color:grey">仅在索引类型为BLOOM时适用。<br />为true时，将通过减少用于计算并行度或受影响分区的IO来缓存输入的RDD以加快索引查找</span></p>
+
+<h4 id="bloomIndexTreebasedFilter">bloomIndexTreebasedFilter(useTreeFilter = true)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.bloom.index.use.treebased.filter</code> <br />
+<span style="color:grey">仅在索引类型为BLOOM时适用。<br />为true时，启用基于间隔树的文件过滤优化。与暴力模式相比，此模式可根据键范围加快文件过滤速度</span></p>
+
+<h4 id="bloomIndexBucketizedChecking">bloomIndexBucketizedChecking(bucketizedChecking = true)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.bloom.index.bucketized.checking</code> <br />
+<span style="color:grey">仅在索引类型为BLOOM时适用。<br />为true时，启用了桶式布隆过滤。这减少了在基于排序的布隆索引查找中看到的偏差</span></p>
+
+<h4 id="bloomIndexKeysPerBucket">bloomIndexKeysPerBucket(keysPerBucket = 10000000)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.bloom.index.keys.per.bucket</code> <br />
+<span style="color:grey">仅在启用bloomIndexBucketizedChecking并且索引类型为bloom的情况下适用。<br />
+此配置控制“存储桶”的大小，该大小可跟踪对单个文件进行的记录键检查的次数，并且是分配给执行布隆过滤器查找的每个分区的工作单位。
+较高的值将分摊将布隆过滤器读取到内存的固定成本。</span></p>
+
+<h4 id="bloomIndexParallelism">bloomIndexParallelism(0)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.bloom.index.parallelism</code> <br />
+<span style="color:grey">仅在索引类型为BLOOM时适用。<br />这是索引查找的并行度，其中涉及Spark Shuffle。 默认情况下，这是根据输入的工作负载特征自动计算的</span></p>
+
+<h4 id="hbaseZkQuorum">hbaseZkQuorum(zkString) [必须]</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.index.hbase.zkquorum</code> <br />
+<span style="color:grey">仅在索引类型为HBASE时适用。要连接的HBase ZK Quorum URL。</span></p>
+
+<h4 id="hbaseZkPort">hbaseZkPort(port) [必须]</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.index.hbase.zkport</code> <br />
+<span style="color:grey">仅在索引类型为HBASE时适用。要连接的HBase ZK Quorum端口。</span></p>
+
+<h4 id="hbaseTableName">hbaseZkZnodeParent(zkZnodeParent)  [必须]</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.index.hbase.zknode.path</code> <br />
+<span style="color:grey">仅在索引类型为HBASE时适用。这是根znode，它将包含HBase创建及使用的所有znode。</span></p>
+
+<h4 id="hbaseTableName">hbaseTableName(tableName)  [必须]</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.index.hbase.table</code> <br />
+<span style="color:grey">仅在索引类型为HBASE时适用。HBase表名称，用作索引。Hudi将row_key和[partition_path, fileID, commitTime]映射存储在表中。</span></p>
+
+<h5 id="bloomIndexUpdatePartitionPath">bloomIndexUpdatePartitionPath(updatePartitionPath = false)</h5>
+<p>属性：<code class="highlighter-rouge">hoodie.bloom.index.update.partition.path</code> <br />
+<span style="color:grey">仅在索引类型为GLOBAL_BLOOM时适用。<br />为true时，当对一个已有记录执行包含分区路径的更新操作时，将会导致把新记录插入到新分区，而把原有记录从旧分区里删除。为false时，只对旧分区的原有记录进行更新。</span></p>
+
+<h3 id="存储选项">存储选项</h3>
+<p>控制有关调整parquet和日志文件大小的方面。</p>
+
+<p><a href="#withStorageConfig">withStorageConfig</a> (HoodieStorageConfig) <br /></p>
+
+<h4 id="limitFileSize">limitFileSize (size = 120MB)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.parquet.max.file.size</code> <br />
+<span style="color:grey">Hudi写阶段生成的parquet文件的目标大小。对于DFS，这需要与基础文件系统块大小保持一致，以实现最佳性能。</span></p>
+
+<h4 id="parquetBlockSize">parquetBlockSize(rowgroupsize = 120MB)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.parquet.block.size</code> <br />
+<span style="color:grey">Parquet行组大小。最好与文件大小相同，以便将文件中的单个列连续存储在磁盘上</span></p>
+
+<h4 id="parquetPageSize">parquetPageSize(pagesize = 1MB)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.parquet.page.size</code> <br />
+<span style="color:grey">Parquet页面大小。页面是parquet文件中的读取单位。 在一个块内，页面被分别压缩。</span></p>
+
+<h4 id="parquetCompressionRatio">parquetCompressionRatio(parquetCompressionRatio = 0.1)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.parquet.compression.ratio</code> <br />
+<span style="color:grey">当Hudi尝试调整新parquet文件的大小时，预期对parquet数据进行压缩的比例。
+如果bulk_insert生成的文件小于预期大小，请增加此值</span></p>
+
+<h4 id="parquetCompressionCodec">parquetCompressionCodec(parquetCompressionCodec = gzip)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.parquet.compression.codec</code> <br />
+<span style="color:grey">Parquet压缩编解码方式名称。默认值为gzip。可能的选项是[gzip | snappy | uncompressed | lzo]</span></p>
+
+<h4 id="logFileMaxSize">logFileMaxSize(logFileSize = 1GB)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.logfile.max.size</code> <br />
+<span style="color:grey">LogFile的最大大小。这是在将日志文件移到下一个版本之前允许的最大大小。</span></p>
+
+<h4 id="logFileDataBlockMaxSize">logFileDataBlockMaxSize(dataBlockSize = 256MB)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.logfile.data.block.max.size</code> <br />
+<span style="color:grey">LogFile数据块的最大大小。这是允许将单个数据块附加到日志文件的最大大小。
+这有助于确保附加到日志文件的数据被分解为可调整大小的块，以防止发生OOM错误。此大小应大于JVM内存。</span></p>
+
+<h4 id="logFileToParquetCompressionRatio">logFileToParquetCompressionRatio(logFileToParquetCompressionRatio = 0.35)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.logfile.to.parquet.compression.ratio</code> <br />
+<span style="color:grey">随着记录从日志文件移动到parquet，预期会进行额外压缩的比例。
+用于merge_on_read存储，以将插入内容发送到日志文件中并控制压缩parquet文件的大小。</span></p>
+
+<h4 id="parquetCompressionCodec">parquetCompressionCodec(parquetCompressionCodec = gzip)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.parquet.compression.codec</code> <br />
+<span style="color:grey">Parquet文件的压缩编解码方式</span></p>
+
+<h3 id="压缩配置">压缩配置</h3>
+<p>压缩配置用于控制压缩（将日志文件合并到新的parquet基本文件中）、清理（回收较旧及未使用的文件组）。
+<a href="#withCompactionConfig">withCompactionConfig</a> (HoodieCompactionConfig) <br /></p>
+
+<h4 id="withCleanerPolicy">withCleanerPolicy(policy = KEEP_LATEST_COMMITS)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.cleaner.policy</code> <br />
+<span style="color:grey">要使用的清理政策。Hudi将删除旧版本的parquet文件以回收空间。
+任何引用此版本文件的查询和计算都将失败。最好确保数据保留的时间超过最大查询执行时间。</span></p>
+
+<h4 id="retainCommits">retainCommits(no_of_commits_to_retain = 24)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.cleaner.commits.retained</code> <br />
+<span style="color:grey">保留的提交数。因此，数据将保留为num_of_commits * time_between_commits（计划的）。
+这也直接转化为您可以逐步提取此数据集的数量</span></p>
+
+<h4 id="archiveCommitsWith">archiveCommitsWith(minCommits = 96, maxCommits = 128)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.keep.min.commits</code>, <code class="highlighter-rouge">hoodie.keep.max.commits</code> <br />
+<span style="color:grey">每个提交都是<code class="highlighter-rouge">.hoodie</code>目录中的一个小文件。由于DFS通常不支持大量小文件，因此Hudi将较早的提交归档到顺序日志中。
+提交通过重命名提交文件以原子方式发布。</span></p>
+
+<h4 id="withCommitsArchivalBatchSize">withCommitsArchivalBatchSize(batch = 10)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.commits.archival.batch</code> <br />
+<span style="color:grey">这控制着批量读取并一起归档的提交即时的数量。</span></p>
+
+<h4 id="compactionSmallFileSize">compactionSmallFileSize(size = 0)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.parquet.small.file.limit</code> <br />
+<span style="color:grey">该值应小于maxFileSize，如果将其设置为0，会关闭此功能。
+由于批处理中分区中插入记录的数量众多，总会出现小文件。
+Hudi提供了一个选项，可以通过将对该分区中的插入作为对现有小文件的更新来解决小文件的问题。
+此处的大小是被视为“小文件大小”的最小文件大小。</span></p>
+
+<h4 id="insertSplitSize">insertSplitSize(size = 500000)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.copyonwrite.insert.split.size</code> <br />
+<span style="color:grey">插入写入并行度。为单个分区的总共插入次数。
+写出100MB的文件，至少1kb大小的记录，意味着每个文件有100K记录。默认值是超额配置为500K。
+为了改善插入延迟，请对其进行调整以匹配单个文件中的记录数。
+将此值设置为较小的值将导致文件变小（尤其是当compactionSmallFileSize为0时）</span></p>
+
+<h4 id="autoTuneInsertSplits">autoTuneInsertSplits(true)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.copyonwrite.insert.auto.split</code> <br />
+<span style="color:grey">Hudi是否应该基于最后24个提交的元数据动态计算insertSplitSize。默认关闭。</span></p>
+
+<h4 id="approxRecordSize">approxRecordSize(size = 1024)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.copyonwrite.record.size.estimate</code> <br />
+<span style="color:grey">平均记录大小。如果指定，hudi将使用它，并且不会基于最后24个提交的元数据动态地计算。
+没有默认值设置。这对于计算插入并行度以及将插入打包到小文件中至关重要。如上所述。</span></p>
+
+<h4 id="withInlineCompaction">withInlineCompaction(inlineCompaction = false)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.compact.inline</code> <br />
+<span style="color:grey">当设置为true时，紧接在插入或插入更新或批量插入的提交或增量提交操作之后由摄取本身触发压缩</span></p>
+
+<h4 id="withMaxNumDeltaCommitsBeforeCompaction">withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommitsBeforeCompaction = 10)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.compact.inline.max.delta.commits</code> <br />
+<span style="color:grey">触发内联压缩之前要保留的最大增量提交数</span></p>
+
+<h4 id="withCompactionLazyBlockReadEnabled">withCompactionLazyBlockReadEnabled(true)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.compaction.lazy.block.read</code> <br />
+<span style="color:grey">当CompactedLogScanner合并所有日志文件时，此配置有助于选择是否应延迟读取日志块。
+选择true以使用I/O密集型延迟块读取（低内存使用），或者为false来使用内存密集型立即块读取（高内存使用）</span></p>
+
+<h4 id="withCompactionReverseLogReadEnabled">withCompactionReverseLogReadEnabled(false)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.compaction.reverse.log.read</code> <br />
+<span style="color:grey">HoodieLogFormatReader会从pos=0到pos=file_length向前读取日志文件。
+如果此配置设置为true，则Reader会从pos=file_length到pos=0反向读取日志文件</span></p>
+
+<h4 id="withCleanerParallelism">withCleanerParallelism(cleanerParallelism = 200)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.cleaner.parallelism</code> <br />
+<span style="color:grey">如果清理变慢，请增加此值。</span></p>
+
+<h4 id="withCompactionStrategy">withCompactionStrategy(compactionStrategy = org.apache.hudi.io.compact.strategy.LogFileSizeBasedCompactionStrategy)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.compaction.strategy</code> <br />
+<span style="color:grey">用来决定在每次压缩运行期间选择要压缩的文件组的压缩策略。
+默认情况下，Hudi选择具有累积最多未合并数据的日志文件</span></p>
+
+<h4 id="withTargetIOPerCompactionInMB">withTargetIOPerCompactionInMB(targetIOPerCompactionInMB = 500000)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.compaction.target.io</code> <br />
+<span style="color:grey">LogFileSizeBasedCompactionStrategy的压缩运行期间要花费的MB量。当压缩以内联模式运行时，此值有助于限制摄取延迟。</span></p>
+
+<h4 id="withTargetPartitionsPerDayBasedCompaction">withTargetPartitionsPerDayBasedCompaction(targetPartitionsPerCompaction = 10)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.compaction.daybased.target</code> <br />
+<span style="color:grey">由org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy使用，表示在压缩运行期间要压缩的最新分区数。</span></p>
+
+<h4 id="payloadClassName">withPayloadClass(payloadClassName = org.apache.hudi.common.model.HoodieAvroPayload)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.compaction.payload.class</code> <br />
+<span style="color:grey">这需要与插入/插入更新过程中使用的类相同。
+就像写入一样，压缩也使用记录有效负载类将日志中的记录彼此合并，再次与基本文件合并，并生成压缩后要写入的最终记录。</span></p>
+
+<h3 id="指标配置">指标配置</h3>
+<p>配置Hudi指标报告。
+<a href="#withMetricsConfig">withMetricsConfig</a> (HoodieMetricsConfig) <br />
+<span style="color:grey">Hudi会发布有关每次提交、清理、回滚等的指标。</span></p>
+
+<h4 id="graphite">GRAPHITE</h4>
+
+<h5 id="on">on(metricsOn = true)</h5>
+<p>属性：<code class="highlighter-rouge">hoodie.metrics.on</code> <br />
+<span style="color:grey">打开或关闭发送指标。默认情况下处于启用状态。</span></p>
+
+<h5 id="withReporterType">withReporterType(reporterType = GRAPHITE)</h5>
+<p>属性：<code class="highlighter-rouge">hoodie.metrics.reporter.type</code> <br />
+<span style="color:grey">指标报告者的类型。默认使用graphite。</span></p>
+
+<h5 id="toGraphiteHost">toGraphiteHost(host = localhost)</h5>
+<p>属性：<code class="highlighter-rouge">hoodie.metrics.graphite.host</code> <br />
+<span style="color:grey">要连接的graphite主机</span></p>
+
+<h5 id="onGraphitePort">onGraphitePort(port = 4756)</h5>
+<p>属性：<code class="highlighter-rouge">hoodie.metrics.graphite.port</code> <br />
+<span style="color:grey">要连接的graphite端口</span></p>
+
+<h5 id="usePrefix">usePrefix(prefix = “”)</h5>
+<p>属性：<code class="highlighter-rouge">hoodie.metrics.graphite.metric.prefix</code> <br />
+<span style="color:grey">适用于所有指标的标准前缀。这有助于添加如数据中心、环境等信息</span></p>
+
+<h4 id="jmx">JMX</h4>
+
+<h5 id="on">on(metricsOn = true)</h5>
+<p>属性：<code class="highlighter-rouge">hoodie.metrics.on</code> <br />
+<span style="color:grey">打开或关闭发送指标。默认情况下处于启用状态。</span></p>
+
+<h5 id="withReporterType">withReporterType(reporterType = JMX)</h5>
+<p>属性：<code class="highlighter-rouge">hoodie.metrics.reporter.type</code> <br />
+<span style="color:grey">指标报告者的类型。</span></p>
+
+<h5 id="toJmxHost">toJmxHost(host = localhost)</h5>
+<p>属性：<code class="highlighter-rouge">hoodie.metrics.jmx.host</code> <br />
+<span style="color:grey">要连接的Jmx主机</span></p>
+
+<h5 id="onJmxPort">onJmxPort(port = 1000-5000)</h5>
+<p>属性：<code class="highlighter-rouge">hoodie.metrics.graphite.port</code> <br />
+<span style="color:grey">要连接的Jmx端口</span></p>
+
+<h5 id="usePrefix">usePrefix(prefix = “”)</h5>
+<p>属性：<code class="highlighter-rouge">hoodie.metrics.jmx.metric.prefix</code> <br />
+<span style="color:grey">适用于所有指标的标准前缀。这有助于添加如数据中心、环境等信息</span></p>
+
+<h3 id="内存配置">内存配置</h3>
+<p>控制由Hudi内部执行的压缩和合并的内存使用情况
+<a href="#withMemoryConfig">withMemoryConfig</a> (HoodieMemoryConfig) <br />
+<span style="color:grey">内存相关配置</span></p>
+
+<h4 id="withMaxMemoryFractionPerPartitionMerge">withMaxMemoryFractionPerPartitionMerge(maxMemoryFractionPerPartitionMerge = 0.6)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.memory.merge.fraction</code> <br />
+<span style="color:grey">该比例乘以用户内存比例（1-spark.memory.fraction）以获得合并期间要使用的堆空间的最终比例</span></p>
+
+<h4 id="withMaxMemorySizePerCompactionInBytes">withMaxMemorySizePerCompactionInBytes(maxMemorySizePerCompactionInBytes = 1GB)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.memory.compaction.fraction</code> <br />
+<span style="color:grey">HoodieCompactedLogScanner读取日志块，将记录转换为HoodieRecords，然后合并这些日志块和记录。
+在任何时候，日志块中的条目数可以小于或等于相应的parquet文件中的条目数。这可能导致Scanner出现OOM。
+因此，可溢出的映射有助于减轻内存压力。使用此配置来设置可溢出映射的最大允许inMemory占用空间。</span></p>
+
+<h4 id="withWriteStatusFailureFraction">withWriteStatusFailureFraction(failureFraction = 0.1)</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.memory.writestatus.failure.fraction</code> <br />
+<span style="color:grey">此属性控制报告给驱动程序的失败记录和异常的比例</span></p>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <a class="footer-link-img" href="https://apache.org">
+        <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+      </a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the Apache License, Version 2.0.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+      <br>
+      Apache Hudi is an effort undergoing incubation at The Apache Software Foundation (ASF), sponsored by the <a href="http://incubator.apache.org/">Apache Incubator</a>.
+      Incubation is required of all newly accepted projects until a further review indicates that the infrastructure, communications, and decision making process have
+      stabilized in a manner consistent with other successful ASF projects. While incubation status is not necessarily a
+      reflection of the completeness or stability of the code, it does indicate that the project has yet to be fully endorsed by the ASF.
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+
+  </body>
+</html>

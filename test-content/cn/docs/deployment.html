@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>管理 Hudi Pipelines - Apache Hudi</title>
+<meta name="description" content="管理员/运维人员可以通过以下方式了解Hudi数据集/管道">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="管理 Hudi Pipelines">
+<meta property="og:url" content="https://hudi.apache.org/cn/docs/deployment.html">
+
+
+  <meta property="og:description" content="管理员/运维人员可以通过以下方式了解Hudi数据集/管道">
+
+
+
+
+
+  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/cn/docs/quick-start-guide.html" target="_self" >文档</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/community.html" target="_self" >社区</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/activity.html" target="_self" >动态</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/releases.html" target="_self" >发布</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/incubator-hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+
+  
+
+    
+      
+
+
+
+
+
+
+
+<nav class="nav__list">
+  
+  <input id="ac-toc" name="accordion-toc" type="checkbox" />
+  <label for="ac-toc">文档菜单</label>
+  <ul class="nav__items">
+    
+      <li>
+        
+          <span class="nav__sub-title">入门指南</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/quick-start-guide.html" class="">快速开始</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/use_cases.html" class="">使用案例</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/powered_by.html" class="">演讲 & hudi 用户</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/comparison.html" class="">对比</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/docker_demo.html" class="">Docker 示例</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">帮助文档</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/concepts.html" class="">概念</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/writing_data.html" class="">写入数据</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/querying_data.html" class="">查询数据</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/configurations.html" class="">配置</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/performance.html" class="">性能</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/deployment.html" class="active">管理</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">其他信息</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/docs-versions.html" class="">文档版本</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/privacy.html" class="">版权信息</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+  </ul>
+</nav>
+    
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">管理 Hudi Pipelines
+</h1>
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#admin-cli">Admin CLI</a>
+    <ul>
+      <li><a href="#检查提交">检查提交</a></li>
+      <li><a href="#深入到特定的提交">深入到特定的提交</a></li>
+      <li><a href="#文件系统视图">文件系统视图</a></li>
+      <li><a href="#统计信息">统计信息</a></li>
+      <li><a href="#归档的提交">归档的提交</a></li>
+      <li><a href="#压缩">压缩</a></li>
+      <li><a href="#验证压缩">验证压缩</a></li>
+      <li><a href="#注意">注意</a></li>
+      <li><a href="#取消调度压缩">取消调度压缩</a></li>
+      <li><a href="#修复压缩">修复压缩</a></li>
+    </ul>
+  </li>
+  <li><a href="#metrics">指标</a></li>
+  <li><a href="#troubleshooting">故障排除</a>
+    <ul>
+      <li><a href="#缺失记录">缺失记录</a></li>
+      <li><a href="#重复">重复</a></li>
+      <li><a href="#spark-ui">Spark故障</a></li>
+    </ul>
+  </li>
+</ul>
+          </nav>
+        </aside>
+        
+        <p>管理员/运维人员可以通过以下方式了解Hudi数据集/管道</p>
+
+<ul>
+  <li><a href="#admin-cli">通过Admin CLI进行管理</a></li>
+  <li><a href="#metrics">Graphite指标</a></li>
+  <li><a href="#spark-ui">Hudi应用程序的Spark UI</a></li>
+</ul>
+
+<p>本节简要介绍了每一种方法，并提供了有关<a href="#troubleshooting">故障排除</a>的一些常规指南</p>
+
+<h2 id="admin-cli">Admin CLI</h2>
+
+<p>一旦构建了hudi，就可以通过<code class="highlighter-rouge">cd hudi-cli &amp;&amp; ./hudi-cli.sh</code>启动shell。
+一个hudi数据集位于DFS上的<strong>basePath</strong>位置，我们需要该位置才能连接到Hudi数据集。
+Hudi库使用.hoodie子文件夹跟踪所有元数据，从而有效地在内部管理该数据集。</p>
+
+<p>初始化hudi表，可使用如下命令。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="mi">18</span><span class="o">/</span><span class="mi">09</span><span class="o">/</span><span class="mo">06</span> <span class="mi">15</span><span class="o">:</span><span class="mi">56</span><span class="o">:</span><span class="mi">52</span> <span class="no">INFO</span> <span class="n">annotation</span><span class="o">.</span><span class="na">AutowiredAnnotationBeanPostProcessor</span><span class="o">:</span> <span class="no">JSR</span><span class="o">-</span><span class="mi">330</span> <span class="err">'</span><span class="n">javax</span><span class="o">.</span><span class="na">inject</span><span class="o">.</span><span class="na">Inject</span><span class="err">'</span> <span class="n">annotation</span> <span class="n">found</span> <span class="n">and</span> <span class="n">supported</span> <span class="k">for</span> <span class="n">autowiring</span>
+<span class="o">============================================</span>
+<span class="o">*</span>                                          <span class="o">*</span>
+<span class="o">*</span>     <span class="n">_</span>    <span class="n">_</span>           <span class="n">_</span>   <span class="n">_</span>               <span class="o">*</span>
+<span class="o">*</span>    <span class="o">|</span> <span class="o">|</span>  <span class="o">|</span> <span class="o">|</span>         <span class="o">|</span> <span class="o">|</span> <span class="o">(</span><span class="n">_</span><span class="o">)</span>              <span class="o">*</span>
+<span class="o">*</span>    <span class="o">|</span> <span class="o">|</span><span class="n">__</span><span class="o">|</span> <span class="o">|</span>       <span class="n">__</span><span class="o">|</span> <span class="o">|</span>  <span class="o">-</span>               <span class="o">*</span>
+<span class="o">*</span>    <span class="o">|</span>  <span class="n">__</span>  <span class="o">||</span>   <span class="o">|</span> <span class="o">/</span> <span class="n">_</span><span class="err">`</span> <span class="o">|</span> <span class="o">||</span>               <span class="o">*</span>
+<span class="o">*</span>    <span class="o">|</span> <span class="o">|</span>  <span class="o">|</span> <span class="o">||</span>   <span class="o">||</span> <span class="o">(</span><span class="n">_</span><span class="o">|</span> <span class="o">|</span> <span class="o">||</span>               <span class="o">*</span>
+<span class="o">*</span>    <span class="o">|</span><span class="n">_</span><span class="o">|</span>  <span class="o">|</span><span class="n">_</span><span class="o">|</span><span class="err">\</span><span class="n">___</span><span class="o">/</span> <span class="err">\</span><span class="n">____</span><span class="o">/</span> <span class="o">||</span>               <span class="o">*</span>
+<span class="o">*</span>                                          <span class="o">*</span>
+<span class="o">============================================</span>
+
+<span class="nc">Welcome</span> <span class="n">to</span> <span class="nc">Hoodie</span> <span class="no">CLI</span><span class="o">.</span> <span class="nc">Please</span> <span class="n">type</span> <span class="n">help</span> <span class="k">if</span> <span class="n">you</span> <span class="n">are</span> <span class="n">looking</span> <span class="k">for</span> <span class="n">help</span><span class="o">.</span>
+<span class="n">hudi</span><span class="o">-&gt;</span><span class="n">create</span> <span class="o">--</span><span class="n">path</span> <span class="o">/</span><span class="n">user</span><span class="o">/</span><span class="n">hive</span><span class="o">/</span><span class="n">warehouse</span><span class="o">/</span><span class="n">table1</span> <span class="o">--</span><span class="n">tableName</span> <span class="n">hoodie_table_1</span> <span class="o">--</span><span class="n">tableType</span> <span class="no">COPY_ON_WRITE</span>
+<span class="o">.....</span>
+<span class="mi">18</span><span class="o">/</span><span class="mi">09</span><span class="o">/</span><span class="mo">06</span> <span class="mi">15</span><span class="o">:</span><span class="mi">57</span><span class="o">:</span><span class="mi">15</span> <span class="no">INFO</span> <span class="n">table</span><span class="o">.</span><span class="na">HoodieTableMetaClient</span><span class="o">:</span> <span class="nc">Finished</span> <span class="nc">Loading</span> <span class="nc">Table</span> <span class="n">of</span> <span class="n">type</span> <span class="no">COPY_ON_WRITE</span> <span class="n">from</span> <span class="o">...</span>
+</code></pre></div></div>
+
+<p>使用desc命令可以查看hudi表的描述信息:</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">hoodie_table_1</span><span class="o">-&gt;</span><span class="n">desc</span>
+<span class="mi">18</span><span class="o">/</span><span class="mi">09</span><span class="o">/</span><span class="mo">06</span> <span class="mi">15</span><span class="o">:</span><span class="mi">57</span><span class="o">:</span><span class="mi">19</span> <span class="no">INFO</span> <span class="n">timeline</span><span class="o">.</span><span class="na">HoodieActiveTimeline</span><span class="o">:</span> <span class="nc">Loaded</span> <span class="n">instants</span> <span class="o">[]</span>
+    <span class="n">_________________________________________________________</span>
+    <span class="o">|</span> <span class="nc">Property</span>                <span class="o">|</span> <span class="nc">Value</span>                        <span class="o">|</span>
+    <span class="o">|========================================================|</span>
+    <span class="o">|</span> <span class="n">basePath</span>                <span class="o">|</span> <span class="o">...</span>                          <span class="o">|</span>
+    <span class="o">|</span> <span class="n">metaPath</span>                <span class="o">|</span> <span class="o">...</span>                          <span class="o">|</span>
+    <span class="o">|</span> <span class="n">fileSystem</span>              <span class="o">|</span> <span class="n">hdfs</span>                         <span class="o">|</span>
+    <span class="o">|</span> <span class="n">hoodie</span><span class="o">.</span><span class="na">table</span><span class="o">.</span><span class="na">name</span>       <span class="o">|</span> <span class="n">hoodie_table_1</span>               <span class="o">|</span>
+    <span class="o">|</span> <span class="n">hoodie</span><span class="o">.</span><span class="na">table</span><span class="o">.</span><span class="na">type</span>       <span class="o">|</span> <span class="no">COPY_ON_WRITE</span>                <span class="o">|</span>
+    <span class="o">|</span> <span class="n">hoodie</span><span class="o">.</span><span class="na">archivelog</span><span class="o">.</span><span class="na">folder</span><span class="o">|</span>                              <span class="o">|</span>
+</code></pre></div></div>
+
+<p>以下是连接到包含uber trips的Hudi数据集的示例命令。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">connect</span> <span class="o">--</span><span class="n">path</span> <span class="o">/</span><span class="n">app</span><span class="o">/</span><span class="n">uber</span><span class="o">/</span><span class="n">trips</span>
+
+<span class="mi">16</span><span class="o">/</span><span class="mi">10</span><span class="o">/</span><span class="mo">05</span> <span class="mi">23</span><span class="o">:</span><span class="mi">20</span><span class="o">:</span><span class="mi">37</span> <span class="no">INFO</span> <span class="n">model</span><span class="o">.</span><span class="na">HoodieTableMetadata</span><span class="o">:</span> <span class="nc">Attempting</span> <span class="n">to</span> <span class="n">load</span> <span class="n">the</span> <span class="n">commits</span> <span class="n">under</span> <span class="o">/</span><span class="n">app</span><span class="o">/</span><span class="n">uber</span><span class="o">/</span><span class="n">trips</span><span class="o">/.</span><span class="na">hoodie</span> <span class="n">with</span> <span class="n">suffix</span> <span class="o">.</span><span class="na">commit</span>
+<span class="mi">16</span><span class="o">/</span><span class="mi">10</span><span class="o">/</span><span class="mo">05</span> <span class="mi">23</span><span class="o">:</span><span class="mi">20</span><span class="o">:</span><span class="mi">37</span> <span class="no">INFO</span> <span class="n">model</span><span class="o">.</span><span class="na">HoodieTableMetadata</span><span class="o">:</span> <span class="nc">Attempting</span> <span class="n">to</span> <span class="n">load</span> <span class="n">the</span> <span class="n">commits</span> <span class="n">under</span> <span class="o">/</span><span class="n">app</span><span class="o">/</span><span class="n">uber</span><span class="o">/</span><span class="n">trips</span><span class="o">/.</span><span class="na">hoodie</span> <span class="n">with</span> <span class="n">suffix</span> <span class="o">.</span><span class="na">inflight</span>
+<span class="mi">16</span><span class="o">/</span><span class="mi">10</span><span class="o">/</span><span class="mo">05</span> <span class="mi">23</span><span class="o">:</span><span class="mi">20</span><span class="o">:</span><span class="mi">37</span> <span class="no">INFO</span> <span class="n">model</span><span class="o">.</span><span class="na">HoodieTableMetadata</span><span class="o">:</span> <span class="nc">All</span> <span class="n">commits</span> <span class="o">:</span><span class="nc">HoodieCommits</span><span class="o">{</span><span class="n">commitList</span><span class="o">=[</span><span class="mi">20161002045850</span><span class="o">,</span> <span class="mi">20161002052915</span><span class="o">,</span> <span class="mi">20161002055918</span><span class="o">,</span> <span class="mi">20161002065317</span><span class="o">,</span> <span class="mi">20161002075932</span><span class="o">,</span> <span class="mi">20161002082904</span><span class="o">,</span> <span class="mi">20161002085949</span><span class="o">,</span> <span class="mi">20161002092936</span><span class="o">,</span> <span class="mi">20161002105903</span><span class="o">,</span> <span class="mi">20161002112938</span><span class="o">,</span> <span class="mi">20161002123005</span><span class="o">,</span> <span class="mi">20161002133002</span><span class="o">,</span> <span class="mi">20161002155940</span><span class="o">,</span> <span class="mi">20161002165924</span><span class="o">,</span> <span class="mi">20161002172907</span><span class="o">,</span> <span class="mi">20161002175905</span><span class="o">,</span> <span class="mi">20161002190016</span><span class="o">,</span> <span class="mi">20161002192954</span><span class="o">,</span> <span class="mi">20161002195925</span><span class="o">,</span> <span class="mi">20161002205935</span><span class="o">,</span> <span class="mi">20161002215928</span><span class="o">,</span> <span class="mi">20161002222938</span><span class="o">,</span> <span class="mi">20161002225915</span><span class="o">,</span> <span class="mi">20161002232906</span><span class="o">,</span> <span class="mi">20161003003028</span><span class="o">,</span> <span class="mi">20161003005958</span><span class="o">,</span> <span class="mi">20161003012936</span><span class="o">,</span> <span class="mi">20161003022924</span><span class="o">,</span> <span class="mi">20161003025859</span><span class="o">,</span> <span class="mi">20161003032854</span><span class="o">,</span> <span class="mi">20161003042930</span><span class="o">,</span> <span class="mi">20161003052911</span><span class="o">,</span> <span class="mi">20161003055907</span><span class="o">,</span> <span class="mi">20161003062946</span><span class="o">,</span> <span class="mi">20161003065927</span><span class="o">,</span> <span class="mi">20161003075924</span><span class="o">,</span> <span class="mi">20161003082926</span><span class="o">,</span> <span class="mi">20161003085925</span><span class="o">,</span> <span class="mi">20161003092909</span><span class="o">,</span> <span class="mi">20161003100010</span><span class="o">,</span> <span class="mi">20161003102913</span><span class="o">,</span> <span class="mi">20161003105850</span><span class="o">,</span> <span class="mi">20161003112910</span><span class="o">,</span> <span class="mi">20161003115851</span><span class="o">,</span> <span class="mi">20161003122929</span><span class="o">,</span> <span class="mi">20161003132931</span><span class="o">,</span> <span class="mi">20161003142952</span><span class="o">,</span> <span class="mi">20161003145856</span><span class="o">,</span> <span class="mi">20161003152953</span><span class="o">,</span> <span class="mi">20161003155912</span><span class="o">,</span> <span class="mi">20161003162922</span><span class="o">,</span> <span class="mi">20161003165852</span><span class="o">,</span> <span class="mi">20161003172923</span><span class="o">,</span> <span class="mi">20161003175923</span><span class="o">,</span> <span class="mi">20161003195931</span><span class="o">,</span> <span class="mi">20161003210118</span><span class="o">,</span> <span class="mi">20161003212919</span><span class="o">,</span> <span class="mi">20161003215928</span><span class="o">,</span> <span class="mi">20161003223000</span><span class="o">,</span> <span class="mi">20161003225858</span><span class="o">,</span> <span class="mi">20161004003042</span><span class="o">,</span> <span class="mi">20161004011345</span><span class="o">,</span> <span class="mi">20161004015235</span><span class="o">,</span> <span class="mi">20161004022234</span><span class="o">,</span> <span class="mi">20161004063001</span><span class="o">,</span> <span class="mi">20161004072402</span><span class="o">,</span> <span class="mi">20161004074436</span><span class="o">,</span> <span class="mi">20161004080224</span><span class="o">,</span> <span class="mi">20161004082928</span><span class="o">,</span> <span class="mi">20161004085857</span><span class="o">,</span> <span class="mi">20161004105922</span><span class="o">,</span> <span class="mi">20161004122927</span><span class="o">,</span> <span class="mi">20161004142929</span><span class="o">,</span> <span class="mi">20161004163026</span><span class="o">,</span> <span class="mi">20161004175925</span><span class="o">,</span> <span class="mi">20161004194411</span><span class="o">,</span> <span class="mi">20161004203202</span><span class="o">,</span> <span class="mi">20161004211210</span><span class="o">,</span> <span class="mi">20161004214115</span><span class="o">,</span> <span class="mi">20161004220437</span><span class="o">,</span> <span class="mi">20161004223020</span><span class="o">,</span> <span class="mi">20161004225321</span><span class="o">,</span> <span class="mi">20161004231431</span><span class="o">,</span> <span class="mi">20161004233643</span><span class="o">,</span> <span class="mi">20161005010227</span><span class="o">,</span> <span class="mi">20161005015927</span><span class="o">,</span> <span class="mi">20161005022911</span><span class="o">,</span> <span class="mi">20161005032958</span><span class="o">,</span> <span class="mi">20161005035939</span><span class="o">,</span> <span class="mi">20161005052904</span><span class="o">,</span> <span class="mi">20161005070028</span><span class="o">,</span> <span class="mi">20161005074429</span><span class="o">,</span> <span class="mi">20161005081318</span><span class="o">,</span> <span class="mi">20161005083455</span><span class="o">,</span> <span class="mi">20161005085921</span><span class="o">,</span> <span class="mi">20161005092901</span><span class="o">,</span> <span class="mi">20161005095936</span><span class="o">,</span> <span class="mi">20161005120158</span><span class="o">,</span> <span class="mi">20161005123418</span><span class="o">,</span> <span class="mi">20161005125911</span><span class="o">,</span> <span class="mi">20161005133107</span><span class="o">,</span> <span class="mi">20161005155908</span><span class="o">,</span> <span class="mi">20161005163517</span><span class="o">,</span> <span class="mi">20161005165855</span><span class="o">,</span> <span class="mi">20161005180127</span><span class="o">,</span> <span class="mi">20161005184226</span><span class="o">,</span> <span class="mi">20161005191051</span><span class="o">,</span> <span class="mi">20161005193234</span><span class="o">,</span> <span class="mi">20161005203112</span><span class="o">,</span> <span class="mi">20161005205920</span><span class="o">,</span> <span class="mi">20161005212949</span><span class="o">,</span> <span class="mi">20161005223034</span><span class="o">,</span> <span class="mi">20161005225920</span><span class="o">]}</span>
+<span class="nc">Metadata</span> <span class="k">for</span> <span class="n">table</span> <span class="n">trips</span> <span class="n">loaded</span>
+<span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span>
+</code></pre></div></div>
+
+<p>连接到数据集后，便可使用许多其他命令。该shell程序具有上下文自动完成帮助(按TAB键)，下面是所有命令的列表，本节中对其中的一些命令进行了详细示例。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">help</span>
+<span class="o">*</span> <span class="o">!</span> <span class="o">-</span> <span class="nc">Allows</span> <span class="n">execution</span> <span class="n">of</span> <span class="n">operating</span> <span class="nf">system</span> <span class="o">(</span><span class="no">OS</span><span class="o">)</span> <span class="n">commands</span>
+<span class="o">*</span> <span class="c1">// - Inline comment markers (start of line only)</span>
+<span class="o">*</span> <span class="o">;</span> <span class="o">-</span> <span class="nc">Inline</span> <span class="n">comment</span> <span class="nf">markers</span> <span class="o">(</span><span class="n">start</span> <span class="n">of</span> <span class="n">line</span> <span class="n">only</span><span class="o">)</span>
+<span class="o">*</span> <span class="n">addpartitionmeta</span> <span class="o">-</span> <span class="nc">Add</span> <span class="n">partition</span> <span class="n">metadata</span> <span class="n">to</span> <span class="n">a</span> <span class="n">dataset</span><span class="o">,</span> <span class="k">if</span> <span class="n">not</span> <span class="n">present</span>
+<span class="o">*</span> <span class="n">clear</span> <span class="o">-</span> <span class="nc">Clears</span> <span class="n">the</span> <span class="n">console</span>
+<span class="o">*</span> <span class="n">cls</span> <span class="o">-</span> <span class="nc">Clears</span> <span class="n">the</span> <span class="n">console</span>
+<span class="o">*</span> <span class="n">commit</span> <span class="n">rollback</span> <span class="o">-</span> <span class="nc">Rollback</span> <span class="n">a</span> <span class="n">commit</span>
+<span class="o">*</span> <span class="n">commits</span> <span class="n">compare</span> <span class="o">-</span> <span class="nc">Compare</span> <span class="n">commits</span> <span class="n">with</span> <span class="n">another</span> <span class="nc">Hoodie</span> <span class="n">dataset</span>
+<span class="o">*</span> <span class="n">commit</span> <span class="n">showfiles</span> <span class="o">-</span> <span class="nc">Show</span> <span class="n">file</span> <span class="n">level</span> <span class="n">details</span> <span class="n">of</span> <span class="n">a</span> <span class="n">commit</span>
+<span class="o">*</span> <span class="n">commit</span> <span class="n">showpartitions</span> <span class="o">-</span> <span class="nc">Show</span> <span class="n">partition</span> <span class="n">level</span> <span class="n">details</span> <span class="n">of</span> <span class="n">a</span> <span class="n">commit</span>
+<span class="o">*</span> <span class="n">commits</span> <span class="n">refresh</span> <span class="o">-</span> <span class="nc">Refresh</span> <span class="n">the</span> <span class="n">commits</span>
+<span class="o">*</span> <span class="n">commits</span> <span class="n">show</span> <span class="o">-</span> <span class="nc">Show</span> <span class="n">the</span> <span class="n">commits</span>
+<span class="o">*</span> <span class="n">commits</span> <span class="n">sync</span> <span class="o">-</span> <span class="nc">Compare</span> <span class="n">commits</span> <span class="n">with</span> <span class="n">another</span> <span class="nc">Hoodie</span> <span class="n">dataset</span>
+<span class="o">*</span> <span class="n">connect</span> <span class="o">-</span> <span class="nc">Connect</span> <span class="n">to</span> <span class="n">a</span> <span class="n">hoodie</span> <span class="n">dataset</span>
+<span class="o">*</span> <span class="n">date</span> <span class="o">-</span> <span class="nc">Displays</span> <span class="n">the</span> <span class="n">local</span> <span class="n">date</span> <span class="n">and</span> <span class="n">time</span>
+<span class="o">*</span> <span class="n">exit</span> <span class="o">-</span> <span class="nc">Exits</span> <span class="n">the</span> <span class="n">shell</span>
+<span class="o">*</span> <span class="n">help</span> <span class="o">-</span> <span class="nc">List</span> <span class="n">all</span> <span class="n">commands</span> <span class="n">usage</span>
+<span class="o">*</span> <span class="n">quit</span> <span class="o">-</span> <span class="nc">Exits</span> <span class="n">the</span> <span class="n">shell</span>
+<span class="o">*</span> <span class="n">records</span> <span class="n">deduplicate</span> <span class="o">-</span> <span class="nc">De</span><span class="o">-</span><span class="n">duplicate</span> <span class="n">a</span> <span class="n">partition</span> <span class="n">path</span> <span class="n">contains</span> <span class="n">duplicates</span> <span class="o">&amp;</span> <span class="n">produce</span> <span class="n">repaired</span> <span class="n">files</span> <span class="n">to</span> <span class="n">replace</span> <span class="n">with</span>
+<span class="o">*</span> <span class="n">script</span> <span class="o">-</span> <span class="nc">Parses</span> <span class="n">the</span> <span class="n">specified</span> <span class="n">resource</span> <span class="n">file</span> <span class="n">and</span> <span class="n">executes</span> <span class="n">its</span> <span class="n">commands</span>
+<span class="o">*</span> <span class="n">stats</span> <span class="n">filesizes</span> <span class="o">-</span> <span class="nc">File</span> <span class="nc">Sizes</span><span class="o">.</span> <span class="nc">Display</span> <span class="n">summary</span> <span class="n">stats</span> <span class="n">on</span> <span class="n">sizes</span> <span class="n">of</span> <span class="n">files</span>
+<span class="o">*</span> <span class="n">stats</span> <span class="n">wa</span> <span class="o">-</span> <span class="nc">Write</span> <span class="nc">Amplification</span><span class="o">.</span> <span class="nc">Ratio</span> <span class="n">of</span> <span class="n">how</span> <span class="n">many</span> <span class="n">records</span> <span class="n">were</span> <span class="n">upserted</span> <span class="n">to</span> <span class="n">how</span> <span class="n">many</span> <span class="n">records</span> <span class="n">were</span> <span class="n">actually</span> <span class="n">written</span>
+<span class="o">*</span> <span class="n">sync</span> <span class="n">validate</span> <span class="o">-</span> <span class="nc">Validate</span> <span class="n">the</span> <span class="n">sync</span> <span class="n">by</span> <span class="n">counting</span> <span class="n">the</span> <span class="n">number</span> <span class="n">of</span> <span class="n">records</span>
+<span class="o">*</span> <span class="n">system</span> <span class="n">properties</span> <span class="o">-</span> <span class="nc">Shows</span> <span class="n">the</span> <span class="n">shell</span><span class="err">'</span><span class="n">s</span> <span class="n">properties</span>
+<span class="o">*</span> <span class="n">utils</span> <span class="n">loadClass</span> <span class="o">-</span> <span class="nc">Load</span> <span class="n">a</span> <span class="kd">class</span>
+<span class="err">*</span> <span class="nc">version</span> <span class="o">-</span> <span class="nc">Displays</span> <span class="n">shell</span> <span class="n">version</span>
+
+<span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span>
+</code></pre></div></div>
+
+<h3 id="检查提交">检查提交</h3>
+
+<p>在Hudi中，更新或插入一批记录的任务被称为<strong>提交</strong>。提交可提供基本的原子性保证，即只有提交的数据可用于查询。
+每个提交都有一个单调递增的字符串/数字，称为<strong>提交编号</strong>。通常，这是我们开始提交的时间。</p>
+
+<p>查看有关最近10次提交的一些基本信息，</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">commits</span> <span class="n">show</span> <span class="o">--</span><span class="n">sortBy</span> <span class="s">"Total Bytes Written"</span> <span class="o">--</span><span class="n">desc</span> <span class="kc">true</span> <span class="o">--</span><span class="n">limit</span> <span class="mi">10</span>
+    <span class="n">________________________________________________________________________________________________________________________________________________________________________</span>
+    <span class="o">|</span> <span class="nc">CommitTime</span>    <span class="o">|</span> <span class="nc">Total</span> <span class="nc">Bytes</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Files</span> <span class="nc">Added</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Files</span> <span class="nc">Updated</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Partitions</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Records</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Update</span> <span class="nc">Records</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Errors</span><span class="o">|</span>
+    <span class="o">|=======================================================================================================================================================================|</span>
+    <span class="o">....</span>
+    <span class="o">....</span>
+    <span class="o">....</span>
+<span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span>
+</code></pre></div></div>
+
+<p>在每次写入开始时，Hudi还将.inflight提交写入.hoodie文件夹。您可以使用那里的时间戳来估计正在进行的提交已经花费的时间</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">$</span> <span class="n">hdfs</span> <span class="n">dfs</span> <span class="o">-</span><span class="n">ls</span> <span class="o">/</span><span class="n">app</span><span class="o">/</span><span class="n">uber</span><span class="o">/</span><span class="n">trips</span><span class="o">/.</span><span class="na">hoodie</span><span class="o">/*.</span><span class="na">inflight</span>
+<span class="o">-</span><span class="n">rw</span><span class="o">-</span><span class="n">r</span><span class="o">--</span><span class="n">r</span><span class="o">--</span>   <span class="mi">3</span> <span class="n">vinoth</span> <span class="n">supergroup</span>     <span class="mi">321984</span> <span class="mi">2016</span><span class="o">-</span><span class="mi">10</span><span class="o">-</span><span class="mo">05</span> <span class="mi">23</span><span class="o">:</span><span class="mi">18</span> <span class="o">/</span><span class="n">app</span><span class="o">/</span><span class="n">uber</span><span class="o">/</span><span class="n">trips</span><span class="o">/.</span><span class="na">hoodie</span><span class="o">/</span><span class="mi">20161005225920</span><span class="o">.</span><span class="na">inflight</span>
+</code></pre></div></div>
+
+<h3 id="深入到特定的提交">深入到特定的提交</h3>
+
+<p>了解写入如何分散到特定分区，</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">commit</span> <span class="n">showpartitions</span> <span class="o">--</span><span class="n">commit</span> <span class="mi">20161005165855</span> <span class="o">--</span><span class="n">sortBy</span> <span class="s">"Total Bytes Written"</span> <span class="o">--</span><span class="n">desc</span> <span class="kc">true</span> <span class="o">--</span><span class="n">limit</span> <span class="mi">10</span>
+    <span class="n">__________________________________________________________________________________________________________________________________________</span>
+    <span class="o">|</span> <span class="nc">Partition</span> <span class="nc">Path</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Files</span> <span class="nc">Added</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Files</span> <span class="nc">Updated</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Records</span> <span class="nc">Inserted</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Records</span> <span class="nc">Updated</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Bytes</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Errors</span><span class="o">|</span>
+    <span class="o">|=========================================================================================================================================|</span>
+     <span class="o">....</span>
+     <span class="o">....</span>
+</code></pre></div></div>
+
+<p>如果您需要文件级粒度，我们可以执行以下操作</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">commit</span> <span class="n">showfiles</span> <span class="o">--</span><span class="n">commit</span> <span class="mi">20161005165855</span> <span class="o">--</span><span class="n">sortBy</span> <span class="s">"Partition Path"</span>
+    <span class="n">________________________________________________________________________________________________________________________________________________________</span>
+    <span class="o">|</span> <span class="nc">Partition</span> <span class="nc">Path</span><span class="o">|</span> <span class="nc">File</span> <span class="no">ID</span>                             <span class="o">|</span> <span class="nc">Previous</span> <span class="nc">Commit</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Records</span> <span class="nc">Updated</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Records</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Bytes</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Errors</span><span class="o">|</span>
+    <span class="o">|=======================================================================================================================================================|</span>
+    <span class="o">....</span>
+    <span class="o">....</span>
+</code></pre></div></div>
+
+<h3 id="文件系统视图">文件系统视图</h3>
+
+<p>Hudi将每个分区视为文件组的集合，每个文件组包含按提交顺序排列的文件切片列表(请参阅概念)。以下命令允许用户查看数据集的文件切片。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nl">hoodie:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">show</span> <span class="n">fsview</span> <span class="n">all</span>
+ <span class="o">....</span>
+  <span class="n">_______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________</span>
+ <span class="o">|</span> <span class="nc">Partition</span> <span class="o">|</span> <span class="nc">FileId</span> <span class="o">|</span> <span class="nc">Base</span><span class="o">-</span><span class="nc">Instant</span> <span class="o">|</span> <span class="nc">Data</span><span class="o">-</span><span class="nc">File</span> <span class="o">|</span> <span class="nc">Data</span><span class="o">-</span><span class="nc">File</span> <span class="nc">Size</span><span class="o">|</span> <span class="nc">Num</span> <span class="nc">Delta</span> <span class="nc">Files</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Delta</span> <span class="nc">File</span> <span class="nc">Size</span><span class="o">|</span> <span class="nc">Delta</span> <span class="nc">Files</span> <span class="o">|</span>
+ <span class="o">|==============================================================================================================================================================================================================================================================================================================================================================================================================|</span>
+ <span class="o">|</span> <span class="mi">2018</span><span class="o">/</span><span class="mi">08</span><span class="o">/</span><span class="mi">31</span><span class="o">|</span> <span class="mi">111415</span><span class="n">c3</span><span class="o">-</span><span class="n">f26d</span><span class="o">-</span><span class="mi">4639</span><span class="o">-</span><span class="mi">86</span><span class="n">c8</span><span class="o">-</span><span class="n">f9956f245ac3</span><span class="o">|</span> <span class="mi">20181002180759</span><span class="o">|</span> <span class="nl">hdfs:</span><span class="c1">//namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/111415c3-f26d-4639-86c8-f9956f245ac3_0_20181002180759.parquet| 432.5 KB | 1 | 20.8 KB | [HoodieLogFile {hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/.111415c3-f26d-4639-86c8-f9956f245ac3_20181002180759.log.1}]|</span>
+
+
+
+ <span class="nl">hoodie:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">show</span> <span class="n">fsview</span> <span class="n">latest</span> <span class="o">--</span><span class="n">partitionPath</span> <span class="s">"2018/08/31"</span>
+ <span class="o">......</span>
+ <span class="n">__________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________</span>
+ <span class="o">|</span> <span class="nc">Partition</span> <span class="o">|</span> <span class="nc">FileId</span> <span class="o">|</span> <span class="nc">Base</span><span class="o">-</span><span class="nc">Instant</span> <span class="o">|</span> <span class="nc">Data</span><span class="o">-</span><span class="nc">File</span> <span class="o">|</span> <span class="nc">Data</span><span class="o">-</span><span class="nc">File</span> <span class="nc">Size</span><span class="o">|</span> <span class="nc">Num</span> <span class="nc">Delta</span> <span class="nc">Files</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Delta</span> <span class="nc">Size</span><span class="o">|</span> <span class="nc">Delta</span> <span class="nc">Size</span> <span class="o">-</span> <span class="n">compaction</span> <span class="n">scheduled</span><span class="o">|</span> <span class="nc">Delta</span> <span class="nc">Size</span> <span class="o">-</span> <span class="n">compaction</span> <span class="n">unscheduled</span><span class="o">|</span> <span class="nc">Delta</span> <span class="nc">To</span> <span class="nc">Base</span> <span class="nc">Ratio</span> <span class="o">-</span> <span class="n">compaction</span> <span class="n">scheduled</span><span class="o">|</span> <span class="nc">Delta</span> <span class="nc">To</span> <span class="nc">Base</span> <span class="nc">Ratio</span> <span class="o">-</span> <span class="n">compaction</span> <span class="n">unscheduled</span><span class="o">|</span> <span class="nc">Delta</span> <span class="nc">Files</span> <span class="o">-</span> <span class="n">compaction</span> <span class="n">scheduled</span> <span class="o">|</span> <span class="nc">Delta</span> <span class="nc">Files</span> <span class="o">-</span> <span class="n">compaction</span> <span class="n">unscheduled</span><span class="o">|</span>
+ <span class="o">|=================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================|</span>
+ <span class="o">|</span> <span class="mi">2018</span><span class="o">/</span><span class="mi">08</span><span class="o">/</span><span class="mi">31</span><span class="o">|</span> <span class="mi">111415</span><span class="n">c3</span><span class="o">-</span><span class="n">f26d</span><span class="o">-</span><span class="mi">4639</span><span class="o">-</span><span class="mi">86</span><span class="n">c8</span><span class="o">-</span><span class="n">f9956f245ac3</span><span class="o">|</span> <span class="mi">20181002180759</span><span class="o">|</span> <span class="nl">hdfs:</span><span class="c1">//namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/111415c3-f26d-4639-86c8-f9956f245ac3_0_20181002180759.parquet| 432.5 KB | 1 | 20.8 KB | 20.8 KB | 0.0 B | 0.0 B | 0.0 B | [HoodieLogFile {hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/.111415c3-f26d-4639-86c8-f9956f245ac3_20181002180759.log.1}]| [] |</span>
+
+ <span class="nl">hoodie:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span>
+</code></pre></div></div>
+
+<h3 id="统计信息">统计信息</h3>
+
+<p>由于Hudi直接管理DFS数据集的文件大小，这些信息会帮助你全面了解Hudi的运行状况</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">stats</span> <span class="n">filesizes</span> <span class="o">--</span><span class="n">partitionPath</span> <span class="mi">2016</span><span class="o">/</span><span class="mi">09</span><span class="o">/</span><span class="mo">01</span> <span class="o">--</span><span class="n">sortBy</span> <span class="s">"95th"</span> <span class="o">--</span><span class="n">desc</span> <span class="kc">true</span> <span class="o">--</span><span class="n">limit</span> <span class="mi">10</span>
+    <span class="n">________________________________________________________________________________________________</span>
+    <span class="o">|</span> <span class="nc">CommitTime</span>    <span class="o">|</span> <span class="nc">Min</span>     <span class="o">|</span> <span class="mi">10</span><span class="n">th</span>    <span class="o">|</span> <span class="mi">50</span><span class="n">th</span>    <span class="o">|</span> <span class="n">avg</span>     <span class="o">|</span> <span class="mi">95</span><span class="n">th</span>    <span class="o">|</span> <span class="nc">Max</span>     <span class="o">|</span> <span class="nc">NumFiles</span><span class="o">|</span> <span class="nc">StdDev</span>  <span class="o">|</span>
+    <span class="o">|===============================================================================================|</span>
+    <span class="o">|</span> <span class="o">&lt;</span><span class="no">COMMIT_ID</span><span class="o">&gt;</span>   <span class="o">|</span> <span class="mf">93.9</span> <span class="no">MB</span> <span class="o">|</span> <span class="mf">93.9</span> <span class="no">MB</span> <span class="o">|</span> <span class="mf">93.9</span> <span class="no">MB</span> <span class="o">|</span> <span class="mf">93.9</span> <span class="no">MB</span> <span class="o">|</span> <span class="mf">93.9</span> <span class="no">MB</span> <span class="o">|</span> <span class="mf">93.9</span> <span class="no">MB</span> <span class="o">|</span> <span class="mi">2</span>       <span class="o">|</span> <span class="mf">2.3</span> <span class="no">KB</span>  <span class="o">|</span>
+    <span class="o">....</span>
+    <span class="o">....</span>
+</code></pre></div></div>
+
+<p>如果Hudi写入花费的时间更长，那么可以通过观察写放大指标来发现任何异常</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">stats</span> <span class="n">wa</span>
+    <span class="n">__________________________________________________________________________</span>
+    <span class="o">|</span> <span class="nc">CommitTime</span>    <span class="o">|</span> <span class="nc">Total</span> <span class="nc">Upserted</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Write</span> <span class="nc">Amplifiation</span> <span class="nc">Factor</span><span class="o">|</span>
+    <span class="o">|=========================================================================|</span>
+    <span class="o">....</span>
+    <span class="o">....</span>
+</code></pre></div></div>
+
+<h3 id="归档的提交">归档的提交</h3>
+
+<p>为了限制DFS上.commit文件的增长量，Hudi将较旧的.commit文件(适当考虑清理策略)归档到commits.archived文件中。
+这是一个序列文件，其包含commitNumber =&gt; json的映射，及有关提交的原始信息(上面已很好地汇总了相同的信息)。</p>
+
+<h3 id="压缩">压缩</h3>
+
+<p>要了解压缩和写程序之间的时滞，请使用以下命令列出所有待处理的压缩。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">compactions</span> <span class="n">show</span> <span class="n">all</span>
+     <span class="n">___________________________________________________________________</span>
+    <span class="o">|</span> <span class="nc">Compaction</span> <span class="nc">Instant</span> <span class="nc">Time</span><span class="o">|</span> <span class="nc">State</span>    <span class="o">|</span> <span class="nc">Total</span> <span class="nc">FileIds</span> <span class="n">to</span> <span class="n">be</span> <span class="nc">Compacted</span><span class="o">|</span>
+    <span class="o">|==================================================================|</span>
+    <span class="o">|</span> <span class="o">&lt;</span><span class="no">INSTANT_1</span><span class="o">&gt;</span>            <span class="o">|</span> <span class="no">REQUESTED</span><span class="o">|</span> <span class="mi">35</span>                           <span class="o">|</span>
+    <span class="o">|</span> <span class="o">&lt;</span><span class="no">INSTANT_2</span><span class="o">&gt;</span>            <span class="o">|</span> <span class="no">INFLIGHT</span> <span class="o">|</span> <span class="mi">27</span>                           <span class="o">|</span>
+</code></pre></div></div>
+
+<p>要检查特定的压缩计划，请使用</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">show</span> <span class="o">--</span><span class="n">instant</span> <span class="o">&lt;</span><span class="no">INSTANT_1</span><span class="o">&gt;</span>
+    <span class="n">_________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________</span>
+    <span class="o">|</span> <span class="nc">Partition</span> <span class="nc">Path</span><span class="o">|</span> <span class="nc">File</span> <span class="nc">Id</span> <span class="o">|</span> <span class="nc">Base</span> <span class="nc">Instant</span>  <span class="o">|</span> <span class="nc">Data</span> <span class="nc">File</span> <span class="nc">Path</span>                                    <span class="o">|</span> <span class="nc">Total</span> <span class="nc">Delta</span> <span class="nc">Files</span><span class="o">|</span> <span class="n">getMetrics</span>                                                                                                                    <span class="o">|</span>
+    <span class="o">|================================================================================================================================================================================================================================================</span>
+    <span class="o">|</span> <span class="mi">2018</span><span class="o">/</span><span class="mo">07</span><span class="o">/</span><span class="mi">17</span>    <span class="o">|</span> <span class="o">&lt;</span><span class="no">UUID</span><span class="o">&gt;</span>  <span class="o">|</span> <span class="o">&lt;</span><span class="no">INSTANT_1</span><span class="o">&gt;</span>   <span class="o">|</span> <span class="nl">viewfs:</span><span class="c1">//ns-default/.../../UUID_&lt;INSTANT&gt;.parquet | 1                | {TOTAL_LOG_FILES=1.0, TOTAL_IO_READ_MB=1230.0, TOTAL_LOG_FILES_SIZE=2.51255751E8, TOTAL_IO_WRITE_MB=991.0, TOTAL_IO_MB=2221.0}|</span>
+
+</code></pre></div></div>
+
+<p>要手动调度或运行压缩，请使用以下命令。该命令使用spark启动器执行压缩操作。
+注意：确保没有其他应用程序正在同时调度此数据集的压缩</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">help</span> <span class="n">compaction</span> <span class="n">schedule</span>
+<span class="nl">Keyword:</span>                   <span class="n">compaction</span> <span class="n">schedule</span>
+<span class="nl">Description:</span>               <span class="nc">Schedule</span> <span class="nc">Compaction</span>
+ <span class="nl">Keyword:</span>                  <span class="n">sparkMemory</span>
+   <span class="nl">Help:</span>                   <span class="nc">Spark</span> <span class="n">executor</span> <span class="n">memory</span>
+   <span class="nl">Mandatory:</span>              <span class="kc">false</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">specified:</span>   <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">unspecified:</span> <span class="err">'</span><span class="mi">1</span><span class="no">G</span><span class="err">'</span>
+
+<span class="o">*</span> <span class="n">compaction</span> <span class="n">schedule</span> <span class="o">-</span> <span class="nc">Schedule</span> <span class="nc">Compaction</span>
+</code></pre></div></div>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">help</span> <span class="n">compaction</span> <span class="n">run</span>
+<span class="nl">Keyword:</span>                   <span class="n">compaction</span> <span class="n">run</span>
+<span class="nl">Description:</span>               <span class="nc">Run</span> <span class="nc">Compaction</span> <span class="k">for</span> <span class="n">given</span> <span class="n">instant</span> <span class="n">time</span>
+ <span class="nl">Keyword:</span>                  <span class="n">tableName</span>
+   <span class="nl">Help:</span>                   <span class="nc">Table</span> <span class="n">name</span>
+   <span class="nl">Mandatory:</span>              <span class="kc">true</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">specified:</span>   <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">unspecified:</span> <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+
+ <span class="nl">Keyword:</span>                  <span class="n">parallelism</span>
+   <span class="nl">Help:</span>                   <span class="nc">Parallelism</span> <span class="k">for</span> <span class="n">hoodie</span> <span class="n">compaction</span>
+   <span class="nl">Mandatory:</span>              <span class="kc">true</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">specified:</span>   <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">unspecified:</span> <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+
+ <span class="nl">Keyword:</span>                  <span class="n">schemaFilePath</span>
+   <span class="nl">Help:</span>                   <span class="nc">Path</span> <span class="k">for</span> <span class="nc">Avro</span> <span class="n">schema</span> <span class="n">file</span>
+   <span class="nl">Mandatory:</span>              <span class="kc">true</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">specified:</span>   <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">unspecified:</span> <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+
+ <span class="nl">Keyword:</span>                  <span class="n">sparkMemory</span>
+   <span class="nl">Help:</span>                   <span class="nc">Spark</span> <span class="n">executor</span> <span class="n">memory</span>
+   <span class="nl">Mandatory:</span>              <span class="kc">true</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">specified:</span>   <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">unspecified:</span> <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+
+ <span class="nl">Keyword:</span>                  <span class="n">retry</span>
+   <span class="nl">Help:</span>                   <span class="nc">Number</span> <span class="n">of</span> <span class="n">retries</span>
+   <span class="nl">Mandatory:</span>              <span class="kc">true</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">specified:</span>   <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">unspecified:</span> <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+
+ <span class="nl">Keyword:</span>                  <span class="n">compactionInstant</span>
+   <span class="nl">Help:</span>                   <span class="nc">Base</span> <span class="n">path</span> <span class="k">for</span> <span class="n">the</span> <span class="n">target</span> <span class="n">hoodie</span> <span class="n">dataset</span>
+   <span class="nl">Mandatory:</span>              <span class="kc">true</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">specified:</span>   <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+   <span class="nc">Default</span> <span class="k">if</span> <span class="nl">unspecified:</span> <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
+
+<span class="o">*</span> <span class="n">compaction</span> <span class="n">run</span> <span class="o">-</span> <span class="nc">Run</span> <span class="nc">Compaction</span> <span class="k">for</span> <span class="n">given</span> <span class="n">instant</span> <span class="n">time</span>
+</code></pre></div></div>
+
+<h3 id="验证压缩">验证压缩</h3>
+
+<p>验证压缩计划：检查压缩所需的所有文件是否都存在且有效</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">validate</span> <span class="o">--</span><span class="n">instant</span> <span class="mi">20181005222611</span>
+<span class="o">...</span>
+
+   <span class="no">COMPACTION</span> <span class="no">PLAN</span> <span class="no">VALID</span>
+
+    <span class="n">___________________________________________________________________________________________________________________________________________________________________________________________________________________________</span>
+    <span class="o">|</span> <span class="nc">File</span> <span class="nc">Id</span>                             <span class="o">|</span> <span class="nc">Base</span> <span class="nc">Instant</span> <span class="nc">Time</span><span class="o">|</span> <span class="nc">Base</span> <span class="nc">Data</span> <span class="nc">File</span>                                                                                                                   <span class="o">|</span> <span class="nc">Num</span> <span class="nc">Delta</span> <span class="nc">Files</span><span class="o">|</span> <span class="nc">Valid</span><span class="o">|</span> <span class="nc">Error</span><span class="o">|</span>
+    <span class="o">|==========================================================================================================================================================================================================================|</span>
+    <span class="o">|</span> <span class="mo">05320</span><span class="n">e98</span><span class="o">-</span><span class="mi">9</span><span class="n">a57</span><span class="o">-</span><span class="mi">4</span><span class="n">c38</span><span class="o">-</span><span class="n">b809</span><span class="o">-</span><span class="n">a6beaaeb36bd</span><span class="o">|</span> <span class="mi">20181005222445</span>   <span class="o">|</span> <span class="nl">hdfs:</span><span class="c1">//namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/05320e98-9a57-4c38-b809-a6beaaeb36bd_0_20181005222445.parquet| 1              | true |      |</span>
+
+
+
+<span class="nl">hoodie:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">validate</span> <span class="o">--</span><span class="n">instant</span> <span class="mi">20181005222601</span>
+
+   <span class="no">COMPACTION</span> <span class="no">PLAN</span> <span class="no">INVALID</span>
+
+    <span class="n">_______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________</span>
+    <span class="o">|</span> <span class="nc">File</span> <span class="nc">Id</span>                             <span class="o">|</span> <span class="nc">Base</span> <span class="nc">Instant</span> <span class="nc">Time</span><span class="o">|</span> <span class="nc">Base</span> <span class="nc">Data</span> <span class="nc">File</span>                                                                                                                   <span class="o">|</span> <span class="nc">Num</span> <span class="nc">Delta</span> <span class="nc">Files</span><span class="o">|</span> <span class="nc">Valid</span><span class="o">|</span> <span class="nc">Error</span>                                                                           <span class="o">|</span>
+    <span class="o">|=====================================================================================================================================================================================================================================================================================================|</span>
+    <span class="o">|</span> <span class="mo">05320</span><span class="n">e98</span><span class="o">-</span><span class="mi">9</span><span class="n">a57</span><span class="o">-</span><span class="mi">4</span><span class="n">c38</span><span class="o">-</span><span class="n">b809</span><span class="o">-</span><span class="n">a6beaaeb36bd</span><span class="o">|</span> <span class="mi">20181005222445</span>   <span class="o">|</span> <span class="nl">hdfs:</span><span class="c1">//namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/05320e98-9a57-4c38-b809-a6beaaeb36bd_0_20181005222445.parquet| 1              | false| All log files specified in compaction operation is not present. Missing ....    |</span>
+</code></pre></div></div>
+
+<h3 id="注意">注意</h3>
+
+<p>必须在其他写入/摄取程序没有运行的情况下执行以下命令。</p>
+
+<p>有时，有必要从压缩计划中删除fileId以便加快或取消压缩操作。
+压缩计划之后在此文件上发生的所有新日志文件都将被安全地重命名以便进行保留。Hudi提供以下CLI来支持</p>
+
+<h3 id="取消调度压缩">取消调度压缩</h3>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">unscheduleFileId</span> <span class="o">--</span><span class="n">fileId</span> <span class="o">&lt;</span><span class="nc">FileUUID</span><span class="o">&gt;</span>
+<span class="o">....</span>
+<span class="nc">No</span> <span class="nc">File</span> <span class="n">renames</span> <span class="n">needed</span> <span class="n">to</span> <span class="n">unschedule</span> <span class="n">file</span> <span class="n">from</span> <span class="n">pending</span> <span class="n">compaction</span><span class="o">.</span> <span class="nc">Operation</span> <span class="n">successful</span><span class="o">.</span>
+</code></pre></div></div>
+
+<p>在其他情况下，需要撤销整个压缩计划。以下CLI支持此功能</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">unschedule</span> <span class="o">--</span><span class="n">compactionInstant</span> <span class="o">&lt;</span><span class="n">compactionInstant</span><span class="o">&gt;</span>
+<span class="o">.....</span>
+<span class="nc">No</span> <span class="nc">File</span> <span class="n">renames</span> <span class="n">needed</span> <span class="n">to</span> <span class="n">unschedule</span> <span class="n">pending</span> <span class="n">compaction</span><span class="o">.</span> <span class="nc">Operation</span> <span class="n">successful</span><span class="o">.</span>
+</code></pre></div></div>
+
+<h3 id="修复压缩">修复压缩</h3>
+
+<p>上面的压缩取消调度操作有时可能会部分失败(例如：DFS暂时不可用)。
+如果发生部分故障，则压缩操作可能与文件切片的状态不一致。
+当您运行<code class="highlighter-rouge">压缩验证</code>时，您会注意到无效的压缩操作(如果有的话)。
+在这种情况下，修复命令将立即执行，它将重新排列文件切片，以使文件不丢失，并且文件切片与压缩计划一致</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">repair</span> <span class="o">--</span><span class="n">instant</span> <span class="mi">20181005222611</span>
+<span class="o">......</span>
+<span class="nc">Compaction</span> <span class="n">successfully</span> <span class="n">repaired</span>
+<span class="o">.....</span>
+</code></pre></div></div>
+
+<h2 id="metrics"><a href="cn/docs/configurations.html#指标配置">指标</a></h2>
+
+<p>为Hudi Client配置正确的数据集名称和指标环境后，它将生成以下graphite指标，以帮助调试hudi数据集</p>
+
+<ul>
+  <li><strong>提交持续时间</strong> - 这是成功提交一批记录所花费的时间</li>
+  <li><strong>回滚持续时间</strong> - 同样，撤消失败的提交所剩余的部分数据所花费的时间(每次写入失败后都会自动发生)</li>
+  <li><strong>文件级别指标</strong> - 显示每次提交中新增、版本、删除(清除)的文件数量</li>
+  <li><strong>记录级别指标</strong> - 每次提交插入/更新的记录总数</li>
+  <li><strong>分区级别指标</strong> - 更新的分区数量(对于了解提交持续时间的突然峰值非常有用)</li>
+</ul>
+
+<p>然后可以将这些指标绘制在grafana等标准工具上。以下是提交持续时间图表示例。</p>
+
+<figure>
+    <img class="docimage" src="/assets/images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 100%" />
+</figure>
+
+<h2 id="troubleshooting">故障排除</h2>
+
+<p>以下部分通常有助于调试Hudi故障。以下元数据已被添加到每条记录中，可以通过标准Hadoop SQL引擎(Hive/Presto/Spark)检索，来更容易地诊断问题的严重性。</p>
+
+<ul>
+  <li><strong>_hoodie_record_key</strong> - 作为每个DFS分区内的主键，是所有更新/插入的基础</li>
+  <li><strong>_hoodie_commit_time</strong> - 该记录上次的提交</li>
+  <li><strong>_hoodie_file_name</strong> - 包含记录的实际文件名(对检查重复非常有用)</li>
+  <li><strong>_hoodie_partition_path</strong> - basePath的路径，该路径标识包含此记录的分区</li>
+</ul>
+
+<p>请注意，到目前为止，Hudi假定应用程序为给定的recordKey传递相同的确定性分区路径。即仅在每个分区内保证recordKey(主键)的唯一性。</p>
+
+<h3 id="缺失记录">缺失记录</h3>
+
+<p>请在可能写入记录的窗口中，使用上面的admin命令检查是否存在任何写入错误。
+如果确实发现错误，那么记录实际上不是由Hudi写入的，而是交还给应用程序来决定如何处理。</p>
+
+<h3 id="重复">重复</h3>
+
+<p>首先，请确保访问Hudi数据集的查询是<a href="sql_queries.html">没有问题的</a>，并之后确认的确有重复。</p>
+
+<ul>
+  <li>如果确认，请使用上面的元数据字段来标识包含记录的物理文件和分区文件。</li>
+  <li>如果重复的记录存在于不同分区路径下的文件，则意味着您的应用程序正在为同一recordKey生成不同的分区路径，请修复您的应用程序.</li>
+  <li>如果重复的记录存在于同一分区路径下的多个文件，请使用邮件列表汇报这个问题。这不应该发生。您可以使用<code class="highlighter-rouge">records deduplicate</code>命令修复数据。</li>
+</ul>
+
+<h3 id="spark-ui">Spark故障</h3>
+
+<p>典型的upsert() DAG如下所示。请注意，Hudi客户端会缓存中间的RDD，以智能地并调整文件大小和Spark并行度。
+另外，由于还显示了探针作业，Spark UI显示了两次sortByKey，但它只是一个排序。</p>
+<figure>
+    <img class="docimage" src="/assets/images/hudi_upsert_dag.png" alt="hudi_upsert_dag.png" style="max-width: 100%" />
+</figure>
+
+<p>概括地说，有两个步骤</p>
+
+<p><strong>索引查找以标识要更改的文件</strong></p>
+
+<ul>
+  <li>Job 1 : 触发输入数据读取，转换为HoodieRecord对象，然后根据输入记录拿到目标分区路径。</li>
+  <li>Job 2 : 加载我们需要检查的文件名集。</li>
+  <li>Job 3  &amp; 4 : 通过联合上面1和2中的RDD，智能调整spark join并行度，然后进行实际查找。</li>
+  <li>Job 5 : 生成带有位置的recordKeys作为标记的RDD。</li>
+</ul>
+
+<p><strong>执行数据的实际写入</strong></p>
+
+<ul>
+  <li>Job 6 : 将记录与recordKey(位置)进行懒惰连接，以提供最终的HoodieRecord集，现在它包含每条记录的文件/分区路径信息(如果插入，则为null)。然后还要再次分析工作负载以确定文件的大小。</li>
+  <li>Job 7 : 实际写入数据(更新 + 插入 + 插入转为更新以保持文件大小)</li>
+</ul>
+
+<p>根据异常源(Hudi/Spark)，上述关于DAG的信息可用于查明实际问题。最常遇到的故障是由YARN/DFS临时故障引起的。
+将来，将在项目中添加更复杂的调试/管理UI，以帮助自动进行某些调试。</p>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <a class="footer-link-img" href="https://apache.org">
+        <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+      </a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the Apache License, Version 2.0.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+      <br>
+      Apache Hudi is an effort undergoing incubation at The Apache Software Foundation (ASF), sponsored by the <a href="http://incubator.apache.org/">Apache Incubator</a>.
+      Incubation is required of all newly accepted projects until a further review indicates that the infrastructure, communications, and decision making process have
+      stabilized in a manner consistent with other successful ASF projects. While incubation status is not necessarily a
+      reflection of the completeness or stability of the code, it does indicate that the project has yet to be fully endorsed by the ASF.
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+
+  </body>
+</html>
