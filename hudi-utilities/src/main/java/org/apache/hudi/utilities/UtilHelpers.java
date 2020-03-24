@@ -34,6 +34,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import org.apache.avro.Schema;
@@ -67,6 +68,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -102,11 +104,19 @@ public class UtilHelpers {
     }
   }
 
-  public static Transformer createTransformer(String transformerClass) throws IOException {
+  public static Transformer createTransformer(List<String> classNames) throws IOException {
     try {
-      return transformerClass == null ? null : (Transformer) ReflectionUtils.loadClass(transformerClass);
+      if (classNames == null) {
+        return null;
+      }
+
+      List<Transformer> transformers = new ArrayList<>();
+      for (String className : classNames) {
+        transformers.add(ReflectionUtils.loadClass(className));
+      }
+      return new ChainedTransformer(transformers);
     } catch (Throwable e) {
-      throw new IOException("Could not load transformer class " + transformerClass, e);
+      throw new IOException("Could not load transformer class(es) " + classNames, e);
     }
   }
 

@@ -54,6 +54,7 @@ import org.apache.spark.sql.SparkSession;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -64,6 +65,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -147,6 +149,17 @@ public class HoodieDeltaStreamer implements Serializable {
     }
   }
 
+  private static class TransformersConverter implements IStringConverter<List<String>> {
+
+    @Override
+    public List<String> convert(String value) throws ParameterException {
+      return value == null ? null : Arrays.stream(value.split(","))
+          .map(String::trim)
+          .filter(s -> !s.isEmpty())
+          .collect(Collectors.toList());
+    }
+  }
+
   public static class Config implements Serializable {
 
     @Parameter(names = {"--target-base-path"},
@@ -195,11 +208,13 @@ public class HoodieDeltaStreamer implements Serializable {
     public String schemaProviderClassName = null;
 
     @Parameter(names = {"--transformer-class"},
-        description = "subclass of org.apache.hudi.utilities.transform.Transformer"
+        description = "A subclass or a list of subclasses of org.apache.hudi.utilities.transform.Transformer"
             + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
             + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
-            + "allows a SQL query templated to be passed as a transformation function)")
-    public String transformerClassName = null;
+            + "allows a SQL query templated to be passed as a transformation function). "
+            + "Pass a comma-separated list of subclass names to chain the transformations.",
+        converter = TransformersConverter.class)
+    public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
         + "Default: No limit For e.g: DFS-Source => max bytes to read, Kafka-Source => max events to read")

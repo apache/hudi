@@ -172,7 +172,7 @@ public class DeltaSync implements Serializable {
 
     refreshTimeline();
 
-    this.transformer = UtilHelpers.createTransformer(cfg.transformerClassName);
+    this.transformer = UtilHelpers.createTransformer(cfg.transformerClassNames);
     this.keyGenerator = DataSourceUtils.createKeyGenerator(props);
 
     this.formatAdapter = new SourceFormatAdapter(
