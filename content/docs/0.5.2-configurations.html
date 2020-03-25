@@ -10,7 +10,7 @@
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="">
 <meta property="og:title" content="Configurations">
-<meta property="og:url" content="https://hudi.apache.org/docs/configurations.html">
+<meta property="og:url" content="https://hudi.apache.org/docs/0.5.2-configurations.html">
 
 
   <meta property="og:description" content="This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.">
@@ -147,7 +147,7 @@
             
 
             
-              <li><a href="/docs/quick-start-guide.html" class="">Quick Start</a></li>
+              <li><a href="/docs/0.5.2-quick-start-guide.html" class="">Quick Start</a></li>
             
 
           
@@ -158,7 +158,7 @@
             
 
             
-              <li><a href="/docs/use_cases.html" class="">Use Cases</a></li>
+              <li><a href="/docs/0.5.2-use_cases.html" class="">Use Cases</a></li>
             
 
           
@@ -169,7 +169,7 @@
             
 
             
-              <li><a href="/docs/powered_by.html" class="">Talks & Powered By</a></li>
+              <li><a href="/docs/0.5.2-powered_by.html" class="">Talks & Powered By</a></li>
             
 
           
@@ -180,7 +180,7 @@
             
 
             
-              <li><a href="/docs/comparison.html" class="">Comparison</a></li>
+              <li><a href="/docs/0.5.2-comparison.html" class="">Comparison</a></li>
             
 
           
@@ -191,7 +191,7 @@
             
 
             
-              <li><a href="/docs/docker_demo.html" class="">Docker Demo</a></li>
+              <li><a href="/docs/0.5.2-docker_demo.html" class="">Docker Demo</a></li>
             
 
           
@@ -214,7 +214,7 @@
             
 
             
-              <li><a href="/docs/concepts.html" class="">Concepts</a></li>
+              <li><a href="/docs/0.5.2-concepts.html" class="">Concepts</a></li>
             
 
           
@@ -225,7 +225,7 @@
             
 
             
-              <li><a href="/docs/writing_data.html" class="">Writing Data</a></li>
+              <li><a href="/docs/0.5.2-writing_data.html" class="">Writing Data</a></li>
             
 
           
@@ -236,7 +236,7 @@
             
 
             
-              <li><a href="/docs/querying_data.html" class="">Querying Data</a></li>
+              <li><a href="/docs/0.5.2-querying_data.html" class="">Querying Data</a></li>
             
 
           
@@ -247,7 +247,7 @@
             
 
             
-              <li><a href="/docs/configurations.html" class="active">Configuration</a></li>
+              <li><a href="/docs/0.5.2-configurations.html" class="active">Configuration</a></li>
             
 
           
@@ -258,7 +258,7 @@
             
 
             
-              <li><a href="/docs/performance.html" class="">Performance</a></li>
+              <li><a href="/docs/0.5.2-performance.html" class="">Performance</a></li>
             
 
           
@@ -269,7 +269,7 @@
             
 
             
-              <li><a href="/docs/deployment.html" class="">Deployment</a></li>
+              <li><a href="/docs/0.5.2-deployment.html" class="">Deployment</a></li>
             
 
           
@@ -292,7 +292,7 @@
             
 
             
-              <li><a href="/docs/docs-versions.html" class="">Docs Versions</a></li>
+              <li><a href="/docs/0.5.2-docs-versions.html" class="">Docs Versions</a></li>
             
 
           
@@ -303,7 +303,7 @@
             
 
             
-              <li><a href="/docs/privacy.html" class="">Privacy Policy</a></li>
+              <li><a href="/docs/0.5.2-privacy.html" class="">Privacy Policy</a></li>
             
 
           
@@ -373,9 +373,9 @@ At a high level, you can control behaviour at few levels.</p>
 to cloud stores.</p>
 
 <ul>
-  <li><a href="/docs/s3_hoodie">AWS S3</a> <br />
+  <li><a href="/docs/0.5.2-s3_hoodie">AWS S3</a> <br />
 Configurations required for S3 and Hudi co-operability.</li>
-  <li><a href="/docs/gcs_hoodie">Google Cloud Storage</a> <br />
+  <li><a href="/docs/0.5.2-gcs_hoodie">Google Cloud Storage</a> <br />
 Configurations required for GCS and Hudi co-operability.</li>
 </ul>
 
@@ -570,10 +570,6 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p><a href="#withIndexConfig">withIndexConfig</a> (HoodieIndexConfig) <br />
 <span style="color:grey">This is pluggable to have a external index (HBase) or use the default bloom filter stored in the Parquet files</span></p>
 
-<h4 id="withIndexClass">withIndexClass(indexClass = “x.y.z.UserDefinedIndex”)</h4>
-<p>Property: <code class="highlighter-rouge">hoodie.index.class</code> <br />
-<span style="color:grey">Full path of user-defined index class and must be a subclass of HoodieIndex class. It will take precedence over the <code class="highlighter-rouge">hoodie.index.type</code> configuration if specified</span></p>
-
 <h4 id="withIndexType">withIndexType(indexType = BLOOM)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.index.type</code> <br />
 <span style="color:grey">Type of index to use. Default is Bloom filter. Possible options are [BLOOM | HBASE | INMEMORY]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files</span></p>
@@ -744,52 +740,28 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <span style="color:grey">This needs to be same as class used during insert/upserts. Just like writing, compaction also uses the record payload class to merge records in the log against each other, merge again with the base file and produce the final record to be written after compaction.</span></p>
 
 <h3 id="metrics-configs">Metrics configs</h3>
-<p>Enables reporting on Hudi metrics.
+<p>Enables reporting of Hudi metrics to graphite.
 <a href="#withMetricsConfig">withMetricsConfig</a> (HoodieMetricsConfig) <br />
-<span style="color:grey">Hudi publishes metrics on every commit, clean, rollback etc.The following sections list the supported reporters.</span></p>
+<span style="color:grey">Hudi publishes metrics on every commit, clean, rollback etc.</span></p>
 
-<h4 id="graphite">GRAPHITE</h4>
-
-<h5 id="on">on(metricsOn = true)</h5>
-<p><code class="highlighter-rouge">hoodie.metrics.on</code> <br />
+<h4 id="on">on(metricsOn = true)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.metrics.on</code> <br />
 <span style="color:grey">Turn sending metrics on/off. on by default.</span></p>
 
-<h5 id="withReporterType">withReporterType(reporterType = GRAPHITE)</h5>
+<h4 id="withReporterType">withReporterType(reporterType = GRAPHITE)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.metrics.reporter.type</code> <br />
-<span style="color:grey">Type of metrics reporter.</span></p>
+<span style="color:grey">Type of metrics reporter. Graphite is the default and the only value suppported.</span></p>
 
-<h5 id="toGraphiteHost">toGraphiteHost(host = localhost)</h5>
+<h4 id="toGraphiteHost">toGraphiteHost(host = localhost)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.metrics.graphite.host</code> <br />
 <span style="color:grey">Graphite host to connect to</span></p>
 
-<h5 id="onGraphitePort">onGraphitePort(port = 4756)</h5>
+<h4 id="onGraphitePort">onGraphitePort(port = 4756)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.metrics.graphite.port</code> <br />
 <span style="color:grey">Graphite port to connect to</span></p>
 
-<h5 id="usePrefix">usePrefix(prefix = “”)</h5>
+<h4 id="usePrefix">usePrefix(prefix = “”)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.metrics.graphite.metric.prefix</code> <br />
-<span style="color:grey">Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g</span></p>
-
-<h4 id="jmx">JMX</h4>
-
-<h5 id="on">on(metricsOn = true)</h5>
-<p><code class="highlighter-rouge">hoodie.metrics.on</code> <br />
-<span style="color:grey">Turn sending metrics on/off. on by default.</span></p>
-
-<h5 id="withReporterType">withReporterType(reporterType = JMX)</h5>
-<p>Property: <code class="highlighter-rouge">hoodie.metrics.reporter.type</code> <br />
-<span style="color:grey">Type of metrics reporter.</span></p>
-
-<h5 id="toJmxHost">toJmxHost(host = localhost)</h5>
-<p>Property: <code class="highlighter-rouge">hoodie.metrics.jmx.host</code> <br />
-<span style="color:grey">Jmx host to connect to</span></p>
-
-<h5 id="onJmxPort">onJmxPort(port = 1000-5000)</h5>
-<p>Property: <code class="highlighter-rouge">hoodie.metrics.jmx.port</code> <br />
-<span style="color:grey">Jmx port to connect to</span></p>
-
-<h5 id="usePrefix">usePrefix(prefix = “”)</h5>
-<p>Property: <code class="highlighter-rouge">hoodie.metrics.jmx.metric.prefix</code> <br />
 <span style="color:grey">Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g</span></p>
 
 <h3 id="memory-configs">Memory configs</h3>

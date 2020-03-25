@@ -10,7 +10,7 @@
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="">
 <meta property="og:title" content="配置">
-<meta property="og:url" content="https://hudi.apache.org/cn/docs/configurations.html">
+<meta property="og:url" content="https://hudi.apache.org/cn/docs/0.5.2-configurations.html">
 
 
   <meta property="og:description" content="该页面介绍了几种配置写入或读取Hudi数据集的作业的方法。简而言之，您可以在几个级别上控制行为。">
@@ -147,7 +147,7 @@
             
 
             
-              <li><a href="/cn/docs/quick-start-guide.html" class="">快速开始</a></li>
+              <li><a href="/cn/docs/0.5.2-quick-start-guide.html" class="">快速开始</a></li>
             
 
           
@@ -158,7 +158,7 @@
             
 
             
-              <li><a href="/cn/docs/use_cases.html" class="">使用案例</a></li>
+              <li><a href="/cn/docs/0.5.2-use_cases.html" class="">使用案例</a></li>
             
 
           
@@ -169,7 +169,7 @@
             
 
             
-              <li><a href="/cn/docs/powered_by.html" class="">演讲 & hudi 用户</a></li>
+              <li><a href="/cn/docs/0.5.2-powered_by.html" class="">演讲 & hudi 用户</a></li>
             
 
           
@@ -180,7 +180,7 @@
             
 
             
-              <li><a href="/cn/docs/comparison.html" class="">对比</a></li>
+              <li><a href="/cn/docs/0.5.2-comparison.html" class="">对比</a></li>
             
 
           
@@ -191,7 +191,7 @@
             
 
             
-              <li><a href="/cn/docs/docker_demo.html" class="">Docker 示例</a></li>
+              <li><a href="/cn/docs/0.5.2-docker_demo.html" class="">Docker 示例</a></li>
             
 
           
@@ -214,7 +214,7 @@
             
 
             
-              <li><a href="/cn/docs/concepts.html" class="">概念</a></li>
+              <li><a href="/cn/docs/0.5.2-concepts.html" class="">概念</a></li>
             
 
           
@@ -225,7 +225,7 @@
             
 
             
-              <li><a href="/cn/docs/writing_data.html" class="">写入数据</a></li>
+              <li><a href="/cn/docs/0.5.2-writing_data.html" class="">写入数据</a></li>
             
 
           
@@ -236,7 +236,7 @@
             
 
             
-              <li><a href="/cn/docs/querying_data.html" class="">查询数据</a></li>
+              <li><a href="/cn/docs/0.5.2-querying_data.html" class="">查询数据</a></li>
             
 
           
@@ -247,7 +247,7 @@
             
 
             
-              <li><a href="/cn/docs/configurations.html" class="active">配置</a></li>
+              <li><a href="/cn/docs/0.5.2-configurations.html" class="active">配置</a></li>
             
 
           
@@ -258,7 +258,7 @@
             
 
             
-              <li><a href="/cn/docs/performance.html" class="">性能</a></li>
+              <li><a href="/cn/docs/0.5.2-performance.html" class="">性能</a></li>
             
 
           
@@ -269,7 +269,7 @@
             
 
             
-              <li><a href="/cn/docs/deployment.html" class="">管理</a></li>
+              <li><a href="/cn/docs/0.5.2-deployment.html" class="">管理</a></li>
             
 
           
@@ -292,7 +292,7 @@
             
 
             
-              <li><a href="/cn/docs/docs-versions.html" class="">文档版本</a></li>
+              <li><a href="/cn/docs/0.5.2-docs-versions.html" class="">文档版本</a></li>
             
 
           
@@ -303,7 +303,7 @@
             
 
             
-              <li><a href="/cn/docs/privacy.html" class="">版权信息</a></li>
+              <li><a href="/cn/docs/0.5.2-privacy.html" class="">版权信息</a></li>
             
 
           
@@ -375,9 +375,9 @@
 <p>无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。</p>
 
 <ul>
-  <li><a href="/cn/docs/s3_hoodie.html">AWS S3</a> <br />
+  <li><a href="/cn/docs/0.5.2-s3_hoodie.html">AWS S3</a> <br />
 S3和Hudi协同工作所需的配置。</li>
-  <li><a href="/cn/docs/gcs_hoodie.html">Google Cloud Storage</a> <br />
+  <li><a href="/cn/docs/0.5.2-gcs_hoodie.html">Google Cloud Storage</a> <br />
 GCS和Hudi协同工作所需的配置。</li>
 </ul>
 
@@ -579,10 +579,6 @@ Hudi将有关提交、保存点、清理审核日志等的所有主要元数据�
 <p><a href="#withIndexConfig">withIndexConfig</a> (HoodieIndexConfig) <br />
 <span style="color:grey">可插入以具有外部索引（HBase）或使用存储在Parquet文件中的默认布隆过滤器（bloom filter）</span></p>
 
-<h4 id="withIndexClass">withIndexClass(indexClass = “x.y.z.UserDefinedIndex”)</h4>
-<p>属性：<code class="highlighter-rouge">hoodie.index.class</code> <br />
-<span style="color:grey">用户自定义索引的全路径名，索引类必须为HoodieIndex的子类，当指定该配置时，其会优先于<code class="highlighter-rouge">hoodie.index.type</code>配置</span></p>
-
 <h4 id="withIndexType">withIndexType(indexType = BLOOM)</h4>
 <p>属性：<code class="highlighter-rouge">hoodie.index.type</code> <br />
 <span style="color:grey">要使用的索引类型。默认为布隆过滤器。可能的选项是[BLOOM | HBASE | INMEMORY]。
@@ -778,52 +774,28 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 就像写入一样，压缩也使用记录有效负载类将日志中的记录彼此合并，再次与基本文件合并，并生成压缩后要写入的最终记录。</span></p>
 
 <h3 id="指标配置">指标配置</h3>
-<p>配置Hudi指标报告。
+<p>能够将Hudi指标报告给graphite。
 <a href="#withMetricsConfig">withMetricsConfig</a> (HoodieMetricsConfig) <br />
 <span style="color:grey">Hudi会发布有关每次提交、清理、回滚等的指标。</span></p>
 
-<h4 id="graphite">GRAPHITE</h4>
-
-<h5 id="on">on(metricsOn = true)</h5>
+<h4 id="on">on(metricsOn = true)</h4>
 <p>属性：<code class="highlighter-rouge">hoodie.metrics.on</code> <br />
 <span style="color:grey">打开或关闭发送指标。默认情况下处于启用状态。</span></p>
 
-<h5 id="withReporterType">withReporterType(reporterType = GRAPHITE)</h5>
+<h4 id="withReporterType">withReporterType(reporterType = GRAPHITE)</h4>
 <p>属性：<code class="highlighter-rouge">hoodie.metrics.reporter.type</code> <br />
-<span style="color:grey">指标报告者的类型。默认使用graphite。</span></p>
+<span style="color:grey">指标报告者的类型。默认使用graphite，也是唯一支持的类型。</span></p>
 
-<h5 id="toGraphiteHost">toGraphiteHost(host = localhost)</h5>
+<h4 id="toGraphiteHost">toGraphiteHost(host = localhost)</h4>
 <p>属性：<code class="highlighter-rouge">hoodie.metrics.graphite.host</code> <br />
 <span style="color:grey">要连接的graphite主机</span></p>
 
-<h5 id="onGraphitePort">onGraphitePort(port = 4756)</h5>
+<h4 id="onGraphitePort">onGraphitePort(port = 4756)</h4>
 <p>属性：<code class="highlighter-rouge">hoodie.metrics.graphite.port</code> <br />
 <span style="color:grey">要连接的graphite端口</span></p>
 
-<h5 id="usePrefix">usePrefix(prefix = “”)</h5>
+<h4 id="usePrefix">usePrefix(prefix = “”)</h4>
 <p>属性：<code class="highlighter-rouge">hoodie.metrics.graphite.metric.prefix</code> <br />
-<span style="color:grey">适用于所有指标的标准前缀。这有助于添加如数据中心、环境等信息</span></p>
-
-<h4 id="jmx">JMX</h4>
-
-<h5 id="on">on(metricsOn = true)</h5>
-<p>属性：<code class="highlighter-rouge">hoodie.metrics.on</code> <br />
-<span style="color:grey">打开或关闭发送指标。默认情况下处于启用状态。</span></p>
-
-<h5 id="withReporterType">withReporterType(reporterType = JMX)</h5>
-<p>属性：<code class="highlighter-rouge">hoodie.metrics.reporter.type</code> <br />
-<span style="color:grey">指标报告者的类型。</span></p>
-
-<h5 id="toJmxHost">toJmxHost(host = localhost)</h5>
-<p>属性：<code class="highlighter-rouge">hoodie.metrics.jmx.host</code> <br />
-<span style="color:grey">要连接的Jmx主机</span></p>
-
-<h5 id="onJmxPort">onJmxPort(port = 1000-5000)</h5>
-<p>属性：<code class="highlighter-rouge">hoodie.metrics.graphite.port</code> <br />
-<span style="color:grey">要连接的Jmx端口</span></p>
-
-<h5 id="usePrefix">usePrefix(prefix = “”)</h5>
-<p>属性：<code class="highlighter-rouge">hoodie.metrics.jmx.metric.prefix</code> <br />
 <span style="color:grey">适用于所有指标的标准前缀。这有助于添加如数据中心、环境等信息</span></p>
 
 <h3 id="内存配置">内存配置</h3>
