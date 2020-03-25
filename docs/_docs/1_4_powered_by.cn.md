@@ -20,7 +20,7 @@ Hudi还支持几个增量的Hive ETL管道，并且目前已集成到Uber的数�
 
 ### Yields.io
 
-Yields.io是第一个使用AI在企业范围内进行自动模型验证和实时监控的金融科技平台。他们的数据湖由Hudi管理，他们还积极使用Hudi为增量式、跨语言/平台机器学习构建基础架构。
+[Yields.io](https://www.yields.io/Blog/Apache-Hudi-at-Yields)是第一个使用AI在企业范围内进行自动模型验证和实时监控的金融科技平台。他们的数据湖由Hudi管理，他们还积极使用Hudi为增量式、跨语言/平台机器学习构建基础架构。
 
 ### Yotpo
 
