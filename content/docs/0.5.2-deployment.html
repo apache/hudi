@@ -3,17 +3,17 @@
   <head>
     <meta charset="utf-8">
 
-<!-- begin _includes/seo.html --><title>Administering Hudi Pipelines - Apache Hudi</title>
-<meta name="description" content="Admins/ops can gain visibility into Hudi datasets/pipelines in the following ways">
+<!-- begin _includes/seo.html --><title>Deployment Guide - Apache Hudi</title>
+<meta name="description" content="This section provides all the help you need to deploy and operate Hudi tables at scale. Specifically, we will cover the following aspects.">
 
 <meta property="og:type" content="article">
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="">
-<meta property="og:title" content="Administering Hudi Pipelines">
-<meta property="og:url" content="https://hudi.apache.org/docs/admin_guide.html">
+<meta property="og:title" content="Deployment Guide">
+<meta property="og:url" content="https://hudi.apache.org/docs/0.5.2-deployment.html">
 
 
-  <meta property="og:description" content="Admins/ops can gain visibility into Hudi datasets/pipelines in the following ways">
+  <meta property="og:description" content="This section provides all the help you need to deploy and operate Hudi tables at scale. Specifically, we will cover the following aspects.">
 
 
 
@@ -147,7 +147,7 @@
             
 
             
-              <li><a href="/docs/quick-start-guide.html" class="">Quick Start</a></li>
+              <li><a href="/docs/0.5.2-quick-start-guide.html" class="">Quick Start</a></li>
             
 
           
@@ -158,7 +158,7 @@
             
 
             
-              <li><a href="/docs/use_cases.html" class="">Use Cases</a></li>
+              <li><a href="/docs/0.5.2-use_cases.html" class="">Use Cases</a></li>
             
 
           
@@ -169,7 +169,7 @@
             
 
             
-              <li><a href="/docs/powered_by.html" class="">Talks & Powered By</a></li>
+              <li><a href="/docs/0.5.2-powered_by.html" class="">Talks & Powered By</a></li>
             
 
           
@@ -180,7 +180,7 @@
             
 
             
-              <li><a href="/docs/comparison.html" class="">Comparison</a></li>
+              <li><a href="/docs/0.5.2-comparison.html" class="">Comparison</a></li>
             
 
           
@@ -191,7 +191,7 @@
             
 
             
-              <li><a href="/docs/docker_demo.html" class="">Docker Demo</a></li>
+              <li><a href="/docs/0.5.2-docker_demo.html" class="">Docker Demo</a></li>
             
 
           
@@ -214,7 +214,7 @@
             
 
             
-              <li><a href="/docs/concepts.html" class="">Concepts</a></li>
+              <li><a href="/docs/0.5.2-concepts.html" class="">Concepts</a></li>
             
 
           
@@ -225,7 +225,7 @@
             
 
             
-              <li><a href="/docs/writing_data.html" class="">Writing Data</a></li>
+              <li><a href="/docs/0.5.2-writing_data.html" class="">Writing Data</a></li>
             
 
           
@@ -236,7 +236,7 @@
             
 
             
-              <li><a href="/docs/querying_data.html" class="">Querying Data</a></li>
+              <li><a href="/docs/0.5.2-querying_data.html" class="">Querying Data</a></li>
             
 
           
@@ -247,7 +247,7 @@
             
 
             
-              <li><a href="/docs/configurations.html" class="">Configuration</a></li>
+              <li><a href="/docs/0.5.2-configurations.html" class="">Configuration</a></li>
             
 
           
@@ -258,7 +258,7 @@
             
 
             
-              <li><a href="/docs/performance.html" class="">Performance</a></li>
+              <li><a href="/docs/0.5.2-performance.html" class="">Performance</a></li>
             
 
           
@@ -269,7 +269,7 @@
             
 
             
-              <li><a href="/docs/admin_guide.html" class="active">Administering</a></li>
+              <li><a href="/docs/0.5.2-deployment.html" class="active">Deployment</a></li>
             
 
           
@@ -292,7 +292,7 @@
             
 
             
-              <li><a href="/docs/docs-versions.html" class="">Docs Versions</a></li>
+              <li><a href="/docs/0.5.2-docs-versions.html" class="">Docs Versions</a></li>
             
 
           
@@ -303,7 +303,7 @@
             
 
             
-              <li><a href="/docs/privacy.html" class="">Privacy Policy</a></li>
+              <li><a href="/docs/0.5.2-privacy.html" class="">Privacy Policy</a></li>
             
 
           
@@ -324,7 +324,7 @@
     <div class="page__inner-wrap">
       
         <header>
-          <h1 id="page-title" class="page__title" itemprop="headline">Administering Hudi Pipelines
+          <h1 id="page-title" class="page__title" itemprop="headline">Deployment Guide
 </h1>
         </header>
       
@@ -333,9 +333,17 @@
         
         <aside class="sidebar__right sticky">
           <nav class="toc">
-            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> In this page</h4></header>
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
             <ul class="toc__menu">
-  <li><a href="#admin-cli">Admin CLI</a>
+  <li><a href="#deploying">Deploying</a>
+    <ul>
+      <li><a href="#deltastreamer">DeltaStreamer</a></li>
+      <li><a href="#spark-datasource-writer-jobs">Spark Datasource Writer Jobs</a></li>
+    </ul>
+  </li>
+  <li><a href="#upgrading">Upgrading</a></li>
+  <li><a href="#migrating">Migrating</a></li>
+  <li><a href="#cli">CLI</a>
     <ul>
       <li><a href="#inspecting-commits">Inspecting Commits</a></li>
       <li><a href="#drilling-down-to-a-specific-commit">Drilling Down to a specific Commit</a></li>
@@ -344,12 +352,12 @@
       <li><a href="#archived-commits">Archived Commits</a></li>
       <li><a href="#compactions">Compactions</a></li>
       <li><a href="#validate-compaction">Validate Compaction</a></li>
-      <li><a href="#unscheduling-compaction">UnScheduling Compaction</a></li>
+      <li><a href="#unscheduling-compaction">Unscheduling Compaction</a></li>
       <li><a href="#repair-compaction">Repair Compaction</a></li>
     </ul>
   </li>
-  <li><a href="#metrics">Metrics</a></li>
-  <li><a href="#troubleshooting">Troubleshooting Failures</a>
+  <li><a href="#monitoring">Monitoring</a></li>
+  <li><a href="#troubleshooting">Troubleshooting</a>
     <ul>
       <li><a href="#missing-records">Missing records</a></li>
       <li><a href="#duplicates">Duplicates</a></li>
@@ -360,45 +368,208 @@
           </nav>
         </aside>
         
-        <p>Admins/ops can gain visibility into Hudi datasets/pipelines in the following ways</p>
+        <p>This section provides all the help you need to deploy and operate Hudi tables at scale. 
+Specifically, we will cover the following aspects.</p>
 
 <ul>
-  <li><a href="#admin-cli">Administering via the Admin CLI</a></li>
-  <li><a href="#metrics">Graphite metrics</a></li>
-  <li><a href="#spark-ui">Spark UI of the Hudi Application</a></li>
+  <li><a href="#deploying">Deployment Model</a> : How various Hudi components are deployed and managed.</li>
+  <li><a href="#upgrading">Upgrading Versions</a> : Picking up new releases of Hudi, guidelines and general best-practices.</li>
+  <li><a href="#migrating">Migrating to Hudi</a> : How to migrate your existing tables to Apache Hudi.</li>
+  <li><a href="#cli">Interacting via CLI</a> : Using the CLI to perform maintenance or deeper introspection.</li>
+  <li><a href="#monitoring">Monitoring</a> : Tracking metrics from your hudi tables using popular tools.</li>
+  <li><a href="#troubleshooting">Troubleshooting</a> : Uncovering, triaging and resolving issues in production.</li>
 </ul>
 
-<p>This section provides a glimpse into each of these, with some general guidance on <a href="#troubleshooting">troubleshooting</a></p>
+<h2 id="deploying">Deploying</h2>
 
-<h2 id="admin-cli">Admin CLI</h2>
+<p>All in all, Hudi deploys with no long running servers or additional infrastructure cost to your data lake. In fact, Hudi pioneered this model of building a transactional distributed storage layer
+using existing infrastructure and its heartening to see other systems adopting similar approaches as well. Hudi writing is done via Spark jobs (DeltaStreamer or custom Spark datasource jobs), deployed per standard Apache Spark <a href="https://spark.apache.org/docs/latest/cluster-overview.html">recommendations</a>.
+Querying Hudi tables happens via libraries installed into Apache Hive, Apache Spark or Presto and hence no additional infrastructure is necessary.</p>
 
-<p>Once hudi has been built, the shell can be fired by via  <code class="highlighter-rouge">cd hudi-cli &amp;&amp; ./hudi-cli.sh</code>.
-A hudi dataset resides on DFS, in a location referred to as the <strong>basePath</strong> and we would need this location in order to connect to a Hudi dataset.
-Hudi library effectively manages this dataset internally, using .hoodie subfolder to track all metadata</p>
+<p>A typical Hudi data ingestion can be achieved in 2 modes. In a singe run mode, Hudi ingestion reads next batch of data, ingest them to Hudi table and exits. In continuous mode, Hudi ingestion runs as a long-running service executing ingestion in a loop.</p>
+
+<p>With Merge_On_Read Table, Hudi ingestion needs to also take care of compacting delta files. Again, compaction can be performed in an asynchronous-mode by letting compaction run concurrently with ingestion or in a serial fashion with one after another.</p>
+
+<h3 id="deltastreamer">DeltaStreamer</h3>
+
+<p><a href="/docs/0.5.2-writing_data.html#deltastreamer">DeltaStreamer</a> is the standalone utility to incrementally pull upstream changes from varied sources such as DFS, Kafka and DB Changelogs and ingest them to hudi tables. It runs as a spark application in 2 modes.</p>
+
+<ul>
+  <li><strong>Run Once Mode</strong> : In this mode, Deltastreamer performs one ingestion round which includes incrementally pulling events from upstream sources and ingesting them to hudi table. Background operations like cleaning old file versions and archiving hoodie timeline are automatically executed as part of the run. For Merge-On-Read tables, Compaction is also run inline as part of ingestion unless disabled by passing the flag “–disable-compaction”. By default, Compaction is run inline for every ingestion run and this can be changed by setting the property “hoodie.compact.inline.max.delta.commits”. You can either manually run this spark application or use any cron trigger or workflow orchestrator (most common deployment strategy) such as Apache Airflow to spawn this application. See command line options in <a href="/docs/0.5.2-writing_data.html#deltastreamer">this section</a> for running the spark application.</li>
+</ul>
+
+<p>Here is an example invocation for reading from kafka topic in a single-run mode and writing to Merge On Read table type in a yarn cluster.</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">[</span><span class="n">hoodie</span><span class="o">]</span><span class="err">$</span> <span class="n">spark</span><span class="o">-</span><span class="n">submit</span> <span class="o">--</span><span class="n">packages</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">:</span><span class="n">hudi</span><span class="o">-</span><span class="n">utilities</span><span class="o">-</span><span class="n">bundle_2</span><span class="o">.</span><span class="mi">11</span><span class="o">:</span><span class="mf">0.5</span><span class="o">.</span><span class="mi">2</span><span class="o">-</span><span class="n">incubating</span><span class="o">,</span><span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">spark</span><span class="o">:</span><span class="n">spark</span><span class="o">-</span><span class="n">avro_2</span><span class="o">.</span><span class="mi">11</span><span class="o">:</span><span class="mf">2.4</span><span class="o">.</span><span class="mi">4</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">master</span> <span class="n">yarn</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">deploy</span><span class="o">-</span><span class="n">mode</span> <span class="n">cluster</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">num</span><span class="o">-</span><span class="n">executors</span> <span class="mi">10</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">executor</span><span class="o">-</span><span class="n">memory</span> <span class="mi">3</span><span class="n">g</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">driver</span><span class="o">-</span><span class="n">memory</span> <span class="mi">6</span><span class="n">g</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">driver</span><span class="o">.</span><span class="na">extraJavaOptions</span><span class="o">=</span><span class="s">"-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime -XX:+PrintGCTimeStamps -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/varadarb_ds_driver.hprof"</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">executor</span><span class="o">.</span><span class="na">extraJavaOptions</span><span class="o">=</span><span class="s">"-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime -XX:+PrintGCTimeStamps -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/varadarb_ds_executor.hprof"</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">queue</span> <span class="n">hadoop</span><span class="o">-</span><span class="n">platform</span><span class="o">-</span><span class="n">queue</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">scheduler</span><span class="o">.</span><span class="na">mode</span><span class="o">=</span><span class="no">FAIR</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">yarn</span><span class="o">.</span><span class="na">executor</span><span class="o">.</span><span class="na">memoryOverhead</span><span class="o">=</span><span class="mi">1072</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">yarn</span><span class="o">.</span><span class="na">driver</span><span class="o">.</span><span class="na">memoryOverhead</span><span class="o">=</span><span class="mi">2048</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">task</span><span class="o">.</span><span class="na">cpus</span><span class="o">=</span><span class="mi">1</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">executor</span><span class="o">.</span><span class="na">cores</span><span class="o">=</span><span class="mi">1</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">task</span><span class="o">.</span><span class="na">maxFailures</span><span class="o">=</span><span class="mi">10</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">memory</span><span class="o">.</span><span class="na">fraction</span><span class="o">=</span><span class="mf">0.4</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">rdd</span><span class="o">.</span><span class="na">compress</span><span class="o">=</span><span class="kc">true</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">kryoserializer</span><span class="o">.</span><span class="na">buffer</span><span class="o">.</span><span class="na">max</span><span class="o">=</span><span class="mi">200</span><span class="n">m</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">serializer</span><span class="o">=</span><span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">spark</span><span class="o">.</span><span class="na">serializer</span><span class="o">.</span><span class="na">KryoSerializer</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">memory</span><span class="o">.</span><span class="na">storageFraction</span><span class="o">=</span><span class="mf">0.1</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">shuffle</span><span class="o">.</span><span class="na">service</span><span class="o">.</span><span class="na">enabled</span><span class="o">=</span><span class="kc">true</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">hive</span><span class="o">.</span><span class="na">convertMetastoreParquet</span><span class="o">=</span><span class="kc">false</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">ui</span><span class="o">.</span><span class="na">port</span><span class="o">=</span><span class="mi">5555</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">driver</span><span class="o">.</span><span class="na">maxResultSize</span><span class="o">=</span><span class="mi">3</span><span class="n">g</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">executor</span><span class="o">.</span><span class="na">heartbeatInterval</span><span class="o">=</span><span class="mi">120</span><span class="n">s</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">network</span><span class="o">.</span><span class="na">timeout</span><span class="o">=</span><span class="mi">600</span><span class="n">s</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">eventLog</span><span class="o">.</span><span class="na">overwrite</span><span class="o">=</span><span class="kc">true</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">eventLog</span><span class="o">.</span><span class="na">enabled</span><span class="o">=</span><span class="kc">true</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">eventLog</span><span class="o">.</span><span class="na">dir</span><span class="o">=</span><span class="nl">hdfs:</span><span class="c1">///user/spark/applicationHistory \</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">yarn</span><span class="o">.</span><span class="na">max</span><span class="o">.</span><span class="na">executor</span><span class="o">.</span><span class="na">failures</span><span class="o">=</span><span class="mi">10</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">catalogImplementation</span><span class="o">=</span><span class="n">hive</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">shuffle</span><span class="o">.</span><span class="na">partitions</span><span class="o">=</span><span class="mi">100</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">driver</span><span class="o">-</span><span class="kd">class</span><span class="err">-</span><span class="nc">path</span> <span class="n">$HADOOP_CONF_DIR</span> <span class="err">\</span>
+ <span class="o">--</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">HoodieDeltaStreamer</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">table</span><span class="o">-</span><span class="n">type</span> <span class="no">MERGE_ON_READ</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">source</span><span class="o">-</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">sources</span><span class="o">.</span><span class="na">JsonKafkaSource</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">source</span><span class="o">-</span><span class="n">ordering</span><span class="o">-</span><span class="n">field</span> <span class="n">ts</span>  <span class="err">\</span>
+ <span class="o">--</span><span class="n">target</span><span class="o">-</span><span class="n">base</span><span class="o">-</span><span class="n">path</span> <span class="o">/</span><span class="n">user</span><span class="o">/</span><span class="n">hive</span><span class="o">/</span><span class="n">warehouse</span><span class="o">/</span><span class="n">stock_ticks_mor</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">target</span><span class="o">-</span><span class="n">table</span> <span class="n">stock_ticks_mor</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">props</span> <span class="o">/</span><span class="kt">var</span><span class="o">/</span><span class="n">demo</span><span class="o">/</span><span class="n">config</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">source</span><span class="o">.</span><span class="na">properties</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">schemaprovider</span><span class="o">-</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">schema</span><span class="o">.</span><span class="na">FilebasedSchemaProvider</span>
+</code></pre></div></div>
+
+<ul>
+  <li><strong>Continuous Mode</strong> :  Here, deltastreamer runs an infinite loop with each round performing one ingestion round as described in <strong>Run Once Mode</strong>. The frequency of data ingestion can be controlled by the configuration “–min-sync-interval-seconds”. For Merge-On-Read tables, Compaction is run in asynchronous fashion concurrently with ingestion unless disabled by passing the flag “–disable-compaction”. Every ingestion run triggers a compaction request asynchronously and this frequency can be changed by setting the property “hoodie.compact.inline.max.delta.commits”. As both ingestion and compaction is running in the same spark context, you can use resource allocation configuration in DeltaStreamer CLI such as (“–delta-sync-scheduling-weight”, “–compact-scheduling-weight”, “”–delta-sync-scheduling-minshare”, and “–compact-scheduling-minshare”) to control executor allocation between ingestion and compaction.</li>
+</ul>
+
+<p>Here is an example invocation for reading from kafka topic in a continuous mode and writing to Merge On Read table type in a yarn cluster.</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">[</span><span class="n">hoodie</span><span class="o">]</span><span class="err">$</span> <span class="n">spark</span><span class="o">-</span><span class="n">submit</span> <span class="o">--</span><span class="n">packages</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">:</span><span class="n">hudi</span><span class="o">-</span><span class="n">utilities</span><span class="o">-</span><span class="n">bundle_2</span><span class="o">.</span><span class="mi">11</span><span class="o">:</span><span class="mf">0.5</span><span class="o">.</span><span class="mi">2</span><span class="o">-</span><span class="n">incubating</span><span class="o">,</span><span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">spark</span><span class="o">:</span><span class="n">spark</span><span class="o">-</span><span class="n">avro_2</span><span class="o">.</span><span class="mi">11</span><span class="o">:</span><span class="mf">2.4</span><span class="o">.</span><span class="mi">4</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">master</span> <span class="n">yarn</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">deploy</span><span class="o">-</span><span class="n">mode</span> <span class="n">cluster</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">num</span><span class="o">-</span><span class="n">executors</span> <span class="mi">10</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">executor</span><span class="o">-</span><span class="n">memory</span> <span class="mi">3</span><span class="n">g</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">driver</span><span class="o">-</span><span class="n">memory</span> <span class="mi">6</span><span class="n">g</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">driver</span><span class="o">.</span><span class="na">extraJavaOptions</span><span class="o">=</span><span class="s">"-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime -XX:+PrintGCTimeStamps -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/varadarb_ds_driver.hprof"</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">executor</span><span class="o">.</span><span class="na">extraJavaOptions</span><span class="o">=</span><span class="s">"-XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime -XX:+PrintGCTimeStamps -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/varadarb_ds_executor.hprof"</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">queue</span> <span class="n">hadoop</span><span class="o">-</span><span class="n">platform</span><span class="o">-</span><span class="n">queue</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">scheduler</span><span class="o">.</span><span class="na">mode</span><span class="o">=</span><span class="no">FAIR</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">yarn</span><span class="o">.</span><span class="na">executor</span><span class="o">.</span><span class="na">memoryOverhead</span><span class="o">=</span><span class="mi">1072</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">yarn</span><span class="o">.</span><span class="na">driver</span><span class="o">.</span><span class="na">memoryOverhead</span><span class="o">=</span><span class="mi">2048</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">task</span><span class="o">.</span><span class="na">cpus</span><span class="o">=</span><span class="mi">1</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">executor</span><span class="o">.</span><span class="na">cores</span><span class="o">=</span><span class="mi">1</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">task</span><span class="o">.</span><span class="na">maxFailures</span><span class="o">=</span><span class="mi">10</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">memory</span><span class="o">.</span><span class="na">fraction</span><span class="o">=</span><span class="mf">0.4</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">rdd</span><span class="o">.</span><span class="na">compress</span><span class="o">=</span><span class="kc">true</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">kryoserializer</span><span class="o">.</span><span class="na">buffer</span><span class="o">.</span><span class="na">max</span><span class="o">=</span><span class="mi">200</span><span class="n">m</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">serializer</span><span class="o">=</span><span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">spark</span><span class="o">.</span><span class="na">serializer</span><span class="o">.</span><span class="na">KryoSerializer</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">memory</span><span class="o">.</span><span class="na">storageFraction</span><span class="o">=</span><span class="mf">0.1</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">shuffle</span><span class="o">.</span><span class="na">service</span><span class="o">.</span><span class="na">enabled</span><span class="o">=</span><span class="kc">true</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">hive</span><span class="o">.</span><span class="na">convertMetastoreParquet</span><span class="o">=</span><span class="kc">false</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">ui</span><span class="o">.</span><span class="na">port</span><span class="o">=</span><span class="mi">5555</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">driver</span><span class="o">.</span><span class="na">maxResultSize</span><span class="o">=</span><span class="mi">3</span><span class="n">g</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">executor</span><span class="o">.</span><span class="na">heartbeatInterval</span><span class="o">=</span><span class="mi">120</span><span class="n">s</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">network</span><span class="o">.</span><span class="na">timeout</span><span class="o">=</span><span class="mi">600</span><span class="n">s</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">eventLog</span><span class="o">.</span><span class="na">overwrite</span><span class="o">=</span><span class="kc">true</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">eventLog</span><span class="o">.</span><span class="na">enabled</span><span class="o">=</span><span class="kc">true</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">eventLog</span><span class="o">.</span><span class="na">dir</span><span class="o">=</span><span class="nl">hdfs:</span><span class="c1">///user/spark/applicationHistory \</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">yarn</span><span class="o">.</span><span class="na">max</span><span class="o">.</span><span class="na">executor</span><span class="o">.</span><span class="na">failures</span><span class="o">=</span><span class="mi">10</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">catalogImplementation</span><span class="o">=</span><span class="n">hive</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">shuffle</span><span class="o">.</span><span class="na">partitions</span><span class="o">=</span><span class="mi">100</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">driver</span><span class="o">-</span><span class="kd">class</span><span class="err">-</span><span class="nc">path</span> <span class="n">$HADOOP_CONF_DIR</span> <span class="err">\</span>
+ <span class="o">--</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">HoodieDeltaStreamer</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">table</span><span class="o">-</span><span class="n">type</span> <span class="no">MERGE_ON_READ</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">source</span><span class="o">-</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">sources</span><span class="o">.</span><span class="na">JsonKafkaSource</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">source</span><span class="o">-</span><span class="n">ordering</span><span class="o">-</span><span class="n">field</span> <span class="n">ts</span>  <span class="err">\</span>
+ <span class="o">--</span><span class="n">target</span><span class="o">-</span><span class="n">base</span><span class="o">-</span><span class="n">path</span> <span class="o">/</span><span class="n">user</span><span class="o">/</span><span class="n">hive</span><span class="o">/</span><span class="n">warehouse</span><span class="o">/</span><span class="n">stock_ticks_mor</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">target</span><span class="o">-</span><span class="n">table</span> <span class="n">stock_ticks_mor</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">props</span> <span class="o">/</span><span class="kt">var</span><span class="o">/</span><span class="n">demo</span><span class="o">/</span><span class="n">config</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">source</span><span class="o">.</span><span class="na">properties</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">schemaprovider</span><span class="o">-</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">schema</span><span class="o">.</span><span class="na">FilebasedSchemaProvider</span> <span class="err">\</span>
+ <span class="o">--</span><span class="n">continuous</span>
+</code></pre></div></div>
+
+<h3 id="spark-datasource-writer-jobs">Spark Datasource Writer Jobs</h3>
+
+<p>As described in <a href="/docs/0.5.2-writing_data.html#datasource-writer">Writing Data</a>, you can use spark datasource to ingest to hudi table. This mechanism allows you to ingest any spark dataframe in Hudi format. Hudi Spark DataSource also supports spark streaming to ingest a streaming source to Hudi table. For Merge On Read table types, inline compaction is turned on by default which runs after every ingestion run. The compaction frequency can be changed by setting the property “hoodie.compact.inline.max.delta.commits”.</p>
+
+<p>Here is an example invocation using spark datasource</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">inputDF</span><span class="o">.</span><span class="na">write</span><span class="o">()</span>
+       <span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">options</span><span class="o">(</span><span class="n">clientOpts</span><span class="o">)</span> <span class="c1">// any of the Hudi client opts can be passed in as well</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">RECORDKEY_FIELD_OPT_KEY</span><span class="o">(),</span> <span class="s">"_row_key"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">(),</span> <span class="s">"partition"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">(),</span> <span class="s">"timestamp"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">HoodieWriteConfig</span><span class="o">.</span><span class="na">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">mode</span><span class="o">(</span><span class="nc">SaveMode</span><span class="o">.</span><span class="na">Append</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
+</code></pre></div></div>
+
+<h2 id="upgrading">Upgrading</h2>
+
+<p>New Hudi releases are listed on the <a href="/releases">releases page</a>, with detailed notes which list all the changes, with highlights in each release. 
+At the end of the day, Hudi is a storage system and with that comes a lot of responsibilities, which we take seriously.</p>
+
+<p>As general guidelines,</p>
+
+<ul>
+  <li>We strive to keep all changes backwards compatible (i.e new code can read old data/timeline files) and when we cannot, we will provide upgrade/downgrade tools via the CLI</li>
+  <li>We cannot always guarantee forward compatibility (i.e old code being able to read data/timeline files written by a greater version). This is generally the norm, since no new features can be built otherwise.
+However any large such changes, will be turned off by default, for smooth transition to newer release. After a few releases and once enough users deem the feature stable in production, we will flip the defaults in a subsequent release.</li>
+  <li>Always upgrade the query bundles (mr-bundle, presto-bundle, spark-bundle) first and then upgrade the writers (deltastreamer, spark jobs using datasource). This often provides the best experience and it’s easy to fix 
+any issues by rolling forward/back the writer code (which typically you might have more control over)</li>
+  <li>With large, feature rich releases we recommend migrating slowly, by first testing in staging environments and running your own tests. Upgrading Hudi is no different than upgrading any database system.</li>
+</ul>
+
+<p>Note that release notes can override this information with specific instructions, applicable on case-by-case basis.</p>
+
+<h2 id="migrating">Migrating</h2>
+
+<p>Currently migrating to Hudi can be done using two approaches</p>
+
+<ul>
+  <li><strong>Convert newer partitions to Hudi</strong> : This model is suitable for large event tables (e.g: click streams, ad impressions), which also typically receive writes for the last few days alone. You can convert the last 
+ N partitions to Hudi and proceed writing as if it were a Hudi table to begin with. The Hudi query side code is able to correctly handle both hudi and non-hudi data partitions.</li>
+  <li><strong>Full conversion to Hudi</strong> : This model is suitable if you are currently bulk/full loading the table few times a day (e.g database ingestion). The full conversion of Hudi is simply a one-time step (akin to 1 run of your existing job),
+ which moves all of the data into the Hudi format and provides the ability to incrementally update for future writes.</li>
+</ul>
+
+<p>For more details, refer to the detailed <a href="/docs/0.5.2-migration_guide.html">migration guide</a>. In the future, we will be supporting seamless zero-copy bootstrap of existing tables with all the upsert/incremental query capabilities fully supported.</p>
+
+<h2 id="cli">CLI</h2>
+
+<p>Once hudi has been built, the shell can be fired by via  <code class="highlighter-rouge">cd hudi-cli &amp;&amp; ./hudi-cli.sh</code>. A hudi table resides on DFS, in a location referred to as the <code class="highlighter-rouge">basePath</code> and 
+we would need this location in order to connect to a Hudi table. Hudi library effectively manages this table internally, using <code class="highlighter-rouge">.hoodie</code> subfolder to track all metadata.</p>
 
 <p>To initialize a hudi table, use the following command.</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="mi">18</span><span class="o">/</span><span class="mi">09</span><span class="o">/</span><span class="mo">06</span> <span class="mi">15</span><span class="o">:</span><span class="mi">56</span><span class="o">:</span><span class="mi">52</span> <span class="no">INFO</span> <span class="n">annotation</span><span class="o">.</span><span class="na">AutowiredAnnotationBeanPostProcessor</span><span class="o">:</span> <span class="no">JSR</span><span class="o">-</span><span class="mi">330</span> <span class="err">'</span><span class="n">javax</span><span class="o">.</span><span class="na">inject</span><span class="o">.</span><span class="na">Inject</span><span class="err">'</span> <span class="n">annotation</span> <span class="n">found</span> <span class="n">and</span> <span class="n">supported</span> <span class="k">for</span> <span class="n">autowiring</span>
-<span class="o">============================================</span>
-<span class="o">*</span>                                          <span class="o">*</span>
-<span class="o">*</span>     <span class="n">_</span>    <span class="n">_</span>           <span class="n">_</span>   <span class="n">_</span>               <span class="o">*</span>
-<span class="o">*</span>    <span class="o">|</span> <span class="o">|</span>  <span class="o">|</span> <span class="o">|</span>         <span class="o">|</span> <span class="o">|</span> <span class="o">(</span><span class="n">_</span><span class="o">)</span>              <span class="o">*</span>
-<span class="o">*</span>    <span class="o">|</span> <span class="o">|</span><span class="n">__</span><span class="o">|</span> <span class="o">|</span>       <span class="n">__</span><span class="o">|</span> <span class="o">|</span>  <span class="o">-</span>               <span class="o">*</span>
-<span class="o">*</span>    <span class="o">|</span>  <span class="n">__</span>  <span class="o">||</span>   <span class="o">|</span> <span class="o">/</span> <span class="n">_</span><span class="err">`</span> <span class="o">|</span> <span class="o">||</span>               <span class="o">*</span>
-<span class="o">*</span>    <span class="o">|</span> <span class="o">|</span>  <span class="o">|</span> <span class="o">||</span>   <span class="o">||</span> <span class="o">(</span><span class="n">_</span><span class="o">|</span> <span class="o">|</span> <span class="o">||</span>               <span class="o">*</span>
-<span class="o">*</span>    <span class="o">|</span><span class="n">_</span><span class="o">|</span>  <span class="o">|</span><span class="n">_</span><span class="o">|</span><span class="err">\</span><span class="n">___</span><span class="o">/</span> <span class="err">\</span><span class="n">____</span><span class="o">/</span> <span class="o">||</span>               <span class="o">*</span>
-<span class="o">*</span>                                          <span class="o">*</span>
-<span class="o">============================================</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">===================================================================</span>
+<span class="o">*</span>         <span class="n">___</span>                          <span class="n">___</span>                        <span class="o">*</span>
+<span class="o">*</span>        <span class="o">/</span><span class="err">\</span><span class="n">__</span><span class="err">\</span>          <span class="n">___</span>           <span class="o">/</span><span class="err">\</span>  <span class="err">\</span>           <span class="n">___</span>         <span class="o">*</span>
+<span class="o">*</span>       <span class="o">/</span> <span class="o">/</span>  <span class="o">/</span>         <span class="o">/</span><span class="err">\</span><span class="n">__</span><span class="err">\</span>         <span class="o">/</span>  <span class="err">\</span>  <span class="err">\</span>         <span class="o">/</span><span class="err">\</span>  <span class="err">\</span>        <span class="o">*</span>
+<span class="o">*</span>      <span class="o">/</span> <span class="o">/</span><span class="n">__</span><span class="o">/</span>         <span class="o">/</span> <span class="o">/</span>  <span class="o">/</span>        <span class="o">/</span> <span class="o">/</span><span class="err">\</span> <span class="err">\</span>  <span class="err">\</span>        <span class="err">\</span> <span class="err">\</span>  <span class="err">\</span>       <span class="o">*</span>
+<span class="o">*</span>     <span class="o">/</span>  <span class="err">\</span>  <span class="err">\</span> <span class="n">___</span>    <span class="o">/</span> <span class="o">/</span>  <span class="o">/</span>        <span class="o">/</span> <span class="o">/</span>  <span class="err">\</span> <span class="err">\</span><span class="n">__</span><span class="err">\</span>       <span class="o">/</span>  <span class="err">\</span><span class="n">__</span><span class="err">\</span>      <span class="o">*</span>
+<span class="o">*</span>    <span class="o">/</span> <span class="o">/</span><span class="err">\</span> <span class="err">\</span>  <span class="o">/</span><span class="err">\</span><span class="n">__</span><span class="err">\</span>  <span class="o">/</span> <span class="o">/</span><span class="n">__</span><span class="o">/</span>  <span class="n">___</span>   <span class="o">/</span> <span class="o">/</span><span class="n">__</span><span class="o">/</span> <span class="err">\</span> <span class="o">|</span><span class="n">__</span><span class="o">|</span>     <span class="o">/</span> <span class="o">/</span><span class="err">\</span><span class="o">/</span><span class="n">__</span><span class="o">/</span>      <span class="o">*</span>
+<span class="o">*</span>    <span class="err">\</span><span class="o">/</span>  <span class="err">\</span> <span class="err">\</span><span class="o">/</span> <span class="o">/</span>  <span class="o">/</span>  <span class="err">\</span> <span class="err">\</span>  <span class="err">\</span> <span class="o">/</span><span class="err">\</span><span class="n">__</span><span class="err">\</span>  <span class="err">\</span> <span class="err">\</span>  <span class="err">\</span> <span class="o">/</span> <span class="o">/</span>  <span class="o">/</span>  <span class="o">/</span><span class="err">\</span><span class="o">/</span> <span class="o">/</span>  <span class="o">/</span>         <span class="o">*</span>
+<span class="o">*</span>         <span class="err">\</span>  <span class="o">/</span>  <span class="o">/</span>    <span class="err">\</span> <span class="err">\</span>  <span class="o">/</span> <span class="o">/</span>  <span class="o">/</span>   <span class="err">\</span> <span class="err">\</span>  <span class="o">/</span> <span class="o">/</span>  <span class="o">/</span>   <span class="err">\</span>  <span class="o">/</span><span class="n">__</span><span class="o">/</span>          <span class="o">*</span>
+<span class="o">*</span>         <span class="o">/</span> <span class="o">/</span>  <span class="o">/</span>      <span class="err">\</span> <span class="err">\</span><span class="o">/</span> <span class="o">/</span>  <span class="o">/</span>     <span class="err">\</span> <span class="err">\</span><span class="o">/</span> <span class="o">/</span>  <span class="o">/</span>     <span class="err">\</span> <span class="err">\</span><span class="n">__</span><span class="err">\</span>          <span class="o">*</span>
+<span class="o">*</span>        <span class="o">/</span> <span class="o">/</span>  <span class="o">/</span>        <span class="err">\</span>  <span class="o">/</span>  <span class="o">/</span>       <span class="err">\</span>  <span class="o">/</span>  <span class="o">/</span>       <span class="err">\</span><span class="o">/</span><span class="n">__</span><span class="o">/</span>          <span class="o">*</span>
+<span class="o">*</span>        <span class="err">\</span><span class="o">/</span><span class="n">__</span><span class="o">/</span>          <span class="err">\</span><span class="o">/</span><span class="n">__</span><span class="o">/</span>         <span class="err">\</span><span class="o">/</span><span class="n">__</span><span class="o">/</span>    <span class="nc">Apache</span> <span class="nc">Hudi</span> <span class="no">CLI</span>    <span class="o">*</span>
+<span class="o">*</span>                                                                 <span class="o">*</span>
+<span class="o">===================================================================</span>
 
-<span class="nc">Welcome</span> <span class="n">to</span> <span class="nc">Hoodie</span> <span class="no">CLI</span><span class="o">.</span> <span class="nc">Please</span> <span class="n">type</span> <span class="n">help</span> <span class="k">if</span> <span class="n">you</span> <span class="n">are</span> <span class="n">looking</span> <span class="k">for</span> <span class="n">help</span><span class="o">.</span>
 <span class="n">hudi</span><span class="o">-&gt;</span><span class="n">create</span> <span class="o">--</span><span class="n">path</span> <span class="o">/</span><span class="n">user</span><span class="o">/</span><span class="n">hive</span><span class="o">/</span><span class="n">warehouse</span><span class="o">/</span><span class="n">table1</span> <span class="o">--</span><span class="n">tableName</span> <span class="n">hoodie_table_1</span> <span class="o">--</span><span class="n">tableType</span> <span class="no">COPY_ON_WRITE</span>
 <span class="o">.....</span>
-<span class="mi">18</span><span class="o">/</span><span class="mi">09</span><span class="o">/</span><span class="mo">06</span> <span class="mi">15</span><span class="o">:</span><span class="mi">57</span><span class="o">:</span><span class="mi">15</span> <span class="no">INFO</span> <span class="n">table</span><span class="o">.</span><span class="na">HoodieTableMetaClient</span><span class="o">:</span> <span class="nc">Finished</span> <span class="nc">Loading</span> <span class="nc">Table</span> <span class="n">of</span> <span class="n">type</span> <span class="no">COPY_ON_WRITE</span> <span class="n">from</span> <span class="o">...</span>
 </code></pre></div></div>
 
 <p>To see the description of hudi table, use the command:</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">hoodie_table_1</span><span class="o">-&gt;</span><span class="n">desc</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">hoodie_table_1</span><span class="o">-&gt;</span><span class="n">desc</span>
 <span class="mi">18</span><span class="o">/</span><span class="mi">09</span><span class="o">/</span><span class="mo">06</span> <span class="mi">15</span><span class="o">:</span><span class="mi">57</span><span class="o">:</span><span class="mi">19</span> <span class="no">INFO</span> <span class="n">timeline</span><span class="o">.</span><span class="na">HoodieActiveTimeline</span><span class="o">:</span> <span class="nc">Loaded</span> <span class="n">instants</span> <span class="o">[]</span>
     <span class="n">_________________________________________________________</span>
     <span class="o">|</span> <span class="nc">Property</span>                <span class="o">|</span> <span class="nc">Value</span>                        <span class="o">|</span>
@@ -411,35 +582,32 @@ Hudi library effectively manages this dataset internally, using .hoodie subfolde
     <span class="o">|</span> <span class="n">hoodie</span><span class="o">.</span><span class="na">archivelog</span><span class="o">.</span><span class="na">folder</span><span class="o">|</span>                              <span class="o">|</span>
 </code></pre></div></div>
 
-<p>Following is a sample command to connect to a Hudi dataset contains uber trips.</p>
+<p>Following is a sample command to connect to a Hudi table contains uber trips.</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">connect</span> <span class="o">--</span><span class="n">path</span> <span class="o">/</span><span class="n">app</span><span class="o">/</span><span class="n">uber</span><span class="o">/</span><span class="n">trips</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">connect</span> <span class="o">--</span><span class="n">path</span> <span class="o">/</span><span class="n">app</span><span class="o">/</span><span class="n">uber</span><span class="o">/</span><span class="n">trips</span>
 
-<span class="mi">16</span><span class="o">/</span><span class="mi">10</span><span class="o">/</span><span class="mo">05</span> <span class="mi">23</span><span class="o">:</span><span class="mi">20</span><span class="o">:</span><span class="mi">37</span> <span class="no">INFO</span> <span class="n">model</span><span class="o">.</span><span class="na">HoodieTableMetadata</span><span class="o">:</span> <span class="nc">Attempting</span> <span class="n">to</span> <span class="n">load</span> <span class="n">the</span> <span class="n">commits</span> <span class="n">under</span> <span class="o">/</span><span class="n">app</span><span class="o">/</span><span class="n">uber</span><span class="o">/</span><span class="n">trips</span><span class="o">/.</span><span class="na">hoodie</span> <span class="n">with</span> <span class="n">suffix</span> <span class="o">.</span><span class="na">commit</span>
-<span class="mi">16</span><span class="o">/</span><span class="mi">10</span><span class="o">/</span><span class="mo">05</span> <span class="mi">23</span><span class="o">:</span><span class="mi">20</span><span class="o">:</span><span class="mi">37</span> <span class="no">INFO</span> <span class="n">model</span><span class="o">.</span><span class="na">HoodieTableMetadata</span><span class="o">:</span> <span class="nc">Attempting</span> <span class="n">to</span> <span class="n">load</span> <span class="n">the</span> <span class="n">commits</span> <span class="n">under</span> <span class="o">/</span><span class="n">app</span><span class="o">/</span><span class="n">uber</span><span class="o">/</span><span class="n">trips</span><span class="o">/.</span><span class="na">hoodie</span> <span class="n">with</span> <span class="n">suffix</span> <span class="o">.</span><span class="na">inflight</span>
 <span class="mi">16</span><span class="o">/</span><span class="mi">10</span><span class="o">/</span><span class="mo">05</span> <span class="mi">23</span><span class="o">:</span><span class="mi">20</span><span class="o">:</span><span class="mi">37</span> <span class="no">INFO</span> <span class="n">model</span><span class="o">.</span><span class="na">HoodieTableMetadata</span><span class="o">:</span> <span class="nc">All</span> <span class="n">commits</span> <span class="o">:</span><span class="nc">HoodieCommits</span><span class="o">{</span><span class="n">commitList</span><span class="o">=[</span><span class="mi">20161002045850</span><span class="o">,</span> <span class="mi">20161002052915</span><span class="o">,</span> <span class="mi">20161002055918</span><span class="o">,</span> <span class="mi">20161002065317</span><span class="o">,</span> <span class="mi">20161002075932</span><span class="o">,</span> <span class="mi">20161002082904</span><span class="o">,</span> <span class="mi">20161002085949</span><span class="o">,</span> <span class="mi">20161002092936</span><span class="o">,</span> <span class="mi">20161002105903</span><span class="o">,</span> <span class="mi">20161002112938</span><span class="o">,</span> <span class="mi">20161002123005</span><span class="o">,</span> <span class="mi">20161002133002</span><span class="o">,</span> <span class="mi">20161002155940</span><span class="o">,</span> <span class="mi">20161002165924</span><span class="o">,</span> <span class="mi">20161002172907</span><span class="o">,</span> <span class="mi">20161002175905</span><span class="o">,</span> <span class="mi">20161002190016</span><span class="o">,</span> <span class="mi">20161002192954</span><span class="o">,</span> <span class="mi">20161002195925</span><span class="o">,</span> <span class="mi">20161002205935</span><span class="o">,</span> <span class="mi">20161002215928</span><span class="o">,</span> <span class="mi">20161002222938</span><span class="o">,</span> <span class="mi">20161002225915</span><span class="o">,</span> <span class="mi">20161002232906</span><span class="o">,</span> <span class="mi">20161003003028</span><span class="o">,</span> <span class="mi">20161003005958</span><span class="o">,</span> <span class="mi">20161003012936</span><span class="o">,</span> <span class="mi">20161003022924</span><span class="o">,</span> <span class="mi">20161003025859</span><span class="o">,</span> <span class="mi">20161003032854</span><span class="o">,</span> <span class="mi">20161003042930</span><span class="o">,</span> <span class="mi">20161003052911</span><span class="o">,</span> <span class="mi">20161003055907</span><span class="o">,</span> <span class="mi">20161003062946</span><span class="o">,</span> <span class="mi">20161003065927</span><span class="o">,</span> <span class="mi">20161003075924</span><span class="o">,</span> <span class="mi">20161003082926</span><span class="o">,</span> <span class="mi">20161003085925</span><span class="o">,</span> <span class="mi">20161003092909</span><span class="o">,</span> <span class="mi">20161003100010</span><span class="o">,</span> <span class="mi">20161003102913</span><span class="o">,</span> <span class="mi">20161003105850</span><span class="o">,</span> <span class="mi">20161003112910</span><span class="o">,</span> <span class="mi">20161003115851</span><span class="o">,</span> <span class="mi">20161003122929</span><span class="o">,</span> <span class="mi">20161003132931</span><span class="o">,</span> <span class="mi">20161003142952</span><span class="o">,</span> <span class="mi">20161003145856</span><span class="o">,</span> <span class="mi">20161003152953</span><span class="o">,</span> <span class="mi">20161003155912</span><span class="o">,</span> <span class="mi">20161003162922</span><span class="o">,</span> <span class="mi">20161003165852</span><span class="o">,</span> <span class="mi">20161003172923</span><span class="o">,</span> <span class="mi">20161003175923</span><span class="o">,</span> <span class="mi">20161003195931</span><span class="o">,</span> <span class="mi">20161003210118</span><span class="o">,</span> <span class="mi">20161003212919</span><span class="o">,</span> <span class="mi">20161003215928</span><span class="o">,</span> <span class="mi">20161003223000</span><span class="o">,</span> <span class="mi">20161003225858</span><span class="o">,</span> <span class="mi">20161004003042</span><span class="o">,</span> <span class="mi">20161004011345</span><span class="o">,</span> <span class="mi">20161004015235</span><span class="o">,</span> <span class="mi">20161004022234</span><span class="o">,</span> <span class="mi">20161004063001</span><span class="o">,</span> <span class="mi">20161004072402</span><span class="o">,</span> <span class="mi">20161004074436</span><span class="o">,</span> <span class="mi">20161004080224</span><span class="o">,</span> <span class="mi">20161004082928</span><span class="o">,</span> <span class="mi">20161004085857</span><span class="o">,</span> <span class="mi">20161004105922</span><span class="o">,</span> <span class="mi">20161004122927</span><span class="o">,</span> <span class="mi">20161004142929</span><span class="o">,</span> <span class="mi">20161004163026</span><span class="o">,</span> <span class="mi">20161004175925</span><span class="o">,</span> <span class="mi">20161004194411</span><span class="o">,</span> <span class="mi">20161004203202</span><span class="o">,</span> <span class="mi">20161004211210</span><span class="o">,</span> <span class="mi">20161004214115</span><span class="o">,</span> <span class="mi">20161004220437</span><span class="o">,</span> <span class="mi">20161004223020</span><span class="o">,</span> <span class="mi">20161004225321</span><span class="o">,</span> <span class="mi">20161004231431</span><span class="o">,</span> <span class="mi">20161004233643</span><span class="o">,</span> <span class="mi">20161005010227</span><span class="o">,</span> <span class="mi">20161005015927</span><span class="o">,</span> <span class="mi">20161005022911</span><span class="o">,</span> <span class="mi">20161005032958</span><span class="o">,</span> <span class="mi">20161005035939</span><span class="o">,</span> <span class="mi">20161005052904</span><span class="o">,</span> <span class="mi">20161005070028</span><span class="o">,</span> <span class="mi">20161005074429</span><span class="o">,</span> <span class="mi">20161005081318</span><span class="o">,</span> <span class="mi">20161005083455</span><span class="o">,</span> <span class="mi">20161005085921</span><span class="o">,</span> <span class="mi">20161005092901</span><span class="o">,</span> <span class="mi">20161005095936</span><span class="o">,</span> <span class="mi">20161005120158</span><span class="o">,</span> <span class="mi">20161005123418</span><span class="o">,</span> <span class="mi">20161005125911</span><span class="o">,</span> <span class="mi">20161005133107</span><span class="o">,</span> <span class="mi">20161005155908</span><span class="o">,</span> <span class="mi">20161005163517</span><span class="o">,</span> <span class="mi">20161005165855</span><span class="o">,</span> <span class="mi">20161005180127</span><span class="o">,</span> <span class="mi">20161005184226</span><span class="o">,</span> <span class="mi">20161005191051</span><span class="o">,</span> <span class="mi">20161005193234</span><span class="o">,</span> <span class="mi">20161005203112</span><span class="o">,</span> <span class="mi">20161005205920</span><span class="o">,</span> <span class="mi">20161005212949</span><span class="o">,</span> <span class="mi">20161005223034</span><span class="o">,</span> <span class="mi">20161005225920</span><span class="o">]}</span>
 <span class="nc">Metadata</span> <span class="k">for</span> <span class="n">table</span> <span class="n">trips</span> <span class="n">loaded</span>
-<span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span>
 </code></pre></div></div>
 
-<p>Once connected to the dataset, a lot of other commands become available. The shell has contextual autocomplete help (press TAB) and below is a list of all commands, few of which are reviewed in this section
+<p>Once connected to the table, a lot of other commands become available. The shell has contextual autocomplete help (press TAB) and below is a list of all commands, few of which are reviewed in this section
 are reviewed</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">help</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">help</span>
 <span class="o">*</span> <span class="o">!</span> <span class="o">-</span> <span class="nc">Allows</span> <span class="n">execution</span> <span class="n">of</span> <span class="n">operating</span> <span class="nf">system</span> <span class="o">(</span><span class="no">OS</span><span class="o">)</span> <span class="n">commands</span>
 <span class="o">*</span> <span class="c1">// - Inline comment markers (start of line only)</span>
 <span class="o">*</span> <span class="o">;</span> <span class="o">-</span> <span class="nc">Inline</span> <span class="n">comment</span> <span class="nf">markers</span> <span class="o">(</span><span class="n">start</span> <span class="n">of</span> <span class="n">line</span> <span class="n">only</span><span class="o">)</span>
-<span class="o">*</span> <span class="n">addpartitionmeta</span> <span class="o">-</span> <span class="nc">Add</span> <span class="n">partition</span> <span class="n">metadata</span> <span class="n">to</span> <span class="n">a</span> <span class="n">dataset</span><span class="o">,</span> <span class="k">if</span> <span class="n">not</span> <span class="n">present</span>
+<span class="o">*</span> <span class="n">addpartitionmeta</span> <span class="o">-</span> <span class="nc">Add</span> <span class="n">partition</span> <span class="n">metadata</span> <span class="n">to</span> <span class="n">a</span> <span class="n">table</span><span class="o">,</span> <span class="k">if</span> <span class="n">not</span> <span class="n">present</span>
 <span class="o">*</span> <span class="n">clear</span> <span class="o">-</span> <span class="nc">Clears</span> <span class="n">the</span> <span class="n">console</span>
 <span class="o">*</span> <span class="n">cls</span> <span class="o">-</span> <span class="nc">Clears</span> <span class="n">the</span> <span class="n">console</span>
 <span class="o">*</span> <span class="n">commit</span> <span class="n">rollback</span> <span class="o">-</span> <span class="nc">Rollback</span> <span class="n">a</span> <span class="n">commit</span>
-<span class="o">*</span> <span class="n">commits</span> <span class="n">compare</span> <span class="o">-</span> <span class="nc">Compare</span> <span class="n">commits</span> <span class="n">with</span> <span class="n">another</span> <span class="nc">Hoodie</span> <span class="n">dataset</span>
+<span class="o">*</span> <span class="n">commits</span> <span class="n">compare</span> <span class="o">-</span> <span class="nc">Compare</span> <span class="n">commits</span> <span class="n">with</span> <span class="n">another</span> <span class="nc">Hoodie</span> <span class="n">table</span>
 <span class="o">*</span> <span class="n">commit</span> <span class="n">showfiles</span> <span class="o">-</span> <span class="nc">Show</span> <span class="n">file</span> <span class="n">level</span> <span class="n">details</span> <span class="n">of</span> <span class="n">a</span> <span class="n">commit</span>
 <span class="o">*</span> <span class="n">commit</span> <span class="n">showpartitions</span> <span class="o">-</span> <span class="nc">Show</span> <span class="n">partition</span> <span class="n">level</span> <span class="n">details</span> <span class="n">of</span> <span class="n">a</span> <span class="n">commit</span>
 <span class="o">*</span> <span class="n">commits</span> <span class="n">refresh</span> <span class="o">-</span> <span class="nc">Refresh</span> <span class="n">the</span> <span class="n">commits</span>
 <span class="o">*</span> <span class="n">commits</span> <span class="n">show</span> <span class="o">-</span> <span class="nc">Show</span> <span class="n">the</span> <span class="n">commits</span>
-<span class="o">*</span> <span class="n">commits</span> <span class="n">sync</span> <span class="o">-</span> <span class="nc">Compare</span> <span class="n">commits</span> <span class="n">with</span> <span class="n">another</span> <span class="nc">Hoodie</span> <span class="n">dataset</span>
-<span class="o">*</span> <span class="n">connect</span> <span class="o">-</span> <span class="nc">Connect</span> <span class="n">to</span> <span class="n">a</span> <span class="n">hoodie</span> <span class="n">dataset</span>
+<span class="o">*</span> <span class="n">commits</span> <span class="n">sync</span> <span class="o">-</span> <span class="nc">Compare</span> <span class="n">commits</span> <span class="n">with</span> <span class="n">another</span> <span class="nc">Hoodie</span> <span class="n">table</span>
+<span class="o">*</span> <span class="n">connect</span> <span class="o">-</span> <span class="nc">Connect</span> <span class="n">to</span> <span class="n">a</span> <span class="n">hoodie</span> <span class="n">table</span>
 <span class="o">*</span> <span class="n">date</span> <span class="o">-</span> <span class="nc">Displays</span> <span class="n">the</span> <span class="n">local</span> <span class="n">date</span> <span class="n">and</span> <span class="n">time</span>
 <span class="o">*</span> <span class="n">exit</span> <span class="o">-</span> <span class="nc">Exits</span> <span class="n">the</span> <span class="n">shell</span>
 <span class="o">*</span> <span class="n">help</span> <span class="o">-</span> <span class="nc">List</span> <span class="n">all</span> <span class="n">commands</span> <span class="n">usage</span>
@@ -453,24 +621,23 @@ are reviewed</p>
 <span class="o">*</span> <span class="n">utils</span> <span class="n">loadClass</span> <span class="o">-</span> <span class="nc">Load</span> <span class="n">a</span> <span class="kd">class</span>
 <span class="err">*</span> <span class="nc">version</span> <span class="o">-</span> <span class="nc">Displays</span> <span class="n">shell</span> <span class="n">version</span>
 
-<span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span>
+<span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span>
 </code></pre></div></div>
 
 <h3 id="inspecting-commits">Inspecting Commits</h3>
 
-<p>The task of upserting or inserting a batch of incoming records is known as a <strong>commit</strong> in Hudi. A commit provides basic atomicity guarantees such that only commited data is available for querying.
+<p>The task of upserting or inserting a batch of incoming records is known as a <strong>commit</strong> in Hudi. A commit provides basic atomicity guarantees such that only committed data is available for querying.
 Each commit has a monotonically increasing string/number called the <strong>commit number</strong>. Typically, this is the time at which we started the commit.</p>
 
 <p>To view some basic information about the last 10 commits,</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">commits</span> <span class="n">show</span> <span class="o">--</span><span class="n">sortBy</span> <span class="s">"Total Bytes Written"</span> <span class="o">--</span><span class="n">desc</span> <span class="kc">true</span> <span class="o">--</span><span class="n">limit</span> <span class="mi">10</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">commits</span> <span class="n">show</span> <span class="o">--</span><span class="n">sortBy</span> <span class="s">"Total Bytes Written"</span> <span class="o">--</span><span class="n">desc</span> <span class="kc">true</span> <span class="o">--</span><span class="n">limit</span> <span class="mi">10</span>
     <span class="n">________________________________________________________________________________________________________________________________________________________________________</span>
     <span class="o">|</span> <span class="nc">CommitTime</span>    <span class="o">|</span> <span class="nc">Total</span> <span class="nc">Bytes</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Files</span> <span class="nc">Added</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Files</span> <span class="nc">Updated</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Partitions</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Records</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Update</span> <span class="nc">Records</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Errors</span><span class="o">|</span>
     <span class="o">|=======================================================================================================================================================================|</span>
     <span class="o">....</span>
     <span class="o">....</span>
     <span class="o">....</span>
-<span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span>
 </code></pre></div></div>
 
 <p>At the start of each write, Hudi also writes a .inflight commit to the .hoodie folder. You can use the timestamp there to estimate how long the commit has been inflight</p>
@@ -483,7 +650,7 @@ Each commit has a monotonically increasing string/number called the <strong>comm
 
 <p>To understand how the writes spread across specific partiions,</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">commit</span> <span class="n">showpartitions</span> <span class="o">--</span><span class="n">commit</span> <span class="mi">20161005165855</span> <span class="o">--</span><span class="n">sortBy</span> <span class="s">"Total Bytes Written"</span> <span class="o">--</span><span class="n">desc</span> <span class="kc">true</span> <span class="o">--</span><span class="n">limit</span> <span class="mi">10</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">commit</span> <span class="n">showpartitions</span> <span class="o">--</span><span class="n">commit</span> <span class="mi">20161005165855</span> <span class="o">--</span><span class="n">sortBy</span> <span class="s">"Total Bytes Written"</span> <span class="o">--</span><span class="n">desc</span> <span class="kc">true</span> <span class="o">--</span><span class="n">limit</span> <span class="mi">10</span>
     <span class="n">__________________________________________________________________________________________________________________________________________</span>
     <span class="o">|</span> <span class="nc">Partition</span> <span class="nc">Path</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Files</span> <span class="nc">Added</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Files</span> <span class="nc">Updated</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Records</span> <span class="nc">Inserted</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Records</span> <span class="nc">Updated</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Bytes</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Errors</span><span class="o">|</span>
     <span class="o">|=========================================================================================================================================|</span>
@@ -493,7 +660,7 @@ Each commit has a monotonically increasing string/number called the <strong>comm
 
 <p>If you need file level granularity , we can do the following</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">commit</span> <span class="n">showfiles</span> <span class="o">--</span><span class="n">commit</span> <span class="mi">20161005165855</span> <span class="o">--</span><span class="n">sortBy</span> <span class="s">"Partition Path"</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">commit</span> <span class="n">showfiles</span> <span class="o">--</span><span class="n">commit</span> <span class="mi">20161005165855</span> <span class="o">--</span><span class="n">sortBy</span> <span class="s">"Partition Path"</span>
     <span class="n">________________________________________________________________________________________________________________________________________________________</span>
     <span class="o">|</span> <span class="nc">Partition</span> <span class="nc">Path</span><span class="o">|</span> <span class="nc">File</span> <span class="no">ID</span>                             <span class="o">|</span> <span class="nc">Previous</span> <span class="nc">Commit</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Records</span> <span class="nc">Updated</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Records</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Bytes</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Errors</span><span class="o">|</span>
     <span class="o">|=======================================================================================================================================================|</span>
@@ -503,10 +670,10 @@ Each commit has a monotonically increasing string/number called the <strong>comm
 
 <h3 id="filesystem-view">FileSystem View</h3>
 
-<p>Hudi views each partition as a collection of file-groups with each file-group containing a list of file-slices in commit
-order (See Concepts). The below commands allow users to view the file-slices for a data-set.</p>
+<p>Hudi views each partition as a collection of file-groups with each file-group containing a list of file-slices in commit order (See <a href="">concepts</a>). 
+The below commands allow users to view the file-slices for a data-set.</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nl">hoodie:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">show</span> <span class="n">fsview</span> <span class="n">all</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">show</span> <span class="n">fsview</span> <span class="n">all</span>
  <span class="o">....</span>
   <span class="n">_______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________</span>
  <span class="o">|</span> <span class="nc">Partition</span> <span class="o">|</span> <span class="nc">FileId</span> <span class="o">|</span> <span class="nc">Base</span><span class="o">-</span><span class="nc">Instant</span> <span class="o">|</span> <span class="nc">Data</span><span class="o">-</span><span class="nc">File</span> <span class="o">|</span> <span class="nc">Data</span><span class="o">-</span><span class="nc">File</span> <span class="nc">Size</span><span class="o">|</span> <span class="nc">Num</span> <span class="nc">Delta</span> <span class="nc">Files</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Delta</span> <span class="nc">File</span> <span class="nc">Size</span><span class="o">|</span> <span class="nc">Delta</span> <span class="nc">Files</span> <span class="o">|</span>
@@ -515,21 +682,20 @@ order (See Concepts). The below commands allow users to view the file-slices for
 
 
 
- <span class="nl">hoodie:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">show</span> <span class="n">fsview</span> <span class="n">latest</span> <span class="o">--</span><span class="n">partitionPath</span> <span class="s">"2018/08/31"</span>
+<span class="nl">hudi:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">show</span> <span class="n">fsview</span> <span class="n">latest</span> <span class="o">--</span><span class="n">partitionPath</span> <span class="s">"2018/08/31"</span>
  <span class="o">......</span>
  <span class="n">__________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________</span>
  <span class="o">|</span> <span class="nc">Partition</span> <span class="o">|</span> <span class="nc">FileId</span> <span class="o">|</span> <span class="nc">Base</span><span class="o">-</span><span class="nc">Instant</span> <span class="o">|</span> <span class="nc">Data</span><span class="o">-</span><span class="nc">File</span> <span class="o">|</span> <span class="nc">Data</span><span class="o">-</span><span class="nc">File</span> <span class="nc">Size</span><span class="o">|</span> <span class="nc">Num</span> <span class="nc">Delta</span> <span class="nc">Files</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Delta</span> <span class="nc">Size</span><span class="o">|</span> <span class="nc">Delta</span> <span class="nc">Size</span> <span class="o">-</span> <span class="n">compaction</span> <span class="n">scheduled</span><span class="o">|</span> <span class="nc">Delta</span> <span class="nc">Size</span> <span class="o">-</span> <span class="n">compaction</span> <span class="n">unscheduled</span><span class="o">|</span> <span class="nc">Delta</span> <span class="nc">To</span> <span class="nc">Base</span> <span class="nc">Ratio</span> <span class="o">-</span> <span class="n">compaction</span> <span class="n">scheduled</span><span class="o">|</span> <span class="nc">Delta</span> <span class="nc">To</span> <span class="nc">Base</span> <span class="nc">Ratio</span> <span class="o">-</span> <span class="n">compaction</span> <span class="n">unscheduled</span><span class="o">|</span> <span class="nc">Delta</span> <span class="nc">Files</span> <span class="o">-</span> <span class="n">compaction</span> <span class="n">scheduled</span> <span class="o">|</span> <span class="nc">Delta</span> <span class="nc">Files</span> <span class="o">-</span> <span class="n">compaction</span> <span class="n">unscheduled</span><span class="o">|</span>
  <span class="o">|=================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================|</span>
  <span class="o">|</span> <span class="mi">2018</span><span class="o">/</span><span class="mi">08</span><span class="o">/</span><span class="mi">31</span><span class="o">|</span> <span class="mi">111415</span><span class="n">c3</span><span class="o">-</span><span class="n">f26d</span><span class="o">-</span><span class="mi">4639</span><span class="o">-</span><span class="mi">86</span><span class="n">c8</span><span class="o">-</span><span class="n">f9956f245ac3</span><span class="o">|</span> <span class="mi">20181002180759</span><span class="o">|</span> <span class="nl">hdfs:</span><span class="c1">//namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/111415c3-f26d-4639-86c8-f9956f245ac3_0_20181002180759.parquet| 432.5 KB | 1 | 20.8 KB | 20.8 KB | 0.0 B | 0.0 B | 0.0 B | [HoodieLogFile {hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/.111415c3-f26d-4639-86c8-f9956f245ac3_20181002180759.log.1}]| [] |</span>
 
- <span class="nl">hoodie:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span>
 </code></pre></div></div>
 
 <h3 id="statistics">Statistics</h3>
 
-<p>Since Hudi directly manages file sizes for DFS dataset, it might be good to get an overall picture</p>
+<p>Since Hudi directly manages file sizes for DFS table, it might be good to get an overall picture</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">stats</span> <span class="n">filesizes</span> <span class="o">--</span><span class="n">partitionPath</span> <span class="mi">2016</span><span class="o">/</span><span class="mi">09</span><span class="o">/</span><span class="mo">01</span> <span class="o">--</span><span class="n">sortBy</span> <span class="s">"95th"</span> <span class="o">--</span><span class="n">desc</span> <span class="kc">true</span> <span class="o">--</span><span class="n">limit</span> <span class="mi">10</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">stats</span> <span class="n">filesizes</span> <span class="o">--</span><span class="n">partitionPath</span> <span class="mi">2016</span><span class="o">/</span><span class="mi">09</span><span class="o">/</span><span class="mo">01</span> <span class="o">--</span><span class="n">sortBy</span> <span class="s">"95th"</span> <span class="o">--</span><span class="n">desc</span> <span class="kc">true</span> <span class="o">--</span><span class="n">limit</span> <span class="mi">10</span>
     <span class="n">________________________________________________________________________________________________</span>
     <span class="o">|</span> <span class="nc">CommitTime</span>    <span class="o">|</span> <span class="nc">Min</span>     <span class="o">|</span> <span class="mi">10</span><span class="n">th</span>    <span class="o">|</span> <span class="mi">50</span><span class="n">th</span>    <span class="o">|</span> <span class="n">avg</span>     <span class="o">|</span> <span class="mi">95</span><span class="n">th</span>    <span class="o">|</span> <span class="nc">Max</span>     <span class="o">|</span> <span class="nc">NumFiles</span><span class="o">|</span> <span class="nc">StdDev</span>  <span class="o">|</span>
     <span class="o">|===============================================================================================|</span>
@@ -540,7 +706,7 @@ order (See Concepts). The below commands allow users to view the file-slices for
 
 <p>In case of Hudi write taking much longer, it might be good to see the write amplification for any sudden increases</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">stats</span> <span class="n">wa</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">stats</span> <span class="n">wa</span>
     <span class="n">__________________________________________________________________________</span>
     <span class="o">|</span> <span class="nc">CommitTime</span>    <span class="o">|</span> <span class="nc">Total</span> <span class="nc">Upserted</span><span class="o">|</span> <span class="nc">Total</span> <span class="nc">Written</span><span class="o">|</span> <span class="nc">Write</span> <span class="nc">Amplifiation</span> <span class="nc">Factor</span><span class="o">|</span>
     <span class="o">|=========================================================================|</span>
@@ -558,7 +724,7 @@ This is a sequence file that contains a mapping from commitNumber =&gt; json wit
 <p>To get an idea of the lag between compaction and writer applications, use the below command to list down all
 pending compactions.</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">compactions</span> <span class="n">show</span> <span class="n">all</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">compactions</span> <span class="n">show</span> <span class="n">all</span>
      <span class="n">___________________________________________________________________</span>
     <span class="o">|</span> <span class="nc">Compaction</span> <span class="nc">Instant</span> <span class="nc">Time</span><span class="o">|</span> <span class="nc">State</span>    <span class="o">|</span> <span class="nc">Total</span> <span class="nc">FileIds</span> <span class="n">to</span> <span class="n">be</span> <span class="nc">Compacted</span><span class="o">|</span>
     <span class="o">|==================================================================|</span>
@@ -568,7 +734,7 @@ pending compactions.</p>
 
 <p>To inspect a specific compaction plan, use</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">show</span> <span class="o">--</span><span class="n">instant</span> <span class="o">&lt;</span><span class="no">INSTANT_1</span><span class="o">&gt;</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">show</span> <span class="o">--</span><span class="n">instant</span> <span class="o">&lt;</span><span class="no">INSTANT_1</span><span class="o">&gt;</span>
     <span class="n">_________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________</span>
     <span class="o">|</span> <span class="nc">Partition</span> <span class="nc">Path</span><span class="o">|</span> <span class="nc">File</span> <span class="nc">Id</span> <span class="o">|</span> <span class="nc">Base</span> <span class="nc">Instant</span>  <span class="o">|</span> <span class="nc">Data</span> <span class="nc">File</span> <span class="nc">Path</span>                                    <span class="o">|</span> <span class="nc">Total</span> <span class="nc">Delta</span> <span class="nc">Files</span><span class="o">|</span> <span class="n">getMetrics</span>                                                                                                                    <span class="o">|</span>
     <span class="o">|================================================================================================================================================================================================================================================</span>
@@ -579,9 +745,9 @@ pending compactions.</p>
 <p>To manually schedule or run a compaction, use the below command. This command uses spark launcher to perform compaction
 operations.</p>
 
-<p class="notice--info"><strong>NOTE:</strong> Make sure no other application is scheduling compaction for this dataset concurrently</p>
+<p class="notice--info"><strong>NOTE:</strong> Make sure no other application is scheduling compaction for this table concurrently</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">help</span> <span class="n">compaction</span> <span class="n">schedule</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">help</span> <span class="n">compaction</span> <span class="n">schedule</span>
 <span class="nl">Keyword:</span>                   <span class="n">compaction</span> <span class="n">schedule</span>
 <span class="nl">Description:</span>               <span class="nc">Schedule</span> <span class="nc">Compaction</span>
  <span class="nl">Keyword:</span>                  <span class="n">sparkMemory</span>
@@ -593,7 +759,7 @@ operations.</p>
 <span class="o">*</span> <span class="n">compaction</span> <span class="n">schedule</span> <span class="o">-</span> <span class="nc">Schedule</span> <span class="nc">Compaction</span>
 </code></pre></div></div>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">help</span> <span class="n">compaction</span> <span class="n">run</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">help</span> <span class="n">compaction</span> <span class="n">run</span>
 <span class="nl">Keyword:</span>                   <span class="n">compaction</span> <span class="n">run</span>
 <span class="nl">Description:</span>               <span class="nc">Run</span> <span class="nc">Compaction</span> <span class="k">for</span> <span class="n">given</span> <span class="n">instant</span> <span class="n">time</span>
  <span class="nl">Keyword:</span>                  <span class="n">tableName</span>
@@ -627,7 +793,7 @@ operations.</p>
    <span class="nc">Default</span> <span class="k">if</span> <span class="nl">unspecified:</span> <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
 
  <span class="nl">Keyword:</span>                  <span class="n">compactionInstant</span>
-   <span class="nl">Help:</span>                   <span class="nc">Base</span> <span class="n">path</span> <span class="k">for</span> <span class="n">the</span> <span class="n">target</span> <span class="n">hoodie</span> <span class="n">dataset</span>
+   <span class="nl">Help:</span>                   <span class="nc">Base</span> <span class="n">path</span> <span class="k">for</span> <span class="n">the</span> <span class="n">target</span> <span class="n">hoodie</span> <span class="n">table</span>
    <span class="nl">Mandatory:</span>              <span class="kc">true</span>
    <span class="nc">Default</span> <span class="k">if</span> <span class="nl">specified:</span>   <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
    <span class="nc">Default</span> <span class="k">if</span> <span class="nl">unspecified:</span> <span class="err">'</span><span class="n">__NULL__</span><span class="err">'</span>
@@ -639,7 +805,7 @@ operations.</p>
 
 <p>Validating a compaction plan : Check if all the files necessary for compactions are present and are valid</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">validate</span> <span class="o">--</span><span class="n">instant</span> <span class="mi">20181005222611</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">validate</span> <span class="o">--</span><span class="n">instant</span> <span class="mi">20181005222611</span>
 <span class="o">...</span>
 
    <span class="no">COMPACTION</span> <span class="no">PLAN</span> <span class="no">VALID</span>
@@ -651,7 +817,7 @@ operations.</p>
 
 
 
-<span class="nl">hoodie:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">validate</span> <span class="o">--</span><span class="n">instant</span> <span class="mi">20181005222601</span>
+<span class="nl">hudi:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">validate</span> <span class="o">--</span><span class="n">instant</span> <span class="mi">20181005222601</span>
 
    <span class="no">COMPACTION</span> <span class="no">PLAN</span> <span class="no">INVALID</span>
 
@@ -667,16 +833,16 @@ operations.</p>
 operation. Any new log-files that happened on this file after the compaction got scheduled will be safely renamed
 so that are preserved. Hudi provides the following CLI to support it</p>
 
-<h3 id="unscheduling-compaction">UnScheduling Compaction</h3>
+<h3 id="unscheduling-compaction">Unscheduling Compaction</h3>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">unscheduleFileId</span> <span class="o">--</span><span class="n">fileId</span> <span class="o">&lt;</span><span class="nc">FileUUID</span><span class="o">&gt;</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">unscheduleFileId</span> <span class="o">--</span><span class="n">fileId</span> <span class="o">&lt;</span><span class="nc">FileUUID</span><span class="o">&gt;</span>
 <span class="o">....</span>
 <span class="nc">No</span> <span class="nc">File</span> <span class="n">renames</span> <span class="n">needed</span> <span class="n">to</span> <span class="n">unschedule</span> <span class="n">file</span> <span class="n">from</span> <span class="n">pending</span> <span class="n">compaction</span><span class="o">.</span> <span class="nc">Operation</span> <span class="n">successful</span><span class="o">.</span>
 </code></pre></div></div>
 
 <p>In other cases, an entire compaction plan needs to be reverted. This is supported by the following CLI</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">unschedule</span> <span class="o">--</span><span class="n">compactionInstant</span> <span class="o">&lt;</span><span class="n">compactionInstant</span><span class="o">&gt;</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">trips</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">unschedule</span> <span class="o">--</span><span class="n">compactionInstant</span> <span class="o">&lt;</span><span class="n">compactionInstant</span><span class="o">&gt;</span>
 <span class="o">.....</span>
 <span class="nc">No</span> <span class="nc">File</span> <span class="n">renames</span> <span class="n">needed</span> <span class="n">to</span> <span class="n">unschedule</span> <span class="n">pending</span> <span class="n">compaction</span><span class="o">.</span> <span class="nc">Operation</span> <span class="n">successful</span><span class="o">.</span>
 </code></pre></div></div>
@@ -689,15 +855,15 @@ partial failures, the compaction operation could become inconsistent with the st
 command comes to the rescue, it will rearrange the file-slices so that there is no loss and the file-slices are
 consistent with the compaction plan</p>
 
-<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hoodie:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">repair</span> <span class="o">--</span><span class="n">instant</span> <span class="mi">20181005222611</span>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">hudi:</span><span class="n">stock_ticks_mor</span><span class="o">-&gt;</span><span class="n">compaction</span> <span class="n">repair</span> <span class="o">--</span><span class="n">instant</span> <span class="mi">20181005222611</span>
 <span class="o">......</span>
 <span class="nc">Compaction</span> <span class="n">successfully</span> <span class="n">repaired</span>
 <span class="o">.....</span>
 </code></pre></div></div>
 
-<h2 id="metrics">Metrics</h2>
+<h2 id="monitoring">Monitoring</h2>
 
-<p>Once the Hudi Client is configured with the right datasetname and environment for metrics, it produces the following graphite metrics, that aid in debugging hudi datasets</p>
+<p>Once the Hudi writer is configured with the right table and environment for metrics, it produces the following graphite metrics, that aid in debugging hudi tables</p>
 
 <ul>
   <li><strong>Commit Duration</strong> - This is amount of time it took to successfully commit a batch of records</li>
@@ -713,7 +879,7 @@ consistent with the compaction plan</p>
     <img class="docimage" src="/assets/images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 100%" />
 </figure>
 
-<h2 id="troubleshooting">Troubleshooting Failures</h2>
+<h2 id="troubleshooting">Troubleshooting</h2>
 
 <p>Section below generally aids in debugging Hudi failures. Off the bat, the following metadata is added to every record to help triage  issues easily using standard Hadoop SQL engines (Hive/Presto/Spark)</p>
 
@@ -724,7 +890,7 @@ consistent with the compaction plan</p>
   <li><strong>_hoodie_partition_path</strong> - Path from basePath that identifies the partition containing this record</li>
 </ul>
 
-<p class="notice--info"><strong>NOTE:</strong> As of now, Hudi assumes the application passes in the same deterministic partitionpath for a given recordKey. i.e the uniqueness of record key is only enforced within each partition.</p>
+<p>For performance related issues, please refer to the <a href="https://cwiki.apache.org/confluence/display/HUDI/Tuning+Guide">tuning guide</a></p>
 
 <h3 id="missing-records">Missing records</h3>
 
@@ -733,7 +899,7 @@ If you do find errors, then the record was not actually written by Hudi, but han
 
 <h3 id="duplicates">Duplicates</h3>
 
-<p>First of all, please confirm if you do indeed have duplicates <strong>AFTER</strong> ensuring the query is accessing the Hudi datasets <a href="sql_queries.html">properly</a> .</p>
+<p>First of all, please confirm if you do indeed have duplicates <strong>AFTER</strong> ensuring the query is accessing the Hudi table <a href="/docs/0.5.2-sql_queries.html">properly</a> .</p>
 
 <ul>
   <li>If confirmed, please use the metadata fields above, to identify the physical files &amp; partition files containing the records .</li>
