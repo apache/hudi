@@ -35,7 +35,7 @@ import java.net.URI;
  * any write apis.
  * <p>
  * - Reading an inlined file at a given offset, length, read it out as if it were an independent file of that length
- * - Inlined path is of the form "inlinefs:///path/to/outer/file/<outer_file_scheme>/inline_file/?start_offset=<start_offset>&length=<length>
+ * - Inlined path is of the form "inlinefs:///path/to/outer/file/<outer_file_scheme>/?start_offset=<start_offset>&length=<length>
  * <p>
  * TODO: The reader/writer may try to use relative paths based on the inlinepath and it may not work. Need to handle
  * this gracefully eg. the parquet summary metadata reading. TODO: If this shows promise, also support directly writing
