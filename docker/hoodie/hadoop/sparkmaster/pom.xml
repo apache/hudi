@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi-hadoop-docker</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.5.2-incubating-rc2</version>
+    <version>0.5.2-incubating</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <packaging>pom</packaging>
