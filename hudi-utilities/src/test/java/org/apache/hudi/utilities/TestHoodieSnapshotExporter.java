@@ -47,8 +47,10 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.runners.Enclosed;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
@@ -60,8 +62,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -167,6 +167,9 @@ public class TestHoodieSnapshotExporter {
 
     private HoodieSnapshotExporter.Config cfg;
 
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
+
     @Before
     public void setUp() throws Exception {
       super.setUp();
@@ -182,16 +185,9 @@ public class TestHoodieSnapshotExporter {
       dfs.mkdirs(new Path(targetPath));
 
       // export
-      Throwable t = null;
-      try {
-        new HoodieSnapshotExporter().export(jsc, cfg);
-      } catch (Exception e) {
-        t = e;
-      } finally {
-        assertNotNull(t);
-        assertTrue(t instanceof HoodieSnapshotExporterException);
-        assertEquals("The target output path already exists.", t.getMessage());
-      }
+      exceptionRule.expect(HoodieSnapshotExporterException.class);
+      exceptionRule.expectMessage("The target output path already exists.");
+      new HoodieSnapshotExporter().export(jsc, cfg);
     }
 
     @Test
@@ -206,19 +202,9 @@ public class TestHoodieSnapshotExporter {
       }
 
       // export
-      Throwable t = null;
-      try {
-        new HoodieSnapshotExporter().export(jsc, cfg);
-      } catch (Exception e) {
-        t = e;
-      } finally {
-        assertNotNull(t);
-        assertTrue(t instanceof HoodieSnapshotExporterException);
-        assertEquals("No commits present. Nothing to snapshot.", t.getMessage());
-      }
-
-      // Check results
-      assertFalse(dfs.exists(new Path(targetPath)));
+      exceptionRule.expect(HoodieSnapshotExporterException.class);
+      exceptionRule.expectMessage("No commits present. Nothing to snapshot.");
+      new HoodieSnapshotExporter().export(jsc, cfg);
     }
 
     @Test
@@ -227,19 +213,9 @@ public class TestHoodieSnapshotExporter {
       dfs.delete(new Path(sourcePath + "/" + PARTITION_PATH), true);
 
       // export
-      Throwable t = null;
-      try {
-        new HoodieSnapshotExporter().export(jsc, cfg);
-      } catch (Exception e) {
-        t = e;
-      } finally {
-        assertNotNull(t);
-        assertTrue(t instanceof HoodieSnapshotExporterException);
-        assertEquals("The source dataset has 0 partition to snapshot.", t.getMessage());
-      }
-
-      // Check results
-      assertFalse(dfs.exists(new Path(targetPath)));
+      exceptionRule.expect(HoodieSnapshotExporterException.class);
+      exceptionRule.expectMessage("The source dataset has 0 partition to snapshot.");
+      new HoodieSnapshotExporter().export(jsc, cfg);
     }
   }
 
