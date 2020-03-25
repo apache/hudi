@@ -23,7 +23,7 @@ offering, providing means for AWS users to perform record-level updates/deletes 
 
 ### Yields.io
 
-Yields.io is the first FinTech platform that uses AI for automated model validation and real-time monitoring on an enterprise-wide scale. Their data lake is managed by Hudi. They are also actively building their infrastructure for incremental, cross language/platform machine learning using Hudi.
+Yields.io is the first FinTech platform that uses AI for automated model validation and real-time monitoring on an enterprise-wide scale. Their [data lake](https://www.yields.io/Blog/Apache-Hudi-at-Yields) is managed by Hudi. They are also actively building their infrastructure for incremental, cross language/platform machine learning using Hudi.
 
 ### Yotpo
 
