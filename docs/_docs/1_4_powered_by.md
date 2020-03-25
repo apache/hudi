@@ -63,6 +63,10 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
        
 10. ["Building Robust CDC Pipeline With Apache Hudi And Debezium"](https://www.slideshare.net/SyedKather/building-robust-cdc-pipeline-with-apache-hudi-and-debezium) - By Pratyaksh, Purushotham, Syed and Shaik December 2019, Hadoop Summit Bangalore, India
 
+11. ["Using Apache Hudi to build the next-generation data lake and its application in medical big data"](https://drive.google.com/open?id=1dmH2kWJF69PNdifPp37QBgjivOHaSLDn) - By JingHuang & Leesf March 2020, Apache Hudi & Apache Kylin Online Meetup, China
+
+12. ["Building a near real-time, high-performance data warehouse based on Apache Hudi and Apache Kylin"](https://drive.google.com/open?id=1Pk_WdFxfEZxMMfAOn0R8-m3ALkcN6G9e) - By ShaoFeng Shi March 2020, Apache Hudi & Apache Kylin Online Meetup, China
+
 ## Articles
 
 1. ["The Case for incremental processing on Hadoop"](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop) - O'reilly Ideas article by Vinoth Chandar
