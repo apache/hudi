@@ -499,7 +499,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   /**
-   * Helper class for an insert bucket along with the weight [0.0, 0.1] that defines the amount of incoming inserts that
+   * Helper class for an insert bucket along with the weight [0.0, 1.0] that defines the amount of incoming inserts that
    * should be allocated to the bucket.
    */
   class InsertBucket implements Serializable {
