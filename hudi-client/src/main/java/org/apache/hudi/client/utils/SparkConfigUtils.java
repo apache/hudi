@@ -31,9 +31,9 @@ import static org.apache.hudi.config.HoodieMemoryConfig.DEFAULT_MIN_MEMORY_FOR_S
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL;
 
 /**
- * Config utils.
+ * Spark config utils.
  */
-public class ConfigUtils {
+public class SparkConfigUtils {
 
   /**
    * Dynamic calculation of max memory to use for for spillable map. user.available.memory = spark.executor.memory *
@@ -41,7 +41,7 @@ public class ConfigUtils {
    * the spark.executor.memory or the spark.memory.fraction is changed, the memory used for spillable map changes
    * accordingly
    */
-  public static long getMaxMemoryAllowedForMerge(Properties properties, String maxMemoryFraction) {
+  public static long getMaxMemoryAllowedForMerge(String maxMemoryFraction) {
     final String SPARK_EXECUTOR_MEMORY_PROP = "spark.executor.memory";
     final String SPARK_EXECUTOR_MEMORY_FRACTION_PROP = "spark.memory.fraction";
     // This is hard-coded in spark code {@link

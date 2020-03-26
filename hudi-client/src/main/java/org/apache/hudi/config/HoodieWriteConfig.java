@@ -556,7 +556,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isMemoryConfigSet = false;
     private boolean isViewConfigSet = false;
     private boolean isConsistencyGuardSet = false;
-    private boolean isEngineConfigSet = false;
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {

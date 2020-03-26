@@ -18,7 +18,7 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.client.utils.ConfigUtils;
+import org.apache.hudi.client.utils.SparkConfigUtils;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -112,20 +112,20 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    private long getMaxMemoryAllowedForMerge(String maxMemoryFraction) {
-      return ConfigUtils.getMaxMemoryAllowedForMerge(props, maxMemoryFraction);
-    }
-
     public HoodieMemoryConfig build() {
       HoodieMemoryConfig config = new HoodieMemoryConfig(props);
       setDefaultOnCondition(props, !props.containsKey(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP),
           MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP, DEFAULT_MAX_MEMORY_FRACTION_FOR_COMPACTION);
       setDefaultOnCondition(props, !props.containsKey(MAX_MEMORY_FRACTION_FOR_MERGE_PROP),
           MAX_MEMORY_FRACTION_FOR_MERGE_PROP, DEFAULT_MAX_MEMORY_FRACTION_FOR_MERGE);
+      long maxMemoryAllowedForMerge =
+          SparkConfigUtils.getMaxMemoryAllowedForMerge(props.getProperty(MAX_MEMORY_FRACTION_FOR_MERGE_PROP));
       setDefaultOnCondition(props, !props.containsKey(MAX_MEMORY_FOR_MERGE_PROP), MAX_MEMORY_FOR_MERGE_PROP,
-          String.valueOf(getMaxMemoryAllowedForMerge(props.getProperty(MAX_MEMORY_FRACTION_FOR_MERGE_PROP))));
+          String.valueOf(maxMemoryAllowedForMerge));
+      long maxMemoryAllowedForCompaction =
+          SparkConfigUtils.getMaxMemoryAllowedForMerge(props.getProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP));
       setDefaultOnCondition(props, !props.containsKey(MAX_MEMORY_FOR_COMPACTION_PROP), MAX_MEMORY_FOR_COMPACTION_PROP,
-          String.valueOf(getMaxMemoryAllowedForMerge(props.getProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP))));
+          String.valueOf(maxMemoryAllowedForCompaction));
       setDefaultOnCondition(props, !props.containsKey(MAX_DFS_STREAM_BUFFER_SIZE_PROP), MAX_DFS_STREAM_BUFFER_SIZE_PROP,
           String.valueOf(DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE));
       setDefaultOnCondition(props, !props.containsKey(SPILLABLE_MAP_BASE_PATH_PROP), SPILLABLE_MAP_BASE_PATH_PROP,

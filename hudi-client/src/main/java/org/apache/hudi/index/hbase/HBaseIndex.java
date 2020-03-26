@@ -19,7 +19,7 @@
 package org.apache.hudi.index.hbase;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.ConfigUtils;
+import org.apache.hudi.client.utils.SparkConfigUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -59,7 +59,6 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
-import org.apache.spark.storage.StorageLevel;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -350,8 +349,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     LOG.info("multiPutBatchSize: before hbase puts" + multiPutBatchSize);
     JavaRDD<WriteStatus> writeStatusJavaRDD = writeStatusRDD.mapPartitionsWithIndex(updateLocationFunction(), true);
     // caching the index updated status RDD
-    StorageLevel storageLevel = ConfigUtils.getWriteStatusStorageLevel(config.getProps());
-    writeStatusJavaRDD = writeStatusJavaRDD.persist(storageLevel);
+    writeStatusJavaRDD = writeStatusJavaRDD.persist(SparkConfigUtils.getWriteStatusStorageLevel(config.getProps()));
     return writeStatusJavaRDD;
   }
 
