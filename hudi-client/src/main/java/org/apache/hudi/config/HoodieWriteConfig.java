@@ -494,22 +494,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   /**
    * memory configs.
    */
-  public Double getMaxMemoryFractionPerPartitionMerge() {
-    return Double.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE_PROP));
-  }
-
-  public Double getMaxMemoryFractionPerCompaction() {
-    return Double.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP));
-  }
-
-  public Long getMaxMemoryPerPartitionMerge() {
-    return Long.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE_PROP));
-  }
-
-  public Long getMaxMemoryPerCompaction() {
-    return Long.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION_PROP));
-  }
-
   public int getMaxDFSStreamBufferSize() {
     return Integer.parseInt(props.getProperty(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP));
   }
