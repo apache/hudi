@@ -30,7 +30,7 @@ temp_query --sql "select Instant, NumInserts, NumWrites from satishkotha_debug w
 ```
 
 ### Raw Release Notes
-  The raw release notes are available [here](https://issues.apache.org/jira/projects/HUDI/versions/12346606#release-report-tab-body)
+  The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346606)
 
 ## [Release 0.5.1-incubating](https://github.com/apache/incubator-hudi/releases/tag/release-0.5.1-incubating) ([docs](/docs/0.5.1-quick-start-guide.html))
 
