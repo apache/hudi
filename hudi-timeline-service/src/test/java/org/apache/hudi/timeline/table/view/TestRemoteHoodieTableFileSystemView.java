@@ -41,6 +41,10 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
   private TimelineService server;
   private RemoteHoodieTableFileSystemView view;
 
+  public TestRemoteHoodieTableFileSystemView(Boolean testBootstrap) {
+    super(testBootstrap);
+  }
+
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
     FileSystemViewStorageConfig sConf =
         FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();

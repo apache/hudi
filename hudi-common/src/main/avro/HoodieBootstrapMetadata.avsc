@@ -21,6 +21,11 @@
    "name":"BootstrapPartitionMetadata",
    "fields":[
       {
+         "name":"version",
+         "type":["int", "null"],
+         "default": 1
+      },
+      {
         "name":"sourcePartitionPath",
         "type":["null", "string"],
         "default" : null
@@ -34,24 +39,9 @@
         "name":"hudiFileIdToSourceFile",
         "type":["null", {
            "type":"map",
-           "values":{
-              "name":"SourceFileInfo",
-              "type":"record",
-              "fields":[
-                {
-                  "name":"fileName",
-                  "type":["null", "string"],
-                  "default" : null
-                }
-              ]
-             }
+           "values": "HoodieFileStatus"
          }],
          "default": null
-      },
-      {
-         "name":"version",
-         "type":["int", "null"],
-         "default": 1
       }
    ]
 }

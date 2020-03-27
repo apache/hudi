@@ -19,6 +19,8 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatabilityException;
 
@@ -63,7 +65,9 @@ public class HoodieAvroUtils {
   private static final Schema METADATA_FIELD_SCHEMA =
       Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)));
 
-  private static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
+  public static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
+
+  public static final Integer NUM_HUDI_METADATA_COLS = 5;
 
   /**
    * Convert a given avro record to bytes.
@@ -239,5 +243,28 @@ public class HoodieAvroUtils {
     } catch (IOException e) {
       throw new HoodieIOException("IOException while decompressing text", e);
     }
+  }
+
+  /**
+   * Generate a reader schema off the provided writeSchema, to just project out the provided columns.
+   */
+  public static Schema generateProjectionSchema(Schema originalSchema, List<String> fieldNames) {
+    Map<String, Field> schemaFieldsMap = originalSchema.getFields().stream()
+        .map(r -> Pair.of(r.name().toLowerCase(), r)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+    List<Schema.Field> projectedFields = new ArrayList<>();
+    for (String fn : fieldNames) {
+      Schema.Field field = schemaFieldsMap.get(fn.toLowerCase());
+      if (field == null) {
+        throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
+            + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
+      } else {
+        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
+      }
+    }
+
+    Schema projectedSchema = Schema.createRecord(originalSchema.getName(), originalSchema.getDoc(),
+        originalSchema.getNamespace(), originalSchema.isError());
+    projectedSchema.setFields(projectedFields);
+    return projectedSchema;
   }
 }

@@ -71,6 +71,8 @@
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
+                  <include>org.apache.hbase:hbase-common</include>
+                  <include>org.apache.hbase:hbase-server</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -86,6 +88,10 @@
                 <relocation>
                   <pattern>com.esotericsoftware.minlog.</pattern>
                   <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern> org.apache.hadoop.hbase.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>

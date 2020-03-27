@@ -25,6 +25,10 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
  */
 public class TestSpillableMapBasedFileSystemView extends TestHoodieTableFileSystemView {
 
+  public TestSpillableMapBasedFileSystemView(Boolean testBootstrap) {
+    super(testBootstrap);
+  }
+
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
     return new SpillableMapBasedFileSystemView(metaClient, timeline, FileSystemViewStorageConfig.newBuilder()
         // pure disk base View

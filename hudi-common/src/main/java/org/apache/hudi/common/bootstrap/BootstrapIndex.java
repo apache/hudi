@@ -43,7 +43,6 @@ import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hudi.avro.model.BootstrapIndexInfo;
 import org.apache.hudi.avro.model.BootstrapPartitionMetadata;
 import org.apache.hudi.avro.model.BootstrapSourceFilePartitionInfo;
-import org.apache.hudi.avro.model.SourceFileInfo;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapSourceFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -241,7 +240,7 @@ public class BootstrapIndex implements Serializable, AutoCloseable {
               TimelineMetadataUtils.deserializeAvroMetadata(valBytes, BootstrapPartitionMetadata.class);
           return metadata.getHudiFileIdToSourceFile().entrySet().stream()
               .map(e -> new BootstrapSourceFileMapping(sourceBasePath, metadata.getSourcePartitionPath(), partition,
-                  e.getValue().getFileName(), e.getKey())).collect(Collectors.toList());
+                  e.getValue(), e.getKey())).collect(Collectors.toList());
         } else {
           LOG.info("No value found for partition key (" + partition + ")");
           return new ArrayList<>();
@@ -251,6 +250,10 @@ public class BootstrapIndex implements Serializable, AutoCloseable {
       }
     }
     return new ArrayList<>();
+  }
+
+  public String getSourceBasePath() {
+    return sourceBasePath;
   }
 
   /**
@@ -275,7 +278,7 @@ public class BootstrapIndex implements Serializable, AutoCloseable {
             BootstrapSourceFilePartitionInfo fileInfo = TimelineMetadataUtils.deserializeAvroMetadata(valBytes,
                 BootstrapSourceFilePartitionInfo.class);
             BootstrapSourceFileMapping mapping = new BootstrapSourceFileMapping(sourceBasePath,
-                fileInfo.getSourcePartitionPath(), fileInfo.getHudiPartitionPath(), fileInfo.getSourceFileName(),
+                fileInfo.getSourcePartitionPath(), fileInfo.getHudiPartitionPath(), fileInfo.getSourceFileStatus(),
                 fileGroupId.getFileId());
             result.put(fileGroupId, mapping);
           }
@@ -386,7 +389,7 @@ public class BootstrapIndex implements Serializable, AutoCloseable {
         bootstrapPartitionMetadata.setHudiPartitionPath(hudiPartitionPath);
         bootstrapPartitionMetadata.setHudiFileIdToSourceFile(
             bootstrapSourceFileMappings.stream().map(m -> Pair.of(m.getHudiFileId(),
-                new SourceFileInfo(m.getSourceFileName()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
+                m.getSourceFileStatus())).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
         Option<byte[]> bytes = TimelineMetadataUtils.serializeAvroMetadata(bootstrapPartitionMetadata,
             BootstrapPartitionMetadata.class);
         if (bytes.isPresent()) {
@@ -410,7 +413,7 @@ public class BootstrapIndex implements Serializable, AutoCloseable {
         BootstrapSourceFilePartitionInfo srcFilePartitionInfo = new BootstrapSourceFilePartitionInfo();
         srcFilePartitionInfo.setHudiPartitionPath(mapping.getHudiPartitionPath());
         srcFilePartitionInfo.setSourcePartitionPath(mapping.getSourcePartitionPath());
-        srcFilePartitionInfo.setSourceFileName(mapping.getSourceFileName());
+        srcFilePartitionInfo.setSourceFileStatus(mapping.getSourceFileStatus());
         KeyValue kv = new KeyValue(getFileGroupKey(mapping.getFileGroupId()).getBytes(), new byte[0], new byte[0],
             HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put,
             TimelineMetadataUtils.serializeAvroMetadata(srcFilePartitionInfo,

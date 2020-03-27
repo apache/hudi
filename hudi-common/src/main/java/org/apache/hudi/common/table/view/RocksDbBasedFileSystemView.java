@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.ExternalBaseFileMapping;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -265,6 +266,62 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   Stream<HoodieBaseFile> fetchAllBaseFiles(String partitionPath) {
     return rocksDB.<HoodieBaseFile>prefixSearch(schemaHelper.getColFamilyForView(),
         schemaHelper.getPrefixForDataFileViewByPartition(partitionPath)).map(Pair::getValue);
+  }
+
+  @Override
+  protected boolean isExternalBaseFilePresentForFileId(HoodieFileGroupId fgId) {
+    return getExternalBaseFile(fgId).isPresent();
+  }
+
+  @Override
+  void resetExternalBaseFileMapping(Stream<ExternalBaseFileMapping> externalBaseFileStream) {
+    rocksDB.writeBatch(batch -> {
+      externalBaseFileStream.forEach(externalBaseFile -> {
+        rocksDB.putInBatch(batch, schemaHelper.getColFamilyForExternalBaseFile(),
+            schemaHelper.getKeyForExternalBaseFile(externalBaseFile.getFileGroupId()), externalBaseFile);
+      });
+      LOG.info("Initializing external data file mapping. Count=" + batch.count());
+    });
+  }
+
+  @Override
+  void addExternalBaseFileMapping(Stream<ExternalBaseFileMapping> externalBaseFileStream) {
+    rocksDB.writeBatch(batch -> {
+      externalBaseFileStream.forEach(externalBaseFile -> {
+        ValidationUtils.checkArgument(!isExternalBaseFilePresentForFileId(externalBaseFile.getFileGroupId()),
+            "Duplicate FileGroupId found in external data file. FgId :" + externalBaseFile.getFileGroupId());
+        rocksDB.putInBatch(batch, schemaHelper.getColFamilyForExternalBaseFile(),
+            schemaHelper.getKeyForExternalBaseFile(externalBaseFile.getFileGroupId()), externalBaseFile);
+      });
+    });
+  }
+
+  @Override
+  void removeExternalBaseFileMapping(Stream<ExternalBaseFileMapping> externalBaseFileStream) {
+    rocksDB.writeBatch(batch -> {
+      externalBaseFileStream.forEach(externalBaseFile -> {
+        ValidationUtils.checkArgument(
+            getExternalBaseFile(externalBaseFile.getFileGroupId()) != null,
+            "Trying to remove a FileGroupId which is not found in external data file mapping. FgId :"
+                + externalBaseFile.getFileGroupId());
+        rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForExternalBaseFile(),
+            schemaHelper.getKeyForExternalBaseFile(externalBaseFile.getFileGroupId()));
+      });
+    });
+  }
+
+  @Override
+  protected Option<ExternalBaseFileMapping> getExternalBaseFile(HoodieFileGroupId fileGroupId) {
+    String lookupKey = schemaHelper.getKeyForExternalBaseFile(fileGroupId);
+    ExternalBaseFileMapping externalBaseFile =
+        rocksDB.get(schemaHelper.getColFamilyForExternalBaseFile(), lookupKey);
+    return Option.ofNullable(externalBaseFile);
+  }
+
+  @Override
+  Stream<ExternalBaseFileMapping> fetchExternalBaseFiles() {
+    return rocksDB.<ExternalBaseFileMapping>prefixSearch(schemaHelper.getColFamilyForExternalBaseFile(), "")
+        .map(Pair::getValue);
   }
 
   @Override

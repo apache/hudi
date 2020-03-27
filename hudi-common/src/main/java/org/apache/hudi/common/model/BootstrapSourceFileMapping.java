@@ -20,21 +20,22 @@ package org.apache.hudi.common.model;
 
 import java.io.Serializable;
 import java.util.Objects;
+import org.apache.hudi.avro.model.HoodieFileStatus;
 
 public class BootstrapSourceFileMapping implements Serializable, Comparable<BootstrapSourceFileMapping> {
 
   private final String sourceBasePath;
   private final String sourcePartitionPath;
   private final String hudiPartitionPath;
-  private final String sourceFileName;
+  private final HoodieFileStatus sourceFileStatus;
   private final String hudiFileId;
 
   public BootstrapSourceFileMapping(String sourceBasePath, String sourcePartitionPath,
-      String hudiPartitionPath, String sourceFileName, String hudiFileId) {
+      String hudiPartitionPath, HoodieFileStatus sourceFileStatus, String hudiFileId) {
     this.sourceBasePath = sourceBasePath;
     this.sourcePartitionPath = sourcePartitionPath;
     this.hudiPartitionPath = hudiPartitionPath;
-    this.sourceFileName = sourceFileName;
+    this.sourceFileStatus = sourceFileStatus;
     this.hudiFileId = hudiFileId;
   }
 
@@ -44,7 +45,7 @@ public class BootstrapSourceFileMapping implements Serializable, Comparable<Boot
         + "sourceBasePath='" + sourceBasePath + '\''
         + ", sourcePartitionPath='" + sourcePartitionPath + '\''
         + ", hudiPartitionPath='" + hudiPartitionPath + '\''
-        + ", sourceFileName='" + sourceFileName + '\''
+        + ", sourceFileStatus='" + sourceFileStatus + '\''
         + ", hudiFileId='" + hudiFileId + '\''
         + '}';
   }
@@ -61,13 +62,13 @@ public class BootstrapSourceFileMapping implements Serializable, Comparable<Boot
     return Objects.equals(sourceBasePath, mapping.sourceBasePath)
         && Objects.equals(sourcePartitionPath, mapping.sourcePartitionPath)
         && Objects.equals(hudiPartitionPath, mapping.hudiPartitionPath)
-        && Objects.equals(sourceFileName, mapping.sourceFileName)
+        && Objects.equals(sourceFileStatus, mapping.sourceFileStatus)
         && Objects.equals(hudiFileId, mapping.hudiFileId);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(sourceBasePath, sourcePartitionPath, hudiPartitionPath, sourceFileName, hudiFileId);
+    return Objects.hash(sourceBasePath, sourcePartitionPath, hudiPartitionPath, sourceFileStatus, hudiFileId);
   }
 
   public String getSourceBasePath() {
@@ -82,8 +83,8 @@ public class BootstrapSourceFileMapping implements Serializable, Comparable<Boot
     return hudiPartitionPath;
   }
 
-  public String getSourceFileName() {
-    return sourceFileName;
+  public HoodieFileStatus getSourceFileStatus() {
+    return sourceFileStatus;
   }
 
   public String getHudiFileId() {

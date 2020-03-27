@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,6 +32,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.hadoop.fs.permission.FsAction;
+import org.apache.hudi.avro.model.HoodieFSPermission;
+import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.BootstrapSourceFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -139,7 +144,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
           Assert.assertEquals(x.getHudiFileId(), res.getHudiFileId());
           Assert.assertEquals(x.getHudiPartitionPath(), res.getHudiPartitionPath());
           Assert.assertEquals(SOURCE_BASE_PATH, res.getSourceBasePath());
-          Assert.assertEquals(x.getSourceFileName(), res.getSourceFileName());
+          Assert.assertEquals(x.getSourceFileStatus(), res.getSourceFileStatus());
           Assert.assertEquals(x.getSourcePartitionPath(), res.getSourcePartitionPath());
         });
       });
@@ -152,7 +157,19 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
         String hudiFileId = UUID.randomUUID().toString();
         System.out.println(" hudiFileId :" + hudiFileId + ", partition :" + partition);
         String sourceFileName = idx + ".parquet";
-        return new BootstrapSourceFileMapping(SOURCE_BASE_PATH, partition, partition, sourceFileName, hudiFileId);
+        HoodieFileStatus sourceFileStatus = HoodieFileStatus.newBuilder()
+            .setPath(HoodiePath.newBuilder().setUri(SOURCE_BASE_PATH + "/" + partition + "/" + sourceFileName).build())
+            .setLength(256 * 1024 * 1024L)
+            .setAccessTime(new Date().getTime())
+            .setModificationTime(new Date().getTime() + 99999)
+            .setBlockReplication(2)
+            .setOwner("hudi")
+            .setGroup("hudi")
+            .setBlockSize(128 * 1024 * 1024L)
+            .setPermission(HoodieFSPermission.newBuilder().setUserAction(FsAction.ALL.name())
+                .setGroupAction(FsAction.READ.name()).setOtherAction(FsAction.NONE.name()).setStickyBit(true).build())
+            .build();
+        return new BootstrapSourceFileMapping(SOURCE_BASE_PATH, partition, partition, sourceFileStatus, hudiFileId);
       }).collect(Collectors.toList()));
     }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }

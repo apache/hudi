@@ -18,7 +18,7 @@
 {
    "namespace":"org.apache.hudi.avro.model",
    "type":"record",
-   "name":"BootstrapSourceFilePartitionInfo",
+   "name":"HoodieFileStatus",
    "fields":[
       {
         "name":"version",
@@ -26,18 +26,58 @@
         "default": 1
       },
       {
-        "name":"sourcePartitionPath",
+        "name":"path",
+        "type":["null", "HoodiePath"],
+        "default" : null
+      },
+      {
+        "name":"length",
+        "type":["null", "long"],
+        "default" : null
+      },
+      {
+        "name":"isDir",
+        "type":["null", "boolean"],
+        "default" : null
+      },
+      {
+        "name":"blockReplication",
+        "type":["null", "int"],
+        "default" : null
+      },
+      {
+        "name":"blockSize",
+        "type":["null", "long"],
+        "default" : null
+      },
+      {
+        "name":"modificationTime",
+        "type":["null", "long"],
+        "default" : null
+      },
+      {
+        "name":"accessTime",
+        "type":["null", "long"],
+        "default" : null
+      },
+      {
+        "name":"permission",
+        "type":["null", "HoodieFSPermission"],
+        "default" : null
+      },
+      {
+        "name":"owner",
         "type":["null", "string"],
         "default" : null
       },
       {
-        "name":"sourceFileStatus",
-        "type":["null", "HoodieFileStatus"],
+        "name":"group",
+        "type":["null", "string"],
         "default" : null
       },
       {
-        "name":"hudiPartitionPath",
-        "type":["null", "string"],
+        "name":"symlink",
+        "type":["null", "HoodiePath"],
         "default" : null
       }
    ]

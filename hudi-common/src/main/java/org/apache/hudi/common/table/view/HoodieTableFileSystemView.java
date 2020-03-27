@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.ExternalBaseFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -59,6 +60,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction;
 
   /**
+   * PartitionPath + File-Id to external Data File (Index Only bootstrapped).
+   */
+  protected Map<HoodieFileGroupId, ExternalBaseFileMapping> fgIdToExternalBaseFile;
+
+  /**
    * Flag to determine if closed.
    */
   private boolean closed = false;
@@ -93,6 +99,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected void resetViewState() {
     this.fgIdToPendingCompaction = null;
     this.partitionToFileGroupsMap = null;
+    this.fgIdToExternalBaseFile = null;
   }
 
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
@@ -102,6 +109,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fileIdToPendingCompaction) {
     return fileIdToPendingCompaction;
+  }
+
+  protected Map<HoodieFileGroupId, ExternalBaseFileMapping> createFileIdToExternalBaseFileMap(
+      Map<HoodieFileGroupId, ExternalBaseFileMapping> fileGroupIdExternalBaseFileMap) {
+    return fileGroupIdExternalBaseFileMap;
   }
 
   /**
@@ -180,6 +192,48 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
+  protected boolean isExternalBaseFilePresentForFileId(HoodieFileGroupId fgId) {
+    return fgIdToExternalBaseFile.containsKey(fgId);
+  }
+
+  @Override
+  void resetExternalBaseFileMapping(Stream<ExternalBaseFileMapping> externalDataFileStream) {
+    // Build fileId to External Data File
+    this.fgIdToExternalBaseFile = createFileIdToExternalBaseFileMap(externalDataFileStream
+        .collect(Collectors.toMap(ExternalBaseFileMapping::getFileGroupId, x -> x)));
+  }
+
+  @Override
+  void addExternalBaseFileMapping(Stream<ExternalBaseFileMapping> externalDataFileStream) {
+    externalDataFileStream.forEach(externalDataFile -> {
+      ValidationUtils.checkArgument(!fgIdToExternalBaseFile.containsKey(externalDataFile.getFileGroupId()),
+          "Duplicate FileGroupId found in external data file mapping. FgId :"
+              + externalDataFile.getFileGroupId());
+      fgIdToExternalBaseFile.put(externalDataFile.getFileGroupId(), externalDataFile);
+    });
+  }
+
+  @Override
+  void removeExternalBaseFileMapping(Stream<ExternalBaseFileMapping> externalDataFileStream) {
+    externalDataFileStream.forEach(externalDataFile -> {
+      ValidationUtils.checkArgument(fgIdToExternalBaseFile.containsKey(externalDataFile.getFileGroupId()),
+          "Trying to remove a FileGroupId which is not found in external data file mapping. FgId :"
+              + externalDataFile.getFileGroupId());
+      fgIdToExternalBaseFile.remove(externalDataFile.getFileGroupId());
+    });
+  }
+
+  @Override
+  protected Option<ExternalBaseFileMapping> getExternalBaseFile(HoodieFileGroupId fileGroupId) {
+    return Option.ofNullable(fgIdToExternalBaseFile.get(fileGroupId));
+  }
+
+  @Override
+  Stream<ExternalBaseFileMapping> fetchExternalBaseFiles() {
+    return fgIdToExternalBaseFile.values().stream();
+  }
+
+  @Override
   protected Option<Pair<String, CompactionOperation>> getPendingCompactionOperationWithInstant(HoodieFileGroupId fgId) {
     return Option.ofNullable(fgIdToPendingCompaction.get(fgId));
   }
@@ -207,6 +261,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     super.reset();
     partitionToFileGroupsMap = null;
     fgIdToPendingCompaction = null;
+    fgIdToExternalBaseFile = null;
   }
 
   @Override
