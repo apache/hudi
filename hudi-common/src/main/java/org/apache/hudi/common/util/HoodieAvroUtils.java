@@ -43,8 +43,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -203,7 +205,8 @@ public class HoodieAvroUtils {
 
   private static GenericRecord rewrite(GenericRecord record, Schema schemaWithFields, Schema newSchema) {
     GenericRecord newRecord = new GenericData.Record(newSchema);
-    for (Schema.Field f : schemaWithFields.getFields()) {
+    //get union of both the schemas, and then populate the fields in the new record
+    for (Schema.Field f : getAllFieldsToWrite(schemaWithFields, newSchema)) {
       if (record.get(f.name()) == null) {
         populateNewRecordAsPerDataType(newRecord, f);
       } else {
@@ -215,6 +218,21 @@ public class HoodieAvroUtils {
           "Unable to validate the rewritten record " + record + " against schema " + newSchema);
     }
     return newRecord;
+  }
+
+  /*
+  This function takes the union of all the fields except hoodie metadata fields
+   */
+  private static List<Field> getAllFieldsToWrite(Schema oldSchema, Schema newSchema) {
+    Set<Field> allFields = new HashSet<>(oldSchema.getFields());
+    List<Field> fields = new ArrayList<>(oldSchema.getFields());
+    for (Schema.Field f : newSchema.getFields()) {
+      if (!allFields.contains(f) && !isMetadataField(f.name())) {
+        fields.add(f);
+      }
+    }
+
+    return fields;
   }
 
   private static void populateNewRecordAsPerDataType(GenericRecord record, Field field) {
