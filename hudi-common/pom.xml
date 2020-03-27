@@ -75,6 +75,12 @@
             <import>${basedir}/src/main/avro/HoodieRollbackMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieRestoreMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieArchivedMetaEntry.avsc</import>
+            <import>${basedir}/src/main/avro/HoodiePath.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieFSPermission.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieFileStatus.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieBootstrapSourceFilePartitionInfo.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieBootstrapIndexInfo.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieBootstrapMetadata.avsc</import>
           </imports>
         </configuration>
       </plugin>

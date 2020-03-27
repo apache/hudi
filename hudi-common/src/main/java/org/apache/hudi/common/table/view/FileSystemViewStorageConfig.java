@@ -41,6 +41,8 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
   public static final String FILESYSTEM_VIEW_SPILLABLE_MEM = "hoodie.filesystem.view.spillable.mem";
   public static final String FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION =
       "hoodie.filesystem.view.spillable.compaction.mem.fraction";
+  public static final String FILESYSTEM_VIEW_EXTERNAL_DATA_FILE_FRACTION =
+      "hoodie.filesystem.view.spillable.external.data.file.mem.fraction";
   private static final String ROCKSDB_BASE_PATH_PROP = "hoodie.filesystem.view.rocksdb.base.path";
 
   public static final FileSystemViewStorageType DEFAULT_VIEW_STORAGE_TYPE = FileSystemViewStorageType.MEMORY;
@@ -53,6 +55,7 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
 
   public static final String DEFAULT_VIEW_SPILLABLE_DIR = "/tmp/view_map/";
   private static final Double DEFAULT_MEM_FRACTION_FOR_PENDING_COMPACTION = 0.01;
+  private static final Double DEFAULT_MEM_FRACTION_FOR_EXTERNAL_DATA_FILE = 0.05;
   private static final Long DEFAULT_MAX_MEMORY_FOR_VIEW = 100 * 1024 * 1024L; // 100 MB
 
   /**
@@ -90,13 +93,21 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
 
   public long getMaxMemoryForFileGroupMap() {
     long totalMemory = Long.parseLong(props.getProperty(FILESYSTEM_VIEW_SPILLABLE_MEM));
-    return totalMemory - getMaxMemoryForPendingCompaction();
+    return totalMemory - getMaxMemoryForPendingCompaction() - getMaxMemoryForExternalDataFile();
   }
 
   public long getMaxMemoryForPendingCompaction() {
     long totalMemory = Long.parseLong(props.getProperty(FILESYSTEM_VIEW_SPILLABLE_MEM));
     return new Double(totalMemory * Double.parseDouble(props.getProperty(FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION)))
         .longValue();
+  }
+
+  public long getMaxMemoryForExternalDataFile() {
+    long totalMemory = Long.parseLong(props.getProperty(FILESYSTEM_VIEW_SPILLABLE_MEM));
+    long reservedForExternalDataFile =
+        new Double(totalMemory * Double.parseDouble(props.getProperty(FILESYSTEM_VIEW_EXTERNAL_DATA_FILE_FRACTION)))
+            .longValue();
+    return reservedForExternalDataFile;
   }
 
   public String getBaseStoreDir() {
@@ -169,6 +180,11 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withMemFractionForExternalDataFile(Double memFractionForExternalDataFile) {
+      props.setProperty(FILESYSTEM_VIEW_EXTERNAL_DATA_FILE_FRACTION, memFractionForExternalDataFile.toString());
+      return this;
+    }
+
     public Builder withBaseStoreDir(String baseStorePath) {
       props.setProperty(FILESYSTEM_VIEW_SPILLABLE_DIR, baseStorePath);
       return this;
@@ -202,6 +218,8 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
           DEFAULT_MAX_MEMORY_FOR_VIEW.toString());
       setDefaultOnCondition(props, !props.containsKey(FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION),
           FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION, DEFAULT_MEM_FRACTION_FOR_PENDING_COMPACTION.toString());
+      setDefaultOnCondition(props, !props.containsKey(FILESYSTEM_VIEW_EXTERNAL_DATA_FILE_FRACTION),
+          FILESYSTEM_VIEW_EXTERNAL_DATA_FILE_FRACTION, DEFAULT_MEM_FRACTION_FOR_EXTERNAL_DATA_FILE.toString());
 
       setDefaultOnCondition(props, !props.containsKey(ROCKSDB_BASE_PATH_PROP), ROCKSDB_BASE_PATH_PROP,
           DEFAULT_ROCKSDB_BASE_PATH);

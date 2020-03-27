@@ -19,33 +19,37 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-
-import java.io.Serializable;
-import java.util.Objects;
 
 /**
- * Hoodie base file.
+ * Hoodie base file - Represents metadata about Hudi file in DFS.
+ * Supports APIs to get Hudi FileId, Commit Time and external file (for bootstrap).
  */
-public class HoodieBaseFile implements Serializable {
+public class HoodieBaseFile extends BaseFile {
 
-  private static final long serialVersionUID = 1L;
-  private transient FileStatus fileStatus;
-  private final String fullPath;
-  private long fileLen;
+  /**
+   * In case of index-only bootstrap, this points to the actual data file.
+   */
+  private Option<BaseFile> externalBaseFile;
+
+  public HoodieBaseFile(HoodieBaseFile dataFile) {
+    super(dataFile);
+    this.externalBaseFile = dataFile.externalBaseFile;
+  }
 
   public HoodieBaseFile(FileStatus fileStatus) {
-    this.fileStatus = fileStatus;
-    this.fullPath = fileStatus.getPath().toString();
-    this.fileLen = fileStatus.getLen();
+    this(fileStatus, null);
+  }
+
+  public HoodieBaseFile(FileStatus fileStatus, BaseFile externalBaseFile) {
+    super(fileStatus);
+    this.externalBaseFile = Option.ofNullable(externalBaseFile);
   }
 
   public HoodieBaseFile(String filePath) {
-    this.fileStatus = null;
-    this.fullPath = filePath;
-    this.fileLen = -1;
+    super(filePath);
   }
 
   public String getFileId() {
@@ -56,49 +60,17 @@ public class HoodieBaseFile implements Serializable {
     return FSUtils.getCommitTime(getFileName());
   }
 
-  public String getPath() {
-    return fullPath;
+  public Option<BaseFile> getExternalBaseFile() {
+    return externalBaseFile;
   }
 
-  public String getFileName() {
-    return new Path(fullPath).getName();
-  }
-
-  public FileStatus getFileStatus() {
-    return fileStatus;
-  }
-
-  public long getFileSize() {
-    return fileLen;
-  }
-
-  public void setFileLen(long fileLen) {
-    this.fileLen = fileLen;
-  }
-
-  public long getFileLen() {
-    return fileLen;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    HoodieBaseFile dataFile = (HoodieBaseFile) o;
-    return Objects.equals(fullPath, dataFile.fullPath);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(fullPath);
+  public void setExternalBaseFile(BaseFile externalBaseFile) {
+    this.externalBaseFile = Option.ofNullable(externalBaseFile);
   }
 
   @Override
   public String toString() {
-    return "HoodieDataFile{fullPath=" + fullPath + ", fileLen=" + fileLen + '}';
+    return "HoodieBaseFile{fullPath=" + getPath() + ", fileLen=" + getFileLen()
+        + ", ExternalDataFile=" + externalBaseFile.orElse(null) + '}';
   }
 }

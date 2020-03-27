@@ -322,8 +322,12 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
     @Override
     public void close() {
       try {
-        indexByPartitionReader.close(true);
-        indexByFileIdReader.close(true);
+        if (null != indexByPartitionReader) {
+          indexByPartitionReader.close(true);
+        }
+        if (null != indexByFileIdReader) {
+          indexByFileIdReader.close(true);
+        }
       } catch (IOException ioe) {
         throw new HoodieIOException(ioe.getMessage(), ioe);
       }
