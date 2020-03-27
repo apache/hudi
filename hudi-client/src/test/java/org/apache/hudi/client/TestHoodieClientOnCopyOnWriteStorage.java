@@ -199,15 +199,15 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     String recordKey = UUID.randomUUID().toString();
     HoodieKey keyOne = new HoodieKey(recordKey, "2018-01-01");
     HoodieRecord<TestRawTripPayload> recordOne =
-        new HoodieRecord(keyOne, HoodieTestDataGenerator.generateRandomValue(keyOne, newCommitTime));
+        new HoodieRecord(keyOne, dataGen.generateRandomValue(keyOne, newCommitTime));
 
     HoodieKey keyTwo = new HoodieKey(recordKey, "2018-02-01");
     HoodieRecord recordTwo =
-        new HoodieRecord(keyTwo, HoodieTestDataGenerator.generateRandomValue(keyTwo, newCommitTime));
+        new HoodieRecord(keyTwo, dataGen.generateRandomValue(keyTwo, newCommitTime));
 
     // Same key and partition as keyTwo
     HoodieRecord recordThree =
-        new HoodieRecord(keyTwo, HoodieTestDataGenerator.generateRandomValue(keyTwo, newCommitTime));
+        new HoodieRecord(keyTwo, dataGen.generateRandomValue(keyTwo, newCommitTime));
 
     JavaRDD<HoodieRecord<TestRawTripPayload>> records =
         jsc.parallelize(Arrays.asList(recordOne, recordTwo, recordThree), 1);

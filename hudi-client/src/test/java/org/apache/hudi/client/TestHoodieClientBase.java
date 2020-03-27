@@ -342,6 +342,34 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
+   * Helper to insert another batch of records and do regular assertions on the state after successful completion.
+   *
+   * @param writeConfig            Hoodie Write Config
+   * @param client                 Hoodie Write Client
+   * @param newCommitTime          New Commit Timestamp to be used
+   * @param initCommitTime         Begin Timestamp (usually "000")
+   * @param numRecordsInThisCommit Number of records to be added in the new commit
+   * @param writeFn                Write Function to be used for insertion
+   * @param isPreppedAPI           Boolean flag to indicate writeFn expects prepped records
+   * @param assertForCommit        Enable Assertion of Writes
+   * @param expRecordsInThisCommit Expected number of records in this commit
+   * @param expTotalRecords        Expected number of records when scanned
+   * @param expTotalCommits        Expected number of commits (including this commit)
+   * @return RDD of write-status
+   * @throws Exception in case of error
+   */
+  JavaRDD<WriteStatus> insertBatch(HoodieWriteConfig writeConfig, HoodieWriteClient client, String newCommitTime,
+                                   String initCommitTime, int numRecordsInThisCommit,
+                                   Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
+                                   boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits) throws Exception {
+    final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
+        generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateInserts);
+
+    return writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime, numRecordsInThisCommit,
+        recordGenFunction, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits);
+  }
+
+  /**
    * Helper to upsert batch of records and do regular assertions on the state after successful completion.
    *
    * @param writeConfig                  Hoodie Write Config

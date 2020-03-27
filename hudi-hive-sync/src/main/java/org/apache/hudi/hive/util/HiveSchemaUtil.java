@@ -18,20 +18,12 @@
 
 package org.apache.hudi.hive.util;
 
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
-import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
-import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
@@ -50,9 +42,9 @@ import java.util.Set;
 /**
  * Schema Utilities.
  */
-public class SchemaUtil {
+public class HiveSchemaUtil {
 
-  private static final Logger LOG = LogManager.getLogger(SchemaUtil.class);
+  private static final Logger LOG = LogManager.getLogger(HiveSchemaUtil.class);
   public static final String HIVE_ESCAPE_CHARACTER = "`";
 
   /**
@@ -423,26 +415,5 @@ public class SchemaUtil {
     // TODO - all partition fields should be part of the schema. datestr is treated as special.
     // Dont do that
     return "String";
-  }
-
-  /**
-   * Read the schema from the log file on path.
-   * 
-   * @return
-   */
-  public static MessageType readSchemaFromLogFile(FileSystem fs, Path path) throws IOException {
-    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null);
-    HoodieAvroDataBlock lastBlock = null;
-    while (reader.hasNext()) {
-      HoodieLogBlock block = reader.next();
-      if (block instanceof HoodieAvroDataBlock) {
-        lastBlock = (HoodieAvroDataBlock) block;
-      }
-    }
-    reader.close();
-    if (lastBlock != null) {
-      return new AvroSchemaConverter().convert(lastBlock.getSchema());
-    }
-    return null;
   }
 }

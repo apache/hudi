@@ -97,6 +97,14 @@ public class HoodieAvroUtils {
         || HoodieRecord.FILENAME_METADATA_FIELD.equals(fieldName);
   }
 
+  public static Schema createHoodieWriteSchema(Schema originalSchema) {
+    return HoodieAvroUtils.addMetadataFields(originalSchema);
+  }
+
+  public static Schema createHoodieWriteSchema(String originalSchema) {
+    return createHoodieWriteSchema(new Schema.Parser().parse(originalSchema));
+  }
+
   /**
    * Adds the Hoodie metadata fields to the given schema.
    */

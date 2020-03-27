@@ -19,6 +19,8 @@
 package org.apache.hudi.client;
 
 import com.codahale.metrics.Timer;
+import org.apache.avro.Schema;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -36,6 +38,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -50,9 +53,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
+import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieCommitArchiveLog;
@@ -166,6 +171,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String instantTime) {
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT);
+    validateSchema(table, true);
     setOperationType(WriteOperationType.UPSERT);
     HoodieWriteMetadata result = table.upsert(jsc,instantTime, records);
     if (result.getIndexLookupDuration().isPresent()) {
@@ -185,6 +191,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String instantTime) {
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT_PREPPED);
+    validateSchema(table, true);
     setOperationType(WriteOperationType.UPSERT_PREPPED);
     HoodieWriteMetadata result = table.upsertPrepped(jsc,instantTime, preppedRecords);
     return postWrite(result, instantTime, table);
@@ -202,6 +209,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, final String instantTime) {
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT);
+    validateSchema(table, false);
     setOperationType(WriteOperationType.INSERT);
     HoodieWriteMetadata result = table.insert(jsc,instantTime, records);
     return postWrite(result, instantTime, table);
@@ -220,6 +228,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String instantTime) {
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT_PREPPED);
+    validateSchema(table, false);
     setOperationType(WriteOperationType.INSERT_PREPPED);
     HoodieWriteMetadata result = table.insertPrepped(jsc,instantTime, preppedRecords);
     return postWrite(result, instantTime, table);
@@ -882,6 +891,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       metadata.addWriteStat(stat.getPartitionPath(), stat);
     }
 
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
+
     // Finalize write
     finalizeWrite(table, compactionCommitTime, updateStatusMap);
 
@@ -919,4 +930,55 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     });
     return compactionInstantTimeOpt;
   }
+
+  /**
+   * Ensure that the current writerSchema is compatible with the latest schema of this dataset.
+   *
+   * When inserting/updating data, we read records using the last used schema and convert them to the
+   * GenericRecords with writerSchema. Hence, we need to ensure that this conversion can take place without errors.
+   *
+   * @param hoodieTable The Hoodie Table
+   * @param isUpsert If this is a check during upserts
+   * @throws HoodieUpsertException If schema check fails during upserts
+   * @throws HoodieInsertException If schema check fails during inserts
+   */
+  private void validateSchema(HoodieTable<T> hoodieTable, final boolean isUpsert)
+      throws HoodieUpsertException, HoodieInsertException {
+
+    if (!getConfig().getAvroSchemaValidate()) {
+      // Check not required
+      return;
+    }
+
+    boolean isValid = false;
+    String errorMsg = "WriterSchema is not compatible with the schema present in the Table";
+    Throwable internalError = null;
+    Schema tableSchema = null;
+    Schema writerSchema = null;
+    try {
+      TableSchemaResolver schemaUtil = new TableSchemaResolver(hoodieTable.getMetaClient());
+      writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
+      tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaUtil.getTableSchemaFromCommitMetadata());
+      isValid = schemaUtil.isSchemaCompatible(tableSchema, writerSchema);
+    } catch (Exception e) {
+      // Two error cases are possible:
+      // 1. There was no schema as no data has been inserted yet (first time only)
+      // 2. Failure in reading the schema
+      isValid = hoodieTable.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0;
+      errorMsg = "Failed to read latest schema on path " + basePath;
+      internalError = e;
+    }
+
+    if (!isValid) {
+      LOG.error(errorMsg);
+      LOG.warn("WriterSchema: " + writerSchema);
+      LOG.warn("Table latest schema: " + tableSchema);
+      if (isUpsert) {
+        throw new HoodieUpsertException(errorMsg, internalError);
+      } else {
+        throw new HoodieInsertException(errorMsg, internalError);
+      }
+    }
+  }
+
 }

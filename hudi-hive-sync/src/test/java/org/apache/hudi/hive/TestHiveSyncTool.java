@@ -22,7 +22,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent;
 import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent.PartitionEventType;
-import org.apache.hudi.hive.util.SchemaUtil;
+import org.apache.hudi.hive.util.HiveSchemaUtil;
 
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.parquet.schema.MessageType;
@@ -87,7 +87,7 @@ public class TestHiveSyncTool {
         .optional(PrimitiveType.PrimitiveTypeName.INT32).named("element").named("list").named("int_list")
         .named("ArrayOfInts");
 
-    String schemaString = SchemaUtil.generateSchemaString(schema);
+    String schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`int_list` ARRAY< int>", schemaString);
 
     // A array of arrays
@@ -95,14 +95,14 @@ public class TestHiveSyncTool {
         .as(OriginalType.LIST).repeatedGroup().required(PrimitiveType.PrimitiveTypeName.INT32).named("element")
         .named("list").named("element").named("list").named("int_list_list").named("ArrayOfArrayOfInts");
 
-    schemaString = SchemaUtil.generateSchemaString(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`int_list_list` ARRAY< ARRAY< int>>", schemaString);
 
     // A list of integers
     schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeated(PrimitiveType.PrimitiveTypeName.INT32)
         .named("element").named("int_list").named("ArrayOfInts");
 
-    schemaString = SchemaUtil.generateSchemaString(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`int_list` ARRAY< int>", schemaString);
 
     // A list of structs with two fields
@@ -110,7 +110,7 @@ public class TestHiveSyncTool {
         .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").required(PrimitiveType.PrimitiveTypeName.INT32)
         .named("num").named("element").named("tuple_list").named("ArrayOfTuples");
 
-    schemaString = SchemaUtil.generateSchemaString(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`tuple_list` ARRAY< STRUCT< `str` : binary, `num` : int>>", schemaString);
 
     // A list of structs with a single field
@@ -120,7 +120,7 @@ public class TestHiveSyncTool {
         .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("array").named("one_tuple_list")
         .named("ArrayOfOneTuples");
 
-    schemaString = SchemaUtil.generateSchemaString(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`one_tuple_list` ARRAY< STRUCT< `str` : binary>>", schemaString);
 
     // A list of structs with a single field
@@ -130,7 +130,7 @@ public class TestHiveSyncTool {
         .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("one_tuple_list_tuple")
         .named("one_tuple_list").named("ArrayOfOneTuples2");
 
-    schemaString = SchemaUtil.generateSchemaString(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`one_tuple_list` ARRAY< STRUCT< `str` : binary>>", schemaString);
 
     // A list of structs with a single field
@@ -140,7 +140,7 @@ public class TestHiveSyncTool {
         .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("one_tuple_list").named("one_tuple_list")
         .named("ArrayOfOneTuples3");
 
-    schemaString = SchemaUtil.generateSchemaString(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`one_tuple_list` ARRAY< binary>", schemaString);
 
     // A list of maps
@@ -149,7 +149,7 @@ public class TestHiveSyncTool {
         .as(OriginalType.UTF8).named("string_key").required(PrimitiveType.PrimitiveTypeName.INT32).named("int_value")
         .named("key_value").named("array").named("map_list").named("ArrayOfMaps");
 
-    schemaString = SchemaUtil.generateSchemaString(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`map_list` ARRAY< MAP< string, int>>", schemaString);
   }
 

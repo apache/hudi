@@ -52,6 +52,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
   private static final String BASE_PATH_PROP = "hoodie.base.path";
   private static final String AVRO_SCHEMA = "hoodie.avro.schema";
+  private static final String AVRO_SCHEMA_VALIDATE = "hoodie.avro.schema.validate";
+  private static final String DEFAULT_AVRO_SCHEMA_VALIDATE = "false";
   private static final String DEFAULT_PARALLELISM = "1500";
   private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
   private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
@@ -129,6 +131,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public void setSchema(String schemaStr) {
     props.setProperty(AVRO_SCHEMA, schemaStr);
+  }
+
+  public boolean getAvroSchemaValidate() {
+    return Boolean.parseBoolean(props.getProperty(AVRO_SCHEMA_VALIDATE));
   }
 
   public String getTableName() {
@@ -577,6 +583,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withAvroSchemaValidate(boolean enable) {
+      props.setProperty(AVRO_SCHEMA_VALIDATE, String.valueOf(enable));
+      return this;
+    }
+
     public Builder forTable(String tableName) {
       props.setProperty(TABLE_NAME, tableName);
       return this;
@@ -721,6 +732,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           String.valueOf(DEFAULT_MAX_CONSISTENCY_CHECKS));
       setDefaultOnCondition(props, !props.containsKey(FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP),
           FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP, DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED);
+      setDefaultOnCondition(props, !props.containsKey(AVRO_SCHEMA_VALIDATE), AVRO_SCHEMA_VALIDATE, DEFAULT_AVRO_SCHEMA_VALIDATE);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());

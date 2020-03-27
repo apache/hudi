@@ -63,7 +63,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
     this.partitionPath = partitionPath;
     this.fileId = fileId;
     this.originalSchema = new Schema.Parser().parse(config.getSchema());
-    this.writerSchema = createHoodieWriteSchema(originalSchema);
+    this.writerSchema = HoodieAvroUtils.createHoodieWriteSchema(originalSchema);
     this.timer = new HoodieTimer().startTimer();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
@@ -76,10 +76,6 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
    */
   private String makeWriteToken() {
     return FSUtils.makeWriteToken(getPartitionId(), getStageId(), getAttemptId());
-  }
-
-  public static Schema createHoodieWriteSchema(Schema originalSchema) {
-    return HoodieAvroUtils.addMetadataFields(originalSchema);
   }
 
   public Path makeNewPath(String partitionPath) {
