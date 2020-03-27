@@ -55,7 +55,7 @@ Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 |**Spark SQL**|Y|Y|Y|
 |**Spark Datasource**|N|N|Y|
 |**Presto**|N|N|Y|
-|**Impala**|N|N|N|
+|**Impala**|N|N|Y|
 
 
 In sections, below we will discuss specific setup to access different query types from different query engines. 
@@ -148,6 +148,7 @@ The following snippet shows how to obtain all records changed after `beginInstan
      .format("org.apache.hudi")
      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), <beginInstantTime>)
+     .option(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY(), "/year=2020/month=*/day=*") // Optional, use glob pattern if querying certain partitions
      .load(tablePath); // For incremental query, pass in the root/base path of table
      
 hudiIncQueryDF.createOrReplaceTempView("hudi_trips_incremental")
