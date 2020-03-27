@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.cli.commands.SparkEnvCommand;
 import org.apache.hudi.cli.commands.SparkMain;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.spark.SparkConf;
@@ -61,9 +62,14 @@ public class SparkUtil {
   }
 
   public static JavaSparkContext initJavaSparkConf(String name) {
+    return initJavaSparkConf(name, Option.empty(), Option.empty());
+  }
+
+  public static JavaSparkContext initJavaSparkConf(String name, Option<String> master,
+                                                   Option<String> executorMemory) {
     SparkConf sparkConf = new SparkConf().setAppName(name);
 
-    String defMasterFromEnv = sparkConf.getenv("SPARK_MASTER");
+    String defMasterFromEnv = master.orElse(sparkConf.getenv("SPARK_MASTER"));
     if ((null == defMasterFromEnv) || (defMasterFromEnv.isEmpty())) {
       sparkConf.setMaster(DEFAULT_SPARK_MASTER);
     } else {
@@ -74,6 +80,9 @@ public class SparkUtil {
     sparkConf.set("spark.driver.maxResultSize", "2g");
     sparkConf.set("spark.eventLog.overwrite", "true");
     sparkConf.set("spark.eventLog.enabled", "true");
+    if (executorMemory.isPresent()) {
+      sparkConf.set("spark.executor.memory", executorMemory.get());
+    }
 
     // Configure hadoop conf
     sparkConf.set("spark.hadoop.mapred.output.compress", "true");

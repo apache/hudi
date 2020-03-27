@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -62,7 +63,9 @@ public class SparkMain {
 
     SparkCommand cmd = SparkCommand.valueOf(command);
 
-    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + command);
+    JavaSparkContext jsc = cmd == SparkCommand.CLEAN
+        ? SparkUtil.initJavaSparkConf("hoodie-cli-" + command, Option.of(args[2]), Option.of(args[4]))
+        : SparkUtil.initJavaSparkConf("hoodie-cli-" + command);
     int returnCode = 0;
     switch (cmd) {
       case ROLLBACK:
@@ -149,7 +152,7 @@ public class SparkMain {
         if (args.length > 5) {
           configs.addAll(Arrays.asList(args).subList(5, args.length));
         }
-        clean(jsc, args[1], args[2], propsFilePath, args[4], configs);
+        clean(jsc, args[1], propsFilePath, configs);
         break;
       default:
         break;
@@ -157,14 +160,10 @@ public class SparkMain {
     System.exit(returnCode);
   }
 
-  private static void clean(JavaSparkContext jsc, String basePath, String sparkMaster, String propsFilePath,
-                            String sparkMemory, List<String> configs) throws Exception {
+  private static void clean(JavaSparkContext jsc, String basePath, String propsFilePath,
+                            List<String> configs) {
     HoodieCleaner.Config cfg = new HoodieCleaner.Config();
     cfg.basePath = basePath;
-    if ((null != sparkMaster) && (!sparkMaster.isEmpty())) {
-      jsc.getConf().setMaster(sparkMaster);
-    }
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
     cfg.propsFilePath = propsFilePath;
     cfg.configs = configs;
     new HoodieCleaner(cfg, jsc).run();
