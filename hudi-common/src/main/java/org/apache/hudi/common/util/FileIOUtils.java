@@ -18,10 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import javax.annotation.Nullable;
-
 import java.io.ByteArrayOutputStream;
-import java.io.Closeable;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -93,27 +90,5 @@ public class FileIOUtils {
     out.println(str);
     out.flush();
     out.close();
-  }
-
-  /**
-   * Closes a {@link Closeable}, with control over whether an {@code IOException} may be thrown.
-   * @param closeable the {@code Closeable} object to be closed, or null,
-   *      in which case this method does nothing.
-   * @param swallowIOException if true, don't propagate IO exceptions thrown by the {@code close} methods.
-   *
-   * @throws IOException if {@code swallowIOException} is false and {@code close} throws an {@code IOException}.
-   */
-  public static void close(@Nullable Closeable closeable, boolean swallowIOException)
-      throws IOException {
-    if (closeable == null) {
-      return;
-    }
-    try {
-      closeable.close();
-    } catch (IOException e) {
-      if (!swallowIOException) {
-        throw e;
-      }
-    }
   }
 }
