@@ -57,9 +57,9 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient HoodieTableMetaClient metaClient;
   private static AtomicInteger instantGen = new AtomicInteger(1);
 
-  protected final transient Supplier<Integer> idSupplier = SparkSupplier.PARTITION_SUPPLIER;
-  protected final transient Supplier<Integer> stageSupplier = SparkSupplier.STAGE_SUPPLIER;
-  protected final transient Supplier<Long> attemptSupplier = SparkSupplier.ATTEMPT_SUPPLIER;
+  protected final Supplier<Integer> idSupplier = SparkSupplier.PARTITION_SUPPLIER;
+  protected final Supplier<Integer> stageSupplier = SparkSupplier.STAGE_SUPPLIER;
+  protected final Supplier<Long> attemptSupplier = SparkSupplier.ATTEMPT_SUPPLIER;
 
   public String getNextInstant() {
     return String.format("%09d", instantGen.getAndIncrement());
