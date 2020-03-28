@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
@@ -53,7 +52,7 @@ public class Metrics {
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       try {
         reporter.report();
-        FileIOUtils.close(reporter.getReporter(), true);
+        getReporter().close();
       } catch (Exception e) {
         e.printStackTrace();
       }
