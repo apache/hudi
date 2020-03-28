@@ -26,8 +26,20 @@ import java.util.function.Supplier;
 /**
  * Spark Supplier.
  */
-public interface SparkSupplier<T> extends Supplier<T>, Serializable {
-  SparkSupplier<Integer> PARTITION_SUPPLIER = () -> TaskContext.getPartitionId();
-  SparkSupplier<Integer> STAGE_SUPPLIER = () -> TaskContext.get().stageId();
-  SparkSupplier<Long> ATTEMPT_SUPPLIER = () -> TaskContext.get().taskAttemptId();
+public interface SparkTaskContextDetailSupplier<T> extends Supplier<T>, Serializable {
+
+  /**
+   * Supplier to get partition id.
+   */
+  SparkTaskContextDetailSupplier<Integer> PARTITION_SUPPLIER = () -> TaskContext.getPartitionId();
+
+  /**
+   * Supplier to get stage id.
+   */
+  SparkTaskContextDetailSupplier<Integer> STAGE_SUPPLIER = () -> TaskContext.get().stageId();
+
+  /**
+   * Supplier to get task attempt id.
+   */
+  SparkTaskContextDetailSupplier<Long> ATTEMPT_SUPPLIER = () -> TaskContext.get().taskAttemptId();
 }

@@ -121,7 +121,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
       try {
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config2, "101", table2,
                 updateRecords.iterator(), record1.getPartitionPath(), fileId,
-                SparkSupplier.PARTITION_SUPPLIER, SparkSupplier.STAGE_SUPPLIER, SparkSupplier.ATTEMPT_SUPPLIER);
+                SparkTaskContextDetailSupplier.PARTITION_SUPPLIER, SparkTaskContextDetailSupplier.STAGE_SUPPLIER, SparkTaskContextDetailSupplier.ATTEMPT_SUPPLIER);
         Configuration conf = new Configuration();
         AvroReadSupport.setAvroReadSchema(conf, mergeHandle.getWriterSchema());
         List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(conf,

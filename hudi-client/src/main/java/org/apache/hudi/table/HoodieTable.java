@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.client.SparkSupplier;
+import org.apache.hudi.client.SparkTaskContextDetailSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -86,9 +86,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   private SerializableConfiguration hadoopConfiguration;
   private transient FileSystemViewManager viewManager;
 
-  protected final Supplier<Integer> idSupplier = SparkSupplier.PARTITION_SUPPLIER;
-  protected final Supplier<Integer> stageSupplier = SparkSupplier.STAGE_SUPPLIER;
-  protected final Supplier<Long> attemptSupplier = SparkSupplier.ATTEMPT_SUPPLIER;
+  protected final Supplier<Integer> idSupplier = SparkTaskContextDetailSupplier.PARTITION_SUPPLIER;
+  protected final Supplier<Integer> stageSupplier = SparkTaskContextDetailSupplier.STAGE_SUPPLIER;
+  protected final Supplier<Long> attemptSupplier = SparkTaskContextDetailSupplier.ATTEMPT_SUPPLIER;
 
   protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc) {
     this.config = config;
