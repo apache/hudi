@@ -17,7 +17,7 @@
  */
 {
   "type" : "record",
-  "name" : "tripuberrec",
+  "name" : "shortTripRec",
   "fields" : [
   {
     "name" : "timestamp",

@@ -26,7 +26,7 @@ import java.util.Objects;
  * Wrapper over TableConfig objects.
  * Useful for incrementally syncing multiple tables one by one via HoodieMultiTableDeltaStreamer.java class.
  */
-public class TableExecutionObject {
+public class TableExecutionContext {
 
   private TypedProperties properties;
   private HoodieDeltaStreamer.Config config;
@@ -74,7 +74,7 @@ public class TableExecutionObject {
       return false;
     }
 
-    TableExecutionObject that = (TableExecutionObject) o;
+    TableExecutionContext that = (TableExecutionContext) o;
     return Objects.equals(properties, that.properties);
   }
 

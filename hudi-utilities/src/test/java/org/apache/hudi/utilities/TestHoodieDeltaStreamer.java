@@ -102,6 +102,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
   public static final String PROPS_FILENAME_TEST_SOURCE1 = "test-source1.properties";
   public static final String PROPS_INVALID_HIVE_SYNC_TEST_SOURCE1 = "test-invalid-hive-sync-source1.properties";
+  public static final String PROPS_INVALID_FILE = "test-invalid-props.properties";
+  public static final String PROPS_INVALID_TABLE_CONFIG_FILE = "test-invalid-table-config.properties";
   private static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
   private static final String PROPS_FILENAME_TEST_CSV = "test-csv-dfs-source.properties";
   private static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
@@ -130,13 +132,13 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target.avsc", dfs, dfsBasePath + "/target.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target-flattened.avsc", dfs, dfsBasePath + "/target-flattened.avsc");
 
-    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source_fg.avsc", dfs, dfsBasePath + "/source_fg.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source_short_trip_uber.avsc", dfs, dfsBasePath + "/source_short_trip_uber.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source_uber.avsc", dfs, dfsBasePath + "/source_uber.avsc");
-    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target_fg.avsc", dfs, dfsBasePath + "/target_fg.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target_short_trip_uber.avsc", dfs, dfsBasePath + "/target_short_trip_uber.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target_uber.avsc", dfs, dfsBasePath + "/target_uber.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/invalid_hive_sync_uber_config.properties", dfs, dfsBasePath + "/config/invalid_hive_sync_uber_config.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/uber_config.properties", dfs, dfsBasePath + "/config/uber_config.properties");
-    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/fg_config.properties", dfs, dfsBasePath + "/config/fg_config.properties");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/short_trip_uber_config.properties", dfs, dfsBasePath + "/config/short_trip_uber_config.properties");
 
     TypedProperties props = new TypedProperties();
     props.setProperty("include", "sql-transformer.properties");
@@ -181,6 +183,10 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     populateCommonProps(props1);
     UtilitiesTestBase.Helpers.savePropsToDFS(props1, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
 
+    TypedProperties properties = new TypedProperties();
+    populateInvalidTableConfigFilePathProps(properties);
+    UtilitiesTestBase.Helpers.savePropsToDFS(properties, dfs, dfsBasePath + "/" + PROPS_INVALID_TABLE_CONFIG_FILE);
+
     TypedProperties invalidHiveSyncProps = new TypedProperties();
     invalidHiveSyncProps.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "uber_db.dummy_table_uber");
     invalidHiveSyncProps.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/invalid_hive_sync_uber_config.properties");
@@ -189,12 +195,19 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     prepareParquetDFSFiles(PARQUET_NUM_RECORDS);
   }
 
+  private static void populateInvalidTableConfigFilePathProps(TypedProperties props) {
+    props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
+    props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
+    props.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "uber_db.dummy_table_uber");
+    props.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/invalid_uber_config.properties");
+  }
+
   private static void populateCommonProps(TypedProperties props) {
     props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
     props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
-    props.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "fg_db.dummy_table_fg,uber_db.dummy_table_uber");
+    props.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "short_trip_db.dummy_table_short_trip,uber_db.dummy_table_uber");
     props.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/uber_config.properties");
-    props.setProperty("hoodie.deltastreamer.ingestion.fg_db.dummy_table_fg.configFile", dfsBasePath + "/config/fg_config.properties");
+    props.setProperty("hoodie.deltastreamer.ingestion.short_trip_db.dummy_table_short_trip.configFile", dfsBasePath + "/config/short_trip_uber_config.properties");
 
     //Kafka source properties
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
@@ -213,7 +226,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   @AfterClass
-  public static void cleanupClass() throws Exception {
+  public static void cleanupClass() {
     UtilitiesTestBase.cleanupClass();
   }
 

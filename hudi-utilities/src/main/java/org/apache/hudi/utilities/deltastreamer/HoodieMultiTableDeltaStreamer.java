@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hadoop.fs.FileUtil;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.TypedProperties;
@@ -30,6 +29,7 @@ import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import com.beust.jcommander.JCommander;
 import com.google.common.base.Strings;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -51,24 +51,24 @@ public class HoodieMultiTableDeltaStreamer {
 
   private static Logger logger = LogManager.getLogger(HoodieMultiTableDeltaStreamer.class);
 
-  private List<TableExecutionObject> tableExecutionObjects;
+  private List<TableExecutionContext> tableExecutionContexts;
   private transient JavaSparkContext jssc;
   private Set<String> successTables;
   private Set<String> failedTables;
 
-  public HoodieMultiTableDeltaStreamer(String[] args, JavaSparkContext jssc) throws IOException {
-    this.tableExecutionObjects = new ArrayList<>();
+  public HoodieMultiTableDeltaStreamer(Config config, JavaSparkContext jssc) throws IOException {
+    this.tableExecutionContexts = new ArrayList<>();
     this.successTables = new HashSet<>();
     this.failedTables = new HashSet<>();
     this.jssc = jssc;
-    String commonPropsFile = getCommonPropsFileName(args);
-    String configFolder = getConfigFolder(args);
+    String commonPropsFile = config.propsFilePath;
+    String configFolder = config.configFolder;
     FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
     configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
     checkIfPropsFileAndConfigFolderExist(commonPropsFile, configFolder, fs);
     TypedProperties properties = UtilHelpers.readConfig(fs, new Path(commonPropsFile), new ArrayList<>()).getConfig();
     //get the tables to be ingested and their corresponding config files from this properties instance
-    populateTableExecutionObjectList(properties, configFolder, fs, args);
+    populateTableExecutionContextList(properties, configFolder, fs, config);
   }
 
   private void checkIfPropsFileAndConfigFolderExist(String commonPropsFile, String configFolder, FileSystem fs) throws IOException {
@@ -94,37 +94,37 @@ public class HoodieMultiTableDeltaStreamer {
   }
 
   //commonProps are passed as parameter which contain table to config file mapping
-  private void populateTableExecutionObjectList(TypedProperties properties, String configFolder, FileSystem fs, String[] args) throws IOException {
+  private void populateTableExecutionContextList(TypedProperties properties, String configFolder, FileSystem fs, Config config) throws IOException {
     List<String> tablesToBeIngested = getTablesToBeIngested(properties);
-    TableExecutionObject executionObject;
+    logger.info("tables to be ingested via MultiTableDeltaStreamer : " + tablesToBeIngested);
+    TableExecutionContext executionContext;
     for (String table : tablesToBeIngested) {
       String[] tableWithDatabase = table.split("\\.");
       String database = tableWithDatabase.length > 1 ? tableWithDatabase[0] : "default";
       String currentTable = tableWithDatabase.length > 1 ? tableWithDatabase[1] : table;
       String configProp = Constants.INGESTION_PREFIX + database + Constants.DELIMITER + currentTable + Constants.INGESTION_CONFIG_SUFFIX;
-      String configFilePath = properties.getString(configProp, configFolder + "/" + database + "_" + currentTable + Constants.DEFAULT_CONFIG_FILE_NAME_SUFFIX);
+      String configFilePath = properties.getString(configProp, Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
       checkIfTableConfigFileExists(configFolder, fs, configFilePath);
       TypedProperties tableProperties = UtilHelpers.readConfig(fs, new Path(configFilePath), new ArrayList<>()).getConfig();
       properties.forEach((k,v) -> {
         tableProperties.setProperty(k.toString(), v.toString());
       });
       final Config cfg = new Config();
-      String[] tableArgs = args.clone();
-      String targetBasePath = resetTarget(tableArgs, database, currentTable);
-      JCommander cmd = new JCommander(cfg);
-      cmd.parse(tableArgs);
+      //copy all the values from config to cfg
+      Helpers.deepCopyConfigs(config, cfg);
+      String targetBasePath = resetTarget(config, database, currentTable);
       String overriddenTargetBasePath = tableProperties.getString(Constants.TARGET_BASE_PATH_PROP, "");
       cfg.targetBasePath = Strings.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
       if (cfg.enableHiveSync && Strings.isNullOrEmpty(tableProperties.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), ""))) {
         throw new HoodieException("Hive sync table field not provided!");
       }
       populateSchemaProviderProps(cfg, tableProperties);
-      executionObject = new TableExecutionObject();
-      executionObject.setProperties(tableProperties);
-      executionObject.setConfig(cfg);
-      executionObject.setDatabase(database);
-      executionObject.setTableName(currentTable);
-      this.tableExecutionObjects.add(executionObject);
+      executionContext = new TableExecutionContext();
+      executionContext.setProperties(tableProperties);
+      executionContext.setConfig(cfg);
+      executionContext.setDatabase(database);
+      executionContext.setTableName(currentTable);
+      this.tableExecutionContexts.add(executionContext);
     }
   }
 
@@ -133,7 +133,7 @@ public class HoodieMultiTableDeltaStreamer {
     if (combinedTablesString == null) {
       return new ArrayList<>();
     }
-    String[] tablesArray = combinedTablesString.split(",");
+    String[] tablesArray = combinedTablesString.split(Constants.COMMA_SEPARATOR);
     return Arrays.asList(tablesArray);
   }
 
@@ -146,61 +146,73 @@ public class HoodieMultiTableDeltaStreamer {
     }
   }
 
+  public static class Helpers {
+
+    static String getDefaultConfigFilePath(String configFolder, String database, String currentTable) {
+      return configFolder + Constants.FILEDELIMITER + database + Constants.UNDERSCORE + currentTable + Constants.DEFAULT_CONFIG_FILE_NAME_SUFFIX;
+    }
+
+    static String getTableWithDatabase(TableExecutionContext context) {
+      return context.getDatabase() + Constants.DELIMITER + context.getTableName();
+    }
+
+    static void deepCopyConfigs(Config globalConfig, Config tableConfig) {
+      tableConfig.enableHiveSync = globalConfig.enableHiveSync;
+      tableConfig.schemaProviderClassName = globalConfig.schemaProviderClassName;
+      tableConfig.sourceOrderingField = globalConfig.sourceOrderingField;
+      tableConfig.sourceClassName = globalConfig.sourceClassName;
+      tableConfig.tableType = globalConfig.tableType;
+      tableConfig.propsFilePath = globalConfig.propsFilePath;
+      tableConfig.basePathPrefix = globalConfig.basePathPrefix;
+      tableConfig.targetTableName = globalConfig.targetTableName;
+      tableConfig.configFolder = globalConfig.configFolder;
+      tableConfig.operation = globalConfig.operation;
+      tableConfig.sourceLimit = globalConfig.sourceLimit;
+      tableConfig.checkpoint = globalConfig.checkpoint;
+      tableConfig.continuousMode = globalConfig.continuousMode;
+      tableConfig.filterDupes = globalConfig.filterDupes;
+      tableConfig.payloadClassName = globalConfig.payloadClassName;
+      tableConfig.configs = globalConfig.configs;
+      tableConfig.forceDisableCompaction = globalConfig.forceDisableCompaction;
+      tableConfig.maxPendingCompactions = globalConfig.maxPendingCompactions;
+      tableConfig.minSyncIntervalSeconds = globalConfig.minSyncIntervalSeconds;
+      tableConfig.transformerClassName = globalConfig.transformerClassName;
+      tableConfig.commitOnErrors = globalConfig.commitOnErrors;
+      tableConfig.compactSchedulingMinShare = globalConfig.compactSchedulingMinShare;
+      tableConfig.compactSchedulingWeight = globalConfig.compactSchedulingWeight;
+      tableConfig.deltaSyncSchedulingMinShare = globalConfig.deltaSyncSchedulingMinShare;
+      tableConfig.deltaSyncSchedulingWeight = globalConfig.deltaSyncSchedulingWeight;
+      tableConfig.sparkMaster = globalConfig.sparkMaster;
+    }
+  }
+
   public static void main(String[] args) throws IOException {
+    final Config config = new Config();
+    JCommander cmd = new JCommander(config, null, args);
+    if (config.help || args.length == 0) {
+      cmd.usage();
+      System.exit(1);
+    }
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-delta-streamer", Constants.LOCAL_SPARK_MASTER);
     try {
-      new HoodieMultiTableDeltaStreamer(args, jssc).sync();
+      new HoodieMultiTableDeltaStreamer(config, jssc).sync();
     } finally {
       jssc.stop();
     }
   }
 
-  private static String getCommonPropsFileName(String[] args) {
-    String commonPropsFileName = "common_props.properties";
-    for (int i = 0; i < args.length; i++) {
-      if (args[i].equals(Constants.PROPS_FILE_PROP)) {
-        commonPropsFileName = args[i + 1];
-        break;
-      }
-    }
-    return commonPropsFileName;
-  }
-
-  private static String getConfigFolder(String[] args) {
-    String configFolder = "";
-    for (int i = 0; i < args.length; i++) {
-      if (args[i].equals(Constants.CONFIG_FOLDER_PROP)) {
-        configFolder = args[i + 1];
-        break;
-      }
-    }
-    return configFolder;
-  }
-
   /**
    * Resets target table name and target path using base-path-prefix.
-   * @param args
+   * @param configuration
    * @param database
    * @param tableName
    * @return
    */
-  private static String resetTarget(String[] args, String database, String tableName) {
-    int counter = 0;
-    String targetBasePath = "";
-    for (int i = 0; i < args.length; i++) {
-      if (args[i].equals(Constants.BASE_PATH_PREFIX_PROP)) {
-        args[i + 1] = args[i + 1].charAt(args[i + 1].length() - 1) == '/' ? args[i + 1].substring(0, args[i + 1].length() - 1) : args[i + 1];
-        targetBasePath = args[i + 1] + Constants.FILEDELIMITER + database + Constants.FILEDELIMITER + tableName;
-        counter += 1;
-      } else if (args[i].equals(Constants.TARGET_TABLE_ARG)) {
-        args[i + 1] = database + Constants.DELIMITER + tableName;
-        counter += 1;
-      }
-      if (counter == 2) {
-        break;
-      }
-    }
-
+  private static String resetTarget(Config configuration, String database, String tableName) {
+    String basePathPrefix = configuration.basePathPrefix;
+    basePathPrefix = basePathPrefix.charAt(basePathPrefix.length() - 1) == '/' ? basePathPrefix.substring(0, basePathPrefix.length() - 1) : basePathPrefix;
+    String targetBasePath = basePathPrefix + Constants.FILEDELIMITER + database + Constants.FILEDELIMITER + tableName;
+    configuration.targetTableName = database + Constants.DELIMITER + tableName;
     return targetBasePath;
   }
 
@@ -208,13 +220,13 @@ public class HoodieMultiTableDeltaStreamer {
   Creates actual HoodieDeltaStreamer objects for every table/topic and does incremental sync
    */
   public void sync() {
-    for (TableExecutionObject object : tableExecutionObjects) {
+    for (TableExecutionContext context : tableExecutionContexts) {
       try {
-        new HoodieDeltaStreamer(object.getConfig(), jssc, object.getProperties()).sync();
-        successTables.add(object.getDatabase() + Constants.DELIMITER + object.getTableName());
+        new HoodieDeltaStreamer(context.getConfig(), jssc, context.getProperties()).sync();
+        successTables.add(Helpers.getTableWithDatabase(context));
       } catch (Exception e) {
-        logger.error("error while running MultiTableDeltaStreamer for table: " + object.getTableName(), e);
-        failedTables.add(object.getDatabase() + Constants.DELIMITER + object.getTableName());
+        logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
+        failedTables.add(Helpers.getTableWithDatabase(context));
       }
     }
 
@@ -239,10 +251,8 @@ public class HoodieMultiTableDeltaStreamer {
     private static final String LOCAL_SPARK_MASTER = "local[2]";
     private static final String FILEDELIMITER = "/";
     private static final String DELIMITER = ".";
-    private static final String TARGET_TABLE_ARG = "--target-table";
-    private static final String PROPS_FILE_PROP = "--props";
-    private static final String CONFIG_FOLDER_PROP = "--config-folder";
-    private static final String BASE_PATH_PREFIX_PROP = "--base-path-prefix";
+    private static final String UNDERSCORE = "_";
+    private static final String COMMA_SEPARATOR = ",";
   }
 
   public Set<String> getSuccessTables() {
@@ -253,7 +263,7 @@ public class HoodieMultiTableDeltaStreamer {
     return failedTables;
   }
 
-  public List<TableExecutionObject> getTableExecutionObjects() {
-    return this.tableExecutionObjects;
+  public List<TableExecutionContext> getTableExecutionContexts() {
+    return this.tableExecutionContexts;
   }
 }

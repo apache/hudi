@@ -27,7 +27,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -152,20 +151,14 @@ public class DeltaSync implements Serializable {
    */
   private transient HoodieWriteClient writeClient;
 
-  /**
-   * Table Type.
-   */
-  private final HoodieTableType tableType;
-
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
-                   HoodieTableType tableType, TypedProperties props, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+                   TypedProperties props, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
                    Function<HoodieWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
 
     this.cfg = cfg;
     this.jssc = jssc;
     this.sparkSession = sparkSession;
     this.fs = fs;
-    this.tableType = tableType;
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
     this.props = props;
     this.schemaProvider = schemaProvider;

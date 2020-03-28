@@ -63,7 +63,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
   }
 
   @AfterClass
-  public static void cleanupClass() throws Exception {
+  public static void cleanupClass() {
     UtilitiesTestBase.cleanupClass();
   }
 

@@ -105,7 +105,7 @@ public class UtilitiesTestBase {
   }
 
   @AfterClass
-  public static void cleanupClass() throws Exception {
+  public static void cleanupClass() {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
     }

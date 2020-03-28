@@ -31,6 +31,7 @@ import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Types;
 import org.joda.time.DateTime;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -68,6 +69,11 @@ public class TestHiveSyncTool {
   @After
   public void teardown() throws IOException {
     TestUtil.clear();
+  }
+
+  @AfterClass
+  public static void cleanUpClass() {
+    TestUtil.shutdown();
   }
 
   /**

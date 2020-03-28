@@ -378,33 +378,7 @@ public class HoodieDeltaStreamer implements Serializable {
         tableType = HoodieTableType.valueOf(cfg.tableType);
       }
 
-      this.props = properties;
-      LOG.info("Creating delta streamer with configs : " + props.toString());
-      this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
-
-      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, tableType, props, jssc, fs, hiveConf,
-        this::onInitializingWriteClient);
-
-    }
-
-    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf)
-        throws IOException {
-      this.cfg = cfg;
-      this.jssc = jssc;
-      this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
-
-      if (fs.exists(new Path(cfg.targetBasePath))) {
-        HoodieTableMetaClient meta =
-            new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath, false);
-        tableType = meta.getTableType();
-        // This will guarantee there is no surprise with table type
-        ValidationUtils.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.tableType)),
-            "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.tableType);
-      } else {
-        tableType = HoodieTableType.valueOf(cfg.tableType);
-      }
-
-      this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+      this.props = properties != null ? properties : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
       LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
 
@@ -412,8 +386,14 @@ public class HoodieDeltaStreamer implements Serializable {
         cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
       }
 
-      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, tableType, props, jssc, fs, hiveConf,
-          this::onInitializingWriteClient);
+      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, hiveConf,
+        this::onInitializingWriteClient);
+
+    }
+
+    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf)
+        throws IOException {
+      this(cfg, jssc, fs, hiveConf, null);
     }
 
     public DeltaSync getDeltaSync() {
