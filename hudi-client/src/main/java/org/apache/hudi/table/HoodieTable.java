@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.client.SparkSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -67,6 +68,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -83,6 +85,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   private SerializableConfiguration hadoopConfiguration;
   private transient FileSystemViewManager viewManager;
+
+  protected final transient Supplier<Integer> idSupplier = SparkSupplier.PARTITION_SUPPLIER;
+  protected final transient Supplier<Integer> stageSupplier = SparkSupplier.STAGE_SUPPLIER;
+  protected final transient Supplier<Long> attemptSupplier = SparkSupplier.ATTEMPT_SUPPLIER;
 
   protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc) {
     this.config = config;
@@ -313,6 +319,18 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats)
       throws HoodieIOException {
     cleanFailedWrites(jsc, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled());
+  }
+
+  public Supplier<Integer> getIdSupplier() {
+    return idSupplier;
+  }
+
+  public Supplier<Integer> getStageSupplier() {
+    return stageSupplier;
+  }
+
+  public Supplier<Long> getAttemptSupplier() {
+    return attemptSupplier;
   }
 
   /**

@@ -49,7 +49,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.TaskContext;
 import org.apache.spark.util.SizeEstimator;
 
 import java.io.IOException;
@@ -59,6 +58,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 /**
  * IO Operation to append data onto an existing file.
@@ -101,16 +101,18 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   private long insertRecordsWritten = 0;
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
-                            String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable);
+                            String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
+                            Supplier<Integer> idSupplier, Supplier<Integer> stageSupplier, Supplier<Long> attemptSupplier) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, idSupplier, stageSupplier, attemptSupplier);
     writeStatus.setStat(new HoodieDeltaWriteStat());
     this.fileId = fileId;
     this.recordItr = recordItr;
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
-                            String partitionPath, String fileId) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, null);
+                            String partitionPath, String fileId, Supplier<Integer> idSupplier,
+                            Supplier<Integer> stageSupplier, Supplier<Long> attemptSupplier) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, null, idSupplier, stageSupplier, attemptSupplier);
   }
 
   private void init(HoodieRecord record) {
@@ -137,7 +139,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
         //save hoodie partition meta in the partition path
         HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, baseInstantTime,
             new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
-        partitionMetadata.trySave(TaskContext.getPartitionId());
+        partitionMetadata.trySave(idSupplier.get());
         this.writer = createLogWriter(fileSlice, baseInstantTime);
         this.currentLogFile = writer.getLogFile();
         ((HoodieDeltaWriteStat) writeStatus.getStat()).setLogVersion(currentLogFile.getLogVersion());
@@ -163,7 +165,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         avroRecord = Option.of(rewriteRecord((GenericRecord) avroRecord.get()));
         String seqId =
-            HoodieRecord.generateSequenceId(instantTime, TaskContext.getPartitionId(), recordIndex.getAndIncrement());
+            HoodieRecord.generateSequenceId(instantTime, (int) idSupplier.get(), recordIndex.getAndIncrement());
         HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getRecordKey(),
             hoodieRecord.getPartitionPath(), fileId);
         HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord.get(), instantTime, seqId);

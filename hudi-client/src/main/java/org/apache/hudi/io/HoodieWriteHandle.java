@@ -38,9 +38,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.TaskContext;
 
 import java.io.IOException;
+import java.util.function.Supplier;
 
 /**
  * Base class for all write operations logically performed at the file group level.
@@ -55,9 +55,13 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
   protected final String partitionPath;
   protected final String fileId;
   protected final String writeToken;
+  protected final Supplier<Integer> idSupplier;
+  protected final Supplier<Integer> stageSupplier;
+  protected final Supplier<Long> attemptSupplier;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
-                           String fileId, HoodieTable<T> hoodieTable) {
+                           String fileId, HoodieTable<T> hoodieTable, Supplier<Integer> idSupplier,
+                           Supplier<Integer> stageSupplier, Supplier<Long> attemptSupplier) {
     super(config, instantTime, hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
@@ -67,14 +71,16 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
     this.timer = new HoodieTimer().startTimer();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
+    this.idSupplier = idSupplier;
+    this.stageSupplier = stageSupplier;
+    this.attemptSupplier = attemptSupplier;
   }
 
   /**
    * Generate a write token based on the currently running spark task and its place in the spark dag.
    */
-  private static String makeSparkWriteToken() {
-    return FSUtils.makeWriteToken(TaskContext.getPartitionId(), TaskContext.get().stageId(),
-        TaskContext.get().taskAttemptId());
+  private String makeSparkWriteToken() {
+    return FSUtils.makeWriteToken((int) idSupplier.get(), stageSupplier.get(), attemptSupplier.get());
   }
 
   public static Schema createHoodieWriteSchema(Schema originalSchema) {

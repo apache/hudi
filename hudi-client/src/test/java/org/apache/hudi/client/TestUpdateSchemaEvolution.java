@@ -89,7 +89,8 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
           .add(new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
       HoodieCreateHandle createHandle =
-          new HoodieCreateHandle(config, "100", table, rowChange1.getPartitionPath(), "f1-0", insertRecords.iterator());
+          new HoodieCreateHandle(config, "100", table, rowChange1.getPartitionPath(), "f1-0", insertRecords.iterator(),
+                  idSupplier, stageSupplier, attemptSupplier);
       createHandle.write();
       return createHandle.close();
     }).collect();
@@ -119,7 +120,8 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
 
       try {
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config2, "101", table2,
-                updateRecords.iterator(), record1.getPartitionPath(), fileId);
+                updateRecords.iterator(), record1.getPartitionPath(), fileId,
+                SparkSupplier.PARTITION_SUPPLIER, SparkSupplier.STAGE_SUPPLIER, SparkSupplier.ATTEMPT_SUPPLIER);
         Configuration conf = new Configuration();
         AvroReadSupport.setAvroReadSchema(conf, mergeHandle.getWriterSchema());
         List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(conf,
