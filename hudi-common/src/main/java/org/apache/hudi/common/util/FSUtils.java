@@ -46,8 +46,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -213,7 +213,7 @@ public class FSUtils {
    * @param basePathStr Base-Path
    * @param consumer Callback for processing
    * @param excludeMetaFolder Exclude .hoodie folder
-   * @throws IOException
+   * @throws IOException -
    */
   static void processFiles(FileSystem fs, String basePathStr, Function<FileStatus, Boolean> consumer,
       boolean excludeMetaFolder) throws IOException {

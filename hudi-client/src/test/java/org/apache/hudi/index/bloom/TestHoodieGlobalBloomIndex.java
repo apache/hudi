@@ -249,17 +249,13 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record5));
 
     String filename0 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", Collections.singletonList(record1),
-                schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", Collections.singletonList(record1), schema, null, false);
     String filename1 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", new ArrayList<>(),
-                schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", new ArrayList<>(), schema, null, false);
     String filename2 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record2),
-                schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record2), schema, null, false);
     String filename3 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record4),
-                schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record4), schema, null, false);
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     metaClient = HoodieTableMetaClient.reload(metaClient);

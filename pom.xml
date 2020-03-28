@@ -534,13 +534,6 @@
         <version>${joda.version}</version>
       </dependency>
 
-      <!-- we have to stay at <= 16.0, due to issues with HBase client -->
-      <dependency>
-        <groupId>com.google.guava</groupId>
-        <artifactId>guava</artifactId>
-        <version>15.0</version>
-      </dependency>
-
       <dependency>
         <groupId>xerces</groupId>
         <artifactId>xercesImpl</artifactId>

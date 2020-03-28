@@ -18,18 +18,18 @@
 
 package org.apache.hudi.metrics;
 
-import com.google.common.base.Preconditions;
-import java.lang.management.ManagementFactory;
-import javax.management.MBeanServer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-
 import org.apache.log4j.LogManager;
 
 import com.codahale.metrics.MetricRegistry;
 
 import java.io.Closeable;
+import java.util.Objects;
 import java.util.stream.IntStream;
+
+import java.lang.management.ManagementFactory;
+import javax.management.MBeanServer;
 
 /**
  * Implementation of Jmx reporter, which used to report jmx metric.
@@ -92,7 +92,7 @@ public class JmxMetricsReporter extends MetricsReporter {
 
   @Override
   public void stop() {
-    Preconditions.checkNotNull(jmxReporterServer, "jmxReporterServer is not running.");
+    Objects.requireNonNull(jmxReporterServer, "jmxReporterServer is not running.");
     try {
       jmxReporterServer.stop();
     } catch (Exception e) {

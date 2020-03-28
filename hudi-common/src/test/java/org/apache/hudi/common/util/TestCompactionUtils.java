@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.CompactionTestUtils.TestHoodieBaseFile;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.versioning.compaction.CompactionPlanMigrator;
 
-import com.google.common.collect.ImmutableMap;
 import org.apache.hadoop.fs.Path;
 import org.junit.Assert;
 import org.junit.Before;
@@ -39,6 +38,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -59,8 +59,12 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
-  private static final Map<String, Double> METRICS =
-      new ImmutableMap.Builder<String, Double>().put("key1", 1.0).put("key2", 3.0).build();
+  private static final Map<String, Double> METRICS = new HashMap<String, Double>() {
+    {
+      put("key1", 1.0);
+      put("key2", 3.0);
+    }
+  };
   private Function<Pair<String, FileSlice>, Map<String, Double>> metricsCaptureFn = (partitionFileSlice) -> METRICS;
 
   @Before

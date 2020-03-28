@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import com.google.common.collect.ImmutableMap;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -122,8 +121,14 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(100 * MB, Collections.singletonList(MB));
     sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
 
-    Map<Long, String> keyToPartitionMap = new ImmutableMap.Builder().put(120 * MB, partitionPaths[2])
-        .put(110 * MB, partitionPaths[2]).put(100 * MB, partitionPaths[1]).put(90 * MB, partitionPaths[0]).build();
+    Map<Long, String> keyToPartitionMap = Collections.unmodifiableMap(new HashMap<Long,String>() {
+      {
+        put(120 * MB, partitionPaths[2]);
+        put(110 * MB, partitionPaths[2]);
+        put(100 * MB, partitionPaths[1]);
+        put(90 * MB, partitionPaths[0]);
+      }
+    });
 
     DayBasedCompactionStrategy strategy = new DayBasedCompactionStrategy();
     HoodieWriteConfig writeConfig =
@@ -162,9 +167,16 @@ public class TestHoodieCompactionStrategy {
     String currentDayPlus1 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(1));
     String currentDayPlus5 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(5));
 
-    Map<Long, String> keyToPartitionMap = new ImmutableMap.Builder().put(120 * MB, currentDay)
-        .put(110 * MB, currentDayMinus1).put(100 * MB, currentDayMinus2).put(80 * MB, currentDayMinus3)
-        .put(90 * MB, currentDayPlus1).put(70 * MB, currentDayPlus5).build();
+    Map<Long, String> keyToPartitionMap = Collections.unmodifiableMap(new HashMap<Long,String>() {
+      {
+        put(120 * MB, currentDay);
+        put(110 * MB, currentDayMinus1);
+        put(100 * MB, currentDayMinus2);
+        put(80 * MB, currentDayMinus3);
+        put(90 * MB, currentDayPlus1);
+        put(70 * MB, currentDayPlus5);
+      }
+    });
 
     BoundedPartitionAwareCompactionStrategy strategy = new BoundedPartitionAwareCompactionStrategy();
     HoodieWriteConfig writeConfig =
@@ -204,9 +216,16 @@ public class TestHoodieCompactionStrategy {
     String currentDayPlus1 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(1));
     String currentDayPlus5 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(5));
 
-    Map<Long, String> keyToPartitionMap = new ImmutableMap.Builder().put(120 * MB, currentDay)
-        .put(110 * MB, currentDayMinus1).put(100 * MB, currentDayMinus2).put(80 * MB, currentDayMinus3)
-        .put(90 * MB, currentDayPlus1).put(70 * MB, currentDayPlus5).build();
+    Map<Long, String> keyToPartitionMap = Collections.unmodifiableMap(new HashMap<Long,String>() {
+      {
+        put(120 * MB, currentDay);
+        put(110 * MB, currentDayMinus1);
+        put(100 * MB, currentDayMinus2);
+        put(80 * MB, currentDayMinus3);
+        put(90 * MB, currentDayPlus1);
+        put(70 * MB, currentDayPlus5);
+      }
+    });
 
     UnBoundedPartitionAwareCompactionStrategy strategy = new UnBoundedPartitionAwareCompactionStrategy();
     HoodieWriteConfig writeConfig =

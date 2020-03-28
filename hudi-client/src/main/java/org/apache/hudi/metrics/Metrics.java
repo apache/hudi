@@ -18,12 +18,12 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.io.Closeables;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -53,8 +53,7 @@ public class Metrics {
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       try {
         reporter.report();
-        reporter.stop();
-        Closeables.close(reporter.getReporter(), true);
+        FileIOUtils.close(reporter.getReporter(), true);
       } catch (Exception e) {
         e.printStackTrace();
       }

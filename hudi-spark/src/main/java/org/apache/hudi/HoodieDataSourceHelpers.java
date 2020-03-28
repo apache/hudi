@@ -23,8 +23,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.CollectionUtils;
 
-import com.google.common.collect.Sets;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.util.List;
@@ -68,7 +68,8 @@ public class HoodieDataSourceHelpers {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
     if (metaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
       return metaClient.getActiveTimeline().getTimelineOfActions(
-          Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION, HoodieActiveTimeline.DELTA_COMMIT_ACTION));
+          CollectionUtils.createSet(HoodieActiveTimeline.COMMIT_ACTION,
+              HoodieActiveTimeline.DELTA_COMMIT_ACTION));
     } else {
       return metaClient.getCommitTimeline().filterCompletedInstants();
     }

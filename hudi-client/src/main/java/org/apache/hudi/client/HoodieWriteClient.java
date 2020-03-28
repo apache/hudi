@@ -64,7 +64,6 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
 import com.codahale.metrics.Timer;
-import com.google.common.collect.ImmutableMap;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -77,6 +76,7 @@ import org.apache.spark.storage.StorageLevel;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -746,7 +746,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     String startRollbackInstant = HoodieActiveTimeline.createNewInstantTime();
     // Start the timer
     final Timer.Context context = startContext();
-    ImmutableMap.Builder<String, List<HoodieRollbackStat>> instantsToStats = ImmutableMap.builder();
+    Map<String, List<HoodieRollbackStat>> instantsToStats = new HashMap<>();
     table.getActiveTimeline().createNewInstant(
         new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, startRollbackInstant));
     instantsToRollback.forEach(instant -> {
@@ -773,7 +773,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       }
     });
     try {
-      finishRestore(context, instantsToStats.build(),
+      finishRestore(context, Collections.unmodifiableMap(instantsToStats),
           instantsToRollback.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
           startRollbackInstant, instantTime);
     } catch (IOException io) {

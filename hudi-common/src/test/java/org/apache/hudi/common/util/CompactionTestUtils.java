@@ -31,8 +31,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import org.apache.hadoop.fs.Path;
 import org.junit.Assert;
 
@@ -82,12 +80,17 @@ public class CompactionTestUtils {
     createDeltaCommit(metaClient, "004");
     createDeltaCommit(metaClient, "006");
 
-    Map<String, String> baseInstantsToCompaction = new ImmutableMap.Builder<String, String>().put("000", "001")
-        .put("002", "003").put("004", "005").put("006", "007").build();
+    Map<String, String> baseInstantsToCompaction = new HashMap<String, String>() {
+      {
+        put("000", "001");
+        put("002", "003");
+        put("004", "005");
+        put("006", "007");
+      }
+    };
     List<Integer> expectedNumEntries =
         Arrays.asList(numEntriesInPlan1, numEntriesInPlan2, numEntriesInPlan3, numEntriesInPlan4);
-    List<HoodieCompactionPlan> plans =
-        new ImmutableList.Builder<HoodieCompactionPlan>().add(plan1, plan2, plan3, plan4).build();
+    List<HoodieCompactionPlan> plans = CollectionUtils.createImmutableList(plan1, plan2, plan3, plan4);
     IntStream.range(0, 4).boxed().forEach(idx -> {
       if (expectedNumEntries.get(idx) > 0) {
         Assert.assertEquals("check if plan " + idx + " has exp entries", expectedNumEntries.get(idx).longValue(),

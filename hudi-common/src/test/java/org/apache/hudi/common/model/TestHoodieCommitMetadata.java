@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.FileIOUtils;
+
 import org.junit.Assert;
 import org.junit.Test;
 
