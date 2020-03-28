@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution;
 
+import org.apache.hudi.client.Suppliers;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -28,7 +29,6 @@ import org.apache.hudi.table.HoodieTable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.function.Supplier;
 
 /**
  * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new log files.
@@ -37,9 +37,8 @@ public class MergeOnReadLazyInsertIterable<T extends HoodieRecordPayload> extend
 
   public MergeOnReadLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
                                        String instantTime, HoodieTable<T> hoodieTable, String idPfx,
-                                       Supplier<Integer> idSupplier, Supplier<Integer> stageSupplier,
-                                       Supplier<Long> attemptSupplier) {
-    super(sortedRecordItr, config, instantTime, hoodieTable, idPfx, idSupplier, stageSupplier, attemptSupplier);
+                                       Suppliers suppliers) {
+    super(sortedRecordItr, config, instantTime, hoodieTable, idPfx, suppliers);
   }
 
   @Override
@@ -56,7 +55,7 @@ public class MergeOnReadLazyInsertIterable<T extends HoodieRecordPayload> extend
       // lazily initialize the handle, for the first time
       if (handle == null) {
         handle = new HoodieAppendHandle(hoodieConfig, instantTime, hoodieTable,
-                insertPayload.getPartitionPath(), getNextFileId(idPrefix), idSupplier, stageSupplier, attemptSupplier);
+                insertPayload.getPartitionPath(), getNextFileId(idPrefix), suppliers);
       }
       if (handle.canWrite(insertPayload)) {
         // write the payload, if the handle has capacity
@@ -67,7 +66,7 @@ public class MergeOnReadLazyInsertIterable<T extends HoodieRecordPayload> extend
         statuses.add(handle.getWriteStatus());
         // Need to handle the rejected payload & open new handle
         handle = new HoodieAppendHandle(hoodieConfig, instantTime, hoodieTable,
-                insertPayload.getPartitionPath(), getNextFileId(idPrefix), idSupplier, stageSupplier, attemptSupplier);
+                insertPayload.getPartitionPath(), getNextFileId(idPrefix), suppliers);
         handle.write(insertPayload, payload.insertValue, payload.exception); // we should be able to write 1 payload.
       }
     }

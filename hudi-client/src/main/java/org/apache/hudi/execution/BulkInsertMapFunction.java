@@ -51,7 +51,6 @@ public class BulkInsertMapFunction<T extends HoodieRecordPayload>
   @Override
   public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> sortedRecordItr) {
     return new CopyOnWriteLazyInsertIterable<>(sortedRecordItr, config, instantTime, hoodieTable,
-        fileIDPrefixes.get(partition), hoodieTable.getIdSupplier(), hoodieTable.getStageSupplier(),
-            hoodieTable.getAttemptSupplier());
+        fileIDPrefixes.get(partition), hoodieTable.getSuppliers());
   }
 }

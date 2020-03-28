@@ -18,28 +18,31 @@
 
 package org.apache.hudi.client;
 
-import org.apache.spark.TaskContext;
-
 import java.io.Serializable;
-import java.util.function.Supplier;
 
 /**
- * Spark Supplier.
+ * A bundle of Suppliers.
  */
-public interface SparkTaskContextDetailSupplier<T> extends Supplier<T>, Serializable {
+public class Suppliers implements Serializable {
 
-  /**
-   * Supplier to get partition id.
-   */
-  SparkTaskContextDetailSupplier<Integer> PARTITION_ID_SUPPLIER = () -> TaskContext.getPartitionId();
+  private SparkTaskContextDetailSupplier<Integer> partitionIdSupplier =
+          SparkTaskContextDetailSupplier.PARTITION_ID_SUPPLIER;
 
-  /**
-   * Supplier to get stage id.
-   */
-  SparkTaskContextDetailSupplier<Integer> STAGE_ID_SUPPLIER = () -> TaskContext.get().stageId();
+  private SparkTaskContextDetailSupplier<Integer> stageIdSupplier =
+          SparkTaskContextDetailSupplier.STAGE_ID_SUPPLIER;
 
-  /**
-   * Supplier to get task attempt id.
-   */
-  SparkTaskContextDetailSupplier<Long> ATTEMPT_ID_SUPPLIER = () -> TaskContext.get().taskAttemptId();
+  private SparkTaskContextDetailSupplier<Long> attemptIdSupplier =
+          SparkTaskContextDetailSupplier.ATTEMPT_ID_SUPPLIER;
+
+  public SparkTaskContextDetailSupplier<Integer> getPartitionIdSupplier() {
+    return partitionIdSupplier;
+  }
+
+  public SparkTaskContextDetailSupplier<Integer> getStageIdSupplier() {
+    return stageIdSupplier;
+  }
+
+  public SparkTaskContextDetailSupplier<Long> getAttemptIdSupplier() {
+    return attemptIdSupplier;
+  }
 }

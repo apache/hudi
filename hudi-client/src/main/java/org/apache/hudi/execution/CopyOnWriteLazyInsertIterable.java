@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution;
 
+import org.apache.hudi.client.Suppliers;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -51,23 +52,20 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
   protected final HoodieTable<T> hoodieTable;
   protected final String idPrefix;
   protected int numFilesWritten;
-  protected Supplier<Integer> idSupplier;
-  protected Supplier<Integer> stageSupplier;
-  protected Supplier<Long> attemptSupplier;
+  protected Suppliers suppliers;
+  protected Supplier<Integer> stageIdSupplier;
+  protected Supplier<Long> attemptIdSupplier;
 
   public CopyOnWriteLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
                                        String instantTime, HoodieTable<T> hoodieTable, String idPrefix,
-                                       Supplier<Integer> idSupplier, Supplier<Integer> stageSupplier,
-                                       Supplier<Long> attemptSupplier) {
+                                       Suppliers suppliers) {
     super(sortedRecordItr);
     this.hoodieConfig = config;
     this.instantTime = instantTime;
     this.hoodieTable = hoodieTable;
     this.idPrefix = idPrefix;
     this.numFilesWritten = 0;
-    this.idSupplier = idSupplier;
-    this.stageSupplier = stageSupplier;
-    this.attemptSupplier = attemptSupplier;
+    this.suppliers = suppliers;
   }
 
   // Used for caching HoodieRecord along with insertValue. We need this to offload computation work to buffering thread.
@@ -146,7 +144,7 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
       // lazily initialize the handle, for the first time
       if (handle == null) {
         handle = new HoodieCreateHandle(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),
-            getNextFileId(idPrefix), idSupplier, stageSupplier, attemptSupplier);
+            getNextFileId(idPrefix), suppliers);
       }
 
       if (handle.canWrite(payload.record)) {
@@ -157,7 +155,7 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
         statuses.add(handle.close());
         // Need to handle the rejected payload & open new handle
         handle = new HoodieCreateHandle(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),
-            getNextFileId(idPrefix), idSupplier, stageSupplier, attemptSupplier);
+            getNextFileId(idPrefix), suppliers);
         handle.write(insertPayload, payload.insertValue, payload.exception); // we should be able to write 1 payload.
       }
     }

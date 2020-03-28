@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.client.Suppliers;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -41,7 +42,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Iterator;
-import java.util.function.Supplier;
 
 public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
 
@@ -56,9 +56,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
   private boolean useWriterSchema = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
-      String partitionPath, String fileId, Supplier<Integer> idSupplier,
-                            Supplier<Integer> stageSupplier, Supplier<Long> attemptSupplier) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, idSupplier, stageSupplier, attemptSupplier);
+      String partitionPath, String fileId, Suppliers suppliers) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, suppliers);
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
 
@@ -67,10 +66,10 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
     try {
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
-      partitionMetadata.trySave(idSupplier.get());
+      partitionMetadata.trySave(getPartitionId());
       createMarkerFile(partitionPath);
       this.storageWriter =
-          HoodieStorageWriterFactory.getStorageWriter(instantTime, path, hoodieTable, config, writerSchema, idSupplier);
+          HoodieStorageWriterFactory.getStorageWriter(instantTime, path, hoodieTable, config, writerSchema, suppliers);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
@@ -81,9 +80,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
    * Called by the compactor code path.
    */
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
-      String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordIterator, Supplier<Integer> idSupplier,
-                            Supplier<Integer> stageSupplier, Supplier<Long> attemptSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, idSupplier, stageSupplier, attemptSupplier);
+      String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordIterator, Suppliers suppliers) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, suppliers);
     this.recordIterator = recordIterator;
     this.useWriterSchema = true;
   }

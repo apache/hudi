@@ -103,8 +103,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
       when(record.getPartitionPath()).thenReturn(partitionPath);
       String writeToken = FSUtils.makeWriteToken(TaskContext.getPartitionId(), TaskContext.get().stageId(),
           TaskContext.get().taskAttemptId());
-      HoodieCreateHandle io = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileName,
-              idSupplier, stageSupplier, attemptSupplier);
+      HoodieCreateHandle io = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileName, suppliers);
       return Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
     }).collect().get(0);
 

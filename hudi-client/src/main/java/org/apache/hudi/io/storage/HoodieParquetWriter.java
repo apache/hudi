@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.client.Suppliers;
 import org.apache.hudi.common.io.storage.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -35,7 +36,6 @@ import org.apache.parquet.hadoop.ParquetWriter;
 
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
 
 /**
  * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides a way to check if
@@ -52,10 +52,10 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   private final HoodieAvroWriteSupport writeSupport;
   private final String instantTime;
   private final Schema schema;
-  private final Supplier<Integer> idSupplier;
+  private final Suppliers suppliers;
 
   public HoodieParquetWriter(String instantTime, Path file, HoodieParquetConfig parquetConfig,
-                             Schema schema, Supplier<Integer> idSupplier) throws IOException {
+                             Schema schema, Suppliers suppliers) throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
         ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),
         parquetConfig.getBlockSize(), parquetConfig.getPageSize(), parquetConfig.getPageSize(),
@@ -73,7 +73,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;
     this.schema = schema;
-    this.idSupplier = idSupplier;
+    this.suppliers = suppliers;
   }
 
   public static Configuration registerFileSystem(Path file, Configuration conf) {
@@ -87,7 +87,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   @Override
   public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
     String seqId =
-        HoodieRecord.generateSequenceId(instantTime, idSupplier.get(), recordIndex.getAndIncrement());
+        HoodieRecord.generateSequenceId(instantTime, suppliers.getPartitionIdSupplier().get(), recordIndex.getAndIncrement());
     HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, record.getRecordKey(), record.getPartitionPath(),
         file.getName());
     HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.client.Suppliers;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -40,7 +41,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.function.Supplier;
 
 /**
  * Base class for all write operations logically performed at the file group level.
@@ -55,13 +55,10 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
   protected final String partitionPath;
   protected final String fileId;
   protected final String writeToken;
-  protected final Supplier<Integer> idSupplier;
-  protected final Supplier<Integer> stageSupplier;
-  protected final Supplier<Long> attemptSupplier;
+  protected final Suppliers suppliers;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
-                           String fileId, HoodieTable<T> hoodieTable, Supplier<Integer> idSupplier,
-                           Supplier<Integer> stageSupplier, Supplier<Long> attemptSupplier) {
+                           String fileId, HoodieTable<T> hoodieTable, Suppliers suppliers) {
     super(config, instantTime, hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
@@ -70,9 +67,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
     this.timer = new HoodieTimer().startTimer();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
-    this.idSupplier = idSupplier;
-    this.stageSupplier = stageSupplier;
-    this.attemptSupplier = attemptSupplier;
+    this.suppliers = suppliers;
     this.writeToken = makeSparkWriteToken();
   }
 
@@ -80,7 +75,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
    * Generate a write token based on the currently running spark task and its place in the spark dag.
    */
   private String makeSparkWriteToken() {
-    return FSUtils.makeWriteToken(idSupplier.get(), stageSupplier.get(), attemptSupplier.get());
+    return FSUtils.makeWriteToken(getPartitionId(), getStageId(), getAttemptId());
   }
 
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
@@ -176,5 +171,17 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
   @Override
   protected FileSystem getFileSystem() {
     return hoodieTable.getMetaClient().getFs();
+  }
+
+  protected int getPartitionId() {
+    return suppliers.getPartitionIdSupplier().get();
+  }
+
+  protected int getStageId() {
+    return suppliers.getStageIdSupplier().get();
+  }
+
+  protected long getAttemptId() {
+    return suppliers.getAttemptIdSupplier().get();
   }
 }

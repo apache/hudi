@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.client.Suppliers;
 import org.apache.hudi.common.bloom.filter.BloomFilter;
 import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -32,7 +33,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 
 import java.io.IOException;
-import java.util.function.Supplier;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
@@ -40,20 +40,19 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 public class HoodieStorageWriterFactory {
 
   public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> getStorageWriter(
-      String instantTime, Path path, HoodieTable<T> hoodieTable, HoodieWriteConfig config, Schema schema,
-      Supplier<Integer> idSupplier)
+          String instantTime, Path path, HoodieTable<T> hoodieTable, HoodieWriteConfig config, Schema schema, Suppliers suppliers)
       throws IOException {
     final String name = path.getName();
     final String extension = FSUtils.isLogFile(path) ? HOODIE_LOG.getFileExtension() : FSUtils.getFileExtension(name);
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetStorageWriter(instantTime, path, config, schema, hoodieTable, idSupplier);
+      return newParquetStorageWriter(instantTime, path, config, schema, hoodieTable, suppliers);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
   private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(
           String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
-          Supplier<Integer> idSupplier)
+          Suppliers suppliers)
       throws IOException {
     BloomFilter filter = BloomFilterFactory
         .createBloomFilter(config.getBloomFilterNumEntries(), config.getBloomFilterFPP(),
@@ -66,6 +65,6 @@ public class HoodieStorageWriterFactory {
         config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
         hoodieTable.getHadoopConf(), config.getParquetCompressionRatio());
 
-    return new HoodieParquetWriter<>(instantTime, path, parquetConfig, schema, idSupplier);
+    return new HoodieParquetWriter<>(instantTime, path, parquetConfig, schema, suppliers);
   }
 }

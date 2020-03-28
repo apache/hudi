@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.client.Suppliers;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkConfigUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -52,7 +53,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
 
 @SuppressWarnings("Duplicates")
 public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
@@ -71,9 +71,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   private boolean useWriterSchema;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
-      Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, Supplier<Integer> idSupplier,
-                           Supplier<Integer> stageSupplier, Supplier<Long> attemptSupplier) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, idSupplier, stageSupplier, attemptSupplier);
+                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, Suppliers suppliers) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, suppliers);
     init(fileId, recordItr);
     init(fileId, partitionPath, hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
   }
@@ -83,9 +82,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
       Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-      HoodieBaseFile dataFileToBeMerged, Supplier<Integer> idSupplier,
-                           Supplier<Integer> stageSupplier, Supplier<Long> attemptSupplier) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, idSupplier, stageSupplier, attemptSupplier);
+      HoodieBaseFile dataFileToBeMerged, Suppliers suppliers) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, suppliers);
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchema = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
@@ -113,7 +111,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
-      partitionMetadata.trySave(idSupplier.get());
+      partitionMetadata.trySave(getPartitionId());
 
       oldFilePath = new Path(config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
       String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
@@ -134,7 +132,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
       // Create the writer for writing the new version file
       storageWriter =
-          HoodieStorageWriterFactory.getStorageWriter(instantTime, newFilePath, hoodieTable, config, writerSchema, idSupplier);
+          HoodieStorageWriterFactory.getStorageWriter(instantTime, newFilePath, hoodieTable, config, writerSchema, suppliers);
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);

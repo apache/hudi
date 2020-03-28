@@ -222,14 +222,13 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
-    return new HoodieMergeHandle<>(config, instantTime, this, recordItr, partitionPath, fileId,
-            idSupplier, stageSupplier, attemptSupplier);
+    return new HoodieMergeHandle<>(config, instantTime, this, recordItr, partitionPath, fileId, suppliers);
   }
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
       Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
     return new HoodieMergeHandle<>(config, instantTime, this, keyToNewRecords,
-            partitionPath, fileId, dataFileToBeMerged, idSupplier, stageSupplier, attemptSupplier);
+            partitionPath, fileId, dataFileToBeMerged, suppliers);
   }
 
   public Iterator<List<WriteStatus>> handleInsert(String instantTime, String idPfx, Iterator<HoodieRecord<T>> recordItr)
@@ -239,15 +238,13 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       LOG.info("Empty partition");
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
-    return new CopyOnWriteLazyInsertIterable<>(recordItr, config, instantTime, this, idPfx,
-            idSupplier, stageSupplier, attemptSupplier);
+    return new CopyOnWriteLazyInsertIterable<>(recordItr, config, instantTime, this, idPfx, suppliers);
   }
 
   public Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
       Iterator<HoodieRecord<T>> recordItr) {
     HoodieCreateHandle createHandle =
-        new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordItr,
-                idSupplier, stageSupplier, attemptSupplier);
+        new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordItr, suppliers);
     createHandle.write();
     return Collections.singletonList(Collections.singletonList(createHandle.close())).iterator();
   }
