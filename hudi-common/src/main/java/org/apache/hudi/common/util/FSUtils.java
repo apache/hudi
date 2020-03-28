@@ -46,8 +46,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -105,12 +105,12 @@ public class FSUtils {
     return String.format("%d-%d-%d", taskPartitionId, stageId, taskAttemptId);
   }
 
-  public static String makeDataFileName(String commitTime, String writeToken, String fileId) {
-    return String.format("%s_%s_%s.parquet", fileId, writeToken, commitTime);
+  public static String makeDataFileName(String instantTime, String writeToken, String fileId) {
+    return String.format("%s_%s_%s.parquet", fileId, writeToken, instantTime);
   }
 
-  public static String makeMarkerFile(String commitTime, String writeToken, String fileId) {
-    return String.format("%s_%s_%s%s", fileId, writeToken, commitTime, HoodieTableMetaClient.MARKER_EXTN);
+  public static String makeMarkerFile(String instantTime, String writeToken, String fileId) {
+    return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, HoodieTableMetaClient.MARKER_EXTN);
   }
 
   public static String translateMarkerToDataPath(String basePath, String markerPath, String instantTs) {
@@ -125,8 +125,8 @@ public class FSUtils {
         HoodieFileFormat.PARQUET.getFileExtension());
   }
 
-  public static String maskWithoutFileId(String commitTime, int taskPartitionId) {
-    return String.format("*_%s_%s%s", taskPartitionId, commitTime, HoodieFileFormat.PARQUET.getFileExtension());
+  public static String maskWithoutFileId(String instantTime, int taskPartitionId) {
+    return String.format("*_%s_%s%s", taskPartitionId, instantTime, HoodieFileFormat.PARQUET.getFileExtension());
   }
 
   public static String getCommitFromCommitFile(String commitFileName) {
@@ -213,7 +213,7 @@ public class FSUtils {
    * @param basePathStr Base-Path
    * @param consumer Callback for processing
    * @param excludeMetaFolder Exclude .hoodie folder
-   * @throws IOException
+   * @throws IOException -
    */
   static void processFiles(FileSystem fs, String basePathStr, Function<FileStatus, Boolean> consumer,
       boolean excludeMetaFolder) throws IOException {
@@ -282,7 +282,7 @@ public class FSUtils {
   }
 
   /**
-   * Get the first part of the file name in the log file. That will be the fileId. Log file do not have commitTime in
+   * Get the first part of the file name in the log file. That will be the fileId. Log file do not have instantTime in
    * the file name.
    */
   public static String getFileIdFromLogPath(Path path) {
@@ -304,7 +304,7 @@ public class FSUtils {
   }
 
   /**
-   * Get the first part of the file name in the log file. That will be the fileId. Log file do not have commitTime in
+   * Get the first part of the file name in the log file. That will be the fileId. Log file do not have instantTime in
    * the file name.
    */
   public static String getBaseCommitTimeFromLogPath(Path path) {

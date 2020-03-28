@@ -214,7 +214,7 @@ public class RollbackHelper implements Serializable {
 
   private Map<HeaderMetadataType, String> generateHeader(String commit) {
     // generate metadata
-    Map<HeaderMetadataType, String> header = new HashMap<>();
+    Map<HeaderMetadataType, String> header = new HashMap<>(3);
     header.put(HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().getTimestamp());
     header.put(HeaderMetadataType.TARGET_INSTANT_TIME, commit);
     header.put(HeaderMetadataType.COMMAND_BLOCK_TYPE,

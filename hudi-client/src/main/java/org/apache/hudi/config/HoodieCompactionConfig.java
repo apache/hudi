@@ -288,7 +288,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       int maxInstantsToKeep = Integer.parseInt(props.getProperty(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP));
       int cleanerCommitsRetained =
           Integer.parseInt(props.getProperty(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP));
-      ValidationUtils.checkArgument(maxInstantsToKeep > minInstantsToKeep);
+      ValidationUtils.checkArgument(maxInstantsToKeep > minInstantsToKeep,
+          String.format(
+              "Increase %s=%d to be greater than %s=%d.",
+              HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP, maxInstantsToKeep,
+              HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP, minInstantsToKeep));
       ValidationUtils.checkArgument(minInstantsToKeep > cleanerCommitsRetained,
           String.format(
               "Increase %s=%d to be greater than %s=%d. Otherwise, there is risk of incremental pull "

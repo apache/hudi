@@ -74,14 +74,14 @@ public class StatsCommand implements CommandMarker {
 
     List<Comparable[]> rows = new ArrayList<>();
     DecimalFormat df = new DecimalFormat("#.00");
-    for (HoodieInstant commitTime : timeline.getInstants().collect(Collectors.toList())) {
+    for (HoodieInstant instantTime : timeline.getInstants().collect(Collectors.toList())) {
       String waf = "0";
-      HoodieCommitMetadata commit = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitTime).get(),
+      HoodieCommitMetadata commit = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(instantTime).get(),
           HoodieCommitMetadata.class);
       if (commit.fetchTotalUpdateRecordsWritten() > 0) {
         waf = df.format((float) commit.fetchTotalRecordsWritten() / commit.fetchTotalUpdateRecordsWritten());
       }
-      rows.add(new Comparable[] {commitTime.getTimestamp(), commit.fetchTotalUpdateRecordsWritten(),
+      rows.add(new Comparable[] {instantTime.getTimestamp(), commit.fetchTotalUpdateRecordsWritten(),
           commit.fetchTotalRecordsWritten(), waf});
       totalRecordsUpserted += commit.fetchTotalUpdateRecordsWritten();
       totalRecordsWritten += commit.fetchTotalRecordsWritten();
@@ -97,8 +97,8 @@ public class StatsCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  private Comparable[] printFileSizeHistogram(String commitTime, Snapshot s) {
-    return new Comparable[] {commitTime, s.getMin(), s.getValue(0.1), s.getMedian(), s.getMean(), s.get95thPercentile(),
+  private Comparable[] printFileSizeHistogram(String instantTime, Snapshot s) {
+    return new Comparable[] {instantTime, s.getMin(), s.getValue(0.1), s.getMedian(), s.getMean(), s.get95thPercentile(),
         s.getMax(), s.size(), s.getStdDev()};
   }
 
@@ -121,19 +121,19 @@ public class StatsCommand implements CommandMarker {
     Histogram globalHistogram = new Histogram(new UniformReservoir(MAX_FILES));
     HashMap<String, Histogram> commitHistoMap = new HashMap<>();
     for (FileStatus fileStatus : statuses) {
-      String commitTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
+      String instantTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
       long sz = fileStatus.getLen();
-      if (!commitHistoMap.containsKey(commitTime)) {
-        commitHistoMap.put(commitTime, new Histogram(new UniformReservoir(MAX_FILES)));
+      if (!commitHistoMap.containsKey(instantTime)) {
+        commitHistoMap.put(instantTime, new Histogram(new UniformReservoir(MAX_FILES)));
       }
-      commitHistoMap.get(commitTime).update(sz);
+      commitHistoMap.get(instantTime).update(sz);
       globalHistogram.update(sz);
     }
 
     List<Comparable[]> rows = new ArrayList<>();
-    for (String commitTime : commitHistoMap.keySet()) {
-      Snapshot s = commitHistoMap.get(commitTime).getSnapshot();
-      rows.add(printFileSizeHistogram(commitTime, s));
+    for (String instantTime : commitHistoMap.keySet()) {
+      Snapshot s = commitHistoMap.get(instantTime).getSnapshot();
+      rows.add(printFileSizeHistogram(instantTime, s));
     }
     Snapshot s = globalHistogram.getSnapshot();
     rows.add(printFileSizeHistogram("ALL", s));

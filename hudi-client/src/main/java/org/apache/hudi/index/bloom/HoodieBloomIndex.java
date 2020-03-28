@@ -19,6 +19,7 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.utils.SparkConfigUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -69,7 +70,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
     // Step 0: cache the input record RDD
     if (config.getBloomIndexUseCaching()) {
-      recordRDD.persist(config.getBloomIndexInputStorageLevel());
+      recordRDD.persist(SparkConfigUtils.getBloomIndexInputStorageLevel(config.getProps()));
     }
 
     // Step 1: Extract out thinner JavaPairRDD of (partitionPath, recordKey)
@@ -223,7 +224,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   }
 
   @Override
-  public boolean rollbackCommit(String commitTime) {
+  public boolean rollbackCommit(String instantTime) {
     // Nope, don't need to do anything.
     return true;
   }

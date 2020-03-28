@@ -180,8 +180,8 @@ public class HoodieAvroUtils {
   /**
    * Adds the Hoodie commit metadata into the provided Generic Record.
    */
-  public static GenericRecord addCommitMetadataToRecord(GenericRecord record, String commitTime, String commitSeqno) {
-    record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime);
+  public static GenericRecord addCommitMetadataToRecord(GenericRecord record, String instantTime, String commitSeqno) {
+    record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
     record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, commitSeqno);
     return record;
   }

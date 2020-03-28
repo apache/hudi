@@ -102,10 +102,10 @@ public class HiveIncrPullSource extends AvroSource {
       return Option.of(commitTimes.get(0));
     }
 
-    for (String commitTime : commitTimes) {
+    for (String instantTime : commitTimes) {
       // TODO(vc): Add an option to delete consumed commits
-      if (commitTime.compareTo(latestTargetCommit.get()) > 0) {
-        return Option.of(commitTime);
+      if (instantTime.compareTo(latestTargetCommit.get()) > 0) {
+        return Option.of(instantTime);
       }
     }
     return Option.empty();

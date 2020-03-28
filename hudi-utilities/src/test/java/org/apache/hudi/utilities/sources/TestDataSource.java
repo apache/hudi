@@ -49,7 +49,7 @@ public class TestDataSource extends AbstractBaseTestSource {
   protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
 
     int nextCommitNum = lastCheckpointStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
-    String commitTime = String.format("%05d", nextCommitNum);
+    String instantTime = String.format("%05d", nextCommitNum);
     LOG.info("Source Limit is set to " + sourceLimit);
 
     // No new data.
@@ -58,8 +58,8 @@ public class TestDataSource extends AbstractBaseTestSource {
     }
 
     List<GenericRecord> records =
-        fetchNextBatch(props, (int) sourceLimit, commitTime, DEFAULT_PARTITION_NUM).collect(Collectors.toList());
+        fetchNextBatch(props, (int) sourceLimit, instantTime, DEFAULT_PARTITION_NUM).collect(Collectors.toList());
     JavaRDD<GenericRecord> avroRDD = sparkContext.<GenericRecord>parallelize(records, 4);
-    return new InputBatch<>(Option.of(avroRDD), commitTime);
+    return new InputBatch<>(Option.of(avroRDD), instantTime);
   }
 }

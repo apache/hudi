@@ -180,7 +180,7 @@ public class KafkaOffsetGen {
               .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
       // Determine the offset ranges to read from
-      if (lastCheckpointStr.isPresent()) {
+      if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty()) {
         fromOffsets = checkupValidOffsets(consumer, lastCheckpointStr, topicPartitions);
       } else {
         KafkaResetOffsetStrategies autoResetValue = KafkaResetOffsetStrategies

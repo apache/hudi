@@ -28,10 +28,10 @@ import org.apache.hudi.common.versioning.clean.CleanMetadataMigrator;
 import org.apache.hudi.common.versioning.clean.CleanV1MigrationHandler;
 import org.apache.hudi.common.versioning.clean.CleanV2MigrationHandler;
 
-import com.google.common.collect.ImmutableMap;
-
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class CleanerUtils {
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanV1MigrationHandler.VERSION;
@@ -40,14 +40,14 @@ public class CleanerUtils {
 
   public static HoodieCleanMetadata convertCleanMetadata(HoodieTableMetaClient metaClient,
       String startCleanTime, Option<Long> durationInMs, List<HoodieCleanStat> cleanStats) {
-    ImmutableMap.Builder<String, HoodieCleanPartitionMetadata> partitionMetadataBuilder = ImmutableMap.builder();
+    Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = new HashMap<>();
     int totalDeleted = 0;
     String earliestCommitToRetain = null;
     for (HoodieCleanStat stat : cleanStats) {
       HoodieCleanPartitionMetadata metadata =
           new HoodieCleanPartitionMetadata(stat.getPartitionPath(), stat.getPolicy().name(),
               stat.getDeletePathPatterns(), stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles());
-      partitionMetadataBuilder.put(stat.getPartitionPath(), metadata);
+      partitionMetadataMap.put(stat.getPartitionPath(), metadata);
       totalDeleted += stat.getSuccessDeleteFiles().size();
       if (earliestCommitToRetain == null) {
         // This will be the same for all partitions
@@ -56,8 +56,7 @@ public class CleanerUtils {
     }
 
     return new HoodieCleanMetadata(startCleanTime,
-        durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
-        partitionMetadataBuilder.build(), CLEAN_METADATA_VERSION_2);
+        durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain, partitionMetadataMap, CLEAN_METADATA_VERSION_2);
   }
 
   /**

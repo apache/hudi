@@ -94,7 +94,7 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
   }
 
   @Override
-  public boolean rollbackCommit(String commitTime) {
+  public boolean rollbackCommit(String instantTime) {
     return true;
   }
 

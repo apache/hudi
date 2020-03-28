@@ -18,11 +18,12 @@
 
 package org.apache.hudi.integ;
 
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
-import com.google.common.collect.ImmutableList;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -98,16 +99,15 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void setupDemo() throws Exception {
-    List<String> cmds = new ImmutableList.Builder<String>()
-        .add("hdfs dfsadmin -safemode wait") // handle NN going into safe mode at times
-        .add("hdfs dfs -mkdir -p " + HDFS_DATA_DIR)
-        .add("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH1 + " " + HDFS_BATCH_PATH1)
-        .add("/bin/bash " + DEMO_CONTAINER_SCRIPT).build();
+    List<String> cmds = CollectionUtils.createImmutableList("hdfs dfsadmin -safemode wait",
+          "hdfs dfs -mkdir -p " + HDFS_DATA_DIR,
+          "hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH1 + " " + HDFS_BATCH_PATH1,
+          "/bin/bash " + DEMO_CONTAINER_SCRIPT);
+
     executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
 
     // create input dir in presto coordinator
-    cmds = new ImmutableList.Builder<String>()
-        .add("mkdir -p " + HDFS_DATA_DIR).build();
+    cmds = Collections.singletonList("mkdir -p " + HDFS_DATA_DIR);
     executeCommandStringsInDocker(PRESTO_COORDINATOR, cmds);
 
     // copy presto sql files to presto coordinator
@@ -117,22 +117,21 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void ingestFirstBatchAndHiveSync() throws Exception {
-    List<String> cmds = new ImmutableList.Builder<String>()
-        .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+    List<String> cmds = CollectionUtils.createImmutableList(
+            "spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties --config-folder " + CONFIG_FOLDER_PATH
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
-            + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME))
-        .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+            + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME),
+            ("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties --config-folder " + CONFIG_FOLDER_PATH
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
-            + " --disable-compaction " + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_TABLE_NAME))
-        .build();
+            + " --disable-compaction " + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_TABLE_NAME)));
 
     executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
   }
@@ -169,23 +168,22 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void ingestSecondBatchAndHiveSync() throws Exception {
-    List<String> cmds = new ImmutableList.Builder<String>()
-        .add("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH2 + " " + HDFS_BATCH_PATH2)
-        .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+    List<String> cmds = CollectionUtils.createImmutableList(
+            ("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH2 + " " + HDFS_BATCH_PATH2),
+            ("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties --config-folder " + CONFIG_FOLDER_PATH
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
-            + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME))
-        .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+            + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME)),
+            ("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties --config-folder " + CONFIG_FOLDER_PATH
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
-            + " --disable-compaction " + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_TABLE_NAME))
-        .build();
+            + " --disable-compaction " + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_TABLE_NAME)));
     executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
   }
 

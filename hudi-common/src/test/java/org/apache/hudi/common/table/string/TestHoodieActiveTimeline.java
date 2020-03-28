@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.Path;
@@ -34,7 +35,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
-import com.google.common.collect.Sets;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -195,9 +195,9 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // Test that various types of getXXX operations from HoodieActiveTimeline
     // return the correct set of Instant
     checkTimeline.accept(timeline.getCommitsTimeline(),
-            Sets.newHashSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION));
+            CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION));
     checkTimeline.accept(timeline.getCommitsAndCompactionTimeline(),
-            Sets.newHashSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION));
+            CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION));
     checkTimeline.accept(timeline.getCommitTimeline(), Collections.singleton(HoodieTimeline.COMMIT_ACTION));
     checkTimeline.accept(timeline.getDeltaCommitTimeline(), Collections.singleton(HoodieTimeline.DELTA_COMMIT_ACTION));
     checkTimeline.accept(timeline.getCleanerTimeline(), Collections.singleton(HoodieTimeline.CLEAN_ACTION));
@@ -205,7 +205,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     checkTimeline.accept(timeline.getRestoreTimeline(), Collections.singleton(HoodieTimeline.RESTORE_ACTION));
     checkTimeline.accept(timeline.getSavePointTimeline(), Collections.singleton(HoodieTimeline.SAVEPOINT_ACTION));
     checkTimeline.accept(timeline.getAllCommitsTimeline(),
-            Sets.newHashSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION,
+            CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION,
                     HoodieTimeline.CLEAN_ACTION, HoodieTimeline.COMPACTION_ACTION,
                     HoodieTimeline.SAVEPOINT_ACTION, HoodieTimeline.ROLLBACK_ACTION));
 
@@ -380,12 +380,12 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     checkFilter.accept(timeline.filter(i -> false), new HashSet<>());
     checkFilter.accept(timeline.filterInflights(), Collections.singleton(State.INFLIGHT));
     checkFilter.accept(timeline.filterInflightsAndRequested(),
-            Sets.newHashSet(State.INFLIGHT, State.REQUESTED));
+            CollectionUtils.createSet(State.INFLIGHT, State.REQUESTED));
 
     // filterCompletedAndCompactionInstants
     // This cannot be done using checkFilter as it involves both states and actions
     final HoodieTimeline t1 = timeline.filterCompletedAndCompactionInstants();
-    final Set<State> states = Sets.newHashSet(State.REQUESTED, State.COMPLETED);
+    final Set<State> states = CollectionUtils.createSet(State.REQUESTED, State.COMPLETED);
     final Set<String> actions = Collections.singleton(HoodieTimeline.COMPACTION_ACTION);
     sup.get().filter(i -> states.contains(i.getState()) || actions.contains(i.getAction()))
         .forEach(i -> assertTrue(t1.containsInstant(i)));
@@ -407,7 +407,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   private List<HoodieInstant> getAllInstants() {
     timeline = new HoodieActiveTimeline(metaClient);
     List<HoodieInstant> allInstants = new ArrayList<>();
-    long commitTime = 1;
+    long instantTime = 1;
     for (State state : State.values()) {
       if (state == State.INVALID) {
         continue;
@@ -432,7 +432,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
           action = HoodieTimeline.COMMIT_ACTION;
         }
 
-        allInstants.add(new HoodieInstant(state, action, String.format("%03d", commitTime++)));
+        allInstants.add(new HoodieInstant(state, action, String.format("%03d", instantTime++)));
       }
     }
     return allInstants;

@@ -98,16 +98,16 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String partitionPath,
+  public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath,
                                                   String fileId, Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
-    LOG.info("Merging updates for commit " + commitTime + " for file " + fileId);
+    LOG.info("Merging updates for commit " + instantTime + " for file " + fileId);
 
     if (!index.canIndexLogFiles() && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
-      LOG.info("Small file corrections for updates for commit " + commitTime + " for file " + fileId);
-      return super.handleUpdate(commitTime, partitionPath, fileId, recordItr);
+      LOG.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);
+      return super.handleUpdate(instantTime, partitionPath, fileId, recordItr);
     } else {
-      HoodieAppendHandle<T> appendHandle = new HoodieAppendHandle<>(config, commitTime, this,
+      HoodieAppendHandle<T> appendHandle = new HoodieAppendHandle<>(config, instantTime, this,
               partitionPath, fileId, recordItr);
       appendHandle.doAppend();
       appendHandle.close();
@@ -116,13 +116,13 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String commitTime, String idPfx, Iterator<HoodieRecord<T>> recordItr)
+  public Iterator<List<WriteStatus>> handleInsert(String instantTime, String idPfx, Iterator<HoodieRecord<T>> recordItr)
       throws Exception {
     // If canIndexLogFiles, write inserts to log files else write inserts to parquet files
     if (index.canIndexLogFiles()) {
-      return new MergeOnReadLazyInsertIterable<>(recordItr, config, commitTime, this, idPfx);
+      return new MergeOnReadLazyInsertIterable<>(recordItr, config, instantTime, this, idPfx);
     } else {
-      return super.handleInsert(commitTime, idPfx, recordItr);
+      return super.handleInsert(instantTime, idPfx, recordItr);
     }
   }
 

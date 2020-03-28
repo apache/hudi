@@ -37,7 +37,7 @@ public class TestHoodieWriteStat {
 
   @Test
   public void testSetPaths() {
-    String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    String instantTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     String basePathString = "/data/tables/some-hoodie-table";
     String partitionPathString = "2017/12/31";
     String fileName = UUID.randomUUID().toString();
@@ -46,7 +46,7 @@ public class TestHoodieWriteStat {
     Path basePath = new Path(basePathString);
     Path partitionPath = new Path(basePath, partitionPathString);
 
-    Path finalizeFilePath = new Path(partitionPath, FSUtils.makeDataFileName(commitTime, writeToken, fileName));
+    Path finalizeFilePath = new Path(partitionPath, FSUtils.makeDataFileName(instantTime, writeToken, fileName));
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setPath(basePath, finalizeFilePath);
     assertEquals(finalizeFilePath, new Path(basePath, writeStat.getPath()));

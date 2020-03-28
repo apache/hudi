@@ -129,7 +129,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
    */
   @Test
   public void testAutoCommitOnBulkInsertPrepped() throws Exception {
-    testAutoCommit((writeClient, recordRDD, commitTime) -> writeClient.bulkInsertPreppedRecords(recordRDD, commitTime,
+    testAutoCommit((writeClient, recordRDD, instantTime) -> writeClient.bulkInsertPreppedRecords(recordRDD, instantTime,
         Option.empty()), true);
   }
 
@@ -357,9 +357,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     final List<HoodieRecord> recordsInFirstBatch = new ArrayList<>();
     Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
-        (String commitTime, Integer numRecordsInThisCommit) -> {
-          List<HoodieRecord> fewRecordsForInsert = dataGen.generateInserts(commitTime, 200);
-          List<HoodieRecord> fewRecordsForDelete = dataGen.generateDeletes(commitTime, 100);
+        (String instantTime, Integer numRecordsInThisCommit) -> {
+          List<HoodieRecord> fewRecordsForInsert = dataGen.generateInserts(instantTime, 200);
+          List<HoodieRecord> fewRecordsForDelete = dataGen.generateDeletes(instantTime, 100);
 
           recordsInFirstBatch.addAll(fewRecordsForInsert);
           recordsInFirstBatch.addAll(fewRecordsForDelete);
@@ -376,7 +376,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     newCommitTime = "004";
     final List<HoodieRecord> recordsInSecondBatch = new ArrayList<>();
 
-    recordGenFunction = (String commitTime, Integer numRecordsInThisCommit) -> {
+    recordGenFunction = (String instantTime, Integer numRecordsInThisCommit) -> {
       List<HoodieRecord> fewRecordsForDelete = recordsInFirstBatch.subList(0, 50);
       List<HoodieRecord> fewRecordsForUpdate = recordsInFirstBatch.subList(50, 100);
       recordsInSecondBatch.addAll(dataGen.generateDeletesFromExistingRecords(fewRecordsForDelete));
@@ -704,18 +704,18 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     testDeletes(client, updateBatch3.getRight(), 10, file1, "007", 140, keysSoFar);
   }
 
-  private Pair<Set<String>, List<HoodieRecord>> testUpdates(String commitTime, HoodieWriteClient client,
+  private Pair<Set<String>, List<HoodieRecord>> testUpdates(String instantTime, HoodieWriteClient client,
                                                             int sizeToInsertAndUpdate, int expectedTotalRecords)
       throws IOException {
-    client.startCommitWithTime(commitTime);
-    List<HoodieRecord> inserts = dataGen.generateInserts(commitTime, sizeToInsertAndUpdate);
+    client.startCommitWithTime(instantTime);
+    List<HoodieRecord> inserts = dataGen.generateInserts(instantTime, sizeToInsertAndUpdate);
     Set<String> keys = HoodieClientTestUtils.getRecordKeys(inserts);
     List<HoodieRecord> insertsAndUpdates = new ArrayList<>();
     insertsAndUpdates.addAll(inserts);
-    insertsAndUpdates.addAll(dataGen.generateUpdates(commitTime, inserts));
+    insertsAndUpdates.addAll(dataGen.generateUpdates(instantTime, inserts));
 
     JavaRDD<HoodieRecord> insertAndUpdatesRDD = jsc.parallelize(insertsAndUpdates, 1);
-    List<WriteStatus> statuses = client.upsert(insertAndUpdatesRDD, commitTime).collect();
+    List<WriteStatus> statuses = client.upsert(insertAndUpdatesRDD, instantTime).collect();
     assertNoWriteErrors(statuses);
 
     // Check the entire dataset has all records still
@@ -729,13 +729,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   private void testDeletes(HoodieWriteClient client, List<HoodieRecord> previousRecords, int sizeToDelete,
-                           String existingFile, String commitTime, int exepctedRecords, List<String> keys) {
-    client.startCommitWithTime(commitTime);
+                           String existingFile, String instantTime, int exepctedRecords, List<String> keys) {
+    client.startCommitWithTime(instantTime);
 
     List<HoodieKey> hoodieKeysToDelete = HoodieClientTestUtils
         .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(previousRecords), sizeToDelete);
     JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(hoodieKeysToDelete, 1);
-    List<WriteStatus> statuses = client.delete(deleteKeys, commitTime).collect();
+    List<WriteStatus> statuses = client.delete(deleteKeys, instantTime).collect();
 
     assertNoWriteErrors(statuses);
 
@@ -757,7 +757,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     List<GenericRecord> records = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), newFile);
     for (GenericRecord record : records) {
       String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-      assertTrue("key expected to be part of " + commitTime, keys.contains(recordKey));
+      assertTrue("key expected to be part of " + instantTime, keys.contains(recordKey));
       assertFalse("Key deleted", hoodieKeysToDelete.contains(recordKey));
     }
   }
@@ -802,21 +802,21 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
       HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
 
-      String commitTime = "000";
-      client.startCommitWithTime(commitTime);
+      String instantTime = "000";
+      client.startCommitWithTime(instantTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
+      List<HoodieRecord> records = dataGen.generateInserts(instantTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-      JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, commitTime);
+      JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, instantTime);
 
-      assertTrue("Commit should succeed", client.commit(commitTime, result));
+      assertTrue("Commit should succeed", client.commit(instantTime, result));
       assertTrue("After explicit commit, commit file should be created",
-          HoodieTestUtils.doesCommitExist(basePath, commitTime));
+          HoodieTestUtils.doesCommitExist(basePath, instantTime));
 
       // Get parquet file paths from commit metadata
       String actionType = metaClient.getCommitActionType();
-      HoodieInstant commitInstant = new HoodieInstant(false, actionType, commitTime);
+      HoodieInstant commitInstant = new HoodieInstant(false, actionType, instantTime);
       HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
           .fromBytes(commitTimeline.getInstantDetails(commitInstant).get(), HoodieCommitMetadata.class);
@@ -824,7 +824,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
       Collection<String> commitPathNames = commitMetadata.getFileIdAndFullPaths(basePath).values();
 
       // Read from commit file
-      String filename = HoodieTestUtils.getCommitFilePath(basePath, commitTime);
+      String filename = HoodieTestUtils.getCommitFilePath(basePath, instantTime);
       FileInputStream inputStream = new FileInputStream(filename);
       String everything = FileIOUtils.readAsUTFString(inputStream);
       HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
@@ -848,20 +848,20 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     HoodieWriteClient client = getHoodieWriteClient(cfg);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
 
-    String commitTime = "000";
-    client.startCommitWithTime(commitTime);
+    String instantTime = "000";
+    client.startCommitWithTime(instantTime);
 
-    List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
+    List<HoodieRecord> records = dataGen.generateInserts(instantTime, 200);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-    JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, commitTime);
+    JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, instantTime);
 
-    assertTrue("Commit should succeed", client.commit(commitTime, result));
+    assertTrue("Commit should succeed", client.commit(instantTime, result));
     assertTrue("After explicit commit, commit file should be created",
-        HoodieTestUtils.doesCommitExist(basePath, commitTime));
+        HoodieTestUtils.doesCommitExist(basePath, instantTime));
 
     // Read from commit file
-    String filename = HoodieTestUtils.getCommitFilePath(basePath, commitTime);
+    String filename = HoodieTestUtils.getCommitFilePath(basePath, instantTime);
     FileInputStream inputStream = new FileInputStream(filename);
     String everything = FileIOUtils.readAsUTFString(inputStream);
     HoodieCommitMetadata metadata =
@@ -879,19 +879,19 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     Assert.assertEquals(inserts, 200);
 
     // Update + Inserts such that they just expand file1
-    commitTime = "001";
-    client.startCommitWithTime(commitTime);
+    instantTime = "001";
+    client.startCommitWithTime(instantTime);
 
-    records = dataGen.generateUpdates(commitTime, records);
+    records = dataGen.generateUpdates(instantTime, records);
     writeRecords = jsc.parallelize(records, 1);
-    result = client.upsert(writeRecords, commitTime);
+    result = client.upsert(writeRecords, instantTime);
 
-    assertTrue("Commit should succeed", client.commit(commitTime, result));
+    assertTrue("Commit should succeed", client.commit(instantTime, result));
     assertTrue("After explicit commit, commit file should be created",
-        HoodieTestUtils.doesCommitExist(basePath, commitTime));
+        HoodieTestUtils.doesCommitExist(basePath, instantTime));
 
     // Read from commit file
-    filename = HoodieTestUtils.getCommitFilePath(basePath, commitTime);
+    filename = HoodieTestUtils.getCommitFilePath(basePath, instantTime);
     inputStream = new FileInputStream(filename);
     everything = FileIOUtils.readAsUTFString(inputStream);
     metadata = HoodieCommitMetadata.fromJsonString(everything.toString(), HoodieCommitMetadata.class);
@@ -918,37 +918,37 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   @Test
   public void testConsistencyCheckDuringFinalize() throws Exception {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    String commitTime = "000";
+    String instantTime = "000";
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
-    Pair<Path, JavaRDD<WriteStatus>> result = testConsistencyCheck(metaClient, commitTime);
+    Pair<Path, JavaRDD<WriteStatus>> result = testConsistencyCheck(metaClient, instantTime);
 
     // Delete orphan marker and commit should succeed
     metaClient.getFs().delete(result.getKey(), false);
-    assertTrue("Commit should succeed", client.commit(commitTime, result.getRight()));
+    assertTrue("Commit should succeed", client.commit(instantTime, result.getRight()));
     assertTrue("After explicit commit, commit file should be created",
-        HoodieTestUtils.doesCommitExist(basePath, commitTime));
+        HoodieTestUtils.doesCommitExist(basePath, instantTime));
     // Marker directory must be removed
-    assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(commitTime))));
+    assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
   }
 
   @Test
   public void testRollbackAfterConsistencyCheckFailure() throws Exception {
-    String commitTime = "000";
+    String instantTime = "000";
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
-    testConsistencyCheck(metaClient, commitTime);
+    testConsistencyCheck(metaClient, instantTime);
 
     // Rollback of this commit should succeed
-    client.rollback(commitTime);
+    client.rollback(instantTime);
     assertFalse("After explicit rollback, commit file should not be present",
-        HoodieTestUtils.doesCommitExist(basePath, commitTime));
+        HoodieTestUtils.doesCommitExist(basePath, instantTime));
     // Marker directory must be removed after rollback
-    assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(commitTime))));
+    assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
   }
 
-  private Pair<Path, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String commitTime)
+  private Pair<Path, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String instantTime)
       throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
@@ -956,24 +956,24 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
         .build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
 
-    client.startCommitWithTime(commitTime);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(dataGen.generateInserts(commitTime, 200), 1);
-    JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, commitTime);
+    client.startCommitWithTime(instantTime);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(dataGen.generateInserts(instantTime, 200), 1);
+    JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, instantTime);
     result.collect();
 
     // Create a dummy marker file to simulate the case that a marker file was created without data file.
     // This should fail the commit
     String partitionPath = Arrays
-        .stream(fs.globStatus(new Path(String.format("%s/*/*/*/*", metaClient.getMarkerFolderPath(commitTime))),
+        .stream(fs.globStatus(new Path(String.format("%s/*/*/*/*", metaClient.getMarkerFolderPath(instantTime))),
             path -> path.toString().endsWith(HoodieTableMetaClient.MARKER_EXTN)))
         .limit(1).map(status -> status.getPath().getParent().toString()).collect(Collectors.toList()).get(0);
     Path markerFilePath = new Path(String.format("%s/%s", partitionPath,
-        FSUtils.makeMarkerFile(commitTime, "1-0-1", UUID.randomUUID().toString())));
+        FSUtils.makeMarkerFile(instantTime, "1-0-1", UUID.randomUUID().toString())));
     metaClient.getFs().create(markerFilePath);
     LOG.info("Created a dummy marker path=" + markerFilePath);
 
     try {
-      client.commit(commitTime, result);
+      client.commit(instantTime, result);
       fail("Commit should fail due to consistency check");
     } catch (HoodieCommitException cme) {
       assertTrue(cme.getCause() instanceof HoodieIOException);

@@ -135,7 +135,7 @@ public class HoodieIncrSource extends RowSource {
      * instantEndpts.getValue()); if (!partitionFields.isEmpty()) { // _hoodie_partition_path String hoodiePartitionPath
      * = row.getString(3); List<Object> partitionVals =
      * extractor.extractPartitionValuesInPath(hoodiePartitionPath).stream() .map(o -> (Object)
-     * o).collect(Collectors.toList()); Preconditions.checkArgument(partitionVals.size() == partitionFields.size(),
+     * o).collect(Collectors.toList()); ValidationUtils.checkArgument(partitionVals.size() == partitionFields.size(),
      * "#partition-fields != #partition-values-extracted"); List<Object> rowObjs = new
      * ArrayList<>(scala.collection.JavaConversions.seqAsJavaList(row.toSeq())); rowObjs.addAll(partitionVals); return
      * RowFactory.create(rowObjs.toArray()); } return row; }, RowEncoder.apply(newSchema));

@@ -45,6 +45,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.AvroUtils;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.FSUtils;
@@ -55,9 +56,6 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.log4j.LogManager;
@@ -131,9 +129,9 @@ public class TestCleaner extends TestHoodieClientBase {
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, client.getConfig(), jsc);
 
     assertFalse(table.getCompletedCommitsTimeline().empty());
-    String commitTime = table.getCompletedCommitsTimeline().getInstants().findFirst().get().getTimestamp();
+    String instantTime = table.getCompletedCommitsTimeline().getInstants().findFirst().get().getTimestamp();
     assertFalse(table.getCompletedCleanTimeline().empty());
-    assertEquals("The clean instant should be the same as the commit instant", commitTime,
+    assertEquals("The clean instant should be the same as the commit instant", instantTime,
         table.getCompletedCleanTimeline().getInstants().findFirst().get().getTimestamp());
 
     HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
@@ -173,7 +171,7 @@ public class TestCleaner extends TestHoodieClientBase {
   @Test
   public void testBulkInsertPreppedAndCleanByVersions() throws Exception {
     testInsertAndCleanByVersions(
-        (client, recordRDD, commitTime) -> client.bulkInsertPreppedRecords(recordRDD, commitTime, Option.empty()),
+        (client, recordRDD, instantTime) -> client.bulkInsertPreppedRecords(recordRDD, instantTime, Option.empty()),
         HoodieWriteClient::upsertPreppedRecords, true);
   }
 
@@ -290,7 +288,7 @@ public class TestCleaner extends TestHoodieClientBase {
                 List<String> commitedVersions = new ArrayList<>(fileIdToVersions.get(fileId));
                 for (int i = 0; i < dataFiles.size(); i++) {
                   assertEquals("File " + fileId + " does not have latest versions on commits" + commitedVersions,
-                      Iterables.get(dataFiles, i).getCommitTime(),
+                      (dataFiles.get(i)).getCommitTime(),
                       commitedVersions.get(commitedVersions.size() - 1 - i));
                 }
               }
@@ -325,7 +323,7 @@ public class TestCleaner extends TestHoodieClientBase {
   @Test
   public void testBulkInsertPreppedAndCleanByCommits() throws Exception {
     testInsertAndCleanByCommits(
-        (client, recordRDD, commitTime) -> client.bulkInsertPreppedRecords(recordRDD, commitTime, Option.empty()),
+        (client, recordRDD, instantTime) -> client.bulkInsertPreppedRecords(recordRDD, instantTime, Option.empty()),
         HoodieWriteClient::upsertPreppedRecords, true);
   }
 
@@ -598,7 +596,7 @@ public class TestCleaner extends TestHoodieClientBase {
 
   @Test
   public void testUpgradeDowngrade() {
-    String commitTime = "000";
+    String instantTime = "000";
 
     String partition1 = DEFAULT_PARTITION_PATHS[0];
     String partition2 = DEFAULT_PARTITION_PATHS[1];
@@ -616,7 +614,7 @@ public class TestCleaner extends TestHoodieClientBase {
     // create partition1 clean stat.
     HoodieCleanStat cleanStat1 = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
         partition1, deletePathPatterns1, successDeleteFiles1,
-        failedDeleteFiles1, commitTime);
+        failedDeleteFiles1, instantTime);
 
     List<String> deletePathPatterns2 = new ArrayList<>();
     List<String> successDeleteFiles2 = new ArrayList<>();
@@ -625,7 +623,7 @@ public class TestCleaner extends TestHoodieClientBase {
     // create partition2 empty clean stat.
     HoodieCleanStat cleanStat2 = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
         partition2, deletePathPatterns2, successDeleteFiles2,
-        failedDeleteFiles2, commitTime);
+        failedDeleteFiles2, instantTime);
 
     // map with absolute file path.
     Map<String, Tuple3> oldExpected = new HashMap<>();
@@ -639,7 +637,7 @@ public class TestCleaner extends TestHoodieClientBase {
     newExpected.put(partition2, new Tuple3<>(deletePathPatterns2, successDeleteFiles2, failedDeleteFiles2));
 
     HoodieCleanMetadata metadata =
-        CleanerUtils.convertCleanMetadata(metaClient, commitTime, Option.of(0L), Arrays.asList(cleanStat1, cleanStat2));
+        CleanerUtils.convertCleanMetadata(metaClient, instantTime, Option.of(0L), Arrays.asList(cleanStat1, cleanStat2));
     metadata.setVersion(CleanerUtils.CLEAN_METADATA_VERSION_1);
 
     // NOw upgrade and check
@@ -740,12 +738,14 @@ public class TestCleaner extends TestHoodieClientBase {
     String file1P1C0 =
         HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "000");
 
-    HoodieCommitMetadata commitMetadata = generateCommitMetadata(new ImmutableMap.Builder()
-        .put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
-            new ImmutableList.Builder<>().add(file1P0C0).build())
-        .put(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
-            new ImmutableList.Builder<>().add(file1P1C0).build())
-        .build());
+    HoodieCommitMetadata commitMetadata = generateCommitMetadata(
+        Collections.unmodifiableMap(new HashMap<String, List<String>>() {
+          {
+            put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, CollectionUtils.createImmutableList(file1P0C0));
+            put(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, CollectionUtils.createImmutableList(file1P1C0));
+          }
+        })
+    );
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "000"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -778,12 +778,12 @@ public class TestCleaner extends TestHoodieClientBase {
         .createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001", file1P0C0); // update
     HoodieTestUtils
         .createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "001", file1P1C0); // update
-    commitMetadata = generateCommitMetadata(new ImmutableMap.Builder()
-        .put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
-            new ImmutableList.Builder<>().add(file1P0C0).add(file2P0C1).build())
-        .put(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
-            new ImmutableList.Builder<>().add(file1P1C0).add(file2P1C1).build())
-        .build());
+    commitMetadata = generateCommitMetadata(new HashMap<String, List<String>>() {
+      {
+        put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, CollectionUtils.createImmutableList(file1P0C0, file2P0C1));
+        put(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, CollectionUtils.createImmutableList(file1P1C0, file2P1C1));
+      }
+    });
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -814,10 +814,9 @@ public class TestCleaner extends TestHoodieClientBase {
     String file3P0C2 =
         HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002");
 
-    commitMetadata = generateCommitMetadata(new ImmutableMap.Builder()
-        .put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
-            new ImmutableList.Builder<>().add(file1P0C0).add(file2P0C1).add(file3P0C2).build())
-        .build());
+    commitMetadata = generateCommitMetadata(CollectionUtils
+        .createImmutableMap(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
+            CollectionUtils.createImmutableList(file1P0C0, file2P0C1, file3P0C2)));
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "002"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -840,10 +839,8 @@ public class TestCleaner extends TestHoodieClientBase {
         .createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "003", file2P0C1); // update
     String file4P0C3 =
         HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "003");
-    commitMetadata = generateCommitMetadata(new ImmutableMap.Builder()
-        .put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
-            new ImmutableList.Builder<>().add(file1P0C0).add(file2P0C1).add(file4P0C3).build())
-        .build());
+    commitMetadata = generateCommitMetadata(CollectionUtils.createImmutableMap(
+        HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, CollectionUtils.createImmutableList(file1P0C0, file2P0C1, file4P0C3)));
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "003"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -871,10 +868,8 @@ public class TestCleaner extends TestHoodieClientBase {
     // No cleaning on partially written file, with no commit.
     HoodieTestUtils
         .createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "004", file3P0C2); // update
-    commitMetadata = generateCommitMetadata(new ImmutableMap.Builder()
-        .put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
-            new ImmutableList.Builder<>().add(file3P0C2).build())
-        .build());
+    commitMetadata = generateCommitMetadata(CollectionUtils.createImmutableMap(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
+            CollectionUtils.createImmutableList(file3P0C2)));
     metaClient.getActiveTimeline().createNewInstant(
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "004"));
     metaClient.getActiveTimeline().transitionRequestedToInflight(
@@ -1107,15 +1102,15 @@ public class TestCleaner extends TestHoodieClientBase {
   /**
    * Utility method to create temporary data files.
    *
-   * @param commitTime Commit Timestamp
+   * @param instantTime Commit Timestamp
    * @param numFiles Number for files to be generated
    * @return generated files
    * @throws IOException in case of error
    */
-  private List<String> createMarkerFiles(String commitTime, int numFiles) throws IOException {
+  private List<String> createMarkerFiles(String instantTime, int numFiles) throws IOException {
     List<String> files = new ArrayList<>();
     for (int i = 0; i < numFiles; i++) {
-      files.add(HoodieTestUtils.createNewMarkerFile(basePath, "2019/03/29", commitTime));
+      files.add(HoodieTestUtils.createNewMarkerFile(basePath, "2019/03/29", instantTime));
     }
     return files;
   }

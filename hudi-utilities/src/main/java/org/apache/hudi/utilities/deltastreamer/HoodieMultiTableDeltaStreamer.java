@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -27,7 +28,6 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 
 import com.beust.jcommander.JCommander;
-import com.google.common.base.Strings;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
@@ -110,12 +110,12 @@ public class HoodieMultiTableDeltaStreamer {
         tableProperties.setProperty(k.toString(), v.toString());
       });
       final Config cfg = new Config();
-      //copy all the values from config to cfg
+      //copy all the values from config to cfgF
       Helpers.deepCopyConfigs(config, cfg);
       String targetBasePath = resetTarget(config, database, currentTable);
       String overriddenTargetBasePath = tableProperties.getString(Constants.TARGET_BASE_PATH_PROP, "");
-      cfg.targetBasePath = Strings.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
-      if (cfg.enableHiveSync && Strings.isNullOrEmpty(tableProperties.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), ""))) {
+      cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
+      if (cfg.enableHiveSync && StringUtils.isNullOrEmpty(tableProperties.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), ""))) {
         throw new HoodieException("Hive sync table field not provided!");
       }
       populateSchemaProviderProps(cfg, tableProperties);

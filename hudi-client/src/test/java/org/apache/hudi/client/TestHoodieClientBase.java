@@ -212,13 +212,13 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    * Ensure records have location field set.
    *
    * @param taggedRecords Tagged Records
-   * @param commitTime    Commit Timestamp
+   * @param instantTime    Commit Timestamp
    */
-  protected void checkTaggedRecords(List<HoodieRecord> taggedRecords, String commitTime) {
+  protected void checkTaggedRecords(List<HoodieRecord> taggedRecords, String instantTime) {
     for (HoodieRecord rec : taggedRecords) {
       assertTrue("Record " + rec + " found with no location.", rec.isCurrentLocationKnown());
-      assertEquals("All records should have commit time " + commitTime + ", since updates were made",
-          rec.getCurrentLocation().getInstantTime(), commitTime);
+      assertEquals("All records should have commit time " + instantTime + ", since updates were made",
+          rec.getCurrentLocation().getInstantTime(), instantTime);
     }
   }
 
