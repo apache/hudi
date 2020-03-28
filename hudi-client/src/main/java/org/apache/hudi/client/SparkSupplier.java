@@ -20,13 +20,14 @@ package org.apache.hudi.client;
 
 import org.apache.spark.TaskContext;
 
+import java.io.Serializable;
 import java.util.function.Supplier;
 
 /**
  * Spark Supplier.
  */
-public class SparkSupplier {
-  public static final Supplier<Integer> PARTITION_SUPPLIER = () -> TaskContext.getPartitionId();
-  public static final Supplier<Integer> STAGE_SUPPLIER = () -> TaskContext.get().stageId();
-  public static final Supplier<Long> ATTEMPT_SUPPLIER = () -> TaskContext.get().taskAttemptId();
+public interface SparkSupplier<T> extends Supplier<T>, Serializable {
+  SparkSupplier<Integer> PARTITION_SUPPLIER = () -> TaskContext.getPartitionId();
+  SparkSupplier<Integer> STAGE_SUPPLIER = () -> TaskContext.get().stageId();
+  SparkSupplier<Long> ATTEMPT_SUPPLIER = () -> TaskContext.get().taskAttemptId();
 }

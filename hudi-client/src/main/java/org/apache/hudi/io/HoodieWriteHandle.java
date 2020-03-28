@@ -65,7 +65,6 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
     super(config, instantTime, hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
-    this.writeToken = makeSparkWriteToken();
     this.originalSchema = new Schema.Parser().parse(config.getSchema());
     this.writerSchema = createHoodieWriteSchema(originalSchema);
     this.timer = new HoodieTimer().startTimer();
@@ -74,13 +73,14 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
     this.idSupplier = idSupplier;
     this.stageSupplier = stageSupplier;
     this.attemptSupplier = attemptSupplier;
+    this.writeToken = makeSparkWriteToken();
   }
 
   /**
    * Generate a write token based on the currently running spark task and its place in the spark dag.
    */
   private String makeSparkWriteToken() {
-    return FSUtils.makeWriteToken((int) idSupplier.get(), stageSupplier.get(), attemptSupplier.get());
+    return FSUtils.makeWriteToken(idSupplier.get(), stageSupplier.get(), attemptSupplier.get());
   }
 
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
