@@ -18,7 +18,7 @@
 
 package org.apache.hudi.execution;
 
-import org.apache.hudi.client.Suppliers;
+import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -39,7 +39,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 /**
  * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new files.
@@ -52,20 +51,18 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
   protected final HoodieTable<T> hoodieTable;
   protected final String idPrefix;
   protected int numFilesWritten;
-  protected Suppliers suppliers;
-  protected Supplier<Integer> stageIdSupplier;
-  protected Supplier<Long> attemptIdSupplier;
+  protected SparkTaskContextSupplier sparkTaskContextSupplier;
 
   public CopyOnWriteLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
                                        String instantTime, HoodieTable<T> hoodieTable, String idPrefix,
-                                       Suppliers suppliers) {
+                                       SparkTaskContextSupplier sparkTaskContextSupplier) {
     super(sortedRecordItr);
     this.hoodieConfig = config;
     this.instantTime = instantTime;
     this.hoodieTable = hoodieTable;
     this.idPrefix = idPrefix;
     this.numFilesWritten = 0;
-    this.suppliers = suppliers;
+    this.sparkTaskContextSupplier = sparkTaskContextSupplier;
   }
 
   // Used for caching HoodieRecord along with insertValue. We need this to offload computation work to buffering thread.
@@ -144,7 +141,7 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
       // lazily initialize the handle, for the first time
       if (handle == null) {
         handle = new HoodieCreateHandle(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),
-            getNextFileId(idPrefix), suppliers);
+            getNextFileId(idPrefix), sparkTaskContextSupplier);
       }
 
       if (handle.canWrite(payload.record)) {
@@ -155,7 +152,7 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
         statuses.add(handle.close());
         // Need to handle the rejected payload & open new handle
         handle = new HoodieCreateHandle(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),
-            getNextFileId(idPrefix), suppliers);
+            getNextFileId(idPrefix), sparkTaskContextSupplier);
         handle.write(insertPayload, payload.insertValue, payload.exception); // we should be able to write 1 payload.
       }
     }

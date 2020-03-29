@@ -18,7 +18,7 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.client.Suppliers;
+import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -55,10 +55,10 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
   protected final String partitionPath;
   protected final String fileId;
   protected final String writeToken;
-  protected final Suppliers suppliers;
+  protected final SparkTaskContextSupplier sparkTaskContextSupplier;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
-                           String fileId, HoodieTable<T> hoodieTable, Suppliers suppliers) {
+                           String fileId, HoodieTable<T> hoodieTable, SparkTaskContextSupplier sparkTaskContextSupplier) {
     super(config, instantTime, hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
@@ -67,14 +67,14 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
     this.timer = new HoodieTimer().startTimer();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
-    this.suppliers = suppliers;
-    this.writeToken = makeSparkWriteToken();
+    this.sparkTaskContextSupplier = sparkTaskContextSupplier;
+    this.writeToken = makeWriteToken();
   }
 
   /**
    * Generate a write token based on the currently running spark task and its place in the spark dag.
    */
-  private String makeSparkWriteToken() {
+  private String makeWriteToken() {
     return FSUtils.makeWriteToken(getPartitionId(), getStageId(), getAttemptId());
   }
 
@@ -174,14 +174,14 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
   }
 
   protected int getPartitionId() {
-    return suppliers.getPartitionIdSupplier().get();
+    return sparkTaskContextSupplier.getPartitionIdSupplier().get();
   }
 
   protected int getStageId() {
-    return suppliers.getStageIdSupplier().get();
+    return sparkTaskContextSupplier.getStageIdSupplier().get();
   }
 
   protected long getAttemptId() {
-    return suppliers.getAttemptIdSupplier().get();
+    return sparkTaskContextSupplier.getAttemptIdSupplier().get();
   }
 }

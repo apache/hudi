@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.client.Suppliers;
+import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -85,7 +85,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   private SerializableConfiguration hadoopConfiguration;
   private transient FileSystemViewManager viewManager;
 
-  protected final Suppliers suppliers = new Suppliers();
+  protected final SparkTaskContextSupplier sparkTaskContextSupplier = new SparkTaskContextSupplier();
 
   protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc) {
     this.config = config;
@@ -452,7 +452,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     return new FailSafeConsistencyGuard(fileSystem, config.getConsistencyGuardConfig());
   }
 
-  public Suppliers getSuppliers() {
-    return suppliers;
+  public SparkTaskContextSupplier getSparkTaskContextSupplier() {
+    return sparkTaskContextSupplier;
   }
 }

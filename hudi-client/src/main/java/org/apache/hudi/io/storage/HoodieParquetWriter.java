@@ -19,7 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.client.Suppliers;
+import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.io.storage.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -52,10 +52,10 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   private final HoodieAvroWriteSupport writeSupport;
   private final String instantTime;
   private final Schema schema;
-  private final Suppliers suppliers;
+  private final SparkTaskContextSupplier sparkTaskContextSupplier;
 
   public HoodieParquetWriter(String instantTime, Path file, HoodieParquetConfig parquetConfig,
-                             Schema schema, Suppliers suppliers) throws IOException {
+       Schema schema, SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
         ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),
         parquetConfig.getBlockSize(), parquetConfig.getPageSize(), parquetConfig.getPageSize(),
@@ -73,7 +73,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;
     this.schema = schema;
-    this.suppliers = suppliers;
+    this.sparkTaskContextSupplier = sparkTaskContextSupplier;
   }
 
   public static Configuration registerFileSystem(Path file, Configuration conf) {
@@ -87,7 +87,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   @Override
   public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
     String seqId =
-        HoodieRecord.generateSequenceId(instantTime, suppliers.getPartitionIdSupplier().get(), recordIndex.getAndIncrement());
+        HoodieRecord.generateSequenceId(instantTime, sparkTaskContextSupplier.getPartitionIdSupplier().get(), recordIndex.getAndIncrement());
     HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, record.getRecordKey(), record.getPartitionPath(),
         file.getName());
     HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);
