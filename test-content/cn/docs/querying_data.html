@@ -335,6 +335,12 @@
           <nav class="toc">
             <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
             <ul class="toc__menu">
+  <li><a href="#查询引擎支持列表">查询引擎支持列表</a>
+    <ul>
+      <li><a href="#读优化表">读优化表</a></li>
+      <li><a href="#实时表">实时表</a></li>
+    </ul>
+  </li>
   <li><a href="#hive">Hive</a>
     <ul>
       <li><a href="#hive-ro-view">读优化表</a></li>
@@ -352,7 +358,7 @@
   <li><a href="#presto">Presto</a></li>
   <li><a href="#impala此功能还未正式发布">Impala(此功能还未正式发布)</a>
     <ul>
-      <li><a href="#读优化表">读优化表</a></li>
+      <li><a href="#读优化表-1">读优化表</a></li>
     </ul>
   </li>
 </ul>
@@ -376,6 +382,94 @@
 您可以只获得全部更新和新行。 这与插入更新一起使用，对于构建某些数据管道尤其有用，包括将1个或多个源Hudi表（数据流/事实）以增量方式拉出（流/事实）
 并与其他表（数据集/维度）结合以<a href="/cn/docs/writing_data.html">写出增量</a>到目标Hudi数据集。增量视图是通过查询上表之一实现的，并具有特殊配置，
 该特殊配置指示查询计划仅需要从数据集中获取增量数据。</p>
+
+<h2 id="查询引擎支持列表">查询引擎支持列表</h2>
+
+<p>下面的表格展示了各查询引擎是否支持Hudi格式</p>
+
+<h3 id="读优化表">读优化表</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>查询引擎</th>
+      <th>实时视图</th>
+      <th>增量拉取</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Hive</strong></td>
+      <td>Y</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Spark SQL</strong></td>
+      <td>Y</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Spark Datasource</strong></td>
+      <td>Y</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Presto</strong></td>
+      <td>Y</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td><strong>Impala</strong></td>
+      <td>Y</td>
+      <td>N</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="实时表">实时表</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>查询引擎</th>
+      <th>实时视图</th>
+      <th>增量拉取</th>
+      <th>读优化表</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Hive</strong></td>
+      <td>Y</td>
+      <td>Y</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Spark SQL</strong></td>
+      <td>Y</td>
+      <td>Y</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Spark Datasource</strong></td>
+      <td>N</td>
+      <td>N</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Presto</strong></td>
+      <td>N</td>
+      <td>N</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Impala</strong></td>
+      <td>N</td>
+      <td>N</td>
+      <td>Y</td>
+    </tr>
+  </tbody>
+</table>
 
 <p>接下来，我们将详细讨论在每个查询引擎上如何访问所有三个视图。</p>
 
@@ -542,7 +636,9 @@ Upsert实用程序（<code class="highlighter-rouge">HoodieDeltaStreamer</code>�
              <span class="nc">DataSourceReadOptions</span><span class="o">.</span><span class="na">VIEW_TYPE_INCREMENTAL_OPT_VAL</span><span class="o">())</span>
      <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceReadOptions</span><span class="o">.</span><span class="na">BEGIN_INSTANTTIME_OPT_KEY</span><span class="o">(),</span>
             <span class="o">&lt;</span><span class="n">beginInstantTime</span><span class="o">&gt;)</span>
-     <span class="o">.</span><span class="na">load</span><span class="o">(</span><span class="n">tablePath</span><span class="o">);</span> <span class="c1">// For incremental view, pass in the root/base path of dataset</span>
+     <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceReadOptions</span><span class="o">.</span><span class="na">INCR_PATH_GLOB_OPT_KEY</span><span class="o">(),</span>
+            <span class="s">"/year=2020/month=*/day=*"</span><span class="o">)</span> <span class="c1">// 可选，从指定的分区增量拉取</span>
+     <span class="o">.</span><span class="na">load</span><span class="o">(</span><span class="n">tablePath</span><span class="o">);</span> <span class="c1">// 用数据集的最底层路径</span>
 </code></pre></div></div>
 
 <p>请参阅<a href="/cn/docs/configurations.html#spark-datasource">设置</a>部分，以查看所有数据源选项。</p>
@@ -579,7 +675,7 @@ Upsert实用程序（<code class="highlighter-rouge">HoodieDeltaStreamer</code>�
 
 <h2 id="impala此功能还未正式发布">Impala(此功能还未正式发布)</h2>
 
-<h3 id="读优化表">读优化表</h3>
+<h3 id="读优化表-1">读优化表</h3>
 
 <p>Impala可以在HDFS上查询Hudi读优化表，作为一种 <a href="https://docs.cloudera.com/documentation/enterprise/6/6.3/topics/impala_tables.html#external_tables">EXTERNAL TABLE</a> 的形式。<br />
 可以通过以下方式在Impala上建立Hudi读优化表:</p>
