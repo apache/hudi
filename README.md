@@ -40,7 +40,7 @@ To submit changes to the docs, please make the changes on the `asf-site` branch,
 
 ### Updating site
 
-At a regular cadence, one of the Hudi committers will regenerate the site. In order to do this, first build it locally, test and then move the generated site from `_site` locally to `docs/../content`. Submit changes as a PR.
+Once a pull request merged, Travis CI will regenerate the site and move the generated site from `_site` to `content` and then submit changes as a PR automatically.
 
 ### Adding docs for version
 

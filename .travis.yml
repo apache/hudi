@@ -31,7 +31,7 @@ after_success:
   - echo $TRAVIS_PULL_REQUEST
   - 'if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then echo "ignore push build result for per submit"; exit 0; fi'
   - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then echo "pushing build result ..."; fi'
-  - mkdir -p test-content && \cp -rf ${DOCS_ROOT}/_site/* test-content
+  - mkdir -p content && \cp -rf ${DOCS_ROOT}/_site/* content
   - git add -A
   - git commit -am "Travis CI build asf-site"
   - git push hudi pr:asf-site
