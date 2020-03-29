@@ -18,14 +18,13 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -37,6 +36,7 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.transform.Transformer;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -62,11 +62,11 @@ import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
 import java.sql.Connection;
+import java.sql.Driver;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.DriverManager;
-import java.sql.Driver;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;

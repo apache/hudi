@@ -20,16 +20,17 @@ package org.apache.hudi.metrics;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
 
 import com.codahale.metrics.MetricRegistry;
+import org.apache.log4j.LogManager;
+
+import javax.management.MBeanServer;
 
 import java.io.Closeable;
+import java.lang.management.ManagementFactory;
 import java.util.Objects;
 import java.util.stream.IntStream;
 
-import java.lang.management.ManagementFactory;
-import javax.management.MBeanServer;
 
 /**
  * Implementation of Jmx reporter, which used to report jmx metric.

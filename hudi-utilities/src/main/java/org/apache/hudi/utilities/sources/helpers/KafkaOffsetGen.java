@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;

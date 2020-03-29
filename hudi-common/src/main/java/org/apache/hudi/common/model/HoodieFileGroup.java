@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;

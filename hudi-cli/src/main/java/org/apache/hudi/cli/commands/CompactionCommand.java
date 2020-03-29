@@ -18,8 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.client.CompactionAdminClient.RenameOpResult;
-import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.cli.HoodieCLI;
@@ -29,13 +27,15 @@ import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.CommitUtil;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.hudi.client.CompactionAdminClient.RenameOpResult;
+import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;

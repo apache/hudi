@@ -20,11 +20,11 @@ package org.apache.hudi.common.table.timeline.versioning.clean;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.versioning.AbstractMigratorBase;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.table.timeline.versioning.AbstractMigratorBase;
 
 import org.apache.hadoop.fs.Path;
 

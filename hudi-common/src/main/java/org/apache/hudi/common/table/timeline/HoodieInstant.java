@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 
 import org.apache.hadoop.fs.FileStatus;
 
