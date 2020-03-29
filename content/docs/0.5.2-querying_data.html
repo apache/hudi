@@ -471,7 +471,7 @@ with special configurations that indicates to query planning that only increment
       <td><strong>Impala</strong></td>
       <td>N</td>
       <td>N</td>
-      <td>N</td>
+      <td>Y</td>
     </tr>
   </tbody>
 </table>
@@ -628,6 +628,7 @@ The following snippet shows how to obtain all records changed after <code class=
      <span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
      <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceReadOptions</span><span class="o">.</span><span class="na">QUERY_TYPE_OPT_KEY</span><span class="o">(),</span> <span class="nc">DataSourceReadOptions</span><span class="o">.</span><span class="na">QUERY_TYPE_INCREMENTAL_OPT_VAL</span><span class="o">())</span>
      <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceReadOptions</span><span class="o">.</span><span class="na">BEGIN_INSTANTTIME_OPT_KEY</span><span class="o">(),</span> <span class="o">&lt;</span><span class="n">beginInstantTime</span><span class="o">&gt;)</span>
+     <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceReadOptions</span><span class="o">.</span><span class="na">INCR_PATH_GLOB_OPT_KEY</span><span class="o">(),</span> <span class="s">"/year=2020/month=*/day=*"</span><span class="o">)</span> <span class="c1">// Optional, use glob pattern if querying certain partitions</span>
      <span class="o">.</span><span class="na">load</span><span class="o">(</span><span class="n">tablePath</span><span class="o">);</span> <span class="c1">// For incremental query, pass in the root/base path of table</span>
      
 <span class="n">hudiIncQueryDF</span><span class="o">.</span><span class="na">createOrReplaceTempView</span><span class="o">(</span><span class="s">"hudi_trips_incremental"</span><span class="o">)</span>
