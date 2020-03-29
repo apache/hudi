@@ -21,7 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.config.HoodieWriteConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;

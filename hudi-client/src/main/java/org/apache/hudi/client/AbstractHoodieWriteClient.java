@@ -38,7 +38,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.avro.AvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.config.HoodieWriteConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;

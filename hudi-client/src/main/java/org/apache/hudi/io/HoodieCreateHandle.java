@@ -28,7 +28,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.config.HoodieWriteConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieStorageWriter;
 import org.apache.hudi.io.storage.HoodieStorageWriterFactory;

@@ -39,7 +39,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.config.HoodieWriteConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;
 import org.apache.hudi.table.HoodieTable;

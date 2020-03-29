@@ -34,8 +34,8 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.config.HoodieCompactionConfig;
-import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.hive.util.SchemaUtil;
 
 import com.fasterxml.jackson.databind.ObjectMapper;

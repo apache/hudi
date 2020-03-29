@@ -32,8 +32,8 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.config.HoodieIndexConfig;
-import org.apache.hudi.common.config.HoodieWriteConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.table.HoodieTable;
 

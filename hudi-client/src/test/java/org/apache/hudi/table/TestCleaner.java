@@ -52,8 +52,8 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
-import org.apache.hudi.common.config.HoodieCompactionConfig;
-import org.apache.hudi.common.config.HoodieWriteConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 
 import org.apache.hadoop.fs.Path;

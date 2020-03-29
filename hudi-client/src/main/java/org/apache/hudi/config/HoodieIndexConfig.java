@@ -16,9 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.config;
+package org.apache.hudi.config;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.index.HoodieIndex;
 
 import javax.annotation.concurrent.Immutable;

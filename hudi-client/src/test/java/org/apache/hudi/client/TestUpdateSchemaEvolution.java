@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.ParquetUtils;
-import org.apache.hudi.common.config.HoodieWriteConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;

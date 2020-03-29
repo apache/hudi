@@ -18,7 +18,9 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.config.HoodieWriteConfig.Builder;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.HoodieWriteConfig.Builder;
 
 import org.junit.Test;
 

@@ -19,7 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.config.HoodieWriteConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileSystem;
