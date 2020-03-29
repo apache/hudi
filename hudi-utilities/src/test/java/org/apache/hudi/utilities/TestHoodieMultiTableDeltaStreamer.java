@@ -103,14 +103,14 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
   public void testCustomConfigProps() throws IOException {
     HoodieDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1,dfsBasePath + "/config", TestDataSource.class.getName(), false);
     HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
-    TableExecutionContext executionObject = streamer.getTableExecutionContexts().get(1);
+    TableExecutionContext executionContext = streamer.getTableExecutionContexts().get(1);
     assertEquals(streamer.getTableExecutionContexts().size(), 2);
-    assertEquals(executionObject.getConfig().targetBasePath, dfsBasePath + "/multi_table_dataset/uber_db/dummy_table_uber");
-    assertEquals(executionObject.getConfig().targetTableName, "uber_db.dummy_table_uber");
-    assertEquals(executionObject.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.KAFKA_TOPIC_PROP), "topic1");
-    assertEquals(executionObject.getProperties().getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()), "_row_key");
-    assertEquals(executionObject.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY()), TestHoodieDeltaStreamer.TestGenerator.class.getName());
-    assertEquals(executionObject.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.HIVE_SYNC_TABLE_PROP), "uber_hive_dummy_table");
+    assertEquals(executionContext.getConfig().targetBasePath, dfsBasePath + "/multi_table_dataset/uber_db/dummy_table_uber");
+    assertEquals(executionContext.getConfig().targetTableName, "uber_db.dummy_table_uber");
+    assertEquals(executionContext.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.KAFKA_TOPIC_PROP), "topic1");
+    assertEquals(executionContext.getProperties().getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()), "_row_key");
+    assertEquals(executionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY()), TestHoodieDeltaStreamer.TestGenerator.class.getName());
+    assertEquals(executionContext.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.HIVE_SYNC_TABLE_PROP), "uber_hive_dummy_table");
   }
 
   @Test

@@ -111,8 +111,8 @@ public class HoodieMultiTableDeltaStreamer {
       });
       final Config cfg = new Config();
       //copy all the values from config to cfgF
-      Helpers.deepCopyConfigs(config, cfg);
       String targetBasePath = resetTarget(config, database, currentTable);
+      Helpers.deepCopyConfigs(config, cfg);
       String overriddenTargetBasePath = tableProperties.getString(Constants.TARGET_BASE_PATH_PROP, "");
       cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
       if (cfg.enableHiveSync && StringUtils.isNullOrEmpty(tableProperties.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), ""))) {
