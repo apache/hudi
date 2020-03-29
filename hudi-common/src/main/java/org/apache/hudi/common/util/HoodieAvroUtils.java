@@ -32,7 +32,6 @@ import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
-import org.codehaus.jackson.node.NullNode;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -105,15 +104,15 @@ public class HoodieAvroUtils {
     List<Schema.Field> parentFields = new ArrayList<>();
 
     Schema.Field commitTimeField =
-        new Schema.Field(HoodieRecord.COMMIT_TIME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", null);
+        new Schema.Field(HoodieRecord.COMMIT_TIME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", (Object) null);
     Schema.Field commitSeqnoField =
-        new Schema.Field(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", null);
+        new Schema.Field(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", (Object) null);
     Schema.Field recordKeyField =
-        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", null);
+        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", (Object) null);
     Schema.Field partitionPathField =
-        new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", null);
+        new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", (Object) null);
     Schema.Field fileNameField =
-        new Schema.Field(HoodieRecord.FILENAME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", null);
+        new Schema.Field(HoodieRecord.FILENAME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", (Object) null);
 
     parentFields.add(commitTimeField);
     parentFields.add(commitSeqnoField);
@@ -171,7 +170,7 @@ public class HoodieAvroUtils {
     List<Field> newFields = schema.getFields().stream()
         .map(field -> new Field(field.name(), field.schema(), field.doc(), field.defaultVal())).collect(Collectors.toList());
     for (String newField : newFieldNames) {
-      newFields.add(new Schema.Field(newField, METADATA_FIELD_SCHEMA, "", NullNode.getInstance()));
+      newFields.add(new Schema.Field(newField, METADATA_FIELD_SCHEMA, "", (Object) null));
     }
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
     newSchema.setFields(newFields);
@@ -192,7 +191,7 @@ public class HoodieAvroUtils {
    * schema.
    */
   public static GenericRecord rewriteRecord(GenericRecord record, Schema newSchema) {
-    return rewrite(record, record.getSchema(), newSchema);
+    return rewrite(record, getAllFieldsToWrite(record.getSchema(), newSchema), newSchema);
   }
 
   /**
@@ -200,15 +199,14 @@ public class HoodieAvroUtils {
    * schema.
    */
   public static GenericRecord rewriteRecordWithOnlyNewSchemaFields(GenericRecord record, Schema newSchema) {
-    return rewrite(record, newSchema, newSchema);
+    return rewrite(record, newSchema.getFields(), newSchema);
   }
 
-  private static GenericRecord rewrite(GenericRecord record, Schema schemaWithFields, Schema newSchema) {
+  private static GenericRecord rewrite(GenericRecord record, List<Field> fieldsToWrite, Schema newSchema) {
     GenericRecord newRecord = new GenericData.Record(newSchema);
-    //get union of both the schemas, and then populate the fields in the new record
-    for (Schema.Field f : getAllFieldsToWrite(schemaWithFields, newSchema)) {
+    for (Schema.Field f : fieldsToWrite) {
       if (record.get(f.name()) == null) {
-        populateNewRecordAsPerDataType(newRecord, f);
+        newRecord.put(f.name(), f.defaultVal());
       } else {
         newRecord.put(f.name(), record.get(f.name()));
       }
@@ -233,48 +231,6 @@ public class HoodieAvroUtils {
     }
 
     return fields;
-  }
-
-  private static void populateNewRecordAsPerDataType(GenericRecord record, Field field) {
-    switch (getSchemaTypeForField(field)) {
-      case STRING:
-      case BYTES:
-      case ENUM:
-      case FIXED:
-        record.put(field.name(), field.defaultVal() == null ? null : (String) field.defaultVal());
-        break;
-      case LONG:
-        record.put(field.name(), field.defaultVal() == null ? null : (long) field.defaultVal());
-        break;
-      case INT:
-        record.put(field.name(), field.defaultVal() == null ? null : (int) field.defaultVal());
-        break;
-      case FLOAT:
-        record.put(field.name(), field.defaultVal() == null ? null : (float) field.defaultVal());
-        break;
-      case DOUBLE:
-        record.put(field.name(), field.defaultVal() == null ? null : (double) field.defaultVal());
-        break;
-      case BOOLEAN:
-        record.put(field.name(), field.defaultVal() == null ? null : (boolean) field.defaultVal());
-        break;
-      default:
-        record.put(field.name(), field.defaultVal());
-    }
-  }
-
-  private static Schema.Type getSchemaTypeForField(Field field) {
-    if (!field.schema().getType().equals(Schema.Type.UNION)) {
-      return field.schema().getType();
-    }
-
-    for (Schema schema : field.schema().getTypes()) {
-      if (!schema.getType().equals(Schema.Type.NULL)) {
-        return schema.getType();
-      }
-    }
-
-    return Schema.Type.STRING;
   }
 
   public static byte[] compress(String text) {
