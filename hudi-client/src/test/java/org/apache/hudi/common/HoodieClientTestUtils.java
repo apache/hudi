@@ -19,6 +19,7 @@
 package org.apache.hudi.common;
 
 import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.filter.BloomFilter;
@@ -230,7 +231,8 @@ public class HoodieClientTestUtils {
         ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
         HoodieTestUtils.getDefaultHadoopConf(), Double.valueOf(HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO));
     HoodieParquetWriter writer =
-        new HoodieParquetWriter(instantTime, new Path(basePath + "/" + partitionPath + "/" + filename), config, schema);
+        new HoodieParquetWriter(instantTime, new Path(basePath + "/" + partitionPath + "/" + filename), config,
+                schema, new SparkTaskContextSupplier());
     int seqId = 1;
     for (HoodieRecord record : records) {
       GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema).get();

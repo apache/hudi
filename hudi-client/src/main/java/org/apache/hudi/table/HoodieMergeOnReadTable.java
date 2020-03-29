@@ -108,7 +108,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
       return super.handleUpdate(instantTime, partitionPath, fileId, recordItr);
     } else {
       HoodieAppendHandle<T> appendHandle = new HoodieAppendHandle<>(config, instantTime, this,
-              partitionPath, fileId, recordItr);
+              partitionPath, fileId, recordItr, sparkTaskContextSupplier);
       appendHandle.doAppend();
       appendHandle.close();
       return Collections.singletonList(Collections.singletonList(appendHandle.getWriteStatus())).iterator();
@@ -120,7 +120,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
       throws Exception {
     // If canIndexLogFiles, write inserts to log files else write inserts to parquet files
     if (index.canIndexLogFiles()) {
-      return new MergeOnReadLazyInsertIterable<>(recordItr, config, instantTime, this, idPfx);
+      return new MergeOnReadLazyInsertIterable<>(recordItr, config, instantTime, this, idPfx, sparkTaskContextSupplier);
     } else {
       return super.handleInsert(instantTime, idPfx, recordItr);
     }

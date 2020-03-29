@@ -17,6 +17,7 @@
 
 package org.apache.hudi.common;
 
+import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.TestHoodieClientBase;
 import org.apache.hudi.common.minicluster.HdfsTestService;
 import org.apache.hudi.common.model.HoodieTestUtils;
@@ -54,6 +55,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient ExecutorService executorService;
   protected transient HoodieTableMetaClient metaClient;
   private static AtomicInteger instantGen = new AtomicInteger(1);
+
+  protected final SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
 
   public String getNextInstant() {
     return String.format("%09d", instantGen.getAndIncrement());
