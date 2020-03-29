@@ -25,6 +25,33 @@ language: cn
 并与其他表（数据集/维度）结合以[写出增量](/cn/docs/0.5.2-writing_data.html)到目标Hudi数据集。增量视图是通过查询上表之一实现的，并具有特殊配置，
 该特殊配置指示查询计划仅需要从数据集中获取增量数据。
 
+
+## 查询引擎支持列表
+
+下面的表格展示了各查询引擎是否支持Hudi格式
+
+### 读优化表
+  
+|查询引擎|实时视图|增量拉取|
+|------------|--------|-----------|
+|**Hive**|Y|Y|
+|**Spark SQL**|Y|Y|
+|**Spark Datasource**|Y|Y|
+|**Presto**|Y|N|
+|**Impala**|Y|N|
+
+
+### 实时表
+
+|查询引擎|实时视图|增量拉取|读优化表|
+|------------|--------|-----------|--------------|
+|**Hive**|Y|Y|Y|
+|**Spark SQL**|Y|Y|Y|
+|**Spark Datasource**|N|N|Y|
+|**Presto**|N|N|Y|
+|**Impala**|N|N|Y|
+
+
 接下来，我们将详细讨论在每个查询引擎上如何访问所有三个视图。
 
 ## Hive
@@ -128,7 +155,9 @@ scala> sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'
              DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL())
      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(),
             <beginInstantTime>)
-     .load(tablePath); // For incremental view, pass in the root/base path of dataset
+     .option(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY(),
+            "/year=2020/month=*/day=*") // 可选，从指定的分区增量拉取
+     .load(tablePath); // 用数据集的最底层路径
 ```
 
 请参阅[设置](/cn/docs/0.5.2-configurations.html#spark-datasource)部分，以查看所有数据源选项。
