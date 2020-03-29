@@ -38,7 +38,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.avro.AvroUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -417,7 +417,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieCleanMetadata cleanMetadata = CleanerUtils
         .convertCleanMetadata(metaClient, cleanInstant, Option.empty(), cleanStats);
     metaClient.getActiveTimeline().saveAsComplete(cleanInflightInstant,
-        AvroUtils.serializeCleanMetadata(cleanMetadata));
+        TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
   }
 
   /**
@@ -438,7 +438,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     rollbacks.add(instant);
 
     HoodieRollbackMetadata rollbackMetadata =
-        AvroUtils.convertRollbackMetadata(rollbackInstant, Option.empty(), rollbacks, rollbackStats);
+        TimelineMetadataUtils.convertRollbackMetadata(rollbackInstant, Option.empty(), rollbacks, rollbackStats);
     if (isRestore) {
       HoodieRestoreMetadata metadata = new HoodieRestoreMetadata();
 
@@ -452,13 +452,13 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
       HoodieInstant restoreInstant = new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, rollbackInstant);
       metaClient.getActiveTimeline().createNewInstant(restoreInstant);
-      metaClient.getActiveTimeline().saveAsComplete(restoreInstant, AvroUtils.serializeRestoreMetadata(metadata));
+      metaClient.getActiveTimeline().saveAsComplete(restoreInstant, TimelineMetadataUtils.serializeRestoreMetadata(metadata));
     } else {
       metaClient.getActiveTimeline().createNewInstant(
           new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant));
       metaClient.getActiveTimeline().saveAsComplete(
           new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant),
-          AvroUtils.serializeRollbackMetadata(rollbackMetadata));
+          TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
     }
   }
 
@@ -500,7 +500,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(slices, Option.empty(), Option.empty());
     HoodieInstant compactionInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-        AvroUtils.serializeCompactionPlan(plan));
+        TimelineMetadataUtils.serializeCompactionPlan(plan));
 
     view.sync();
     partitions.forEach(p -> {

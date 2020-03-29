@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.avro.AvroUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
@@ -130,7 +130,7 @@ public class CompactionTestUtils {
       HoodieCompactionPlan compactionPlan) throws IOException {
     metaClient.getActiveTimeline().saveToCompactionRequested(
         new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
-        AvroUtils.serializeCompactionPlan(compactionPlan));
+        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
   }
 
   public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) {

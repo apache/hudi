@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.avro.AvroUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.fs.FSUtils;
@@ -162,7 +162,7 @@ public class HoodieTestUtils {
                   metaClient.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
               os = metaClient.getFs().create(commitFile, true);
               // Write empty clean metadata
-              os.write(AvroUtils.serializeCleanerPlan(
+              os.write(TimelineMetadataUtils.serializeCleanerPlan(
                   new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(), 1)).get());
             } catch (IOException ioe) {
               throw new HoodieIOException(ioe.getMessage(), ioe);
@@ -241,7 +241,7 @@ public class HoodieTestUtils {
     HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(fileSliceList, Option.empty(), Option.empty());
     HoodieInstant compactionInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instant);
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-        AvroUtils.serializeCompactionPlan(plan));
+        TimelineMetadataUtils.serializeCompactionPlan(plan));
   }
 
   public static String getDataFilePath(String basePath, String partitionPath, String instantTime, String fileID) {
@@ -306,7 +306,7 @@ public class HoodieTestUtils {
       HoodieCleanMetadata cleanMetadata =
           CleanerUtils.convertCleanMetadata(metaClient, instantTime, Option.of(0L), Collections.singletonList(cleanStats));
       // Write empty clean metadata
-      os.write(AvroUtils.serializeCleanMetadata(cleanMetadata).get());
+      os.write(TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata).get());
     }
   }
 

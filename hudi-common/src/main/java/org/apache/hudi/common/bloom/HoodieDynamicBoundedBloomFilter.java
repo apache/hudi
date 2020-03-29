@@ -58,9 +58,9 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
   }
 
   /**
-   * Generate {@link HoodieDynamicBoundedBloomFilter} from the given {@code serString} serialized timeline.
+   * Generate {@link HoodieDynamicBoundedBloomFilter} from the given {@code serString} serialized string.
    *
-   * @param serString the serialized timeline which represents the {@link HoodieDynamicBoundedBloomFilter}
+   * @param serString the serialized string which represents the {@link HoodieDynamicBoundedBloomFilter}
    * @param typeCode  type code of the bloom filter
    */
   HoodieDynamicBoundedBloomFilter(String serString, BloomFilterTypeCode typeCode) {

@@ -58,7 +58,7 @@ import java.util.stream.Collectors;
 public class DataSourceUtils {
 
   /**
-   * Obtain value of the provided field as timeline, denoted by dot notation. e.g: a.b.c
+   * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
    */
   public static String getNestedFieldValAsString(GenericRecord record, String fieldName, boolean returnNullIfNotFound) {
     Object obj = getNestedFieldVal(record, fieldName, returnNullIfNotFound);

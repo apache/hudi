@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.avro;
+package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -47,10 +47,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * A utility class for avro.
- */
-public class AvroUtils {
+public class TimelineMetadataUtils {
 
   private static final Integer DEFAULT_VERSION = 1;
 

@@ -35,7 +35,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.avro.AvroUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -399,14 +399,14 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       durationInMs = Option.of(metrics.getDurationInMs(context.stop()));
       metrics.updateRollbackMetrics(durationInMs.get(), numFilesDeleted);
     }
-    HoodieRollbackMetadata rollbackMetadata = AvroUtils
+    HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils
         .convertRollbackMetadata(startRollbackTime, durationInMs, commitsToRollback, rollbackStats);
     //TODO: varadarb - This will be fixed when Rollback transition mimics that of commit
     table.getActiveTimeline().createNewInstant(new HoodieInstant(State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION,
         startRollbackTime));
     table.getActiveTimeline().saveAsComplete(
         new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime),
-        AvroUtils.serializeRollbackMetadata(rollbackMetadata));
+        TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
     LOG.info("Rollback of Commits " + commitsToRollback + " is complete");
 
     if (!table.getActiveTimeline().getCleanerTimeline().empty()) {

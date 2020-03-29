@@ -36,7 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.avro.AvroUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -119,7 +119,7 @@ public class CompactionCommand implements CommandMarker {
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
-    HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
+    HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
         activeTimeline.readCompactionPlanAsBytes(
             HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get());
 
@@ -179,7 +179,7 @@ public class CompactionCommand implements CommandMarker {
     String endTs = CommitUtil.addHours(compactionInstantTime, 1);
     try {
       archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
-      HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
+      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
               archivedTimeline.getInstantDetails(instant).get());
       return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly);
     } finally {
@@ -330,7 +330,7 @@ public class CompactionCommand implements CommandMarker {
       return null;
     } else {
       try {
-        return AvroUtils.deserializeCompactionPlan(archivedTimeline.getInstantDetails(instant).get());
+        return TimelineMetadataUtils.deserializeCompactionPlan(archivedTimeline.getInstantDetails(instant).get());
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -346,7 +346,7 @@ public class CompactionCommand implements CommandMarker {
       if (!HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())) {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
-          return AvroUtils.deserializeCompactionPlan(
+          return TimelineMetadataUtils.deserializeCompactionPlan(
                   activeTimeline.readCompactionPlanAsBytes(
                           HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
         } catch (HoodieIOException ioe) {
@@ -354,7 +354,7 @@ public class CompactionCommand implements CommandMarker {
           return null;
         }
       } else {
-        return AvroUtils.deserializeCompactionPlan(activeTimeline.readCompactionPlanAsBytes(
+        return TimelineMetadataUtils.deserializeCompactionPlan(activeTimeline.readCompactionPlanAsBytes(
                 HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
       }
     } catch (IOException e) {

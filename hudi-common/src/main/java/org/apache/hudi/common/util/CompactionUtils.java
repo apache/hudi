@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.avro.AvroUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
@@ -140,7 +140,7 @@ public class CompactionUtils {
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
       throws IOException {
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
-    HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
+    HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
         metaClient.getActiveTimeline().readCompactionPlanAsBytes(
             HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
     return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());

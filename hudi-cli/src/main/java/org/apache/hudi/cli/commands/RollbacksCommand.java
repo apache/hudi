@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.avro.AvroUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -64,7 +64,7 @@ public class RollbacksCommand implements CommandMarker {
     final List<Comparable[]> rows = new ArrayList<>();
     rollback.getInstants().forEach(instant -> {
       try {
-        HoodieRollbackMetadata metadata = AvroUtils
+        HoodieRollbackMetadata metadata = TimelineMetadataUtils
             .deserializeAvroMetadata(activeTimeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
         metadata.getCommitsRollback().forEach(c -> {
           Comparable[] row = new Comparable[5];
@@ -96,7 +96,7 @@ public class RollbacksCommand implements CommandMarker {
       throws IOException {
     HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.getTableMetaClient());
     final List<Comparable[]> rows = new ArrayList<>();
-    HoodieRollbackMetadata metadata = AvroUtils.deserializeAvroMetadata(
+    HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
         activeTimeline.getInstantDetails(new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
         HoodieRollbackMetadata.class);
     metadata.getPartitionMetadata().forEach((key, value) -> Stream

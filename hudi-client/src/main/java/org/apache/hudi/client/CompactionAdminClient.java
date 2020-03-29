@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.avro.AvroUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
@@ -182,7 +182,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
       // Overwrite compaction plan with updated info
       metaClient.getActiveTimeline().saveToCompactionRequested(
           new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionOperationWithInstant.getLeft()),
-          AvroUtils.serializeCompactionPlan(newPlan), true);
+          TimelineMetadataUtils.serializeCompactionPlan(newPlan), true);
     }
     return res;
   }
@@ -219,7 +219,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
    */
   private static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
       throws IOException {
-    return AvroUtils.deserializeCompactionPlan(
+    return TimelineMetadataUtils.deserializeCompactionPlan(
             metaClient.getActiveTimeline().readCompactionPlanAsBytes(
                     HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
   }
