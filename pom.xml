@@ -354,7 +354,7 @@
           </configuration>
           <executions>
             <execution>
-              <phase>package</phase>
+              <phase>compile</phase>
               <goals>
                 <goal>check</goal>
               </goals>
