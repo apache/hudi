@@ -55,7 +55,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   private final SparkTaskContextSupplier sparkTaskContextSupplier;
 
   public HoodieParquetWriter(String instantTime, Path file, HoodieParquetConfig parquetConfig,
-       Schema schema, SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
+      Schema schema, SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
         ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),
         parquetConfig.getBlockSize(), parquetConfig.getPageSize(), parquetConfig.getPageSize(),
