@@ -40,7 +40,7 @@ To submit changes to the docs, please make the changes on the `asf-site` branch,
 
 ### Updating site
 
-Once a pull request merged, Travis CI will regenerate the site and move the generated site from `_site` to `docs/../content` and then submit changes as a PR automatically.
+Once a pull request merged, Travis CI will regenerate the site and move the generated site from `_site` to `docs/../content`, and then submit changes as a PR automatically.
 
 ### Adding docs for version
 
