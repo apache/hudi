@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities.inline.fs;
 
 import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.common.inline.fs.FileSystemTestUtils;
-import org.apache.hudi.common.inline.fs.InLineFileSystem;
-import org.apache.hudi.common.inline.fs.InMemoryFileSystem;
+import org.apache.hudi.common.fs.inline.FileSystemTestUtils;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.fs.inline.InMemoryFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.avro.generic.GenericRecord;
@@ -43,9 +43,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.FILE_SCHEME;
-import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.getPhantomFile;
-import static org.apache.hudi.common.inline.fs.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.FILE_SCHEME;
+import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getPhantomFile;
+import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getRandomOuterInMemPath;
 
 /**
  * Tests {@link InLineFileSystem} with Parquet writer and reader. hudi-common can't access HoodieTestDataGenerator.

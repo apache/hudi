@@ -19,11 +19,11 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.storage.StorageSchemes;
+import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.HoodieLogFormat.WriterBuilder;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 

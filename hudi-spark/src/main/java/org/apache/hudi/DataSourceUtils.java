@@ -27,10 +27,10 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.TypedProperties;
-import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.config.HoodieCompactionConfig;
+import org.apache.hudi.common.config.HoodieIndexConfig;
+import org.apache.hudi.common.config.HoodieWriteConfig;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -58,7 +58,7 @@ import java.util.stream.Collectors;
 public class DataSourceUtils {
 
   /**
-   * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
+   * Obtain value of the provided field as timeline, denoted by dot notation. e.g: a.b.c
    */
   public static String getNestedFieldValAsString(GenericRecord record, String fieldName, boolean returnNullIfNotFound) {
     Object obj = getNestedFieldVal(record, fieldName, returnNullIfNotFound);

@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.common.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.scalatest.{FunSuite, Matchers}

@@ -21,9 +21,9 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.config.HoodieWriteConfig;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;

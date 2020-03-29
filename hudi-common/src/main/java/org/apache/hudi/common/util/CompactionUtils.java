@@ -18,18 +18,19 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.AvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.versioning.compaction.CompactionPlanMigrator;
-import org.apache.hudi.common.versioning.compaction.CompactionV1MigrationHandler;
-import org.apache.hudi.common.versioning.compaction.CompactionV2MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
+import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV1MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV2MigrationHandler;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.log4j.LogManager;

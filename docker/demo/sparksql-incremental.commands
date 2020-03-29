@@ -19,7 +19,7 @@
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.spark.sql.SaveMode;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.config.HoodieWriteConfig;
 import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hadoop.fs.FileSystem;
 

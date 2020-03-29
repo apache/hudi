@@ -21,7 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.TestHoodieClientBase;
 import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.IndexedRecord;

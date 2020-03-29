@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.config.HoodieWriteConfig;
 
 import org.junit.Test;
 

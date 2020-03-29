@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.Before;

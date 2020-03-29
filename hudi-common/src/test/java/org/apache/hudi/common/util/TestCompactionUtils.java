@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.HoodieCommonTestHarness;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -29,7 +30,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CompactionTestUtils.TestHoodieBaseFile;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.versioning.compaction.CompactionPlanMigrator;
+import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.Assert;

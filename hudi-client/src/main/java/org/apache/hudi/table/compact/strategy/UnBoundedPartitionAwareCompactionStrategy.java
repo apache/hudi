@@ -20,7 +20,7 @@ package org.apache.hudi.table.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
 import java.util.Comparator;

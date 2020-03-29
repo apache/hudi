@@ -20,10 +20,10 @@ package org.apache.hudi.cli
 import java.util.stream.Collectors
 
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.util.FSUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.log4j.Logger
 import org.apache.spark.sql.{DataFrame, SQLContext}

@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -50,7 +50,7 @@ public class KafkaOffsetGen {
   public static class CheckpointUtils {
 
     /**
-     * Reconstruct checkpoint from string.
+     * Reconstruct checkpoint from timeline.
      */
     public static HashMap<TopicPartition, Long> strToOffsets(String checkpointStr) {
       HashMap<TopicPartition, Long> offsetMap = new HashMap<>();

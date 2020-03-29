@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.storage;
 
+import org.apache.hudi.common.fs.StorageSchemes;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;

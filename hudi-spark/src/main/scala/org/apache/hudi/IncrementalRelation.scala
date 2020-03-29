@@ -22,7 +22,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ParquetUtils
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.common.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.table.HoodieTable
 import org.apache.log4j.LogManager
