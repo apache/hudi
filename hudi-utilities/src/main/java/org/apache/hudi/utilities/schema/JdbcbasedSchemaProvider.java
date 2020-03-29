@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.spark.api.java.JavaSparkContext;

@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.databind.JsonNode;

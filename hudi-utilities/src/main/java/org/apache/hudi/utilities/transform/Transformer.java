@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.transform;
 
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;

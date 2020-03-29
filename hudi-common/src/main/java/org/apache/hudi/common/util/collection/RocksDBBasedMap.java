@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.common.util.RocksDBDAO;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import java.io.Serializable;

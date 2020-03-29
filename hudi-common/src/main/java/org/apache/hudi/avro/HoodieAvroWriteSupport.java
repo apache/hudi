@@ -18,8 +18,8 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.hudi.common.bloom.filter.BloomFilter;
-import org.apache.hudi.common.bloom.filter.HoodieDynamicBoundedBloomFilter;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 
 import org.apache.avro.Schema;
 import org.apache.parquet.avro.AvroWriteSupport;

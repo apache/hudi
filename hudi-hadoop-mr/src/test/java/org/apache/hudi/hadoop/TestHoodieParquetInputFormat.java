@@ -38,7 +38,7 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;

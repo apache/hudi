@@ -23,7 +23,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.SchemaTestUtil;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.keygen.TimestampBasedKeyGenerator;
 import org.junit.Before;
 import org.junit.Test;

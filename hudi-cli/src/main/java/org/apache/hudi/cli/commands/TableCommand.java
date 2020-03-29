@@ -23,7 +23,7 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.exception.TableNotFoundException;
 
 import org.springframework.shell.core.CommandMarker;

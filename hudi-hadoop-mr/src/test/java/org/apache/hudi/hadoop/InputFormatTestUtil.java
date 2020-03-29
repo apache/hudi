@@ -20,8 +20,8 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.HoodieAvroUtils;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.SchemaTestUtil;
 
 import org.apache.avro.Schema;

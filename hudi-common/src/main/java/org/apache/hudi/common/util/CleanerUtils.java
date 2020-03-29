@@ -18,15 +18,16 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.versioning.clean.CleanMetadataMigrator;
-import org.apache.hudi.common.versioning.clean.CleanV1MigrationHandler;
-import org.apache.hudi.common.versioning.clean.CleanV2MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanV1MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanV2MigrationHandler;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -69,7 +70,7 @@ public class CleanerUtils {
   public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
     CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    HoodieCleanMetadata cleanMetadata = AvroUtils.deserializeHoodieCleanMetadata(
+    HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
         metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get());
     return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
   }
@@ -83,7 +84,7 @@ public class CleanerUtils {
    */
   public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
-    return AvroUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get(),
+    return TimelineMetadataUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get(),
         HoodieCleanerPlan.class);
   }
 }

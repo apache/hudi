@@ -23,11 +23,11 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -42,7 +42,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.HoodieTimeline.ROLLBACK_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 
 /**
  * CLI command to display rollback options.
@@ -64,7 +64,7 @@ public class RollbacksCommand implements CommandMarker {
     final List<Comparable[]> rows = new ArrayList<>();
     rollback.getInstants().forEach(instant -> {
       try {
-        HoodieRollbackMetadata metadata = AvroUtils
+        HoodieRollbackMetadata metadata = TimelineMetadataUtils
             .deserializeAvroMetadata(activeTimeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
         metadata.getCommitsRollback().forEach(c -> {
           Comparable[] row = new Comparable[5];
@@ -96,7 +96,7 @@ public class RollbacksCommand implements CommandMarker {
       throws IOException {
     HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.getTableMetaClient());
     final List<Comparable[]> rows = new ArrayList<>();
-    HoodieRollbackMetadata metadata = AvroUtils.deserializeAvroMetadata(
+    HoodieRollbackMetadata metadata = TimelineMetadataUtils.deserializeAvroMetadata(
         activeTimeline.getInstantDetails(new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),
         HoodieRollbackMetadata.class);
     metadata.getPartitionMetadata().forEach((key, value) -> Stream
