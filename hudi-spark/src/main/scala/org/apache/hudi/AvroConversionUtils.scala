@@ -71,16 +71,6 @@ object AvroConversionUtils {
     }
   }
 
-  def getNewRecordNamespace(elementDataType: DataType,
-                            currentRecordNamespace: String,
-                            elementName: String): String = {
-
-    elementDataType match {
-      case StructType(_) => s"$currentRecordNamespace.$elementName"
-      case _ => currentRecordNamespace
-    }
-  }
-
   def convertStructTypeToAvroSchema(structType: StructType,
                                     structName: String,
                                     recordNamespace: String): Schema = {
