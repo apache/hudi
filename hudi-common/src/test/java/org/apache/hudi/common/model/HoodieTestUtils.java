@@ -179,6 +179,30 @@ public class HoodieTestUtils {
     }
   }
 
+  public static void createCorruptedPendingCleanFiles(HoodieTableMetaClient metaClient, String commitTime) {
+    Arrays.asList(HoodieTimeline.makeRequestedCleanerFileName(commitTime),
+        HoodieTimeline.makeInflightCleanerFileName(commitTime)).forEach(f -> {
+          FSDataOutputStream os = null;
+          try {
+            Path commitFile = new Path(
+                    metaClient.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
+            os = metaClient.getFs().create(commitFile, true);
+            // Write empty clean metadata
+            os.write(new byte[0]);
+          } catch (IOException ioe) {
+            throw new HoodieIOException(ioe.getMessage(), ioe);
+          } finally {
+            if (null != os) {
+              try {
+                os.close();
+              } catch (IOException e) {
+                throw new HoodieIOException(e.getMessage(), e);
+              }
+            }
+          }
+        });
+  }
+
   public static String createNewDataFile(String basePath, String partitionPath, String instantTime)
       throws IOException {
     String fileID = UUID.randomUUID().toString();
