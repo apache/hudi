@@ -20,6 +20,7 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.HoodiePrintHelper;
+
 import org.junit.Test;
 import org.springframework.shell.core.CommandResult;
 

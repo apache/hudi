@@ -19,10 +19,10 @@
 package org.apache.hudi.timeline.service;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
-import org.apache.hudi.common.fs.FSUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;

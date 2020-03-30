@@ -18,14 +18,16 @@
 
 package org.apache.hudi.keygen;
 
-import java.util.Arrays;
-import java.util.List;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieKeyException;
+
+import org.apache.avro.generic.GenericRecord;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Key generator for deletes using global indices. Global index deletes do not require partition value

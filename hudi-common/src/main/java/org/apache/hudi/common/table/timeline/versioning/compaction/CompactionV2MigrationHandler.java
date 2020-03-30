@@ -21,8 +21,8 @@ package org.apache.hudi.common.table.timeline.versioning.compaction;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.table.timeline.versioning.AbstractMigratorBase;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.hadoop.fs.Path;
 

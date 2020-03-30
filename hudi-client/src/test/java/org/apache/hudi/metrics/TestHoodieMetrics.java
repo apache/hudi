@@ -21,10 +21,9 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import com.codahale.metrics.Timer;
 import org.junit.Before;
 import org.junit.Test;
-
-import com.codahale.metrics.Timer;
 
 import java.util.Arrays;
 import java.util.Random;

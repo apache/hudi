@@ -18,10 +18,11 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.util.ValidationUtils;
+
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 

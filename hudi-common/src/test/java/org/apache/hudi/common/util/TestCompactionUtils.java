@@ -28,9 +28,9 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
 import org.apache.hudi.common.util.CompactionTestUtils.TestHoodieBaseFile;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.Assert;
