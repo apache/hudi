@@ -63,8 +63,8 @@ public class SparkMain {
 
     SparkCommand cmd = SparkCommand.valueOf(command);
 
-    JavaSparkContext jsc = cmd == SparkCommand.CLEAN
-        ? SparkUtil.initJavaSparkConf("hoodie-cli-" + command, Option.of(args[2]), Option.of(args[4]))
+    JavaSparkContext jsc = sparkMasterContained(cmd)
+        ? SparkUtil.initJavaSparkConf("hoodie-cli-" + command, Option.of(args[1]), Option.of(args[2]))
         : SparkUtil.initJavaSparkConf("hoodie-cli-" + command);
     int returnCode = 0;
     switch (cmd) {
@@ -121,43 +121,49 @@ public class SparkMain {
         break;
       case COMPACT_VALIDATE:
         assert (args.length == 7);
-        doCompactValidate(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6]);
+        doCompactValidate(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]));
         returnCode = 0;
         break;
       case COMPACT_REPAIR:
         assert (args.length == 8);
-        doCompactRepair(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
+        doCompactRepair(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
             Boolean.parseBoolean(args[7]));
         returnCode = 0;
         break;
       case COMPACT_UNSCHEDULE_FILE:
         assert (args.length == 9);
-        doCompactUnscheduleFile(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
+        doCompactUnscheduleFile(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
             Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
         returnCode = 0;
         break;
       case COMPACT_UNSCHEDULE_PLAN:
         assert (args.length == 9);
-        doCompactUnschedule(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
+        doCompactUnschedule(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
             Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
         returnCode = 0;
         break;
       case CLEAN:
         assert (args.length >= 5);
         propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[3])) {
-          propsFilePath = args[3];
+        if (!StringUtils.isNullOrEmpty(args[4])) {
+          propsFilePath = args[4];
         }
         configs = new ArrayList<>();
         if (args.length > 5) {
           configs.addAll(Arrays.asList(args).subList(5, args.length));
         }
-        clean(jsc, args[1], propsFilePath, configs);
+        clean(jsc, args[3], propsFilePath, configs);
         break;
       default:
         break;
     }
     System.exit(returnCode);
+  }
+
+  private static boolean sparkMasterContained(SparkCommand command) {
+    List masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
+        SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN);
+    return masterContained.contains(command);
   }
 
   private static void clean(JavaSparkContext jsc, String basePath, String propsFilePath,
@@ -189,22 +195,18 @@ public class SparkMain {
   }
 
   private static void doCompactValidate(JavaSparkContext jsc, String basePath, String compactionInstant,
-      String outputPath, int parallelism, String sparkMaster, String sparkMemory) throws Exception {
+      String outputPath, int parallelism) throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.VALIDATE;
     cfg.outputPath = outputPath;
     cfg.compactionInstantTime = compactionInstant;
     cfg.parallelism = parallelism;
-    if ((null != sparkMaster) && (!sparkMaster.isEmpty())) {
-      jsc.getConf().setMaster(sparkMaster);
-    }
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
   private static void doCompactRepair(JavaSparkContext jsc, String basePath, String compactionInstant,
-      String outputPath, int parallelism, String sparkMaster, String sparkMemory, boolean dryRun) throws Exception {
+      String outputPath, int parallelism, boolean dryRun) throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.REPAIR;
@@ -212,16 +214,11 @@ public class SparkMain {
     cfg.compactionInstantTime = compactionInstant;
     cfg.parallelism = parallelism;
     cfg.dryRun = dryRun;
-    if ((null != sparkMaster) && (!sparkMaster.isEmpty())) {
-      jsc.getConf().setMaster(sparkMaster);
-    }
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
   private static void doCompactUnschedule(JavaSparkContext jsc, String basePath, String compactionInstant,
-      String outputPath, int parallelism, String sparkMaster, String sparkMemory, boolean skipValidation,
-      boolean dryRun) throws Exception {
+      String outputPath, int parallelism, boolean skipValidation, boolean dryRun) throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.UNSCHEDULE_PLAN;
@@ -230,15 +227,11 @@ public class SparkMain {
     cfg.parallelism = parallelism;
     cfg.dryRun = dryRun;
     cfg.skipValidation = skipValidation;
-    if ((null != sparkMaster) && (!sparkMaster.isEmpty())) {
-      jsc.getConf().setMaster(sparkMaster);
-    }
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
   private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String outputPath,
-      int parallelism, String sparkMaster, String sparkMemory, boolean skipValidation, boolean dryRun)
+      int parallelism, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
@@ -248,10 +241,6 @@ public class SparkMain {
     cfg.parallelism = parallelism;
     cfg.dryRun = dryRun;
     cfg.skipValidation = skipValidation;
-    if ((null != sparkMaster) && (!sparkMaster.isEmpty())) {
-      jsc.getConf().setMaster(sparkMaster);
-    }
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 

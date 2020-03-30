@@ -137,7 +137,7 @@ public class CleansCommand implements CommandMarker {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
     String cmd = SparkMain.SparkCommand.CLEAN.toString();
-    sparkLauncher.addAppArgs(cmd, metaClient.getBasePath(), master, propsFilePath, sparkMemory);
+    sparkLauncher.addAppArgs(cmd, master, sparkMemory, metaClient.getBasePath(), propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
