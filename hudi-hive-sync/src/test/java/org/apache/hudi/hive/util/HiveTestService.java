@@ -21,7 +21,6 @@ package org.apache.hudi.hive.util;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 
-import com.google.common.io.Files;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -51,6 +50,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -78,8 +78,8 @@ public class HiveTestService {
   private TServer tServer;
   private HiveServer2 hiveServer;
 
-  public HiveTestService(Configuration configuration) {
-    this.workDir = Files.createTempDir().getAbsolutePath();
+  public HiveTestService(Configuration configuration) throws IOException {
+    this.workDir = Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath();
   }
 
   public Configuration getHadoopConf() {
@@ -139,7 +139,8 @@ public class HiveTestService {
     File derbyLogFile = new File(localHiveDir, "derby.log");
     derbyLogFile.createNewFile();
     setSystemProperty("derby.stream.error.file", derbyLogFile.getPath());
-    conf.set(HiveConf.ConfVars.METASTOREWAREHOUSE.varname, Files.createTempDir().getAbsolutePath());
+    conf.set(HiveConf.ConfVars.METASTOREWAREHOUSE.varname,
+        Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath());
     conf.set("datanucleus.schema.autoCreateTables", "true");
     conf.set("hive.metastore.schema.verification", "false");
     setSystemProperty("derby.stream.error.file", derbyLogFile.getPath());

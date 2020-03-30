@@ -19,6 +19,7 @@
 package org.apache.hudi.table.rollback;
 
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -27,7 +28,6 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock.HoodieCommandBlockTypeEnum;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
@@ -214,7 +214,7 @@ public class RollbackHelper implements Serializable {
 
   private Map<HeaderMetadataType, String> generateHeader(String commit) {
     // generate metadata
-    Map<HeaderMetadataType, String> header = new HashMap<>();
+    Map<HeaderMetadataType, String> header = new HashMap<>(3);
     header.put(HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().getTimestamp());
     header.put(HeaderMetadataType.TARGET_INSTANT_TIME, commit);
     header.put(HeaderMetadataType.COMMAND_BLOCK_TYPE,

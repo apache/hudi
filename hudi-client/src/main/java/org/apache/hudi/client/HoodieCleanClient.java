@@ -24,11 +24,11 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -119,7 +119,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
       HoodieInstant cleanInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
       // Save to both aux and timeline folder
       try {
-        table.getActiveTimeline().saveToCleanRequested(cleanInstant, AvroUtils.serializeCleanerPlan(cleanerPlan));
+        table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
         LOG.info("Requesting Cleaning with instant time " + cleanInstant);
       } catch (IOException e) {
         LOG.error("Got exception when saving cleaner requested file", e);
@@ -157,7 +157,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
       if (!cleanInstant.isInflight()) {
         // Mark as inflight first
         cleanInstant = table.getActiveTimeline().transitionCleanRequestedToInflight(cleanInstant,
-            AvroUtils.serializeCleanerPlan(cleanerPlan));
+            TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
       }
 
       List<HoodieCleanStat> cleanStats = table.clean(jsc, cleanInstant, cleanerPlan);
@@ -182,7 +182,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
 
       table.getActiveTimeline().transitionCleanInflightToComplete(
           new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant.getTimestamp()),
-          AvroUtils.serializeCleanMetadata(metadata));
+          TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + cleanInstant.getTimestamp() + " as complete");
       return metadata;
     } catch (IOException e) {

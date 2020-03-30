@@ -18,9 +18,8 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-
-import com.google.common.collect.ImmutableList;
 
 import java.io.Serializable;
 import java.util.List;
@@ -38,8 +37,8 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   public static String FILENAME_METADATA_FIELD = "_hoodie_file_name";
 
   public static final List<String> HOODIE_META_COLUMNS =
-      new ImmutableList.Builder<String>().add(COMMIT_TIME_METADATA_FIELD).add(COMMIT_SEQNO_METADATA_FIELD)
-          .add(RECORD_KEY_METADATA_FIELD).add(PARTITION_PATH_METADATA_FIELD).add(FILENAME_METADATA_FIELD).build();
+      CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
+          RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD);
 
   /**
    * Identifies the record across the table.

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 

@@ -286,9 +286,9 @@ SOFTWARE.
 
 This product includes code from Apache Hadoop
 
-* org.apache.hudi.common.bloom.filter.InternalDynamicBloomFilter.java adapted from org.apache.hadoop.util.bloom.DynamicBloomFilter.java
+* org.apache.hudi.common.bloom.InternalDynamicBloomFilter.java adapted from org.apache.hadoop.util.bloom.DynamicBloomFilter.java
 
-* org.apache.hudi.common.bloom.filter.InternalFilter copied from classes in org.apache.hadoop.util.bloom package
+* org.apache.hudi.common.bloom.InternalFilter copied from classes in org.apache.hadoop.util.bloom package
 
 with the following license
 

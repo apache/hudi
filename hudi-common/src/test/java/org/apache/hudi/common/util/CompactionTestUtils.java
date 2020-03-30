@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -28,11 +29,10 @@ import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import org.apache.hadoop.fs.Path;
 import org.junit.Assert;
 
@@ -47,8 +47,8 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
-import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
-import static org.apache.hudi.common.table.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 
 /**
  * The utility class to support testing compaction.
@@ -82,12 +82,17 @@ public class CompactionTestUtils {
     createDeltaCommit(metaClient, "004");
     createDeltaCommit(metaClient, "006");
 
-    Map<String, String> baseInstantsToCompaction = new ImmutableMap.Builder<String, String>().put("000", "001")
-        .put("002", "003").put("004", "005").put("006", "007").build();
+    Map<String, String> baseInstantsToCompaction = new HashMap<String, String>() {
+      {
+        put("000", "001");
+        put("002", "003");
+        put("004", "005");
+        put("006", "007");
+      }
+    };
     List<Integer> expectedNumEntries =
         Arrays.asList(numEntriesInPlan1, numEntriesInPlan2, numEntriesInPlan3, numEntriesInPlan4);
-    List<HoodieCompactionPlan> plans =
-        new ImmutableList.Builder<HoodieCompactionPlan>().add(plan1, plan2, plan3, plan4).build();
+    List<HoodieCompactionPlan> plans = CollectionUtils.createImmutableList(plan1, plan2, plan3, plan4);
     IntStream.range(0, 4).boxed().forEach(idx -> {
       if (expectedNumEntries.get(idx) > 0) {
         Assert.assertEquals("check if plan " + idx + " has exp entries", expectedNumEntries.get(idx).longValue(),
@@ -125,7 +130,7 @@ public class CompactionTestUtils {
       HoodieCompactionPlan compactionPlan) throws IOException {
     metaClient.getActiveTimeline().saveToCompactionRequested(
         new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
-        AvroUtils.serializeCompactionPlan(compactionPlan));
+        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
   }
 
   public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) {

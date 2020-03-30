@@ -18,11 +18,11 @@
 
 package org.apache.hudi.client;
 
-import java.util.Collections;
-
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.utils.SparkConfigUtils;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRollingStat;
@@ -30,12 +30,11 @@ import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.util.AvroUtils;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -54,6 +53,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -115,7 +115,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       String instantTime) {
     // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
     // RDD actions that are performed after updating the index.
-    writeStatusRDD = writeStatusRDD.persist(config.getWriteStatusStorageLevel());
+    writeStatusRDD = writeStatusRDD.persist(SparkConfigUtils.getWriteStatusStorageLevel(config.getProps()));
     Timer.Context indexTimer = metrics.getIndexCtx();
     // Update the index back
     JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, jsc, table);
@@ -398,14 +398,14 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       durationInMs = Option.of(metrics.getDurationInMs(context.stop()));
       metrics.updateRollbackMetrics(durationInMs.get(), numFilesDeleted);
     }
-    HoodieRollbackMetadata rollbackMetadata = AvroUtils
+    HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils
         .convertRollbackMetadata(startRollbackTime, durationInMs, commitsToRollback, rollbackStats);
     //TODO: varadarb - This will be fixed when Rollback transition mimics that of commit
     table.getActiveTimeline().createNewInstant(new HoodieInstant(State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION,
         startRollbackTime));
     table.getActiveTimeline().saveAsComplete(
         new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime),
-        AvroUtils.serializeRollbackMetadata(rollbackMetadata));
+        TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
     LOG.info("Rollback of Commits " + commitsToRollback + " is complete");
 
     if (!table.getActiveTimeline().getCleanerTimeline().empty()) {

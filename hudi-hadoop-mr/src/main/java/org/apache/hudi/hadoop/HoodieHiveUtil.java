@@ -18,6 +18,11 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -25,10 +30,6 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapreduce.JobContext;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 public class HoodieHiveUtil {
 

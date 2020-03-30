@@ -18,32 +18,33 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieRollbackStat;
-import org.apache.hudi.common.SerializableConfiguration;
+import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.fs.ConsistencyGuard;
+import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.SyncableFileSystemView;
-import org.apache.hudi.common.table.TableFileSystemView;
-import org.apache.hudi.common.table.TableFileSystemView.BaseFileOnlyView;
-import org.apache.hudi.common.table.TableFileSystemView.SliceView;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.AvroUtils;
-import org.apache.hudi.common.util.ConsistencyGuard;
-import org.apache.hudi.common.util.ConsistencyGuard.FileVisibility;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.FailSafeConsistencyGuard;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -83,6 +84,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   private SerializableConfiguration hadoopConfiguration;
   private transient FileSystemViewManager viewManager;
+
+  protected final SparkTaskContextSupplier sparkTaskContextSupplier = new SparkTaskContextSupplier();
 
   protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc) {
     this.config = config;
@@ -227,7 +230,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
     HoodieSavepointMetadata metadata;
     try {
-      metadata = AvroUtils.deserializeHoodieSavepointMetadata(getActiveTimeline().getInstantDetails(instant).get());
+      metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(getActiveTimeline().getInstantDetails(instant).get());
     } catch (IOException e) {
       throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTime, e);
     }
@@ -447,5 +450,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   private ConsistencyGuard getFailSafeConsistencyGuard(FileSystem fileSystem) {
     return new FailSafeConsistencyGuard(fileSystem, config.getConsistencyGuardConfig());
+  }
+
+  public SparkTaskContextSupplier getSparkTaskContextSupplier() {
+    return sparkTaskContextSupplier;
   }
 }

@@ -18,13 +18,13 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.SerializableConfiguration;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.TableNotFoundException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;

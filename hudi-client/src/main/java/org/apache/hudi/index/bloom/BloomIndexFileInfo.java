@@ -64,9 +64,8 @@ public class BloomIndexFileInfo implements Serializable {
    * Does the given key fall within the range (inclusive).
    */
   public boolean isKeyInRange(String recordKey) {
-    assert minRecordKey != null;
-    assert maxRecordKey != null;
-    return minRecordKey.compareTo(recordKey) <= 0 && maxRecordKey.compareTo(recordKey) >= 0;
+    return Objects.requireNonNull(minRecordKey).compareTo(recordKey) <= 0
+        && Objects.requireNonNull(maxRecordKey).compareTo(recordKey) >= 0;
   }
 
   @Override

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.DefaultHoodieConfig;
 
 import java.io.File;
 import java.io.FileReader;

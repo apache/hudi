@@ -18,10 +18,10 @@
 
 package org.apache.hudi.common.util.collection;
 
+import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.util.BufferedRandomAccessFile;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
-import org.apache.hudi.common.util.collection.io.storage.SizeAwareDataOutputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;

@@ -18,20 +18,25 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
+
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.jmx.JmxReporter;
-import com.google.common.base.Preconditions;
+
+import javax.management.MBeanServer;
+import javax.management.remote.JMXConnectorServer;
+import javax.management.remote.JMXConnectorServerFactory;
+import javax.management.remote.JMXServiceURL;
+
 import java.io.IOException;
 import java.rmi.NoSuchObjectException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import javax.management.MBeanServer;
-import javax.management.remote.JMXConnectorServer;
-import javax.management.remote.JMXConnectorServerFactory;
-import javax.management.remote.JMXServiceURL;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieException;
+import java.util.Objects;
+
 
 /**
  * A reporter which publishes metric values to a JMX server.
@@ -78,10 +83,9 @@ public class JmxReporterServer {
     }
 
     public JmxReporterServer build() {
-      Preconditions.checkNotNull(registry, "registry cannot be null!");
-      Preconditions.checkNotNull(mBeanServer, "mBeanServer cannot be null!");
-      Preconditions
-          .checkArgument(!StringUtils.isNullOrEmpty(host), "host cannot be null or empty!");
+      Objects.requireNonNull(registry, "registry cannot be null!");
+      Objects.requireNonNull(mBeanServer, "mBeanServer cannot be null!");
+      ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(host), "host cannot be null or empty!");
       return new JmxReporterServer(registry, host, port, mBeanServer);
     }
   }
@@ -110,7 +114,7 @@ public class JmxReporterServer {
   }
 
   public void start() {
-    Preconditions.checkArgument(reporter != null && connector != null,
+    ValidationUtils.checkArgument(reporter != null && connector != null,
         "reporter or connector cannot be null!");
     try {
       connector.start();

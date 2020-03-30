@@ -18,7 +18,11 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.utils.SparkConfigUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,8 +31,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -45,7 +47,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.TaskContext;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -70,8 +71,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   private boolean useWriterSchema;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
-      Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable);
+       Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, SparkTaskContextSupplier sparkTaskContextSupplier) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, sparkTaskContextSupplier);
     init(fileId, recordItr);
     init(fileId, partitionPath, hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
   }
@@ -81,8 +82,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
       Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-      HoodieBaseFile dataFileToBeMerged) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable);
+      HoodieBaseFile dataFileToBeMerged, SparkTaskContextSupplier sparkTaskContextSupplier) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, sparkTaskContextSupplier);
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchema = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
@@ -110,7 +111,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
-      partitionMetadata.trySave(TaskContext.getPartitionId());
+      partitionMetadata.trySave(getPartitionId());
 
       oldFilePath = new Path(config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
       String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
@@ -131,7 +132,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
       // Create the writer for writing the new version file
       storageWriter =
-          HoodieStorageWriterFactory.getStorageWriter(instantTime, newFilePath, hoodieTable, config, writerSchema);
+          HoodieStorageWriterFactory.getStorageWriter(instantTime, newFilePath, hoodieTable, config, writerSchema, sparkTaskContextSupplier);
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
@@ -146,7 +147,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   private void init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
     try {
       // Load the new records in a map
-      long memoryForMerge = config.getMaxMemoryPerPartitionMerge();
+      long memoryForMerge = SparkConfigUtils.getMaxMemoryPerPartitionMerge(config.getProps());
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
           new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(originalSchema));

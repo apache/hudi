@@ -18,24 +18,25 @@
 
 package org.apache.hudi.common;
 
-import org.apache.hudi.client.HoodieReadClient;
-import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.bloom.filter.BloomFilter;
-import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
-import org.apache.hudi.common.bloom.filter.BloomFilterTypeCode;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.HoodieAvroUtils;
+import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
@@ -230,7 +231,8 @@ public class HoodieClientTestUtils {
         ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
         HoodieTestUtils.getDefaultHadoopConf(), Double.valueOf(HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO));
     HoodieParquetWriter writer =
-        new HoodieParquetWriter(instantTime, new Path(basePath + "/" + partitionPath + "/" + filename), config, schema);
+        new HoodieParquetWriter(instantTime, new Path(basePath + "/" + partitionPath + "/" + filename), config,
+                schema, new SparkTaskContextSupplier());
     int seqId = 1;
     for (HoodieRecord record : records) {
       GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema).get();

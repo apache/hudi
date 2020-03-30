@@ -16,10 +16,11 @@
  * limitations under the License.
  */
 
+import org.apache.hudi.DataSourceUtils;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.DataSourceUtils;
 import org.junit.Test;
 
 import java.time.LocalDate;

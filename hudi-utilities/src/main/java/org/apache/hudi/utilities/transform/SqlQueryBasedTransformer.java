@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.transform;
 
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
