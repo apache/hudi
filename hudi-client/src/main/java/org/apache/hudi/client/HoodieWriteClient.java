@@ -480,9 +480,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   private Partitioner getPartitioner(HoodieTable table, boolean isUpsert, WorkloadProfile profile) {
     if (isUpsert) {
-      return table.getUpsertPartitioner(profile);
+      return table.getUpsertPartitioner(profile, jsc);
     } else {
-      return table.getInsertPartitioner(profile);
+      return table.getInsertPartitioner(profile, jsc);
     }
   }
 
