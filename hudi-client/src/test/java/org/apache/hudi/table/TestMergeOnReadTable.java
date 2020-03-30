@@ -1272,7 +1272,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       JavaRDD<HoodieRecord> deleteRDD = jsc.parallelize(fewRecordsForDelete, 1);
 
       // initialize partitioner
-      hoodieTable.getUpsertPartitioner(new WorkloadProfile(deleteRDD));
+      hoodieTable.getUpsertPartitioner(new WorkloadProfile(deleteRDD), jsc);
       final List<List<WriteStatus>> deleteStatus = jsc.parallelize(Arrays.asList(1)).map(x -> {
         return hoodieTable.handleUpdate(newDeleteTime, partitionPath, fileId, fewRecordsForDelete.iterator());
       }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();

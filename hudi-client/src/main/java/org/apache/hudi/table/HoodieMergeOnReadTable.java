@@ -89,11 +89,11 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Partitioner getUpsertPartitioner(WorkloadProfile profile) {
+  public Partitioner getUpsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc) {
     if (profile == null) {
       throw new HoodieUpsertException("Need workload profile to construct the upsert partitioner.");
     }
-    mergeOnReadUpsertPartitioner = new MergeOnReadUpsertPartitioner(profile);
+    mergeOnReadUpsertPartitioner = new MergeOnReadUpsertPartitioner(profile, jsc);
     return mergeOnReadUpsertPartitioner;
   }
 
@@ -325,8 +325,8 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
    */
   class MergeOnReadUpsertPartitioner extends HoodieCopyOnWriteTable.UpsertPartitioner {
 
-    MergeOnReadUpsertPartitioner(WorkloadProfile profile) {
-      super(profile);
+    MergeOnReadUpsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc) {
+      super(profile, jsc);
     }
 
     @Override
@@ -376,16 +376,12 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
             sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
             sf.sizeBytes = getTotalFileSize(smallFileSlice);
             smallFileLocations.add(sf);
-            // Update the global small files list
-            smallFiles.add(sf);
           } else {
             HoodieLogFile logFile = smallFileSlice.getLogFiles().findFirst().get();
             sf.location = new HoodieRecordLocation(FSUtils.getBaseCommitTimeFromLogPath(logFile.getPath()),
                 FSUtils.getFileIdFromLogPath(logFile.getPath()));
             sf.sizeBytes = getTotalFileSize(smallFileSlice);
             smallFileLocations.add(sf);
-            // Update the global small files list
-            smallFiles.add(sf);
           }
         }
       }
