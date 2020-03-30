@@ -990,6 +990,25 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
+   * Test clean previous corrupted cleanFiles.
+   */
+  @Test
+  public void testCleanPreviousCorruptedCleanFiles() {
+    HoodieWriteConfig config =
+        HoodieWriteConfig.newBuilder()
+            .withPath(basePath).withAssumeDatePartitioning(true)
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
+            .build();
+
+    HoodieTestUtils.createCorruptedPendingCleanFiles(metaClient, getNextInstant());
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    List<HoodieCleanStat> cleanStats = runCleaner(config);
+    assertEquals("Must not clean any files", 0, cleanStats.size());
+  }
+
+  /**
    * Common test method for validating pending compactions.
    *
    * @param config Hoodie Write Config
