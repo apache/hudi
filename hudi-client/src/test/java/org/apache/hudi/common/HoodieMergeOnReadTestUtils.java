@@ -44,9 +44,13 @@ import java.util.stream.Collectors;
  * Utility methods to aid in testing MergeOnRead (workaround for HoodieReadClient for MOR).
  */
 public class HoodieMergeOnReadTestUtils {
-
   public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths, String basePath) {
-    JobConf jobConf = new JobConf();
+    return getRecordsUsingInputFormat(inputPaths, basePath, new Configuration());
+  }
+
+  public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths, String basePath,
+                                                                Configuration conf) {
+    JobConf jobConf = new JobConf(conf);
     Schema schema = HoodieAvroUtils.addMetadataFields(
         new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
     HoodieParquetRealtimeInputFormat inputFormat = new HoodieParquetRealtimeInputFormat();
@@ -64,8 +68,10 @@ public class HoodieMergeOnReadTestUtils {
           // writable returns an array with [field1, field2, _hoodie_commit_time,
           // _hoodie_commit_seqno]
           Writable[] values = writable.get();
+          final int[] fieldIndex = {0};
+          assert schema.getFields().size() <= values.length;
           schema.getFields().forEach(field -> {
-            newRecord.set(field, values[2]);
+            newRecord.set(field, values[fieldIndex[0]++]);
           });
           records.add(newRecord.build());
         }
@@ -76,7 +82,7 @@ public class HoodieMergeOnReadTestUtils {
     }).reduce((a, b) -> {
       a.addAll(b);
       return a;
-    }).get();
+    }).orElse(new ArrayList<GenericRecord>());
   }
 
   private static void setPropsForInputFormat(HoodieParquetRealtimeInputFormat inputFormat, JobConf jobConf,
