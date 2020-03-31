@@ -60,7 +60,7 @@ public class HoodieCompactionAdminTool {
    */
   public void run(JavaSparkContext jsc) throws Exception {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.basePath);
-    try (CompactionAdminClient admin = new CompactionAdminClient(jsc, cfg.basePath)) {
+    try (CompactionAdminClient admin = new CompactionAdminClient(cfg.basePath)) {
       final FileSystem fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
       if (cfg.outputPath != null && fs.exists(new Path(cfg.outputPath))) {
         throw new IllegalStateException("Output File Path already exists");

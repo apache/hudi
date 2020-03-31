@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.utils.SparkEngineUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -47,7 +48,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -67,12 +67,12 @@ public class CompactionAdminClient extends AbstractHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(CompactionAdminClient.class);
 
-  public CompactionAdminClient(JavaSparkContext jsc, String basePath) {
-    super(jsc, HoodieWriteConfig.newBuilder().withPath(basePath).build());
+  public CompactionAdminClient(String basePath) {
+    super(SparkEngineUtils.getJsc(), HoodieWriteConfig.newBuilder().withPath(basePath).build());
   }
 
-  public CompactionAdminClient(JavaSparkContext jsc, String basePath, Option<EmbeddedTimelineService> timelineServer) {
-    super(jsc, HoodieWriteConfig.newBuilder().withPath(basePath).build(), timelineServer);
+  public CompactionAdminClient(String basePath, Option<EmbeddedTimelineService> timelineServer) {
+    super(SparkEngineUtils.getJsc(), HoodieWriteConfig.newBuilder().withPath(basePath).build(), timelineServer);
   }
 
   /**
@@ -91,13 +91,13 @@ public class CompactionAdminClient extends AbstractHoodieClient {
     if (plan.getOperations() != null) {
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      return jsc.parallelize(ops, parallelism).map(op -> {
+      return SparkEngineUtils.parallelizeMap(ops, parallelism, op -> {
         try {
           return validateCompactionOperation(metaClient, compactionInstant, op, Option.of(fsView));
         } catch (IOException e) {
           throw new HoodieIOException(e.getMessage(), e);
         }
-      }).collect();
+      });
     }
     return new ArrayList<>();
   }
@@ -356,7 +356,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
     } else {
       LOG.info("The following compaction renaming operations needs to be performed to un-schedule");
       if (!dryRun) {
-        return jsc.parallelize(renameActions, parallelism).map(lfPair -> {
+        return SparkEngineUtils.parallelizeMap(renameActions, parallelism, lfPair -> {
           try {
             LOG.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
             renameLogFile(metaClient, lfPair.getLeft(), lfPair.getRight());
@@ -367,7 +367,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
                 + lfPair.getLeft().getBaseCommitTime() + "\" to recover from failure ***\n\n\n");
             return new RenameOpResult(lfPair, false, Option.of(e));
           }
-        }).collect();
+        });
       } else {
         LOG.info("Dry-Run Mode activated for rename operations");
         return renameActions.parallelStream().map(lfPair -> new RenameOpResult(lfPair, false, false, Option.empty()))
@@ -398,7 +398,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
           "Number of Compaction Operations :" + plan.getOperations().size() + " for instant :" + compactionInstant);
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      return jsc.parallelize(ops, parallelism).flatMap(op -> {
+      return SparkEngineUtils.parallelizeFlatMap(ops, parallelism, op -> {
         try {
           return getRenamingActionsForUnschedulingCompactionOperation(metaClient, compactionInstant, op,
               Option.of(fsView), skipValidation).iterator();
@@ -407,7 +407,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
         } catch (CompactionValidationException ve) {
           throw new HoodieException(ve);
         }
-      }).collect();
+      });
     }
     LOG.warn("No operations for compaction instant : " + compactionInstant);
     return new ArrayList<>();

@@ -65,7 +65,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     initPath();
     initSparkContexts();
     metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, MERGE_ON_READ);
-    client = new CompactionAdminClient(jsc, basePath);
+    client = new CompactionAdminClient(basePath);
   }
 
   @After
