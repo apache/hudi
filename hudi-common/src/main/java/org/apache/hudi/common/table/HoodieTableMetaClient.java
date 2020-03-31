@@ -68,10 +68,11 @@ import java.util.stream.Stream;
  */
 public class HoodieTableMetaClient implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetaClient.class);
-  public static String METAFOLDER_NAME = ".hoodie";
-  public static String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
-  public static String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
+  public static final String METAFOLDER_NAME = ".hoodie";
+  public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
+  public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
   public static final String MARKER_EXTN = ".marker";
 
   private String basePath;

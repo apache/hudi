@@ -30,6 +30,7 @@ import java.io.Serializable;
  */
 public class SerializableConfiguration implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private transient Configuration configuration;
 
   public SerializableConfiguration(Configuration configuration) {

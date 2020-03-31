@@ -31,6 +31,7 @@ import java.util.Objects;
  */
 public class HoodieBaseFile implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private transient FileStatus fileStatus;
   private final String fullPath;
   private long fileLen;

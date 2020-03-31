@@ -61,7 +61,7 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
    * value based on global indexing throughput needs and most importantly, how much the HBase installation in use is
    * able to tolerate without Region Servers going down.
    */
-  public static String HBASE_MAX_QPS_PER_REGION_SERVER_PROP = "hoodie.index.hbase.max.qps.per.region.server";
+  public static final String HBASE_MAX_QPS_PER_REGION_SERVER_PROP = "hoodie.index.hbase.max.qps.per.region.server";
   /**
    * Default batch size, used only for Get, but computed for Put.
    */

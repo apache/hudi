@@ -85,7 +85,7 @@ public class DFSPathSelector {
       long maxModificationTime = Long.MIN_VALUE;
       List<FileStatus> filteredFiles = new ArrayList<>();
       for (FileStatus f : eligibleFiles) {
-        if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long.valueOf(lastCheckpointStr.get())) {
+        if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long.valueOf(lastCheckpointStr.get()).longValue()) {
           // skip processed files
           continue;
         }

@@ -57,6 +57,7 @@ import scala.Tuple2;
  */
 public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieReadClient.class);
 
   /**

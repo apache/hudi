@@ -32,7 +32,7 @@ public class HoodieTimer {
   // Ordered stack of TimeInfo's to make sure stopping the timer returns the correct elapsed time
   Deque<TimeInfo> timeInfoDeque = new ArrayDeque<>();
 
-  class TimeInfo {
+  static class TimeInfo {
 
     // captures the startTime of the code block
     long startTime;

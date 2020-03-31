@@ -131,9 +131,9 @@ public class StatsCommand implements CommandMarker {
     }
 
     List<Comparable[]> rows = new ArrayList<>();
-    for (String instantTime : commitHistoMap.keySet()) {
-      Snapshot s = commitHistoMap.get(instantTime).getSnapshot();
-      rows.add(printFileSizeHistogram(instantTime, s));
+    for (Map.Entry<String, Histogram> entry : commitHistoMap.entrySet()) {
+      Snapshot s = entry.getValue().getSnapshot();
+      rows.add(printFileSizeHistogram(entry.getKey(), s));
     }
     Snapshot s = globalHistogram.getSnapshot();
     rows.add(printFileSizeHistogram("ALL", s));

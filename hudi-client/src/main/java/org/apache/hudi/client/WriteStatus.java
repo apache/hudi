@@ -35,6 +35,7 @@ import java.util.Random;
  */
 public class WriteStatus implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final long RANDOM_SEED = 9038412832L;
 
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();

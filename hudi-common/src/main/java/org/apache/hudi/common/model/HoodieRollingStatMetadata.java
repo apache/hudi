@@ -52,7 +52,7 @@ public class HoodieRollingStatMetadata implements Serializable {
     this.actionType = actionType;
   }
 
-  class RollingStatsHashMap<K, V> extends HashMap<K, V> {
+  static class RollingStatsHashMap<K, V> extends HashMap<K, V> {
 
     @Override
     public V put(K key, V value) {
