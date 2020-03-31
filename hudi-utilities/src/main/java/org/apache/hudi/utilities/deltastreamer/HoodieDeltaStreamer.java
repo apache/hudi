@@ -77,6 +77,7 @@ import java.util.stream.IntStream;
  */
 public class HoodieDeltaStreamer implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
 
   public static String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
@@ -302,6 +303,7 @@ public class HoodieDeltaStreamer implements Serializable {
    */
   public static class DeltaSyncService extends AbstractDeltaStreamerService {
 
+    private static final long serialVersionUID = 1L;
     /**
      * Delta Sync Config.
      */
@@ -489,6 +491,7 @@ public class HoodieDeltaStreamer implements Serializable {
    */
   public static class AsyncCompactService extends AbstractDeltaStreamerService {
 
+    private static final long serialVersionUID = 1L;
     private final int maxConcurrentCompaction;
     private transient Compactor compactor;
     private transient JavaSparkContext jssc;

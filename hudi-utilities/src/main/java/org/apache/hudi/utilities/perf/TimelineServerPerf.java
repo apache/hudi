@@ -58,6 +58,7 @@ import java.util.stream.IntStream;
 
 public class TimelineServerPerf implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(TimelineServerPerf.class);
   private final Config cfg;
   private transient TimelineService timelineServer;

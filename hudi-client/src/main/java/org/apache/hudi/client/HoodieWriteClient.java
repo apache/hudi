@@ -93,6 +93,7 @@ import scala.Tuple2;
  */
 public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHoodieWriteClient<T> {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieWriteClient.class);
   private static final String LOOKUP_STR = "lookup";
   private final boolean rollbackPending;

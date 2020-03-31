@@ -34,7 +34,7 @@ import java.util.Map;
 @Component
 public class SparkEnvCommand implements CommandMarker {
 
-  public static Map<String, String> env = new HashMap<String, String>();
+  public static Map<String, String> env = new HashMap<>();
 
   @CliCommand(value = "set", help = "Set spark launcher env to cli")
   public void setEnv(@CliOption(key = {"conf"}, help = "Env config to be set") final String confMap) {
@@ -49,8 +49,8 @@ public class SparkEnvCommand implements CommandMarker {
   public String showAllEnv() {
     String[][] rows = new String[env.size()][2];
     int i = 0;
-    for (String key: env.keySet()) {
-      rows[i] = new String[]{key, env.get(key)};
+    for (Map.Entry<String, String> entry: env.entrySet()) {
+      rows[i] = new String[]{entry.getKey(), entry.getValue()};
       i++;
     }
     return HoodiePrintHelper.print(new String[] {"key", "value"}, rows);

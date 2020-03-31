@@ -47,6 +47,7 @@ import java.util.List;
 
 public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieCleanClient.class);
   private final transient HoodieMetrics metrics;
 

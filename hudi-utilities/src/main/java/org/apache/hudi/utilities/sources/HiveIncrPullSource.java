@@ -59,6 +59,8 @@ import java.util.stream.Collectors;
  */
 public class HiveIncrPullSource extends AvroSource {
 
+  private static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LogManager.getLogger(HiveIncrPullSource.class);
 
   private final transient FileSystem fs;

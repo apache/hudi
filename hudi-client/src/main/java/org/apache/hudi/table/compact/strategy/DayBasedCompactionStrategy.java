@@ -39,14 +39,14 @@ import java.util.stream.Collectors;
 public class DayBasedCompactionStrategy extends CompactionStrategy {
 
   // For now, use SimpleDateFormat as default partition format
-  protected static String datePartitionFormat = "yyyy/MM/dd";
+  protected static final String DATE_PARTITION_FORMAT = "yyyy/MM/dd";
   // Sorts compaction in LastInFirstCompacted order
   protected static Comparator<String> comparator = (String leftPartition, String rightPartition) -> {
     try {
       leftPartition = getPartitionPathWithoutPartitionKeys(leftPartition);
       rightPartition = getPartitionPathWithoutPartitionKeys(rightPartition);
-      Date left = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH).parse(leftPartition);
-      Date right = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH).parse(rightPartition);
+      Date left = new SimpleDateFormat(DATE_PARTITION_FORMAT, Locale.ENGLISH).parse(leftPartition);
+      Date right = new SimpleDateFormat(DATE_PARTITION_FORMAT, Locale.ENGLISH).parse(rightPartition);
       return left.after(right) ? -1 : right.after(left) ? 1 : 0;
     } catch (ParseException e) {
       throw new HoodieException("Invalid Partition Date Format", e);

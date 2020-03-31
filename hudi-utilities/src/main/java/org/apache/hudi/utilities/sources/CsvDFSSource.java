@@ -58,10 +58,12 @@ import java.util.List;
  * passed to the CSV reader without inferring the schema from the CSV file.
  */
 public class CsvDFSSource extends RowSource {
+
+  private static final long serialVersionUID = 1L;
   // CsvSource config prefix
-  public static final String CSV_SRC_CONFIG_PREFIX = "hoodie.deltastreamer.csv.";
+  protected static final String CSV_SRC_CONFIG_PREFIX = "hoodie.deltastreamer.csv.";
   // CSV-specific configurations to pass in from Hudi to Spark
-  public static final List<String> CSV_CONFIG_KEYS = Arrays.asList(
+  protected static final List<String> CSV_CONFIG_KEYS = Arrays.asList(
       "sep", "encoding", "quote", "escape", "charToEscapeQuoteEscaping", "comment",
       "header", "enforceSchema", "inferSchema", "samplingRatio", "ignoreLeadingWhiteSpace",
       "ignoreTrailingWhiteSpace", "nullValue", "emptyValue", "nanValue", "positiveInf",
@@ -69,7 +71,7 @@ public class CsvDFSSource extends RowSource {
       "mode", "columnNameOfCorruptRecord", "multiLine"
   );
 
-  private final DFSPathSelector pathSelector;
+  private final transient DFSPathSelector pathSelector;
   private final StructType sourceSchema;
 
   public CsvDFSSource(TypedProperties props,

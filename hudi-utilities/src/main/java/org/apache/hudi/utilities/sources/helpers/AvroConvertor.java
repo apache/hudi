@@ -33,6 +33,7 @@ import java.io.Serializable;
  */
 public class AvroConvertor implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   /**
    * To be lazily inited on executors.
    */

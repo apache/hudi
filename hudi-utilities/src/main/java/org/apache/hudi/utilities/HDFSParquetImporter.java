@@ -66,6 +66,7 @@ import scala.Tuple2;
  */
 public class HDFSParquetImporter implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HDFSParquetImporter.class);
 
   private static final DateTimeFormatter PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd")

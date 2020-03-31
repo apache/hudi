@@ -51,6 +51,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieROTablePathFilter implements PathFilter, Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieROTablePathFilter.class);
 
   /**

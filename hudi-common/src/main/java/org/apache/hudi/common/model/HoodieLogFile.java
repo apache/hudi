@@ -37,6 +37,7 @@ import java.util.Objects;
  */
 public class HoodieLogFile implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   public static final String DELTA_EXTENSION = ".log";
   public static final Integer LOGFILE_BASE_VERSION = 1;
 
@@ -129,6 +130,7 @@ public class HoodieLogFile implements Serializable {
    */
   public static class LogFileComparator implements Comparator<HoodieLogFile>, Serializable {
 
+    private static final long serialVersionUID = 1L;
     private transient Comparator<String> writeTokenComparator;
 
     private Comparator<String> getWriteTokenComparator() {

@@ -83,9 +83,10 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
  */
 public class DeltaSync implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
-  public static String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
-  public static String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
+  public static final String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
+  public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
   /**
    * Delta Sync Config.
