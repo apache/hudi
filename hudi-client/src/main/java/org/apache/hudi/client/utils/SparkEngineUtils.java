@@ -26,7 +26,7 @@ import org.apache.spark.api.java.function.Function;
 import java.util.List;
 
 /**
- * Util class for Spark Engine.
+ * Util class for Spark engine.
  */
 public class SparkEngineUtils {
   private static JavaSparkContext jsc;
