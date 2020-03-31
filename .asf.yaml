@@ -1,0 +1,10 @@
+github:
+  description: "Upserts Deletes And Incremental Processing on Big Data."
+  homepage: https://hudi.apache.org/
+  labels:
+    - hudi
+    - apachehudi
+    - datalake
+    - delta
+    - incremental processing
+    - bigdata
