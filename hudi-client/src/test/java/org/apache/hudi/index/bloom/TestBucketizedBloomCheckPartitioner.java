@@ -30,6 +30,7 @@ import java.util.stream.IntStream;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class TestBucketizedBloomCheckPartitioner {
 
@@ -79,4 +80,20 @@ public class TestBucketizedBloomCheckPartitioner {
     BucketizedBloomCheckPartitioner p = new BucketizedBloomCheckPartitioner(10000, comparisons1, 10);
     assertEquals("num partitions must equal total buckets", 100, p.numPartitions());
   }
+
+  @Test
+  public void testGetPartitions() {
+    Map<String, Long> comparisons1 = new HashMap<String, Long>() {
+      {
+        IntStream.range(0, 100000).forEach(f -> put("f" + f, 100L));
+      }
+    };
+    BucketizedBloomCheckPartitioner p = new BucketizedBloomCheckPartitioner(1000, comparisons1, 10);
+
+    IntStream.range(0, 100000).forEach(f -> {
+      int partition = p.getPartition(Pair.of("f" + f, "value"));
+      assertTrue("partition is out of range: " + partition, 0 <= partition && partition <= 1000);
+    });
+  }
+
 }
