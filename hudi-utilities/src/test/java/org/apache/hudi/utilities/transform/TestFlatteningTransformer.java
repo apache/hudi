@@ -16,9 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities;
-
-import org.apache.hudi.utilities.transform.FlatteningTransformer;
+package org.apache.hudi.utilities.transform;
 
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;

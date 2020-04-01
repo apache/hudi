@@ -106,7 +106,7 @@ public class DeltaSync implements Serializable {
   /**
    * Allows transforming source to target table before writing.
    */
-  private transient Transformer transformer;
+  private transient Option<Transformer> transformer;
 
   /**
    * Extract the key for the target table.
@@ -173,7 +173,7 @@ public class DeltaSync implements Serializable {
 
     refreshTimeline();
 
-    this.transformer = UtilHelpers.createTransformer(cfg.transformerClassName);
+    this.transformer = UtilHelpers.createTransformer(cfg.transformerClassNames);
     this.keyGenerator = DataSourceUtils.createKeyGenerator(props);
 
     this.formatAdapter = new SourceFormatAdapter(
@@ -281,14 +281,14 @@ public class DeltaSync implements Serializable {
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
     final SchemaProvider schemaProvider;
-    if (transformer != null) {
+    if (transformer.isPresent()) {
       // Transformation is needed. Fetch New rows in Row Format, apply transformation and then convert them
       // to generic records for writing
       InputBatch<Dataset<Row>> dataAndCheckpoint =
           formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
 
       Option<Dataset<Row>> transformed =
-          dataAndCheckpoint.getBatch().map(data -> transformer.apply(jssc, sparkSession, data, props));
+          dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       if (this.schemaProvider != null && this.schemaProvider.getTargetSchema() != null) {
         // If the target schema is specified through Avro schema,
