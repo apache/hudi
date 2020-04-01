@@ -30,8 +30,11 @@ import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.io.JsonDecoder;
+import org.apache.avro.io.JsonEncoder;
 import org.codehaus.jackson.node.NullNode;
 
 import java.io.ByteArrayInputStream;
@@ -80,6 +83,22 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Convert a given avro record to json and return the encoded bytes.
+   *
+   * @param record The GenericRecord to convert
+   * @param pretty Whether to pretty-print the json output
+   */
+  public static byte[] avroToJson(GenericRecord record, boolean pretty) throws IOException {
+    DatumWriter<Object> writer = new GenericDatumWriter<>(record.getSchema());
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    JsonEncoder jsonEncoder = EncoderFactory.get().jsonEncoder(record.getSchema(), out, pretty);
+    writer.write(record, jsonEncoder);
+    jsonEncoder.flush();
+    return out.toByteArray();
+    //metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+  }
+
+  /**
    * Convert serialized bytes back into avro record.
    */
   public static GenericRecord bytesToAvro(byte[] bytes, Schema schema) throws IOException {
@@ -87,6 +106,16 @@ public class HoodieAvroUtils {
     reuseDecoder.set(decoder);
     GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
     return reader.read(null, decoder);
+  }
+
+  /**
+   * Convert json bytes back into avro record.
+   */
+  public static GenericRecord jsonBytesToAvro(byte[] bytes, Schema schema) throws IOException {
+    ByteArrayInputStream bio = new ByteArrayInputStream(bytes);
+    JsonDecoder jsonDecoder = DecoderFactory.get().jsonDecoder(schema, bio);
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
+    return reader.read(null, jsonDecoder);
   }
 
   public static boolean isMetadataField(String fieldName) {

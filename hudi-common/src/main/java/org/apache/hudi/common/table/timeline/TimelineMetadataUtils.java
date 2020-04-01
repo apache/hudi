@@ -132,6 +132,10 @@ public class TimelineMetadataUtils {
     return deserializeAvroMetadata(bytes, HoodieCleanMetadata.class);
   }
 
+  public static HoodieRollbackMetadata deserializeHoodieRollbackMetadata(byte[] bytes) throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieRollbackMetadata.class);
+  }
+
   public static HoodieSavepointMetadata deserializeHoodieSavepointMetadata(byte[] bytes) throws IOException {
     return deserializeAvroMetadata(bytes, HoodieSavepointMetadata.class);
   }
