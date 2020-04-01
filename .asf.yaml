@@ -1,0 +1,12 @@
+github:
+  description: "Upserts, Deletes And Incremental Processing on Big Data."
+  homepage: https://hudi.apache.org/
+  labels:
+    - hudi
+    - apachehudi
+    - datalake
+    - incremental processing
+    - bigdata
+    - stream processing
+    - data integration
+    - apachespark
