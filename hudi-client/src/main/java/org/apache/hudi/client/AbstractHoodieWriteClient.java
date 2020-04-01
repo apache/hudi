@@ -140,9 +140,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
   private boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata, String actionType) {
 
-    LOG.info("Commiting " + instantTime);
+    LOG.info("Committing " + instantTime);
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
+    HoodieTable<T> table = HoodieTable.create(config, jsc);
 
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
@@ -221,7 +221,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     // TODO : make sure we cannot rollback / archive last commit file
     try {
       // Create a Hoodie table which encapsulated the commits and files visible
-      HoodieTable table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
+      HoodieTable table = HoodieTable.create(config, jsc);
       // 0. All of the rolling stat management is only done by the DELTA commit for MOR and COMMIT for COW other wise
       // there may be race conditions
       HoodieRollingStatMetadata rollingStatMetadata = new HoodieRollingStatMetadata(actionType);
@@ -272,7 +272,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       setWriteSchemaFromLastInstant(metaClient);
     }
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
     if (table.getMetaClient().getCommitActionType().equals(HoodieTimeline.COMMIT_ACTION)) {
       writeContext = metrics.getCommitCtx();
     } else {
@@ -321,8 +321,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     // Create a Hoodie table which encapsulated the commits and files visible
     try {
       // Create a Hoodie table which encapsulated the commits and files visible
-      HoodieTable<T> table = HoodieTable.getHoodieTable(
-          createMetaClient(true), config, jsc);
+      HoodieTable<T> table = HoodieTable.create(config, jsc);
       Option<HoodieInstant> rollbackInstantOpt =
           Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstants()
               .filter(instant -> HoodieActiveTimeline.EQUAL.test(instant.getTimestamp(), commitToRollback))
@@ -341,8 +340,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
   protected List<HoodieRollbackStat> doRollbackAndGetStats(final HoodieInstant instantToRollback) throws
       IOException {
     final String commitToRollback = instantToRollback.getTimestamp();
-    HoodieTable<T> table = HoodieTable.getHoodieTable(
-        createMetaClient(true), config, jsc);
+    HoodieTable<T> table = HoodieTable.create(config, jsc);
     HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
     // Check if any of the commits is a savepoint - do not allow rollback on those commits
@@ -391,7 +389,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
 
   private void finishRollback(final Timer.Context context, List<HoodieRollbackStat> rollbackStats,
       List<String> commitsToRollback, final String startRollbackTime) throws IOException {
-    HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
+    HoodieTable<T> table = HoodieTable.create(config, jsc);
     Option<Long> durationInMs = Option.empty();
     long numFilesDeleted = rollbackStats.stream().mapToLong(stat -> stat.getSuccessDeleteFiles().size()).sum();
     if (context != null) {

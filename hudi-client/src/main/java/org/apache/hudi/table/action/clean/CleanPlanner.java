@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table;
+package org.apache.hudi.table.action.clean;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.fs.FSUtils;
@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -56,12 +57,10 @@ import java.util.stream.Collectors;
  * 1) It provides sufficient time for existing queries running on older versions, to close
  * <p>
  * 2) It bounds the growth of the files in the file system
- * <p>
- * TODO: Should all cleaning be done based on {@link HoodieCommitMetadata}
  */
-public class CleanHelper<T extends HoodieRecordPayload<T>> implements Serializable {
+public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(CleanHelper.class);
+  private static final Logger LOG = LogManager.getLogger(CleanPlanner.class);
 
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
@@ -69,7 +68,7 @@ public class CleanHelper<T extends HoodieRecordPayload<T>> implements Serializab
   private HoodieTable<T> hoodieTable;
   private HoodieWriteConfig config;
 
-  public CleanHelper(HoodieTable<T> hoodieTable, HoodieWriteConfig config) {
+  public CleanPlanner(HoodieTable<T> hoodieTable, HoodieWriteConfig config) {
     this.hoodieTable = hoodieTable;
     this.fileSystemView = hoodieTable.getHoodieView();
     this.commitTimeline = hoodieTable.getCompletedCommitTimeline();

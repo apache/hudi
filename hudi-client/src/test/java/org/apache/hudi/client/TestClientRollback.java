@@ -99,7 +99,7 @@ public class TestClientRollback extends TestHoodieClientBase {
       List<String> partitionPaths =
           FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), getConfig().shouldAssumeDatePartitioning());
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
+      HoodieTable table = HoodieTable.create(metaClient, getConfig(), jsc);
       final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
 
       List<HoodieBaseFile> dataFiles = partitionPaths.stream().flatMap(s -> {
@@ -124,7 +124,7 @@ public class TestClientRollback extends TestHoodieClientBase {
       assertNoWriteErrors(statuses);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
+      table = HoodieTable.create(metaClient, getConfig(), jsc);
       final BaseFileOnlyView view2 = table.getBaseFileOnlyView();
 
       dataFiles = partitionPaths.stream().flatMap(s -> view2.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
@@ -143,7 +143,7 @@ public class TestClientRollback extends TestHoodieClientBase {
       client.rollbackToSavepoint(savepoint.getTimestamp());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
+      table = HoodieTable.create(metaClient, getConfig(), jsc);
       final BaseFileOnlyView view3 = table.getBaseFileOnlyView();
       dataFiles = partitionPaths.stream().flatMap(s -> {
         return view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"));

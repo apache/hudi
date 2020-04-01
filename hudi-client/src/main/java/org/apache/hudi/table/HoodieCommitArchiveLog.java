@@ -138,7 +138,7 @@ public class HoodieCommitArchiveLog {
     int maxCommitsToKeep = config.getMaxCommitsToKeep();
     int minCommitsToKeep = config.getMinCommitsToKeep();
 
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
 
     // GroupBy each action and limit each action timeline to maxCommitsToKeep
     // TODO: Handle ROLLBACK_ACTION in future

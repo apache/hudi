@@ -42,7 +42,6 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -83,10 +82,6 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   @After
   public void tearDown() throws Exception {
     cleanupResources();
-  }
-
-  protected HoodieCleanClient getHoodieCleanClient(HoodieWriteConfig cfg) {
-    return new HoodieCleanClient(jsc, cfg, new HoodieMetrics(cfg, cfg.getTableName()));
   }
 
   protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
@@ -161,7 +156,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   protected HoodieTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
     ((SyncableFileSystemView) (table.getSliceView())).reset();
     return table;
   }
@@ -255,7 +250,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
       final HoodieIndex index = HoodieIndex.createIndex(writeConfig, jsc);
       List<HoodieRecord> records = recordGenFunction.apply(commit, numRecords);
       final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
-      HoodieTable table = HoodieTable.getHoodieTable(metaClient, writeConfig, jsc);
+      HoodieTable table = HoodieTable.create(metaClient, writeConfig, jsc);
       JavaRDD<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), jsc, table);
       return taggedRecords.collect();
     };
@@ -276,7 +271,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
       final HoodieIndex index = HoodieIndex.createIndex(writeConfig, jsc);
       List<HoodieKey> records = keyGenFunction.apply(numRecords);
       final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
-      HoodieTable table = HoodieTable.getHoodieTable(metaClient, writeConfig, jsc);
+      HoodieTable table = HoodieTable.create(metaClient, writeConfig, jsc);
       JavaRDD<HoodieRecord> recordsToDelete = jsc.parallelize(records, 1)
           .map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
       JavaRDD<HoodieRecord> taggedRecords = index.tagLocation(recordsToDelete, jsc, table);

@@ -18,13 +18,14 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.ClientUtils;
-import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuard;
@@ -39,22 +40,20 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -87,12 +86,12 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   protected final SparkTaskContextSupplier sparkTaskContextSupplier = new SparkTaskContextSupplier();
 
-  protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc) {
+  protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.hadoopConfiguration = new SerializableConfiguration(jsc.hadoopConfiguration());
     this.viewManager = FileSystemViewManager.createViewManager(new SerializableConfiguration(jsc.hadoopConfiguration()),
         config.getViewStorageConfig());
-    this.metaClient = ClientUtils.createMetaClient(jsc, config, true);
+    this.metaClient = metaClient;
     this.index = HoodieIndex.createIndex(config, jsc);
   }
 
@@ -103,13 +102,25 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     return viewManager;
   }
 
-  public static <T extends HoodieRecordPayload> HoodieTable<T> getHoodieTable(HoodieTableMetaClient metaClient,
-      HoodieWriteConfig config, JavaSparkContext jsc) {
+  public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieWriteConfig config, JavaSparkContext jsc) {
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(
+        jsc.hadoopConfiguration(),
+        config.getBasePath(),
+        true,
+        config.getConsistencyGuardConfig(),
+        Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))
+    );
+    return HoodieTable.create(metaClient, config, jsc);
+  }
+
+  public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieTableMetaClient metaClient,
+                                                                      HoodieWriteConfig config,
+                                                                      JavaSparkContext jsc) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        return new HoodieCopyOnWriteTable<>(config, jsc);
+        return new HoodieCopyOnWriteTable<>(config, jsc, metaClient);
       case MERGE_ON_READ:
-        return new HoodieMergeOnReadTable<>(config, jsc);
+        return new HoodieMergeOnReadTable<>(config, jsc, metaClient);
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
@@ -280,23 +291,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       HoodieCompactionPlan compactionPlan);
 
   /**
-   * Generates list of files that are eligible for cleaning.
-   * 
-   * @param jsc Java Spark Context
-   * @return Cleaner Plan containing list of files to be deleted.
+   * Executes a new clean action.
+   *
+   * @return information on cleaned file slices
    */
-  public abstract HoodieCleanerPlan scheduleClean(JavaSparkContext jsc);
-
-  /**
-   * Cleans the files listed in the cleaner plan associated with clean instant.
-   * 
-   * @param jsc Java Spark Context
-   * @param cleanInstant Clean Instant
-   * @param cleanerPlan Cleaner Plan
-   * @return list of Clean Stats
-   */
-  public abstract List<HoodieCleanStat> clean(JavaSparkContext jsc, HoodieInstant cleanInstant,
-      HoodieCleanerPlan cleanerPlan);
+  public abstract HoodieCleanMetadata clean(JavaSparkContext jsc, String cleanInstantTime);
 
   /**
    * Rollback the (inflight/committed) record changes with the given commit time. Four steps: (1) Atomically unpublish
