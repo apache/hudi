@@ -39,7 +39,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Enclosed.class)
@@ -67,13 +67,13 @@ public class TestUtilHelpers {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Test
-    public void testCreateTransformerReturnsNull() throws IOException {
-      assertNull(UtilHelpers.createTransformer(null));
+    public void testCreateTransformerNotPresent() throws IOException {
+      assertFalse(UtilHelpers.createTransformer(null).isPresent());
     }
 
     @Test
     public void testCreateTransformerLoadOneClass() throws IOException {
-      Transformer transformer = UtilHelpers.createTransformer(Collections.singletonList(TransformerFoo.class.getName()));
+      Transformer transformer = UtilHelpers.createTransformer(Collections.singletonList(TransformerFoo.class.getName())).get();
       assertTrue(transformer instanceof ChainedTransformer);
       List<String> transformerNames = ((ChainedTransformer) transformer).getTransformersNames();
       assertEquals(1, transformerNames.size());
@@ -83,7 +83,7 @@ public class TestUtilHelpers {
     @Test
     public void testCreateTransformerLoadMultipleClasses() throws IOException {
       List<String> classNames = Arrays.asList(TransformerFoo.class.getName(), TransformerBar.class.getName());
-      Transformer transformer = UtilHelpers.createTransformer(classNames);
+      Transformer transformer = UtilHelpers.createTransformer(classNames).get();
       assertTrue(transformer instanceof ChainedTransformer);
       List<String> transformerNames = ((ChainedTransformer) transformer).getTransformersNames();
       assertEquals(2, transformerNames.size());

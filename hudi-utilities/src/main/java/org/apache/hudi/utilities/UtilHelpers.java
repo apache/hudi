@@ -70,6 +70,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
@@ -104,17 +105,13 @@ public class UtilHelpers {
     }
   }
 
-  public static Transformer createTransformer(List<String> classNames) throws IOException {
+  public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
     try {
-      if (classNames == null) {
-        return null;
-      }
-
       List<Transformer> transformers = new ArrayList<>();
-      for (String className : classNames) {
+      for (String className : Option.ofNullable(classNames).orElse(Collections.emptyList())) {
         transformers.add(ReflectionUtils.loadClass(className));
       }
-      return new ChainedTransformer(transformers);
+      return transformers.isEmpty() ? Option.empty() : Option.of(new ChainedTransformer(transformers));
     } catch (Throwable e) {
       throw new IOException("Could not load transformer class(es) " + classNames, e);
     }
