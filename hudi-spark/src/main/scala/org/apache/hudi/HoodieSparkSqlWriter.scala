@@ -29,8 +29,11 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{HoodieWriteClient, WriteStatus}
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.model.HoodieRecordPayload
+import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, BOOTSTRAP_INDEX_CLASS_PROP, DEFAULT_BOOTSTRAP_INDEX_CLASS}
@@ -105,8 +108,10 @@ private[hudi] object HoodieSparkSqlWriter {
       handleSaveModes(mode, basePath, tableConfig, tblName, operation, fs)
       // Create the table if not present
       if (!tableExists) {
+        val archiveLogFolder = parameters.getOrElse(
+          HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
         val tableMetaClient = HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get,
-          HoodieTableType.valueOf(tableType), tblName, "archived", parameters(PAYLOAD_CLASS_OPT_KEY),
+          HoodieTableType.valueOf(tableType), tblName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
           null.asInstanceOf[String])
         tableConfig = tableMetaClient.getTableConfig
       }
@@ -244,8 +249,10 @@ private[hudi] object HoodieSparkSqlWriter {
     }
 
     if (!tableExists) {
+      val archiveLogFolder = parameters.getOrElse(
+        HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
       HoodieTableMetaClient.initTableTypeWithBootstrap(sparkContext.hadoopConfiguration, path,
-        HoodieTableType.valueOf(tableType), tableName, "archived", parameters(PAYLOAD_CLASS_OPT_KEY),
+        HoodieTableType.valueOf(tableType), tableName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
         null, bootstrapIndexClass, bootstrapBasePath)
     }
 
