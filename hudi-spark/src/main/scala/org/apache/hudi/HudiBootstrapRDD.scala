@@ -67,6 +67,7 @@ class HudiBootstrapRDD(@transient spark: SparkSession,
           }
         })
 
+        logDebug("Merged data and skeleton values => " + mergedArr.mkString(","))
         val mergedRow = InternalRow.fromSeq(mergedArr)
         mergedRow
       }

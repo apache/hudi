@@ -101,6 +101,8 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
     * @return
     */
   override def buildScan(requiredColumns: Array[String]): RDD[Row] = {
+    logInfo("Scanning for required columns => " + requiredColumns.mkString(","))
+
     // Compute splits
     val bootstrapSplits = fileIndex.files.map(hoodieBaseFile => {
       val skeletonFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen)
@@ -140,12 +142,11 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
     val rdd = new HudiBootstrapRDD(_sqlContext.sparkSession, dataReadFunction, skeletonReadFunction, requiredDataSchema,
       requiredSkeletonSchema, requiredColumns, tableState)
 
-    logInfo("RDD partitions size => " + rdd.partitions.length)
+    logInfo("Number of partitions for HudiBootstrapRDD => " + rdd.partitions.length)
 
-    val requiredSchema = StructType(requiredSkeletonSchema.fields ++ requiredDataSchema.fields)
+    val requiredSchema = StructType(requiredColumns.map(col => completeSchema.find(_.name == col).get))
     val encoder = RowEncoder(requiredSchema).resolveAndBind()
-
-    logInfo("Row encoder using required schema => " + requiredSchema.toString())
+    logDebug("Converting InternalRow to Row using required schema => " + requiredSchema.toString())
     rdd.map(x => encoder.fromRow(x))
   }
 
