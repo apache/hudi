@@ -1,3 +1,4 @@
+#!/bin/bash
 
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
@@ -15,13 +16,5 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-add jar ${hudi.hadoop.bundle};
-
-set hoodie.stock_ticks_cow.consume.mode=INCREMENTAL;
-set hoodie.stock_ticks_cow.consume.max.commits=3;
-set hoodie.stock_ticks_cow.consume.start.timestamp=${min.commit.time};
-
-select symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG' and `_hoodie_commit_time` > '${min.commit.time}';
-
-!quit
-
+MIN_COMMIT_TIME=`hdfs dfs -ls -t /user/hive/warehouse/stock_ticks_mor/.hoodie/*.deltacommit  | head -1 | awk -F'/' ' { print $7 } ' | awk -F'.' ' { print $1 } '`
+echo $MIN_COMMIT_TIME;
