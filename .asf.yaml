@@ -5,8 +5,8 @@ github:
     - hudi
     - apachehudi
     - datalake
-    - incremental processing
+    - incrementalprocessing
     - bigdata
-    - stream processing
-    - data integration
+    - streamprocessing
+    - dataintegration
     - apachespark
