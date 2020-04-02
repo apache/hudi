@@ -81,7 +81,7 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
       logInfo("Inferred data schema => " + inferredDataSchema.get.toString())
 
       dataSchema = inferredDataSchema.get
-      completeSchema = StructType(dataSchema.fields ++ skeletonSchema.fields)
+      completeSchema = StructType(skeletonSchema.fields ++ dataSchema.fields)
       logInfo("Complete schema => " + completeSchema.toString())
     }
     completeSchema
@@ -101,7 +101,6 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
     * @return
     */
   override def buildScan(requiredColumns: Array[String]): RDD[Row] = {
-
     // Compute splits
     val bootstrapSplits = fileIndex.files.map(hoodieBaseFile => {
       val skeletonFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen)
@@ -139,11 +138,11 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
       )
 
     val rdd = new HudiBootstrapRDD(_sqlContext.sparkSession, dataReadFunction, skeletonReadFunction, requiredDataSchema,
-      requiredSkeletonSchema, tableState)
+      requiredSkeletonSchema, requiredColumns, tableState)
 
-    logInfo("RDD partitions size =>" + rdd.partitions.length)
+    logInfo("RDD partitions size => " + rdd.partitions.length)
 
-    val requiredSchema = StructType(requiredDataSchema.fields ++ requiredSkeletonSchema.fields)
+    val requiredSchema = StructType(requiredSkeletonSchema.fields ++ requiredDataSchema.fields)
     val encoder = RowEncoder(requiredSchema).resolveAndBind()
 
     logInfo("Row encoder using required schema => " + requiredSchema.toString())

@@ -31,6 +31,7 @@ class HudiBootstrapRDD(@transient spark: SparkSession,
                        skeletonReadFunction: PartitionedFile => Iterator[InternalRow],
                        dataSchema: StructType,
                        skeletonSchema: StructType,
+                       requiredColumns: Array[String],
                        tableState: HudiBootstrapTableState)
   extends RDD[InternalRow](spark.sparkContext, Nil) {
 
@@ -43,18 +44,30 @@ class HudiBootstrapRDD(@transient spark: SparkSession,
 
     val dataFileIterator = read(bootstrapPartition.split.dataFile, dataReadFunction)
     val skeletonFileIterator = read(bootstrapPartition.split.skeletonFile, skeletonReadFunction)
-    merge(dataFileIterator, skeletonFileIterator)
+    merge(skeletonFileIterator, dataFileIterator)
   }
 
-  def merge(left: Iterator[InternalRow], right: Iterator[InternalRow]): Iterator[InternalRow] = {
+  def merge(skeletonFileIterator: Iterator[InternalRow], dataFileIterator: Iterator[InternalRow])
+  : Iterator[InternalRow] = {
     new Iterator[InternalRow] {
-      override def hasNext: Boolean = left.hasNext && right.hasNext
+      override def hasNext: Boolean = dataFileIterator.hasNext && skeletonFileIterator.hasNext
 
       override def next(): InternalRow = {
-        val leftArr  = left.next().toSeq(dataSchema)
-        val rightArr = right.next().toSeq(skeletonSchema)
-        val merged  = leftArr ++ rightArr
-        val mergedRow = InternalRow.fromSeq(merged)
+        val leftArr  = skeletonFileIterator.next().toSeq(skeletonSchema)
+        val rightArr = dataFileIterator.next().toSeq(dataSchema)
+
+        // We need to return it in the order requested
+        val mergedArr = requiredColumns.map(col => {
+          if (skeletonSchema.fieldNames.contains(col)) {
+            val idx = skeletonSchema.fieldIndex(col)
+            leftArr(idx)
+          } else {
+            val idx = dataSchema.fieldIndex(col)
+            rightArr(idx)
+          }
+        })
+
+        val mergedRow = InternalRow.fromSeq(mergedArr)
         mergedRow
       }
     }
