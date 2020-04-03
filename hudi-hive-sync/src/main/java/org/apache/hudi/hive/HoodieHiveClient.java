@@ -198,7 +198,8 @@ public class HoodieHiveClient {
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
       Path partitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition);
-      String fullPartitionPath = partitionPath.toUri().getScheme().equals(StorageSchemes.HDFS.getScheme())
+      String partitionScheme = partitionPath.toUri().getScheme();
+      String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
               ? FSUtils.getDFSFullPartitionPath(fs, partitionPath) : partitionPath.toString();
       String changePartition =
           alterTable + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'";
@@ -505,6 +506,7 @@ public class HoodieHiveClient {
     try {
       final long startTime = System.currentTimeMillis();
       ss = SessionState.start(configuration);
+      ss.setCurrentDatabase(syncConfig.databaseName);
       hiveDriver = new org.apache.hadoop.hive.ql.Driver(configuration);
       final long endTime = System.currentTimeMillis();
       LOG.info(String.format("Time taken to start SessionState and create Driver: %s ms", (endTime - startTime)));
