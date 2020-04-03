@@ -89,9 +89,6 @@ class HudiBootstrapRDD(@transient spark: SparkSession,
 
   override protected def getPartitions: Array[Partition] = {
     logInfo("Getting partitions..")
-    var conf = spark.sessionState.newHadoopConf()
-    conf = spark.sessionState.newHadoopConfWithOptions(Map.empty)
-    conf = spark.sparkContext.hadoopConfiguration
 
     tableState.files.zipWithIndex.map(file => {
       logInfo("Forming partition with => " + file._2 + "," + file._1.dataFile.filePath
