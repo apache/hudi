@@ -107,7 +107,6 @@ public class TestUtil {
 
     hiveSyncConfig = new HiveSyncConfig();
     hiveSyncConfig.jdbcUrl = "jdbc:hive2://127.0.0.1:9999/";
-    hiveSyncConfig.databaseName = "hdrone_test";
     hiveSyncConfig.hiveUser = "";
     hiveSyncConfig.hivePass = "";
     hiveSyncConfig.databaseName = "testdb";
@@ -167,7 +166,8 @@ public class TestUtil {
     createCommitFile(commitMetadata, commitTime);
   }
 
-  static void createMORTable(String commitTime, String deltaCommitTime, int numberOfPartitions)
+  static void createMORTable(String commitTime, String deltaCommitTime, int numberOfPartitions,
+                             boolean createDeltaCommit)
       throws IOException, InitializationError, URISyntaxException, InterruptedException {
     Path path = new Path(hiveSyncConfig.basePath);
     FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
@@ -185,9 +185,11 @@ public class TestUtil {
     commitMetadata.getPartitionToWriteStats()
         .forEach((key, value) -> value.forEach(l -> compactionMetadata.addWriteStat(key, l)));
     createCompactionCommitFile(compactionMetadata, commitTime);
-    // Write a delta commit
-    HoodieCommitMetadata deltaMetadata = createLogFiles(commitMetadata.getPartitionToWriteStats(), true);
-    createDeltaCommitFile(deltaMetadata, deltaCommitTime);
+    if (createDeltaCommit) {
+      // Write a delta commit
+      HoodieCommitMetadata deltaMetadata = createLogFiles(commitMetadata.getPartitionToWriteStats(), true);
+      createDeltaCommitFile(deltaMetadata, deltaCommitTime);
+    }
   }
 
   static void addCOWPartitions(int numberOfPartitions, boolean isParquetSchemaSimple, DateTime startFrom,
