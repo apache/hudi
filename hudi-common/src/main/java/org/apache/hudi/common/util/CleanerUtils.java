@@ -39,8 +39,9 @@ public class CleanerUtils {
   public static final Integer CLEAN_METADATA_VERSION_2 = CleanV2MigrationHandler.VERSION;
   public static final Integer LATEST_CLEAN_METADATA_VERSION = CLEAN_METADATA_VERSION_2;
 
-  public static HoodieCleanMetadata convertCleanMetadata(HoodieTableMetaClient metaClient,
-      String startCleanTime, Option<Long> durationInMs, List<HoodieCleanStat> cleanStats) {
+  public static HoodieCleanMetadata convertCleanMetadata(String startCleanTime,
+                                                         Option<Long> durationInMs,
+                                                         List<HoodieCleanStat> cleanStats) {
     Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = new HashMap<>();
     int totalDeleted = 0;
     String earliestCommitToRetain = null;

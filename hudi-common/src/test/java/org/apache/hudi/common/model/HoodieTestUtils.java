@@ -328,7 +328,7 @@ public class HoodieTestUtils {
       // Create the clean metadata
 
       HoodieCleanMetadata cleanMetadata =
-          CleanerUtils.convertCleanMetadata(metaClient, instantTime, Option.of(0L), Collections.singletonList(cleanStats));
+          CleanerUtils.convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats));
       // Write empty clean metadata
       os.write(TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata).get());
     }

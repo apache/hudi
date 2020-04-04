@@ -118,10 +118,6 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
     return config;
   }
 
-  public Option<EmbeddedTimelineService> getTimelineServer() {
-    return timelineServer;
-  }
-
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
     return ClientUtils.createMetaClient(jsc, config, loadActiveTimelineOnLoad);
   }

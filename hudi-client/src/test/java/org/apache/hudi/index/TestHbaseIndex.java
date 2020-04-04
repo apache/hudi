@@ -142,7 +142,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     HBaseIndex index = new HBaseIndex(config);
     try (HoodieWriteClient writeClient = getWriteClient(config);) {
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc);
 
       // Test tagLocation without any entries in index
       JavaRDD<HoodieRecord> javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
@@ -162,7 +162,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
       writeClient.commit(newCommitTime, writeStatues);
       // Now tagLocation for these records, hbaseIndex should tag them correctly
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      hoodieTable = HoodieTable.create(metaClient, config, jsc);
       javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
       assertEquals(200, javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size());
       assertEquals(200, javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count());
@@ -183,7 +183,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
     writeClient.startCommitWithTime(newCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc);
 
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
     JavaRDD<HoodieRecord> javaRDD1 = index.tagLocation(writeRecords, jsc, hoodieTable);
@@ -201,7 +201,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     writeClient.commit(newCommitTime, writeStatues);
     // Now tagLocation for these records, hbaseIndex should tag them correctly
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    hoodieTable = HoodieTable.create(metaClient, config, jsc);
     JavaRDD<HoodieRecord> javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
     assertEquals(10, javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size());
     assertEquals(10, javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count());
@@ -227,7 +227,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
 
     // commit this upsert
     writeClient.commit(newCommitTime, writeStatues);
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc);
     // Now tagLocation for these records, hbaseIndex should tag them
     JavaRDD<HoodieRecord> javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
     assert (javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 200);
@@ -242,7 +242,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // Rollback the last commit
     writeClient.rollback(newCommitTime);
 
-    hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    hoodieTable = HoodieTable.create(metaClient, config, jsc);
     // Now tagLocation for these records, hbaseIndex should not tag them since it was a rolled
     // back commit
     javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
@@ -271,7 +271,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 250);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc);
 
     // Insert 250 records
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
@@ -296,7 +296,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 250);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc);
 
     // Insert 200 records
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
@@ -408,7 +408,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     HBaseIndex index = new HBaseIndex(config);
     try (HoodieWriteClient writeClient = getWriteClient(config);) {
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc);
 
       // Test tagLocation without any entries in index
       JavaRDD<HoodieRecord> javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
@@ -428,7 +428,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
       writeClient.commit(newCommitTime, writeStatues);
       // Now tagLocation for these records, hbaseIndex should tag them correctly
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      hoodieTable = HoodieTable.create(metaClient, config, jsc);
       javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
       assertEquals(200, javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size());
       assertEquals(200, javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count());
@@ -448,7 +448,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     HBaseIndex index = new HBaseIndex(config);
     try (HoodieWriteClient writeClient = getWriteClient(config);) {
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc);
 
       // Test tagLocation without any entries in index
       JavaRDD<HoodieRecord> javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
@@ -462,7 +462,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
 
       // Now tagLocation for these records, hbaseIndex should tag them correctly
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      hoodieTable = HoodieTable.create(metaClient, config, jsc);
       javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
       assertEquals(10, javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size());
       assertEquals(10, javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count());
@@ -499,7 +499,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
 
     assertTrue(index.canIndexLogFiles());
     try {
-      HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc);
       index.fetchRecordLocation(jsc.parallelize(new ArrayList<HoodieKey>(), 1), jsc, hoodieTable);
       fail("HbaseIndex supports fetchRecordLocation");
     } catch (UnsupportedOperationException ex) {
