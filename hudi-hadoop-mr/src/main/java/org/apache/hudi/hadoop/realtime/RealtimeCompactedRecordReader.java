@@ -45,7 +45,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   protected final RecordReader<NullWritable, ArrayWritable> parquetReader;
   private final Map<String, HoodieRecord<? extends HoodieRecordPayload>> deltaRecordMap;
 
-  public RealtimeCompactedRecordReader(HoodieRealtimeFileSplit split, JobConf job,
+  public RealtimeCompactedRecordReader(RealtimeSplit split, JobConf job,
       RecordReader<NullWritable, ArrayWritable> realReader) throws IOException {
     super(split, job);
     this.parquetReader = realReader;

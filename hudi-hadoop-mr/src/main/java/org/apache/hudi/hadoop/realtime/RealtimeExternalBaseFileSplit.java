@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.hadoop.ExternalBaseFileSplit;
+
 import org.apache.hadoop.mapred.FileSplit;
 
 import java.io.DataInput;
@@ -26,49 +28,21 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * Filesplit that wraps the base split and a list of log files to merge deltas from.
+ * Realtime File Split with external base file.
  */
-public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit {
+public class RealtimeExternalBaseFileSplit extends ExternalBaseFileSplit implements RealtimeSplit {
 
   private List<String> deltaLogPaths;
 
-  private String maxCommitTime;
+  private String maxInstantTime;
 
   private String basePath;
 
-  public HoodieRealtimeFileSplit() {
-    super();
-  }
-
-  public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<String> deltaLogPaths, String maxCommitTime)
-      throws IOException {
-    super(baseSplit.getPath(), baseSplit.getStart(), baseSplit.getLength(), baseSplit.getLocations());
+  public RealtimeExternalBaseFileSplit(FileSplit baseSplit, String basePath, List<String> deltaLogPaths,
+      String maxInstantTime, FileSplit externalFileSplit) throws IOException {
+    super(baseSplit, externalFileSplit);
+    this.maxInstantTime = maxInstantTime;
     this.deltaLogPaths = deltaLogPaths;
-    this.maxCommitTime = maxCommitTime;
-    this.basePath = basePath;
-  }
-
-  public List<String> getDeltaLogPaths() {
-    return deltaLogPaths;
-  }
-
-  public String getMaxCommitTime() {
-    return maxCommitTime;
-  }
-
-  public String getBasePath() {
-    return basePath;
-  }
-
-  public void setDeltaLogPaths(List<String> deltaLogPaths) {
-    this.deltaLogPaths = deltaLogPaths;
-  }
-
-  public void setMaxCommitTime(String maxCommitTime) {
-    this.maxCommitTime = maxCommitTime;
-  }
-
-  public void setBasePath(String basePath) {
     this.basePath = basePath;
   }
 
@@ -85,8 +59,32 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
   }
 
   @Override
-  public String toString() {
-    return "HoodieRealtimeFileSplit{DataPath=" + getPath() + ", deltaLogPaths=" + deltaLogPaths
-        + ", maxCommitTime='" + maxCommitTime + '\'' + ", basePath='" + basePath + '\'' + '}';
+  public List<String> getDeltaLogPaths() {
+    return deltaLogPaths;
+  }
+
+  @Override
+  public String getMaxCommitTime() {
+    return maxInstantTime;
+  }
+
+  @Override
+  public String getBasePath() {
+    return basePath;
+  }
+
+  @Override
+  public void setDeltaLogPaths(List<String> deltaLogPaths) {
+    this.deltaLogPaths = deltaLogPaths;
+  }
+
+  @Override
+  public void setMaxCommitTime(String maxInstantTime) {
+    this.maxInstantTime = maxInstantTime;
+  }
+
+  @Override
+  public void setBasePath(String basePath) {
+    this.basePath = basePath;
   }
 }

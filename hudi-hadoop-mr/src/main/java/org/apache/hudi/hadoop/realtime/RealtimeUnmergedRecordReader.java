@@ -64,7 +64,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
    * @param job Job Configuration
    * @param realReader Parquet Reader
    */
-  public RealtimeUnmergedRecordReader(HoodieRealtimeFileSplit split, JobConf job,
+  public RealtimeUnmergedRecordReader(RealtimeSplit split, JobConf job,
       RecordReader<NullWritable, ArrayWritable> realReader) {
     super(split, job);
     this.parquetReader = new SafeParquetRecordReaderWrapper(realReader);

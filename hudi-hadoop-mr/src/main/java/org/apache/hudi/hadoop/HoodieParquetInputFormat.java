@@ -18,19 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hadoop.conf.Configurable;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hadoop.mapred.Reporter;
-import org.apache.hadoop.mapreduce.Job;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -41,8 +29,25 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.conf.Configurable;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hadoop.mapred.Reporter;
+import org.apache.hadoop.mapreduce.Job;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -56,6 +61,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.apache.hudi.hadoop.HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR;
 
 /**
  * HoodieInputFormat which understands the Hoodie File Structure and filters files based on the Hoodie Mode. If paths
@@ -117,6 +125,19 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
       }
     }
     return returns.toArray(new FileStatus[returns.size()]);
+  }
+
+  protected static FileStatus getFileStatus(HoodieBaseFile baseFile) throws IOException {
+    if (baseFile.getExternalBaseFile().isPresent()) {
+      if (baseFile.getFileStatus() instanceof LocatedFileStatus) {
+        return new LocatedFileStatusWithExternalBaseFile((LocatedFileStatus)baseFile.getFileStatus(),
+            baseFile.getExternalBaseFile().get().getFileStatus());
+      } else {
+        return new FileStatusWithExternalBaseFile(baseFile.getFileStatus(),
+            baseFile.getExternalBaseFile().get().getFileStatus());
+      }
+    }
+    return baseFile.getFileStatus();
   }
 
   /**
@@ -224,7 +245,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     for (HoodieBaseFile filteredFile : filteredFiles) {
       LOG.debug("Processing incremental hoodie file - " + filteredFile.getPath());
       filteredFile = checkFileStatus(filteredFile);
-      returns.add(filteredFile.getFileStatus());
+      returns.add(getFileStatus(filteredFile));
     }
     LOG.info("Total paths to process after hoodie incremental filter " + filteredFiles.size());
     return returns;
@@ -270,7 +291,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
    * Filters data files for a snapshot queried table.
    */
   private List<FileStatus> filterFileStatusForSnapshotMode(
-      HoodieTableMetaClient metadata, List<FileStatus> fileStatuses) {
+      HoodieTableMetaClient metadata, List<FileStatus> fileStatuses) throws IOException {
     FileStatus[] statuses = fileStatuses.toArray(new FileStatus[0]);
     if (LOG.isDebugEnabled()) {
       LOG.debug("Hoodie Metadata initialized with completed commit Ts as :" + metadata);
@@ -287,7 +308,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
         LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
       }
       filteredFile = checkFileStatus(filteredFile);
-      returns.add(filteredFile.getFileStatus());
+      returns.add(getFileStatus(filteredFile));
     }
     return returns;
   }
@@ -303,7 +324,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
       if (dataFile.getFileSize() == 0) {
         FileSystem fs = dataPath.getFileSystem(conf);
         LOG.info("Refreshing file status " + dataFile.getPath());
-        return new HoodieBaseFile(fs.getFileStatus(dataPath));
+        return new HoodieBaseFile(fs.getFileStatus(dataPath), dataFile.getExternalBaseFile().orElse(null));
       }
       return dataFile;
     } catch (IOException e) {
@@ -335,6 +356,76 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     // ParquetInputFormat.setFilterPredicate(job, predicate);
     // clearOutExistingPredicate(job);
     // }
+    if (split instanceof ExternalBaseFileSplit) {
+      ExternalBaseFileSplit eSplit = (ExternalBaseFileSplit)split;
+      LOG.debug("ExternalDataFileSplit is " + eSplit);
+      String[] rawColNames = HoodieColumnProjectionUtils.getReadColumnNames(job);
+      List<Integer> rawColIds = HoodieColumnProjectionUtils.getReadColumnIDs(job);
+      List<Pair<Integer, String>> colsWithIndex =
+          IntStream.range(0, rawColIds.size()).mapToObj(idx -> Pair.of(rawColIds.get(idx), rawColNames[idx]))
+              .collect(Collectors.toList());
+
+      List<Pair<Integer, String>> hoodieColsProjected = colsWithIndex.stream()
+          .filter(idxWithName -> idxWithName.getKey() < HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
+          .collect(Collectors.toList());
+      // This always matches hive table description
+      List<Pair<String, String>> colNameWithTypes = HoodieColumnProjectionUtils.getIOColumnNameAndTypes(job);
+      List<Pair<String, String>> hoodieColNamesWithTypes = colNameWithTypes.subList(0, 5);
+      List<Pair<String, String>> otherColNamesWithTypes =
+          colNameWithTypes.subList(5, colNameWithTypes.size());
+      JobConf jobConf1 = new JobConf(job);
+      JobConf jobConf2 = new JobConf(job);
+      HoodieColumnProjectionUtils.setIOColumnNameAndTypes(jobConf1, hoodieColNamesWithTypes);
+      HoodieColumnProjectionUtils.setIOColumnNameAndTypes(jobConf2, otherColNamesWithTypes);
+      if (hoodieColsProjected.isEmpty()) {
+        // Adjust adjustedColsProjected
+        List<Integer> adjustednonHoodieColsProjected = colsWithIndex.stream()
+            .filter(idxWithName -> idxWithName.getKey() >= HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
+            .map(idxWithName -> idxWithName.getKey() - HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
+            .collect(Collectors.toList());
+        List<String> adjustednonHoodieColNamesProjected = colsWithIndex.stream()
+            .filter(idxWithName -> idxWithName.getKey() >= HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
+            .map(idxWithName -> idxWithName.getValue())
+            .collect(Collectors.toList());
+        HoodieColumnProjectionUtils.setReadColumns(jobConf1, adjustednonHoodieColsProjected,
+            adjustednonHoodieColNamesProjected);
+        return super.getRecordReader(split, jobConf1, reporter);
+      } else {
+        HoodieColumnProjectionUtils.setReadColumns(jobConf1, new ArrayList<>(), new ArrayList<>());
+        HoodieColumnProjectionUtils.setReadColumns(jobConf2, new ArrayList<>(), new ArrayList<>());
+        List<String> hoodieColNames = colsWithIndex.stream()
+            .filter(idxWithName -> idxWithName.getKey() < HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
+            .map(idxWithName -> idxWithName.getValue()).collect(Collectors.toList());
+        List<Integer> hoodieColIds = colsWithIndex.stream()
+            .filter(idxWithName -> idxWithName.getKey() < HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
+            .map(idxWithName -> idxWithName.getKey()).collect(Collectors.toList());
+        List<String> nonHoodieColNames = colsWithIndex.stream()
+            .filter(idxWithName -> idxWithName.getKey() >= HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
+            .map(idxWithName -> idxWithName.getValue()).collect(Collectors.toList());
+        List<Integer> nonHoodieColIdsAdjusted = colsWithIndex.stream()
+            .filter(idxWithName -> idxWithName.getKey() >= HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
+            .map(idxWithName -> idxWithName.getKey() - HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
+            .collect(Collectors.toList());
+        List<String> groupCols = Arrays.asList(job.get(READ_NESTED_COLUMN_PATH_CONF_STR, "").split(","));
+        HoodieColumnProjectionUtils.appendReadColumns(jobConf1, hoodieColIds, hoodieColNames, new ArrayList<>());
+        HoodieColumnProjectionUtils.appendReadColumns(jobConf2, nonHoodieColIdsAdjusted, nonHoodieColNames, groupCols);
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("hoodieColNames=" + hoodieColNames + ", hoodieColIds=" + hoodieColIds
+              + ", SIZES : hoodieColNames=" + hoodieColNames.size() + ", hoodieColIds=" + hoodieColIds.size()
+              + ", nonHoodieColNames=" + nonHoodieColNames + ", nonHoodieColIdsAdjusted=" + nonHoodieColIdsAdjusted
+              + ", nonHoodieColNames=" + nonHoodieColNames.size() + ", nonHoodieColIdsAdjusted="
+              + nonHoodieColIdsAdjusted.size());
+        }
+        FileSystem fs = FileSystem.get(job);
+        //FileSplit rightSplit =
+        //    makeSplit(externalFile, 0, externalFileStatus.getLen(), new String[0], new String[0]);
+        FileSplit rightSplit = eSplit.getExternalFileSplit();
+        LOG.info("Generating column stiching reader for " + eSplit.getPath() + " and " + rightSplit.getPath());
+        return new HoodieColumnStichingRecordReader(super.getRecordReader(eSplit, jobConf1, reporter),
+            super.getRecordReader(rightSplit, jobConf2, reporter));
+      }
+    }
+    System.out.println("EMPLOYING DEFAULT RECORD READER - " + split);
     return super.getRecordReader(split, job, reporter);
   }
 
@@ -352,5 +443,43 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     Path baseDir = HoodieHiveUtil.getNthParent(dataPath, levels);
     LOG.info("Reading hoodie metadata from path " + baseDir.toString());
     return new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
+  }
+
+  @Override
+  protected boolean isSplitable(FileSystem fs, Path filename) {
+    return !(filename instanceof HoodiePathWithExternalFileStatus);
+  }
+
+  @Override
+  protected FileSplit makeSplit(Path file, long start, long length,
+      String[] hosts) {
+    FileSplit split = new FileSplit(file, start, length, hosts);
+
+    if (file instanceof HoodiePathWithExternalFileStatus) {
+      return makeExternalFileSplit((HoodiePathWithExternalFileStatus)file, split);
+    }
+    return split;
+  }
+
+  @Override
+  protected FileSplit makeSplit(Path file, long start, long length,
+      String[] hosts, String[] inMemoryHosts) {
+    FileSplit split = new FileSplit(file, start, length, hosts, inMemoryHosts);
+    if (file instanceof HoodiePathWithExternalFileStatus) {
+      return makeExternalFileSplit((HoodiePathWithExternalFileStatus)file, split);
+    }
+    return split;
+  }
+
+  private ExternalBaseFileSplit makeExternalFileSplit(HoodiePathWithExternalFileStatus file, FileSplit split) {
+    try {
+      System.out.println("Making external data split for " + file);
+      FileStatus externalFileStatus = file.getExternalFileStatus();
+      FileSplit externalFileSplit = makeSplit(externalFileStatus.getPath(), 0, externalFileStatus.getLen(),
+          new String[0], new String[0]);
+      return new ExternalBaseFileSplit(split, externalFileSplit);
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
+    }
   }
 }

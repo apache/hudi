@@ -88,7 +88,7 @@ public abstract class AbstractRealtimeRecordReader {
 
   private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
 
-  protected final HoodieRealtimeFileSplit split;
+  protected final RealtimeSplit split;
   protected final JobConf jobConf;
   private final MessageType baseFileSchema;
   protected final boolean usesCustomPayload;
@@ -97,7 +97,7 @@ public abstract class AbstractRealtimeRecordReader {
   private Schema writerSchema;
   private Schema hiveSchema;
 
-  public AbstractRealtimeRecordReader(HoodieRealtimeFileSplit split, JobConf job) {
+  public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
     this.split = split;
     this.jobConf = job;
     LOG.info("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
