@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
@@ -259,7 +260,8 @@ public class TestHoodieCompactionStrategy {
       operations.add(new HoodieCompactionOperation(df.getCommitTime(),
           logFiles.stream().map(s -> s.getPath().toString()).collect(Collectors.toList()), df.getPath(), df.getFileId(),
           partitionPath,
-          config.getCompactionStrategy().captureMetrics(config, Option.of(df), partitionPath, logFiles)));
+          config.getCompactionStrategy().captureMetrics(config, Option.of(df), partitionPath, logFiles),
+          df.getExternalBaseFile().map(BaseFile::getPath).orElse(null)));
     });
     return operations;
   }

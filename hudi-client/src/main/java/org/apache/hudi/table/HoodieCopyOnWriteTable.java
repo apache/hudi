@@ -21,12 +21,14 @@ package org.apache.hudi.table;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.utils.MergingParquetIterator;
 import org.apache.hudi.client.utils.ParquetReaderIterator;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -59,6 +61,10 @@ import org.apache.hudi.table.action.commit.UpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -155,22 +161,51 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      AvroReadSupport.setAvroReadSchema(getHadoopConf(), upsertHandle.getWriterSchema());
+      HoodieBaseFile baseFile = upsertHandle.getPrevBaseFile();
       BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-      try (ParquetReader<IndexedRecord> reader =
-          AvroParquetReader.<IndexedRecord>builder(upsertHandle.getOldFilePath()).withConf(getHadoopConf()).build()) {
-        wrapper = new SparkBoundedInMemoryExecutor(config, new ParquetReaderIterator(reader),
+      Configuration configForHudiFile = new Configuration(getHadoopConf());
+      ParquetReader<GenericRecord> reader =
+          AvroParquetReader.<GenericRecord>builder(upsertHandle.getOldFilePath()).withConf(configForHudiFile).build();
+      ParquetReader<GenericRecord> externalFileReader = null;
+      try {
+        final Iterator<GenericRecord> readerIterator;
+        if (baseFile.getExternalBaseFile().isPresent()) {
+          Path externalFilePath = new Path(baseFile.getExternalBaseFile().get().getPath());
+          Configuration configForExternalFile = new Configuration(getHadoopConf());
+          AvroReadSupport.setAvroReadSchema(configForHudiFile, HoodieAvroUtils.METADATA_FIELD_SCHEMA);
+          AvroReadSupport.setAvroReadSchema(configForExternalFile, upsertHandle.getOriginalSchema());
+          externalFileReader =
+              AvroParquetReader.<GenericRecord>builder(externalFilePath).withConf(configForHudiFile).build();
+          readerIterator = new MergingParquetIterator<>(new ParquetReaderIterator<>(externalFileReader),
+              new ParquetReaderIterator<>(reader), (inputRecordPair) -> HoodieAvroUtils.stitchRecords(
+                  inputRecordPair.getLeft(), inputRecordPair.getRight(), upsertHandle.getWriterSchema()));
+        } else {
+          AvroReadSupport.setAvroReadSchema(getHadoopConf(), upsertHandle.getWriterSchema());
+          readerIterator = new ParquetReaderIterator(reader);
+        }
+
+        wrapper = new SparkBoundedInMemoryExecutor(config, readerIterator,
             new UpdateHandler(upsertHandle), x -> x);
         wrapper.execute();
       } catch (Exception e) {
         throw new HoodieException(e);
       } finally {
         upsertHandle.close();
+
         if (null != wrapper) {
           wrapper.shutdownNow();
         }
+
+        if (null != externalFileReader) {
+          externalFileReader.close();
+        }
+
+        if (null != reader) {
+          reader.close();
+        }
       }
     }
+
 
     // TODO(vc): This needs to be revisited
     if (upsertHandle.getWriteStatus().getPartitionPath() == null) {

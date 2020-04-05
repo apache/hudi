@@ -60,6 +60,9 @@ public class CompactionOpDTO {
   @JsonProperty("metrics")
   private Map<String, Double> metrics;
 
+  @JsonProperty("externalBaseFile")
+  private String externalBaseFile;
+
   public static CompactionOpDTO fromCompactionOperation(String compactionInstantTime, CompactionOperation op) {
     CompactionOpDTO dto = new CompactionOpDTO();
     dto.fileId = op.getFileId();
@@ -70,13 +73,14 @@ public class CompactionOpDTO {
     dto.deltaFilePaths = new ArrayList<>(op.getDeltaFileNames());
     dto.partitionPath = op.getPartitionPath();
     dto.metrics = op.getMetrics() == null ? new HashMap<>() : new HashMap<>(op.getMetrics());
+    dto.externalBaseFile = op.getExternalFilePath().orElse(null);
     return dto;
   }
 
   public static Pair<String, CompactionOperation> toCompactionOperation(CompactionOpDTO dto) {
     return Pair.of(dto.compactionInstantTime,
         new CompactionOperation(dto.fileId, dto.partitionPath, dto.baseInstantTime,
-            Option.ofNullable(dto.dataFileCommitTime), dto.deltaFilePaths, Option.ofNullable(dto.dataFilePath),
-            dto.metrics));
+            Option.ofNullable(dto.dataFileCommitTime), dto.deltaFilePaths,
+            Option.ofNullable(dto.dataFilePath), Option.ofNullable(dto.externalBaseFile), dto.metrics));
   }
 }

@@ -69,6 +69,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   private long updatedRecordsWritten = 0;
   private long insertRecordsWritten = 0;
   private boolean useWriterSchema;
+  private HoodieBaseFile prevBaseFile;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
        Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, SparkTaskContextSupplier sparkTaskContextSupplier) {
@@ -98,11 +99,16 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     return writerSchema;
   }
 
+  public Schema getOriginalSchema() {
+    return originalSchema;
+  }
+
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
   private void init(String fileId, String partitionPath, HoodieBaseFile dataFileToBeMerged) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
+    this.prevBaseFile = dataFileToBeMerged;
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
     try {
@@ -311,5 +317,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   @Override
   public WriteStatus getWriteStatus() {
     return writeStatus;
+  }
+
+  public HoodieBaseFile getPrevBaseFile() {
+    return prevBaseFile;
   }
 }

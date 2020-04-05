@@ -44,6 +44,7 @@ public class CompactionOperation implements Serializable {
   private Option<String> dataFileName;
   private HoodieFileGroupId id;
   private Map<String, Double> metrics;
+  private Option<String> externalFilePath;
 
   // Only for serialization/de-serialization
   @Deprecated
@@ -51,11 +52,12 @@ public class CompactionOperation implements Serializable {
 
   public CompactionOperation(String fileId, String partitionPath, String baseInstantTime,
       Option<String> dataFileCommitTime, List<String> deltaFileNames, Option<String> dataFileName,
-      Map<String, Double> metrics) {
+      Option<String> externalFilePath, Map<String, Double> metrics) {
     this.baseInstantTime = baseInstantTime;
     this.dataFileCommitTime = dataFileCommitTime;
     this.deltaFileNames = deltaFileNames;
     this.dataFileName = dataFileName;
+    this.externalFilePath = externalFilePath;
     this.id = new HoodieFileGroupId(partitionPath, fileId);
     this.metrics = metrics;
   }
@@ -67,14 +69,15 @@ public class CompactionOperation implements Serializable {
       this.dataFileName = Option.of(dataFile.get().getFileName());
       this.id = new HoodieFileGroupId(partitionPath, dataFile.get().getFileId());
       this.dataFileCommitTime = Option.of(dataFile.get().getCommitTime());
+      this.externalFilePath = dataFile.get().getExternalBaseFile().map(BaseFile::getPath);
     } else {
       assert logFiles.size() > 0;
       this.dataFileName = Option.empty();
       this.baseInstantTime = FSUtils.getBaseCommitTimeFromLogPath(logFiles.get(0).getPath());
       this.id = new HoodieFileGroupId(partitionPath, FSUtils.getFileIdFromLogPath(logFiles.get(0).getPath()));
       this.dataFileCommitTime = Option.empty();
+      this.externalFilePath = Option.empty();
     }
-
     this.deltaFileNames = logFiles.stream().map(s -> s.getPath().getName()).collect(Collectors.toList());
     this.metrics = metrics;
   }
@@ -111,9 +114,17 @@ public class CompactionOperation implements Serializable {
     return id;
   }
 
+  public Option<String> getExternalFilePath() {
+    return externalFilePath;
+  }
+
   public Option<HoodieBaseFile> getBaseFile(String basePath, String partitionPath) {
+    Option<BaseFile> externalBaseFile = externalFilePath.map(BaseFile::new);
     Path dirPath = FSUtils.getPartitionPath(basePath, partitionPath);
-    return dataFileName.map(df -> new HoodieBaseFile(new Path(dirPath, df).toString()));
+    return dataFileName.map(df -> {
+      return externalBaseFile.map(ext -> new HoodieBaseFile(new Path(dirPath, df).toString(), ext))
+          .orElseGet(() -> new HoodieBaseFile(new Path(dirPath, df).toString()));
+    });
   }
 
   /**
@@ -130,6 +141,7 @@ public class CompactionOperation implements Serializable {
     op.deltaFileNames = new ArrayList<>(operation.getDeltaFilePaths());
     op.id = new HoodieFileGroupId(operation.getPartitionPath(), operation.getFileId());
     op.metrics = operation.getMetrics() == null ? new HashMap<>() : new HashMap<>(operation.getMetrics());
+    op.externalFilePath = Option.ofNullable(operation.getExternalDataFilePath());
     return op;
   }
 
@@ -137,7 +149,7 @@ public class CompactionOperation implements Serializable {
   public String toString() {
     return "CompactionOperation{baseInstantTime='" + baseInstantTime + '\'' + ", dataFileCommitTime="
         + dataFileCommitTime + ", deltaFileNames=" + deltaFileNames + ", dataFileName=" + dataFileName + ", id='" + id
-        + '\'' + ", metrics=" + metrics + '}';
+        + '\'' + ", metrics=" + metrics + ", externalFilePath=" + externalFilePath + '}';
   }
 
   @Override

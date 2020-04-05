@@ -52,6 +52,11 @@ public class HoodieBaseFile extends BaseFile {
     super(filePath);
   }
 
+  public HoodieBaseFile(String filePath, BaseFile externalBaseFile) {
+    super(filePath);
+    this.externalBaseFile = Option.ofNullable(externalBaseFile);
+  }
+
   public String getFileId() {
     return FSUtils.getFileId(getFileName());
   }

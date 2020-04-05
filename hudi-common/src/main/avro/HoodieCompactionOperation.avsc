@@ -61,6 +61,11 @@
                         "values":"double"
                      }],
                      "default": null
+                  },
+                  {
+                     "name":"externalDataFilePath",
+                     "type":["null", "string"],
+                     "default": null
                   }
                ]
             }

@@ -19,6 +19,7 @@
 package org.apache.hudi.avro;
 
 import org.apache.avro.JsonProperties;
+import org.apache.avro.generic.GenericData.Record;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -66,7 +67,7 @@ public class HoodieAvroUtils {
   private static ThreadLocal<BinaryDecoder> reuseDecoder = ThreadLocal.withInitial(() -> null);
 
   // All metadata fields are optional strings.
-  static final Schema METADATA_FIELD_SCHEMA =
+  public static final Schema METADATA_FIELD_SCHEMA =
       Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)));
 
   public static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
@@ -253,6 +254,17 @@ public class HoodieAvroUtils {
     record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
     record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, commitSeqno);
     return record;
+  }
+
+  public static GenericRecord stitchRecords(GenericRecord left, GenericRecord right, Schema stitchedSchema) {
+    GenericRecord result = new Record(stitchedSchema);
+    for (Schema.Field f : left.getSchema().getFields()) {
+      result.put(f.name(), left.get(f.name()));
+    }
+    for (Schema.Field f : right.getSchema().getFields()) {
+      result.put(f.name(), right.get(f.name()));
+    }
+    return result;
   }
 
   /**
