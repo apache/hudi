@@ -18,20 +18,20 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.TestRawTripPayload.MetadataMergeWriteStatus;
-import org.apache.hudi.common.bloom.filter.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
@@ -95,22 +95,22 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     String fileName = UUID.randomUUID().toString();
     String partitionPath = "2016/05/04";
 
-    String commitTime = HoodieTestUtils.makeNewCommitTime();
+    String instantTime = HoodieTestUtils.makeNewCommitTime();
     HoodieWriteConfig config = makeHoodieClientConfig();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
 
     Pair<Path, String> newPathWithWriteToken = jsc.parallelize(Arrays.asList(1)).map(x -> {
       HoodieRecord record = mock(HoodieRecord.class);
       when(record.getPartitionPath()).thenReturn(partitionPath);
       String writeToken = FSUtils.makeWriteToken(TaskContext.getPartitionId(), TaskContext.get().stageId(),
           TaskContext.get().taskAttemptId());
-      HoodieCreateHandle io = new HoodieCreateHandle(config, commitTime, table, partitionPath, fileName);
+      HoodieCreateHandle io = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileName, supplier);
       return Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
     }).collect().get(0);
 
     Assert.assertEquals(newPathWithWriteToken.getKey().toString(), this.basePath + "/" + partitionPath + "/"
-        + FSUtils.makeDataFileName(commitTime, newPathWithWriteToken.getRight(), fileName));
+        + FSUtils.makeDataFileName(instantTime, newPathWithWriteToken.getRight(), fileName));
   }
 
   private HoodieWriteConfig makeHoodieClientConfig() throws Exception {
@@ -132,7 +132,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     String partitionPath = "/2016/01/31";
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
+    HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
 
     // Get some records belong to the same partition (2016/01/31)
     String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -207,10 +207,10 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     Thread.sleep(1000);
     String newCommitTime = HoodieTestUtils.makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    final HoodieCopyOnWriteTable newTable = new HoodieCopyOnWriteTable(config, jsc);
+    final HoodieCopyOnWriteTable newTable = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
     List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return newTable.handleUpdate(newCommitTime, updatedRecord1.getCurrentLocation().getFileId(),
-          updatedRecords.iterator());
+      return newTable.handleUpdate(newCommitTime, updatedRecord1.getPartitionPath(),
+          updatedRecord1.getCurrentLocation().getFileId(), updatedRecords.iterator());
     }).flatMap(x -> HoodieClientTestUtils.collectStatuses(x).iterator()).collect();
 
     // Check the updated file
@@ -274,7 +274,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
+    HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
 
     // Get some records belong to the same partition (2016/01/31)
     String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -308,9 +308,9 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
   @Test
   public void testInsertRecords() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfig();
-    String commitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
+    String instantTime = HoodieTestUtils.makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
 
     // Case 1:
     // 10 records for partition 1, 1 record for partition 2.
@@ -320,7 +320,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     // Insert new records
     final List<HoodieRecord> recs2 = records;
     List<WriteStatus> returnedStatuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return table.handleInsert(commitTime, FSUtils.createNewFileIdPfx(), recs2.iterator());
+      return table.handleInsert(instantTime, FSUtils.createNewFileIdPfx(), recs2.iterator());
     }).flatMap(x -> HoodieClientTestUtils.collectStatuses(x).iterator()).collect();
 
     // TODO: check the actual files and make sure 11 records, total were written.
@@ -342,7 +342,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     final List<HoodieRecord> recs3 = records;
 
     returnedStatuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return table.handleInsert(commitTime, FSUtils.createNewFileIdPfx(), recs3.iterator());
+      return table.handleInsert(instantTime, FSUtils.createNewFileIdPfx(), recs3.iterator());
     }).flatMap(x -> HoodieClientTestUtils.collectStatuses(x).iterator()).collect();
 
     assertEquals(3, returnedStatuses.size());
@@ -361,9 +361,9 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
   public void testFileSizeUpsertRecords() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().withStorageConfig(HoodieStorageConfig.newBuilder()
         .limitFileSize(64 * 1024).parquetBlockSize(64 * 1024).parquetPageSize(64 * 1024).build()).build();
-    String commitTime = HoodieTestUtils.makeNewCommitTime();
+    String instantTime = HoodieTestUtils.makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
+    HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
 
     List<HoodieRecord> records = new ArrayList<>();
     // Approx 1150 records are written for block size of 64KB
@@ -376,13 +376,13 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
 
     // Insert new records
     jsc.parallelize(Arrays.asList(1))
-        .map(i -> table.handleInsert(commitTime, FSUtils.createNewFileIdPfx(), records.iterator()))
+        .map(i -> table.handleInsert(instantTime, FSUtils.createNewFileIdPfx(), records.iterator()))
         .map(x -> HoodieClientTestUtils.collectStatuses(x)).collect();
 
     // Check the updated file
     int counts = 0;
     for (File file : new File(basePath + "/2016/01/31").listFiles()) {
-      if (file.getName().endsWith(".parquet") && FSUtils.getCommitTime(file.getName()).equals(commitTime)) {
+      if (file.getName().endsWith(".parquet") && FSUtils.getCommitTime(file.getName()).equals(instantTime)) {
         LOG.info(file.getName() + "-" + file.length());
         counts++;
       }
@@ -400,7 +400,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     HoodieClientTestUtils.fakeCommitFile(basePath, "001");
     HoodieClientTestUtils.fakeDataFile(basePath, testPartitionPath, "001", "file1", fileSize);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
+    HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     List<HoodieRecord> insertRecords = dataGenerator.generateInserts("001", numInserts);
@@ -415,7 +415,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     records.addAll(updateRecords);
     WorkloadProfile profile = new WorkloadProfile(jsc.parallelize(records));
     HoodieCopyOnWriteTable.UpsertPartitioner partitioner =
-        (HoodieCopyOnWriteTable.UpsertPartitioner) table.getUpsertPartitioner(profile);
+        (HoodieCopyOnWriteTable.UpsertPartitioner) table.getUpsertPartitioner(profile, jsc);
     assertEquals("Update record should have gone to the 1 update partition", 0, partitioner.getPartition(
         new Tuple2<>(updateRecords.get(0).getKey(), Option.ofNullable(updateRecords.get(0).getCurrentLocation()))));
     return partitioner;
@@ -470,27 +470,27 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
-        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
+            .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    final HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
-    String commitTime = "000";
+    final HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
+    String instantTime = "000";
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
-    final List<HoodieRecord> inserts = dataGen.generateInsertsWithHoodieAvroPayload(commitTime, 100);
+    final List<HoodieRecord> inserts = dataGen.generateInsertsWithHoodieAvroPayload(instantTime, 100);
     final List<List<WriteStatus>> ws = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return table.handleInsert(commitTime, UUID.randomUUID().toString(), inserts.iterator());
+      return table.handleInsert(instantTime, UUID.randomUUID().toString(), inserts.iterator());
     }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();
 
     WriteStatus writeStatus = ws.get(0).get(0);
     String fileId = writeStatus.getFileId();
     metaClient.getFs().create(new Path(basePath + "/.hoodie/000.commit")).close();
-    final HoodieCopyOnWriteTable table2 = new HoodieCopyOnWriteTable(config, jsc);
+    final List<HoodieRecord> updates = dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts);
 
-    final List<HoodieRecord> updates =
-        dataGen.generateUpdatesWithHoodieAvroPayload(commitTime, writeStatus.getWrittenRecords());
-
-    jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return table2.handleUpdate("001", fileId, updates.iterator());
+    String partitionPath = updates.get(0).getPartitionPath();
+    long numRecordsInPartition = updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
+    final List<List<WriteStatus>> updateStatus = jsc.parallelize(Arrays.asList(1)).map(x -> {
+      return table.handleUpdate(instantTime, partitionPath, fileId, updates.iterator());
     }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();
+    assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
 
   @After

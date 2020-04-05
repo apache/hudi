@@ -18,14 +18,13 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.util.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -35,8 +34,10 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -62,12 +63,14 @@ import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
 import java.sql.Connection;
+import java.sql.Driver;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.DriverManager;
-import java.sql.Driver;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
@@ -102,11 +105,15 @@ public class UtilHelpers {
     }
   }
 
-  public static Transformer createTransformer(String transformerClass) throws IOException {
+  public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
     try {
-      return transformerClass == null ? null : (Transformer) ReflectionUtils.loadClass(transformerClass);
+      List<Transformer> transformers = new ArrayList<>();
+      for (String className : Option.ofNullable(classNames).orElse(Collections.emptyList())) {
+        transformers.add(ReflectionUtils.loadClass(className));
+      }
+      return transformers.isEmpty() ? Option.empty() : Option.of(new ChainedTransformer(transformers));
     } catch (Throwable e) {
-      throw new IOException("Could not load transformer class " + transformerClass, e);
+      throw new IOException("Could not load transformer class(es) " + classNames, e);
     }
   }
 

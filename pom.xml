@@ -354,7 +354,7 @@
           </configuration>
           <executions>
             <execution>
-              <phase>package</phase>
+              <phase>compile</phase>
               <goals>
                 <goal>check</goal>
               </goals>
@@ -534,13 +534,6 @@
         <version>${joda.version}</version>
       </dependency>
 
-      <!-- we have to stay at <= 16.0, due to issues with HBase client -->
-      <dependency>
-        <groupId>com.google.guava</groupId>
-        <artifactId>guava</artifactId>
-        <version>15.0</version>
-      </dependency>
-
       <dependency>
         <groupId>xerces</groupId>
         <artifactId>xercesImpl</artifactId>
@@ -688,13 +681,6 @@
             <artifactId>jaxb-api</artifactId>
           </exclusion>
         </exclusions>
-      </dependency>
-
-      <!-- HBase -->
-      <dependency>
-        <groupId>org.apache.hbase</groupId>
-        <artifactId>hbase-client</artifactId>
-        <version>${hbase.version}</version>
       </dependency>
 
       <!-- Hive -->

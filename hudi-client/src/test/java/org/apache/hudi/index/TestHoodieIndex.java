@@ -34,8 +34,8 @@ import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.hbase.HBaseIndex;
-
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -125,7 +125,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     }
 
     @Override
-    public boolean rollbackCommit(String commitTime) {
+    public boolean rollbackCommit(String instantTime) {
       return false;
     }
 

@@ -18,17 +18,17 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.TestRawTripPayload;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -129,7 +129,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01");
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
     List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, jsc, table);
     // Still 0, as no valid commit
@@ -140,7 +140,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     new File(basePath + "/.hoodie/20160401010101.commit").createNewFile();
     new File(basePath + "/.hoodie/20150312101010.commit").createNewFile();
 
-    table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    table = HoodieTable.create(metaClient, config, jsc);
     filesList = index.loadInvolvedFiles(partitions, jsc, table);
     assertEquals(filesList.size(), 4);
 
@@ -249,21 +249,17 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record5));
 
     String filename0 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", Collections.singletonList(record1),
-                schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", Collections.singletonList(record1), schema, null, false);
     String filename1 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", new ArrayList<>(),
-                schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", new ArrayList<>(), schema, null, false);
     String filename2 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record2),
-                schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record2), schema, null, false);
     String filename3 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record4),
-                schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record4), schema, null, false);
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
 
     // Add some commits
     new File(basePath + "/.hoodie").mkdirs();
@@ -348,7 +344,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
         .writeParquetFile(basePath, "2016/01/31", Collections.singletonList(originalRecord), schema, null, false);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
 
     // Add some commits
     new File(basePath + "/.hoodie").mkdirs();

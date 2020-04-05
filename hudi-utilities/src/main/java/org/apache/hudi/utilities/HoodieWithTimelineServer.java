@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hudi.common.util.ValidationUtils;
+
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
@@ -25,7 +27,6 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.BufferedReader;

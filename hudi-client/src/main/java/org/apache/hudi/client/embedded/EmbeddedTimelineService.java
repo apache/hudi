@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.embedded;
 
-import org.apache.hudi.common.SerializableConfiguration;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;

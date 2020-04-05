@@ -18,10 +18,10 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -282,13 +282,13 @@ public class SparkMain {
     return 0;
   }
 
-  private static int rollback(JavaSparkContext jsc, String commitTime, String basePath) throws Exception {
+  private static int rollback(JavaSparkContext jsc, String instantTime, String basePath) throws Exception {
     HoodieWriteClient client = createHoodieClient(jsc, basePath);
-    if (client.rollback(commitTime)) {
-      LOG.info(String.format("The commit \"%s\" rolled back.", commitTime));
+    if (client.rollback(instantTime)) {
+      LOG.info(String.format("The commit \"%s\" rolled back.", instantTime));
       return 0;
     } else {
-      LOG.info(String.format("The commit \"%s\" failed to roll back.", commitTime));
+      LOG.info(String.format("The commit \"%s\" failed to roll back.", instantTime));
       return -1;
     }
   }

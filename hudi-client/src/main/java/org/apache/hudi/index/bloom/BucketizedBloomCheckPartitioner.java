@@ -145,7 +145,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     final Pair<String, String> parts = (Pair<String, String>) key;
     final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", parts.getRight());
     final List<Integer> candidatePartitions = fileGroupToPartitions.get(parts.getLeft());
-    final int idx = (int) Math.floorMod(hashOfKey, candidatePartitions.size());
+    final int idx = (int) Math.floorMod((int) hashOfKey, candidatePartitions.size());
     assert idx >= 0;
     return candidatePartitions.get(idx);
   }

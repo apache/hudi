@@ -27,13 +27,14 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.StringUtils;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
@@ -220,18 +221,18 @@ public class CommitsCommand implements CommandMarker {
   }
 
   @CliCommand(value = "commit rollback", help = "Rollback a commit")
-  public String rollbackCommit(@CliOption(key = {"commit"}, help = "Commit to rollback") final String commitTime,
+  public String rollbackCommit(@CliOption(key = {"commit"}, help = "Commit to rollback") final String instantTime,
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    HoodieTimeline filteredTimeline = completedTimeline.filter(instant -> instant.getTimestamp().equals(commitTime));
+    HoodieTimeline filteredTimeline = completedTimeline.filter(instant -> instant.getTimestamp().equals(instantTime));
     if (filteredTimeline.empty()) {
-      return "Commit " + commitTime + " not found in Commits " + completedTimeline;
+      return "Commit " + instantTime + " not found in Commits " + completedTimeline;
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK.toString(), commitTime,
+    sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK.toString(), instantTime,
         HoodieCLI.getTableMetaClient().getBasePath());
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -239,16 +240,16 @@ public class CommitsCommand implements CommandMarker {
     // Refresh the current
     refreshCommits();
     if (exitCode != 0) {
-      return "Commit " + commitTime + " failed to roll back";
+      return "Commit " + instantTime + " failed to roll back";
     }
-    return "Commit " + commitTime + " rolled back";
+    return "Commit " + instantTime + " rolled back";
   }
 
   @CliCommand(value = "commit showpartitions", help = "Show partition level details of a commit")
   public String showCommitPartitions(
       @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
           unspecifiedDefaultValue = "") final String exportTableName,
-      @CliOption(key = {"commit"}, help = "Commit to show") final String commitTime,
+      @CliOption(key = {"commit"}, help = "Commit to show") final String instantTime,
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
@@ -258,10 +259,10 @@ public class CommitsCommand implements CommandMarker {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
+    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
 
     if (!timeline.containsInstant(commitInstant)) {
-      return "Commit " + commitTime + " not found in Commits " + timeline;
+      return "Commit " + instantTime + " not found in Commits " + timeline;
     }
     HoodieCommitMetadata meta = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitInstant).get(),
         HoodieCommitMetadata.class);
@@ -306,7 +307,7 @@ public class CommitsCommand implements CommandMarker {
   public String showCommitFiles(
       @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
           unspecifiedDefaultValue = "") final String exportTableName,
-      @CliOption(key = {"commit"}, help = "Commit to show") final String commitTime,
+      @CliOption(key = {"commit"}, help = "Commit to show") final String instantTime,
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
@@ -316,10 +317,10 @@ public class CommitsCommand implements CommandMarker {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
+    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
 
     if (!timeline.containsInstant(commitInstant)) {
-      return "Commit " + commitTime + " not found in Commits " + timeline;
+      return "Commit " + instantTime + " not found in Commits " + timeline;
     }
     HoodieCommitMetadata meta = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitInstant).get(),
         HoodieCommitMetadata.class);

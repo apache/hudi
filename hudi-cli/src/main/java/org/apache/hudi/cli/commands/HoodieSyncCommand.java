@@ -22,8 +22,8 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.utils.CommitUtil;
 import org.apache.hudi.cli.utils.HiveUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
 
 import org.springframework.shell.core.CommandMarker;

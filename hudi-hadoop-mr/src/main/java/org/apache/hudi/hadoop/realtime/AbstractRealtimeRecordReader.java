@@ -18,10 +18,10 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.HoodieAvroUtils;
-import org.apache.hudi.common.util.LogReaderUtils;
+import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;

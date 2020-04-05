@@ -35,14 +35,14 @@ import java.util.List;
 public class BulkInsertMapFunction<T extends HoodieRecordPayload>
     implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
 
-  private String commitTime;
+  private String instantTime;
   private HoodieWriteConfig config;
   private HoodieTable<T> hoodieTable;
   private List<String> fileIDPrefixes;
 
-  public BulkInsertMapFunction(String commitTime, HoodieWriteConfig config, HoodieTable<T> hoodieTable,
-      List<String> fileIDPrefixes) {
-    this.commitTime = commitTime;
+  public BulkInsertMapFunction(String instantTime, HoodieWriteConfig config, HoodieTable<T> hoodieTable,
+                               List<String> fileIDPrefixes) {
+    this.instantTime = instantTime;
     this.config = config;
     this.hoodieTable = hoodieTable;
     this.fileIDPrefixes = fileIDPrefixes;
@@ -50,7 +50,7 @@ public class BulkInsertMapFunction<T extends HoodieRecordPayload>
 
   @Override
   public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> sortedRecordItr) {
-    return new CopyOnWriteLazyInsertIterable<>(sortedRecordItr, config, commitTime, hoodieTable,
-        fileIDPrefixes.get(partition));
+    return new CopyOnWriteLazyInsertIterable<>(sortedRecordItr, config, instantTime, hoodieTable,
+        fileIDPrefixes.get(partition), hoodieTable.getSparkTaskContextSupplier());
   }
 }

@@ -17,10 +17,11 @@
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.model.{EmptyHoodieRecordPayload, OverwriteWithLatestAvroPayload}
-import org.apache.hudi.common.util.{Option, SchemaTestUtil, TypedProperties}
+import org.apache.hudi.common.util.{Option, SchemaTestUtil}
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, GlobalDeleteKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.common.config.TypedProperties
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.scalatest.junit.AssertionsForJUnit

@@ -18,29 +18,29 @@
 
 package org.apache.hudi;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.KeyGenerator;
 
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -196,20 +196,20 @@ public class DataSourceUtils {
   }
 
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-                                                      String commitTime, String operation) {
+                                                      String instantTime, String operation) {
     if (operation.equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL())) {
-      return client.bulkInsert(hoodieRecords, commitTime);
+      return client.bulkInsert(hoodieRecords, instantTime);
     } else if (operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())) {
-      return client.insert(hoodieRecords, commitTime);
+      return client.insert(hoodieRecords, instantTime);
     } else {
       // default is upsert
-      return client.upsert(hoodieRecords, commitTime);
+      return client.upsert(hoodieRecords, instantTime);
     }
   }
 
   public static JavaRDD<WriteStatus> doDeleteOperation(HoodieWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
-                                                       String commitTime) {
-    return client.delete(hoodieKeys, commitTime);
+                                                       String instantTime) {
+    return client.delete(hoodieKeys, instantTime);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,

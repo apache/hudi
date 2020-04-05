@@ -23,7 +23,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableMap;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
@@ -32,6 +31,7 @@ import org.apache.avro.generic.GenericRecord;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,13 +49,22 @@ public class MercifulJsonConverter {
    * Build type processor map for each avro type.
    */
   private static Map<Schema.Type, JsonToAvroFieldProcessor> getFieldTypeProcessors() {
-    return new ImmutableMap.Builder<Type, JsonToAvroFieldProcessor>().put(Type.STRING, generateStringTypeHandler())
-        .put(Type.BOOLEAN, generateBooleanTypeHandler()).put(Type.DOUBLE, generateDoubleTypeHandler())
-        .put(Type.FLOAT, generateFloatTypeHandler()).put(Type.INT, generateIntTypeHandler())
-        .put(Type.LONG, generateLongTypeHandler()).put(Type.ARRAY, generateArrayTypeHandler())
-        .put(Type.RECORD, generateRecordTypeHandler()).put(Type.ENUM, generateEnumTypeHandler())
-        .put(Type.MAP, generateMapTypeHandler()).put(Type.BYTES, generateBytesTypeHandler())
-        .put(Type.FIXED, generateFixedTypeHandler()).build();
+    return Collections.unmodifiableMap(new HashMap<Schema.Type, JsonToAvroFieldProcessor>() {
+      {
+        put(Type.STRING, generateStringTypeHandler());
+        put(Type.BOOLEAN, generateBooleanTypeHandler());
+        put(Type.DOUBLE, generateDoubleTypeHandler());
+        put(Type.FLOAT, generateFloatTypeHandler());
+        put(Type.INT, generateIntTypeHandler());
+        put(Type.LONG, generateLongTypeHandler());
+        put(Type.ARRAY, generateArrayTypeHandler());
+        put(Type.RECORD, generateRecordTypeHandler());
+        put(Type.ENUM, generateEnumTypeHandler());
+        put(Type.MAP, generateMapTypeHandler());
+        put(Type.BYTES, generateBytesTypeHandler());
+        put(Type.FIXED, generateFixedTypeHandler());
+      }
+    });
   }
 
   /**

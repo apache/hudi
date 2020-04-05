@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -100,12 +101,12 @@ public class SchemaTestUtil {
   public static List<IndexedRecord> generateHoodieTestRecords(int from, int limit)
       throws IOException, URISyntaxException {
     List<IndexedRecord> records = generateTestRecords(from, limit);
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
     Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, hoodieFieldsSchema)).map(p -> {
       p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, UUID.randomUUID().toString());
       p.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
-      p.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime);
+      p.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
       return p;
     }).collect(Collectors.toList());
 
@@ -124,12 +125,12 @@ public class SchemaTestUtil {
   }
 
   public static List<IndexedRecord> updateHoodieTestRecords(List<String> oldRecordKeys, List<IndexedRecord> newRecords,
-      String commitTime) {
+      String instantTime) {
 
     return newRecords.stream().map(p -> {
       ((GenericRecord) p).put(HoodieRecord.RECORD_KEY_METADATA_FIELD, oldRecordKeys.remove(0));
       ((GenericRecord) p).put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
-      ((GenericRecord) p).put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime);
+      ((GenericRecord) p).put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
       return p;
     }).collect(Collectors.toList());
 
@@ -173,9 +174,9 @@ public class SchemaTestUtil {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/timestamp-test-evolved.avsc"));
   }
 
-  public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String commitTime,
+  public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,
       String fileId) throws IOException {
-    TestRecord record = new TestRecord(commitTime, recordNumber, fileId);
+    TestRecord record = new TestRecord(instantTime, recordNumber, fileId);
     MercifulJsonConverter converter = new MercifulJsonConverter();
     return converter.convert(record.toJsonString(), schema);
   }

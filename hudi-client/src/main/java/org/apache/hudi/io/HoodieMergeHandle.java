@@ -18,7 +18,11 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.utils.SparkConfigUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,8 +31,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -45,7 +47,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.TaskContext;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -69,23 +70,23 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   private long insertRecordsWritten = 0;
   private boolean useWriterSchema;
 
-  public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
-      Iterator<HoodieRecord<T>> recordItr, String fileId) {
-    super(config, commitTime, fileId, hoodieTable);
-    String partitionPath = init(fileId, recordItr);
+  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
+       Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, SparkTaskContextSupplier sparkTaskContextSupplier) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, sparkTaskContextSupplier);
+    init(fileId, recordItr);
     init(fileId, partitionPath, hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
   }
 
   /**
    * Called by compactor code path.
    */
-  public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
-      Map<String, HoodieRecord<T>> keyToNewRecords, String fileId, HoodieBaseFile dataFileToBeMerged) {
-    super(config, commitTime, fileId, hoodieTable);
+  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
+      Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
+      HoodieBaseFile dataFileToBeMerged, SparkTaskContextSupplier sparkTaskContextSupplier) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, sparkTaskContextSupplier);
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchema = true;
-    init(fileId, keyToNewRecords.get(keyToNewRecords.keySet().stream().findFirst().get()).getPartitionPath(),
-        dataFileToBeMerged);
+    init(fileId, this.partitionPath, dataFileToBeMerged);
   }
 
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
@@ -110,7 +111,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
-      partitionMetadata.trySave(TaskContext.getPartitionId());
+      partitionMetadata.trySave(getPartitionId());
 
       oldFilePath = new Path(config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
       String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
@@ -131,7 +132,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
       // Create the writer for writing the new version file
       storageWriter =
-          HoodieStorageWriterFactory.getStorageWriter(instantTime, newFilePath, hoodieTable, config, writerSchema);
+          HoodieStorageWriterFactory.getStorageWriter(instantTime, newFilePath, hoodieTable, config, writerSchema, sparkTaskContextSupplier);
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
@@ -143,20 +144,18 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   /**
    * Load the new incoming records in a map and return partitionPath.
    */
-  private String init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
+  private void init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
     try {
       // Load the new records in a map
-      long memoryForMerge = config.getMaxMemoryPerPartitionMerge();
+      long memoryForMerge = SparkConfigUtils.getMaxMemoryPerPartitionMerge(config.getProps());
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
           new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(originalSchema));
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
-    String partitionPath = null;
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> record = newRecordsItr.next();
-      partitionPath = record.getPartitionPath();
       // update the new location of the record, so we know where to find it next
       record.unseal();
       record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
@@ -170,7 +169,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
         + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + "Number of entries in DiskBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + "Size of file spilled to disk => "
         + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
-    return partitionPath;
   }
 
   private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
@@ -182,6 +180,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
   private boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
     Option recordMetadata = hoodieRecord.getData().getMetadata();
+    if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
+      HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
+          + hoodieRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
+      writeStatus.markFailure(hoodieRecord, failureEx, recordMetadata);
+      return false;
+    }
     try {
       if (indexedRecord.isPresent()) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema

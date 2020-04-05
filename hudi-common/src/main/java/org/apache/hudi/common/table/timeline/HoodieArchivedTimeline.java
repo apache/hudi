@@ -18,19 +18,19 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -123,14 +123,14 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   }
 
   private HoodieInstant readCommit(GenericRecord record, boolean loadDetails) {
-    final String commitTime  = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
+    final String instantTime  = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
     if (loadDetails) {
       Option.ofNullable(record.get(getMetadataKey(action))).map(actionData ->
-              this.readCommits.put(commitTime, actionData.toString().getBytes(StandardCharsets.UTF_8))
+              this.readCommits.put(instantTime, actionData.toString().getBytes(StandardCharsets.UTF_8))
       );
     }
-    return new HoodieInstant(false, action, commitTime);
+    return new HoodieInstant(false, action, instantTime);
   }
 
   private String getMetadataKey(String action) {

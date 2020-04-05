@@ -20,17 +20,17 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.DefaultHoodieConfig;
+import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.TimelineLayoutVersion;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.table.compact.strategy.CompactionStrategy;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.table.compact.strategy.CompactionStrategy;
 
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.apache.spark.storage.StorageLevel;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -67,7 +67,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_COMBINE_BEFORE_UPSERT = "true";
   private static final String COMBINE_BEFORE_DELETE_PROP = "hoodie.combine.before.delete";
   private static final String DEFAULT_COMBINE_BEFORE_DELETE = "true";
-  private static final String WRITE_STATUS_STORAGE_LEVEL = "hoodie.write.status.storage.level";
+  public static final String WRITE_STATUS_STORAGE_LEVEL = "hoodie.write.status.storage.level";
   private static final String DEFAULT_WRITE_STATUS_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
   private static final String HOODIE_AUTO_COMMIT_PROP = "hoodie.auto.commit";
   private static final String DEFAULT_HOODIE_AUTO_COMMIT = "true";
@@ -181,10 +181,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean shouldCombineBeforeDelete() {
     return Boolean.parseBoolean(props.getProperty(COMBINE_BEFORE_DELETE_PROP));
-  }
-
-  public StorageLevel getWriteStatusStorageLevel() {
-    return StorageLevel.fromString(props.getProperty(WRITE_STATUS_STORAGE_LEVEL));
   }
 
   public String getWriteStatusClassName() {
@@ -430,10 +426,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_KEYS_PER_BUCKET_PROP));
   }
 
-  public StorageLevel getBloomIndexInputStorageLevel() {
-    return StorageLevel.fromString(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
-  }
-
   public boolean getBloomIndexUpdatePartitionPath() {
     return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH));
   }
@@ -507,22 +499,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   /**
    * memory configs.
    */
-  public Double getMaxMemoryFractionPerPartitionMerge() {
-    return Double.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE_PROP));
-  }
-
-  public Double getMaxMemoryFractionPerCompaction() {
-    return Double.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP));
-  }
-
-  public Long getMaxMemoryPerPartitionMerge() {
-    return Long.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE_PROP));
-  }
-
-  public Long getMaxMemoryPerCompaction() {
-    return Long.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION_PROP));
-  }
-
   public int getMaxDFSStreamBufferSize() {
     return Integer.parseInt(props.getProperty(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP));
   }

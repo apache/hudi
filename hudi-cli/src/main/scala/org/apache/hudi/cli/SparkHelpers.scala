@@ -22,8 +22,9 @@ import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.avro.HoodieAvroWriteSupport
+import org.apache.hudi.client.SparkTaskContextSupplier
 import org.apache.hudi.common.HoodieJsonPayload
-import org.apache.hudi.common.bloom.filter.{BloomFilter, BloomFilterFactory}
+import org.apache.hudi.common.bloom.{BloomFilter, BloomFilterFactory}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieStorageConfig}
@@ -38,14 +39,14 @@ import scala.collection.mutable._
 
 object SparkHelpers {
   @throws[Exception]
-  def skipKeysAndWriteNewFile(commitTime: String, fs: FileSystem, sourceFile: Path, destinationFile: Path, keysToSkip: Set[String]) {
+  def skipKeysAndWriteNewFile(instantTime: String, fs: FileSystem, sourceFile: Path, destinationFile: Path, keysToSkip: Set[String]) {
     val sourceRecords = ParquetUtils.readAvroRecords(fs.getConf, sourceFile)
     val schema: Schema = sourceRecords.get(0).getSchema
     val filter: BloomFilter = BloomFilterFactory.createBloomFilter(HoodieIndexConfig.DEFAULT_BLOOM_FILTER_NUM_ENTRIES.toInt, HoodieIndexConfig.DEFAULT_BLOOM_FILTER_FPP.toDouble,
       HoodieIndexConfig.DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES.toInt, HoodieIndexConfig.DEFAULT_BLOOM_INDEX_FILTER_TYPE);
     val writeSupport: HoodieAvroWriteSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter)
     val parquetConfig: HoodieParquetConfig = new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP, HoodieStorageConfig.DEFAULT_PARQUET_BLOCK_SIZE_BYTES.toInt, HoodieStorageConfig.DEFAULT_PARQUET_PAGE_SIZE_BYTES.toInt, HoodieStorageConfig.DEFAULT_PARQUET_FILE_MAX_BYTES.toInt, fs.getConf, HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO.toDouble)
-    val writer = new HoodieParquetWriter[HoodieJsonPayload, IndexedRecord](commitTime, destinationFile, parquetConfig, schema)
+    val writer = new HoodieParquetWriter[HoodieJsonPayload, IndexedRecord](instantTime, destinationFile, parquetConfig, schema, new SparkTaskContextSupplier())
     for (rec <- sourceRecords) {
       val key: String = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
       if (!keysToSkip.contains(key)) {

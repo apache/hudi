@@ -21,20 +21,29 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieException;
 
-import com.google.common.reflect.ClassPath;
-import com.google.common.reflect.ClassPath.ClassInfo;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 /**
  * A utility class for reflection.
  */
 public class ReflectionUtils {
+
+  private static final Logger LOG = LogManager.getLogger(ReflectionUtils.class);
 
   private static Map<String, Class<?>> clazzCache = new HashMap<>();
 
@@ -90,16 +99,58 @@ public class ReflectionUtils {
   }
 
   /**
-   * Return stream of top level class names in the same class path as passed-in class.
-   * 
-   * @param clazz
+   * Scans all classes accessible from the context class loader
+   * which belong to the given package and subpackages.
+   *
+   * @param clazz class
+   * @return Stream of Class names in package
    */
-  public static Stream<String> getTopLevelClassesInClasspath(Class clazz) {
+  public static Stream<String> getTopLevelClassesInClasspath(Class<?> clazz) {
+    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+    String packageName = clazz.getPackage().getName();
+    String path = packageName.replace('.', '/');
+    Enumeration<URL> resources = null;
     try {
-      ClassPath classPath = ClassPath.from(clazz.getClassLoader());
-      return classPath.getTopLevelClasses().stream().map(ClassInfo::getName);
+      resources = classLoader.getResources(path);
     } catch (IOException e) {
-      throw new RuntimeException("Got exception while dumping top level classes", e);
+      LOG.error("Unable to fetch Resources in package " + e.getMessage());
     }
+    List<File> directories = new ArrayList<>();
+    while (Objects.requireNonNull(resources).hasMoreElements()) {
+      URL resource = resources.nextElement();
+      try {
+        directories.add(new File(resource.toURI()));
+      } catch (URISyntaxException e) {
+        LOG.error("Unable to get " + e.getMessage());
+      }
+    }
+    List<String> classes = new ArrayList<>();
+    for (File directory : directories) {
+      classes.addAll(findClasses(directory, packageName));
+    }
+    return classes.stream();
+  }
+
+  /**
+   * Recursive method used to find all classes in a given directory and subdirs.
+   *
+   * @param directory   The base directory
+   * @param packageName The package name for classes found inside the base directory
+   * @return classes in the package
+   */
+  private static List<String> findClasses(File directory, String packageName) {
+    List<String> classes = new ArrayList<>();
+    if (!directory.exists()) {
+      return classes;
+    }
+    File[] files = directory.listFiles();
+    for (File file : Objects.requireNonNull(files)) {
+      if (file.isDirectory()) {
+        classes.addAll(findClasses(file, packageName + "." + file.getName()));
+      } else if (file.getName().endsWith(".class")) {
+        classes.add(packageName + '.' + file.getName().substring(0, file.getName().length() - 6));
+      }
+    }
+    return classes;
   }
 }

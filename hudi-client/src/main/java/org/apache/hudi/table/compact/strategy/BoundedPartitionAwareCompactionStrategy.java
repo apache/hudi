@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  */
 public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionStrategy {
 
-  SimpleDateFormat dateFormat = new SimpleDateFormat(datePartitionFormat);
+  SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_PARTITION_FORMAT);
 
   @Override
   public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,

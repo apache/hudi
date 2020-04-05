@@ -18,13 +18,12 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import com.google.common.collect.Sets;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -49,6 +48,7 @@ import static java.util.Collections.reverse;
  */
 public class HoodieDefaultTimeline implements HoodieTimeline {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieDefaultTimeline.class);
 
   private static final String HASHING_ALGORITHM = "SHA-256";
@@ -113,7 +113,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public HoodieTimeline getCommitsAndCompactionTimeline() {
-    Set<String> validActions = Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION);
+    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION);
     return new HoodieDefaultTimeline(instants.stream().filter(s -> validActions.contains(s.getAction())), details);
   }
 
@@ -130,9 +130,9 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public HoodieDefaultTimeline findInstantsAfter(String commitTime, int numCommits) {
+  public HoodieDefaultTimeline findInstantsAfter(String instantTime, int numCommits) {
     return new HoodieDefaultTimeline(instants.stream()
-        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), commitTime, GREATER)).limit(numCommits),
+        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), instantTime, GREATER)).limit(numCommits),
         details);
   }
 
@@ -145,7 +145,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    * Get all instants (commits, delta commits) that produce new data, in the active timeline.
    */
   public HoodieTimeline getCommitsTimeline() {
-    return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION));
+    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION));
   }
 
   /**
@@ -153,8 +153,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    * timeline.
    */
   public HoodieTimeline getAllCommitsTimeline() {
-    return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION, COMPACTION_ACTION,
-            SAVEPOINT_ACTION, ROLLBACK_ACTION));
+    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION,
+            CLEAN_ACTION, COMPACTION_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION));
   }
 
   /**

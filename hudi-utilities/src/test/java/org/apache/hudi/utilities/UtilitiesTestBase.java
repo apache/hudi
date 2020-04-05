@@ -20,13 +20,14 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.TestRawTripPayload;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.minicluster.HdfsTestService;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveClient;
@@ -41,7 +42,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema.Builder;
-import com.google.common.collect.ImmutableList;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -146,7 +146,7 @@ public class UtilitiesTestBase {
     hiveSyncConfig.basePath = basePath;
     hiveSyncConfig.assumeDatePartitioning = false;
     hiveSyncConfig.usePreApacheInputFormat = false;
-    hiveSyncConfig.partitionFields = new ImmutableList.Builder<String>().add("datestr").build();
+    hiveSyncConfig.partitionFields = CollectionUtils.createImmutableList("datestr");
     return hiveSyncConfig;
   }
 

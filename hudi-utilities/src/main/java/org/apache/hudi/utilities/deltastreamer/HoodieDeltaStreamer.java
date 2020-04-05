@@ -19,16 +19,16 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -54,6 +54,7 @@ import org.apache.spark.sql.SparkSession;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -64,6 +65,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -77,6 +79,7 @@ import java.util.stream.IntStream;
  */
 public class HoodieDeltaStreamer implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
 
   public static String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
@@ -124,7 +127,7 @@ public class HoodieDeltaStreamer implements Serializable {
         throw ex;
       } finally {
         deltaSyncService.close();
-        LOG.info("Shut down deltastreamer");
+        LOG.info("Shut down delta streamer");
       }
     }
   }
@@ -144,6 +147,17 @@ public class HoodieDeltaStreamer implements Serializable {
     @Override
     public Operation convert(String value) throws ParameterException {
       return Operation.valueOf(value);
+    }
+  }
+
+  private static class TransformersConverter implements IStringConverter<List<String>> {
+
+    @Override
+    public List<String> convert(String value) throws ParameterException {
+      return value == null ? null : Arrays.stream(value.split(","))
+          .map(String::trim)
+          .filter(s -> !s.isEmpty())
+          .collect(Collectors.toList());
     }
   }
 
@@ -195,11 +209,13 @@ public class HoodieDeltaStreamer implements Serializable {
     public String schemaProviderClassName = null;
 
     @Parameter(names = {"--transformer-class"},
-        description = "subclass of org.apache.hudi.utilities.transform.Transformer"
+        description = "A subclass or a list of subclasses of org.apache.hudi.utilities.transform.Transformer"
             + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
             + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
-            + "allows a SQL query templated to be passed as a transformation function)")
-    public String transformerClassName = null;
+            + "allows a SQL query templated to be passed as a transformation function). "
+            + "Pass a comma-separated list of subclass names to chain the transformations.",
+        converter = TransformersConverter.class)
+    public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
         + "Default: No limit For e.g: DFS-Source => max bytes to read, Kafka-Source => max events to read")
@@ -302,6 +318,7 @@ public class HoodieDeltaStreamer implements Serializable {
    */
   public static class DeltaSyncService extends AbstractDeltaStreamerService {
 
+    private static final long serialVersionUID = 1L;
     /**
      * Delta Sync Config.
      */
@@ -489,6 +506,7 @@ public class HoodieDeltaStreamer implements Serializable {
    */
   public static class AsyncCompactService extends AbstractDeltaStreamerService {
 
+    private static final long serialVersionUID = 1L;
     private final int maxConcurrentCompaction;
     private transient Compactor compactor;
     private transient JavaSparkContext jssc;
@@ -575,9 +593,5 @@ public class HoodieDeltaStreamer implements Serializable {
         return true;
       }, executor)).toArray(CompletableFuture[]::new)), executor);
     }
-  }
-
-  public DeltaSyncService getDeltaSyncService() {
-    return deltaSyncService;
   }
 }

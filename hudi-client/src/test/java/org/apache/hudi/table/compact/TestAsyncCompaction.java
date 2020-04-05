@@ -18,12 +18,12 @@
 
 package org.apache.hudi.table.compact;
 
+import org.apache.hudi.avro.model.HoodieCompactionOperation;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.TestHoodieClientBase;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.avro.model.HoodieCompactionOperation;
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.FileSlice;
@@ -33,9 +33,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -119,7 +119,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
 
       // Reload and rollback inflight compaction
       metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-      HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
+      HoodieTable hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
       // hoodieTable.rollback(jsc,
       //    new HoodieInstant(true, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), false);
 

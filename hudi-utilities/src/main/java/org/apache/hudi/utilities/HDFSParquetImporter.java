@@ -21,14 +21,14 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieJsonPayload;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.beust.jcommander.IValueValidator;
@@ -66,6 +66,7 @@ import scala.Tuple2;
  */
 public class HDFSParquetImporter implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HDFSParquetImporter.class);
 
   private static final DateTimeFormatter PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd")

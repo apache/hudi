@@ -18,17 +18,17 @@
 
 package org.apache.hudi.table.compact;
 
-import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
@@ -100,7 +100,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   @Test(expected = HoodieNotSupportedException.class)
   public void testCompactionOnCopyOnWriteFail() throws Exception {
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
+    HoodieTable table = HoodieTable.create(metaClient, getConfig(), jsc);
     String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
     table.compact(jsc, compactionInstantTime, table.scheduleCompaction(jsc, compactionInstantTime));
   }
@@ -109,7 +109,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   public void testCompactionEmpty() throws Exception {
     HoodieWriteConfig config = getConfig();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
     try (HoodieWriteClient writeClient = getWriteClient(config);) {
 
       String newCommitTime = writeClient.startCommit();
@@ -138,7 +138,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
       // Update all the 100 records
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      HoodieTable table = HoodieTable.create(metaClient, config, jsc);
 
       newCommitTime = "101";
       writeClient.startCommitWithTime(newCommitTime);
@@ -154,7 +154,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
       // Verify that all data file has one log file
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      table = HoodieTable.create(metaClient, config, jsc);
       for (String partitionPath : dataGen.getPartitionPaths()) {
         List<FileSlice> groupedLogFiles =
             table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
@@ -165,7 +165,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
       // Do a compaction
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      table = HoodieTable.create(metaClient, config, jsc);
 
       String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
       JavaRDD<WriteStatus> result =
