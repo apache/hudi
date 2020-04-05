@@ -229,7 +229,6 @@ public class HoodieAvroUtils {
         fields.add(f);
       }
     }
-
     return fields;
   }
 
