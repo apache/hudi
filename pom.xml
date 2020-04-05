@@ -354,7 +354,7 @@
           </configuration>
           <executions>
             <execution>
-              <phase>package</phase>
+              <phase>compile</phase>
               <goals>
                 <goal>check</goal>
               </goals>
@@ -681,13 +681,6 @@
             <artifactId>jaxb-api</artifactId>
           </exclusion>
         </exclusions>
-      </dependency>
-
-      <!-- HBase -->
-      <dependency>
-        <groupId>org.apache.hbase</groupId>
-        <artifactId>hbase-client</artifactId>
-        <version>${hbase.version}</version>
       </dependency>
 
       <!-- Hive -->

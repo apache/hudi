@@ -18,10 +18,10 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;

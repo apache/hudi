@@ -24,12 +24,13 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
+import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV1MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV2MigrationHandler;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.versioning.compaction.CompactionPlanMigrator;
-import org.apache.hudi.common.versioning.compaction.CompactionV1MigrationHandler;
-import org.apache.hudi.common.versioning.compaction.CompactionV2MigrationHandler;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.log4j.LogManager;
@@ -139,7 +140,7 @@ public class CompactionUtils {
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
       throws IOException {
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
-    HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
+    HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
         metaClient.getActiveTimeline().readCompactionPlanAsBytes(
             HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
     return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());

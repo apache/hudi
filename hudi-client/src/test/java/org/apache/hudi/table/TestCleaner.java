@@ -18,19 +18,20 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.client.TestHoodieClientBase;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.HoodieCleanClient;
 import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.TestHoodieClientBase;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -38,20 +39,18 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.TableFileSystemView;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
+import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.ConsistencyGuardConfig;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.versioning.clean.CleanMetadataMigrator;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -104,7 +103,7 @@ public class TestCleaner extends TestHoodieClientBase {
    * @param insertFn Insertion API for testing
    * @throws Exception in case of error
    */
-  private String insertFirstBigBatchForClientCleanerTest(HoodieWriteConfig cfg, HoodieWriteClient client,
+  private void insertFirstBigBatchForClientCleanerTest(HoodieWriteConfig cfg, HoodieWriteClient client,
       Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> insertFn) throws Exception {
 
@@ -126,7 +125,7 @@ public class TestCleaner extends TestHoodieClientBase {
     HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
     assertEquals("Expecting a single commit.", 1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
     // Should have 100 records in table (check using Index), all in locations marked at commit
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, client.getConfig(), jsc);
+    HoodieTable table = HoodieTable.create(metaClient, client.getConfig(), jsc);
 
     assertFalse(table.getCompletedCommitsTimeline().empty());
     String instantTime = table.getCompletedCommitsTimeline().getInstants().findFirst().get().getTimestamp();
@@ -137,7 +136,6 @@ public class TestCleaner extends TestHoodieClientBase {
     HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
     List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), jsc, table).collect();
     checkTaggedRecords(taggedRecords, newCommitTime);
-    return newCommitTime;
   }
 
   /**
@@ -207,7 +205,7 @@ public class TestCleaner extends TestHoodieClientBase {
 
       Map<HoodieFileGroupId, FileSlice> compactionFileIdToLatestFileSlice = new HashMap<>();
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
+      HoodieTable table = HoodieTable.create(metaClient, getConfig(), jsc);
       for (String partitionPath : dataGen.getPartitionPaths()) {
         TableFileSystemView fsView = table.getFileSystemView();
         Option<Boolean> added = Option.fromJavaOptional(fsView.getAllFileGroups(partitionPath).findFirst().map(fg -> {
@@ -229,7 +227,7 @@ public class TestCleaner extends TestHoodieClientBase {
       String compactionTime = instantTimes.get(0);
       table.getActiveTimeline().saveToCompactionRequested(
           new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionTime),
-          AvroUtils.serializeCompactionPlan(compactionPlan));
+          TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
 
       instantTimes = instantTimes.subList(1, instantTimes.size());
       // Keep doing some writes and clean inline. Make sure we have expected number of files
@@ -244,7 +242,7 @@ public class TestCleaner extends TestHoodieClientBase {
           assertNoWriteErrors(statuses);
 
           metaClient = HoodieTableMetaClient.reload(metaClient);
-          table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
+          table = HoodieTable.create(metaClient, getConfig(), jsc);
           HoodieTimeline timeline = table.getMetaClient().getCommitsTimeline();
 
           TableFileSystemView fsView = table.getFileSystemView();
@@ -376,7 +374,7 @@ public class TestCleaner extends TestHoodieClientBase {
         assertNoWriteErrors(statuses);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
-        HoodieTable table1 = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
+        HoodieTable table1 = HoodieTable.create(metaClient, cfg, jsc);
         HoodieTimeline activeTimeline = table1.getCompletedCommitsTimeline();
         Option<HoodieInstant> earliestRetainedCommit = activeTimeline.nthFromLastInstant(maxCommits - 1);
         Set<HoodieInstant> acceptableCommits = activeTimeline.getInstants().collect(Collectors.toSet());
@@ -412,7 +410,7 @@ public class TestCleaner extends TestHoodieClientBase {
    *
    * @param config HoodieWriteConfig
    */
-  private List<HoodieCleanStat> runCleaner(HoodieWriteConfig config) {
+  private List<HoodieCleanStat> runCleaner(HoodieWriteConfig config) throws IOException {
     return runCleaner(config, false);
   }
 
@@ -421,9 +419,8 @@ public class TestCleaner extends TestHoodieClientBase {
    *
    * @param config HoodieWriteConfig
    */
-  private List<HoodieCleanStat> runCleaner(HoodieWriteConfig config, boolean simulateRetryFailure) {
-    HoodieCleanClient writeClient = getHoodieCleanClient(config);
-
+  private List<HoodieCleanStat> runCleaner(HoodieWriteConfig config, boolean simulateRetryFailure) throws IOException {
+    HoodieWriteClient<?> writeClient = getHoodieWriteClient(config);
     String cleanInstantTs = getNextInstant();
     HoodieCleanMetadata cleanMetadata1 = writeClient.clean(cleanInstantTs);
 
@@ -432,18 +429,16 @@ public class TestCleaner extends TestHoodieClientBase {
     }
 
     if (simulateRetryFailure) {
-      metaClient.reloadActiveTimeline()
-          .revertToInflight(new HoodieInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, cleanInstantTs));
-      final HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-      HoodieCleanMetadata cleanMetadata2 = writeClient.runClean(table,
-          HoodieTimeline.getCleanInflightInstant(cleanInstantTs));
+      HoodieInstant completedCleanInstant = new HoodieInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, cleanInstantTs);
+      metaClient.reloadActiveTimeline().revertToInflight(completedCleanInstant);
+      HoodieCleanMetadata cleanMetadata2 = writeClient.clean(getNextInstant());
       Assert.assertEquals(cleanMetadata1.getEarliestCommitToRetain(), cleanMetadata2.getEarliestCommitToRetain());
       Assert.assertEquals(new Integer(0), cleanMetadata2.getTotalFilesDeleted());
-      Assert.assertEquals(cleanMetadata1.getPartitionMetadata().keySet(),
-          cleanMetadata2.getPartitionMetadata().keySet());
+      Assert.assertEquals(cleanMetadata1.getPartitionMetadata().keySet(), cleanMetadata2.getPartitionMetadata().keySet());
+      final HoodieCleanMetadata retriedCleanMetadata = CleanerUtils.getCleanerMetadata(HoodieTableMetaClient.reload(metaClient), completedCleanInstant);
       cleanMetadata1.getPartitionMetadata().keySet().forEach(k -> {
         HoodieCleanPartitionMetadata p1 = cleanMetadata1.getPartitionMetadata().get(k);
-        HoodieCleanPartitionMetadata p2 = cleanMetadata2.getPartitionMetadata().get(k);
+        HoodieCleanPartitionMetadata p2 = retriedCleanMetadata.getPartitionMetadata().get(k);
         Assert.assertEquals(p1.getDeletePathPatterns(), p2.getDeletePathPatterns());
         Assert.assertEquals(p1.getSuccessDeleteFiles(), p2.getFailedDeleteFiles());
         Assert.assertEquals(p1.getPartitionPath(), p2.getPartitionPath());
@@ -636,8 +631,11 @@ public class TestCleaner extends TestHoodieClientBase {
             Collections.singletonList(fileName2)));
     newExpected.put(partition2, new Tuple3<>(deletePathPatterns2, successDeleteFiles2, failedDeleteFiles2));
 
-    HoodieCleanMetadata metadata =
-        CleanerUtils.convertCleanMetadata(metaClient, instantTime, Option.of(0L), Arrays.asList(cleanStat1, cleanStat2));
+    HoodieCleanMetadata metadata = CleanerUtils.convertCleanMetadata(
+        instantTime,
+        Option.of(0L),
+        Arrays.asList(cleanStat1, cleanStat2)
+    );
     metadata.setVersion(CleanerUtils.CLEAN_METADATA_VERSION_1);
 
     // NOw upgrade and check
@@ -896,7 +894,7 @@ public class TestCleaner extends TestHoodieClientBase {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
     table.getActiveTimeline().createNewInstant(new HoodieInstant(State.REQUESTED,
         HoodieTimeline.COMMIT_ACTION, "000"));
     table.getActiveTimeline().transitionRequestedToInflight(
@@ -985,6 +983,25 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
+   * Test clean previous corrupted cleanFiles.
+   */
+  @Test
+  public void testCleanPreviousCorruptedCleanFiles() throws IOException {
+    HoodieWriteConfig config =
+        HoodieWriteConfig.newBuilder()
+            .withPath(basePath).withAssumeDatePartitioning(true)
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
+            .build();
+
+    HoodieTestUtils.createCorruptedPendingCleanFiles(metaClient, getNextInstant());
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    List<HoodieCleanStat> cleanStats = runCleaner(config);
+    assertEquals("Must not clean any files", 0, cleanStats.size());
+  }
+
+  /**
    * Common test method for validating pending compactions.
    *
    * @param config Hoodie Write Config
@@ -1023,7 +1040,7 @@ public class TestCleaner extends TestHoodieClientBase {
         if (j == i && j <= maxNumFileIdsForCompaction) {
           expFileIdToPendingCompaction.put(fileId, compactionInstants[j]);
           metaClient = HoodieTableMetaClient.reload(metaClient);
-          HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+          HoodieTable table = HoodieTable.create(metaClient, config, jsc);
           FileSlice slice =
               table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
                   .filter(fs -> fs.getFileId().equals(fileId)).findFirst().get();
@@ -1065,7 +1082,7 @@ public class TestCleaner extends TestHoodieClientBase {
 
     // Test for safety
     final HoodieTableMetaClient newMetaClient = HoodieTableMetaClient.reload(metaClient);
-    final HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    final HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc);
 
     expFileIdToPendingCompaction.forEach((fileId, value) -> {
       String baseInstantForCompaction = fileIdToLatestInstantBeforeCompaction.get(fileId);

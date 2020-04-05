@@ -20,28 +20,27 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.TestRawTripPayload;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.table.HoodieCopyOnWriteTable;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-//import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -68,7 +67,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
   public void testSchemaEvolutionOnUpdate() throws Exception {
     // Create a bunch of records with a old version of schema
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
-    final HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
+    final HoodieTable<?> table = HoodieTable.create(config, jsc);
 
     final List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -89,7 +88,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
           .add(new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
       HoodieCreateHandle createHandle =
-          new HoodieCreateHandle(config, "100", table, rowChange1.getPartitionPath(), "f1-0", insertRecords.iterator());
+          new HoodieCreateHandle(config, "100", table, rowChange1.getPartitionPath(), "f1-0", insertRecords.iterator(), supplier);
       createHandle.write();
       return createHandle.close();
     }).collect();
@@ -103,7 +102,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     final WriteStatus insertResult = statuses.get(0);
     String fileId = insertResult.getFileId();
 
-    final HoodieCopyOnWriteTable table2 = new HoodieCopyOnWriteTable(config2, jsc);
+    final HoodieTable table2 = HoodieTable.create(config2, jsc);
     Assert.assertEquals(1, jsc.parallelize(Arrays.asList(1)).map(x -> {
       // New content with values for the newly added field
       String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -119,7 +118,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
 
       try {
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config2, "101", table2,
-                updateRecords.iterator(), record1.getPartitionPath(), fileId);
+                updateRecords.iterator(), record1.getPartitionPath(), fileId, supplier);
         Configuration conf = new Configuration();
         AvroReadSupport.setAvroReadSchema(conf, mergeHandle.getWriterSchema());
         List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(conf,

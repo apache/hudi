@@ -24,9 +24,10 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.versioning.clean.CleanMetadataMigrator;
-import org.apache.hudi.common.versioning.clean.CleanV1MigrationHandler;
-import org.apache.hudi.common.versioning.clean.CleanV2MigrationHandler;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanV1MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanV2MigrationHandler;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -38,8 +39,9 @@ public class CleanerUtils {
   public static final Integer CLEAN_METADATA_VERSION_2 = CleanV2MigrationHandler.VERSION;
   public static final Integer LATEST_CLEAN_METADATA_VERSION = CLEAN_METADATA_VERSION_2;
 
-  public static HoodieCleanMetadata convertCleanMetadata(HoodieTableMetaClient metaClient,
-      String startCleanTime, Option<Long> durationInMs, List<HoodieCleanStat> cleanStats) {
+  public static HoodieCleanMetadata convertCleanMetadata(String startCleanTime,
+                                                         Option<Long> durationInMs,
+                                                         List<HoodieCleanStat> cleanStats) {
     Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = new HashMap<>();
     int totalDeleted = 0;
     String earliestCommitToRetain = null;
@@ -69,7 +71,7 @@ public class CleanerUtils {
   public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
     CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    HoodieCleanMetadata cleanMetadata = AvroUtils.deserializeHoodieCleanMetadata(
+    HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
         metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get());
     return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
   }
@@ -83,7 +85,7 @@ public class CleanerUtils {
    */
   public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
-    return AvroUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get(),
+    return TimelineMetadataUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get(),
         HoodieCleanerPlan.class);
   }
 }

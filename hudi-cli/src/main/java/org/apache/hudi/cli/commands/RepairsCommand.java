@@ -22,12 +22,15 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.CleanerUtils;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
@@ -50,6 +53,8 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
  */
 @Component
 public class RepairsCommand implements CommandMarker {
+
+  private static final Logger LOG = Logger.getLogger(RepairsCommand.class);
 
   @CliCommand(value = "repair deduplicate",
       help = "De-duplicate a partition path contains duplicates & produce repaired files to replace with")
@@ -136,5 +141,21 @@ public class RepairsCommand implements CommandMarker {
       rows[ind++] = row;
     }
     return HoodiePrintHelper.print(new String[] {"Property", "Old Value", "New Value"}, rows);
+  }
+
+  @CliCommand(value = "repair corrupted clean files", help = "repair corrupted clean files")
+  public void removeCorruptedPendingCleanAction() {
+
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
+
+    activeTimeline.filterInflightsAndRequested().getInstants().forEach(instant -> {
+      try {
+        CleanerUtils.getCleanerPlan(client, instant);
+      } catch (IOException e) {
+        LOG.warn("try to remove corrupted instant file: " + instant);
+        FSUtils.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+      }
+    });
   }
 }

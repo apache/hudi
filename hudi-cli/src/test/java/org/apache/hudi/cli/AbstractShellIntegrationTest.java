@@ -19,6 +19,7 @@
 package org.apache.hudi.cli;
 
 import org.apache.hudi.common.HoodieClientTestHarness;
+
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;

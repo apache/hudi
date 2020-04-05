@@ -20,21 +20,21 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRollingStat;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.ConsistencyGuardConfig;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
@@ -70,7 +70,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.HoodieTestDataGenerator.NULL_SCHEMA;
 import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.common.model.TimelineLayoutVersion.VERSION_0;
+import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -397,7 +397,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
      * Write 1 (inserts and deletes) Write actual 200 insert records and ignore 100 delete records
      */
     String newCommitTime = "001";
-    List<HoodieRecord> inserts1 = dataGen.generateInserts(newCommitTime, 10);
+    List<HoodieRecord> inserts1 = dataGen.generateInserts(newCommitTime, 100);
 
     // Write 1 (only inserts)
     client.startCommitWithTime(newCommitTime);
@@ -413,7 +413,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals("Must contain " + 10 + " records", 10,
+    assertEquals("Must contain 100 records", 100,
         HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
 
     /**
@@ -436,7 +436,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals("Must contain " + 10 + " records", 10,
+    assertEquals("Must contain 100 records", 100,
         HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
   }
 
@@ -800,7 +800,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-      HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
+      HoodieTable table = HoodieTable.create(metaClient, cfg, jsc);
 
       String instantTime = "000";
       client.startCommitWithTime(instantTime);

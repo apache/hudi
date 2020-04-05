@@ -18,24 +18,27 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import com.beust.jcommander.Parameter;
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 
 import com.beust.jcommander.JCommander;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.utilities.sources.JsonDFSSource;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -109,8 +112,8 @@ public class HoodieMultiTableDeltaStreamer {
       properties.forEach((k,v) -> {
         tableProperties.setProperty(k.toString(), v.toString());
       });
-      final Config cfg = new Config();
-      //copy all the values from config to cfgF
+      final HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
+      //copy all the values from config to cfg
       String targetBasePath = resetTarget(config, database, currentTable);
       Helpers.deepCopyConfigs(config, cfg);
       String overriddenTargetBasePath = tableProperties.getString(Constants.TARGET_BASE_PATH_PROP, "");
@@ -137,7 +140,7 @@ public class HoodieMultiTableDeltaStreamer {
     return Arrays.asList(tablesArray);
   }
 
-  private void populateSchemaProviderProps(Config cfg, TypedProperties typedProperties) {
+  private void populateSchemaProviderProps(HoodieDeltaStreamer.Config cfg, TypedProperties typedProperties) {
     if (cfg.schemaProviderClassName.equals(SchemaRegistryProvider.class.getName())) {
       String schemaRegistryBaseUrl = typedProperties.getString(Constants.SCHEMA_REGISTRY_BASE_URL_PROP);
       String schemaRegistrySuffix = typedProperties.getString(Constants.SCHEMA_REGISTRY_URL_SUFFIX_PROP);
@@ -156,14 +159,12 @@ public class HoodieMultiTableDeltaStreamer {
       return context.getDatabase() + Constants.DELIMITER + context.getTableName();
     }
 
-    static void deepCopyConfigs(Config globalConfig, Config tableConfig) {
+    static void deepCopyConfigs(Config globalConfig, HoodieDeltaStreamer.Config tableConfig) {
       tableConfig.enableHiveSync = globalConfig.enableHiveSync;
       tableConfig.schemaProviderClassName = globalConfig.schemaProviderClassName;
       tableConfig.sourceOrderingField = globalConfig.sourceOrderingField;
       tableConfig.sourceClassName = globalConfig.sourceClassName;
       tableConfig.tableType = globalConfig.tableType;
-      tableConfig.propsFilePath = globalConfig.propsFilePath;
-      tableConfig.basePathPrefix = globalConfig.basePathPrefix;
       tableConfig.targetTableName = globalConfig.targetTableName;
       tableConfig.configFolder = globalConfig.configFolder;
       tableConfig.operation = globalConfig.operation;
@@ -172,11 +173,10 @@ public class HoodieMultiTableDeltaStreamer {
       tableConfig.continuousMode = globalConfig.continuousMode;
       tableConfig.filterDupes = globalConfig.filterDupes;
       tableConfig.payloadClassName = globalConfig.payloadClassName;
-      tableConfig.configs = globalConfig.configs;
       tableConfig.forceDisableCompaction = globalConfig.forceDisableCompaction;
       tableConfig.maxPendingCompactions = globalConfig.maxPendingCompactions;
       tableConfig.minSyncIntervalSeconds = globalConfig.minSyncIntervalSeconds;
-      tableConfig.transformerClassName = globalConfig.transformerClassName;
+      tableConfig.transformerClassNames = globalConfig.transformerClassNames;
       tableConfig.commitOnErrors = globalConfig.commitOnErrors;
       tableConfig.compactSchedulingMinShare = globalConfig.compactSchedulingMinShare;
       tableConfig.compactSchedulingWeight = globalConfig.compactSchedulingWeight;
@@ -199,6 +199,132 @@ public class HoodieMultiTableDeltaStreamer {
     } finally {
       jssc.stop();
     }
+  }
+
+  public static class Config implements Serializable {
+
+    @Parameter(names = {"--base-path-prefix"},
+        description = "base path prefix for multi table support via HoodieMultiTableDeltaStreamer class")
+    public String basePathPrefix;
+
+    // TODO: How to obtain hive configs to register?
+    @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
+    public String targetTableName;
+
+    @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
+    public String tableType;
+
+    @Parameter(names = {"--config-folder"}, description = "Path to folder which contains all the properties file", required = true)
+    public String configFolder;
+
+    @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
+        + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
+        + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
+        + "to individual classes, for supported properties.")
+    public String propsFilePath =
+        "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
+
+    @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
+        + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
+    public List<String> configs = new ArrayList<>();
+
+    @Parameter(names = {"--source-class"},
+        description = "Subclass of org.apache.hudi.utilities.sources to read data. "
+        + "Built-in options: org.apache.hudi.utilities.sources.{JsonDFSSource (default), AvroDFSSource, "
+        + "JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}")
+    public String sourceClassName = JsonDFSSource.class.getName();
+
+    @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
+        + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record")
+    public String sourceOrderingField = "ts";
+
+    @Parameter(names = {"--payload-class"}, description = "subclass of HoodieRecordPayload, that works off "
+        + "a GenericRecord. Implement your own, if you want to do something other than overwriting existing value")
+    public String payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
+
+    @Parameter(names = {"--schemaprovider-class"}, description = "subclass of org.apache.hudi.utilities.schema"
+        + ".SchemaProvider to attach schemas to input & target table data, built in options: "
+        + "org.apache.hudi.utilities.schema.FilebasedSchemaProvider."
+        + "Source (See org.apache.hudi.utilities.sources.Source) implementation can implement their own SchemaProvider."
+        + " For Sources that return Dataset<Row>, the schema is obtained implicitly. "
+        + "However, this CLI option allows overriding the schemaprovider returned by Source.")
+    public String schemaProviderClassName = null;
+
+    @Parameter(names = {"--transformer-class"},
+        description = "A subclass or a list of subclasses of org.apache.hudi.utilities.transform.Transformer"
+        + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
+        + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
+        + "allows a SQL query templated to be passed as a transformation function). "
+        + "Pass a comma-separated list of subclass names to chain the transformations.",
+        converter = HoodieDeltaStreamer.TransformersConverter.class)
+    public List<String> transformerClassNames = null;
+
+    @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
+        + "Default: No limit For e.g: DFS-Source => max bytes to read, Kafka-Source => max events to read")
+    public long sourceLimit = Long.MAX_VALUE;
+
+    @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
+        + "is purely new data/inserts to gain speed)", converter = HoodieDeltaStreamer.OperationConvertor.class)
+    public HoodieDeltaStreamer.Operation operation = HoodieDeltaStreamer.Operation.UPSERT;
+
+    @Parameter(names = {"--filter-dupes"},
+        description = "Should duplicate records from source be dropped/filtered out before insert/bulk-insert")
+    public Boolean filterDupes = false;
+
+    @Parameter(names = {"--enable-hive-sync"}, description = "Enable syncing to hive")
+    public Boolean enableHiveSync = false;
+
+    @Parameter(names = {"--max-pending-compactions"},
+        description = "Maximum number of outstanding inflight/requested compactions. Delta Sync will not happen unless"
+        + "outstanding compactions is less than this number")
+    public Integer maxPendingCompactions = 5;
+
+    @Parameter(names = {"--continuous"}, description = "Delta Streamer runs in continuous mode running"
+        + " source-fetch -> Transform -> Hudi Write in loop")
+    public Boolean continuousMode = false;
+
+    @Parameter(names = {"--min-sync-interval-seconds"},
+        description = "the min sync interval of each sync in continuous mode")
+    public Integer minSyncIntervalSeconds = 0;
+
+    @Parameter(names = {"--spark-master"}, description = "spark master to use.")
+    public String sparkMaster = "local[2]";
+
+    @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written")
+    public Boolean commitOnErrors = false;
+
+    @Parameter(names = {"--delta-sync-scheduling-weight"},
+        description = "Scheduling weight for delta sync as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer deltaSyncSchedulingWeight = 1;
+
+    @Parameter(names = {"--compact-scheduling-weight"}, description = "Scheduling weight for compaction as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer compactSchedulingWeight = 1;
+
+    @Parameter(names = {"--delta-sync-scheduling-minshare"}, description = "Minshare for delta sync as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer deltaSyncSchedulingMinShare = 0;
+
+    @Parameter(names = {"--compact-scheduling-minshare"}, description = "Minshare for compaction as defined in "
+        + "https://spark.apache.org/docs/latest/job-scheduling.html")
+    public Integer compactSchedulingMinShare = 0;
+
+    /**
+     * Compaction is enabled for MoR table by default. This flag disables it
+     */
+    @Parameter(names = {"--disable-compaction"},
+        description = "Compaction is enabled for MoR table by default. This flag disables it ")
+    public Boolean forceDisableCompaction = false;
+
+    /**
+     * Resume Delta Streamer from this checkpoint.
+     */
+    @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
+    public String checkpoint = null;
+
+    @Parameter(names = {"--help", "-h"}, help = true)
+    public Boolean help = false;
   }
 
   /**

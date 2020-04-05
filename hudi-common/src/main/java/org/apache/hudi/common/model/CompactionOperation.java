@@ -19,7 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.Path;

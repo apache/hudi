@@ -57,6 +57,7 @@ import scala.Tuple2;
  */
 public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieReadClient.class);
 
   /**
@@ -95,7 +96,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
     final String basePath = clientConfig.getBasePath();
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
-    this.hoodieTable = HoodieTable.getHoodieTable(metaClient, clientConfig, jsc);
+    this.hoodieTable = HoodieTable.create(metaClient, clientConfig, jsc);
     this.index = HoodieIndex.createIndex(clientConfig, jsc);
     this.sqlContextOpt = Option.empty();
   }

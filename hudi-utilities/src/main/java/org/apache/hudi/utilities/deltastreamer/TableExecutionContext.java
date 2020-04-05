@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 
 import java.util.Objects;
 
@@ -75,11 +75,11 @@ public class TableExecutionContext {
     }
 
     TableExecutionContext that = (TableExecutionContext) o;
-    return Objects.equals(properties, that.properties);
+    return Objects.equals(properties, that.properties) && Objects.equals(database, that.database) && Objects.equals(tableName, that.tableName);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(properties);
+    return Objects.hash(properties, database, tableName);
   }
 }
