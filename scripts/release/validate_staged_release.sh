@@ -97,7 +97,7 @@ cd hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}
 
 ### BEGIN: Binary Files Check
 echo "Checking for binary files in source release"
-numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'text/' | grep -va 'application/xml' | wc -l | sed -e s'/ //g'`
+numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
 
 if [ "$numBinaryFiles" -gt "0" ]; then
   echo -e "There were non-text files in source release. Please check below\n"
@@ -107,11 +107,11 @@ fi
 echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
 ### END: Binary Files Check
 
-### Checking for DISCLAIMER-WIP
-echo "Checking for DISCLAIMERi-WIP"
-disclaimerFile="./DISCLAIMER-WIP"
+### Checking for DISCLAIMER
+echo "Checking for DISCLAIMER"
+disclaimerFile="./DISCLAIMER"
 if [ ! -f "$disclaimerFile" ]; then
-  echo "DISCLAIMER-WIP file missing"
+  echo "DISCLAIMER file missing"
   exit -1
 fi
 echo -e "\t\tDISCLAIMER file exists ? [OK]\n"

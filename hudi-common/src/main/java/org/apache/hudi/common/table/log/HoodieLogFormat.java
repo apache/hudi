@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -121,7 +121,7 @@ public interface HoodieLogFormat {
     // File Id
     private String logFileId;
     // File Commit Time stamp
-    private String commitTime;
+    private String instantTime;
     // version number for this log file. If not specified, then the current version will be
     // computed by inspecting the file system
     private Integer logVersion;
@@ -173,7 +173,7 @@ public interface HoodieLogFormat {
     }
 
     public WriterBuilder overBaseCommit(String baseCommit) {
-      this.commitTime = baseCommit;
+      this.instantTime = baseCommit;
       return this;
     }
 
@@ -195,7 +195,7 @@ public interface HoodieLogFormat {
       if (logFileId == null) {
         throw new IllegalArgumentException("FileID is not specified");
       }
-      if (commitTime == null) {
+      if (instantTime == null) {
         throw new IllegalArgumentException("BaseCommitTime is not specified");
       }
       if (fileExtension == null) {
@@ -212,7 +212,7 @@ public interface HoodieLogFormat {
       if (logVersion == null) {
         LOG.info("Computing the next log version for " + logFileId + " in " + parentPath);
         Option<Pair<Integer, String>> versionAndWriteToken =
-            FSUtils.getLatestLogVersion(fs, parentPath, logFileId, fileExtension, commitTime);
+            FSUtils.getLatestLogVersion(fs, parentPath, logFileId, fileExtension, instantTime);
         if (versionAndWriteToken.isPresent()) {
           logVersion = versionAndWriteToken.get().getKey();
           logWriteToken = versionAndWriteToken.get().getValue();
@@ -233,7 +233,7 @@ public interface HoodieLogFormat {
       }
 
       Path logPath = new Path(parentPath,
-          FSUtils.makeLogFileName(logFileId, fileExtension, commitTime, logVersion, logWriteToken));
+          FSUtils.makeLogFileName(logFileId, fileExtension, instantTime, logVersion, logWriteToken));
       LOG.info("HoodieLogFile on path " + logPath);
       HoodieLogFile logFile = new HoodieLogFile(logPath);
 

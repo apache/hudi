@@ -18,8 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.SyncableFileSystemView;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
 import java.io.IOException;
 

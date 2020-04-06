@@ -18,13 +18,13 @@
 
 package org.apache.hudi.utilities.perf;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -58,6 +58,7 @@ import java.util.stream.IntStream;
 
 public class TimelineServerPerf implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(TimelineServerPerf.class);
   private final Config cfg;
   private transient TimelineService timelineServer;
@@ -114,7 +115,7 @@ public class TimelineServerPerf implements Serializable {
     d2.close();
 
     System.out.println("\n\n\nDumping all File Slices");
-    selected.stream().forEach(p -> fsView.getAllFileSlices(p).forEach(s -> System.out.println("\tMyFileSlice=" + s)));
+    selected.forEach(p -> fsView.getAllFileSlices(p).forEach(s -> System.out.println("\tMyFileSlice=" + s)));
 
     // Waiting for curl queries
     if (!useExternalTimelineServer && cfg.waitForManualQueries) {
@@ -131,17 +132,16 @@ public class TimelineServerPerf implements Serializable {
 
   public List<PerfStats> runLookups(JavaSparkContext jsc, List<String> partitionPaths, SyncableFileSystemView fsView,
       int numIterations, int concurrency) {
-    List<PerfStats> perfStats = jsc.parallelize(partitionPaths, cfg.numExecutors).flatMap(p -> {
+    return jsc.parallelize(partitionPaths, cfg.numExecutors).flatMap(p -> {
       ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(100);
       final List<PerfStats> result = new ArrayList<>();
       final List<ScheduledFuture<PerfStats>> futures = new ArrayList<>();
       List<FileSlice> slices = fsView.getLatestFileSlices(p).collect(Collectors.toList());
       String fileId = slices.isEmpty() ? "dummyId"
           : slices.get(new Random(Double.doubleToLongBits(Math.random())).nextInt(slices.size())).getFileId();
-      IntStream.range(0, concurrency).forEach(i -> {
-        futures.add(executor.schedule(() -> runOneRound(fsView, p, fileId, i, numIterations), 0, TimeUnit.NANOSECONDS));
-      });
-      futures.stream().forEach(x -> {
+      IntStream.range(0, concurrency).forEach(i -> futures.add(executor.schedule(() -> runOneRound(fsView, p, fileId,
+              i, numIterations), 0, TimeUnit.NANOSECONDS)));
+      futures.forEach(x -> {
         try {
           result.add(x.get());
         } catch (InterruptedException | ExecutionException e) {
@@ -149,12 +149,9 @@ public class TimelineServerPerf implements Serializable {
         }
       });
       System.out.println("SLICES are=");
-      slices.stream().forEach(s -> {
-        System.out.println("\t\tFileSlice=" + s);
-      });
+      slices.forEach(s -> System.out.println("\t\tFileSlice=" + s));
       return result.iterator();
     }).collect();
-    return perfStats;
   }
 
   private static PerfStats runOneRound(SyncableFileSystemView fsView, String partition, String fileId, int id,
@@ -194,7 +191,7 @@ public class TimelineServerPerf implements Serializable {
     }
 
     public void dump(List<PerfStats> stats) {
-      stats.stream().forEach(x -> {
+      stats.forEach(x -> {
         String row = String.format("%s,%d,%d,%d,%f,%f,%f,%f\n", x.partition, x.id, x.minTime, x.maxTime, x.meanTime,
             x.medianTime, x.p75, x.p95);
         System.out.println(row);
@@ -260,7 +257,7 @@ public class TimelineServerPerf implements Serializable {
     @Parameter(names = {"--num-iterations", "-i"}, description = "Number of iterations for each partitions")
     public Integer numIterations = 10;
 
-    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master")
     public String sparkMaster = "local[2]";
 
     @Parameter(names = {"--server-port", "-p"}, description = " Server Port")

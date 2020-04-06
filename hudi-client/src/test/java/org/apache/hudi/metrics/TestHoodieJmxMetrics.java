@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.Test;
@@ -31,22 +30,31 @@ import static org.mockito.Mockito.when;
 /**
  * Test for the Jmx metrics report.
  */
-public class TestHoodieJmxMetrics extends TestHoodieMetrics {
+public class TestHoodieJmxMetrics {
 
-  @Override
-  public void start() {
-    HoodieWriteConfig config = mock(HoodieWriteConfig.class);
-    when(config.isMetricsOn()).thenReturn(true);
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
-    when(config.getJmxHost()).thenReturn(HoodieMetricsConfig.DEFAULT_JMX_HOST);
-    when(config.getJmxPort()).thenReturn(HoodieMetricsConfig.DEFAULT_JMX_PORT);
-    new HoodieMetrics(config, "raw_table");
-  }
+  HoodieWriteConfig config = mock(HoodieWriteConfig.class);
 
   @Test
   public void testRegisterGauge() {
-    registerGauge("jmx_metric", 123L);
+    when(config.isMetricsOn()).thenReturn(true);
+    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
+    when(config.getJmxHost()).thenReturn("localhost");
+    when(config.getJmxPort()).thenReturn("9889");
+    new HoodieMetrics(config, "raw_table");
+    registerGauge("jmx_metric1", 123L);
     assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
-        .get("jmx_metric").getValue().toString());
+        .get("jmx_metric1").getValue().toString());
+  }
+
+  @Test
+  public void testRegisterGaugeByRangerPort() {
+    when(config.isMetricsOn()).thenReturn(true);
+    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
+    when(config.getJmxHost()).thenReturn("localhost");
+    when(config.getJmxPort()).thenReturn("1000-5000");
+    new HoodieMetrics(config, "raw_table");
+    registerGauge("jmx_metric2", 123L);
+    assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
+        .get("jmx_metric2").getValue().toString());
   }
 }

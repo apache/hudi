@@ -55,6 +55,11 @@ Prerequisites for building Apache Hudi:
 # Checkout code and build
 git clone https://github.com/apache/incubator-hudi.git && cd incubator-hudi
 mvn clean package -DskipTests -DskipITs
+
+# Start command
+spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
+  --jars `ls packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar` \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
 To build the Javadoc for all Java and Scala classes:
@@ -63,6 +68,30 @@ To build the Javadoc for all Java and Scala classes:
 mvn clean javadoc:aggregate -Pjavadocs
 ```
 
+### Build with Scala 2.12
+
+The default Scala version supported is 2.11. To build for Scala 2.12 version, build using `scala-2.12` profile
+
+```
+mvn clean package -DskipTests -DskipITs -Dscala-2.12
+```
+
+### Build without spark-avro module
+
+The default hudi-jar bundles spark-avro module. To build without spark-avro module, build using `spark-shade-unbundle-avro` profile
+
+```
+# Checkout code and build
+git clone https://github.com/apache/incubator-hudi.git && cd incubator-hudi
+mvn clean package -DskipTests -DskipITs -Pspark-shade-unbundle-avro
+
+# Start command
+spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
+  --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+  --jars `ls packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar` \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+```
+
 ## Quickstart
 
-Please visit [https://hudi.apache.org/quickstart.html](https://hudi.apache.org/quickstart.html) to quickly explore Hudi's capabilities using spark-shell. 
+Please visit [https://hudi.apache.org/docs/quick-start-guide.html](https://hudi.apache.org/docs/quick-start-guide.html) to quickly explore Hudi's capabilities using spark-shell. 

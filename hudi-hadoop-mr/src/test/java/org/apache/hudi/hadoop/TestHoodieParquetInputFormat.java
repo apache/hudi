@@ -18,14 +18,11 @@
 
 package org.apache.hudi.hadoop;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.model.HoodieWriteStat;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.io.ArrayWritable;
@@ -35,14 +32,19 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.util.FSUtils;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class TestHoodieParquetInputFormat {
 
@@ -122,7 +124,7 @@ public class TestHoodieParquetInputFormat {
       throws IOException {
     List<HoodieWriteStat> writeStats = HoodieTestUtils.generateFakeHoodieWriteStat(1);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    writeStats.stream().forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
+    writeStats.forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
     File file = new File(basePath.getRoot().toString() + "/.hoodie/", commitNumber + ".commit");
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
@@ -221,8 +223,8 @@ public class TestHoodieParquetInputFormat {
     String defaultmode = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, "db3.first_trips");
     conf.set(defaultmode, HoodieHiveUtil.DEFAULT_SCAN_MODE);
     List<String> actualincrTables = HoodieHiveUtil.getIncrementalTableNames(Job.getInstance(conf));
-    for (int i = 0; i < expectedincrTables.length; i++) {
-      assertTrue(actualincrTables.contains(expectedincrTables[i]));
+    for (String expectedincrTable : expectedincrTables) {
+      assertTrue(actualincrTables.contains(expectedincrTable));
     }
   }
 

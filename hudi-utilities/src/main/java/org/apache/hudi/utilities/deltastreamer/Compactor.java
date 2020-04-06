@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -37,6 +37,7 @@ import java.io.Serializable;
  */
 public class Compactor implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(Compactor.class);
 
   private transient HoodieWriteClient compactionClient;
@@ -50,7 +51,7 @@ public class Compactor implements Serializable {
   public void compact(HoodieInstant instant) throws IOException {
     LOG.info("Compactor executing compaction " + instant);
     JavaRDD<WriteStatus> res = compactionClient.compact(instant.getTimestamp());
-    long numWriteErrors = res.collect().stream().filter(r -> r.hasErrors()).count();
+    long numWriteErrors = res.collect().stream().filter(WriteStatus::hasErrors).count();
     if (numWriteErrors != 0) {
       // We treat even a single error in compaction as fatal
       LOG.error("Compaction for instant (" + instant + ") failed with write errors. Errors :" + numWriteErrors);

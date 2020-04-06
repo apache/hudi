@@ -22,6 +22,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.DataSource
+import org.apache.spark.sql.execution.datasources.SaveIntoDataSourceCommand
 import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
@@ -63,7 +64,7 @@ class DefaultSource extends RelationProvider
       sqlContext.sparkContext.hadoopConfiguration.setClass(
         "mapreduce.input.pathFilter.class",
         classOf[HoodieROTablePathFilter],
-        classOf[org.apache.hadoop.fs.PathFilter]);
+        classOf[org.apache.hadoop.fs.PathFilter])
 
       log.info("Constructing hoodie (as parquet) data source with options :" + parameters)
       log.warn("Snapshot view not supported yet via data source, for MERGE_ON_READ tables. " +
@@ -82,6 +83,22 @@ class DefaultSource extends RelationProvider
     }
   }
 
+  /**
+    * This DataSource API is used for writing the DataFrame at the destination. For now, we are returning a dummy
+    * relation here because Spark does not really make use of the relation returned, and just returns an empty
+    * dataset at [[SaveIntoDataSourceCommand.run()]]. This saves us the cost of creating and returning a parquet
+    * relation here.
+    *
+    * TODO: Revisit to return a concrete relation here when we support CREATE TABLE AS for Hudi with DataSource API.
+    *       That is the only case where Spark seems to actually need a relation to be returned here
+    *       [[DataSource.writeAndRead()]]
+    *
+    * @param sqlContext Spark SQL Context
+    * @param mode Mode for saving the DataFrame at the destination
+    * @param optParams Parameters passed as part of the DataFrame write operation
+    * @param df Spark DataFrame to be written
+    * @return Spark Relation
+    */
   override def createRelation(sqlContext: SQLContext,
                               mode: SaveMode,
                               optParams: Map[String, String],
@@ -89,7 +106,8 @@ class DefaultSource extends RelationProvider
 
     val parameters = HoodieSparkSqlWriter.parametersWithWriteDefaults(optParams)
     HoodieSparkSqlWriter.write(sqlContext, mode, parameters, df)
-    createRelation(sqlContext, parameters, df.schema)
+
+    new HudiEmptyRelation(sqlContext, df.schema)
   }
 
   override def createSink(sqlContext: SQLContext,

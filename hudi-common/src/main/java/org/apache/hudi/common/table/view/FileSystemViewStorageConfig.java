@@ -18,9 +18,8 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hudi.config.DefaultHoodieConfig;
-
-import com.google.common.base.Preconditions;
+import org.apache.hudi.common.config.DefaultHoodieConfig;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.File;
 import java.io.FileReader;
@@ -69,7 +68,7 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
   }
 
   public boolean isIncrementalTimelineSyncEnabled() {
-    return Boolean.valueOf(props.getProperty(FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE));
+    return Boolean.parseBoolean(props.getProperty(FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE));
   }
 
   public String getRemoteViewServerHost() {
@@ -87,10 +86,8 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
 
   public long getMaxMemoryForPendingCompaction() {
     long totalMemory = Long.parseLong(props.getProperty(FILESYSTEM_VIEW_SPILLABLE_MEM));
-    long reservedForPendingComaction =
-        new Double(totalMemory * Double.parseDouble(props.getProperty(FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION)))
-            .longValue();
-    return reservedForPendingComaction;
+    return new Double(totalMemory * Double.parseDouble(props.getProperty(FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION)))
+        .longValue();
   }
 
   public String getBaseStoreDir() {
@@ -113,12 +110,9 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
     private final Properties props = new Properties();
 
     public Builder fromFile(File propertiesFile) throws IOException {
-      FileReader reader = new FileReader(propertiesFile);
-      try {
+      try (FileReader reader = new FileReader(propertiesFile)) {
         props.load(reader);
         return this;
-      } finally {
-        reader.close();
       }
     }
 
@@ -197,7 +191,7 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
       // Validations
       FileSystemViewStorageType.valueOf(props.getProperty(FILESYSTEM_VIEW_STORAGE_TYPE));
       FileSystemViewStorageType.valueOf(props.getProperty(FILESYSTEM_SECONDARY_VIEW_STORAGE_TYPE));
-      Preconditions.checkArgument(Integer.parseInt(props.getProperty(FILESYSTEM_VIEW_REMOTE_PORT)) > 0);
+      ValidationUtils.checkArgument(Integer.parseInt(props.getProperty(FILESYSTEM_VIEW_REMOTE_PORT)) > 0);
       return new FileSystemViewStorageConfig(props);
     }
   }

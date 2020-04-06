@@ -27,7 +27,6 @@ import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{Fixed, Record}
 import org.apache.avro.generic.{GenericData, GenericFixed, GenericRecord}
-import org.apache.hudi.AvroConversionUtils.getNewRecordNamespace
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.avro.{IncompatibleSchemaException, SchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.GenericRow
@@ -127,7 +126,7 @@ object AvroConversionHelper {
                   new Timestamp(item.asInstanceOf[Long])
                 case other =>
                   throw new IncompatibleSchemaException(
-                    s"Cannot convert Avro logical type ${other} to Catalyst Timestamp type.")
+                    s"Cannot convert Avro logical type $other to Catalyst Timestamp type.")
               }
             }
         case (struct: StructType, RECORD) =>
@@ -215,7 +214,7 @@ object AvroConversionHelper {
               createConverter(Schema.createUnion(remainingUnionTypes.asJava), sqlType, path)
             }
           } else avroSchema.getTypes.asScala.map(_.getType) match {
-            case Seq(t1) => createConverter(avroSchema.getTypes.get(0), sqlType, path)
+            case Seq(_) => createConverter(avroSchema.getTypes.get(0), sqlType, path)
             case Seq(a, b) if Set(a, b) == Set(INT, LONG) && sqlType == LongType =>
               (item: AnyRef) => {
                 item match {
@@ -286,7 +285,7 @@ object AvroConversionHelper {
       case ShortType => (item: Any) =>
         if (item == null) null else item.asInstanceOf[Short].intValue
       case dec: DecimalType => (item: Any) =>
-        Option(item).map { i =>
+        Option(item).map { _ =>
           val bigDecimalValue = item.asInstanceOf[java.math.BigDecimal]
           val decimalConversions = new DecimalConversion()
           decimalConversions.toFixed(bigDecimalValue, avroSchema.getField(structName).schema().getTypes.get(0),
@@ -303,7 +302,7 @@ object AvroConversionHelper {
           avroSchema,
           elementType,
           structName,
-          getNewRecordNamespace(elementType, recordNamespace, structName))
+          recordNamespace)
         (item: Any) => {
           if (item == null) {
             null
@@ -324,7 +323,7 @@ object AvroConversionHelper {
           avroSchema,
           valueType,
           structName,
-          getNewRecordNamespace(valueType, recordNamespace, structName))
+          recordNamespace)
         (item: Any) => {
           if (item == null) {
             null
@@ -338,12 +337,13 @@ object AvroConversionHelper {
         }
       case structType: StructType =>
         val schema: Schema = SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
+        val childNameSpace = if (recordNamespace != "") s"$recordNamespace.$structName" else structName
         val fieldConverters = structType.fields.map(field =>
           createConverterToAvro(
             avroSchema,
             field.dataType,
             field.name,
-            getNewRecordNamespace(field.dataType, recordNamespace, structName)))
+            childNameSpace))
         (item: Any) => {
           if (item == null) {
             null

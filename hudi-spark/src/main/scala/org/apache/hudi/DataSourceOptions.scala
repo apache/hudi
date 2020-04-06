@@ -102,7 +102,14 @@ object DataSourceReadOptions {
     * This option allows setting filters directly on Hoodie Source
     */
   val PUSH_DOWN_INCR_FILTERS_OPT_KEY = "hoodie.datasource.read.incr.filters"
-  val DEFAULTPUSH_DOWN_FILTERS_OPT_VAL = ""
+  val DEFAULT_PUSH_DOWN_FILTERS_OPT_VAL = ""
+
+  /**
+   * For the use-cases like users only want to incremental pull from certain partitions instead of the full table.
+   * This option allows using glob pattern to directly filter on path.
+   */
+  val INCR_PATH_GLOB_OPT_KEY = "hoodie.datasource.read.incr.path.glob"
+  val DEFAULT_INCR_PATH_GLOB_OPT_VAL = ""
 }
 
 /**

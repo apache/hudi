@@ -18,10 +18,9 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hudi.common.SerializableConfiguration;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.SyncableFileSystemView;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Functions.Function2;
 
 import org.apache.log4j.LogManager;
@@ -95,7 +94,7 @@ public class FileSystemViewManager {
    * Closes all views opened.
    */
   public void close() {
-    this.globalViewMap.values().stream().forEach(v -> v.close());
+    this.globalViewMap.values().forEach(SyncableFileSystemView::close);
     this.globalViewMap.clear();
   }
 
@@ -196,7 +195,7 @@ public class FileSystemViewManager {
         return new FileSystemViewManager(conf, config, (basePath, viewConfig) -> {
           RemoteHoodieTableFileSystemView remoteFileSystemView =
               createRemoteFileSystemView(conf, viewConfig, new HoodieTableMetaClient(conf.newCopy(), basePath));
-          SyncableFileSystemView secondaryView = null;
+          SyncableFileSystemView secondaryView;
           switch (viewConfig.getSecondaryStorageType()) {
             case MEMORY:
               secondaryView = createInMemoryFileSystemView(conf, viewConfig, basePath);

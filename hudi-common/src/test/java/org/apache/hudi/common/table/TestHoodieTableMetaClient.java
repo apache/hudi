@@ -21,20 +21,14 @@ package org.apache.hudi.common.table;
 import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 
-import com.google.common.collect.Lists;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IOUtils;
-import org.apache.hadoop.io.SequenceFile;
-import org.apache.hadoop.io.Text;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -100,32 +94,4 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertArrayEquals("Commit value should be \"test-detail\"", "test-detail".getBytes(),
         activeCommitTimeline.getInstantDetails(completedInstant).get());
   }
-
-  @Test
-  public void checkArchiveCommitTimeline() throws IOException {
-    Path archiveLogPath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
-    SequenceFile.Writer writer =
-        SequenceFile.createWriter(metaClient.getHadoopConf(), SequenceFile.Writer.file(archiveLogPath),
-            SequenceFile.Writer.keyClass(Text.class), SequenceFile.Writer.valueClass(Text.class));
-
-    writer.append(new Text("1"), new Text("data1"));
-    writer.append(new Text("2"), new Text("data2"));
-    writer.append(new Text("3"), new Text("data3"));
-
-    IOUtils.closeStream(writer);
-
-    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
-
-    HoodieInstant instant1 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "1");
-    HoodieInstant instant2 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "2");
-    HoodieInstant instant3 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "3");
-
-    assertEquals(Lists.newArrayList(instant1, instant2, instant3),
-        archivedTimeline.getInstants().collect(Collectors.toList()));
-
-    assertArrayEquals(new Text("data1").getBytes(), archivedTimeline.getInstantDetails(instant1).get());
-    assertArrayEquals(new Text("data2").getBytes(), archivedTimeline.getInstantDetails(instant2).get());
-    assertArrayEquals(new Text("data3").getBytes(), archivedTimeline.getInstantDetails(instant3).get());
-  }
-
 }

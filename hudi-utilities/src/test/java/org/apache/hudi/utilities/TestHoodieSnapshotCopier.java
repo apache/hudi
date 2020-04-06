@@ -20,8 +20,8 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.util.FSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -41,7 +41,7 @@ import static org.junit.Assert.assertTrue;
 
 public class TestHoodieSnapshotCopier extends HoodieCommonTestHarness {
 
-  private static String TEST_WRITE_TOKEN = "1-0-1";
+  private static final String TEST_WRITE_TOKEN = "1-0-1";
 
   private String rootPath = null;
   private String basePath = null;

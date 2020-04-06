@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -50,7 +50,7 @@ public class KafkaOffsetGen {
   public static class CheckpointUtils {
 
     /**
-     * Reconstruct checkpoint from string.
+     * Reconstruct checkpoint from timeline.
      */
     public static HashMap<TopicPartition, Long> strToOffsets(String checkpointStr) {
       HashMap<TopicPartition, Long> offsetMap = new HashMap<>();
@@ -94,8 +94,7 @@ public class KafkaOffsetGen {
 
       // Create initial offset ranges for each 'to' partition, with from = to offsets.
       OffsetRange[] ranges = new OffsetRange[toOffsetMap.size()];
-      toOffsetMap.entrySet().stream().map(e -> {
-        TopicPartition tp = e.getKey();
+      toOffsetMap.keySet().stream().map(tp -> {
         long fromOffset = fromOffsetMap.getOrDefault(tp, 0L);
         return OffsetRange.create(tp, fromOffset, fromOffset);
       }).sorted(byPartition).collect(Collectors.toList()).toArray(ranges);
@@ -172,33 +171,35 @@ public class KafkaOffsetGen {
   public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit) {
 
     // Obtain current metadata for the topic
-    KafkaConsumer consumer = new KafkaConsumer(kafkaParams);
-    List<PartitionInfo> partitionInfoList;
-    partitionInfoList = consumer.partitionsFor(topicName);
-    Set<TopicPartition> topicPartitions = partitionInfoList.stream()
-            .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
-
-    // Determine the offset ranges to read from
     Map<TopicPartition, Long> fromOffsets;
-    if (lastCheckpointStr.isPresent()) {
-      fromOffsets = checkupValidOffsets(consumer, lastCheckpointStr, topicPartitions);
-    } else {
-      KafkaResetOffsetStrategies autoResetValue = KafkaResetOffsetStrategies
-              .valueOf(props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
-      switch (autoResetValue) {
-        case EARLIEST:
-          fromOffsets = consumer.beginningOffsets(topicPartitions);
-          break;
-        case LATEST:
-          fromOffsets = consumer.endOffsets(topicPartitions);
-          break;
-        default:
-          throw new HoodieNotSupportedException("Auto reset value must be one of 'smallest' or 'largest' ");
-      }
-    }
+    Map<TopicPartition, Long> toOffsets;
+    try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
+      List<PartitionInfo> partitionInfoList;
+      partitionInfoList = consumer.partitionsFor(topicName);
+      Set<TopicPartition> topicPartitions = partitionInfoList.stream()
+              .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
-    // Obtain the latest offsets.
-    Map<TopicPartition, Long> toOffsets = consumer.endOffsets(topicPartitions);
+      // Determine the offset ranges to read from
+      if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty()) {
+        fromOffsets = checkupValidOffsets(consumer, lastCheckpointStr, topicPartitions);
+      } else {
+        KafkaResetOffsetStrategies autoResetValue = KafkaResetOffsetStrategies
+                .valueOf(props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
+        switch (autoResetValue) {
+          case EARLIEST:
+            fromOffsets = consumer.beginningOffsets(topicPartitions);
+            break;
+          case LATEST:
+            fromOffsets = consumer.endOffsets(topicPartitions);
+            break;
+          default:
+            throw new HoodieNotSupportedException("Auto reset value must be one of 'smallest' or 'largest' ");
+        }
+      }
+
+      // Obtain the latest offsets.
+      toOffsets = consumer.endOffsets(topicPartitions);
+    }
 
     // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
     long maxEventsToReadFromKafka = props.getLong(Config.MAX_EVENTS_FROM_KAFKA_SOURCE_PROP,
@@ -206,9 +207,7 @@ public class KafkaOffsetGen {
     maxEventsToReadFromKafka = (maxEventsToReadFromKafka == Long.MAX_VALUE || maxEventsToReadFromKafka == Integer.MAX_VALUE)
         ? Config.maxEventsFromKafkaSource : maxEventsToReadFromKafka;
     long numEvents = sourceLimit == Long.MAX_VALUE ? maxEventsToReadFromKafka : sourceLimit;
-    OffsetRange[] offsetRanges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
-
-    return offsetRanges;
+    return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
   }
 
   // check up checkpoint offsets is valid or not, if true, return checkpoint offsets,

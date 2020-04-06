@@ -19,11 +19,11 @@
 package org.apache.hudi.utilities.keygen;
 
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 
 import org.apache.avro.generic.GenericRecord;
@@ -103,7 +103,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
         unixTime = ((Float) partitionVal).longValue();
       } else if (partitionVal instanceof Long) {
         unixTime = (Long) partitionVal;
-      } else if (partitionVal instanceof String) {
+      } else if (partitionVal instanceof CharSequence) {
         unixTime = inputDateFormat.parse(partitionVal.toString()).getTime() / 1000;
       } else {
         throw new HoodieNotSupportedException(

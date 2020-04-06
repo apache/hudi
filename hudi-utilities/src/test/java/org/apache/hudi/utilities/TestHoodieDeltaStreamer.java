@@ -20,28 +20,29 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.DFSPropertiesConfiguration;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Operation;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.CsvDFSSource;
 import org.apache.hudi.utilities.sources.DistributedTestDataSource;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -60,6 +61,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -76,6 +78,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
@@ -98,23 +101,28 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final Random RANDOM = new Random();
   private static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
   private static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
+  private static final String PROPS_FILENAME_TEST_CSV = "test-csv-dfs-source.properties";
   private static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
-  private static final String PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
+  private static String PARQUET_SOURCE_ROOT;
   private static final int PARQUET_NUM_RECORDS = 5;
+  private static final int CSV_NUM_RECORDS = 3;
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
 
-  private static int parquetTestNum = 1;
+  private static int testNum = 1;
 
   @BeforeClass
   public static void initClass() throws Exception {
     UtilitiesTestBase.initClass(true);
+    PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
 
     // prepare the configs.
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/base.properties", dfs, dfsBasePath + "/base.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/sql-transformer.properties", dfs,
         dfsBasePath + "/sql-transformer.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source.avsc", dfs, dfsBasePath + "/source.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source-flattened.avsc", dfs, dfsBasePath + "/source-flattened.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target.avsc", dfs, dfsBasePath + "/target.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target-flattened.avsc", dfs, dfsBasePath + "/target-flattened.avsc");
 
     TypedProperties props = new TypedProperties();
     props.setProperty("include", "sql-transformer.properties");
@@ -123,6 +131,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
     props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
+
     // Hive Configs
     props.setProperty(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), "jdbc:hive2://127.0.0.1:9999/");
     props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "testdb1");
@@ -175,42 +184,42 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   static class TestHelpers {
 
     static HoodieDeltaStreamer.Config makeDropAllConfig(String basePath, Operation op) {
-      return makeConfig(basePath, op, DropAllTransformer.class.getName());
+      return makeConfig(basePath, op, Collections.singletonList(DropAllTransformer.class.getName()));
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op) {
-      return makeConfig(basePath, op, TripsWithDistanceTransformer.class.getName());
+      return makeConfig(basePath, op, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
     }
 
-    static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, String transformerClassName) {
-      return makeConfig(basePath, op, transformerClassName, PROPS_FILENAME_TEST_SOURCE, false);
+    static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, List<String> transformerClassNames) {
+      return makeConfig(basePath, op, transformerClassNames, PROPS_FILENAME_TEST_SOURCE, false);
     }
 
-    static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, String transformerClassName,
-                                                 String propsFilename, boolean enableHiveSync) {
-      return makeConfig(basePath, op, transformerClassName, propsFilename, enableHiveSync, true,
-        false, null, null);
+    static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, List<String> transformerClassNames,
+        String propsFilename, boolean enableHiveSync) {
+      return makeConfig(basePath, op, transformerClassNames, propsFilename, enableHiveSync, true,
+          false, null, null);
     }
 
-    static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, String transformerClassName,
+    static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, List<String> transformerClassNames,
         String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass, boolean updatePayloadClass,
-                                                 String payloadClassName, String tableType) {
-      return makeConfig(basePath, op, TestDataSource.class.getName(), transformerClassName, propsFilename, enableHiveSync,
-          useSchemaProviderClass, 1000, updatePayloadClass, payloadClassName, tableType);
+        String payloadClassName, String tableType) {
+      return makeConfig(basePath, op, TestDataSource.class.getName(), transformerClassNames, propsFilename, enableHiveSync,
+          useSchemaProviderClass, 1000, updatePayloadClass, payloadClassName, tableType, "timestamp");
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, String sourceClassName,
-        String transformerClassName, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
-        int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType) {
+        List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
+        int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField) {
       HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
       cfg.targetBasePath = basePath;
       cfg.targetTableName = "hoodie_trips";
       cfg.tableType = tableType == null ? "COPY_ON_WRITE" : tableType;
       cfg.sourceClassName = sourceClassName;
-      cfg.transformerClassName = transformerClassName;
+      cfg.transformerClassNames = transformerClassNames;
       cfg.operation = op;
       cfg.enableHiveSync = enableHiveSync;
-      cfg.sourceOrderingField = "timestamp";
+      cfg.sourceOrderingField = sourceOrderingField;
       cfg.propsFilePath = dfsBasePath + "/" + propsFilename;
       cfg.sourceLimit = sourceLimit;
       if (updatePayloadClass) {
@@ -331,7 +340,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       String tableBasePath = dfsBasePath + "/test_table";
       HoodieDeltaStreamer deltaStreamer =
           new HoodieDeltaStreamer(TestHelpers.makeConfig(tableBasePath, Operation.BULK_INSERT,
-              TripsWithDistanceTransformer.class.getName(), PROPS_FILENAME_TEST_INVALID, false), jsc);
+              Collections.singletonList(TripsWithDistanceTransformer.class.getName()), PROPS_FILENAME_TEST_INVALID, false), jsc);
       deltaStreamer.sync();
       fail("Should error out when setting the key generator class property to an invalid value");
     } catch (IOException e) {
@@ -421,8 +430,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       } else {
         TestHelpers.assertAtleastNCompactionCommits(5, tableBasePath, dfs);
       }
-      TestHelpers.assertRecordCount(totalRecords + 200, tableBasePath + "/*/*.parquet", sqlContext);
-      TestHelpers.assertDistanceCount(totalRecords + 200, tableBasePath + "/*/*.parquet", sqlContext);
+      TestHelpers.assertRecordCount(totalRecords, tableBasePath + "/*/*.parquet", sqlContext);
+      TestHelpers.assertDistanceCount(totalRecords, tableBasePath + "/*/*.parquet", sqlContext);
       return true;
     }, 180);
     ds.shutdownGracefully();
@@ -443,7 +452,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     // Initial bulk insert to ingest to first hudi table
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.BULK_INSERT,
-        SqlQueryBasedTransformer.class.getName(), PROPS_FILENAME_TEST_SOURCE, true);
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true);
     new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf()).sync();
     TestHelpers.assertRecordCount(1000, tableBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertDistanceCount(1000, tableBasePath + "/*/*.parquet", sqlContext);
@@ -516,7 +525,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   public void testNullSchemaProvider() throws Exception {
     String tableBasePath = dfsBasePath + "/test_table";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.BULK_INSERT,
-        SqlQueryBasedTransformer.class.getName(), PROPS_FILENAME_TEST_SOURCE, true,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true,
         false, false, null, null);
     try {
       new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf()).sync();
@@ -526,20 +535,20 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       assertTrue(e.getMessage().contains("Please provide a valid schema provider class!"));
     }
   }
-
+  
   @Test
   public void testPayloadClassUpdate() throws Exception {
     String dataSetBasePath = dfsBasePath + "/test_dataset_mor";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, Operation.BULK_INSERT,
-        SqlQueryBasedTransformer.class.getName(), PROPS_FILENAME_TEST_SOURCE, true,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true,
         true, false, null, "MERGE_ON_READ");
     new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf()).sync();
     TestHelpers.assertRecordCount(1000, dataSetBasePath + "/*/*.parquet", sqlContext);
 
     //now create one more deltaStreamer instance and update payload class
     cfg = TestHelpers.makeConfig(dataSetBasePath, Operation.BULK_INSERT,
-      SqlQueryBasedTransformer.class.getName(), PROPS_FILENAME_TEST_SOURCE, true,
-      true, true, DummyAvroPayload.class.getName(), "MERGE_ON_READ");
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true,
+        true, true, DummyAvroPayload.class.getName(), "MERGE_ON_READ");
     new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf());
 
     //now assert that hoodie.properties file now has updated payload class name
@@ -557,14 +566,14 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   public void testPayloadClassUpdateWithCOWTable() throws Exception {
     String dataSetBasePath = dfsBasePath + "/test_dataset_cow";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, Operation.BULK_INSERT,
-        SqlQueryBasedTransformer.class.getName(), PROPS_FILENAME_TEST_SOURCE, true,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true,
         true, false, null, null);
     new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf()).sync();
     TestHelpers.assertRecordCount(1000, dataSetBasePath + "/*/*.parquet", sqlContext);
 
     //now create one more deltaStreamer instance and update payload class
     cfg = TestHelpers.makeConfig(dataSetBasePath, Operation.BULK_INSERT,
-        SqlQueryBasedTransformer.class.getName(), PROPS_FILENAME_TEST_SOURCE, true,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true,
         true, true, DummyAvroPayload.class.getName(), null);
     new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf());
 
@@ -652,7 +661,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     if (useSchemaProvider) {
       parquetProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
       if (hasTransformer) {
-        parquetProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/target.avsc");
+        parquetProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
       }
     }
     parquetProps.setProperty("hoodie.deltastreamer.source.dfs.root", PARQUET_SOURCE_ROOT);
@@ -660,16 +669,16 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.savePropsToDFS(parquetProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_PARQUET);
   }
 
-  private void testParquetDFSSource(boolean useSchemaProvider, String transformerClassName) throws Exception {
-    prepareParquetDFSSource(useSchemaProvider, transformerClassName != null);
-    String tableBasePath = dfsBasePath + "/test_parquet_table" + parquetTestNum;
+  private void testParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
+    prepareParquetDFSSource(useSchemaProvider, transformerClassNames != null);
+    String tableBasePath = dfsBasePath + "/test_parquet_table" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
         TestHelpers.makeConfig(tableBasePath, Operation.INSERT, ParquetDFSSource.class.getName(),
-            transformerClassName, PROPS_FILENAME_TEST_PARQUET, false,
-            useSchemaProvider, 100000, false, null, null), jsc);
+            transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
+            useSchemaProvider, 100000, false, null, null, "timestamp"), jsc);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
-    parquetTestNum++;
+    testNum++;
   }
 
   @Test
@@ -679,7 +688,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
   @Test
   public void testParquetDFSSourceWithoutSchemaProviderAndTransformer() throws Exception {
-    testParquetDFSSource(false, TripsWithDistanceTransformer.class.getName());
+    testParquetDFSSource(false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
   @Test
@@ -689,7 +698,147 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
   @Test
   public void testParquetDFSSourceWithSchemaFilesAndTransformer() throws Exception {
-    testParquetDFSSource(true, TripsWithDistanceTransformer.class.getName());
+    testParquetDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
+  }
+
+  private void prepareCsvDFSSource(
+      boolean hasHeader, char sep, boolean useSchemaProvider, boolean hasTransformer) throws IOException {
+    String sourceRoot = dfsBasePath + "/csvFiles";
+    String recordKeyField = (hasHeader || useSchemaProvider) ? "_row_key" : "_c0";
+
+    // Properties used for testing delta-streamer with CSV source
+    TypedProperties csvProps = new TypedProperties();
+    csvProps.setProperty("include", "base.properties");
+    csvProps.setProperty("hoodie.datasource.write.recordkey.field", recordKeyField);
+    csvProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    if (useSchemaProvider) {
+      csvProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source-flattened.avsc");
+      if (hasTransformer) {
+        csvProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target-flattened.avsc");
+      }
+    }
+    csvProps.setProperty("hoodie.deltastreamer.source.dfs.root", sourceRoot);
+
+    if (sep != ',') {
+      if (sep == '\t') {
+        csvProps.setProperty("hoodie.deltastreamer.csv.sep", "\\t");
+      } else {
+        csvProps.setProperty("hoodie.deltastreamer.csv.sep", Character.toString(sep));
+      }
+    }
+    if (hasHeader) {
+      csvProps.setProperty("hoodie.deltastreamer.csv.header", Boolean.toString(hasHeader));
+    }
+
+    UtilitiesTestBase.Helpers.savePropsToDFS(csvProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_CSV);
+
+    String path = sourceRoot + "/1.csv";
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    UtilitiesTestBase.Helpers.saveCsvToDFS(
+        hasHeader, sep,
+        Helpers.jsonifyRecords(dataGenerator.generateInserts("000", CSV_NUM_RECORDS, true)),
+        dfs, path);
+  }
+
+  private void testCsvDFSSource(
+      boolean hasHeader, char sep, boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
+    prepareCsvDFSSource(hasHeader, sep, useSchemaProvider, transformerClassNames != null);
+    String tableBasePath = dfsBasePath + "/test_csv_table" + testNum;
+    String sourceOrderingField = (hasHeader || useSchemaProvider) ? "timestamp" : "_c0";
+    HoodieDeltaStreamer deltaStreamer =
+        new HoodieDeltaStreamer(TestHelpers.makeConfig(
+            tableBasePath, Operation.INSERT, CsvDFSSource.class.getName(),
+            transformerClassNames, PROPS_FILENAME_TEST_CSV, false,
+            useSchemaProvider, 1000, false, null, null, sourceOrderingField), jsc);
+    deltaStreamer.sync();
+    TestHelpers.assertRecordCount(CSV_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
+    testNum++;
+  }
+
+  @Test
+  public void testCsvDFSSourceWithHeaderWithoutSchemaProviderAndNoTransformer() throws Exception {
+    // The CSV files have header, the columns are separated by ',', the default separator
+    // No schema provider is specified, no transformer is applied
+    // In this case, the source schema comes from the inferred schema of the CSV files
+    testCsvDFSSource(true, ',', false, null);
+  }
+
+  @Test
+  public void testCsvDFSSourceWithHeaderAndSepWithoutSchemaProviderAndNoTransformer() throws Exception {
+    // The CSV files have header, the columns are separated by '\t',
+    // which is passed in through the Hudi CSV properties
+    // No schema provider is specified, no transformer is applied
+    // In this case, the source schema comes from the inferred schema of the CSV files
+    testCsvDFSSource(true, '\t', false, null);
+  }
+
+  @Test
+  public void testCsvDFSSourceWithHeaderAndSepWithSchemaProviderAndNoTransformer() throws Exception {
+    // The CSV files have header, the columns are separated by '\t'
+    // File schema provider is used, no transformer is applied
+    // In this case, the source schema comes from the source Avro schema file
+    testCsvDFSSource(true, '\t', true, null);
+  }
+
+  @Test
+  public void testCsvDFSSourceWithHeaderAndSepWithoutSchemaProviderAndWithTransformer() throws Exception {
+    // The CSV files have header, the columns are separated by '\t'
+    // No schema provider is specified, transformer is applied
+    // In this case, the source schema comes from the inferred schema of the CSV files.
+    // Target schema is determined based on the Dataframe after transformation
+    testCsvDFSSource(true, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
+  }
+
+  @Test
+  public void testCsvDFSSourceWithHeaderAndSepWithSchemaProviderAndTransformer() throws Exception {
+    // The CSV files have header, the columns are separated by '\t'
+    // File schema provider is used, transformer is applied
+    // In this case, the source and target schema come from the Avro schema files
+    testCsvDFSSource(true, '\t', true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
+  }
+
+  @Test
+  public void testCsvDFSSourceNoHeaderWithoutSchemaProviderAndNoTransformer() throws Exception {
+    // The CSV files do not have header, the columns are separated by '\t',
+    // which is passed in through the Hudi CSV properties
+    // No schema provider is specified, no transformer is applied
+    // In this case, the source schema comes from the inferred schema of the CSV files
+    // No CSV header and no schema provider at the same time are not recommended
+    // as the column names are not informative
+    testCsvDFSSource(false, '\t', false, null);
+  }
+
+  @Test
+  public void testCsvDFSSourceNoHeaderWithSchemaProviderAndNoTransformer() throws Exception {
+    // The CSV files do not have header, the columns are separated by '\t'
+    // File schema provider is used, no transformer is applied
+    // In this case, the source schema comes from the source Avro schema file
+    testCsvDFSSource(false, '\t', true, null);
+  }
+
+  @Test
+  public void testCsvDFSSourceNoHeaderWithoutSchemaProviderAndWithTransformer() throws Exception {
+    // The CSV files do not have header, the columns are separated by '\t'
+    // No schema provider is specified, transformer is applied
+    // In this case, the source schema comes from the inferred schema of the CSV files.
+    // Target schema is determined based on the Dataframe after transformation
+    // No CSV header and no schema provider at the same time are not recommended,
+    // as the transformer behavior may be unexpected
+    try {
+      testCsvDFSSource(false, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
+      fail("Should error out when doing the transformation.");
+    } catch (AnalysisException e) {
+      LOG.error("Expected error during transformation", e);
+      assertTrue(e.getMessage().contains("cannot resolve '`begin_lat`' given input columns:"));
+    }
+  }
+
+  @Test
+  public void testCsvDFSSourceNoHeaderWithSchemaProviderAndTransformer() throws Exception {
+    // The CSV files do not have header, the columns are separated by '\t'
+    // File schema provider is used, transformer is applied
+    // In this case, the source and target schema come from the Avro schema files
+    testCsvDFSSource(false, '\t', true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
   /**

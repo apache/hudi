@@ -24,30 +24,32 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.versioning.clean.CleanMetadataMigrator;
-import org.apache.hudi.common.versioning.clean.CleanV1MigrationHandler;
-import org.apache.hudi.common.versioning.clean.CleanV2MigrationHandler;
-
-import com.google.common.collect.ImmutableMap;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanV1MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanV2MigrationHandler;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class CleanerUtils {
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanV1MigrationHandler.VERSION;
   public static final Integer CLEAN_METADATA_VERSION_2 = CleanV2MigrationHandler.VERSION;
   public static final Integer LATEST_CLEAN_METADATA_VERSION = CLEAN_METADATA_VERSION_2;
 
-  public static HoodieCleanMetadata convertCleanMetadata(HoodieTableMetaClient metaClient,
-      String startCleanTime, Option<Long> durationInMs, List<HoodieCleanStat> cleanStats) {
-    ImmutableMap.Builder<String, HoodieCleanPartitionMetadata> partitionMetadataBuilder = ImmutableMap.builder();
+  public static HoodieCleanMetadata convertCleanMetadata(String startCleanTime,
+                                                         Option<Long> durationInMs,
+                                                         List<HoodieCleanStat> cleanStats) {
+    Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = new HashMap<>();
     int totalDeleted = 0;
     String earliestCommitToRetain = null;
     for (HoodieCleanStat stat : cleanStats) {
       HoodieCleanPartitionMetadata metadata =
           new HoodieCleanPartitionMetadata(stat.getPartitionPath(), stat.getPolicy().name(),
               stat.getDeletePathPatterns(), stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles());
-      partitionMetadataBuilder.put(stat.getPartitionPath(), metadata);
+      partitionMetadataMap.put(stat.getPartitionPath(), metadata);
       totalDeleted += stat.getSuccessDeleteFiles().size();
       if (earliestCommitToRetain == null) {
         // This will be the same for all partitions
@@ -55,10 +57,8 @@ public class CleanerUtils {
       }
     }
 
-    HoodieCleanMetadata metadata = new HoodieCleanMetadata(startCleanTime,
-        durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
-        partitionMetadataBuilder.build(), CLEAN_METADATA_VERSION_2);
-    return metadata;
+    return new HoodieCleanMetadata(startCleanTime,
+        durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain, partitionMetadataMap, CLEAN_METADATA_VERSION_2);
   }
 
   /**
@@ -71,7 +71,7 @@ public class CleanerUtils {
   public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
     CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    HoodieCleanMetadata cleanMetadata = AvroUtils.deserializeHoodieCleanMetadata(
+    HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
         metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get());
     return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
   }
@@ -85,7 +85,7 @@ public class CleanerUtils {
    */
   public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
-    return AvroUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get(),
+    return TimelineMetadataUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get(),
         HoodieCleanerPlan.class);
   }
 }

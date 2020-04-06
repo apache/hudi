@@ -18,16 +18,18 @@
 
 package org.apache.hudi.hadoop;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class HoodieHiveUtil {
 
@@ -77,8 +79,7 @@ public class HoodieHiveUtil {
         return (!matcher.find() ? null : matcher.group(1));
       }
       return null;
-    }).filter(s -> s != null)
-        .collect(Collectors.toList());
+    }).filter(Objects::nonNull).collect(Collectors.toList());
     if (result == null) {
       // Returns an empty list instead of null.
       result = new ArrayList<>();

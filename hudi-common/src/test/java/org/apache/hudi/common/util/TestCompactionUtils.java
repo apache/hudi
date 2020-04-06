@@ -21,17 +21,17 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.HoodieCommonTestHarness;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
 import org.apache.hudi.common.util.CompactionTestUtils.TestHoodieBaseFile;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.versioning.compaction.CompactionPlanMigrator;
 
-import com.google.common.collect.ImmutableMap;
 import org.apache.hadoop.fs.Path;
 import org.junit.Assert;
 import org.junit.Before;
@@ -39,6 +39,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -59,8 +60,12 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
-  private static final Map<String, Double> METRICS =
-      new ImmutableMap.Builder<String, Double>().put("key1", 1.0).put("key2", 3.0).build();
+  private static final Map<String, Double> METRICS = new HashMap<String, Double>() {
+    {
+      put("key1", 1.0);
+      put("key2", 3.0);
+    }
+  };
   private Function<Pair<String, FileSlice>, Map<String, Double>> metricsCaptureFn = (partitionFileSlice) -> METRICS;
 
   @Before
@@ -84,6 +89,8 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     HoodieCompactionPlan newPlan = migrator.upgradeToLatest(plan, plan.getVersion());
     Assert.assertEquals(LATEST_COMPACTION_METADATA_VERSION, newPlan.getVersion());
     testFileSlicesCompactionPlanEquality(inputAndPlan.getKey(), newPlan);
+    HoodieCompactionPlan latestPlan = migrator.migrateToVersion(oldPlan, oldPlan.getVersion(), newPlan.getVersion());
+    testFileSlicesCompactionPlanEquality(inputAndPlan.getKey(), latestPlan);
   }
 
   @Test
@@ -159,13 +166,12 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     Pair<List<Pair<String, FileSlice>>, HoodieCompactionPlan> inputAndPlan = buildCompactionPlan();
     HoodieCompactionPlan plan = inputAndPlan.getRight();
     List<HoodieCompactionOperation> originalOps = plan.getOperations();
-    List<HoodieCompactionOperation> regeneratedOps = originalOps.stream().map(op -> {
-      // Convert to CompactionOperation
-      return CompactionUtils.buildCompactionOperation(op);
-    }).map(op2 -> {
-      // Convert back to HoodieCompactionOperation and check for equality
-      return CompactionUtils.buildHoodieCompactionOperation(op2);
-    }).collect(Collectors.toList());
+    // Convert to CompactionOperation
+    // Convert back to HoodieCompactionOperation and check for equality
+    List<HoodieCompactionOperation> regeneratedOps = originalOps.stream()
+            .map(CompactionUtils::buildCompactionOperation)
+            .map(CompactionUtils::buildHoodieCompactionOperation)
+            .collect(Collectors.toList());
     Assert.assertTrue("Transformation did get tested", originalOps.size() > 0);
     Assert.assertEquals("All fields set correctly in transformations", originalOps, regeneratedOps);
   }
@@ -247,11 +253,9 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
           op.getDataFilePath());
     }
     List<String> paths = slice.getLogFiles().map(l -> l.getPath().toString()).collect(Collectors.toList());
-    IntStream.range(0, paths.size()).boxed().forEach(idx -> {
-      Assert.assertEquals("Log File Index " + idx,
-          version == COMPACTION_METADATA_VERSION_1 ? paths.get(idx) : new Path(paths.get(idx)).getName(),
-          op.getDeltaFilePaths().get(idx));
-    });
+    IntStream.range(0, paths.size()).boxed().forEach(idx -> Assert.assertEquals("Log File Index " + idx,
+        version == COMPACTION_METADATA_VERSION_1 ? paths.get(idx) : new Path(paths.get(idx)).getName(),
+        op.getDeltaFilePaths().get(idx)));
     Assert.assertEquals("Metrics set", METRICS, op.getMetrics());
   }
 

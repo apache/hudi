@@ -59,8 +59,8 @@ public abstract class ITTestBase {
   protected static final String HOODIE_JAVA_APP = HOODIE_WS_ROOT + "/hudi-spark/run_hoodie_app.sh";
   protected static final String HUDI_HADOOP_BUNDLE =
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-hadoop-mr-bundle.jar";
-  protected static final String HUDI_HIVE_BUNDLE =
-      HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-hive-bundle.jar";
+  protected static final String HUDI_HIVE_SYNC_BUNDLE =
+      HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-hive-sync-bundle.jar";
   protected static final String HUDI_SPARK_BUNDLE =
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-spark-bundle.jar";
   protected static final String HUDI_UTILITIES_BUNDLE =
@@ -87,7 +87,7 @@ public abstract class ITTestBase {
     cmd.add("hive.stats.autogather=false");
     cmd.add("-e");
     cmd.add("\"" + fullCommand + "\"");
-    return cmd.stream().toArray(String[]::new);
+    return cmd.toArray(new String[0]);
   }
 
   private static String getHiveConsoleCommandFile(String commandFile, String additionalVar) {

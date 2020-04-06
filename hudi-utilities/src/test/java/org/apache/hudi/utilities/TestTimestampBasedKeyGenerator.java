@@ -18,13 +18,14 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.SchemaTestUtil;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.keygen.TimestampBasedKeyGenerator;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -33,13 +34,12 @@ import java.io.IOException;
 import static org.junit.Assert.assertEquals;
 
 public class TestTimestampBasedKeyGenerator {
-  private Schema schema;
   private GenericRecord baseRecord;
   private TypedProperties properties = new TypedProperties();
 
   @Before
   public void initialize() throws IOException {
-    schema = SchemaTestUtil.getTimestampEvolvedSchema();
+    Schema schema = SchemaTestUtil.getTimestampEvolvedSchema();
     baseRecord = SchemaTestUtil
         .generateAvroRecordFromJson(schema, 1, "001", "f1");
 

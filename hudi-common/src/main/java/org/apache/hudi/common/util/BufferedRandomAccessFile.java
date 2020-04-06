@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -59,7 +59,7 @@ import java.nio.ByteBuffer;
 public final class BufferedRandomAccessFile extends RandomAccessFile {
   private static final Logger LOG = Logger.getLogger(BufferedRandomAccessFile.class);
   static final int DEFAULT_BUFFER_SIZE = (1 << 16); // 64K buffer
-  static final int BUFFER_BOUNDARY_MASK = ~(DEFAULT_BUFFER_SIZE - 1);
+  static final int BUFFER_BOUNDARY_MASK = -DEFAULT_BUFFER_SIZE;
 
   private int capacity;
   private ByteBuffer dataBuffer;
@@ -169,7 +169,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
   private int fillBuffer() throws IOException {
     int cnt = 0;
     int bytesToRead = this.capacity;
-    /** blocking read, until buffer is filled or EOF reached */
+    // blocking read, until buffer is filled or EOF reached
     while (bytesToRead > 0) {
       int n = super.read(this.dataBuffer.array(), cnt, bytesToRead);
       if (n < 0) {
@@ -268,11 +268,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
     this.seek(this.currentPosition);
 
     // if currentPosition is at start, EOF has been reached
-    if (this.currentPosition == this.validLastPosition) {
-      return false;
-    }
-
-    return true;
+    return this.currentPosition != this.validLastPosition;
   }
 
   /**

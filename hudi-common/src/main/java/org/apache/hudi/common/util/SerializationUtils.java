@@ -21,18 +21,13 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.exception.HoodieSerializationException;
 
 import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import com.esotericsoftware.kryo.serializers.FieldSerializer;
-import com.esotericsoftware.reflectasm.ConstructorAccess;
-import org.objenesis.instantiator.ObjectInstantiator;
+import org.objenesis.strategy.StdInstantiatorStrategy;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 
 /**
  * {@link SerializationUtils} class internally uses {@link Kryo} serializer for serializing / deserializing objects.
@@ -41,7 +36,7 @@ public class SerializationUtils {
 
   // Caching kryo serializer to avoid creating kryo instance for every serde operation
   private static final ThreadLocal<KryoSerializerInstance> SERIALIZER_REF =
-      ThreadLocal.withInitial(() -> new KryoSerializerInstance());
+      ThreadLocal.withInitial(KryoSerializerInstance::new);
 
   // Serialize
   // -----------------------------------------------------------------------
@@ -99,7 +94,7 @@ public class SerializationUtils {
       kryo.setRegistrationRequired(false);
     }
 
-    byte[] serialize(Object obj) throws IOException {
+    byte[] serialize(Object obj) {
       kryo.reset();
       baos.reset();
       Output output = new Output(baos);
@@ -121,50 +116,16 @@ public class SerializationUtils {
 
     public Kryo newKryo() {
 
-      Kryo kryo = new KryoBase();
+      Kryo kryo = new Kryo();
       // ensure that kryo doesn't fail if classes are not registered with kryo.
       kryo.setRegistrationRequired(false);
       // This would be used for object initialization if nothing else works out.
-      kryo.setInstantiatorStrategy(new org.objenesis.strategy.StdInstantiatorStrategy());
+      kryo.setInstantiatorStrategy(new Kryo.DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
       // Handle cases where we may have an odd classloader setup like with libjars
       // for hadoop
       kryo.setClassLoader(Thread.currentThread().getContextClassLoader());
       return kryo;
     }
 
-    private static class KryoBase extends Kryo {
-      @Override
-      protected Serializer newDefaultSerializer(Class type) {
-        final Serializer serializer = super.newDefaultSerializer(type);
-        if (serializer instanceof FieldSerializer) {
-          final FieldSerializer fieldSerializer = (FieldSerializer) serializer;
-          fieldSerializer.setIgnoreSyntheticFields(true);
-        }
-        return serializer;
-      }
-
-      @Override
-      protected ObjectInstantiator newInstantiator(Class type) {
-        return () -> {
-          // First try reflectasm - it is fastest way to instantiate an object.
-          try {
-            final ConstructorAccess access = ConstructorAccess.get(type);
-            return access.newInstance();
-          } catch (Throwable t) {
-            // ignore this exception. We may want to try other way.
-          }
-          // fall back to java based instantiation.
-          try {
-            final Constructor constructor = type.getConstructor();
-            constructor.setAccessible(true);
-            return constructor.newInstance();
-          } catch (NoSuchMethodException | IllegalAccessException | InstantiationException
-              | InvocationTargetException e) {
-            // ignore this exception. we will fall back to default instantiation strategy.
-          }
-          return super.getInstantiatorStrategy().newInstantiatorOf(type).newInstance();
-        };
-      }
-    }
   }
 }

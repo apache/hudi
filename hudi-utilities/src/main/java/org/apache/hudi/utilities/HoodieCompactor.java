@@ -18,11 +18,11 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.WriteStatus;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -83,7 +83,7 @@ public class HoodieCompactor {
     public List<String> configs = new ArrayList<>();
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {

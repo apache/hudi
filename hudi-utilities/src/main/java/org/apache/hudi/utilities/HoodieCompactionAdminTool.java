@@ -18,12 +18,12 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.CompactionAdminClient;
-import org.apache.hudi.CompactionAdminClient.RenameOpResult;
-import org.apache.hudi.CompactionAdminClient.ValidationOpResult;
+import org.apache.hudi.client.CompactionAdminClient;
+import org.apache.hudi.client.CompactionAdminClient.RenameOpResult;
+import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.FSUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -60,8 +60,7 @@ public class HoodieCompactionAdminTool {
    */
   public void run(JavaSparkContext jsc) throws Exception {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.basePath);
-    final CompactionAdminClient admin = new CompactionAdminClient(jsc, cfg.basePath);
-    try {
+    try (CompactionAdminClient admin = new CompactionAdminClient(jsc, cfg.basePath)) {
       final FileSystem fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
       if (cfg.outputPath != null && fs.exists(new Path(cfg.outputPath))) {
         throw new IllegalStateException("Output File Path already exists");
@@ -101,8 +100,6 @@ public class HoodieCompactionAdminTool {
         default:
           throw new IllegalStateException("Not yet implemented !!");
       }
-    } finally {
-      admin.close();
     }
   }
 

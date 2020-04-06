@@ -18,9 +18,8 @@
 
 package org.apache.hudi.common.model;
 
-import com.google.common.base.Objects;
-
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Location of a HoodieRecord within the partition it belongs to. Ultimately, this points to an actual file on disk
@@ -44,12 +43,12 @@ public class HoodieRecordLocation implements Serializable {
       return false;
     }
     HoodieRecordLocation otherLoc = (HoodieRecordLocation) o;
-    return Objects.equal(instantTime, otherLoc.instantTime) && Objects.equal(fileId, otherLoc.fileId);
+    return Objects.equals(instantTime, otherLoc.instantTime) && Objects.equals(fileId, otherLoc.fileId);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(instantTime, fileId);
+    return Objects.hash(instantTime, fileId);
   }
 
   @Override

@@ -18,9 +18,9 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.beust.jcommander.JCommander;
@@ -31,7 +31,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,11 +45,6 @@ public class HoodieCleaner {
   private final Config cfg;
 
   /**
-   * Filesystem used.
-   */
-  private transient FileSystem fs;
-
-  /**
    * Spark context.
    */
   private transient JavaSparkContext jssc;
@@ -60,22 +54,25 @@ public class HoodieCleaner {
    */
   private TypedProperties props;
 
-  public HoodieCleaner(Config cfg, JavaSparkContext jssc) throws IOException {
+  public HoodieCleaner(Config cfg, JavaSparkContext jssc) {
     this.cfg = cfg;
     this.jssc = jssc;
-    this.fs = FSUtils.getFs(cfg.basePath, jssc.hadoopConfiguration());
+    /*
+     * Filesystem used.
+     */
+    FileSystem fs = FSUtils.getFs(cfg.basePath, jssc.hadoopConfiguration());
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
         : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
     LOG.info("Creating Cleaner with configs : " + props.toString());
   }
 
-  public void run() throws Exception {
+  public void run() {
     HoodieWriteConfig hoodieCfg = getHoodieClientConfig();
     HoodieWriteClient client = new HoodieWriteClient<>(jssc, hoodieCfg, false);
     client.clean();
   }
 
-  private HoodieWriteConfig getHoodieClientConfig() throws Exception {
+  private HoodieWriteConfig getHoodieClientConfig() {
     return HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.basePath).withAutoCommit(false)
         .withProps(props).build();
   }
@@ -101,7 +98,7 @@ public class HoodieCleaner {
     public Boolean help = false;
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {

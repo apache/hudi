@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;

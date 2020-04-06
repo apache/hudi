@@ -23,7 +23,6 @@ import org.apache.hudi.exception.HoodieException;
 
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.io.Closeables;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -33,6 +32,7 @@ import java.io.Closeable;
  * This is the main class of the metrics system.
  */
 public class Metrics {
+
   private static final Logger LOG = LogManager.getLogger(Metrics.class);
 
   private static volatile boolean initialized = false;
@@ -47,19 +47,16 @@ public class Metrics {
     if (reporter == null) {
       throw new RuntimeException("Cannot initialize Reporter.");
     }
-    // reporter.start();
+    reporter.start();
 
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      @Override
-      public void run() {
-        try {
-          reporter.report();
-          Closeables.close(reporter.getReporter(), true);
-        } catch (Exception e) {
-          e.printStackTrace();
-        }
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      try {
+        reporter.report();
+        getReporter().close();
+      } catch (Exception e) {
+        e.printStackTrace();
       }
-    });
+    }));
   }
 
   public static Metrics getInstance() {

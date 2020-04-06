@@ -133,6 +133,11 @@
          "name":"version",
          "type":["int", "null"],
          "default": 1
+      },
+      {
+         "name":"operationType",
+         "type": ["null","string"],
+         "default":null
       }
    ]
 }

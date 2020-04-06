@@ -18,32 +18,36 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.KeyGenerator;
 
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -77,7 +81,8 @@ public class DataSourceUtils {
 
       // return, if last part of name
       if (i == parts.length - 1) {
-        return val;
+        Schema fieldSchema = valueNode.getSchema().getField(part).schema();
+        return convertValueForSpecificDataTypes(fieldSchema, val);
       } else {
         // VC: Need a test here
         if (!(val instanceof GenericRecord)) {
@@ -94,6 +99,40 @@ public class DataSourceUtils {
         fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
           + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
     }
+  }
+
+  /**
+   * This method converts values for fields with certain Avro/Parquet data types that require special handling.
+   *
+   * Logical Date Type is converted to actual Date value instead of Epoch Integer which is how it is
+   * represented/stored in parquet.
+   *
+   * @param fieldSchema avro field schema
+   * @param fieldValue avro field value
+   * @return field value either converted (for certain data types) or as it is.
+   */
+  private static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue) {
+    if (fieldSchema == null) {
+      return fieldValue;
+    }
+
+    if (isLogicalTypeDate(fieldSchema)) {
+      return LocalDate.ofEpochDay(Long.parseLong(fieldValue.toString()));
+    }
+    return fieldValue;
+  }
+
+  /**
+   * Given an Avro field schema checks whether the field is of Logical Date Type or not.
+   *
+   * @param fieldSchema avro field schema
+   * @return boolean indicating whether fieldSchema is of Avro's Date Logical Type
+   */
+  private static boolean isLogicalTypeDate(Schema fieldSchema) {
+    if (fieldSchema.getType() == Schema.Type.UNION) {
+      return fieldSchema.getTypes().stream().anyMatch(schema -> schema.getLogicalType() == LogicalTypes.date());
+    }
+    return fieldSchema.getLogicalType() == LogicalTypes.date();
   }
 
   /**
@@ -127,7 +166,7 @@ public class DataSourceUtils {
   }
 
   public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
-    checkPropNames.stream().forEach(prop -> {
+    checkPropNames.forEach(prop -> {
       if (!props.containsKey(prop)) {
         throw new HoodieNotSupportedException("Required property " + prop + " is missing");
       }
@@ -157,20 +196,20 @@ public class DataSourceUtils {
   }
 
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-                                                      String commitTime, String operation) {
+                                                      String instantTime, String operation) {
     if (operation.equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL())) {
-      return client.bulkInsert(hoodieRecords, commitTime);
+      return client.bulkInsert(hoodieRecords, instantTime);
     } else if (operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())) {
-      return client.insert(hoodieRecords, commitTime);
+      return client.insert(hoodieRecords, instantTime);
     } else {
       // default is upsert
-      return client.upsert(hoodieRecords, commitTime);
+      return client.upsert(hoodieRecords, instantTime);
     }
   }
 
   public static JavaRDD<WriteStatus> doDeleteOperation(HoodieWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
-                                                       String commitTime) {
-    return client.delete(hoodieKeys, commitTime);
+                                                       String instantTime) {
+    return client.delete(hoodieKeys, instantTime);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
@@ -181,38 +220,33 @@ public class DataSourceUtils {
 
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
-                                                     HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> timelineService) {
-    HoodieReadClient client = null;
+                                                     HoodieWriteConfig writeConfig) {
     try {
-      client = new HoodieReadClient<>(jssc, writeConfig, timelineService);
+      HoodieReadClient client = new HoodieReadClient<>(jssc, writeConfig);
       return client.tagLocation(incomingHoodieRecords)
           .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
     } catch (TableNotFoundException e) {
       // this will be executed when there is no hoodie table yet
       // so no dups to drop
       return incomingHoodieRecords;
-    } finally {
-      if (null != client) {
-        client.close();
-      }
     }
   }
 
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
-                                                     Map<String, String> parameters, Option<EmbeddedTimelineService> timelineService) {
+                                                     Map<String, String> parameters) {
     HoodieWriteConfig writeConfig =
         HoodieWriteConfig.newBuilder().withPath(parameters.get("path")).withProps(parameters).build();
-    return dropDuplicates(jssc, incomingHoodieRecords, writeConfig, timelineService);
+    return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);
   }
 
   public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath) {
-    checkRequiredProperties(props, Arrays.asList(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY()));
+    checkRequiredProperties(props, Collections.singletonList(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY()));
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
     hiveSyncConfig.basePath = basePath;
     hiveSyncConfig.usePreApacheInputFormat =
         props.getBoolean(DataSourceWriteOptions.HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY(),
-            Boolean.valueOf(DataSourceWriteOptions.DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL()));
+            Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL()));
     hiveSyncConfig.databaseName = props.getString(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(),
         DataSourceWriteOptions.DEFAULT_HIVE_DATABASE_OPT_VAL());
     hiveSyncConfig.tableName = props.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY());

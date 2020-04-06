@@ -18,7 +18,8 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.bloom.filter.BloomFilterTypeCode;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.index.HoodieIndex;
 
 import javax.annotation.concurrent.Immutable;
@@ -36,6 +37,9 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
   public static final String INDEX_TYPE_PROP = "hoodie.index.type";
   public static final String DEFAULT_INDEX_TYPE = HoodieIndex.IndexType.BLOOM.name();
+
+  public static final String INDEX_CLASS_PROP = "hoodie.index.class";
+  public static final String DEFAULT_INDEX_CLASS = "";
 
   // ***** Bloom Index configs *****
   public static final String BLOOM_FILTER_NUM_ENTRIES = "hoodie.index.bloom.num_entries";
@@ -77,6 +81,17 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL = "hoodie.bloom.index.input.storage.level";
   public static final String DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
 
+  /**
+   * Only applies if index type is GLOBAL_BLOOM.
+   * <p>
+   * When set to true, an update to a record with a different partition from its existing one
+   * will insert the record to the new partition and delete it from the old partition.
+   * <p>
+   * When set to false, a record will be updated to the old partition.
+   */
+  public static final String BLOOM_INDEX_UPDATE_PARTITION_PATH = "hoodie.bloom.index.update.partition.path";
+  public static final String DEFAULT_BLOOM_INDEX_UPDATE_PARTITION_PATH = "false";
+
   private HoodieIndexConfig(Properties props) {
     super(props);
   }
@@ -103,6 +118,11 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
     public Builder withIndexType(HoodieIndex.IndexType indexType) {
       props.setProperty(INDEX_TYPE_PROP, indexType.name());
+      return this;
+    }
+
+    public Builder withIndexClass(String indexClass) {
+      props.setProperty(INDEX_CLASS_PROP, indexClass);
       return this;
     }
 
@@ -176,9 +196,15 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withBloomIndexUpdatePartitionPath(boolean updatePartitionPath) {
+      props.setProperty(BLOOM_INDEX_UPDATE_PARTITION_PATH, String.valueOf(updatePartitionPath));
+      return this;
+    }
+
     public HoodieIndexConfig build() {
       HoodieIndexConfig config = new HoodieIndexConfig(props);
       setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP), INDEX_TYPE_PROP, DEFAULT_INDEX_TYPE);
+      setDefaultOnCondition(props, !props.containsKey(INDEX_CLASS_PROP), INDEX_CLASS_PROP, DEFAULT_INDEX_CLASS);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_NUM_ENTRIES), BLOOM_FILTER_NUM_ENTRIES,
           DEFAULT_BLOOM_FILTER_NUM_ENTRIES);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_FPP), BLOOM_FILTER_FPP, DEFAULT_BLOOM_FILTER_FPP);
@@ -190,6 +216,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           DEFAULT_BLOOM_INDEX_USE_CACHING);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_INPUT_STORAGE_LEVEL), BLOOM_INDEX_INPUT_STORAGE_LEVEL,
           DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_UPDATE_PARTITION_PATH),
+          BLOOM_INDEX_UPDATE_PARTITION_PATH, DEFAULT_BLOOM_INDEX_UPDATE_PARTITION_PATH);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_TREE_BASED_FILTER_PROP),
           BLOOM_INDEX_TREE_BASED_FILTER_PROP, DEFAULT_BLOOM_INDEX_TREE_BASED_FILTER);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_BUCKETIZED_CHECKING_PROP),

@@ -18,14 +18,15 @@
 
 package org.apache.hudi.index.hbase;
 
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.utils.SparkConfigUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -36,7 +37,6 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HRegionLocation;
@@ -114,7 +114,6 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     this.hBaseIndexQPSResourceAllocator = createQPSResourceAllocator(this.config);
   }
 
-  @VisibleForTesting
   public HBaseIndexQPSResourceAllocator createQPSResourceAllocator(HoodieWriteConfig config) {
     try {
       LOG.info("createQPSResourceAllocator :" + config.getHBaseQPSResourceAllocatorClass());
@@ -205,9 +204,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
         }
       }
       List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
-      HTable hTable = null;
-      try {
-        hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName));
+      try (HTable hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName))) {
         List<Get> statements = new ArrayList<>();
         List<HoodieRecord> currentBatchOfRecords = new LinkedList<>();
         // Do the tagging.
@@ -250,15 +247,6 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
         }
       } catch (IOException e) {
         throw new HoodieIndexException("Failed to Tag indexed locations because of exception with HBase Client", e);
-      } finally {
-        if (hTable != null) {
-          try {
-            hTable.close();
-          } catch (IOException e) {
-            // Ignore
-          }
-        }
-
       }
       return taggedRecords.iterator();
     };
@@ -361,7 +349,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     LOG.info("multiPutBatchSize: before hbase puts" + multiPutBatchSize);
     JavaRDD<WriteStatus> writeStatusJavaRDD = writeStatusRDD.mapPartitionsWithIndex(updateLocationFunction(), true);
     // caching the index updated status RDD
-    writeStatusJavaRDD = writeStatusJavaRDD.persist(config.getWriteStatusStorageLevel());
+    writeStatusJavaRDD = writeStatusJavaRDD.persist(SparkConfigUtils.getWriteStatusStorageLevel(config.getProps()));
     return writeStatusJavaRDD;
   }
 
@@ -398,7 +386,6 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     }
   }
 
-  @VisibleForTesting
   public Tuple2<Long, Integer> getHBasePutAccessParallelism(final JavaRDD<WriteStatus> writeStatusRDD) {
     final JavaPairRDD<Long, Integer> insertOnlyWriteStatusRDD = writeStatusRDD
         .filter(w -> w.getStat().getNumInserts() > 0).mapToPair(w -> new Tuple2<>(w.getStat().getNumInserts(), 1));
@@ -444,16 +431,14 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
      */
     public int getBatchSize(int numRegionServersForTable, int maxQpsPerRegionServer, int numTasksDuringPut,
         int maxExecutors, int sleepTimeMs, float qpsFraction) {
-      int numRSAlive = numRegionServersForTable;
-      int maxReqPerSec = (int) (qpsFraction * numRSAlive * maxQpsPerRegionServer);
-      int numTasks = numTasksDuringPut;
-      int maxParallelPuts = Math.max(1, Math.min(numTasks, maxExecutors));
+      int maxReqPerSec = (int) (qpsFraction * numRegionServersForTable * maxQpsPerRegionServer);
+      int maxParallelPuts = Math.max(1, Math.min(numTasksDuringPut, maxExecutors));
       int maxReqsSentPerTaskPerSec = MILLI_SECONDS_IN_A_SECOND / sleepTimeMs;
       int multiPutBatchSize = Math.max(1, maxReqPerSec / (maxParallelPuts * maxReqsSentPerTaskPerSec));
       LOG.info("HbaseIndexThrottling: qpsFraction :" + qpsFraction);
-      LOG.info("HbaseIndexThrottling: numRSAlive :" + numRSAlive);
+      LOG.info("HbaseIndexThrottling: numRSAlive :" + numRegionServersForTable);
       LOG.info("HbaseIndexThrottling: maxReqPerSec :" + maxReqPerSec);
-      LOG.info("HbaseIndexThrottling: numTasks :" + numTasks);
+      LOG.info("HbaseIndexThrottling: numTasks :" + numTasksDuringPut);
       LOG.info("HbaseIndexThrottling: maxExecutors :" + maxExecutors);
       LOG.info("HbaseIndexThrottling: maxParallelPuts :" + maxParallelPuts);
       LOG.info("HbaseIndexThrottling: maxReqsSentPerTaskPerSec :" + maxReqsSentPerTaskPerSec);
@@ -481,7 +466,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   @Override
-  public boolean rollbackCommit(String commitTime) {
+  public boolean rollbackCommit(String instantTime) {
     // Rollback in HbaseIndex is managed via method {@link #checkIfValidCommit()}
     return true;
   }
@@ -510,7 +495,6 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     return false;
   }
 
-  @VisibleForTesting
   public void setHbaseConnection(Connection hbaseConnection) {
     HBaseIndex.hbaseConnection = hbaseConnection;
   }

@@ -18,12 +18,13 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.io.storage.HoodieWrapperFileSystem;
+import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.HoodieAvroUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -32,7 +33,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.spark.TaskContext;
 
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -50,11 +50,12 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   private final HoodieWrapperFileSystem fs;
   private final long maxFileSize;
   private final HoodieAvroWriteSupport writeSupport;
-  private final String commitTime;
+  private final String instantTime;
   private final Schema schema;
+  private final SparkTaskContextSupplier sparkTaskContextSupplier;
 
-  public HoodieParquetWriter(String commitTime, Path file, HoodieParquetConfig parquetConfig, Schema schema)
-      throws IOException {
+  public HoodieParquetWriter(String instantTime, Path file, HoodieParquetConfig parquetConfig,
+      Schema schema, SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
         ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),
         parquetConfig.getBlockSize(), parquetConfig.getPageSize(), parquetConfig.getPageSize(),
@@ -70,8 +71,9 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     this.maxFileSize = parquetConfig.getMaxFileSize()
         + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
     this.writeSupport = parquetConfig.getWriteSupport();
-    this.commitTime = commitTime;
+    this.instantTime = instantTime;
     this.schema = schema;
+    this.sparkTaskContextSupplier = sparkTaskContextSupplier;
   }
 
   public static Configuration registerFileSystem(Path file, Configuration conf) {
@@ -85,10 +87,10 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   @Override
   public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
     String seqId =
-        HoodieRecord.generateSequenceId(commitTime, TaskContext.getPartitionId(), recordIndex.getAndIncrement());
+        HoodieRecord.generateSequenceId(instantTime, sparkTaskContextSupplier.getPartitionIdSupplier().get(), recordIndex.getAndIncrement());
     HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, record.getRecordKey(), record.getPartitionPath(),
         file.getName());
-    HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, commitTime, seqId);
+    HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);
     super.write(avroRecord);
     writeSupport.add(record.getRecordKey());
   }
