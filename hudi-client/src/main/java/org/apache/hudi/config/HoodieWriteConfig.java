@@ -20,6 +20,7 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -118,6 +119,9 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       "_.hoodie.allow.multi.write.on.same.instant";
   private static final String DEFAULT_ALLOW_MULTI_WRITE_ON_SAME_INSTANT = "false";
 
+  public static final String EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION = AVRO_SCHEMA + ".externalTransformation";
+  public static final String DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION = "false";
+
   private ConsistencyGuardConfig consistencyGuardConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
@@ -125,7 +129,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private final FileSystemViewStorageConfig clientSpecifiedViewStorageConfig;
   private FileSystemViewStorageConfig viewStorageConfig;
 
-  private HoodieWriteConfig(Properties props) {
+  protected HoodieWriteConfig(Properties props) {
     super(props);
     Properties newProps = new Properties();
     newProps.putAll(props);
@@ -167,6 +171,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public Boolean shouldAssumeDatePartitioning() {
     return Boolean.parseBoolean(props.getProperty(HOODIE_ASSUME_DATE_PARTITIONING_PROP));
+  }
+
+  public boolean shouldUseExternalSchemaTransformation() {
+    return Boolean.parseBoolean(props.getProperty(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION));
   }
 
   public Integer getTimelineLayoutVersion() {
@@ -624,13 +632,46 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return clientSpecifiedViewStorageConfig;
   }
 
+  public String getBootstrapSourceBasePath() {
+    return props.getProperty(HoodieBootstrapConfig.SOURCE_BASE_PATH_PROP);
+  }
+
+  public String getBootstrapModeSelectorClass() {
+    return props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR);
+  }
+
+  public String getFullBootstrapInputProvider() {
+    return props.getProperty(HoodieBootstrapConfig.FULL_BOOTRAP_INPUT_PROVIDER);
+  }
+
+  public String getBootstrapKeyGeneratorClass() {
+    return props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS);
+  }
+
+  public String getBootstrapModeSelectorRegex() {
+    return props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_REGEX);
+  }
+
+  public BootstrapMode getBootstrapModeForRegexMatch() {
+    return BootstrapMode.valueOf(props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_REGEX_MODE));
+  }
+
+  public String getBootstrapPartitionPathTranslatorClass() {
+    return props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS);
+  }
+
+  public int getBootstrapParallelism() {
+    return Integer.parseInt(props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM));
+  }
+
   public static class Builder {
 
-    private final Properties props = new Properties();
+    protected final Properties props = new Properties();
     private boolean isIndexConfigSet = false;
     private boolean isStorageConfigSet = false;
     private boolean isCompactionConfigSet = false;
     private boolean isMetricsConfigSet = false;
+    private boolean isBootstrapConfigSet = false;
     private boolean isMemoryConfigSet = false;
     private boolean isViewConfigSet = false;
     private boolean isConsistencyGuardSet = false;
@@ -748,6 +789,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withBootstrapConfig(HoodieBootstrapConfig bootstrapConfig) {
+      props.putAll(bootstrapConfig.getProps());
+      isBootstrapConfigSet = true;
+      return this;
+    }
+
     public Builder withAutoCommit(boolean autoCommit) {
       props.setProperty(HOODIE_AUTO_COMMIT_PROP, String.valueOf(autoCommit));
       return this;
@@ -790,7 +837,17 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public HoodieWriteConfig build() {
+    public Builder withExternalSchemaTrasformation(boolean enabled) {
+      props.setProperty(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withProperties(Properties properties) {
+      this.props.putAll(properties);
+      return this;
+    }
+
+    protected void setDefaults() {
       // Check for mandatory properties
       setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_PARALLELISM), BULKINSERT_PARALLELISM,
@@ -835,18 +892,25 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !isCompactionConfigSet,
           HoodieCompactionConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMetricsConfigSet, HoodieMetricsConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isBootstrapConfigSet,
+          HoodieBootstrapConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMemoryConfigSet, HoodieMemoryConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isViewConfigSet,
           FileSystemViewStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isConsistencyGuardSet,
           ConsistencyGuardConfig.newBuilder().fromProperties(props).build());
 
+      setDefaultOnCondition(props, !props.containsKey(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION),
+          EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
       setDefaultOnCondition(props, !props.containsKey(TIMELINE_LAYOUT_VERSION), TIMELINE_LAYOUT_VERSION,
           String.valueOf(TimelineLayoutVersion.CURR_VERSION));
       String layoutVersion = props.getProperty(TIMELINE_LAYOUT_VERSION);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
+    }
 
+    public HoodieWriteConfig build() {
+      setDefaults();
       // Build WriteConfig at the end
       HoodieWriteConfig config = new HoodieWriteConfig(props);
       Objects.requireNonNull(config.getBasePath());

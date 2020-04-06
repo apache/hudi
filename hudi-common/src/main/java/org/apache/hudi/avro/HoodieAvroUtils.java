@@ -19,6 +19,8 @@
 package org.apache.hudi.avro;
 
 import org.apache.avro.JsonProperties;
+import java.time.LocalDate;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
@@ -364,5 +366,83 @@ public class HoodieAvroUtils {
         originalSchema.getNamespace(), originalSchema.isError());
     projectedSchema.setFields(projectedFields);
     return projectedSchema;
+  }
+
+  /**
+   * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
+   */
+  public static String getNestedFieldValAsString(GenericRecord record, String fieldName, boolean returnNullIfNotFound) {
+    Object obj = getNestedFieldVal(record, fieldName, returnNullIfNotFound);
+    return (obj == null) ? null : obj.toString();
+  }
+
+  /**
+   * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c
+   */
+  public static Object getNestedFieldVal(GenericRecord record, String fieldName, boolean returnNullIfNotFound) {
+    String[] parts = fieldName.split("\\.");
+    GenericRecord valueNode = record;
+    int i = 0;
+    for (; i < parts.length; i++) {
+      String part = parts[i];
+      Object val = valueNode.get(part);
+      if (val == null) {
+        break;
+      }
+
+      // return, if last part of name
+      if (i == parts.length - 1) {
+        Schema fieldSchema = valueNode.getSchema().getField(part).schema();
+        return convertValueForSpecificDataTypes(fieldSchema, val);
+      } else {
+        // VC: Need a test here
+        if (!(val instanceof GenericRecord)) {
+          throw new HoodieException("Cannot find a record at part value :" + part);
+        }
+        valueNode = (GenericRecord) val;
+      }
+    }
+
+    if (returnNullIfNotFound) {
+      return null;
+    } else {
+      throw new HoodieException(
+          fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
+              + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+    }
+  }
+
+  /**
+   * This method converts values for fields with certain Avro/Parquet data types that require special handling.
+   *
+   * Logical Date Type is converted to actual Date value instead of Epoch Integer which is how it is
+   * represented/stored in parquet.
+   *
+   * @param fieldSchema avro field schema
+   * @param fieldValue avro field value
+   * @return field value either converted (for certain data types) or as it is.
+   */
+  private static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue) {
+    if (fieldSchema == null) {
+      return fieldValue;
+    }
+
+    if (isLogicalTypeDate(fieldSchema)) {
+      return LocalDate.ofEpochDay(Long.parseLong(fieldValue.toString()));
+    }
+    return fieldValue;
+  }
+
+  /**
+   * Given an Avro field schema checks whether the field is of Logical Date Type or not.
+   *
+   * @param fieldSchema avro field schema
+   * @return boolean indicating whether fieldSchema is of Avro's Date Logical Type
+   */
+  private static boolean isLogicalTypeDate(Schema fieldSchema) {
+    if (fieldSchema.getType() == Schema.Type.UNION) {
+      return fieldSchema.getTypes().stream().anyMatch(schema -> schema.getLogicalType() == LogicalTypes.date());
+    }
+    return fieldSchema.getLogicalType() == LogicalTypes.date();
   }
 }

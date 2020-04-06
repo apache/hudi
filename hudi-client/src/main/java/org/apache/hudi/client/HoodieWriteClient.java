@@ -148,6 +148,35 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
+   * Main API to run bootstrap to hudi.
+   */
+  public void bootstrap() {
+    if (rollbackPending) {
+      rollBackPendingBootstrap();
+    }
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT);
+    table.bootstrap(jsc);
+  }
+
+  /**
+   * Main API to rollback pending bootstrap.
+   */
+  protected void rollBackPendingBootstrap() {
+    LOG.info("Rolling back pending bootstrap if present");
+    HoodieTable<T> table = HoodieTable.create(config, hadoopConf);
+    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
+    Option<String> instant = Option.fromJavaOptional(
+        inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp).findFirst());
+    if (instant.isPresent() && HoodieTimeline.compareTimestamps(instant.get(), HoodieTimeline.LESSER_THAN_OR_EQUALS,
+        HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
+      LOG.info("Found pending bootstrap instants. Rolling them back");
+      table.rollbackBootstrap(jsc, HoodieActiveTimeline.createNewInstantTime());
+      LOG.info("Finished rolling back pending bootstrap");
+    }
+
+  }
+
+  /**
    * Upsert a batch of new records into Hoodie table at the supplied instantTime.
    *
    * @param records JavaRDD of hoodieRecords to upsert
@@ -638,7 +667,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     for (String commit : commits) {
-      rollback(commit);
+      if (HoodieTimeline.compareTimestamps(commit, HoodieTimeline.LESSER_THAN_OR_EQUALS,
+          HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
+        rollBackPendingBootstrap();
+        break;
+      } else {
+        rollback(commit);
+      }
     }
   }
 

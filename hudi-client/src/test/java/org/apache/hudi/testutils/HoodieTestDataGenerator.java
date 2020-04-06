@@ -18,6 +18,7 @@
 
 package org.apache.hudi.testutils;
 
+import java.net.URLEncoder;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
@@ -43,6 +44,14 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.Column;
+import org.apache.spark.sql.api.java.UDF1;
+import org.apache.spark.sql.types.DataTypes;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -57,10 +66,12 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.spark.sql.functions.callUDF;
 
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
@@ -360,7 +371,7 @@ public class HoodieTestDataGenerator {
   }
 
   public List<HoodieRecord> generateInsertsAsPerSchema(String commitTime, Integer n, String schemaStr) {
-    return generateInsertsStream(commitTime, n, schemaStr).collect(Collectors.toList());
+    return generateInsertsStream(commitTime, n, false, schemaStr).collect(Collectors.toList());
   }
 
   /**
@@ -387,20 +398,24 @@ public class HoodieTestDataGenerator {
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
-  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, String schemaStr) {
-    return generateInsertsStream(commitTime, n, false, schemaStr);
+  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened,
+      String schemaStr) {
+    return generateInsertsStream(commitTime, n, isFlattened, schemaStr,
+        () -> partitionPaths[RAND.nextInt(partitionPaths.length)],
+        () -> UUID.randomUUID().toString());
   }
 
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
   public Stream<HoodieRecord> generateInsertsStream(
-      String instantTime, Integer n, boolean isFlattened, String schemaStr) {
+      String instantTime, Integer n, boolean isFlattened, String schemaStr, Supplier<String> partitionPathSupplier,
+      Supplier<String> recordKeySupplier) {
     int currSize = getNumExistingKeys(schemaStr);
 
     return IntStream.range(0, n).boxed().map(i -> {
-      String partitionPath = partitionPaths[RAND.nextInt(partitionPaths.length)];
-      HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
+      String partitionPath = partitionPathSupplier.get();
+      HoodieKey key = new HoodieKey(recordKeySupplier.get(), partitionPath);
       KeyPartition kp = new KeyPartition();
       kp.key = key;
       kp.partitionPath = partitionPath;
@@ -634,6 +649,36 @@ public class HoodieTestDataGenerator {
     }
     numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
     return result.stream();
+  }
+
+  public static Dataset<Row> generateTestRawTripDataset(double timestamp, int numRecords, List<String> partitionPaths,
+      JavaSparkContext jsc, SQLContext sqlContext) {
+    boolean isPartitioned = partitionPaths != null && !partitionPaths.isEmpty();
+    final List<String> records = new ArrayList<>();
+    IntStream.range(0, numRecords).forEach(i -> {
+      String id = "" + i;
+      records.add(generateGenericRecord("trip_" + id, "rider_" + id, "driver_" + id,
+          timestamp, false, false).toString());
+    });
+    if (isPartitioned) {
+      sqlContext.udf().register("partgen",
+          (UDF1<String, String>) (val) -> URLEncoder.encode(partitionPaths.get(
+              Integer.parseInt(val.split("_")[1]) % partitionPaths.size()), StandardCharsets.UTF_8.toString()),
+          DataTypes.StringType);
+    }
+    JavaRDD rdd = jsc.parallelize(records);
+    Dataset<Row> df = sqlContext.read().json(rdd);
+    if (isPartitioned) {
+      df = df.withColumn("datestr", callUDF("partgen", new Column("_row_key")));
+      // Order the columns to ensure generated avro schema aligns with Hive schema
+      df = df.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon",
+          "end_lat", "end_lon", "city_to_state", "fare", "tip_history", "_hoodie_is_deleted", "datestr");
+    } else {
+      // Order the columns to ensure generated avro schema aligns with Hive schema
+      df = df.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon",
+          "end_lat", "end_lon", "city_to_state", "fare", "tip_history", "_hoodie_is_deleted");
+    }
+    return df;
   }
 
   /**

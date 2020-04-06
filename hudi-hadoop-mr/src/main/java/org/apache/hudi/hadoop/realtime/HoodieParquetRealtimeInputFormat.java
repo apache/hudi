@@ -145,10 +145,10 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
                   .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
               if (split instanceof ExternalBaseFileSplit) {
                 ExternalBaseFileSplit eSplit = (ExternalBaseFileSplit)split;
-                String[] hosts = Arrays.stream(split.getLocationInfo()).filter(x -> !x.isInMemory())
-                    .toArray(String[]::new);
-                String[] inMemoryHosts = Arrays.stream(split.getLocationInfo()).filter(SplitLocationInfo::isInMemory)
-                    .toArray(String[]::new);
+                String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
+                    .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];
+                String[] inMemoryHosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
+                    .filter(SplitLocationInfo::isInMemory).toArray(String[]::new) : new String[0];
                 FileSplit baseSplit = new FileSplit(eSplit.getPath(), eSplit.getStart(), eSplit.getLength(),
                     hosts, inMemoryHosts);
                 rtSplits.add(new RealtimeExternalBaseFileSplit(baseSplit,metaClient.getBasePath(),
@@ -270,9 +270,16 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     // sanity check
     ValidationUtils.checkArgument(split instanceof RealtimeSplit,
         "HoodieRealtimeRecordReader can only work on RealtimeSplit and not with " + split);
-
-    return new HoodieRealtimeRecordReader((RealtimeSplit)split, jobConf,
-          super.getRecordReader(split, jobConf, reporter));
+    JobConf jobConf1 = new JobConf(jobConf);
+    JobConf jobConf2 = new JobConf(jobConf);
+    if (split instanceof ExternalBaseFileSplit) {
+      // Group-By queries are failing because of Projection Pusher implementation which messes up the columnNames and
+      // columnIds in the configuration.
+      // TODO: ProjectionPusher needs to be overridden for both vectorized and non-vectorized parquet reading.
+      //jobConf2.unset(ConfVars.PLAN.varname);
+    }
+    return new HoodieRealtimeRecordReader((RealtimeSplit)split, jobConf1,
+        super.getRecordReader(split, jobConf2, reporter));
   }
 
   @Override

@@ -19,17 +19,13 @@
 package org.apache.hudi.table;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.MergingParquetIterator;
-import org.apache.hudi.client.utils.ParquetReaderIterator;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
@@ -40,15 +36,14 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.table.action.bootstrap.BootstrapActionExecutor;
+import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BulkInsertCommitActionExecutor;
@@ -56,20 +51,15 @@ import org.apache.hudi.table.action.commit.BulkInsertPreppedCommitActionExecutor
 import org.apache.hudi.table.action.commit.DeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.InsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.InsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.MergeHelper;
 import org.apache.hudi.table.action.commit.UpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.UpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.avro.AvroParquetReader;
-import org.apache.parquet.avro.AvroReadSupport;
-import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -148,6 +138,16 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
 
+  @Override
+  public HoodieBootstrapWriteMetadata bootstrap(JavaSparkContext jsc) {
+    return new BootstrapActionExecutor(jsc, config, this).execute();
+  }
+
+  @Override
+  public void rollbackBootstrap(JavaSparkContext jsc, String instantTime) {
+    new CopyOnWriteRestoreActionExecutor(jsc, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
+  }
+
   public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
       Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
@@ -161,6 +161,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
+      MergeHelper.runMerge(this, upsertHandle);
+      /**
       HoodieBaseFile baseFile = upsertHandle.getPrevBaseFile();
       BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
       Configuration configForHudiFile = new Configuration(getHadoopConf());
@@ -204,6 +206,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
           reader.close();
         }
       }
+      **/
     }
 
 

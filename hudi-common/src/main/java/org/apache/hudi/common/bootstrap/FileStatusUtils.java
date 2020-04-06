@@ -46,7 +46,7 @@ public class FileStatusUtils {
     if (null == path) {
       return null;
     }
-    return HoodiePath.newBuilder().setUri(path.toUri().toString()).build();
+    return HoodiePath.newBuilder().setUri(path.toString()).build();
   }
   
   public static FsPermission toFSPermission(HoodieFSPermission fsPermission) {
@@ -77,7 +77,6 @@ public class FileStatusUtils {
       return null;
     }
 
-    System.out.println("HoodieFileStatus : " + fileStatus);
     return new FileStatus(fileStatus.getLength(), fileStatus.getIsDir() == null ? false : fileStatus.getIsDir(),
         fileStatus.getBlockReplication(), fileStatus.getBlockSize(), fileStatus.getModificationTime(),
         fileStatus.getAccessTime(), toFSPermission(fileStatus.getPermission()), fileStatus.getOwner(),

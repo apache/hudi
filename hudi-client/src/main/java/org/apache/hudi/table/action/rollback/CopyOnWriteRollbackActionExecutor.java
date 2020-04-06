@@ -80,6 +80,9 @@ public class CopyOnWriteRollbackActionExecutor extends BaseRollbackActionExecuto
       //TODO: We need to persist this as rollback workload and use it in case of partial failures
       stats = new RollbackHelper(table.getMetaClient(), config).performRollback(jsc, resolvedInstant, rollbackRequests);
     }
+
+    dropBootstrapIndexIfNeeded(instantToRollback);
+
     // Delete Inflight instant if enabled
     deleteInflightAndRequestedInstant(deleteInstants, activeTimeline, resolvedInstant);
     LOG.info("Time(in ms) taken to finish rollback " + (System.currentTimeMillis() - startTime));

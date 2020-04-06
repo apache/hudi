@@ -358,7 +358,6 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     // }
     if (split instanceof ExternalBaseFileSplit) {
       ExternalBaseFileSplit eSplit = (ExternalBaseFileSplit)split;
-      LOG.debug("ExternalDataFileSplit is " + eSplit);
       String[] rawColNames = HoodieColumnProjectionUtils.getReadColumnNames(job);
       List<Integer> rawColIds = HoodieColumnProjectionUtils.getReadColumnIDs(job);
       List<Pair<Integer, String>> colsWithIndex =
@@ -370,26 +369,25 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
           .collect(Collectors.toList());
       // This always matches hive table description
       List<Pair<String, String>> colNameWithTypes = HoodieColumnProjectionUtils.getIOColumnNameAndTypes(job);
-      List<Pair<String, String>> hoodieColNamesWithTypes = colNameWithTypes.subList(0, 5);
-      List<Pair<String, String>> otherColNamesWithTypes =
-          colNameWithTypes.subList(5, colNameWithTypes.size());
-      JobConf jobConf1 = new JobConf(job);
-      JobConf jobConf2 = new JobConf(job);
-      HoodieColumnProjectionUtils.setIOColumnNameAndTypes(jobConf1, hoodieColNamesWithTypes);
-      HoodieColumnProjectionUtils.setIOColumnNameAndTypes(jobConf2, otherColNamesWithTypes);
+      List<Pair<String, String>> hoodieColNamesOnlyWithTypes = colNameWithTypes.stream()
+          .filter(p -> HoodieRecord.HOODIE_META_COLUMNS.contains(p.getKey()))
+          .collect(Collectors.toList());
+      List<Pair<String, String>> colNamesWithTypesForSkeleton = colNameWithTypes.stream()
+          .filter(p -> HoodieRecord.HOODIE_META_COLUMNS.contains(p.getKey())
+              || VirtualColumn.VIRTUAL_COLUMN_NAMES.contains(p.getKey()))
+          .collect(Collectors.toList());
+      List<Pair<String, String>> colNamesWithTypesForExternal = colNameWithTypes.stream()
+              .filter(p -> !HoodieRecord.HOODIE_META_COLUMNS.contains(p.getKey())).collect(Collectors.toList());
+      LOG.error("colNameWithTypes.size()" + colNameWithTypes.size());
+      LOG.error("colNameWithTypes =" + colNameWithTypes);
       if (hoodieColsProjected.isEmpty()) {
-        // Adjust adjustedColsProjected
-        List<Integer> adjustednonHoodieColsProjected = colsWithIndex.stream()
-            .filter(idxWithName -> idxWithName.getKey() >= HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
-            .map(idxWithName -> idxWithName.getKey() - HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
-            .collect(Collectors.toList());
-        List<String> adjustednonHoodieColNamesProjected = colsWithIndex.stream()
-            .filter(idxWithName -> idxWithName.getKey() >= HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
-            .map(idxWithName -> idxWithName.getValue())
-            .collect(Collectors.toList());
-        HoodieColumnProjectionUtils.setReadColumns(jobConf1, adjustednonHoodieColsProjected,
-            adjustednonHoodieColNamesProjected);
-        return super.getRecordReader(split, jobConf1, reporter);
+        return new HoodieColumnStichingRecordReader(new NullSkeletonRecordReader(),
+            HoodieRecord.HOODIE_META_COLUMNS.size(),
+            super.getRecordReader(eSplit.getExternalFileSplit(), job, reporter),
+            colNamesWithTypesForExternal.size(),
+            false);
+      } else if (externalColsProjected.isEmpty()) {
+        return super.getRecordReader(split, job, reporter);
       } else {
         HoodieColumnProjectionUtils.setReadColumns(jobConf1, new ArrayList<>(), new ArrayList<>());
         HoodieColumnProjectionUtils.setReadColumns(jobConf2, new ArrayList<>(), new ArrayList<>());
@@ -420,12 +418,17 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
         //FileSplit rightSplit =
         //    makeSplit(externalFile, 0, externalFileStatus.getLen(), new String[0], new String[0]);
         FileSplit rightSplit = eSplit.getExternalFileSplit();
-        LOG.info("Generating column stiching reader for " + eSplit.getPath() + " and " + rightSplit.getPath());
-        return new HoodieColumnStichingRecordReader(super.getRecordReader(eSplit, jobConf1, reporter),
-            super.getRecordReader(rightSplit, jobConf2, reporter));
+        LOG.info("Generating column stitching reader for " + eSplit.getPath() + " and " + rightSplit.getPath());
+        return new HoodieColumnStichingRecordReader(super.getRecordReader(eSplit, job, reporter),
+            HoodieRecord.HOODIE_META_COLUMNS.size(),
+            super.getRecordReader(rightSplit, job, reporter),
+            colNamesWithTypesForExternal.size(),
+            true);
       }
     }
-    System.out.println("EMPLOYING DEFAULT RECORD READER - " + split);
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("EMPLOYING DEFAULT RECORD READER - " + split);
+    }
     return super.getRecordReader(split, job, reporter);
   }
 
@@ -473,7 +476,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
 
   private ExternalBaseFileSplit makeExternalFileSplit(HoodiePathWithExternalFileStatus file, FileSplit split) {
     try {
-      System.out.println("Making external data split for " + file);
+      LOG.info("Making external data split for " + file);
       FileStatus externalFileStatus = file.getExternalFileStatus();
       FileSplit externalFileSplit = makeSplit(externalFileStatus.getPath(), 0, externalFileStatus.getLen(),
           new String[0], new String[0]);

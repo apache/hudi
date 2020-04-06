@@ -19,9 +19,10 @@
 package org.apache.hudi.utilities.keygen;
 
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
@@ -110,8 +111,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   }
 
   @Override
-  public HoodieKey getKey(GenericRecord record) {
-    Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathField, true);
+  public String getPartitionPath(GenericRecord record) {
+    Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, partitionPathField, true);
     if (partitionVal == null) {
       partitionVal = 1L;
     }
@@ -133,14 +134,16 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
           "Unexpected type for partition field: " + partitionVal.getClass().getName());
       }
       Date timestamp = new Date(timeMs);
-      String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
-      if (recordKey == null || recordKey.isEmpty()) {
-        throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
+      String partitionPath = partitionPathFormat.format(timestamp);
+      if (encodePartitionPath) {
+        try {
+          partitionPath = URLEncoder.encode(partitionPath, StandardCharsets.UTF_8.toString());
+        } catch (UnsupportedEncodingException uoe) {
+          throw new HoodieException(uoe.getMessage(), uoe);
+        }
       }
 
-      String partitionPath = hiveStylePartitioning ? partitionPathField + "=" + partitionPathFormat.format(timestamp)
-              : partitionPathFormat.format(timestamp);
-      return new HoodieKey(recordKey, partitionPath);
+      return hiveStylePartitioning ? partitionPathField + "=" + partitionPath : partitionPath;
     } catch (ParseException pe) {
       throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, pe);
     }

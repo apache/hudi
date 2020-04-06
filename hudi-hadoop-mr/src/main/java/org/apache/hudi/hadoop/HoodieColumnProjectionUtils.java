@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -101,7 +102,6 @@ public class HoodieColumnProjectionUtils {
     if (old != null && !old.isEmpty()) {
       newConfStr = newConfStr + StringUtils.COMMA_STR + old;
     }
-    System.out.println("Read Column Ids=" + newConfStr);
     setReadColumnIDConf(conf, newConfStr);
     // Set READ_ALL_COLUMNS to false
     conf.setBoolean(READ_ALL_COLUMNS, false);
@@ -210,8 +210,10 @@ public class HoodieColumnProjectionUtils {
 
   public static List<String> getIOColumnTypes(Configuration conf) {
     String colTypes = conf.get(IOConstants.COLUMNS_TYPES, "");
+    TypeInfoUtils.getTypeInfosFromTypeString(colTypes);
     if (colTypes != null && !colTypes.isEmpty()) {
-      return Arrays.asList(colTypes.split(","));
+      return TypeInfoUtils.getTypeInfosFromTypeString(colTypes).stream()
+          .map(t -> t.getTypeName()).collect(Collectors.toList());
     }
     return new ArrayList<>();
   }
@@ -270,7 +272,6 @@ public class HoodieColumnProjectionUtils {
       }
       result.append(col);
     }
-    System.out.println("Read Column Names=" + result);
     conf.set(READ_COLUMN_NAMES_CONF_STR, result.toString());
   }
 

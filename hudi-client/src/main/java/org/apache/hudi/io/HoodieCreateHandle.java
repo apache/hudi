@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieStorageWriter;
@@ -57,7 +59,14 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
       String partitionPath, String fileId, SparkTaskContextSupplier sparkTaskContextSupplier) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, sparkTaskContextSupplier);
+    this(config, instantTime, hoodieTable, partitionPath, fileId, generateOriginalAndHoodieWriteSchema(config),
+        sparkTaskContextSupplier);
+  }
+
+  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
+      String partitionPath, String fileId, Pair<Schema, Schema> originalAndHoodieSchema,
+      SparkTaskContextSupplier sparkTaskContextSupplier) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, originalAndHoodieSchema, sparkTaskContextSupplier);
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
 

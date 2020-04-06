@@ -47,4 +47,12 @@ public class ExternalBaseFileMapping implements Serializable {
   public HoodieFileStatus getExternalFileStatus() {
     return externalFileStatus;
   }
+
+  @Override
+  public String toString() {
+    return "ExternalBaseFileMapping{"
+        + "fileGroupId=" + fileGroupId
+        + ", externalFileStatus=" + externalFileStatus
+        + '}';
+  }
 }

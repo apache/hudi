@@ -24,6 +24,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{HoodieWriteClient, WriteStatus}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
@@ -106,7 +107,7 @@ private[hudi] object HoodieSparkSqlWriter {
       val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
       val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
       val hoodieAllIncomingRecords = genericRecords.map(gr => {
-        val orderingVal = DataSourceUtils.getNestedFieldVal(gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false)
+        val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false)
             .asInstanceOf[Comparable[_]]
         DataSourceUtils.createHoodieRecord(gr,
           orderingVal, keyGenerator.getKey(gr), parameters(PAYLOAD_CLASS_OPT_KEY))

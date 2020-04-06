@@ -16,28 +16,31 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.keygen;
+package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.schema.SchemaProvider;
 
-import org.apache.avro.generic.GenericRecord;
-
-import java.io.Serializable;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
 
 /**
- * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record.
+ * A Row Source that returns empty batch.
  */
-public abstract class KeyGenerator implements Serializable {
+public class EmptyBatchRowSource extends RowSource {
 
-  protected transient TypedProperties config;
-
-  protected KeyGenerator(TypedProperties config) {
-    this.config = config;
+  public EmptyBatchRowSource(TypedProperties props,
+      JavaSparkContext sparkContext, SparkSession sparkSession,
+      SchemaProvider schemaProvider) {
+    super(props, sparkContext, sparkSession, schemaProvider);
   }
 
-  /**
-   * Generate a Hoodie Key out of provided generic record.
-   */
-  public abstract HoodieKey getKey(GenericRecord record);
+  @Override
+  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
+    return Pair.of(Option.empty(), null);
+  }
 }

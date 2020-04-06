@@ -18,6 +18,13 @@
 
 package org.apache.hudi.table.action.commit;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkConfigUtils;
@@ -38,27 +45,18 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.BaseActionExecutor;
-
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
 import scala.Tuple2;
 
-public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
-    extends BaseActionExecutor<HoodieWriteMetadata> {
+public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>, R>
+    extends BaseActionExecutor<R> {
 
   private static final Logger LOG = LogManager.getLogger(BaseCommitActionExecutor.class);
 
@@ -179,7 +177,12 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
     }
   }
 
-  private void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata result) {
+  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata result) {
+    commit(extraMetadata, result, result.getWriteStatuses().map(WriteStatus::getStat).collect());
+  }
+
+  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata result,
+      List<HoodieWriteStat> stats) {
     String actionType = table.getMetaClient().getCommitActionType();
     LOG.info("Committing " + instantTime + ", action Type " + actionType);
     // Create a Hoodie table which encapsulated the commits and files visible
@@ -187,9 +190,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
 
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-
     result.setCommitted(true);
-    List<HoodieWriteStat> stats = result.getWriteStatuses().map(WriteStatus::getStat).collect();
     result.setWriteStats(stats);
 
     updateMetadataAndRollingStats(metadata, stats);
@@ -201,7 +202,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
     if (extraMetadata.isPresent()) {
       extraMetadata.get().forEach(metadata::addMetadata);
     }
-    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, getSchemaToStoreInCommit());
     metadata.setOperationType(operationType);
 
     try {
@@ -228,6 +229,13 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
     } catch (HoodieIOException ioe) {
       throw new HoodieCommitException("Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
     }
+  }
+
+  /**
+   * By default, return the writer schema in Write Config for storing in commit.
+   */
+  protected String getSchemaToStoreInCommit() {
+    return config.getSchema();
   }
 
   private void updateMetadataAndRollingStats(HoodieCommitMetadata metadata, List<HoodieWriteStat> writeStats) {

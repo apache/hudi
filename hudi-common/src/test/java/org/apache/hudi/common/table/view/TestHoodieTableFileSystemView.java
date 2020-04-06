@@ -22,8 +22,8 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
-import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
+import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
 import org.apache.hudi.common.bootstrap.index.HFileBasedBootstrapIndex;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
@@ -63,6 +63,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -336,7 +337,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         writer.begin();
         BootstrapSourceFileMapping mapping = new BootstrapSourceFileMapping(BOOTSTRAP_SOURCE_PATH, partitionPath,
             partitionPath, srcFileStatus, fileId);
-        writer.appendNextPartition(partitionPath, Arrays.asList(mapping));
+        List<BootstrapSourceFileMapping> b = new ArrayList<>();
+        b.add(mapping);
+        writer.appendNextPartition(partitionPath, b);
         writer.finish();
       }
     }

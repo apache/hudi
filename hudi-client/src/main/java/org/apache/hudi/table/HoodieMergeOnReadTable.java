@@ -28,6 +28,8 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -127,6 +129,11 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   public HoodieWriteMetadata compact(JavaSparkContext jsc, String compactionInstantTime) {
     RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(jsc, config, this, compactionInstantTime);
     return compactionExecutor.execute();
+  }
+
+  @Override
+  public void rollbackBootstrap(JavaSparkContext jsc, String instantTime) {
+    new MergeOnReadRestoreActionExecutor(jsc, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
   }
 
   @Override

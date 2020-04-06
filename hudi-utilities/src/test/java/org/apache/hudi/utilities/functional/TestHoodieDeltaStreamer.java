@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -70,6 +71,7 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.api.java.UDF4;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -443,7 +445,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   @Test
-  public void testBulkInsertsAndUpserts() throws Exception {
+  public void testBulkInsertsAndUpsertsWithBootstrap() throws Exception {
     String tableBasePath = dfsBasePath + "/test_table";
 
     // Initial bulk insert
@@ -469,6 +471,34 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     TestHelpers.assertCommitMetadata("00001", tableBasePath, dfs, 2);
     List<Row> counts = TestHelpers.countsPerCommit(tableBasePath + "/*/*.parquet", sqlContext);
     assertEquals(1950, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+
+    // Perform bootstrap with tableBasePath as source
+    String bootstrapSourcePath = dfsBasePath + "/src_bootstrapped";
+    sqlContext.read().format("org.apache.hudi").load(tableBasePath + "/*/*.parquet").write().format("parquet")
+        .save(bootstrapSourcePath);
+
+    String newDatasetBasePath = dfsBasePath + "/test_dataset_bootstrapped";
+    cfg.runBootstrap = true;
+    cfg.configs.add(String.format("hoodie.bootstrap.source.base.path=%s", bootstrapSourcePath));
+    cfg.configs.add(String.format("hoodie.bootstrap.recordkey.columns=%s", "_row_key"));
+    cfg.configs.add("hoodie.bootstrap.parallelism=5");
+    cfg.targetBasePath = newDatasetBasePath;
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    Dataset<Row> res = sqlContext.read().format("org.apache.hudi").load(newDatasetBasePath + "/*.parquet");
+    LOG.info("Schema :");
+    res.printSchema();
+
+    TestHelpers.assertRecordCount(1950, newDatasetBasePath + "/*.parquet", sqlContext);
+    res.registerTempTable("bootstrapped");
+    assertEquals(1950, sqlContext.sql("select distinct _hoodie_record_key from bootstrapped").count());
+
+    StructField[] fields = res.schema().fields();
+    assertEquals(5, fields.length);
+    assertEquals(HoodieRecord.COMMIT_TIME_METADATA_FIELD, fields[0].name());
+    assertEquals(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, fields[1].name());
+    assertEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, fields[2].name());
+    assertEquals(HoodieRecord.PARTITION_PATH_METADATA_FIELD, fields[3].name());
+    assertEquals(HoodieRecord.FILENAME_METADATA_FIELD, fields[4].name());
   }
 
   @Test

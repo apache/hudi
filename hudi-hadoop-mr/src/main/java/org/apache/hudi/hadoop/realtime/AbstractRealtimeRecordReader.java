@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -47,9 +48,9 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.hudi.hadoop.InputSplitUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.schema.MessageType;
 
@@ -341,12 +342,14 @@ public abstract class AbstractRealtimeRecordReader {
   private void init() throws IOException {
     Schema schemaFromLogFile =
         LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaLogPaths(), jobConf);
+    LOG.error("1. Writer Schema From Parquet => " + InputSplitUtils.getBaseFileSchema((FileSplit)split, jobConf)
+        .toString(true));
     if (schemaFromLogFile == null) {
-      writerSchema = new AvroSchemaConverter().convert(baseFileSchema);
-      LOG.debug("Writer Schema From Parquet => " + writerSchema.getFields());
+      writerSchema = InputSplitUtils.getBaseFileSchema((FileSplit)split, jobConf);
+      LOG.info("Writer Schema From Parquet => " + writerSchema.getFields());
     } else {
       writerSchema = schemaFromLogFile;
-      LOG.debug("Writer Schema From Log => " + writerSchema.getFields());
+      LOG.error("Writer Schema From Log => " + writerSchema.toString(true));
     }
     // Add partitioning fields to writer schema for resulting row to contain null values for these fields
     String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");

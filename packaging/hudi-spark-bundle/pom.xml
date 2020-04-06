@@ -64,6 +64,7 @@
               </transformers>
               <artifactSet>
                 <includes>
+                  <include>com.yammer.metrics:metrics-core</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
@@ -95,11 +96,18 @@
                   <include>org.apache.hive:hive-service-rpc</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
+                  <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-common</include>
+                  <include>org.apache.hbase:hbase-protocol</include>
                   <include>org.apache.hbase:hbase-server</include>
+                  <include>org.apache.htrace:htrace-core</include>
                 </includes>
               </artifactSet>
               <relocations>
+                <relocation>
+                  <pattern>com.yammer.metrics.</pattern>
+                  <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>com.beust.jcommander.</pattern>
                   <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
@@ -147,6 +155,10 @@
                 <relocation>
                   <pattern> org.apache.hadoop.hbase.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern> org.apache.htrace.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
                 </relocation>
                 <!-- TODO: Revisit GH ISSUE #533 & PR#633-->
               </relocations>
@@ -276,6 +288,13 @@
       <artifactId>hive-common</artifactId>
       <version>${hive.version}</version>
       <scope>${spark.bundle.hive.scope}</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.htrace</groupId>
+      <artifactId>htrace-core</artifactId>
+      <version>${htrace.version}</version>
+      <scope>compile</scope>
     </dependency>
 
     <dependency>

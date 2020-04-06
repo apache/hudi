@@ -18,20 +18,18 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
 public class SimpleKeyGenerator extends KeyGenerator {
-
-  private static final String DEFAULT_PARTITION_PATH = "default";
 
   protected final String recordKeyField;
 
@@ -48,24 +46,22 @@ public class SimpleKeyGenerator extends KeyGenerator {
   }
 
   @Override
-  public HoodieKey getKey(GenericRecord record) {
-    if (recordKeyField == null || partitionPathField == null) {
-      throw new HoodieKeyException("Unable to find field names for record key or partition path in cfg");
-    }
+  public String getRecordKey(GenericRecord record) {
+    return KeyGenUtils.getRecordKey(record, recordKeyField);
+  }
 
-    String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
-    if (recordKey == null || recordKey.isEmpty()) {
-      throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
-    }
+  @Override
+  public String getPartitionPath(GenericRecord record) {
+    return KeyGenUtils.getPartitionPath(record, partitionPathField, hiveStylePartitioning, encodePartitionPath);
+  }
 
-    String partitionPath = DataSourceUtils.getNestedFieldValAsString(record, partitionPathField, true);
-    if (partitionPath == null || partitionPath.isEmpty()) {
-      partitionPath = DEFAULT_PARTITION_PATH;
-    }
-    if (hiveStylePartitioning) {
-      partitionPath = partitionPathField + "=" + partitionPath;
-    }
+  @Override
+  public List<String> getRecordKeyFields() {
+    return Arrays.asList(recordKeyField);
+  }
 
-    return new HoodieKey(recordKey, partitionPath);
+  @Override
+  public List<String> getPartitionPathFields() {
+    return Arrays.asList(partitionPathField);
   }
 }

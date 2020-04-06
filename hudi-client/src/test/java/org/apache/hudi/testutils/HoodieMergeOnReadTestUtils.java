@@ -59,9 +59,16 @@ public class HoodieMergeOnReadTestUtils {
                                                                String basePath,
                                                                JobConf jobConf,
                                                                HoodieParquetInputFormat inputFormat) {
-    Schema schema = HoodieAvroUtils.addMetadataFields(
-        new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
-    setPropsForInputFormat(inputFormat, jobConf, schema, basePath);
+    Schema schema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    return getRecordsUsingInputFormat(inputPaths, basePath, jobConf, inputFormat, schema,
+        HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES);
+  }
+
+  public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths, String basePath,
+        JobConf jobConf, HoodieParquetInputFormat inputFormat, Schema rawSchema, String rawHiveColumnTypes) {
+    Schema schema = HoodieAvroUtils.addMetadataFields(rawSchema);
+    String hiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(rawHiveColumnTypes);
+    setPropsForInputFormat(inputFormat, jobConf, schema, hiveColumnTypes);
     return inputPaths.stream().map(path -> {
       setInputPath(jobConf, path);
       List<GenericRecord> records = new ArrayList<>();
@@ -94,7 +101,7 @@ public class HoodieMergeOnReadTestUtils {
   }
 
   private static void setPropsForInputFormat(HoodieParquetInputFormat inputFormat, JobConf jobConf,
-      Schema schema, String basePath) {
+      Schema schema, String hiveColumnTyps) {
     List<Schema.Field> fields = schema.getFields();
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
     String postions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
@@ -104,7 +111,7 @@ public class HoodieMergeOnReadTestUtils {
         .map(Schema.Field::name).collect(Collectors.joining(","));
     hiveColumnNames = hiveColumnNames + ",datestr";
 
-    String hiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES);
+    String hiveColumnTypes = hiveColumnTyps;
     hiveColumnTypes = hiveColumnTypes + ",string";
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, hiveColumnTypes);

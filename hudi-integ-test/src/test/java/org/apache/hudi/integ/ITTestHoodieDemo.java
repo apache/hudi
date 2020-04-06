@@ -21,6 +21,7 @@ package org.apache.hudi.integ;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -143,6 +144,39 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --disable-compaction " + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_TABLE_NAME)));
 
     executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
+    executeSparkSQLCommand(SPARKSQL_BS_PREP_COMMANDS, true);
+    List<String> bootstrapCmds = CollectionUtils.createImmutableList(
+        "spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+        + " --table-type COPY_ON_WRITE "
+        + " --run-bootstrap "
+        + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
+        + " --target-base-path " + COW_BOOTSTRAPPED_BASE_PATH + " --target-table " + COW_BOOTSTRAPPED_TABLE_NAME
+        + " --props /var/demo/config/dfs-source.properties"
+        + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
+        + " --initial-checkpoint-provider"
+        + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
+        + " --hoodie-conf hoodie.bootstrap.source.base.path=" + BOOTSTRAPPED_SRC_PATH
+        + " --hoodie-conf hoodie.bootstrap.recordkey.columns=key"
+        + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
+        + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
+        + " --hoodie-conf hoodie.bootstrap.keygen.class=" + SimpleKeyGenerator.class.getName()
+        + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_BOOTSTRAPPED_TABLE_NAME),
+        "spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+        + " --table-type MERGE_ON_READ "
+        + " --run-bootstrap "
+        + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
+        + " --target-base-path " + MOR_BOOTSTRAPPED_BASE_PATH + " --target-table " + MOR_BOOTSTRAPPED_TABLE_NAME
+        + " --props /var/demo/config/dfs-source.properties"
+        + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
+        + " --initial-checkpoint-provider"
+        + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
+        + " --hoodie-conf hoodie.bootstrap.source.base.path=" + BOOTSTRAPPED_SRC_PATH
+        + " --hoodie-conf hoodie.bootstrap.recordkey.columns=key"
+        + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
+        + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
+        + " --hoodie-conf hoodie.bootstrap.keygen.class=" + SimpleKeyGenerator.class.getName()
+        + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_BOOTSTRAPPED_TABLE_NAME));
+    executeCommandStringsInDocker(ADHOC_1_CONTAINER, bootstrapCmds);
   }
 
   private void testHiveAfterFirstBatch() throws Exception {

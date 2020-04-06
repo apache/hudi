@@ -49,7 +49,7 @@ public class HoodieBaseFile extends BaseFile {
   }
 
   public HoodieBaseFile(String filePath) {
-    super(filePath);
+    this(filePath, null);
   }
 
   public HoodieBaseFile(String filePath, BaseFile externalBaseFile) {

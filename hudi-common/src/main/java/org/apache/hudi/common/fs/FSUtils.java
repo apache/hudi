@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -47,14 +49,18 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -567,5 +573,35 @@ public class FSUtils {
         consistencyGuardConfig.isConsistencyCheckEnabled()
             ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig)
             : new NoOpConsistencyGuard());
+  }
+
+  public static List<Pair<String, List<HoodieFileStatus>>> getAllLeafFoldersWithFiles(FileSystem fs, String basePathStr,
+      PathFilter filePathFilter) throws IOException {
+    final Path basePath = new Path(basePathStr);
+    final Map<Integer, List<String>> levelToPartitions = new HashMap<>();
+    final Map<String, List<HoodieFileStatus>> partitionToFiles = new HashMap<>();
+    processFiles(fs, basePathStr, (status) -> {
+      if (status.isFile() && filePathFilter.accept(status.getPath())) {
+        String relativePath = FSUtils.getRelativePartitionPath(basePath, status.getPath().getParent());
+        List<HoodieFileStatus> statusList = partitionToFiles.get(relativePath);
+        if (null == statusList) {
+          Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
+          List<String> dirs = levelToPartitions.get(level);
+          if (null == dirs) {
+            dirs = new ArrayList<>();
+            levelToPartitions.put(level, dirs);
+          }
+          dirs.add(relativePath);
+          statusList = new ArrayList<>();
+          partitionToFiles.put(relativePath, statusList);
+        }
+        statusList.add(FileStatusUtils.fromFileStatus(status));
+      }
+      return true;
+    }, true);
+    OptionalInt maxLevelOpt = levelToPartitions.keySet().stream().mapToInt(x -> x).max();
+    int maxLevel = maxLevelOpt.orElse(-1);
+    return maxLevel >= 0 ? levelToPartitions.get(maxLevel).stream()
+        .map(d -> Pair.of(d, partitionToFiles.get(d))).collect(Collectors.toList()) : new ArrayList<>();
   }
 }

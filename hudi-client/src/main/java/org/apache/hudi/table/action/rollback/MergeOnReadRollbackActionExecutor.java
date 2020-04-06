@@ -96,6 +96,8 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
       allRollbackStats = new RollbackHelper(table.getMetaClient(), config).performRollback(jsc, resolvedInstant, rollbackRequests);
     }
 
+    dropBootstrapIndexIfNeeded(resolvedInstant);
+
     // Delete Inflight instants if enabled
     deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), resolvedInstant);
 

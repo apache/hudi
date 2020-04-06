@@ -31,6 +31,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -44,8 +46,6 @@ import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -72,6 +72,8 @@ import java.util.stream.Collectors;
 
 public class HFileBasedBootstrapIndex extends BootstrapIndex {
 
+  protected static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LogManager.getLogger(HFileBasedBootstrapIndex.class);
 
   public static final String BOOTSTRAP_INDEX_FILE_ID = "00000000-0000-0000-0000-000000000000-0";
@@ -82,8 +84,22 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
   // Additional Metadata written to HFiles.
   public static final byte[] INDEX_INFO_KEY = Bytes.toBytes("INDEX_INFO");
 
+  // Flag to idenitfy if Bootstrap Index is empty or not
+  private final boolean hasIndex;
+
   public HFileBasedBootstrapIndex(HoodieTableMetaClient metaClient) {
     super(metaClient);
+    Path indexByPartitionPath = getIndexByPartitionPath(metaClient);
+    Path indexByFilePath = getIndexByFileIdPath(metaClient);
+    try {
+      if (metaClient.getFs().exists(indexByPartitionPath) && metaClient.getFs().exists(indexByFilePath)) {
+        hasIndex = true;
+      } else {
+        hasIndex = false;
+      }
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
   }
 
   private static String getPartitionKey(String partition) {
@@ -116,7 +132,6 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
   private static HFile.Reader createReader(String hFilePath, Configuration conf, FileSystem fileSystem) {
     try {
       LOG.info("Opening HFile for reading :" + hFilePath);
-      CacheConfig config = new CacheConfig(conf);
       HFile.Reader reader = HFile.createReader(fileSystem, new HFilePathForReader(hFilePath), new CacheConfig(conf),
           conf);
       return reader;
@@ -135,6 +150,26 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
     return new HFileBootstrapIndexWriter(sourceBasePath, metaClient);
   }
 
+  @Override
+  public void dropIndex() {
+    try {
+      Path[] indexPaths = new Path[]{getIndexByPartitionPath(metaClient), getIndexByFileIdPath(metaClient)};
+      for (Path indexPath : indexPaths) {
+        if (metaClient.getFs().exists(indexPath)) {
+          LOG.info("Dropping bootstrap index. Deleting file : " + indexPath);
+          metaClient.getFs().delete(indexPath);
+        }
+      }
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+  }
+
+  @Override
+  protected boolean checkIndex() {
+    return hasIndex;
+  }
+
   /**
    * HFile Based Index Reader.
    */
@@ -145,8 +180,6 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
     // Well Known Paths for indices
     private final String indexByPartitionPath;
     private final String indexByFileIdPath;
-    // Flag to idenitfy if Bootstrap Index is empty or not
-    private final boolean isBootstrapped;
 
     // Index Readers
     private transient HFile.Reader indexByPartitionReader;
@@ -157,25 +190,12 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
 
     public HFileBootstrapIndexReader(HoodieTableMetaClient metaClient) {
       super(metaClient);
-      try {
-        metaClient.initializeBootstrapDirsIfNotExists();
-        Path indexByPartitionPath = getIndexByPartitionPath(metaClient);
-        Path indexByFilePath = getIndexByFileIdPath(metaClient);
-        if (metaClient.getFs().exists(indexByPartitionPath) && metaClient.getFs().exists(indexByFilePath)) {
-          this.indexByPartitionPath = indexByPartitionPath.toString();
-          this.indexByFileIdPath = indexByFilePath.toString();
-          this.sourceBasePath = getIndexInfo().getSourceBasePath();
-          this.isBootstrapped = true;
-        } else {
-          this.indexByPartitionPath = null;
-          this.indexByFileIdPath = null;
-          this.sourceBasePath = null;
-          this.isBootstrapped = false;
-        }
-        LOG.info("Loaded HFileBasedBootstrapIndex with source base path :" + sourceBasePath);
-      } catch (IOException e) {
-        throw new HoodieIOException(e.getMessage(), e);
-      }
+      Path indexByPartitionPath = getIndexByPartitionPath(metaClient);
+      Path indexByFilePath = getIndexByFileIdPath(metaClient);
+      this.indexByPartitionPath = indexByPartitionPath.toString();
+      this.indexByFileIdPath = indexByFilePath.toString();
+      this.sourceBasePath = getIndexInfo().getSourceBasePath();
+      LOG.info("Loaded HFileBasedBootstrapIndex with source base path :" + sourceBasePath);
     }
 
     @Override
@@ -195,9 +215,6 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
     }
 
     private BootstrapIndexInfo fetchBootstrapIndexInfo() throws IOException {
-      if (!isBootstrapped) {
-        return null;
-      }
       return TimelineMetadataUtils.deserializeAvroMetadata(
           getIndexByPartitionReader().loadFileInfo().get(INDEX_INFO_KEY),
           BootstrapIndexInfo.class);
@@ -243,44 +260,40 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
 
     private List<String> getAllKeys(HFileScanner scanner) {
       List<String> keys = new ArrayList<>();
-      if (isBootstrapped) {
-        try {
-          boolean available = scanner.seekTo();
-          while (available) {
-            keys.add(CellUtil.getCellKeyAsString(scanner.getKeyValue()));
-            available = scanner.next();
-          }
-        } catch (IOException ioe) {
-          throw new HoodieIOException(ioe.getMessage(), ioe);
+      try {
+        boolean available = scanner.seekTo();
+        while (available) {
+          keys.add(CellUtil.getCellKeyAsString(scanner.getKeyValue()));
+          available = scanner.next();
         }
+      } catch (IOException ioe) {
+        throw new HoodieIOException(ioe.getMessage(), ioe);
       }
+
       return keys;
     }
 
     @Override
     public List<BootstrapSourceFileMapping> getSourceFileMappingForPartition(String partition) {
-      if (isBootstrapped) {
-        try {
-          HFileScanner scanner = getIndexByPartitionReader().getScanner(true, true);
-          KeyValue keyValue = new KeyValue(Bytes.toBytes(getPartitionKey(partition)), new byte[0], new byte[0],
-              HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, new byte[0]);
-          if (scanner.seekTo(keyValue) == 0) {
-            ByteBuffer readValue = scanner.getValue();
-            byte[] valBytes = Bytes.toBytes(readValue);
-            BootstrapPartitionMetadata metadata =
-                TimelineMetadataUtils.deserializeAvroMetadata(valBytes, BootstrapPartitionMetadata.class);
-            return metadata.getHudiFileIdToSourceFile().entrySet().stream()
-                .map(e -> new BootstrapSourceFileMapping(sourceBasePath, metadata.getSourcePartitionPath(),
-                    partition, e.getValue(), e.getKey())).collect(Collectors.toList());
-          } else {
-            LOG.info("No value found for partition key (" + partition + ")");
-            return new ArrayList<>();
-          }
-        } catch (IOException ioe) {
-          throw new HoodieIOException(ioe.getMessage(), ioe);
+      try {
+        HFileScanner scanner = getIndexByPartitionReader().getScanner(true, true);
+        KeyValue keyValue = new KeyValue(Bytes.toBytes(getPartitionKey(partition)), new byte[0], new byte[0],
+            HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, new byte[0]);
+        if (scanner.seekTo(keyValue) == 0) {
+          ByteBuffer readValue = scanner.getValue();
+          byte[] valBytes = Bytes.toBytes(readValue);
+          BootstrapPartitionMetadata metadata =
+              TimelineMetadataUtils.deserializeAvroMetadata(valBytes, BootstrapPartitionMetadata.class);
+          return metadata.getHudiFileIdToSourceFile().entrySet().stream()
+              .map(e -> new BootstrapSourceFileMapping(sourceBasePath, metadata.getSourcePartitionPath(),
+                  partition, e.getValue(), e.getKey())).collect(Collectors.toList());
+        } else {
+          LOG.info("No value found for partition key (" + partition + ")");
+          return new ArrayList<>();
         }
+      } catch (IOException ioe) {
+        throw new HoodieIOException(ioe.getMessage(), ioe);
       }
-      return new ArrayList<>();
     }
 
     @Override
@@ -295,26 +308,24 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
       // Arrange input Keys in sorted order for 1 pass scan
       List<HoodieFileGroupId> fileGroupIds = new ArrayList<>(ids);
       Collections.sort(fileGroupIds);
-      if (isBootstrapped) {
-        try {
-          HFileScanner scanner = getIndexByFileIdReader().getScanner(true, true);
-          for (HoodieFileGroupId fileGroupId : fileGroupIds) {
-            KeyValue keyValue = new KeyValue(Bytes.toBytes(getFileGroupKey(fileGroupId)), new byte[0], new byte[0],
-                HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, new byte[0]);
-            if (scanner.seekTo(keyValue) == 0) {
-              ByteBuffer readValue = scanner.getValue();
-              byte[] valBytes = Bytes.toBytes(readValue);
-              BootstrapSourceFilePartitionInfo fileInfo = TimelineMetadataUtils.deserializeAvroMetadata(valBytes,
-                  BootstrapSourceFilePartitionInfo.class);
-              BootstrapSourceFileMapping mapping = new BootstrapSourceFileMapping(sourceBasePath,
-                  fileInfo.getSourcePartitionPath(), fileInfo.getHudiPartitionPath(), fileInfo.getSourceFileStatus(),
-                  fileGroupId.getFileId());
-              result.put(fileGroupId, mapping);
-            }
+      try {
+        HFileScanner scanner = getIndexByFileIdReader().getScanner(true, true);
+        for (HoodieFileGroupId fileGroupId : fileGroupIds) {
+          KeyValue keyValue = new KeyValue(Bytes.toBytes(getFileGroupKey(fileGroupId)), new byte[0], new byte[0],
+              HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, new byte[0]);
+          if (scanner.seekTo(keyValue) == 0) {
+            ByteBuffer readValue = scanner.getValue();
+            byte[] valBytes = Bytes.toBytes(readValue);
+            BootstrapSourceFilePartitionInfo fileInfo = TimelineMetadataUtils.deserializeAvroMetadata(valBytes,
+                BootstrapSourceFilePartitionInfo.class);
+            BootstrapSourceFileMapping mapping = new BootstrapSourceFileMapping(sourceBasePath,
+                fileInfo.getSourcePartitionPath(), fileInfo.getHudiPartitionPath(), fileInfo.getSourceFileStatus(),
+                fileGroupId.getFileId());
+            result.put(fileGroupId, mapping);
           }
-        } catch (IOException ioe) {
-          throw new HoodieIOException(ioe.getMessage(), ioe);
         }
+      } catch (IOException ioe) {
+        throw new HoodieIOException(ioe.getMessage(), ioe);
       }
       return result;
     }
@@ -322,11 +333,13 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
     @Override
     public void close() {
       try {
-        if (null != indexByPartitionReader) {
+        if (indexByPartitionReader != null) {
           indexByPartitionReader.close(true);
+          indexByPartitionReader = null;
         }
-        if (null != indexByFileIdReader) {
+        if (indexByFileIdReader != null) {
           indexByFileIdReader.close(true);
+          indexByFileIdReader = null;
         }
       } catch (IOException ioe) {
         throw new HoodieIOException(ioe.getMessage(), ioe);
@@ -406,7 +419,7 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
      * order.
      * @param mapping boostrap source file mapping.
      */
-    private void appendNextSourceFileMapping(BootstrapSourceFileMapping mapping) {
+    private void writeNextSourceFileMapping(BootstrapSourceFileMapping mapping) {
       try {
         BootstrapSourceFilePartitionInfo srcFilePartitionInfo = new BootstrapSourceFilePartitionInfo();
         srcFilePartitionInfo.setHudiPartitionPath(mapping.getHudiPartitionPath());
@@ -447,6 +460,7 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
               TimelineMetadataUtils.serializeAvroMetadata(partitionIndexInfo, BootstrapIndexInfo.class).get());
           indexByFileIdWriter.appendFileInfo(INDEX_INFO_KEY,
               TimelineMetadataUtils.serializeAvroMetadata(fileIdIndexInfo, BootstrapIndexInfo.class).get());
+
           close();
         }
       } catch (IOException ioe) {
@@ -493,25 +507,11 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
     public void finish() {
       // Sort and write
       List<String> partitions = sourceFileMappings.keySet().stream().sorted().collect(Collectors.toList());
-      partitions.forEach(p -> appendNextPartition(p, sourceFileMappings.get(p)));
+      partitions.forEach(p -> writeNextPartition(p, sourceFileMappings.get(p).get(0).getSourcePartitionPath(),
+          sourceFileMappings.get(p)));
       sourceFileMappings.values().stream().flatMap(Collection::stream).sorted()
-          .forEach(this::appendNextSourceFileMapping);
+          .forEach(this::writeNextSourceFileMapping);
       commit();
-    }
-
-    @Override
-    public void dropIndex() {
-      try {
-        Path[] indexPaths = new Path[]{indexByPartitionPath, indexByFileIdPath};
-        for (Path indexPath : indexPaths) {
-          if (metaClient.getFs().exists(indexPath)) {
-            LOG.info("Dropping bootstrap index. Deleting file : " + indexPath);
-            metaClient.getFs().delete(indexPath);
-          }
-        }
-      } catch (IOException ioe) {
-        throw new HoodieIOException(ioe.getMessage(), ioe);
-      }
     }
   }
 

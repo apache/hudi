@@ -26,6 +26,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ReflectionUtils;
 
 /**
  * Bootstrap Index Interface.
@@ -38,9 +40,38 @@ public abstract class BootstrapIndex implements Serializable {
     this.metaClient = metaClient;
   }
 
+  /**
+   * Create Bootstrap Index Reader.
+   * @return Index Reader
+   */
   public abstract IndexReader createReader();
 
+  /**
+   * Create Bootstrap Index Writer.
+   * @param sourceBasePath Source Base Path
+   * @return Index Writer
+   */
   public abstract IndexWriter createWriter(String sourceBasePath);
+
+  /**
+   * Drop bootstrap index.
+   */
+  public abstract void dropIndex();
+
+  /**
+   * Returns true if valid metadata bootstrap is present.
+   * @return
+   */
+  public final boolean isIndexAvailable() {
+    return metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant()
+        .map(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
+            HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS)).orElse(false) && checkIndex();
+  }
+
+  /**
+   * Check if bootstrap Index is present and ensures readable.
+   */
+  protected abstract boolean checkIndex();
 
   /**
    * Bootstrap Index Reader Interface.
@@ -124,11 +155,11 @@ public abstract class BootstrapIndex implements Serializable {
      */
     public abstract void finish();
 
-    /**
-     * Drop bootstrap index.
-     */
-    public abstract void dropIndex();
-
     public abstract void close();
+  }
+
+  public static BootstrapIndex getBootstrapIndex(HoodieTableMetaClient metaClient) {
+    return ((BootstrapIndex)(ReflectionUtils.loadClass(
+        metaClient.getTableConfig().getBootstrapIndexClass(), metaClient)));
   }
 }

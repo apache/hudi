@@ -18,6 +18,9 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -31,8 +34,14 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
@@ -84,7 +93,11 @@ public class HoodieDeltaStreamer implements Serializable {
 
   private final transient Config cfg;
 
+  private final TypedProperties properties;
+
   private transient DeltaSyncService deltaSyncService;
+
+  private final Option<BootstrapExecutor> bootstrapExecutor;
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
@@ -110,6 +123,9 @@ public class HoodieDeltaStreamer implements Serializable {
     }
     this.cfg = cfg;
     this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, conf, properties);
+    this.properties = properties;
+    this.bootstrapExecutor = Option.ofNullable(
+        cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, properties) : null);
   }
 
   public void shutdownGracefully() {
@@ -122,20 +138,25 @@ public class HoodieDeltaStreamer implements Serializable {
    * @throws Exception
    */
   public void sync() throws Exception {
-    if (cfg.continuousMode) {
-      deltaSyncService.start(this::onDeltaSyncShutdown);
-      deltaSyncService.waitForShutdown();
-      LOG.info("Delta Sync shutting down");
+    if (bootstrapExecutor.isPresent()) {
+      LOG.info("Performing bootstrap. Source=" + bootstrapExecutor.get().bootstrapConfig.getBootstrapSourceBasePath());
+      bootstrapExecutor.get().execute();
     } else {
-      LOG.info("Delta Streamer running only single round");
-      try {
-        deltaSyncService.getDeltaSync().syncOnce();
-      } catch (Exception ex) {
-        LOG.error("Got error running delta sync once. Shutting down", ex);
-        throw ex;
-      } finally {
-        deltaSyncService.close();
-        LOG.info("Shut down delta streamer");
+      if (cfg.continuousMode) {
+        deltaSyncService.start(this::onDeltaSyncShutdown);
+        deltaSyncService.waitForShutdown();
+        LOG.info("Delta Sync shutting down");
+      } else {
+        LOG.info("Delta Streamer running only single round");
+        try {
+          deltaSyncService.getDeltaSync().syncOnce();
+        } catch (Exception ex) {
+          LOG.error("Got error running delta sync once. Shutting down", ex);
+          throw ex;
+        } finally {
+          deltaSyncService.close();
+          LOG.info("Shut down delta streamer");
+        }
       }
     }
   }
@@ -287,6 +308,9 @@ public class HoodieDeltaStreamer implements Serializable {
         + "for the first run. This field will override the checkpoint of last commit using the checkpoint field. "
         + "Use this field only when switching source, for example, from DFS source to Kafka Source.")
     public String initialCheckpointProvider = null;
+
+    @Parameter(names = {"--run-bootstrap"}, description = "Run bootstrap if bootstrap index is not found")
+    public Boolean runBootstrap = false;
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
@@ -605,6 +629,119 @@ public class HoodieDeltaStreamer implements Serializable {
         }
         return true;
       }, executor)).toArray(CompletableFuture[]::new)), executor);
+    }
+  }
+
+  /**
+   * Performs bootstrap from a non-hudi source.
+   */
+  public static class BootstrapExecutor  implements Serializable {
+
+    /**
+     *  Config.
+     */
+    private final HoodieDeltaStreamer.Config cfg;
+
+    /**
+     * Schema provider that supplies the command for reading the input and writing out the target table.
+     */
+    private transient SchemaProvider schemaProvider;
+
+    /**
+     * Spark context.
+     */
+    private transient JavaSparkContext jssc;
+
+    /**
+     * Bag of properties with source, hoodie client, key generator etc.
+     */
+    private final TypedProperties props;
+
+    /**
+     * Hadoop Configuration.
+     */
+    private final Configuration configuration;
+
+    /**
+     * Bootstrap Configuration.
+     */
+    private final HoodieWriteConfig bootstrapConfig;
+
+    /**
+     * FileSystem instance.
+     */
+    private transient FileSystem fs;
+    /**
+     * Bootstrap Executor.
+     * @param cfg DeltaStreamer Config
+     * @param jssc Java Spark Context
+     * @param fs File System
+     * @param properties Bootstrap Writer Properties
+     * @throws IOException
+     */
+    public BootstrapExecutor(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
+        TypedProperties properties) throws IOException {
+      this.cfg = cfg;
+      this.jssc = jssc;
+      this.fs = fs;
+      this.configuration = conf;
+      this.props = properties != null ? properties : UtilHelpers.readConfig(
+          FSUtils.getFs(cfg.propsFilePath, jssc.hadoopConfiguration()),
+          new Path(cfg.propsFilePath), cfg.configs).getConfig();
+      // Add more defaults if full bootstrap requested
+      this.props.putIfAbsent(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY(),
+          DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL());
+      this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
+      HoodieWriteConfig.Builder builder =
+          HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath)
+              .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build())
+              .forTable(cfg.targetTableName)
+              .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+              .withAutoCommit(true)
+              .withProps(props);
+
+      if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {
+        builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
+      }
+      this.bootstrapConfig = builder.build();
+      LOG.info("Created bootstrap executor with configs : " + bootstrapConfig.getProps());
+    }
+
+    /**
+     * Executes Bootstrap.
+     */
+    public void execute() throws IOException {
+      initializeTable();
+      HoodieWriteClient bootstrapClient = new HoodieWriteClient(jssc, bootstrapConfig, true);
+      bootstrapClient.bootstrap();
+      syncHive();
+    }
+
+    /**
+     * Sync to Hive.
+     */
+    private void syncHive() {
+      if (cfg.enableHiveSync) {
+        HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath);
+        LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
+            + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
+        new HiveSyncTool(hiveSyncConfig, new HiveConf(configuration, HiveConf.class), fs).syncHoodieTable();
+      }
+    }
+
+    private void initializeTable() throws IOException {
+      if (fs.exists(new Path(cfg.targetBasePath))) {
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(new Configuration(fs.getConf()),
+            cfg.targetBasePath, false);
+        // This will guarantee there is no surprise with table type
+        ValidationUtils.checkArgument(metaClient.getTableType().equals(HoodieTableType.valueOf(cfg.tableType)),
+            "Hoodie table is of type " + metaClient.getTableType() + " but passed in CLI argument is "
+                + cfg.tableType);
+      } else {
+        // Initialize Table
+        HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()),
+            cfg.targetBasePath, cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName);
+      }
     }
   }
 }

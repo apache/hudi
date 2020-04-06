@@ -59,6 +59,7 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -328,6 +329,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    */
   public abstract HoodieWriteMetadata compact(JavaSparkContext jsc,
                                               String compactionInstantTime);
+
+  /**
+   * Perform metadata/full bootstrap of a Hudi table.
+   * @param jsc JavaSparkContext
+   * @return HoodieBootstrapWriteMetadata
+   */
+  public abstract HoodieBootstrapWriteMetadata bootstrap(JavaSparkContext jsc);
+
+  /**
+   * Perform rollback of bootstrap of a Hudi table.
+   * @param jsc JavaSparkContext
+   */
+  public abstract void rollbackBootstrap(JavaSparkContext jsc, String instantTime);
 
   /**
    * Executes a new clean action.

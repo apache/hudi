@@ -21,18 +21,15 @@ package org.apache.hudi.common.bootstrap;
 import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
 import org.apache.hudi.common.bootstrap.index.HFileBasedBootstrapIndex;
 import org.apache.hudi.common.model.BootstrapSourceFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.fs.permission.FsAction;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -48,6 +45,12 @@ import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 /**
  * Unit Tests for Bootstrap Index.
  */
@@ -56,7 +59,8 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
   private static String[] PARTITIONS = {"2020/03/18", "2020/03/19", "2020/03/20", "2020/03/21"};
   private static String SOURCE_BASE_PATH = "/tmp/source/parquet_tables/table1";
 
-  @Before
+  @BeforeEach
+
   public void init() throws IOException {
     initMetaClient();
   }
@@ -71,9 +75,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
     testBootstrapIndexOneRound(10);
 
     HFileBasedBootstrapIndex index = new HFileBasedBootstrapIndex(metaClient);
-    try (IndexWriter w = index.createWriter(SOURCE_BASE_PATH)) {
-      w.dropIndex();
-    }
+    index.dropIndex();
 
     // Run again this time recreating bootstrap index
     testBootstrapIndexOneRound(5);
@@ -126,30 +128,29 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
     BootstrapIndex index = new HFileBasedBootstrapIndex(metaClient);
     try (BootstrapIndex.IndexReader reader = index.createReader()) {
       List<String> partitions = reader.getIndexedPartitions();
-      Assert.assertEquals(bootstrapMapping.size(), partitions.size());
+      assertEquals(bootstrapMapping.size(), partitions.size());
       long expNumFileGroupKeys = bootstrapMapping.values().stream().flatMap(x -> x.stream()).count();
       long gotNumFileGroupKeys = reader.getIndexedFileIds().size();
-      Assert.assertEquals(expNumFileGroupKeys, gotNumFileGroupKeys);
+      assertEquals(expNumFileGroupKeys, gotNumFileGroupKeys);
 
       bootstrapMapping.entrySet().stream().forEach(e -> {
         List<BootstrapSourceFileMapping> gotMapping = reader.getSourceFileMappingForPartition(e.getKey());
         List<BootstrapSourceFileMapping> expected = new ArrayList<>(e.getValue());
         Collections.sort(gotMapping);
         Collections.sort(expected);
-        Assert.assertEquals("Check for bootstrap index entries for partition " + e.getKey(),
-            expected, gotMapping);
+        assertEquals(expected, gotMapping, "Check for bootstrap index entries for partition " + e.getKey());
         List<HoodieFileGroupId> fileIds = e.getValue().stream().map(BootstrapSourceFileMapping::getFileGroupId)
             .collect(Collectors.toList());
         Map<HoodieFileGroupId, BootstrapSourceFileMapping> lookupResult = reader.getSourceFileMappingForFileIds(fileIds);
-        Assert.assertEquals(fileIds.size(), lookupResult.size());
+        assertEquals(fileIds.size(), lookupResult.size());
         e.getValue().forEach(x -> {
           BootstrapSourceFileMapping res = lookupResult.get(x.getFileGroupId());
-          Assert.assertNotNull(res);
-          Assert.assertEquals(x.getHudiFileId(), res.getHudiFileId());
-          Assert.assertEquals(x.getHudiPartitionPath(), res.getHudiPartitionPath());
-          Assert.assertEquals(SOURCE_BASE_PATH, res.getSourceBasePath());
-          Assert.assertEquals(x.getSourceFileStatus(), res.getSourceFileStatus());
-          Assert.assertEquals(x.getSourcePartitionPath(), res.getSourcePartitionPath());
+          assertNotNull(res);
+          assertEquals(x.getHudiFileId(), res.getHudiFileId());
+          assertEquals(x.getHudiPartitionPath(), res.getHudiPartitionPath());
+          assertEquals(SOURCE_BASE_PATH, res.getSourceBasePath());
+          assertEquals(x.getSourceFileStatus(), res.getSourceFileStatus());
+          assertEquals(x.getSourcePartitionPath(), res.getSourcePartitionPath());
         });
       });
     }

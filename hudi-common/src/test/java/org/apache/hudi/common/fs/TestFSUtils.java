@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.conf.Configuration;
@@ -355,5 +357,54 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime).get().getLeft());
     assertEquals(4, FSUtils.computeNextLogVersion(FSUtils.getFs(basePath, new Configuration()),
         new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime));
+  }
+
+  @Test
+  public void testAllLeafFoldersWithFiles() throws IOException {
+    // All directories including marker dirs.
+    List<String> folders = Arrays.asList("2016/04/15", "2016/05/16", "2016/05/17");
+    folders.forEach(f -> {
+      try {
+        metaClient.getFs().mkdirs(new Path(new Path(basePath), f));
+      } catch (IOException e) {
+        throw new HoodieException(e);
+      }
+    });
+
+    // Files inside partitions and marker directories
+    List<String> files = Arrays.asList(
+        "2016/04/15/1_1-0-1_20190528120000.parquet",
+        "2016/04/15/2_1-0-1_20190528120000.parquet",
+        "2016/05/16/3_1-0-1_20190528120000.parquet",
+        "2016/05/16/4_1-0-1_20190528120000.parquet",
+        "2016/04/17/5_1-0-1_20190528120000.parquet",
+        "2016/04/17/6_1-0-1_20190528120000.parquet");
+
+    files.forEach(f -> {
+      try {
+        metaClient.getFs().create(new Path(new Path(basePath), f));
+      } catch (IOException e) {
+        throw new HoodieException(e);
+      }
+    });
+
+    List<Pair<String, List<HoodieFileStatus>>> collected =
+        FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), basePath, (status) -> {
+          return true;
+        });
+    assertEquals(3, collected.size());
+    collected.stream().forEach(k -> {
+      assertEquals(2, k.getRight().size());
+    });
+
+    // Simulate reading from un-partitioned dataset
+    collected =
+        FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), basePath + "/" + folders.get(0), (status) -> {
+          return true;
+        });
+    assertEquals(1, collected.size());
+    collected.stream().forEach(k -> {
+      assertEquals(2, k.getRight().size());
+    });
   }
 }

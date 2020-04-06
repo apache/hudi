@@ -22,6 +22,13 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.hadoop.ParquetFileReader;
 
 public class InputSplitUtils {
 
@@ -35,5 +42,24 @@ public class InputSplitUtils {
     byte[] bytes = new byte[in.readInt()];
     in.readFully(bytes);
     return new String(bytes, StandardCharsets.UTF_8);
+  }
+
+  /**
+   * Return correct base-file schema based on split.
+   * @param split File Split
+   * @param conf Configuration
+   * @return
+   */
+  public static Schema getBaseFileSchema(FileSplit split, Configuration conf) {
+    try {
+      if (split instanceof ExternalBaseFileSplit) {
+        return HoodieAvroUtils.addMetadataFields(new AvroSchemaConverter().convert(ParquetFileReader.readFooter(conf,
+            ((ExternalBaseFileSplit)(split)).getExternalFileSplit().getPath()).getFileMetaData().getSchema()));
+      }
+      return new AvroSchemaConverter().convert(ParquetFileReader.readFooter(conf, split.getPath())
+          .getFileMetaData().getSchema());
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read footer for parquet " + split.getPath(), e);
+    }
   }
 }
