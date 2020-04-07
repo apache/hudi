@@ -45,7 +45,6 @@ import com.beust.jcommander.ParameterException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -90,33 +89,26 @@ public class HoodieDeltaStreamer implements Serializable {
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
-        getDefaultHiveConf(jssc.hadoopConfiguration()));
+        jssc.hadoopConfiguration(), null);
   }
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, TypedProperties props) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
-        getDefaultHiveConf(jssc.hadoopConfiguration()), props);
+        jssc.hadoopConfiguration(), props);
   }
 
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration hiveConf) throws IOException {
+    this(cfg, jssc, fs, hiveConf, null);
+  }
+
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration hiveConf,
                              TypedProperties properties) throws IOException {
     this.cfg = cfg;
     this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, hiveConf, properties);
   }
 
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf) throws IOException {
-    this.cfg = cfg;
-    this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, hiveConf);
-  }
-
   public void shutdownGracefully() {
     deltaSyncService.shutdown(false);
-  }
-
-  private static HiveConf getDefaultHiveConf(Configuration cfg) {
-    HiveConf hiveConf = new HiveConf();
-    hiveConf.addResource(cfg);
-    return hiveConf;
   }
 
   /**
@@ -371,7 +363,7 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient DeltaSync deltaSync;
 
-    public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+    public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration hiveConf,
                             TypedProperties properties) throws IOException {
       this.cfg = cfg;
       this.jssc = jssc;
@@ -398,12 +390,6 @@ public class HoodieDeltaStreamer implements Serializable {
 
       deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, hiveConf,
         this::onInitializingWriteClient);
-
-    }
-
-    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf)
-        throws IOException {
-      this(cfg, jssc, fs, hiveConf, null);
     }
 
     public DeltaSync getDeltaSync() {
