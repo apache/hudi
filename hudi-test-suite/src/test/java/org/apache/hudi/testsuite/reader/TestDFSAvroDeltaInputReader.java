@@ -18,7 +18,7 @@
 
 package org.apache.hudi.testsuite.reader;
 
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testsuite.utils.TestUtils;
 import org.apache.hudi.utilities.UtilitiesTestBase;

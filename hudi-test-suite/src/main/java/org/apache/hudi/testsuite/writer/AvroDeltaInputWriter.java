@@ -18,7 +18,7 @@
 
 package org.apache.hudi.testsuite.writer;
 
-import org.apache.hudi.common.io.storage.HoodieWrapperFileSystem;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.io.storage.HoodieParquetWriter;
 
 import org.apache.avro.Schema;

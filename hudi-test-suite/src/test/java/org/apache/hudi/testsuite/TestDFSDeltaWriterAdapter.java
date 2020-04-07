@@ -18,8 +18,8 @@
 
 package org.apache.hudi.testsuite;
 
-import org.apache.hudi.common.SerializableConfiguration;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.testsuite.generator.FlexibleSchemaRecordGenerationIterator;

@@ -20,7 +20,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.5.2-SNAPSHOT</version>
+    <version>0.6.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -67,9 +67,9 @@
                   <include>commons-pool:commons-pool</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client</include>
-                  <include>org.apache.hudi:hudi-utilities</include>
-                  <include>org.apache.hudi:hudi-spark</include>
-                  <include>org.apache.hudi:hudi-hive</include>
+                  <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
+                  <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
+                  <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
                   <include>org.apache.hudi:hudi-test-suite</include>
@@ -125,36 +125,28 @@
                   <shadedPattern>org.apache.hudi.org.apache.hive.jdbc.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hadoop.hive.metastore.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.metastore.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.apache.hive.common.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.hive.common.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.common.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.common.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.conf.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.conf.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hive.common.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.shims.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.shims.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hive.shims.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.thrift.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.thrift.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hive.thrift.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.serde2.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.serde2.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hive.serde2.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.io.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.io.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hive.io.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hive.service.</pattern>
@@ -285,11 +277,10 @@
 
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hive</artifactId>
+      <artifactId>hudi-hive-sync</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
-      <scope>test</scope>
     </dependency>
 
     <dependency>
@@ -327,7 +318,7 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
-      <scope>test</scope>
+      <classifier>${hive.exec.classifier}</classifier>
     </dependency>
 
     <dependency>
@@ -372,7 +363,7 @@
 
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hive</artifactId>
+      <artifactId>hudi-hive-sync</artifactId>
       <version>${project.version}</version>
       <exclusions>
         <exclusion>

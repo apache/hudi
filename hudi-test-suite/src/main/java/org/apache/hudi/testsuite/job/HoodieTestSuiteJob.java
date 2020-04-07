@@ -20,12 +20,12 @@ package org.apache.hudi.testsuite.job;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.keygen.KeyGenerator;
-import org.apache.hudi.common.SerializableConfiguration;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testsuite.DeltaInputFormat;
 import org.apache.hudi.testsuite.DeltaOutputType;

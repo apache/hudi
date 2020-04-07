@@ -262,7 +262,6 @@ public class UtilitiesTestBase {
       return props;
     }
 
-
     public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {
       try {
         Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.AVRO_SCHEMA);

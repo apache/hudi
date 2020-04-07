@@ -18,7 +18,7 @@
 
 package org.apache.hudi.testsuite.dag.nodes;
 
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.testsuite.dag.ExecutionContext;

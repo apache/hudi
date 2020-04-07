@@ -18,7 +18,7 @@
 
 package org.apache.hudi.testsuite.configuration;
 
-import org.apache.hudi.common.SerializableConfiguration;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.testsuite.DeltaInputFormat;
 import org.apache.hudi.testsuite.DeltaOutputType;

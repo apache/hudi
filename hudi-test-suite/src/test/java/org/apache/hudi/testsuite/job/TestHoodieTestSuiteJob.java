@@ -20,7 +20,7 @@ package org.apache.hudi.testsuite.job;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.testsuite.DeltaInputFormat;
 import org.apache.hudi.testsuite.DeltaOutputType;
 import org.apache.hudi.testsuite.dag.HiveSyncDagGenerator;

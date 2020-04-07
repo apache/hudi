@@ -54,6 +54,7 @@ public class HiveQueryNode extends DagNode<Boolean> {
     Connection con = DriverManager.getConnection(hiveSyncConfig.jdbcUrl, hiveSyncConfig.hiveUser,
         hiveSyncConfig.hivePass);
     Statement stmt = con.createStatement();
+    stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
     for (String hiveProperty : this.config.getHiveProperties()) {
       executeStatement(hiveProperty, stmt);
     }

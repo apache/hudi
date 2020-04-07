@@ -20,7 +20,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.5.2-SNAPSHOT</version>
+    <version>0.6.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -130,7 +130,7 @@
 
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hive</artifactId>
+      <artifactId>hudi-hive-sync</artifactId>
       <version>${project.version}</version>
       <exclusions>
         <exclusion>
@@ -301,22 +301,20 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-client</artifactId>
       <version>${project.version}</version>
-      <classifier>tests</classifier>
       <type>test-jar</type>
-      <scope>test</scope>
     </dependency>
 
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
+      <classifier>${hive.exec.classifier}</classifier>
       <exclusions>
         <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>servlet-api</artifactId>
         </exclusion>
       </exclusions>
-      <scope>test</scope>
     </dependency>
 
     <dependency>

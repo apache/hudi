@@ -18,10 +18,10 @@
 
 package org.apache.hudi.testsuite.writer;
 
-import org.apache.hudi.HoodieReadClient;
-import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;

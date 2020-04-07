@@ -18,8 +18,8 @@
 
 package org.apache.hudi.testsuite.writer;
 
-import org.apache.hudi.HoodieReadClient;
-import org.apache.hudi.HoodieWriteClient;
+import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.testsuite.job.HoodieDeltaStreamerWrapper;

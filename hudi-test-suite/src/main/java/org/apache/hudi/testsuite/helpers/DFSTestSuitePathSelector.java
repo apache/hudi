@@ -19,7 +19,7 @@
 package org.apache.hudi.testsuite.helpers;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
