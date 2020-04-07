@@ -18,6 +18,7 @@
 
 package org.apache.hudi.cli.utils;
 
+import org.apache.hudi.cli.HoodieCliSparkConfig;
 import org.apache.hudi.cli.commands.SparkEnvCommand;
 import org.apache.hudi.cli.commands.SparkMain;
 import org.apache.hudi.client.HoodieWriteClient;
@@ -39,7 +40,7 @@ import java.util.Objects;
  */
 public class SparkUtil {
 
-  public static final String DEFAULT_SPARK_MASTER = "yarn-client";
+  private static final String DEFAULT_SPARK_MASTER = "yarn-client";
 
   /**
    * TODO: Need to fix a bunch of hardcoded stuff here eg: history server, spark distro.
@@ -69,30 +70,30 @@ public class SparkUtil {
       Option<String> executorMemory) {
     SparkConf sparkConf = new SparkConf().setAppName(name);
 
-    String defMaster = master.orElse(sparkConf.getenv("SPARK_MASTER"));
+    String defMaster = master.orElse(sparkConf.getenv(HoodieCliSparkConfig.CLI_SPARK_MASTER));
     if ((null == defMaster) || (defMaster.isEmpty())) {
       sparkConf.setMaster(DEFAULT_SPARK_MASTER);
     } else {
       sparkConf.setMaster(defMaster);
     }
 
-    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-    sparkConf.set("spark.driver.maxResultSize", "2g");
-    sparkConf.set("spark.eventLog.overwrite", "true");
-    sparkConf.set("spark.eventLog.enabled", "true");
+    sparkConf.set(HoodieCliSparkConfig.CLI_SERIALIZER, "org.apache.spark.serializer.KryoSerializer");
+    sparkConf.set(HoodieCliSparkConfig.CLI_DRIVER_MAX_RESULT_SIZE, "2g");
+    sparkConf.set(HoodieCliSparkConfig.CLI_EVENT_LOG_OVERWRITE, "true");
+    sparkConf.set(HoodieCliSparkConfig.CLI_EVENT_LOG_ENABLED, "true");
     if (executorMemory.isPresent()) {
-      sparkConf.set("spark.executor.memory", executorMemory.get());
+      sparkConf.set(HoodieCliSparkConfig.CLI_EXECUTOR_MEMORY, executorMemory.get());
     }
 
     // Configure hadoop conf
-    sparkConf.set("spark.hadoop.mapred.output.compress", "true");
-    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
-    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
-    sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
+    sparkConf.set(HoodieCliSparkConfig.CLI_MAPRED_OUTPUT_COMPRESS, "true");
+    sparkConf.set(HoodieCliSparkConfig.CLI_MAPRED_OUTPUT_COMPRESSION_CODEC, "true");
+    sparkConf.set(HoodieCliSparkConfig.CLI_MAPRED_OUTPUT_COMPRESSION_CODEC, "org.apache.hadoop.io.compress.GzipCodec");
+    sparkConf.set(HoodieCliSparkConfig.CLI_MAPRED_OUTPUT_COMPRESSION_TYPE, "BLOCK");
 
     HoodieWriteClient.registerClasses(sparkConf);
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
-    jsc.hadoopConfiguration().setBoolean("parquet.enable.summary-metadata", false);
+    jsc.hadoopConfiguration().setBoolean(HoodieCliSparkConfig.CLI_PARQUET_ENABLE_SUMMARY_METADATA, false);
     FSUtils.prepareHadoopConf(jsc.hadoopConfiguration());
     return jsc;
   }
