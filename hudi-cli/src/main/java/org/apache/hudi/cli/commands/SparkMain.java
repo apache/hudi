@@ -161,13 +161,13 @@ public class SparkMain {
   }
 
   private static boolean sparkMasterContained(SparkCommand command) {
-    List masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
+    List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
         SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN);
     return masterContained.contains(command);
   }
 
   private static void clean(JavaSparkContext jsc, String basePath, String propsFilePath,
-                            List<String> configs) {
+      List<String> configs) {
     HoodieCleaner.Config cfg = new HoodieCleaner.Config();
     cfg.basePath = basePath;
     cfg.propsFilePath = propsFilePath;
@@ -177,7 +177,7 @@ public class SparkMain {
 
   private static int dataLoad(JavaSparkContext jsc, String command, String srcPath, String targetPath, String tableName,
       String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile, String sparkMemory,
-                              int retry, String propsFilePath, List<String> configs) {
+      int retry, String propsFilePath, List<String> configs) {
     Config cfg = new Config();
     cfg.command = command;
     cfg.srcPath = srcPath;
@@ -246,7 +246,7 @@ public class SparkMain {
 
   private static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
       int parallelism, String schemaFile, String sparkMemory, int retry, boolean schedule, String propsFilePath,
-                             List<String> configs) {
+      List<String> configs) {
     HoodieCompactor.Config cfg = new HoodieCompactor.Config();
     cfg.basePath = basePath;
     cfg.tableName = tableName;

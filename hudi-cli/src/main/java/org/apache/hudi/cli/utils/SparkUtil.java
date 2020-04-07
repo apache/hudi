@@ -66,14 +66,14 @@ public class SparkUtil {
   }
 
   public static JavaSparkContext initJavaSparkConf(String name, Option<String> master,
-                                                   Option<String> executorMemory) {
+      Option<String> executorMemory) {
     SparkConf sparkConf = new SparkConf().setAppName(name);
 
-    String defMasterFromEnv = master.orElse(sparkConf.getenv("SPARK_MASTER"));
-    if ((null == defMasterFromEnv) || (defMasterFromEnv.isEmpty())) {
+    String defMaster = master.orElse(sparkConf.getenv("SPARK_MASTER"));
+    if ((null == defMaster) || (defMaster.isEmpty())) {
       sparkConf.setMaster(DEFAULT_SPARK_MASTER);
     } else {
-      sparkConf.setMaster(defMasterFromEnv);
+      sparkConf.setMaster(defMaster);
     }
 
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
