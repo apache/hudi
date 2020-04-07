@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.springframework.shell.core.CommandResult;
