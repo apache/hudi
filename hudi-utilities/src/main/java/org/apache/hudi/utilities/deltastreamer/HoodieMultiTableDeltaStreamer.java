@@ -166,7 +166,6 @@ public class HoodieMultiTableDeltaStreamer {
       tableConfig.sourceClassName = globalConfig.sourceClassName;
       tableConfig.tableType = globalConfig.tableType;
       tableConfig.targetTableName = globalConfig.targetTableName;
-      tableConfig.configFolder = globalConfig.configFolder;
       tableConfig.operation = globalConfig.operation;
       tableConfig.sourceLimit = globalConfig.sourceLimit;
       tableConfig.checkpoint = globalConfig.checkpoint;

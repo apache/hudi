@@ -187,9 +187,6 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
     public String tableType;
 
-    @Parameter(names = {"--config-folder"}, description = "Path to folder which contains all the properties file", required = true)
-    public String configFolder;
-
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
         + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
