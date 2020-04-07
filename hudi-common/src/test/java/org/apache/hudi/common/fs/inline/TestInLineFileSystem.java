@@ -27,6 +27,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.File;
@@ -115,8 +116,8 @@ public class TestInLineFileSystem {
     }
   }
 
-  // @Test
-  // Disabling flaky test for now https://issues.apache.org/jira/browse/HUDI-786
+  @Test
+  @Ignore // Disabling flaky test for now https://issues.apache.org/jira/browse/HUDI-786
   public void testFileSystemApis() throws IOException {
     OuterPathInfo outerPathInfo = generateOuterFileAndGetInfo(1000);
     Path inlinePath = FileSystemTestUtils.getPhantomFile(outerPathInfo.outerPath, outerPathInfo.startOffset, outerPathInfo.length);

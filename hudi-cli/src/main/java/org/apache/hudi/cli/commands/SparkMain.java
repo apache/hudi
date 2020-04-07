@@ -283,7 +283,7 @@ public class SparkMain {
 
   private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
     HoodieWriteClient client = createHoodieClient(jsc, basePath);
-    if (client.rollbackToSavepoint(savepointTime)) {
+    if (client.restoreToSavepoint(savepointTime)) {
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
       return 0;
     } else {

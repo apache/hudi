@@ -23,10 +23,11 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
@@ -350,12 +351,27 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   public abstract HoodieCleanMetadata clean(JavaSparkContext jsc, String cleanInstantTime);
 
   /**
-   * Rollback the (inflight/committed) record changes with the given commit time. Four steps: (1) Atomically unpublish
-   * this commit (2) clean indexing data (3) clean new generated parquet files / log blocks (4) Finally, delete
-   * .<action>.commit or .<action>.inflight file if deleteInstants = true
+   * Rollback the (inflight/committed) record changes with the given commit time.
+   * <pre>
+   *   Three steps:
+   *   (1) Atomically unpublish this commit
+   *   (2) clean indexing data
+   *   (3) clean new generated parquet files.
+   *   (4) Finally delete .commit or .inflight file, if deleteInstants = true
+   * </pre>
    */
-  public abstract List<HoodieRollbackStat> rollback(JavaSparkContext jsc, HoodieInstant instant, boolean deleteInstants)
-      throws IOException;
+  public abstract HoodieRollbackMetadata rollback(JavaSparkContext jsc,
+                                                  String rollbackInstantTime,
+                                                  HoodieInstant commitInstant,
+                                                  boolean deleteInstants);
+
+  /**
+   * Restore the table to the given instant. Note that this is a admin table recovery operation
+   * that would cause any running queries that are accessing file slices written after the instant to fail.
+   */
+  public abstract HoodieRestoreMetadata restore(JavaSparkContext jsc,
+                                                String restoreInstantTime,
+                                                String instantToRestore);
 
   /**
    * Finalize the written data onto storage. Perform any final cleanups.
@@ -364,8 +380,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param stats List of HoodieWriteStats
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
-  public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats)
-      throws HoodieIOException {
+  public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats) throws HoodieIOException {
     cleanFailedWrites(jsc, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled());
   }
 
@@ -374,7 +389,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * 
    * @param instantTs Instant Time
    */
-  protected void deleteMarkerDir(String instantTs) {
+  public void deleteMarkerDir(String instantTs) {
     try {
       FileSystem fs = getMetaClient().getFs();
       Path markerDir = new Path(metaClient.getMarkerFolderPath(instantTs));
@@ -473,8 +488,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param groupByPartition Files grouped by partition
    * @param visibility Appear/Disappear
    */
-  private void waitForAllFiles(JavaSparkContext jsc, Map<String, List<Pair<String, String>>> groupByPartition,
-      FileVisibility visibility) {
+  private void waitForAllFiles(JavaSparkContext jsc, Map<String, List<Pair<String, String>>> groupByPartition, FileVisibility visibility) {
     // This will either ensure all files to be deleted are present.
     boolean checkPassed =
         jsc.parallelize(new ArrayList<>(groupByPartition.entrySet()), config.getFinalizeWriteParallelism())
@@ -486,8 +500,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     }
   }
 
-  private boolean waitForCondition(String partitionPath, Stream<Pair<String, String>> partitionFilePaths,
-      FileVisibility visibility) {
+  private boolean waitForCondition(String partitionPath, Stream<Pair<String, String>> partitionFilePaths, FileVisibility visibility) {
     final FileSystem fileSystem = metaClient.getRawFs();
     List<String> fileList = partitionFilePaths.map(Pair::getValue).collect(Collectors.toList());
     try {
