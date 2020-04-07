@@ -292,7 +292,8 @@ public class HoodieCommitArchiveLog {
         archivedMetaWrapper.setActionType(ActionType.clean.name());
         break;
       }
-      case HoodieTimeline.COMMIT_ACTION: {
+      case HoodieTimeline.COMMIT_ACTION:
+      case HoodieTimeline.DELTA_COMMIT_ACTION: {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
         archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata));
@@ -309,13 +310,6 @@ public class HoodieCommitArchiveLog {
         archivedMetaWrapper.setHoodieSavePointMetadata(TimelineMetadataUtils.deserializeAvroMetadata(
             commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieSavepointMetadata.class));
         archivedMetaWrapper.setActionType(ActionType.savepoint.name());
-        break;
-      }
-      case HoodieTimeline.DELTA_COMMIT_ACTION: {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
-        archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata));
-        archivedMetaWrapper.setActionType(ActionType.commit.name());
         break;
       }
       case HoodieTimeline.COMPACTION_ACTION: {

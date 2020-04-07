@@ -121,6 +121,20 @@ public class HiveTestService {
     return hiveServer;
   }
 
+  public void stop() {
+    resetSystemProperties();
+    if (tServer != null) {
+      tServer.stop();
+    }
+    if (hiveServer != null) {
+      hiveServer.stop();
+    }
+    LOG.info("Hive Minicluster service shut down.");
+    tServer = null;
+    hiveServer = null;
+    hadoopConf = null;
+  }
+
   private HiveConf configureHive(Configuration conf, String localHiveLocation) throws IOException {
     conf.set("hive.metastore.local", "false");
     conf.set(HiveConf.ConfVars.METASTOREURIS.varname, "thrift://" + bindIP + ":" + metastorePort);
@@ -181,6 +195,17 @@ public class HiveTestService {
     } else {
       System.getProperties().remove(name);
     }
+  }
+
+  private void resetSystemProperties() {
+    for (Map.Entry<String, String> entry : sysProps.entrySet()) {
+      if (entry.getValue() != null) {
+        System.setProperty(entry.getKey(), entry.getValue());
+      } else {
+        System.getProperties().remove(entry.getKey());
+      }
+    }
+    sysProps.clear();
   }
 
   private static String getHiveLocation(String baseLocation) {

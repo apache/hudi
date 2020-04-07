@@ -88,7 +88,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     HoodieTestDataGenerator dataGenerator = dataGeneratorMap.get(partition);
 
     // generate `sourceLimit` number of upserts each time.
-    int numExistingKeys = dataGenerator.getNumExistingKeys();
+    int numExistingKeys = dataGenerator.getNumExistingKeys(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
     LOG.info("NumExistingKeys=" + numExistingKeys);
 
     int numUpdates = Math.min(numExistingKeys, sourceLimit / 2);
@@ -116,21 +116,22 @@ public abstract class AbstractBaseTestSource extends AvroSource {
       LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + (numUpdates - 50) + ", NumDeletes=50, maxUniqueRecords="
           + maxUniqueKeys);
       // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
-      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 50).map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
-      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50).map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 50).map(AbstractBaseTestSource::toGenericRecord);
+      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .map(AbstractBaseTestSource::toGenericRecord);
     } else {
       LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
-      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates)
-          .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+      updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .map(AbstractBaseTestSource::toGenericRecord);
     }
-    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(instantTime, numInserts, false)
-        .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(instantTime, numInserts, false, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .map(AbstractBaseTestSource::toGenericRecord);
     return Stream.concat(deleteStream, Stream.concat(updateStream, insertStream));
   }
 
-  private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {
+  private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
     try {
-      Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.AVRO_SCHEMA);
+      Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA);
       return (GenericRecord) recordOpt.get();
     } catch (IOException e) {
       return null;

@@ -68,7 +68,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
     cleanupTestDataGenerator();
   }
 
-  private HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig config) throws Exception {
+  private HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig config) {
     return new HoodieWriteClient(jsc, config);
   }
 
@@ -89,7 +89,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
     HoodieWriteConfig localConfig = getHoodieWriteConfig(tablePath);
 
     try (HoodieWriteClient hdfsWriteClient = getHoodieWriteClient(cfg);
-        HoodieWriteClient localWriteClient = getHoodieWriteClient(localConfig);) {
+        HoodieWriteClient localWriteClient = getHoodieWriteClient(localConfig)) {
 
       // Write generated data to hdfs (only inserts)
       String readCommitTime = hdfsWriteClient.startCommit();

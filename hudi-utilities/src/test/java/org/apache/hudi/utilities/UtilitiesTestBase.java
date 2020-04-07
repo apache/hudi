@@ -83,6 +83,7 @@ public class UtilitiesTestBase {
   protected transient SparkSession sparkSession = null;
   protected transient SQLContext sqlContext;
   protected static HiveServer2 hiveServer;
+  protected static HiveTestService hiveTestService;
   private static ObjectMapper mapper = new ObjectMapper();
 
   @BeforeClass
@@ -97,19 +98,22 @@ public class UtilitiesTestBase {
     dfsBasePath = dfs.getWorkingDirectory().toString();
     dfs.mkdirs(new Path(dfsBasePath));
     if (startHiveService) {
-      HiveTestService hiveService = new HiveTestService(hdfsTestService.getHadoopConf());
-      hiveServer = hiveService.start();
+      hiveTestService = new HiveTestService(hdfsTestService.getHadoopConf());
+      hiveServer = hiveTestService.start();
       clearHiveDb();
     }
   }
 
   @AfterClass
-  public static void cleanupClass() throws Exception {
+  public static void cleanupClass() {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
     }
     if (hiveServer != null) {
       hiveServer.stop();
+    }
+    if (hiveTestService != null) {
+      hiveTestService.stop();
     }
   }
 
@@ -263,20 +267,19 @@ public class UtilitiesTestBase {
       return props;
     }
 
-    public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {
+    public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
       try {
-        Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.AVRO_SCHEMA);
+        Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA);
         return (GenericRecord) recordOpt.get();
       } catch (IOException e) {
         return null;
       }
     }
 
-    public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords,
-        HoodieTestDataGenerator dataGenerator) {
+    public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords) {
       List<GenericRecord> records = new ArrayList<GenericRecord>();
       for (HoodieRecord hoodieRecord : hoodieRecords) {
-        records.add(toGenericRecord(hoodieRecord, dataGenerator));
+        records.add(toGenericRecord(hoodieRecord));
       }
       return records;
     }

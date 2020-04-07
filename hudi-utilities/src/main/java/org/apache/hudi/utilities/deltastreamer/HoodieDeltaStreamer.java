@@ -93,6 +93,17 @@ public class HoodieDeltaStreamer implements Serializable {
         getDefaultHiveConf(jssc.hadoopConfiguration()));
   }
 
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, TypedProperties props) throws IOException {
+    this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
+        getDefaultHiveConf(jssc.hadoopConfiguration()), props);
+  }
+
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+                             TypedProperties properties) throws IOException {
+    this.cfg = cfg;
+    this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, hiveConf, properties);
+  }
+
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf) throws IOException {
     this.cfg = cfg;
     this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, hiveConf);
@@ -142,7 +153,7 @@ public class HoodieDeltaStreamer implements Serializable {
     UPSERT, INSERT, BULK_INSERT
   }
 
-  private static class OperationConvertor implements IStringConverter<Operation> {
+  protected static class OperationConvertor implements IStringConverter<Operation> {
 
     @Override
     public Operation convert(String value) throws ParameterException {
@@ -150,7 +161,7 @@ public class HoodieDeltaStreamer implements Serializable {
     }
   }
 
-  private static class TransformersConverter implements IStringConverter<List<String>> {
+  protected static class TransformersConverter implements IStringConverter<List<String>> {
 
     @Override
     public List<String> convert(String value) throws ParameterException {
@@ -169,6 +180,7 @@ public class HoodieDeltaStreamer implements Serializable {
         required = true)
     public String targetBasePath;
 
+    // TODO: How to obtain hive configs to register?
     @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
     public String targetTableName;
 
@@ -359,8 +371,8 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient DeltaSync deltaSync;
 
-    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf)
-        throws IOException {
+    public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+                            TypedProperties properties) throws IOException {
       this.cfg = cfg;
       this.jssc = jssc;
       this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
@@ -376,7 +388,7 @@ public class HoodieDeltaStreamer implements Serializable {
         tableType = HoodieTableType.valueOf(cfg.tableType);
       }
 
-      this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+      this.props = properties != null ? properties : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
       LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
 
@@ -384,8 +396,14 @@ public class HoodieDeltaStreamer implements Serializable {
         cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
       }
 
-      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, tableType, props, jssc, fs, hiveConf,
-          this::onInitializingWriteClient);
+      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, hiveConf,
+        this::onInitializingWriteClient);
+
+    }
+
+    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf)
+        throws IOException {
+      this(cfg, jssc, fs, hiveConf, null);
     }
 
     public DeltaSync getDeltaSync() {
