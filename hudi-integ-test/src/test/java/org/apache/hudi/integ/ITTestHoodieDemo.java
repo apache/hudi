@@ -280,16 +280,16 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void testIncrementalHiveQueryBeforeCompaction() throws Exception {
-    String expectedOutputCOW = "| GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |";
+    String expectedOutput = "| GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |";
 
     // verify that 10:59 is present in COW table because there is no compaction process for COW
-    testIncrementalHiveQuery(MIN_COMMIT_TIME_COW_SCRIPT, HIVE_INCREMENTAL_COW_COMMANDS, expectedOutputCOW, 1);
+    testIncrementalHiveQuery(MIN_COMMIT_TIME_COW_SCRIPT, HIVE_INCREMENTAL_COW_COMMANDS, expectedOutput, 1);
 
     // verify that 10:59 is NOT present in RO table because of pending compaction
-   testIncrementalHiveQuery(MIN_COMMIT_TIME_MOR_SCRIPT, HIVE_INCREMENTAL_MOR_RO_COMMANDS, expectedOutputCOW, 0);
+   testIncrementalHiveQuery(MIN_COMMIT_TIME_MOR_SCRIPT, HIVE_INCREMENTAL_MOR_RO_COMMANDS, expectedOutput, 0);
 
     // verify that 10:59 is present in RT table even with pending compaction
-    testIncrementalHiveQuery(MIN_COMMIT_TIME_MOR_SCRIPT, HIVE_INCREMENTAL_MOR_RT_COMMANDS, expectedOutputCOW, 1);
+    testIncrementalHiveQuery(MIN_COMMIT_TIME_MOR_SCRIPT, HIVE_INCREMENTAL_MOR_RT_COMMANDS, expectedOutput, 1);
   }
 
   private void testIncrementalHiveQueryAfterCompaction() throws Exception {
