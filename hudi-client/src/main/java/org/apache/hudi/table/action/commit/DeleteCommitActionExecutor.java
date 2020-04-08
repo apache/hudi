@@ -16,29 +16,30 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action;
+package org.apache.hudi.table.action.commit;
 
-import java.io.Serializable;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
-public abstract class BaseActionExecutor<R> implements Serializable {
+public class DeleteCommitActionExecutor<T extends HoodieRecordPayload<T>>
+    extends CommitActionExecutor<T> {
 
-  protected final transient JavaSparkContext jsc;
+  private final JavaRDD<HoodieKey> keys;
 
-  protected final HoodieWriteConfig config;
-
-  protected final HoodieTable<?> table;
-
-  protected final String instantTime;
-
-  public BaseActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable<?> table, String instantTime) {
-    this.jsc = jsc;
-    this.config = config;
-    this.table = table;
-    this.instantTime = instantTime;
+  public DeleteCommitActionExecutor(JavaSparkContext jsc,
+      HoodieWriteConfig config, HoodieTable table,
+      String instantTime, JavaRDD<HoodieKey> keys) {
+    super(jsc, config, table, instantTime, WriteOperationType.DELETE);
+    this.keys = keys;
   }
 
-  public abstract R execute();
+  public HoodieWriteMetadata execute() {
+    return DeleteHelper.execute(instantTime, keys, jsc, config, (HoodieTable<T>)table, this);
+  }
 }

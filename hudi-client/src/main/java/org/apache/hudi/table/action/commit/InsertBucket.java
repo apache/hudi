@@ -16,29 +16,26 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action;
+package org.apache.hudi.table.action.commit;
 
 import java.io.Serializable;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieTable;
-import org.apache.spark.api.java.JavaSparkContext;
 
-public abstract class BaseActionExecutor<R> implements Serializable {
+/**
+ * Helper class for an insert bucket along with the weight [0.0, 1.0] that defines the amount of incoming inserts that
+ * should be allocated to the bucket.
+ */
+public class InsertBucket implements Serializable {
 
-  protected final transient JavaSparkContext jsc;
+  int bucketNumber;
+  // fraction of total inserts, that should go into this bucket
+  double weight;
 
-  protected final HoodieWriteConfig config;
-
-  protected final HoodieTable<?> table;
-
-  protected final String instantTime;
-
-  public BaseActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable<?> table, String instantTime) {
-    this.jsc = jsc;
-    this.config = config;
-    this.table = table;
-    this.instantTime = instantTime;
+  @Override
+  public String toString() {
+    final StringBuilder sb = new StringBuilder("WorkloadStat {");
+    sb.append("bucketNumber=").append(bucketNumber).append(", ");
+    sb.append("weight=").append(weight);
+    sb.append('}');
+    return sb.toString();
   }
-
-  public abstract R execute();
 }

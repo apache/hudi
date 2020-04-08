@@ -24,9 +24,8 @@ import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -39,24 +38,26 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.execution.MergeOnReadLazyInsertIterable;
-import org.apache.hudi.io.HoodieAppendHandle;
+import org.apache.hudi.table.action.commit.HoodieWriteMetadata;
+import org.apache.hudi.table.action.deltacommit.BulkInsertDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.BulkInsertPreppedDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.DeleteDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.InsertDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.InsertPreppedDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.UpsertDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.UpsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.compact.HoodieMergeOnReadTableCompactor;
 import org.apache.hudi.table.rollback.RollbackHelper;
 import org.apache.hudi.table.rollback.RollbackRequest;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -82,49 +83,49 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergeOnReadTable.class);
 
-  // UpsertPartitioner for MergeOnRead table type
-  private MergeOnReadUpsertPartitioner mergeOnReadUpsertPartitioner;
-
   HoodieMergeOnReadTable(HoodieWriteConfig config, JavaSparkContext jsc, HoodieTableMetaClient metaClient) {
     super(config, jsc, metaClient);
   }
 
   @Override
-  public Partitioner getUpsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc) {
-    if (profile == null) {
-      throw new HoodieUpsertException("Need workload profile to construct the upsert partitioner.");
-    }
-    mergeOnReadUpsertPartitioner = new MergeOnReadUpsertPartitioner(profile, jsc);
-    return mergeOnReadUpsertPartitioner;
+  public HoodieWriteMetadata upsert(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieRecord<T>> records) {
+    return new UpsertDeltaCommitActionExecutor<>(jsc, config, this, instantTime, records).execute();
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath,
-                                                  String fileId, Iterator<HoodieRecord<T>> recordItr)
-      throws IOException {
-    LOG.info("Merging updates for commit " + instantTime + " for file " + fileId);
-
-    if (!index.canIndexLogFiles() && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
-      LOG.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);
-      return super.handleUpdate(instantTime, partitionPath, fileId, recordItr);
-    } else {
-      HoodieAppendHandle<T> appendHandle = new HoodieAppendHandle<>(config, instantTime, this,
-              partitionPath, fileId, recordItr, sparkTaskContextSupplier);
-      appendHandle.doAppend();
-      appendHandle.close();
-      return Collections.singletonList(Collections.singletonList(appendHandle.getWriteStatus())).iterator();
-    }
+  public HoodieWriteMetadata insert(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieRecord<T>> records) {
+    return new InsertDeltaCommitActionExecutor<>(jsc, config, this, instantTime, records).execute();
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String instantTime, String idPfx, Iterator<HoodieRecord<T>> recordItr)
-      throws Exception {
-    // If canIndexLogFiles, write inserts to log files else write inserts to parquet files
-    if (index.canIndexLogFiles()) {
-      return new MergeOnReadLazyInsertIterable<>(recordItr, config, instantTime, this, idPfx, sparkTaskContextSupplier);
-    } else {
-      return super.handleInsert(instantTime, idPfx, recordItr);
-    }
+  public HoodieWriteMetadata bulkInsert(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieRecord<T>> records,
+      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+    return new BulkInsertDeltaCommitActionExecutor<>(jsc, config,
+        this, instantTime, records, bulkInsertPartitioner).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata delete(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieKey> keys) {
+    return new DeleteDeltaCommitActionExecutor<>(jsc, config, this, instantTime, keys).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata upsertPrepped(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> preppedRecords) {
+    return new UpsertPreppedDeltaCommitActionExecutor<>(jsc, config, this, instantTime, preppedRecords).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata insertPrepped(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> preppedRecords) {
+    return new InsertPreppedDeltaCommitActionExecutor<>(jsc, config, this, instantTime, preppedRecords).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata bulkInsertPrepped(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+    return new BulkInsertPreppedDeltaCommitActionExecutor<>(jsc, config,
+        this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
   }
 
   @Override
@@ -318,105 +319,6 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
       throws HoodieIOException {
     // delegate to base class for MOR tables
     super.finalizeWrite(jsc, instantTs, stats);
-  }
-
-  /**
-   * UpsertPartitioner for MergeOnRead table type, this allows auto correction of small parquet files to larger ones
-   * without the need for an index in the logFile.
-   */
-  class MergeOnReadUpsertPartitioner extends HoodieCopyOnWriteTable.UpsertPartitioner {
-
-    MergeOnReadUpsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc) {
-      super(profile, jsc);
-    }
-
-    @Override
-    protected List<SmallFile> getSmallFiles(String partitionPath) {
-
-      // smallFiles only for partitionPath
-      List<SmallFile> smallFileLocations = new ArrayList<>();
-
-      // Init here since this class (and member variables) might not have been initialized
-      HoodieTimeline commitTimeline = getCompletedCommitsTimeline();
-
-      // Find out all eligible small file slices
-      if (!commitTimeline.empty()) {
-        HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
-        // find smallest file in partition and append to it
-        List<FileSlice> allSmallFileSlices = new ArrayList<>();
-        // If we cannot index log files, then we choose the smallest parquet file in the partition and add inserts to
-        // it. Doing this overtime for a partition, we ensure that we handle small file issues
-        if (!index.canIndexLogFiles()) {
-          // TODO : choose last N small files since there can be multiple small files written to a single partition
-          // by different spark partitions in a single batch
-          Option<FileSlice> smallFileSlice = Option.fromJavaOptional(getSliceView()
-                  .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), false)
-                  .filter(fileSlice -> fileSlice.getLogFiles().count() < 1 && fileSlice.getBaseFile().get().getFileSize() < config.getParquetSmallFileLimit())
-                  .min((FileSlice left, FileSlice right) -> left.getBaseFile().get().getFileSize() < right.getBaseFile().get().getFileSize() ? -1 : 1));
-          if (smallFileSlice.isPresent()) {
-            allSmallFileSlices.add(smallFileSlice.get());
-          }
-        } else {
-          // If we can index log files, we can add more inserts to log files for fileIds including those under
-          // pending compaction.
-          List<FileSlice> allFileSlices =
-              getSliceView().getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
-                  .collect(Collectors.toList());
-          for (FileSlice fileSlice : allFileSlices) {
-            if (isSmallFile(fileSlice)) {
-              allSmallFileSlices.add(fileSlice);
-            }
-          }
-        }
-        // Create SmallFiles from the eligible file slices
-        for (FileSlice smallFileSlice : allSmallFileSlices) {
-          SmallFile sf = new SmallFile();
-          if (smallFileSlice.getBaseFile().isPresent()) {
-            // TODO : Move logic of file name, file id, base commit time handling inside file slice
-            String filename = smallFileSlice.getBaseFile().get().getFileName();
-            sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
-            sf.sizeBytes = getTotalFileSize(smallFileSlice);
-            smallFileLocations.add(sf);
-          } else {
-            HoodieLogFile logFile = smallFileSlice.getLogFiles().findFirst().get();
-            sf.location = new HoodieRecordLocation(FSUtils.getBaseCommitTimeFromLogPath(logFile.getPath()),
-                FSUtils.getFileIdFromLogPath(logFile.getPath()));
-            sf.sizeBytes = getTotalFileSize(smallFileSlice);
-            smallFileLocations.add(sf);
-          }
-        }
-      }
-      return smallFileLocations;
-    }
-
-    public List<String> getSmallFileIds() {
-      return (List<String>) smallFiles.stream().map(smallFile -> ((SmallFile) smallFile).location.getFileId())
-          .collect(Collectors.toList());
-    }
-
-    private long getTotalFileSize(FileSlice fileSlice) {
-      if (!fileSlice.getBaseFile().isPresent()) {
-        return convertLogFilesSizeToExpectedParquetSize(fileSlice.getLogFiles().collect(Collectors.toList()));
-      } else {
-        return fileSlice.getBaseFile().get().getFileSize()
-            + convertLogFilesSizeToExpectedParquetSize(fileSlice.getLogFiles().collect(Collectors.toList()));
-      }
-    }
-
-    private boolean isSmallFile(FileSlice fileSlice) {
-      long totalSize = getTotalFileSize(fileSlice);
-      return totalSize < config.getParquetMaxFileSize();
-    }
-
-    // TODO (NA) : Make this static part of utility
-    public long convertLogFilesSizeToExpectedParquetSize(List<HoodieLogFile> hoodieLogFiles) {
-      long totalSizeOfLogFiles = hoodieLogFiles.stream().map(HoodieLogFile::getFileSize)
-          .filter(size -> size > 0).reduce(Long::sum).orElse(0L);
-      // Here we assume that if there is no base parquet file, all log files contain only inserts.
-      // We can then just get the parquet equivalent size of these log files, compare that with
-      // {@link config.getParquetMaxFileSize()} and decide if there is scope to insert more rows
-      return (long) (totalSizeOfLogFiles * config.getLogFileToParquetCompressionRatio());
-    }
   }
 
   private List<RollbackRequest> generateAppendRollbackBlocksAction(String partitionPath, HoodieInstant rollbackInstant,

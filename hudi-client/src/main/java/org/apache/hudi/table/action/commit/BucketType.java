@@ -16,29 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action;
+package org.apache.hudi.table.action.commit;
 
-import java.io.Serializable;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieTable;
-import org.apache.spark.api.java.JavaSparkContext;
-
-public abstract class BaseActionExecutor<R> implements Serializable {
-
-  protected final transient JavaSparkContext jsc;
-
-  protected final HoodieWriteConfig config;
-
-  protected final HoodieTable<?> table;
-
-  protected final String instantTime;
-
-  public BaseActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable<?> table, String instantTime) {
-    this.jsc = jsc;
-    this.config = config;
-    this.table = table;
-    this.instantTime = instantTime;
-  }
-
-  public abstract R execute();
+public enum BucketType {
+  UPDATE, INSERT
 }
