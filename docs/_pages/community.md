@@ -53,7 +53,7 @@ Committers are chosen by a majority vote of the Apache Hudi [PMC](https://www.ap
 | Image                                                        | Name                                                         | Role            | Apache ID    |
 | ------------------------------------------------------------ | ------------------------------------------------------------ | --------------- | ------------ |
 | <img src="https://avatars.githubusercontent.com/alunarbeach" style="max-width: 100px" alt="alunarbeach" align="middle" /> | [Anbu Cheeralan](https://github.com/alunarbeach)             | PPMC, Committer | anchee       |
-| <img src="https://avatars.githubusercontent.com/bhasudha" style="max-width: 100px" alt="bhasudha" align="middle" /> | [Bhavani Sudha](https://github.com/bhasudha)                 | Committer       | bhavanisudha |
+| <img src="https://avatars.githubusercontent.com/bhasudha" style="max-width: 100px" alt="bhasudha" align="middle" /> | [Bhavani Sudha](https://github.com/bhasudha)                 | PPMC, Committer | bhavanisudha |
 | <img src="https://avatars.githubusercontent.com/bvaradar" style="max-width: 100px" alt="bvaradar" align="middle" /> | [Balaji Varadarajan](https://github.com/bvaradar)            | PPMC, Committer | vbalaji      |
 | <img src="https://avatars.githubusercontent.com/kishoreg" style="max-width: 100px" alt="kishoreg" align="middle" /> | [Kishore Gopalakrishna](https://github.com/kishoreg)         | PPMC, Committer | kishoreg     |
 | <img src="https://avatars.githubusercontent.com/lresende" style="max-width: 100px" alt="lresende" align="middle" /> | [Luciano Resende](https://github.com/lresende)               | PPMC, Committer | lresende     |
@@ -66,6 +66,7 @@ Committers are chosen by a majority vote of the Apache Hudi [PMC](https://www.ap
 | <img src="https://avatars.githubusercontent.com/vinothchandar" style="max-width: 100px" alt="vinothchandar" align="middle" /> | [vinoth chandar](https://github.com/vinothchandar)           | PPMC, Committer | vinoth       |
 | <img src="https://avatars.githubusercontent.com/yanghua" style="max-width: 100px" alt="yanghua" /> | [vinoyang](https://github.com/yanghua)                       | PPMC, Committer       | vinoyang     |
 | <img src="https://avatars.githubusercontent.com/zqureshi" alt="zqureshi" style="max-width: 100px;" align="middle" /> | [Zeeshan Qureshi](https://github.com/zqureshi)               | PPMC, Committer | zqureshi     |
+| <img src="https://avatars.githubusercontent.com/lamber-ken" alt="lamber-ken" style="max-width: 100px;" align="middle" /> | [lamber-ken](https://github.com/lamber-ken)               | Committer | lamberken     |
 
 
 ## Code Contributions

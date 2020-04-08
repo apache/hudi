@@ -54,18 +54,20 @@ Committers are chosen by a majority vote of the Apache Hudi [PMC](https://www.ap
 | Image                                                        | Name                                                         | Role            | Apache ID    |
 | ------------------------------------------------------------ | ------------------------------------------------------------ | --------------- | ------------ |
 | <img src="https://avatars.githubusercontent.com/alunarbeach" style="max-width: 100px" alt="alunarbeach" align="middle" /> | [Anbu Cheeralan](https://github.com/alunarbeach)             | PPMC, Committer | anchee       |
-| <img src="https://avatars.githubusercontent.com/bhasudha" style="max-width: 100px" alt="bhasudha" align="middle" /> | [Bhavani Sudha](https://github.com/bhasudha)                 | Committer       | bhavanisudha |
+| <img src="https://avatars.githubusercontent.com/bhasudha" style="max-width: 100px" alt="bhasudha" align="middle" /> | [Bhavani Sudha](https://github.com/bhasudha)                 | PPMC, Committer | bhavanisudha |
 | <img src="https://avatars.githubusercontent.com/bvaradar" style="max-width: 100px" alt="bvaradar" align="middle" /> | [Balaji Varadarajan](https://github.com/bvaradar)            | PPMC, Committer | vbalaji      |
 | <img src="https://avatars.githubusercontent.com/kishoreg" style="max-width: 100px" alt="kishoreg" align="middle" /> | [Kishore Gopalakrishna](https://github.com/kishoreg)         | PPMC, Committer | kishoreg     |
-| <img src="https://avatars.githubusercontent.com/leesf" style="max-width: 100px" alt="leesf" align="middle" /> | [Shaofeng Li](https://github.com/leesf)                      | Committer       | leesf        |
 | <img src="https://avatars.githubusercontent.com/lresende" style="max-width: 100px" alt="lresende" align="middle" /> | [Luciano Resende](https://github.com/lresende)               | PPMC, Committer | lresende     |
 | <img src="https://avatars.githubusercontent.com/n3nash" style="max-width: 100px" alt="n3nash" align="middle" /> | [Nishith Agarwal](https://github.com/n3nash)                 | PPMC, Committer | nagarwal     |
 | <img src="https://avatars.githubusercontent.com/prasannarajaperumal" style="max-width: 100px" alt="prasannarajaperumal" align="middle" /> | [Prasanna Rajaperumal](https://github.com/prasannarajaperumal) | PPMC, Committer | prasanna     |
+| <img src="https://avatars.githubusercontent.com/leesf" style="max-width: 100px" alt="leesf" align="middle" /> | [Shaofeng Li](https://github.com/leesf)                      | PPMC, Committer       | leesf        |
+| <img src="https://avatars.githubusercontent.com/nsivabalan" style="max-width: 100px" alt="nsivabalan" align="middle" /> | [Sivabalan Narayanan](https://github.com/nsivabalan)         | Committer | sivabalan      |
 | <img src="https://avatars.githubusercontent.com/smarthi" style="max-width: 100px" alt="smarthi" align="middle" /> | [Suneel Marthi](https://github.com/smarthi)                  | PPMC, Committer | smarthi      |
 | <img src="https://avatars.githubusercontent.com/tweise" style="max-width: 100px" alt="tweise" align="middle" /> | [Thomas Weise](https://github.com/tweise)                    | PPMC, Committer | thw          |
 | <img src="https://avatars.githubusercontent.com/vinothchandar" style="max-width: 100px" alt="vinothchandar" align="middle" /> | [vinoth chandar](https://github.com/vinothchandar)           | PPMC, Committer | vinoth       |
-| <img src="https://avatars.githubusercontent.com/yanghua" style="max-width: 100px" alt="yanghua" /> | [vinoyang](https://github.com/yanghua)                       | Committer       | vinoyang     |
+| <img src="https://avatars.githubusercontent.com/yanghua" style="max-width: 100px" alt="yanghua" /> | [vinoyang](https://github.com/yanghua)                       | PPMC, Committer       | vinoyang     |
 | <img src="https://avatars.githubusercontent.com/zqureshi" alt="zqureshi" style="max-width: 100px;" align="middle" /> | [Zeeshan Qureshi](https://github.com/zqureshi)               | PPMC, Committer | zqureshi     |
+| <img src="https://avatars.githubusercontent.com/lamber-ken" alt="lamber-ken" style="max-width: 100px;" align="middle" /> | [lamber-ken](https://github.com/lamber-ken)               | Committer | lamberken     |
 
 
 ## Code Contributions
