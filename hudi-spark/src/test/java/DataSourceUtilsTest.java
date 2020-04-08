@@ -17,17 +17,57 @@
  */
 
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
 
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 public class DataSourceUtilsTest {
+
+  @Mock
+  private HoodieWriteClient hoodieWriteClient;
+
+  @Mock
+  private JavaRDD<HoodieRecord> hoodieRecords;
+
+  @Captor
+  private ArgumentCaptor<Option> optionCaptor;
+  private HoodieWriteConfig config;
+
+  @BeforeEach
+  public void setUp() {
+    config = HoodieWriteConfig.newBuilder().withPath("/").build();
+  }
 
   @Test
   public void testAvroRecordsFieldConversion() {
@@ -59,4 +99,50 @@ public class DataSourceUtilsTest {
     assertEquals("Hudi Meetup", DataSourceUtils.getNestedFieldValAsString(record, "event_name", true));
     assertEquals("Hudi PMC", DataSourceUtils.getNestedFieldValAsString(record, "event_organizer", true));
   }
+
+  @Test
+  public void testDoWriteOperationWithoutUserDefinedBulkInsertPartitioner() throws HoodieException {
+    when(hoodieWriteClient.getConfig()).thenReturn(config);
+
+    DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
+            DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+
+    verify(hoodieWriteClient, times(1)).bulkInsert(any(hoodieRecords.getClass()), anyString(),
+            optionCaptor.capture());
+    assertThat(optionCaptor.getValue(), is(equalTo(Option.empty())));
+  }
+
+  @Test
+  public void testDoWriteOperationWithNonExistUserDefinedBulkInsertPartitioner() throws HoodieException {
+    setAndVerifyHoodieWriteClientWith("NonExistClassName");
+
+    Exception exception = assertThrows(HoodieException.class, () -> {
+      DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
+              DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+    });
+
+    assertThat(exception.getMessage(), containsString("Could not create UserDefinedBulkInsertPartitioner"));
+  }
+
+  @Test
+  public void testDoWriteOperationWithUserDefinedBulkInsertPartitioner() throws HoodieException {
+    setAndVerifyHoodieWriteClientWith(DataSourceTestUtils.NoOpBulkInsertPartitioner.class.getName());
+
+    DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
+            DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+
+    verify(hoodieWriteClient, times(1)).bulkInsert(any(hoodieRecords.getClass()), anyString(),
+            optionCaptor.capture());
+    assertThat(optionCaptor.getValue().get(), is(instanceOf(DataSourceTestUtils.NoOpBulkInsertPartitioner.class)));
+  }
+
+  private void setAndVerifyHoodieWriteClientWith(final String partitionerClassName) {
+    config = HoodieWriteConfig.newBuilder().withPath(config.getBasePath())
+            .withUserDefinedBulkInsertPartitionerClass(partitionerClassName)
+            .build();
+    when(hoodieWriteClient.getConfig()).thenReturn(config);
+
+    assertThat(config.getUserDefinedBulkInsertPartitionerClass(), is(equalTo(partitionerClassName)));
+  }
+
 }

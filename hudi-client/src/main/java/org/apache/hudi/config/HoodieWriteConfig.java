@@ -57,6 +57,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_PARALLELISM = "1500";
   private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
   private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
+  private static final String BULKINSERT_USER_DEFINED_PARTITIONER_CLASS = "hoodie.bulkinsert.user.defined.partitioner.class";
   private static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
   private static final String DELETE_PARALLELISM = "hoodie.delete.shuffle.parallelism";
   private static final String DEFAULT_ROLLBACK_PARALLELISM = "100";
@@ -155,6 +156,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public int getBulkInsertShuffleParallelism() {
     return Integer.parseInt(props.getProperty(BULKINSERT_PARALLELISM));
+  }
+
+  public String getUserDefinedBulkInsertPartitionerClass() {
+    return props.getProperty(BULKINSERT_USER_DEFINED_PARTITIONER_CLASS);
   }
 
   public int getInsertShuffleParallelism() {
@@ -600,6 +605,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public Builder withBulkInsertParallelism(int bulkInsertParallelism) {
       props.setProperty(BULKINSERT_PARALLELISM, String.valueOf(bulkInsertParallelism));
+      return this;
+    }
+
+    public Builder withUserDefinedBulkInsertPartitionerClass(String className) {
+      props.setProperty(BULKINSERT_USER_DEFINED_PARTITIONER_CLASS, className);
       return this;
     }
 

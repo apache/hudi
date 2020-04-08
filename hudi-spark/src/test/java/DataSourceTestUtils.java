@@ -19,7 +19,10 @@
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
+import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
 import java.util.List;
@@ -52,4 +55,14 @@ public class DataSourceTestUtils {
         .map(hr -> "{\"_row_key\":\"" + hr.getRecordKey() + "\",\"partition\":\"" + hr.getPartitionPath() + "\"}")
         .collect(Collectors.toList());
   }
+
+  public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>
+          implements UserDefinedBulkInsertPartitioner<T> {
+
+    @Override
+    public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
+      return records;
+    }
+  }
+
 }
