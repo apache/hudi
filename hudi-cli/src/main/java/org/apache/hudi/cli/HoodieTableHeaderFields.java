@@ -19,21 +19,21 @@
 package org.apache.hudi.cli;
 
 /**
- * Config for table header.
+ * Fields of print table header.
  */
-public class HoodieTableHeaderConfig {
+public class HoodieTableHeaderFields {
   public static final String HEADER_PARTITION = "Partition";
   public static final String HEADER_FILE_ID = "FileId";
   public static final String HEADER_BASE_INSTANT = "Base-Instant";
 
   /**
-   * Data header config.
+   * Fields of data header.
    */
   public static final String HEADER_DATA_FILE = "Data-File";
   public static final String HEADER_DATA_FILE_SIZE = HEADER_DATA_FILE + " Size";
 
   /**
-   * Delta header config.
+   * Fields of delta header.
    */
   public static final String HEADER_DELTA_SIZE = "Delta Size";
   public static final String HEADER_DELTA_FILES = "Delta Files";
@@ -42,7 +42,7 @@ public class HoodieTableHeaderConfig {
   public static final String HEADER_NUM_DELTA_FILES = "Num " + HEADER_DELTA_FILES;
 
   /**
-   * Compaction scheduled header config.
+   * Fields of compaction scheduled header.
    */
   private static final String COMPACTION_SCHEDULED_SUFFIX = " - compaction scheduled";
   private static final String COMPACTION_UNSCHEDULED_SUFFIX = " - compaction unscheduled";
