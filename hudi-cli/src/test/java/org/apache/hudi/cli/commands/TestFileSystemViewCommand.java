@@ -21,6 +21,7 @@ package org.apache.hudi.cli.commands;
 import org.apache.hudi.cli.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderConfig;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.common.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.common.fs.FSUtils;
@@ -54,11 +55,8 @@ import static org.junit.Assert.assertTrue;
  * Test class for {@link FileSystemViewCommand}.
  */
 public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
-  private String tablePath;
   private String partitionPath;
   private SyncableFileSystemView fsView;
-
-  private static String TEST_WRITE_TOKEN = "1-0-1";
 
   @Before
   public void init() throws IOException {
@@ -66,7 +64,7 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
 
     // Create table and connect
     String tableName = "test_table";
-    tablePath = basePath + File.separator + tableName;
+    String tablePath = basePath + File.separator + tableName;
     new TableCommand().createTable(
         tablePath, tableName,
         "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
@@ -84,15 +82,16 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
     String fileId1 = UUID.randomUUID().toString();
 
     // Write date files and log file
-    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1))
+    String testWriteToken = "1-0-1";
+    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime1, testWriteToken, fileId1))
         .createNewFile();
     new File(fullPartitionPath + "/"
-        + FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, TEST_WRITE_TOKEN))
+        + FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken))
         .createNewFile();
-    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, fileId1))
+    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime2, testWriteToken, fileId1))
         .createNewFile();
     new File(fullPartitionPath + "/"
-        + FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, TEST_WRITE_TOKEN))
+        + FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken))
         .createNewFile();
 
     // Write commit files
@@ -136,13 +135,17 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
     Function<Object, String> converterFunction =
         entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString())));
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put("Total Delta File Size", converterFunction);
-    fieldNameToConverterMap.put("Data-File Size", converterFunction);
+    fieldNameToConverterMap.put(HoodieTableHeaderConfig.HEADER_TOTAL_DELTA_FILE_SIZE, converterFunction);
+    fieldNameToConverterMap.put(HoodieTableHeaderConfig.HEADER_DATA_FILE_SIZE, converterFunction);
 
-    TableHeader header = new TableHeader().addTableHeaderField("Partition").addTableHeaderField("FileId")
-        .addTableHeaderField("Base-Instant").addTableHeaderField("Data-File").addTableHeaderField("Data-File Size")
-        .addTableHeaderField("Num Delta Files").addTableHeaderField("Total Delta File Size")
-        .addTableHeaderField("Delta Files");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderConfig.HEADER_PARTITION)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_FILE_ID)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_BASE_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DATA_FILE)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DATA_FILE_SIZE)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_NUM_DELTA_FILES)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_TOTAL_DELTA_FILE_SIZE)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_FILES);
     String expected = HoodiePrintHelper.print(header, fieldNameToConverterMap, "", false, -1, false, rows);
     assertEquals(expected, cr.getResult().toString());
 
@@ -166,8 +169,11 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
       rows.add(row);
     }));
 
-    header = new TableHeader().addTableHeaderField("Partition").addTableHeaderField("FileId")
-        .addTableHeaderField("Base-Instant").addTableHeaderField("Data-File").addTableHeaderField("Data-File Size");
+    header = new TableHeader().addTableHeaderField(HoodieTableHeaderConfig.HEADER_PARTITION)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_FILE_ID)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_BASE_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DATA_FILE)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DATA_FILE_SIZE);
 
     expected = HoodiePrintHelper.print(header, fieldNameToConverterMap, "", false, -1, false, rows);
     assertEquals(expected, cr.getResult().toString());
@@ -225,20 +231,24 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
     Function<Object, String> converterFunction =
         entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString())));
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put("Data-File Size", converterFunction);
-    fieldNameToConverterMap.put("Total Delta Size", converterFunction);
-    fieldNameToConverterMap.put("Delta Size - compaction scheduled", converterFunction);
-    fieldNameToConverterMap.put("Delta Size - compaction unscheduled", converterFunction);
+    fieldNameToConverterMap.put(HoodieTableHeaderConfig.HEADER_DATA_FILE_SIZE, converterFunction);
+    fieldNameToConverterMap.put(HoodieTableHeaderConfig.HEADER_TOTAL_DELTA_SIZE, converterFunction);
+    fieldNameToConverterMap.put(HoodieTableHeaderConfig.HEADER_DELTA_SIZE_SCHEDULED, converterFunction);
+    fieldNameToConverterMap.put(HoodieTableHeaderConfig.HEADER_DELTA_SIZE_UNSCHEDULED, converterFunction);
 
-    TableHeader header = new TableHeader().addTableHeaderField("Partition").addTableHeaderField("FileId")
-        .addTableHeaderField("Base-Instant").addTableHeaderField("Data-File").addTableHeaderField("Data-File Size")
-        .addTableHeaderField("Num Delta Files").addTableHeaderField("Total Delta Size")
-        .addTableHeaderField("Delta Size - compaction scheduled")
-        .addTableHeaderField("Delta Size - compaction unscheduled")
-        .addTableHeaderField("Delta To Base Ratio - compaction scheduled")
-        .addTableHeaderField("Delta To Base Ratio - compaction unscheduled")
-        .addTableHeaderField("Delta Files - compaction scheduled")
-        .addTableHeaderField("Delta Files - compaction unscheduled");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderConfig.HEADER_PARTITION)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_FILE_ID)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_BASE_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DATA_FILE)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DATA_FILE_SIZE)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_NUM_DELTA_FILES)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_TOTAL_DELTA_SIZE)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_SIZE_SCHEDULED)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_SIZE_UNSCHEDULED)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_BASE_SCHEDULED)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_BASE_UNSCHEDULED)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_FILES_SCHEDULED)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_FILES_UNSCHEDULED);
     String expected = HoodiePrintHelper.print(header, fieldNameToConverterMap, "", false, -1, false, rows);
     assertEquals(expected, cr.getResult().toString());
   }

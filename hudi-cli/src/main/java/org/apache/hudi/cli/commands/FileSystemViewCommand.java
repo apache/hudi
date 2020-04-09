@@ -20,6 +20,7 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderConfig;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -99,14 +100,18 @@ public class FileSystemViewCommand implements CommandMarker {
     Function<Object, String> converterFunction =
         entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString())));
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put("Total Delta File Size", converterFunction);
-    fieldNameToConverterMap.put("Data-File Size", converterFunction);
+    fieldNameToConverterMap.put(HoodieTableHeaderConfig.HEADER_TOTAL_DELTA_FILE_SIZE, converterFunction);
+    fieldNameToConverterMap.put(HoodieTableHeaderConfig.HEADER_DATA_FILE_SIZE, converterFunction);
 
-    TableHeader header = new TableHeader().addTableHeaderField("Partition").addTableHeaderField("FileId")
-        .addTableHeaderField("Base-Instant").addTableHeaderField("Data-File").addTableHeaderField("Data-File Size");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderConfig.HEADER_PARTITION)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_FILE_ID)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_BASE_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DATA_FILE)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DATA_FILE_SIZE);
     if (!baseFileOnly) {
-      header = header.addTableHeaderField("Num Delta Files").addTableHeaderField("Total Delta File Size")
-          .addTableHeaderField("Delta Files");
+      header = header.addTableHeaderField(HoodieTableHeaderConfig.HEADER_NUM_DELTA_FILES)
+          .addTableHeaderField(HoodieTableHeaderConfig.HEADER_TOTAL_DELTA_FILE_SIZE)
+          .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_FILES);
     }
     return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows);
   }
@@ -189,24 +194,28 @@ public class FileSystemViewCommand implements CommandMarker {
     Function<Object, String> converterFunction =
         entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString())));
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put("Data-File Size", converterFunction);
+    fieldNameToConverterMap.put(HoodieTableHeaderConfig.HEADER_DATA_FILE_SIZE, converterFunction);
     if (!baseFileOnly) {
-      fieldNameToConverterMap.put("Total Delta Size", converterFunction);
-      fieldNameToConverterMap.put("Delta Size - compaction scheduled", converterFunction);
-      fieldNameToConverterMap.put("Delta Size - compaction unscheduled", converterFunction);
+      fieldNameToConverterMap.put(HoodieTableHeaderConfig.HEADER_TOTAL_DELTA_SIZE, converterFunction);
+      fieldNameToConverterMap.put(HoodieTableHeaderConfig.HEADER_DELTA_SIZE_SCHEDULED, converterFunction);
+      fieldNameToConverterMap.put(HoodieTableHeaderConfig.HEADER_DELTA_SIZE_UNSCHEDULED, converterFunction);
     }
 
-    TableHeader header = new TableHeader().addTableHeaderField("Partition").addTableHeaderField("FileId")
-        .addTableHeaderField("Base-Instant").addTableHeaderField("Data-File").addTableHeaderField("Data-File Size");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderConfig.HEADER_PARTITION)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_FILE_ID)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_BASE_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DATA_FILE)
+        .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DATA_FILE_SIZE);
 
     if (!baseFileOnly) {
-      header = header.addTableHeaderField("Num Delta Files").addTableHeaderField("Total Delta Size")
-          .addTableHeaderField("Delta Size - compaction scheduled")
-          .addTableHeaderField("Delta Size - compaction unscheduled")
-          .addTableHeaderField("Delta To Base Ratio - compaction scheduled")
-          .addTableHeaderField("Delta To Base Ratio - compaction unscheduled")
-          .addTableHeaderField("Delta Files - compaction scheduled")
-          .addTableHeaderField("Delta Files - compaction unscheduled");
+      header = header.addTableHeaderField(HoodieTableHeaderConfig.HEADER_NUM_DELTA_FILES)
+          .addTableHeaderField(HoodieTableHeaderConfig.HEADER_TOTAL_DELTA_SIZE)
+          .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_SIZE_SCHEDULED)
+          .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_SIZE_UNSCHEDULED)
+          .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_BASE_SCHEDULED)
+          .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_BASE_UNSCHEDULED)
+          .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_FILES_SCHEDULED)
+          .addTableHeaderField(HoodieTableHeaderConfig.HEADER_DELTA_FILES_UNSCHEDULED);
     }
     return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows);
   }
