@@ -165,7 +165,7 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
     // Only get instant 1, since maxInstant was specified 2
     fileGroups.forEach(fg -> fg.getAllFileSlices().filter(fs -> fs.getBaseInstantTime().equals("1")).forEach(fs -> {
       int idx = 0;
-      // For base file only Views, do not display any delta-file related columns
+      // For base file only Views, do not display any delta-file related columns.
       Comparable[] row = new Comparable[5];
       row[idx++] = fg.getPartitionPath();
       row[idx++] = fg.getFileGroupId().getFileId();
