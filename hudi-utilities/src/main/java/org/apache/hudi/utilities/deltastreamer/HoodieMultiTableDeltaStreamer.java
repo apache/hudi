@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
@@ -66,6 +67,8 @@ public class HoodieMultiTableDeltaStreamer {
     this.jssc = jssc;
     String commonPropsFile = config.propsFilePath;
     String configFolder = config.configFolder;
+    ValidationUtils.checkArgument(!config.filterDupes || config.operation != HoodieDeltaStreamer.Operation.UPSERT,
+        "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
     FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
     configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
     checkIfPropsFileAndConfigFolderExist(commonPropsFile, configFolder, fs);
