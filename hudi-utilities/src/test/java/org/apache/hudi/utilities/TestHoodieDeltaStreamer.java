@@ -593,7 +593,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // Generate the same 1000 records + 1000 new ones for upsert
     cfg.filterDupes = true;
     cfg.sourceLimit = 2000;
-    cfg.operation = Operation.UPSERT;
+    cfg.operation = Operation.INSERT;
     new HoodieDeltaStreamer(cfg, jsc).sync();
     TestHelpers.assertRecordCount(2000, tableBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, dfs, 2);
@@ -606,7 +606,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     HoodieTableMetaClient mClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), tableBasePath, true);
     HoodieInstant lastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
     HoodieDeltaStreamer.Config cfg2 = TestHelpers.makeDropAllConfig(tableBasePath, Operation.UPSERT);
-    cfg2.filterDupes = true;
+    cfg2.filterDupes = false;
     cfg2.sourceLimit = 2000;
     cfg2.operation = Operation.UPSERT;
     cfg2.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN_PROP));
@@ -622,6 +622,16 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
         .fromBytes(mClient.getActiveTimeline().getInstantDetails(newLastFinished).get(), HoodieCommitMetadata.class);
     System.out.println("New Commit Metadata=" + commitMetadata);
     assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
+
+    // Try UPSERT with filterDupes true. Expect exception
+    cfg2.filterDupes = true;
+    cfg2.operation = Operation.UPSERT;
+    try {
+      new HoodieDeltaStreamer(cfg2, jsc).sync();
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed."));
+    }
+
   }
 
   @Test

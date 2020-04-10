@@ -359,16 +359,15 @@ public class HoodieDeltaStreamer implements Serializable {
         tableType = HoodieTableType.valueOf(cfg.tableType);
       }
 
+      ValidationUtils.checkArgument(!cfg.filterDupes || cfg.operation != Operation.UPSERT,
+          "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
+
       this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
       LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
 
-      if (cfg.filterDupes) {
-        cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
-      }
-
       deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, tableType, props, jssc, fs, hiveConf,
-          this::onInitializingWriteClient);
+        this::onInitializingWriteClient);
     }
 
     public DeltaSync getDeltaSync() {

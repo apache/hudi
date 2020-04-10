@@ -180,9 +180,6 @@ public class DeltaSync implements Serializable {
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider));
 
     this.hiveConf = hiveConf;
-    if (cfg.filterDupes) {
-      cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
-    }
 
     // If schemaRegistry already resolved, setup write-client
     setupWriteClient();
@@ -355,8 +352,6 @@ public class DeltaSync implements Serializable {
     Option<String> scheduledCompactionInstant = Option.empty();
     // filter dupes if needed
     if (cfg.filterDupes) {
-      // turn upserts to insert
-      cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
       records = DataSourceUtils.dropDuplicates(jssc, records, writeClient.getConfig());
     }
 
