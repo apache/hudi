@@ -18,20 +18,20 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieRecord;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -40,16 +40,13 @@ import java.util.UUID;
 
 public class TestHoodieAvroWriteSupport {
 
-  @Rule
-  public TemporaryFolder folder = new TemporaryFolder();
-
   @Test
-  public void testAddKey() throws IOException {
+  public void testAddKey(@TempDir java.nio.file.Path tempDir) throws IOException {
     List<String> rowKeys = new ArrayList<>();
     for (int i = 0; i < 1000; i++) {
       rowKeys.add(UUID.randomUUID().toString());
     }
-    String filePath = folder.getRoot() + "/test.parquet";
+    String filePath = tempDir.resolve("test.parquet").toAbsolutePath().toString();
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
     BloomFilter filter = BloomFilterFactory.createBloomFilter(
         1000, 0.0001, 10000,

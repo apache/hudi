@@ -20,10 +20,10 @@ package org.apache.hudi.metrics;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static org.apache.hudi.metrics.Metrics.registerGauge;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 

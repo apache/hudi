@@ -18,12 +18,15 @@
 
 package org.apache.hudi.integ;
 
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.model.HoodieTableType;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 /**
  * Smoke tests to run as part of verification.
@@ -129,7 +132,7 @@ public class ITTestHoodieSanity extends ITTestBase {
 
     // Ensure table does not exist
     Pair<String, String> stdOutErr = executeHiveCommand("show tables like '" + hiveTableName + "'");
-    Assert.assertTrue("Dropped table " + hiveTableName + " exists!", stdOutErr.getLeft().isEmpty());
+    assertTrue(stdOutErr.getLeft().isEmpty(), "Dropped table " + hiveTableName + " exists!");
 
     // Run Hoodie Java App
     String cmd;
@@ -145,24 +148,24 @@ public class ITTestHoodieSanity extends ITTestBase {
     }
     executeCommandStringInDocker(ADHOC_1_CONTAINER, cmd, true);
 
-    String snapshotTableName = tableType.equals(HoodieTableType.MERGE_ON_READ.name()) ?
-        hiveTableName + "_rt" : hiveTableName;
-    Option<String> roTableName = tableType.equals(HoodieTableType.MERGE_ON_READ.name()) ?
-        Option.of(hiveTableName +"_ro") : Option.empty();
+    String snapshotTableName = tableType.equals(HoodieTableType.MERGE_ON_READ.name())
+        ? hiveTableName + "_rt" : hiveTableName;
+    Option<String> roTableName = tableType.equals(HoodieTableType.MERGE_ON_READ.name())
+        ? Option.of(hiveTableName + "_ro") : Option.empty();
 
     // Ensure table does exist
     stdOutErr = executeHiveCommand("show tables like '" + snapshotTableName + "'");
-    Assert.assertEquals("Table exists", snapshotTableName, stdOutErr.getLeft());
+    assertEquals(snapshotTableName, stdOutErr.getLeft(), "Table exists");
 
     // Ensure row count is 80 (without duplicates) (100 - 20 deleted)
     stdOutErr = executeHiveCommand("select count(1) from " + snapshotTableName);
-    Assert.assertEquals("Expecting 80 rows to be present in the snapshot table", 80,
-        Integer.parseInt(stdOutErr.getLeft().trim()));
+    assertEquals(80, Integer.parseInt(stdOutErr.getLeft().trim()),
+        "Expecting 80 rows to be present in the snapshot table");
 
     if (roTableName.isPresent()) {
       stdOutErr = executeHiveCommand("select count(1) from " + roTableName.get());
-      Assert.assertEquals("Expecting 80 rows to be present in the snapshot table", 80,
-          Integer.parseInt(stdOutErr.getLeft().trim()));
+      assertEquals(80, Integer.parseInt(stdOutErr.getLeft().trim()),
+          "Expecting 80 rows to be present in the snapshot table");
     }
 
     // Make the HDFS dataset non-hoodie and run the same query; Checks for interoperability with non-hoodie tables
@@ -175,8 +178,8 @@ public class ITTestHoodieSanity extends ITTestBase {
     } else {
       stdOutErr = executeHiveCommand("select count(1) from " + snapshotTableName);
     }
-    Assert.assertEquals("Expecting 280 rows to be present in the new table", 280,
-        Integer.parseInt(stdOutErr.getLeft().trim()));
+    assertEquals(280, Integer.parseInt(stdOutErr.getLeft().trim()),
+        "Expecting 280 rows to be present in the new table");
   }
 
   private void dropHiveTables(String hiveTableName, String tableType) throws Exception {

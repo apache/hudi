@@ -21,10 +21,14 @@ package org.apache.hudi.avro;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests hoodie avro utilities.
@@ -59,18 +63,18 @@ public class TestHoodieAvroUtils {
         continue;
       }
 
-      Assert.assertNotNull("field name is null", field.name());
+      assertNotNull(field.name(), "field name is null");
       Map<String, Object> props = field.getObjectProps();
-      Assert.assertNotNull("The property is null", props);
+      assertNotNull(props, "The property is null");
 
       if (field.name().equals("pii_col")) {
         piiPresent = true;
-        Assert.assertTrue("sensitivity_level is removed in field 'pii_col'", props.containsKey("column_category"));
+        assertTrue(props.containsKey("column_category"), "sensitivity_level is removed in field 'pii_col'");
       } else {
-        Assert.assertEquals("The property shows up but not set", 0, props.size());
+        assertEquals(0, props.size(), "The property shows up but not set");
       }
     }
-    Assert.assertTrue("column pii_col doesn't show up", piiPresent);
+    assertTrue(piiPresent, "column pii_col doesn't show up");
   }
 
   @Test
@@ -81,8 +85,8 @@ public class TestHoodieAvroUtils {
     rec.put("pii_col", "val2");
     rec.put("timestamp", 3.5);
     GenericRecord rec1 = HoodieAvroUtils.rewriteRecord(rec, new Schema.Parser().parse(EVOLVED_SCHEMA));
-    Assert.assertEquals(rec1.get("new_col1"), "dummy_val");
-    Assert.assertNull(rec1.get("new_col2"));
+    assertEquals(rec1.get("new_col1"), "dummy_val");
+    assertNull(rec1.get("new_col2"));
   }
 
   @Test
@@ -93,8 +97,8 @@ public class TestHoodieAvroUtils {
     rec.put("pii_col", "val2");
     rec.put("timestamp", 3.5);
     GenericRecord rec1 = HoodieAvroUtils.rewriteRecord(rec, new Schema.Parser().parse(EVOLVED_SCHEMA));
-    Assert.assertEquals(rec1.get("new_col1"), "dummy_val");
-    Assert.assertNull(rec1.get("new_col2"));
+    assertEquals(rec1.get("new_col1"), "dummy_val");
+    assertNull(rec1.get("new_col2"));
   }
 
   @Test
@@ -105,6 +109,6 @@ public class TestHoodieAvroUtils {
     rec.put("pii_col", "val2");
     rec.put("timestamp", 3.5);
     GenericRecord rec1 = HoodieAvroUtils.rewriteRecord(rec, new Schema.Parser().parse(SCHEMA_WITH_METADATA_FIELD));
-    Assert.assertNull(rec1.get("_hoodie_commit_time"));
+    assertNull(rec1.get("_hoodie_commit_time"));
   }
 }

@@ -21,11 +21,11 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class DataSourceUtilsTest {
 
@@ -34,7 +34,7 @@ public class DataSourceUtilsTest {
     // There are fields event_date1, event_date2, event_date3 with logical type as Date. event_date1 & event_date3 are
     // of UNION schema type, which is a union of null and date type in different orders. event_date2 is non-union
     // date type
-    String avroSchemaString  = "{\"type\": \"record\"," + "\"name\": \"events\"," + "\"fields\": [ "
+    String avroSchemaString = "{\"type\": \"record\"," + "\"name\": \"events\"," + "\"fields\": [ "
         + "{\"name\": \"event_date1\", \"type\" : [{\"type\" : \"int\", \"logicalType\" : \"date\"}, \"null\"]},"
         + "{\"name\": \"event_date2\", \"type\" : {\"type\": \"int\", \"logicalType\" : \"date\"}},"
         + "{\"name\": \"event_date3\", \"type\" : [\"null\", {\"type\" : \"int\", \"logicalType\" : \"date\"}]},"
