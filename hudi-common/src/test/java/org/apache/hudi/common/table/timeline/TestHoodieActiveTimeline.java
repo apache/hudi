@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -25,8 +26,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-
-import org.apache.hadoop.fs.Path;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -153,10 +152,15 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   public void testTimelineOperations() {
     timeline = new MockHoodieTimeline(Stream.of("01", "03", "05", "07", "09", "11", "13", "15", "17", "19"),
         Stream.of("21", "23"));
-    HoodieTestUtils.assertStreamEquals("", Stream.of("05", "07", "09", "11"), timeline.getCommitTimeline()
-        .filterCompletedInstants().findInstantsInRange("04", "11").getInstants().map(HoodieInstant::getTimestamp));
-    HoodieTestUtils.assertStreamEquals("", Stream.of("09", "11"), timeline.getCommitTimeline().filterCompletedInstants()
-        .findInstantsAfter("07", 2).getInstants().map(HoodieInstant::getTimestamp));
+    HoodieTestUtils.assertStreamEquals("findInstantsInRange should return 4 instants", Stream.of("05", "07", "09", "11"),
+        timeline.getCommitTimeline().filterCompletedInstants().findInstantsInRange("04", "11")
+            .getInstants().map(HoodieInstant::getTimestamp));
+    HoodieTestUtils.assertStreamEquals("findInstantsAfter 07 should return 2 instants", Stream.of("09", "11"),
+        timeline.getCommitTimeline().filterCompletedInstants().findInstantsAfter("07", 2)
+            .getInstants().map(HoodieInstant::getTimestamp));
+    HoodieTestUtils.assertStreamEquals("findInstantsBefore 07 should return 3 instants", Stream.of("01", "03", "05"),
+        timeline.getCommitTimeline().filterCompletedInstants().findInstantsBefore("07")
+            .getInstants().map(HoodieInstant::getTimestamp));
     assertFalse(timeline.empty());
     assertFalse(timeline.getCommitTimeline().filterPendingExcludingCompaction().empty());
     assertEquals("", 12, timeline.countInstants());

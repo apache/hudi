@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -157,6 +158,12 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     // Call the HoodieInputFormat::listStatus to obtain all latest parquet files, based on commit
     // timeline.
     return super.listStatus(job);
+  }
+
+  @Override
+  protected HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
+    // no specific filtering for Realtime format
+    return timeline;
   }
 
   /**

@@ -20,6 +20,7 @@ package org.apache.hudi.common;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 
 import org.apache.avro.Schema;
@@ -51,29 +52,36 @@ public class HoodieMergeOnReadTestUtils {
   public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths, String basePath,
                                                                 Configuration conf) {
     JobConf jobConf = new JobConf(conf);
+    return getRecordsUsingInputFormat(inputPaths, basePath, jobConf, new HoodieParquetRealtimeInputFormat());
+  }
+
+  public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths,
+                                                               String basePath,
+                                                               JobConf jobConf,
+                                                               HoodieParquetInputFormat inputFormat) {
     Schema schema = HoodieAvroUtils.addMetadataFields(
         new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
-    HoodieParquetRealtimeInputFormat inputFormat = new HoodieParquetRealtimeInputFormat();
     setPropsForInputFormat(inputFormat, jobConf, schema, basePath);
     return inputPaths.stream().map(path -> {
       setInputPath(jobConf, path);
       List<GenericRecord> records = new ArrayList<>();
       try {
         List<InputSplit> splits = Arrays.asList(inputFormat.getSplits(jobConf, 1));
-        RecordReader recordReader = inputFormat.getRecordReader(splits.get(0), jobConf, null);
-        Void key = (Void) recordReader.createKey();
-        ArrayWritable writable = (ArrayWritable) recordReader.createValue();
-        while (recordReader.next(key, writable)) {
-          GenericRecordBuilder newRecord = new GenericRecordBuilder(schema);
-          // writable returns an array with [field1, field2, _hoodie_commit_time,
-          // _hoodie_commit_seqno]
-          Writable[] values = writable.get();
-          final int[] fieldIndex = {0};
-          assert schema.getFields().size() <= values.length;
-          schema.getFields().forEach(field -> {
-            newRecord.set(field, values[fieldIndex[0]++]);
-          });
-          records.add(newRecord.build());
+        for (InputSplit split : splits) {
+          RecordReader recordReader = inputFormat.getRecordReader(split, jobConf, null);
+          Void key = (Void) recordReader.createKey();
+          ArrayWritable writable = (ArrayWritable) recordReader.createValue();
+          while (recordReader.next(key, writable)) {
+            GenericRecordBuilder newRecord = new GenericRecordBuilder(schema);
+            // writable returns an array with [field1, field2, _hoodie_commit_time,
+            // _hoodie_commit_seqno]
+            Writable[] values = writable.get();
+            assert schema.getFields().size() <= values.length;
+            schema.getFields().forEach(field -> {
+              newRecord.set(field, values[field.pos()]);
+            });
+            records.add(newRecord.build());
+          }
         }
       } catch (IOException ie) {
         ie.printStackTrace();
@@ -85,7 +93,7 @@ public class HoodieMergeOnReadTestUtils {
     }).orElse(new ArrayList<GenericRecord>());
   }
 
-  private static void setPropsForInputFormat(HoodieParquetRealtimeInputFormat inputFormat, JobConf jobConf,
+  private static void setPropsForInputFormat(HoodieParquetInputFormat inputFormat, JobConf jobConf,
       Schema schema, String basePath) {
     List<Schema.Field> fields = schema.getFields();
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));

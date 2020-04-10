@@ -18,17 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieIOException;
-
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -42,6 +31,18 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -119,6 +120,36 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
   }
 
   /**
+   * Filter any specific instants that we do not want to process.
+   * example timeline:
+   *
+   * t0 -> create bucket1.parquet
+   * t1 -> create and append updates bucket1.log
+   * t2 -> request compaction
+   * t3 -> create bucket2.parquet
+   *
+   * if compaction at t2 takes a long time, incremental readers on RO tables can move to t3 and would skip updates in t1
+   *
+   * To workaround this problem, we want to stop returning data belonging to commits > t2.
+   * After compaction is complete, incremental reader would see updates in t2, t3, so on.
+   */
+  protected HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
+    HoodieDefaultTimeline commitsAndCompactionTimeline = timeline.getCommitsAndCompactionTimeline();
+    Option<HoodieInstant> pendingCompactionInstant = commitsAndCompactionTimeline.filterPendingCompactionTimeline().firstInstant();
+    if (pendingCompactionInstant.isPresent()) {
+      HoodieDefaultTimeline instantsTimeline = commitsAndCompactionTimeline.findInstantsBefore(pendingCompactionInstant.get().getTimestamp());
+      int numCommitsFilteredByCompaction = commitsAndCompactionTimeline.getCommitsTimeline().countInstants()
+          - instantsTimeline.getCommitsTimeline().countInstants();
+      LOG.info("Earliest pending compaction instant is: " + pendingCompactionInstant.get().getTimestamp()
+              + " skipping " + numCommitsFilteredByCompaction + " commits");
+
+      return instantsTimeline;
+    } else {
+      return timeline;
+    }
+  }
+
+  /**
    * Achieves listStatus functionality for an incrementally queried table. Instead of listing all
    * partitions and then filtering based on the commits of interest, this logic first extracts the
    * partitions touched by the desired commits and then lists only those partitions.
@@ -126,10 +157,18 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
   private List<FileStatus> listStatusForIncrementalMode(
       JobConf job, HoodieTableMetaClient tableMetaClient, List<Path> inputPaths) throws IOException {
     String tableName = tableMetaClient.getTableConfig().getTableName();
-    HoodieTimeline timeline = tableMetaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    String lastIncrementalTs = HoodieHiveUtil.readStartCommitTime(Job.getInstance(job), tableName);
+    Job jobContext = Job.getInstance(job);
+    HoodieDefaultTimeline baseTimeline;
+    if (HoodieHiveUtil.stopAtCompaction(jobContext, tableName)) {
+      baseTimeline = filterInstantsTimeline(tableMetaClient.getActiveTimeline());
+    } else {
+      baseTimeline = tableMetaClient.getActiveTimeline();
+    }
+
+    HoodieTimeline timeline = baseTimeline.getCommitsTimeline().filterCompletedInstants();
+    String lastIncrementalTs = HoodieHiveUtil.readStartCommitTime(jobContext, tableName);
     // Total number of commits to return in this batch. Set this to -1 to get all the commits.
-    Integer maxCommits = HoodieHiveUtil.readMaxCommits(Job.getInstance(job), tableName);
+    Integer maxCommits = HoodieHiveUtil.readMaxCommits(jobContext, tableName);
     LOG.info("Last Incremental timestamp was set as " + lastIncrementalTs);
     List<HoodieInstant> commitsToCheck = timeline.findInstantsAfter(lastIncrementalTs, maxCommits)
         .getInstants().collect(Collectors.toList());
