@@ -18,18 +18,17 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.common.model.HoodieBaseFile
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.{HoodieBaseFile, HoodiePartitionMetadata, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.util.FSUtils
-import org.apache.hudi.hadoop.HoodieParquetInputFormat
+import org.apache.hudi.exception.TableNotFoundException
+import org.apache.hudi.hadoop.{HoodieHiveUtil, HoodieParquetInputFormat}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.{Row, SQLContext}
@@ -40,23 +39,23 @@ import scala.collection.JavaConverters._
 
 class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
                             val userSchema: StructType,
-                            val basePath: String,
+                            val path: String,
                             val optParams: Map[String, String]) extends BaseRelation
   with PrunedScan with Logging {
 
   val fileIndex: HudiBootstrapFileIndex = buildFileIndex()
 
   val skeletonSchema: StructType = StructType(Seq(
-    StructField("_hoodie_commit_time", StringType, nullable = true),
-    StructField("_hoodie_commit_seqno", StringType, nullable = true),
-    StructField("_hoodie_record_key", StringType, nullable = true),
-    StructField("_hoodie_partition_path", StringType, nullable = true),
-    StructField("_hoodie_file_name", StringType, nullable = true)
+    StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, StringType, nullable = true),
+    StructField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, StringType, nullable = true),
+    StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, StringType, nullable = true),
+    StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, StringType, nullable = true),
+    StructField(HoodieRecord.FILENAME_METADATA_FIELD, StringType, nullable = true)
   ))
 
   var dataSchema: StructType = _
 
-  var completeSchema: StructType = null
+  var completeSchema: StructType = _
 
   override def sqlContext: SQLContext = _sqlContext
 
@@ -68,8 +67,7 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
 
       // We need to infer schema from the external data files and then merge the skeleton schema which is fixed
       // to get the complete schema
-      val conf = new Configuration()
-      val fs = FSUtils.getFs(basePath, conf)
+      val fs = FSUtils.getFs(path, _sqlContext.sparkContext.hadoopConfiguration)
 
       val externalFileStatus = fs.listStatus(
         fileIndex.files.map(file => new Path(file.getExternalDataFile.get())).toArray)
@@ -103,6 +101,7 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
     * @return
     */
   override def buildScan(requiredColumns: Array[String]): RDD[Row] = {
+    logInfo("Udith : Revision 3 Scan..")
     // Compute splits
     val bootstrapSplits = fileIndex.files.map(hoodieBaseFile => {
       val skeletonFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen)
@@ -149,23 +148,41 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
   def buildFileIndex() : HudiBootstrapFileIndex = {
     logInfo("Building file index..")
 
-    val conf = new Configuration()
-    val fs = FSUtils.getFs(basePath, conf)
-
-    val metaClient = new HoodieTableMetaClient(fs.getConf, basePath)
-    val inputFormat = new HoodieParquetInputFormat()
-    inputFormat.setConf(conf)
-
+    val fs = FSUtils.getFs(path, _sqlContext.sparkContext.hadoopConfiguration)
+    var metaClient: HoodieTableMetaClient = null
     val jobConf = new JobConf()
-    val partitionPaths = FSUtils.getAllPartitionPaths(fs, basePath, false)
-    val fullPartitionPaths = partitionPaths.asScala.map(partitionPath => {
-      val fullPartitionPath = basePath + "/" + partitionPath
-      fullPartitionPath
-    })
-    logInfo("Partition paths : " + fullPartitionPaths.mkString(","))
 
-    // Listing using input format listing api.
-    jobConf.set("mapreduce.input.fileinputformat.inputdir", fullPartitionPaths.mkString(","))
+    try {
+      metaClient = new HoodieTableMetaClient(fs.getConf, path)
+      logInfo("Found Hudi table at path => " + path)
+      val partitionPaths = FSUtils.getAllPartitionPaths(fs, path, false)
+      val fullPartitionPaths = partitionPaths.asScala.map(partitionPath => {
+        val fullPartitionPath = path + "/" + partitionPath
+        fullPartitionPath
+      })
+      logInfo("Partition paths : " + fullPartitionPaths.mkString(","))
+
+      // Listing using input format listing api.
+      jobConf.set("mapreduce.input.fileinputformat.inputdir", fullPartitionPaths.mkString(","))
+    } catch {
+      case ex: TableNotFoundException => {
+        val partitionPath = new Path(path)
+        if (HoodiePartitionMetadata.hasPartitionMetadata(fs, partitionPath)) {
+          val metadata = new HoodiePartitionMetadata(fs, partitionPath)
+          metadata.readFromFS()
+          val basePath = HoodieHiveUtil.getNthParent(partitionPath, metadata.getPartitionDepth)
+          metaClient = new HoodieTableMetaClient(fs.getConf, basePath.toString)
+          jobConf.set("mapreduce.input.fileinputformat.inputdir", partitionPath.toString)
+        }
+        else {
+          throw ex
+        }
+      }
+    }
+
+    val inputFormat = new HoodieParquetInputFormat()
+    inputFormat.setConf(_sqlContext.sparkContext.hadoopConfiguration)
+
     val fileStatuses = inputFormat.listStatus(jobConf)
     fileStatuses.foreach(f => logInfo(f.getPath.toString))
 
@@ -174,7 +191,9 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
     val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
 
     latestFiles.foreach(file => logInfo("Skeleton file path: " + file.getPath))
-    latestFiles.foreach(file => logInfo("External data file path: " + file.getExternalDataFile.get()))
+    latestFiles.filter(_.getExternalDataFile.isPresent).foreach(file => {
+      logInfo("External data file path: " + file.getExternalDataFile.get())
+    })
 
     HudiBootstrapFileIndex(latestFiles)
   }
