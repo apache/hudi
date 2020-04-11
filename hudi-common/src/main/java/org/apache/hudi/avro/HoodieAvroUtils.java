@@ -42,10 +42,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -140,7 +139,7 @@ public class HoodieAvroUtils {
 
   private static Schema initRecordKeySchema() {
     Schema.Field recordKeyField =
-        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", null);
+        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", (Object) null);
     Schema recordKeySchema = Schema.createRecord("HoodieRecordKey", "", "", false);
     recordKeySchema.setFields(Collections.singletonList(recordKeyField));
     return recordKeySchema;
@@ -191,7 +190,7 @@ public class HoodieAvroUtils {
    * schema.
    */
   public static GenericRecord rewriteRecord(GenericRecord record, Schema newSchema) {
-    return rewrite(record, getAllFieldsToWrite(record.getSchema(), newSchema), newSchema);
+    return rewrite(record, getCombinedFieldsToWrite(record.getSchema(), newSchema), newSchema);
   }
 
   /**
@@ -199,10 +198,10 @@ public class HoodieAvroUtils {
    * schema.
    */
   public static GenericRecord rewriteRecordWithOnlyNewSchemaFields(GenericRecord record, Schema newSchema) {
-    return rewrite(record, newSchema.getFields(), newSchema);
+    return rewrite(record, new LinkedHashSet<>(newSchema.getFields()), newSchema);
   }
 
-  private static GenericRecord rewrite(GenericRecord record, List<Field> fieldsToWrite, Schema newSchema) {
+  private static GenericRecord rewrite(GenericRecord record, LinkedHashSet<Field> fieldsToWrite, Schema newSchema) {
     GenericRecord newRecord = new GenericData.Record(newSchema);
     for (Schema.Field f : fieldsToWrite) {
       if (record.get(f.name()) == null) {
@@ -218,18 +217,17 @@ public class HoodieAvroUtils {
     return newRecord;
   }
 
-  /*
-  This function takes the union of all the fields except hoodie metadata fields
+  /**
+   * Generates a super set of fields from both old and new schema.
    */
-  private static List<Field> getAllFieldsToWrite(Schema oldSchema, Schema newSchema) {
-    Set<Field> allFields = new HashSet<>(oldSchema.getFields());
-    List<Field> fields = new ArrayList<>(oldSchema.getFields());
+  private static LinkedHashSet<Field> getCombinedFieldsToWrite(Schema oldSchema, Schema newSchema) {
+    LinkedHashSet<Field> allFields = new LinkedHashSet<>(oldSchema.getFields());
     for (Schema.Field f : newSchema.getFields()) {
       if (!allFields.contains(f) && !isMetadataField(f.name())) {
-        fields.add(f);
+        allFields.add(f);
       }
     }
-    return fields;
+    return allFields;
   }
 
   public static byte[] compress(String text) {
