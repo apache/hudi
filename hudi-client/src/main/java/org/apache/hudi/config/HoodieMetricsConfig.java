@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.metrics.MetricsReporterType;
 
 import javax.annotation.concurrent.Immutable;
@@ -101,6 +102,16 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder toJmxHost(String host) {
+      props.setProperty(JMX_HOST, host);
+      return this;
+    }
+
+    public Builder onJmxPort(String port) {
+      props.setProperty(JMX_PORT, port);
+      return this;
+    }
+
     public Builder usePrefix(String prefix) {
       props.setProperty(GRAPHITE_METRIC_PREFIX, prefix);
       return this;
@@ -115,8 +126,10 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
           DEFAULT_GRAPHITE_SERVER_HOST);
       setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_PORT), GRAPHITE_SERVER_PORT,
           String.valueOf(DEFAULT_GRAPHITE_SERVER_PORT));
-      setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_PORT), GRAPHITE_SERVER_PORT,
-          String.valueOf(DEFAULT_GRAPHITE_SERVER_PORT));
+      setDefaultOnCondition(props, !props.containsKey(JMX_HOST), JMX_HOST,
+          DEFAULT_JMX_HOST);
+      setDefaultOnCondition(props, !props.containsKey(JMX_PORT), JMX_PORT,
+          String.valueOf(DEFAULT_JMX_PORT));
       return config;
     }
   }

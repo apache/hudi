@@ -21,9 +21,6 @@ package org.apache.hudi.hive.util;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
-import com.google.common.io.Files;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -53,7 +50,10 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
+import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -73,13 +73,13 @@ public class HiveTestService {
   private int serverPort = 9999;
   private boolean clean = true;
 
-  private Map<String, String> sysProps = Maps.newHashMap();
+  private Map<String, String> sysProps = new HashMap<>();
   private ExecutorService executorService;
   private TServer tServer;
   private HiveServer2 hiveServer;
 
-  public HiveTestService(Configuration configuration) {
-    this.workDir = Files.createTempDir().getAbsolutePath();
+  public HiveTestService(Configuration configuration) throws IOException {
+    this.workDir = Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath();
   }
 
   public Configuration getHadoopConf() {
@@ -87,7 +87,7 @@ public class HiveTestService {
   }
 
   public HiveServer2 start() throws IOException {
-    Preconditions.checkState(workDir != null, "The work dir must be set before starting cluster.");
+    Objects.requireNonNull(workDir, "The work dir must be set before starting cluster.");
 
     if (hadoopConf == null) {
       hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
@@ -121,6 +121,20 @@ public class HiveTestService {
     return hiveServer;
   }
 
+  public void stop() {
+    resetSystemProperties();
+    if (tServer != null) {
+      tServer.stop();
+    }
+    if (hiveServer != null) {
+      hiveServer.stop();
+    }
+    LOG.info("Hive Minicluster service shut down.");
+    tServer = null;
+    hiveServer = null;
+    hadoopConf = null;
+  }
+
   private HiveConf configureHive(Configuration conf, String localHiveLocation) throws IOException {
     conf.set("hive.metastore.local", "false");
     conf.set(HiveConf.ConfVars.METASTOREURIS.varname, "thrift://" + bindIP + ":" + metastorePort);
@@ -139,7 +153,8 @@ public class HiveTestService {
     File derbyLogFile = new File(localHiveDir, "derby.log");
     derbyLogFile.createNewFile();
     setSystemProperty("derby.stream.error.file", derbyLogFile.getPath());
-    conf.set(HiveConf.ConfVars.METASTOREWAREHOUSE.varname, Files.createTempDir().getAbsolutePath());
+    conf.set(HiveConf.ConfVars.METASTOREWAREHOUSE.varname,
+        Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath());
     conf.set("datanucleus.schema.autoCreateTables", "true");
     conf.set("hive.metastore.schema.verification", "false");
     setSystemProperty("derby.stream.error.file", derbyLogFile.getPath());
@@ -180,6 +195,17 @@ public class HiveTestService {
     } else {
       System.getProperties().remove(name);
     }
+  }
+
+  private void resetSystemProperties() {
+    for (Map.Entry<String, String> entry : sysProps.entrySet()) {
+      if (entry.getValue() != null) {
+        System.setProperty(entry.getKey(), entry.getValue());
+      } else {
+        System.getProperties().remove(entry.getKey());
+      }
+    }
+    sysProps.clear();
   }
 
   private static String getHiveLocation(String baseLocation) {

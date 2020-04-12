@@ -18,8 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.client.CompactionAdminClient.RenameOpResult;
-import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.cli.HoodieCLI;
@@ -29,14 +27,16 @@ import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.CommitUtil;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.hudi.client.CompactionAdminClient.RenameOpResult;
+import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -44,13 +44,12 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.compact.OperationResult;
 import org.apache.hudi.table.compact.strategy.UnBoundedCompactionStrategy;
+import org.apache.hudi.utilities.HoodieCompactionAdminTool;
+import org.apache.hudi.utilities.HoodieCompactor;
 
-import com.google.common.base.Strings;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.utilities.HoodieCompactionAdminTool;
-import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
@@ -123,7 +122,7 @@ public class CompactionCommand implements CommandMarker {
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
-    HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
+    HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
         activeTimeline.readCompactionPlanAsBytes(
             HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get());
 
@@ -183,7 +182,7 @@ public class CompactionCommand implements CommandMarker {
     String endTs = CommitUtil.addHours(compactionInstantTime, 1);
     try {
       archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
-      HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
+      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
               archivedTimeline.getInstantDetails(instant).get());
       return printCompaction(compactionPlan, sortByField, descending, limit, headerOnly);
     } finally {
@@ -197,7 +196,8 @@ public class CompactionCommand implements CommandMarker {
                                 @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
                                   unspecifiedDefaultValue = "") final String propsFilePath,
                                 @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
-                                  unspecifiedDefaultValue = "") final String[] configs) throws Exception {
+                                  unspecifiedDefaultValue = "") final String[] configs,
+                                @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master ") String master) throws Exception {
     checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
@@ -217,10 +217,11 @@ public class CompactionCommand implements CommandMarker {
     // TODO: Make this configurable along with strategy specific config - For now, this is a generic enough strategy
     config.strategyClassName = UnBoundedCompactionStrategy.class.getCanonicalName();
     config.configs = Arrays.asList(configs);
-    if (!Strings.isNullOrEmpty(propsFilePath)) {
+    if (!StringUtils.isNullOrEmpty(propsFilePath)) {
       config.propsFilePath = propsFilePath;
     }
     config.schemaFile = "";
+    config.sparkMaster = master;
     String[] commandConfig = config.getCommandConfigsAsStringArray(SparkCommand.COMPACT_SCHEDULE.toString());
 
     sparkLauncher.addAppArgs(commandConfig);
@@ -246,7 +247,8 @@ public class CompactionCommand implements CommandMarker {
       @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
         unspecifiedDefaultValue = "") final String propsFilePath,
       @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
-        unspecifiedDefaultValue = "") final String[] configs)
+        unspecifiedDefaultValue = "") final String[] configs,
+      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master ") String master)
       throws Exception {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
@@ -275,7 +277,8 @@ public class CompactionCommand implements CommandMarker {
     config.sparkMemory = sparkMemory;
     config.retry = Integer.parseInt(retry);
     config.configs = Arrays.asList(configs);
-    if (!Strings.isNullOrEmpty(propsFilePath)) {
+    config.sparkMaster = master;
+    if (!StringUtils.isNullOrEmpty(propsFilePath)) {
       config.propsFilePath = propsFilePath;
     }
     String[] commandConfig = config.getCommandConfigsAsStringArray(SparkCommand.COMPACT_RUN.toString());
@@ -358,7 +361,7 @@ public class CompactionCommand implements CommandMarker {
       return null;
     } else {
       try {
-        return AvroUtils.deserializeCompactionPlan(archivedTimeline.getInstantDetails(instant).get());
+        return TimelineMetadataUtils.deserializeCompactionPlan(archivedTimeline.getInstantDetails(instant).get());
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -374,7 +377,7 @@ public class CompactionCommand implements CommandMarker {
       if (!HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())) {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
-          return AvroUtils.deserializeCompactionPlan(
+          return TimelineMetadataUtils.deserializeCompactionPlan(
                   activeTimeline.readCompactionPlanAsBytes(
                           HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
         } catch (HoodieIOException ioe) {
@@ -382,7 +385,7 @@ public class CompactionCommand implements CommandMarker {
           return null;
         }
       } else {
-        return AvroUtils.deserializeCompactionPlan(activeTimeline.readCompactionPlanAsBytes(
+        return TimelineMetadataUtils.deserializeCompactionPlan(activeTimeline.readCompactionPlanAsBytes(
                 HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
       }
     } catch (IOException e) {

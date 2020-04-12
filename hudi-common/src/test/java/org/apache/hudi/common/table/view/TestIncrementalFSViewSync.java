@@ -25,31 +25,29 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterators;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -71,7 +69,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 
 /**
  * Tests incremental file system view sync.
@@ -135,8 +133,11 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     // Clean first slice
     testCleans(view, Collections.singletonList("21"),
-        new ImmutableMap.Builder<String, List<String>>().put("11", Arrays.asList("12", "13", "15")).build(),
-        instantsToFiles, Collections.singletonList("11"));
+        new HashMap<String, List<String>>() {
+          {
+            put("11", Arrays.asList("12", "13", "15"));
+          }
+        }, instantsToFiles, Collections.singletonList("11"));
 
     // Add one more ingestion instant. This should be 2nd slice now
     instantsToFiles.putAll(testMultipleWriteSteps(view, Collections.singletonList("22"), true, "19", 2));
@@ -201,7 +202,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     view1.sync();
     Map<String, List<String>> instantsToFiles;
 
-    /**
+    /*
      * Case where incremental syncing is catching up on more than one ingestion at a time
      */
     // Run 1 ingestion on MOR table (1 delta commits). View1 is now sync up to this point
@@ -222,7 +223,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     view3.sync();
     areViewsConsistent(view1, view2, partitions.size() * fileIdsPerPartition.size());
 
-    /**
+    /*
      * Case where a compaction is scheduled and then unscheduled
      */
     scheduleCompaction(view2, "15");
@@ -233,7 +234,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         getFileSystemView(new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath()));
     view4.sync();
 
-    /**
+    /*
      * Case where a compaction is scheduled, 2 ingestion happens and then a compaction happens
      */
     scheduleCompaction(view2, "16");
@@ -247,11 +248,15 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         getFileSystemView(new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath()));
     view5.sync();
 
-    /**
+    /*
      * Case where a clean happened and then rounds of ingestion and compaction happened
      */
     testCleans(view2, Collections.singletonList("19"),
-        new ImmutableMap.Builder<String, List<String>>().put("11", Arrays.asList("12", "13", "14")).build(),
+        new HashMap<String, List<String>>() {
+            {
+              put("11", Arrays.asList("12", "13", "14"));
+            }
+        },
         instantsToFiles, Collections.singletonList("11"));
     scheduleCompaction(view2, "20");
     instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("21", "22"), true, "20", 2));
@@ -266,7 +271,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         getFileSystemView(new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath()));
     view6.sync();
 
-    /**
+    /*
      * Case where multiple restores and ingestions happened
      */
     testRestore(view2, Collections.singletonList("25"), true, new HashMap<>(), Collections.singletonList("24"), "29", true);
@@ -409,10 +414,9 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     HoodieInstant cleanInflightInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant);
     metaClient.getActiveTimeline().createNewInstant(cleanInflightInstant);
-    HoodieCleanMetadata cleanMetadata = CleanerUtils
-        .convertCleanMetadata(metaClient, cleanInstant, Option.empty(), cleanStats);
+    HoodieCleanMetadata cleanMetadata = CleanerUtils.convertCleanMetadata(cleanInstant, Option.empty(), cleanStats);
     metaClient.getActiveTimeline().saveAsComplete(cleanInflightInstant,
-        AvroUtils.serializeCleanMetadata(cleanMetadata));
+        TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
   }
 
   /**
@@ -433,13 +437,13 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     rollbacks.add(instant);
 
     HoodieRollbackMetadata rollbackMetadata =
-        AvroUtils.convertRollbackMetadata(rollbackInstant, Option.empty(), rollbacks, rollbackStats);
+        TimelineMetadataUtils.convertRollbackMetadata(rollbackInstant, Option.empty(), rollbacks, rollbackStats);
     if (isRestore) {
       HoodieRestoreMetadata metadata = new HoodieRestoreMetadata();
 
       List<HoodieRollbackMetadata> rollbackM = new ArrayList<>();
       rollbackM.add(rollbackMetadata);
-      metadata.setHoodieRestoreMetadata(new ImmutableMap.Builder().put(rollbackInstant, rollbackM).build());
+      metadata.setHoodieRestoreMetadata(CollectionUtils.createImmutableMap(rollbackInstant, rollbackM));
       List<String> rollbackInstants = new ArrayList<>();
       rollbackInstants.add(rollbackInstant);
       metadata.setInstantsToRollback(rollbackInstants);
@@ -447,13 +451,13 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
       HoodieInstant restoreInstant = new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, rollbackInstant);
       metaClient.getActiveTimeline().createNewInstant(restoreInstant);
-      metaClient.getActiveTimeline().saveAsComplete(restoreInstant, AvroUtils.serializeRestoreMetadata(metadata));
+      metaClient.getActiveTimeline().saveAsComplete(restoreInstant, TimelineMetadataUtils.serializeRestoreMetadata(metadata));
     } else {
       metaClient.getActiveTimeline().createNewInstant(
           new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant));
       metaClient.getActiveTimeline().saveAsComplete(
           new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant),
-          AvroUtils.serializeRollbackMetadata(rollbackMetadata));
+          TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
     }
   }
 
@@ -495,7 +499,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(slices, Option.empty(), Option.empty());
     HoodieInstant compactionInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-        AvroUtils.serializeCompactionPlan(plan));
+        TimelineMetadataUtils.serializeCompactionPlan(plan));
 
     view.sync();
     partitions.forEach(p -> {
@@ -528,7 +532,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       String newBaseInstant) throws IOException {
     HoodieInstant instant = new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstantTime);
     boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
-    Preconditions.checkArgument(deleted, "Unable to delete compaction instant.");
+    ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
 
     view.sync();
     Assert.assertEquals(newLastInstant, view.getLastInstant().get().getTimestamp());
@@ -646,7 +650,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieTimeline timeline1 = view1.getTimeline();
     HoodieTimeline timeline2 = view2.getTimeline();
     Assert.assertEquals(view1.getLastInstant(), view2.getLastInstant());
-    Iterators.elementsEqual(timeline1.getInstants().iterator(), timeline2.getInstants().iterator());
+    CollectionUtils.elementsEqual(timeline1.getInstants().iterator(), timeline2.getInstants().iterator());
 
     // View Checks
     Map<HoodieFileGroupId, HoodieFileGroup> fileGroupsMap1 = partitions.stream().flatMap(view1::getAllFileGroups)
@@ -719,7 +723,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);
     metaClient.getActiveTimeline().saveAsComplete(inflightInstant,
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-    /**
+    /*
     // Delete pending compaction if present
     metaClient.getFs().delete(new Path(metaClient.getMetaPath(),
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instant).getFileName()));

@@ -22,6 +22,7 @@ import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.Before;
@@ -32,6 +33,7 @@ import java.io.IOException;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -92,5 +94,23 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertEquals("Commit should be 1", completedInstant, activeCommitTimeline.getInstants().findFirst().get());
     assertArrayEquals("Commit value should be \"test-detail\"", "test-detail".getBytes(),
         activeCommitTimeline.getInstantDetails(completedInstant).get());
+  }
+
+  @Test
+  public void testEquals() throws IOException {
+    HoodieTableMetaClient metaClient1 = HoodieTestUtils.init(folder.getRoot().getAbsolutePath(), getTableType());
+    HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(folder.getRoot().getAbsolutePath(), getTableType());
+    assertEquals(metaClient1, metaClient1);
+    assertEquals(metaClient1, metaClient2);
+    assertNotEquals(metaClient1, null);
+    assertNotEquals(metaClient1, new Object());
+  }
+
+  @Test
+  public void testToString() throws IOException {
+    HoodieTableMetaClient metaClient1 = HoodieTestUtils.init(folder.getRoot().getAbsolutePath(), getTableType());
+    HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(folder.getRoot().getAbsolutePath(), getTableType());
+    assertEquals(metaClient1.toString(), metaClient2.toString());
+    assertNotEquals(metaClient1.toString(), new Object().toString());
   }
 }

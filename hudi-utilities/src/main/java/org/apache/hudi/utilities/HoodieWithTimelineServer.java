@@ -18,9 +18,10 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hudi.common.util.ValidationUtils;
+
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import com.google.common.base.Preconditions;
 import io.javalin.Javalin;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -87,7 +88,7 @@ public class HoodieWithTimelineServer implements Serializable {
     IntStream.range(0, cfg.numPartitions).forEach(i -> messages.add("Hello World"));
     List<String> gotMessages = jsc.parallelize(messages).map(msg -> sendRequest(driverHost, cfg.serverPort)).collect();
     System.out.println("Got Messages :" + gotMessages);
-    Preconditions.checkArgument(gotMessages.equals(messages), "Got expected reply from Server");
+    ValidationUtils.checkArgument(gotMessages.equals(messages), "Got expected reply from Server");
   }
 
   public String sendRequest(String driverHost, int port) {

@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.client.HoodieWriteClient;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.beust.jcommander.Parameter;

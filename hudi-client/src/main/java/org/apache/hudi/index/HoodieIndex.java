@@ -24,6 +24,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -51,6 +53,14 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
 
   public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(HoodieWriteConfig config,
       JavaSparkContext jsc) throws HoodieIndexException {
+    // first use index class config to create index.
+    if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
+      Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
+      if (!(instance instanceof HoodieIndex)) {
+        throw new HoodieIndexException(config.getIndexClass() + " is not a subclass of HoodieIndex");
+      }
+      return (HoodieIndex) instance;
+    }
     switch (config.getIndexType()) {
       case HBASE:
         return new HBaseIndex<>(config);
@@ -88,9 +98,9 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
       HoodieTable<T> hoodieTable) throws HoodieIndexException;
 
   /**
-   * Rollback the efffects of the commit made at commitTime.
+   * Rollback the efffects of the commit made at instantTime.
    */
-  public abstract boolean rollbackCommit(String commitTime);
+  public abstract boolean rollbackCommit(String instantTime);
 
   /**
    * An index is `global` if {@link HoodieKey} to fileID mapping, does not depend on the `partitionPath`. Such an

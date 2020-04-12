@@ -18,9 +18,10 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -28,12 +29,13 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.SyncableFileSystemView;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -41,10 +43,9 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.MergeOnReadLazyInsertIterable;
 import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.compact.HoodieMergeOnReadTableCompactor;
-
-import com.google.common.base.Preconditions;
 import org.apache.hudi.table.rollback.RollbackHelper;
 import org.apache.hudi.table.rollback.RollbackRequest;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -84,29 +85,31 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   // UpsertPartitioner for MergeOnRead table type
   private MergeOnReadUpsertPartitioner mergeOnReadUpsertPartitioner;
 
-  public HoodieMergeOnReadTable(HoodieWriteConfig config, JavaSparkContext jsc) {
-    super(config, jsc);
+  HoodieMergeOnReadTable(HoodieWriteConfig config, JavaSparkContext jsc, HoodieTableMetaClient metaClient) {
+    super(config, jsc, metaClient);
   }
 
   @Override
-  public Partitioner getUpsertPartitioner(WorkloadProfile profile) {
+  public Partitioner getUpsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc) {
     if (profile == null) {
       throw new HoodieUpsertException("Need workload profile to construct the upsert partitioner.");
     }
-    mergeOnReadUpsertPartitioner = new MergeOnReadUpsertPartitioner(profile);
+    mergeOnReadUpsertPartitioner = new MergeOnReadUpsertPartitioner(profile, jsc);
     return mergeOnReadUpsertPartitioner;
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileId, Iterator<HoodieRecord<T>> recordItr)
+  public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath,
+                                                  String fileId, Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
-    LOG.info("Merging updates for commit " + commitTime + " for file " + fileId);
+    LOG.info("Merging updates for commit " + instantTime + " for file " + fileId);
 
     if (!index.canIndexLogFiles() && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
-      LOG.info("Small file corrections for updates for commit " + commitTime + " for file " + fileId);
-      return super.handleUpdate(commitTime, fileId, recordItr);
+      LOG.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);
+      return super.handleUpdate(instantTime, partitionPath, fileId, recordItr);
     } else {
-      HoodieAppendHandle<T> appendHandle = new HoodieAppendHandle<>(config, commitTime, this, fileId, recordItr);
+      HoodieAppendHandle<T> appendHandle = new HoodieAppendHandle<>(config, instantTime, this,
+              partitionPath, fileId, recordItr, sparkTaskContextSupplier);
       appendHandle.doAppend();
       appendHandle.close();
       return Collections.singletonList(Collections.singletonList(appendHandle.getWriteStatus())).iterator();
@@ -114,13 +117,13 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String commitTime, String idPfx, Iterator<HoodieRecord<T>> recordItr)
+  public Iterator<List<WriteStatus>> handleInsert(String instantTime, String idPfx, Iterator<HoodieRecord<T>> recordItr)
       throws Exception {
     // If canIndexLogFiles, write inserts to log files else write inserts to parquet files
     if (index.canIndexLogFiles()) {
-      return new MergeOnReadLazyInsertIterable<>(recordItr, config, commitTime, this, idPfx);
+      return new MergeOnReadLazyInsertIterable<>(recordItr, config, instantTime, this, idPfx, sparkTaskContextSupplier);
     } else {
-      return super.handleInsert(commitTime, idPfx, recordItr);
+      return super.handleInsert(instantTime, idPfx, recordItr);
     }
   }
 
@@ -323,8 +326,8 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
    */
   class MergeOnReadUpsertPartitioner extends HoodieCopyOnWriteTable.UpsertPartitioner {
 
-    MergeOnReadUpsertPartitioner(WorkloadProfile profile) {
-      super(profile);
+    MergeOnReadUpsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc) {
+      super(profile, jsc);
     }
 
     @Override
@@ -374,16 +377,12 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
             sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
             sf.sizeBytes = getTotalFileSize(smallFileSlice);
             smallFileLocations.add(sf);
-            // Update the global small files list
-            smallFiles.add(sf);
           } else {
             HoodieLogFile logFile = smallFileSlice.getLogFiles().findFirst().get();
             sf.location = new HoodieRecordLocation(FSUtils.getBaseCommitTimeFromLogPath(logFile.getPath()),
                 FSUtils.getFileIdFromLogPath(logFile.getPath()));
             sf.sizeBytes = getTotalFileSize(smallFileSlice);
             smallFileLocations.add(sf);
-            // Update the global small files list
-            smallFiles.add(sf);
           }
         }
       }
@@ -422,7 +421,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
 
   private List<RollbackRequest> generateAppendRollbackBlocksAction(String partitionPath, HoodieInstant rollbackInstant,
       HoodieCommitMetadata commitMetadata) {
-    Preconditions.checkArgument(rollbackInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
+    ValidationUtils.checkArgument(rollbackInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
 
     // wStat.getPrevCommit() might not give the right commit time in the following
     // scenario : If a compaction was scheduled, the new commitTime associated with the requested compaction will be
@@ -439,9 +438,9 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
 
       if (validForRollback) {
         // For sanity, log instant time can never be less than base-commit on which we are rolling back
-        Preconditions
+        ValidationUtils
             .checkArgument(HoodieTimeline.compareTimestamps(fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId()),
-                rollbackInstant.getTimestamp(), HoodieTimeline.LESSER_OR_EQUAL));
+              rollbackInstant.getTimestamp(), HoodieTimeline.LESSER_OR_EQUAL));
       }
 
       return validForRollback && HoodieTimeline.compareTimestamps(fileIdToBaseCommitTimeForLogMap.get(

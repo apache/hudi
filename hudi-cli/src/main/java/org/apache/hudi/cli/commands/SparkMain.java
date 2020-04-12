@@ -21,7 +21,8 @@ package org.apache.hudi.cli.commands;
 import org.apache.hudi.cli.DedupeConfig;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.HoodieCleaner;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
@@ -35,6 +36,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * This class deals with initializing spark context based on command entered to hudi-cli.
@@ -57,7 +59,9 @@ public class SparkMain {
     SparkCommand cmd = SparkCommand.valueOf(command);
     String[] commandConfigs = Arrays.copyOfRange(args, 1, args.length);
 
-    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + command);
+    JavaSparkContext jsc = sparkMasterContained(cmd)
+        ? SparkUtil.initJavaSparkConf("hoodie-cli-" + command, Option.of(args[1]), Option.of(args[2]))
+        : SparkUtil.initJavaSparkConf("hoodie-cli-" + command);
     int returnCode = 0;
     switch (cmd) {
       case ROLLBACK:
@@ -106,10 +110,6 @@ public class SparkMain {
 
   private static void clean(JavaSparkContext jsc, HoodieCleaner.Config config) {
     LOG.info("Command config: " + config.toString());
-    if ((null != config.sparkMaster) && (!config.sparkMaster.isEmpty())) {
-      jsc.getConf().setMaster(config.sparkMaster);
-    }
-    jsc.getConf().set("spark.executor.memory", config.sparkMemory);
     new HoodieCleaner(config, jsc).run();
   }
 
@@ -120,17 +120,18 @@ public class SparkMain {
 
   private static void doCompactOperation(JavaSparkContext jsc, HoodieCompactionAdminTool.Config config) throws Exception {
     LOG.info("Command config: " + config.toString());
-    if ((null != config.sparkMaster) && (!config.sparkMaster.isEmpty())) {
-      jsc.getConf().setMaster(config.sparkMaster);
-    }
-    jsc.getConf().set("spark.executor.memory", config.sparkMemory);
     new HoodieCompactionAdminTool(config).run(jsc);
   }
 
   private static int compact(JavaSparkContext jsc, HoodieCompactor.Config config) {
     LOG.info("Command config: " + config.toString());
-    jsc.getConf().set("spark.executor.memory", config.sparkMemory);
     return new HoodieCompactor(config).compact(jsc, config.retry);
+  }
+
+  private static boolean sparkMasterContained(SparkCommand command) {
+    List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
+        SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN, SparkCommand.COMPACT_RUN, SparkCommand.COMPACT_SCHEDULE);
+    return masterContained.contains(command);
   }
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, DedupeConfig config) {

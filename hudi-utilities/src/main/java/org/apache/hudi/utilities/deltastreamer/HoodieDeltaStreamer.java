@@ -19,16 +19,17 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -41,7 +42,6 @@ import org.apache.hudi.utilities.sources.JsonDFSSource;
 import com.beust.jcommander.IStringConverter;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -54,6 +54,7 @@ import org.apache.spark.sql.SparkSession;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -64,6 +65,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -77,6 +79,7 @@ import java.util.stream.IntStream;
  */
 public class HoodieDeltaStreamer implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
 
   public static String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
@@ -88,6 +91,17 @@ public class HoodieDeltaStreamer implements Serializable {
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
         getDefaultHiveConf(jssc.hadoopConfiguration()));
+  }
+
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, TypedProperties props) throws IOException {
+    this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
+        getDefaultHiveConf(jssc.hadoopConfiguration()), props);
+  }
+
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+                             TypedProperties properties) throws IOException {
+    this.cfg = cfg;
+    this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, hiveConf, properties);
   }
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf) throws IOException {
@@ -124,7 +138,7 @@ public class HoodieDeltaStreamer implements Serializable {
         throw ex;
       } finally {
         deltaSyncService.close();
-        LOG.info("Shut down deltastreamer");
+        LOG.info("Shut down delta streamer");
       }
     }
   }
@@ -139,11 +153,22 @@ public class HoodieDeltaStreamer implements Serializable {
     UPSERT, INSERT, BULK_INSERT
   }
 
-  private static class OperationConvertor implements IStringConverter<Operation> {
+  protected static class OperationConvertor implements IStringConverter<Operation> {
 
     @Override
     public Operation convert(String value) throws ParameterException {
       return Operation.valueOf(value);
+    }
+  }
+
+  protected static class TransformersConverter implements IStringConverter<List<String>> {
+
+    @Override
+    public List<String> convert(String value) throws ParameterException {
+      return value == null ? null : Arrays.stream(value.split(","))
+          .map(String::trim)
+          .filter(s -> !s.isEmpty())
+          .collect(Collectors.toList());
     }
   }
 
@@ -155,6 +180,7 @@ public class HoodieDeltaStreamer implements Serializable {
         required = true)
     public String targetBasePath;
 
+    // TODO: How to obtain hive configs to register?
     @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
     public String targetTableName;
 
@@ -195,11 +221,13 @@ public class HoodieDeltaStreamer implements Serializable {
     public String schemaProviderClassName = null;
 
     @Parameter(names = {"--transformer-class"},
-        description = "subclass of org.apache.hudi.utilities.transform.Transformer"
+        description = "A subclass or a list of subclasses of org.apache.hudi.utilities.transform.Transformer"
             + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
             + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
-            + "allows a SQL query templated to be passed as a transformation function)")
-    public String transformerClassName = null;
+            + "allows a SQL query templated to be passed as a transformation function). "
+            + "Pass a comma-separated list of subclass names to chain the transformations.",
+        converter = TransformersConverter.class)
+    public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
         + "Default: No limit For e.g: DFS-Source => max bytes to read, Kafka-Source => max events to read")
@@ -295,6 +323,7 @@ public class HoodieDeltaStreamer implements Serializable {
    */
   public static class DeltaSyncService extends AbstractDeltaStreamerService {
 
+    private static final long serialVersionUID = 1L;
     /**
      * Delta Sync Config.
      */
@@ -335,8 +364,8 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient DeltaSync deltaSync;
 
-    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf)
-        throws IOException {
+    public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+                            TypedProperties properties) throws IOException {
       this.cfg = cfg;
       this.jssc = jssc;
       this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
@@ -346,22 +375,26 @@ public class HoodieDeltaStreamer implements Serializable {
             new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath, false);
         tableType = meta.getTableType();
         // This will guarantee there is no surprise with table type
-        Preconditions.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.tableType)),
+        ValidationUtils.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.tableType)),
             "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.tableType);
       } else {
         tableType = HoodieTableType.valueOf(cfg.tableType);
       }
 
-      this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+      ValidationUtils.checkArgument(!cfg.filterDupes || cfg.operation != Operation.UPSERT,
+          "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
+
+      this.props = properties != null ? properties : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
       LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
 
-      if (cfg.filterDupes) {
-        cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
-      }
+      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, hiveConf,
+        this::onInitializingWriteClient);
+    }
 
-      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, tableType, props, jssc, fs, hiveConf,
-          this::onInitializingWriteClient);
+    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf)
+        throws IOException {
+      this(cfg, jssc, fs, hiveConf, null);
     }
 
     public DeltaSync getDeltaSync() {
@@ -482,6 +515,7 @@ public class HoodieDeltaStreamer implements Serializable {
    */
   public static class AsyncCompactService extends AbstractDeltaStreamerService {
 
+    private static final long serialVersionUID = 1L;
     private final int maxConcurrentCompaction;
     private transient Compactor compactor;
     private transient JavaSparkContext jssc;
@@ -568,9 +602,5 @@ public class HoodieDeltaStreamer implements Serializable {
         return true;
       }, executor)).toArray(CompletableFuture[]::new)), executor);
     }
-  }
-
-  public DeltaSyncService getDeltaSyncService() {
-    return deltaSyncService;
   }
 }

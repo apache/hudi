@@ -18,10 +18,10 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.SchemaTestUtil;
 
 import org.apache.avro.Schema;
@@ -50,8 +50,13 @@ public class InputFormatTestUtil {
     basePath.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
     File partitionPath = basePath.newFolder("2016", "05", "01");
+    return simulateInserts(partitionPath, "fileId1", numberOfFiles, commitNumber);
+  }
+
+  public static File simulateInserts(File partitionPath, String fileId, int numberOfFiles, String commitNumber)
+          throws IOException {
     for (int i = 0; i < numberOfFiles; i++) {
-      File dataFile = new File(partitionPath, FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i));
+      File dataFile = new File(partitionPath, FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, fileId + i));
       dataFile.createNewFile();
     }
     return partitionPath;
@@ -170,10 +175,10 @@ public class InputFormatTestUtil {
   }
 
   private static Iterable<? extends GenericRecord> generateAvroRecords(Schema schema, int numberOfRecords,
-      String commitTime, String fileId) throws IOException {
+      String instantTime, String fileId) throws IOException {
     List<GenericRecord> records = new ArrayList<>(numberOfRecords);
     for (int i = 0; i < numberOfRecords; i++) {
-      records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, commitTime, fileId));
+      records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, instantTime, fileId));
     }
     return records;
   }

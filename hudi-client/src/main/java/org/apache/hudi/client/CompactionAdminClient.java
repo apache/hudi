@@ -21,28 +21,28 @@ package org.apache.hudi.client;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.AvroUtils;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.compact.OperationResult;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -58,7 +58,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 
 /**
  * Client to perform admin operations related to compaction.
@@ -138,7 +138,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
       // TODO: Add a rollback instant but for compaction
       HoodieInstant instant = new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionInstant);
       boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
-      Preconditions.checkArgument(deleted, "Unable to delete compaction instant.");
+      ValidationUtils.checkArgument(deleted, "Unable to delete compaction instant.");
     }
     return res;
   }
@@ -182,7 +182,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
       // Overwrite compaction plan with updated info
       metaClient.getActiveTimeline().saveToCompactionRequested(
           new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, compactionOperationWithInstant.getLeft()),
-          AvroUtils.serializeCompactionPlan(newPlan), true);
+          TimelineMetadataUtils.serializeCompactionPlan(newPlan), true);
     }
     return res;
   }
@@ -219,7 +219,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
    */
   private static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
       throws IOException {
-    return AvroUtils.deserializeCompactionPlan(
+    return TimelineMetadataUtils.deserializeCompactionPlan(
             metaClient.getActiveTimeline().readCompactionPlanAsBytes(
                     HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
   }
@@ -247,7 +247,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
     List<HoodieLogFile> logFilesToBeMoved =
         merged.getLogFiles().filter(lf -> lf.getLogVersion() > maxVersion).collect(Collectors.toList());
     return logFilesToBeMoved.stream().map(lf -> {
-      Preconditions.checkArgument(lf.getLogVersion() - maxVersion > 0, "Expect new log version to be sane");
+      ValidationUtils.checkArgument(lf.getLogVersion() - maxVersion > 0, "Expect new log version to be sane");
       HoodieLogFile newLogFile = new HoodieLogFile(new Path(lf.getPath().getParent(),
           FSUtils.makeLogFileName(lf.getFileId(), "." + FSUtils.getFileExtensionFromLog(lf.getPath()),
               compactionInstant, lf.getLogVersion() - maxVersion, HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
@@ -266,9 +266,9 @@ public class CompactionAdminClient extends AbstractHoodieClient {
   protected static void renameLogFile(HoodieTableMetaClient metaClient, HoodieLogFile oldLogFile,
       HoodieLogFile newLogFile) throws IOException {
     FileStatus[] statuses = metaClient.getFs().listStatus(oldLogFile.getPath());
-    Preconditions.checkArgument(statuses.length == 1, "Only one status must be present");
-    Preconditions.checkArgument(statuses[0].isFile(), "Source File must exist");
-    Preconditions.checkArgument(oldLogFile.getPath().getParent().equals(newLogFile.getPath().getParent()),
+    ValidationUtils.checkArgument(statuses.length == 1, "Only one status must be present");
+    ValidationUtils.checkArgument(statuses[0].isFile(), "Source File must exist");
+    ValidationUtils.checkArgument(oldLogFile.getPath().getParent().equals(newLogFile.getPath().getParent()),
         "Log file must only be moved within the parent directory");
     metaClient.getFs().rename(oldLogFile.getPath(), newLogFile.getPath());
   }
@@ -300,9 +300,9 @@ public class CompactionAdminClient extends AbstractHoodieClient {
                     new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()),
                         new Path(operation.getDataFileName().get())))
                 .getPath().toString();
-            Preconditions.checkArgument(df.isPresent(),
+            ValidationUtils.checkArgument(df.isPresent(),
                 "Data File must be present. File Slice was : " + fs + ", operation :" + operation);
-            Preconditions.checkArgument(df.get().getPath().equals(expPath),
+            ValidationUtils.checkArgument(df.get().getPath().equals(expPath),
                 "Base Path in operation is specified as " + expPath + " but got path " + df.get().getPath());
           }
           Set<HoodieLogFile> logFilesInFileSlice = fs.getLogFiles().collect(Collectors.toSet());
@@ -310,7 +310,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
             try {
               FileStatus[] fileStatuses = metaClient.getFs().listStatus(new Path(
                   FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), new Path(dp)));
-              Preconditions.checkArgument(fileStatuses.length == 1, "Expect only 1 file-status");
+              ValidationUtils.checkArgument(fileStatuses.length == 1, "Expect only 1 file-status");
               return new HoodieLogFile(fileStatuses[0]);
             } catch (FileNotFoundException fe) {
               throw new CompactionValidationException(fe.getMessage());
@@ -320,12 +320,12 @@ public class CompactionAdminClient extends AbstractHoodieClient {
           }).collect(Collectors.toSet());
           Set<HoodieLogFile> missing = logFilesInCompactionOp.stream().filter(lf -> !logFilesInFileSlice.contains(lf))
               .collect(Collectors.toSet());
-          Preconditions.checkArgument(missing.isEmpty(),
+          ValidationUtils.checkArgument(missing.isEmpty(),
               "All log files specified in compaction operation is not present. Missing :" + missing + ", Exp :"
                   + logFilesInCompactionOp + ", Got :" + logFilesInFileSlice);
           Set<HoodieLogFile> diff = logFilesInFileSlice.stream().filter(lf -> !logFilesInCompactionOp.contains(lf))
               .collect(Collectors.toSet());
-          Preconditions.checkArgument(diff.stream().allMatch(lf -> lf.getBaseCommitTime().equals(compactionInstant)),
+          ValidationUtils.checkArgument(diff.stream().allMatch(lf -> lf.getBaseCommitTime().equals(compactionInstant)),
               "There are some log-files which are neither specified in compaction plan "
                   + "nor present after compaction request instant. Some of these :" + diff);
         } else {

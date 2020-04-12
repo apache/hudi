@@ -87,4 +87,11 @@ public class MetricsGraphiteReporter extends MetricsReporter {
     return GraphiteReporter.forRegistry(registry).prefixedWith(reporterPrefix).convertRatesTo(TimeUnit.SECONDS)
         .convertDurationsTo(TimeUnit.MILLISECONDS).filter(MetricFilter.ALL).build(graphite);
   }
+
+  @Override
+  public void stop() {
+    if (graphiteReporter != null) {
+      graphiteReporter.stop();
+    }
+  }
 }

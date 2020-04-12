@@ -17,7 +17,7 @@
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.common.HoodieTestDataGenerator
-import org.apache.hudi.common.util.FSUtils
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._

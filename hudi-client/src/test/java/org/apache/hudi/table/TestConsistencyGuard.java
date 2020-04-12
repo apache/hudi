@@ -20,9 +20,9 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
-import org.apache.hudi.common.util.ConsistencyGuard;
-import org.apache.hudi.common.util.ConsistencyGuardConfig;
-import org.apache.hudi.common.util.FailSafeConsistencyGuard;
+import org.apache.hudi.common.fs.ConsistencyGuard;
+import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.After;

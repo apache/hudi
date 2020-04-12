@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import com.google.common.base.Strings;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.cli.HoodieCLI;
@@ -27,11 +26,12 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.HoodieCleaner;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
@@ -39,7 +39,6 @@ import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
-import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -49,6 +48,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConverters;
 
 /**
  * CLI command to show cleans options.
@@ -71,7 +72,7 @@ public class CleansCommand implements CommandMarker {
     List<Comparable[]> rows = new ArrayList<>();
     for (HoodieInstant clean : cleans) {
       HoodieCleanMetadata cleanMetadata =
-              AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
+              TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(clean).get());
       rows.add(new Comparable[]{clean.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
               cleanMetadata.getTotalFilesDeleted(), cleanMetadata.getTimeTakenInMillis()});
     }
@@ -83,13 +84,13 @@ public class CleansCommand implements CommandMarker {
   }
 
   @CliCommand(value = "cleans refresh", help = "Refresh the commits")
-  public String refreshCleans() throws IOException {
+  public String refreshCleans() {
     HoodieCLI.refreshTableMetadata();
     return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
   }
 
   @CliCommand(value = "clean showpartitions", help = "Show partition level details of a clean")
-  public String showCleanPartitions(@CliOption(key = {"clean"}, help = "clean to show") final String commitTime,
+  public String showCleanPartitions(@CliOption(key = {"clean"}, help = "clean to show") final String instantTime,
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
@@ -99,14 +100,14 @@ public class CleansCommand implements CommandMarker {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
-    HoodieInstant cleanInstant = new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, commitTime);
+    HoodieInstant cleanInstant = new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, instantTime);
 
     if (!timeline.containsInstant(cleanInstant)) {
-      return "Clean " + commitTime + " not found in metadata " + timeline;
+      return "Clean " + instantTime + " not found in metadata " + timeline;
     }
 
     HoodieCleanMetadata cleanMetadata =
-        AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(cleanInstant).get());
+        TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(cleanInstant).get());
     List<Comparable[]> rows = new ArrayList<>();
     for (Map.Entry<String, HoodieCleanPartitionMetadata> entry : cleanMetadata.getPartitionMetadata().entrySet()) {
       String path = entry.getKey();
@@ -141,7 +142,7 @@ public class CleansCommand implements CommandMarker {
 
     HoodieCleaner.Config config = new HoodieCleaner.Config();
     config.configs = Arrays.asList(configs);
-    if (!Strings.isNullOrEmpty(propsFilePath)) {
+    if (!StringUtils.isNullOrEmpty(propsFilePath)) {
       config.propsFilePath = propsFilePath;
     }
     config.basePath = metaClient.getBasePath();

@@ -20,19 +20,28 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.TestRawTripPayload;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.minicluster.HdfsTestService;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.hive.util.HiveTestService;
 import org.apache.hudi.utilities.sources.TestDataSource;
 
-import com.google.common.collect.ImmutableList;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.dataformat.csv.CsvMapper;
+import com.fasterxml.jackson.dataformat.csv.CsvSchema;
+import com.fasterxml.jackson.dataformat.csv.CsvSchema.Builder;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -42,6 +51,7 @@ import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.hadoop.ParquetFileWriter.Mode;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -56,6 +66,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -72,6 +83,8 @@ public class UtilitiesTestBase {
   protected transient SparkSession sparkSession = null;
   protected transient SQLContext sqlContext;
   protected static HiveServer2 hiveServer;
+  protected static HiveTestService hiveTestService;
+  private static ObjectMapper mapper = new ObjectMapper();
 
   @BeforeClass
   public static void initClass() throws Exception {
@@ -85,19 +98,22 @@ public class UtilitiesTestBase {
     dfsBasePath = dfs.getWorkingDirectory().toString();
     dfs.mkdirs(new Path(dfsBasePath));
     if (startHiveService) {
-      HiveTestService hiveService = new HiveTestService(hdfsTestService.getHadoopConf());
-      hiveServer = hiveService.start();
+      hiveTestService = new HiveTestService(hdfsTestService.getHadoopConf());
+      hiveServer = hiveTestService.start();
       clearHiveDb();
     }
   }
 
   @AfterClass
-  public static void cleanupClass() throws Exception {
+  public static void cleanupClass() {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
     }
     if (hiveServer != null) {
       hiveServer.stop();
+    }
+    if (hiveTestService != null) {
+      hiveTestService.stop();
     }
   }
 
@@ -134,7 +150,7 @@ public class UtilitiesTestBase {
     hiveSyncConfig.basePath = basePath;
     hiveSyncConfig.assumeDatePartitioning = false;
     hiveSyncConfig.usePreApacheInputFormat = false;
-    hiveSyncConfig.partitionFields = new ImmutableList.Builder<String>().add("datestr").build();
+    hiveSyncConfig.partitionFields = CollectionUtils.createImmutableList("datestr");
     return hiveSyncConfig;
   }
 
@@ -193,9 +209,47 @@ public class UtilitiesTestBase {
       os.close();
     }
 
+    /**
+     * Converts the json records into CSV format and writes to a file.
+     *
+     * @param hasHeader  whether the CSV file should have a header line.
+     * @param sep  the column separator to use.
+     * @param lines  the records in JSON format.
+     * @param fs  {@link FileSystem} instance.
+     * @param targetPath  File path.
+     * @throws IOException
+     */
+    public static void saveCsvToDFS(
+        boolean hasHeader, char sep,
+        String[] lines, FileSystem fs, String targetPath) throws IOException {
+      Builder csvSchemaBuilder = CsvSchema.builder();
+
+      ArrayNode arrayNode = mapper.createArrayNode();
+      Arrays.stream(lines).forEachOrdered(
+          line -> {
+            try {
+              arrayNode.add(mapper.readValue(line, ObjectNode.class));
+            } catch (IOException e) {
+              throw new HoodieIOException(
+                  "Error converting json records into CSV format: " + e.getMessage());
+            }
+          });
+      arrayNode.get(0).fieldNames().forEachRemaining(csvSchemaBuilder::addColumn);
+      ObjectWriter csvObjWriter = new CsvMapper()
+          .writerFor(JsonNode.class)
+          .with(csvSchemaBuilder.setUseHeader(hasHeader).setColumnSeparator(sep).build());
+      PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
+      csvObjWriter.writeValue(os, arrayNode);
+      os.flush();
+      os.close();
+    }
+
     public static void saveParquetToDFS(List<GenericRecord> records, Path targetFile) throws IOException {
       try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(targetFile)
-          .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {
+          .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
+          .withConf(HoodieTestUtils.getDefaultHadoopConf())
+          .withWriteMode(Mode.OVERWRITE)
+          .build()) {
         for (GenericRecord record : records) {
           writer.write(record);
         }
@@ -203,26 +257,29 @@ public class UtilitiesTestBase {
     }
 
     public static TypedProperties setupSchemaOnDFS() throws IOException {
-      UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source.avsc", dfs, dfsBasePath + "/source.avsc");
+      return setupSchemaOnDFS("source.avsc");
+    }
+
+    public static TypedProperties setupSchemaOnDFS(String filename) throws IOException {
+      UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/" + filename, dfs, dfsBasePath + "/" + filename);
       TypedProperties props = new TypedProperties();
-      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
+      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/" + filename);
       return props;
     }
 
-    public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {
+    public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
       try {
-        Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.AVRO_SCHEMA);
+        Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA);
         return (GenericRecord) recordOpt.get();
       } catch (IOException e) {
         return null;
       }
     }
 
-    public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords,
-        HoodieTestDataGenerator dataGenerator) {
+    public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords) {
       List<GenericRecord> records = new ArrayList<GenericRecord>();
       for (HoodieRecord hoodieRecord : hoodieRecords) {
-        records.add(toGenericRecord(hoodieRecord, dataGenerator));
+        records.add(toGenericRecord(hoodieRecord));
       }
       return records;
     }

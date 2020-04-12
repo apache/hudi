@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -58,6 +58,8 @@ import java.util.stream.Collectors;
  * This produces beautiful causality, that makes data issues in ETLs very easy to debug
  */
 public class HiveIncrPullSource extends AvroSource {
+
+  private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LogManager.getLogger(HiveIncrPullSource.class);
 
@@ -102,10 +104,10 @@ public class HiveIncrPullSource extends AvroSource {
       return Option.of(commitTimes.get(0));
     }
 
-    for (String commitTime : commitTimes) {
+    for (String instantTime : commitTimes) {
       // TODO(vc): Add an option to delete consumed commits
-      if (commitTime.compareTo(latestTargetCommit.get()) > 0) {
-        return Option.of(commitTime);
+      if (instantTime.compareTo(latestTargetCommit.get()) > 0) {
+        return Option.of(instantTime);
       }
     }
     return Option.empty();

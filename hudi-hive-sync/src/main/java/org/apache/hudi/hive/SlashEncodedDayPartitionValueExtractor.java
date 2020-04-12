@@ -33,6 +33,7 @@ import java.util.List;
  */
 public class SlashEncodedDayPartitionValueExtractor implements PartitionValueExtractor {
 
+  private static final long serialVersionUID = 1L;
   private transient DateTimeFormatter dtfOut;
 
   public SlashEncodedDayPartitionValueExtractor() {

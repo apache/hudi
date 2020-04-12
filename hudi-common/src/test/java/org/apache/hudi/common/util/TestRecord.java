@@ -74,15 +74,15 @@ public class TestRecord implements Serializable {
   private TestNestedRecord testNestedRecord;
   private String[] stringArray;
 
-  public TestRecord(String commitTime, int recordNumber, String fileId) {
-    this._hoodie_commit_time = commitTime;
+  public TestRecord(String instantTime, int recordNumber, String fileId) {
+    this._hoodie_commit_time = instantTime;
     this._hoodie_record_key = "key" + recordNumber;
-    this._hoodie_partition_path = commitTime;
+    this._hoodie_partition_path = instantTime;
     this._hoodie_file_name = fileId;
-    this._hoodie_commit_seqno = commitTime + recordNumber;
+    this._hoodie_commit_seqno = instantTime + recordNumber;
 
-    String commitTimeSuffix = "@" + commitTime;
-    int commitHashCode = commitTime.hashCode();
+    String commitTimeSuffix = "@" + instantTime;
+    int commitHashCode = instantTime.hashCode();
 
     this.field1 = "field" + recordNumber;
     this.field2 = "field" + recordNumber + commitTimeSuffix;

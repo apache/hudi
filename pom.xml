@@ -354,7 +354,7 @@
           </configuration>
           <executions>
             <execution>
-              <phase>package</phase>
+              <phase>compile</phase>
               <goals>
                 <goal>check</goal>
               </goals>
@@ -516,6 +516,11 @@
         <artifactId>metrics-core</artifactId>
         <version>${metrics.version}</version>
       </dependency>
+      <dependency>
+        <groupId>io.dropwizard.metrics</groupId>
+        <artifactId>metrics-jmx</artifactId>
+        <version>${metrics.version}</version>
+      </dependency>
 
       <dependency>
         <groupId>com.beust</groupId>
@@ -527,13 +532,6 @@
         <groupId>joda-time</groupId>
         <artifactId>joda-time</artifactId>
         <version>${joda.version}</version>
-      </dependency>
-
-      <!-- we have to stay at <= 16.0, due to issues with HBase client -->
-      <dependency>
-        <groupId>com.google.guava</groupId>
-        <artifactId>guava</artifactId>
-        <version>15.0</version>
       </dependency>
 
       <dependency>
@@ -683,13 +681,6 @@
             <artifactId>jaxb-api</artifactId>
           </exclusion>
         </exclusions>
-      </dependency>
-
-      <!-- HBase -->
-      <dependency>
-        <groupId>org.apache.hbase</groupId>
-        <artifactId>hbase-client</artifactId>
-        <version>${hbase.version}</version>
       </dependency>
 
       <!-- Hive -->

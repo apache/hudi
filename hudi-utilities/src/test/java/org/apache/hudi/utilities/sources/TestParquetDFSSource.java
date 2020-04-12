@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.TypedProperties;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.Before;
@@ -48,6 +48,6 @@ public class TestParquetDFSSource extends AbstractDFSSourceTestBase {
 
   @Override
   void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
-    Helpers.saveParquetToDFS(Helpers.toGenericRecords(records, dataGenerator), path);
+    Helpers.saveParquetToDFS(Helpers.toGenericRecords(records), path);
   }
 }

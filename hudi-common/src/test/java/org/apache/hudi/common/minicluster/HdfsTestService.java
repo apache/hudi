@@ -20,20 +20,20 @@ package org.apache.hudi.common.minicluster;
 
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.exception.HoodieIOException;
 
-import com.google.common.base.Preconditions;
-import com.google.common.io.Files;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.nio.file.Files;
+import java.util.Objects;
 
 /**
  * An HDFS minicluster service implementation.
@@ -53,8 +53,8 @@ public class HdfsTestService {
    */
   private MiniDFSCluster miniDfsCluster;
 
-  public HdfsTestService() {
-    workDir = Files.createTempDir().getAbsolutePath();
+  public HdfsTestService() throws IOException {
+    workDir = Files.createTempDirectory("temp").toFile().getAbsolutePath();
   }
 
   public Configuration getHadoopConf() {
@@ -70,7 +70,7 @@ public class HdfsTestService {
   }
 
   public MiniDFSCluster start(boolean format) throws IOException {
-    Preconditions.checkState(workDir != null, "The work dir must be set before starting cluster.");
+    Objects.requireNonNull(workDir, "The work dir must be set before starting cluster.");
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
 
     // If clean, then remove the work dir so we can start fresh.

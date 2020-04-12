@@ -45,7 +45,24 @@ public abstract class AbstractCommandConfig implements Serializable {
 
     for (Field field : fields) {
       try {
-        if (field.isSynthetic()) {
+        if (field.getName().equals("sparkMemory") || field.getName().equals("sparkMaster")) {
+          Object value = field.get(this);
+          Parameter param = field.getAnnotation(com.beust.jcommander.Parameter.class);
+          if (value != null && param != null) {
+            result.append(param.names()[0]);
+            result.append(SPACE);
+            result.append(value);
+            result.append(SPACE);
+          }
+        }
+      } catch (Throwable e) {
+        throw new InvalidCommandConfigException("Failed to convert job configs to string array.", e);
+      }
+    }
+
+    for (Field field : fields) {
+      try {
+        if (field.isSynthetic() || field.getName().equals("sparkMemory") || field.getName().equals("sparkMaster")) {
           continue;
         }
         Object value = field.get(this);

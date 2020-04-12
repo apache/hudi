@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -37,6 +37,7 @@ import java.util.Objects;
  */
 public class HoodieLogFile implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   public static final String DELTA_EXTENSION = ".log";
   public static final Integer LOGFILE_BASE_VERSION = 1;
 
@@ -129,6 +130,7 @@ public class HoodieLogFile implements Serializable {
    */
   public static class LogFileComparator implements Comparator<HoodieLogFile>, Serializable {
 
+    private static final long serialVersionUID = 1L;
     private transient Comparator<String> writeTokenComparator;
 
     private Comparator<String> getWriteTokenComparator() {

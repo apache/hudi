@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.storage;
 
+import org.apache.hudi.common.fs.StorageSchemes;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
@@ -38,6 +40,7 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAppendSupported("wasb"));
     assertFalse(StorageSchemes.isAppendSupported("adl"));
     assertFalse(StorageSchemes.isAppendSupported("abfs"));
+    assertFalse(StorageSchemes.isAppendSupported("oss"));
     assertTrue(StorageSchemes.isAppendSupported("viewfs"));
     try {
       StorageSchemes.isAppendSupported("s2");

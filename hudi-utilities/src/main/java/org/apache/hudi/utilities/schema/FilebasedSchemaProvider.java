@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;

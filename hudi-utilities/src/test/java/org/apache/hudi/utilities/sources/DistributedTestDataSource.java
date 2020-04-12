@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.config.TestSourceConfig;
 
@@ -52,12 +52,12 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
   @Override
   protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
     int nextCommitNum = lastCkptStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
-    String commitTime = String.format("%05d", nextCommitNum);
+    String instantTime = String.format("%05d", nextCommitNum);
     LOG.info("Source Limit is set to " + sourceLimit);
 
     // No new data.
     if (sourceLimit <= 0) {
-      return new InputBatch<>(Option.empty(), commitTime);
+      return new InputBatch<>(Option.empty(), instantTime);
     }
 
     TypedProperties newProps = new TypedProperties();
@@ -76,8 +76,8 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
               if (!dataGeneratorMap.containsKey(p)) {
                 initDataGen(newProps, p);
               }
-              return fetchNextBatch(newProps, perPartitionSourceLimit, commitTime, p).iterator();
+              return fetchNextBatch(newProps, perPartitionSourceLimit, instantTime, p).iterator();
             }, true);
-    return new InputBatch<>(Option.of(avroRDD), commitTime);
+    return new InputBatch<>(Option.of(avroRDD), instantTime);
   }
 }

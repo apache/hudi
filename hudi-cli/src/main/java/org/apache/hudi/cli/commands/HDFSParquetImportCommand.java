@@ -18,11 +18,11 @@
 
 package org.apache.hudi.cli.commands;
 
-import com.google.common.base.Strings;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.HDFSParquetImporter.FormatValidator;
 
@@ -94,7 +94,7 @@ public class HDFSParquetImportCommand implements CommandMarker {
     config.sparkMemory = sparkMemory;
     config.retry = Integer.parseInt(retry);
     config.configs = Arrays.asList(configs);
-    if (!Strings.isNullOrEmpty(propsFilePath)) {
+    if (!StringUtils.isNullOrEmpty(propsFilePath)) {
       config.propsFilePath = propsFilePath;
     }
     String[] commandConfig = config.getCommandConfigsAsStringArray(cmd);

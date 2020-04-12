@@ -18,11 +18,11 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.DiskBasedMap.FileEntry;
-import org.apache.hudi.common.util.collection.io.storage.SizeAwareDataOutputStream;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 
 import org.apache.avro.generic.GenericRecord;

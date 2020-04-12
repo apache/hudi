@@ -44,7 +44,7 @@ public class SchemaDifference {
     this.tableSchema = tableSchema;
     this.deleteColumns = Collections.unmodifiableList(deleteColumns);
     this.updateColumnTypes = Collections.unmodifiableMap(updateColumnTypes);
-    this.addColumnTypes =  Collections.unmodifiableMap(addColumnTypes);
+    this.addColumnTypes = Collections.unmodifiableMap(addColumnTypes);
   }
 
   public List<String> getDeleteColumns() {

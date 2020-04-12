@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -25,17 +26,15 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
-import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -116,10 +115,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     long fgBuildTimeTakenMs = timer.endTimer();
     timer.startTimer();
     // Group by partition for efficient updates for both InMemory and DiskBased stuctures.
-    fileGroups.stream().collect(Collectors.groupingBy(HoodieFileGroup::getPartitionPath)).entrySet().forEach(entry -> {
-      String partition = entry.getKey();
+    fileGroups.stream().collect(Collectors.groupingBy(HoodieFileGroup::getPartitionPath)).forEach((partition, value) -> {
       if (!isPartitionAvailableInStore(partition)) {
-        storePartitionView(partition, entry.getValue());
+        storePartitionView(partition, value);
       }
     });
     long storePartitionsTs = timer.endTimer();
@@ -209,7 +207,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   private void ensurePartitionLoadedCorrectly(String partition) {
 
-    Preconditions.checkArgument(!isClosed(), "View is already closed");
+    ValidationUtils.checkArgument(!isClosed(), "View is already closed");
 
     // ensure we list files only once even in the face of concurrency
     addedPartitions.computeIfAbsent(partition, (partitionPathStr) -> {
@@ -397,11 +395,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public final Stream<HoodieBaseFile> getLatestBaseFilesInRange(List<String> commitsToReturn) {
     try {
       readLock.lock();
-      return fetchAllStoredFileGroups().map(fileGroup -> {
-        return Option.fromJavaOptional(
-            fileGroup.getAllBaseFiles().filter(baseFile -> commitsToReturn.contains(baseFile.getCommitTime())
-                && !isBaseFileDueToPendingCompaction(baseFile)).findFirst());
-      }).filter(Option::isPresent).map(Option::get);
+      return fetchAllStoredFileGroups().map(fileGroup -> Option.fromJavaOptional(
+          fileGroup.getAllBaseFiles().filter(baseFile -> commitsToReturn.contains(baseFile.getCommitTime())
+              && !isBaseFileDueToPendingCompaction(baseFile)).findFirst())).filter(Option::isPresent).map(Option::get);
     } finally {
       readLock.unlock();
     }
@@ -443,7 +439,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
       Option<FileSlice> fs = fetchLatestFileSlice(partitionPath, fileId);
-      return fs.map(f -> filterBaseFileAfterPendingCompaction(f));
+      return fs.map(this::filterBaseFileAfterPendingCompaction);
     } finally {
       readLock.unlock();
     }
@@ -480,7 +476,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       ensurePartitionLoadedCorrectly(partitionPath);
       Stream<FileSlice> fileSliceStream = fetchLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime);
       if (includeFileSlicesInPendingCompaction) {
-        return fileSliceStream.map(fs -> filterBaseFileAfterPendingCompaction(fs));
+        return fileSliceStream.map(this::filterBaseFileAfterPendingCompaction);
       } else {
         return fileSliceStream.filter(fs -> !isPendingCompactionScheduledForFileId(fs.getFileGroupId()));
       }
@@ -815,7 +811,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Return Only Commits and Compaction timeline for building file-groups.
    * 
-   * @return
+   * @return {@code HoodieTimeline}
    */
   public HoodieTimeline getVisibleCommitsAndCompactionTimeline() {
     return visibleCommitsAndCompactionTimeline;

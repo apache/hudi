@@ -45,11 +45,11 @@ public class HoodieRollback {
 
   public int rollback(JavaSparkContext jsc) throws Exception {
     HoodieWriteClient client = createHoodieClient(jsc, cfg.basePath);
-    if (client.rollback(cfg.commitTime)) {
-      LOG.info(String.format("The commit \"%s\" rolled back.", cfg.commitTime));
+    if (client.rollback(cfg.instantTime)) {
+      LOG.info(String.format("The commit \"%s\" rolled back.", cfg.instantTime));
       return 0;
     } else {
-      LOG.info(String.format("The commit \"%s\" failed to roll back.", cfg.commitTime));
+      LOG.info(String.format("The commit \"%s\" failed to roll back.", cfg.instantTime));
       return -1;
     }
   }
@@ -67,9 +67,9 @@ public class HoodieRollback {
 
   public static class Config extends AbstractCommandConfig {
 
-    @Parameter(names = {"--commit-time",
+    @Parameter(names = {"--instant-time",
         "-ct"}, description = "Commit time for rollback")
-    public String commitTime = null;
+    public String instantTime = null;
 
     @Parameter(names = {"--savepoint-time",
         "-st"}, description = "Savepoint time for rollback")

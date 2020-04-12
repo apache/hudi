@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -31,6 +31,7 @@ import java.util.Objects;
  */
 public class HoodieBaseFile implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   private transient FileStatus fileStatus;
   private final String fullPath;
   private long fileLen;

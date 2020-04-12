@@ -21,10 +21,10 @@ import java.util.stream.Collectors
 
 import com.beust.jcommander.Parameter
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.common.util.FSUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.utilities.config.AbstractCommandConfig
 import org.apache.log4j.Logger
@@ -145,11 +145,11 @@ class DedupeSparkJob(cfg: DedupeConfig, sqlContext: SQLContext, fs: FileSystem) 
 
     // 2. Remove duplicates from the bad files
     dupeFixPlan.foreach { case (fileName, keysToSkip) =>
-      val commitTime = FSUtils.getCommitTime(fileNameToPathMap(fileName).getName)
+      val instantTime = FSUtils.getCommitTime(fileNameToPathMap(fileName).getName)
       val badFilePath = new Path(s"${cfg.repairOutputPath}/${fileNameToPathMap(fileName).getName}.bad")
       val newFilePath = new Path(s"${cfg.repairOutputPath}/${fileNameToPathMap(fileName).getName}")
       LOG.info(" Skipping and writing new file for : " + fileName)
-      SparkHelpers.skipKeysAndWriteNewFile(commitTime, fs, badFilePath, newFilePath, dupeFixPlan(fileName))
+      SparkHelpers.skipKeysAndWriteNewFile(instantTime, fs, badFilePath, newFilePath, dupeFixPlan(fileName))
       fs.delete(badFilePath, false)
     }
 

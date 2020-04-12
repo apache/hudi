@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.minicluster;
 
-import com.google.common.base.Preconditions;
-import com.google.common.io.Files;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.log4j.LogManager;
@@ -36,6 +34,8 @@ import java.io.OutputStream;
 import java.io.Reader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.util.Objects;
 
 /**
  * A Zookeeper minicluster service implementation.
@@ -75,8 +75,8 @@ public class ZookeeperTestService {
   private ZooKeeperServer zooKeeperServer;
   private boolean started = false;
 
-  public ZookeeperTestService(Configuration config) {
-    this.workDir = Files.createTempDir().getAbsolutePath();
+  public ZookeeperTestService(Configuration config) throws IOException {
+    this.workDir = Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath();
     this.hadoopConf = config;
   }
 
@@ -85,7 +85,7 @@ public class ZookeeperTestService {
   }
 
   public ZooKeeperServer start() throws IOException, InterruptedException {
-    Preconditions.checkState(workDir != null, "The localBaseFsLocation must be set before starting cluster.");
+    Objects.requireNonNull(workDir, "The localBaseFsLocation must be set before starting cluster.");
 
     setupTestEnv();
     stop();
@@ -171,13 +171,10 @@ public class ZookeeperTestService {
     long start = System.currentTimeMillis();
     while (true) {
       try {
-        Socket sock = new Socket("localhost", port);
-        try {
+        try (Socket sock = new Socket("localhost", port)) {
           OutputStream outstream = sock.getOutputStream();
           outstream.write("stat".getBytes());
           outstream.flush();
-        } finally {
-          sock.close();
         }
       } catch (IOException e) {
         return true;

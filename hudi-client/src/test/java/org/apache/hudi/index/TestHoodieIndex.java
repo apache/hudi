@@ -18,20 +18,33 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieClientTestHarness;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.hbase.HBaseIndex;
+import org.apache.hudi.table.HoodieTable;
 
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class TestHoodieIndex extends HoodieClientTestHarness {
 
@@ -67,5 +80,76 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     config = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.GLOBAL_BLOOM).build()).build();
     assertTrue(HoodieIndex.createIndex(config, jsc) instanceof HoodieGlobalBloomIndex);
+
+    config = clientConfigBuilder.withPath(basePath)
+        .withIndexConfig(indexConfigBuilder.withIndexClass(DummyHoodieIndex.class.getName()).build()).build();
+    assertTrue(HoodieIndex.createIndex(config, jsc) instanceof DummyHoodieIndex);
+
+    config = clientConfigBuilder.withPath(basePath)
+        .withIndexConfig(indexConfigBuilder.withIndexClass(IndexWithConstructor.class.getName()).build()).build();
+    try {
+      HoodieIndex.createIndex(config, jsc);
+      fail("exception is expected");
+    } catch (HoodieIndexException e) {
+      assertTrue(e.getMessage().contains("is not a subclass of HoodieIndex"));
+    }
+
+    config = clientConfigBuilder.withPath(basePath)
+            .withIndexConfig(indexConfigBuilder.withIndexClass(IndexWithoutConstructor.class.getName()).build()).build();
+    try {
+      HoodieIndex.createIndex(config, jsc);
+      fail("exception is expected");
+    } catch (HoodieException e) {
+      assertTrue(e.getMessage().contains("Unable to instantiate class"));
+    }
+  }
+
+  public static class DummyHoodieIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
+    public DummyHoodieIndex(HoodieWriteConfig config) {
+      super(config);
+    }
+
+    @Override
+    public JavaPairRDD<HoodieKey, Option<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys, JavaSparkContext jsc, HoodieTable<T> hoodieTable) {
+      return null;
+    }
+
+    @Override
+    public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, JavaSparkContext jsc, HoodieTable<T> hoodieTable) throws HoodieIndexException {
+      return null;
+    }
+
+    @Override
+    public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc, HoodieTable<T> hoodieTable) throws HoodieIndexException {
+      return null;
+    }
+
+    @Override
+    public boolean rollbackCommit(String instantTime) {
+      return false;
+    }
+
+    @Override
+    public boolean isGlobal() {
+      return false;
+    }
+
+    @Override
+    public boolean canIndexLogFiles() {
+      return false;
+    }
+
+    @Override
+    public boolean isImplicitWithStorage() {
+      return false;
+    }
+  }
+
+  public static class IndexWithConstructor {
+    public IndexWithConstructor(HoodieWriteConfig config) {}
+  }
+
+  public static class IndexWithoutConstructor {
+
   }
 }
