@@ -18,14 +18,43 @@
 
 package org.apache.hudi.utilities.checkpointing;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 /**
  * Provide the initial checkpoint for delta streamer.
  */
-public interface InitialCheckPointProvider {
+public abstract class InitialCheckPointProvider {
+  protected transient Path path;
+  protected transient FileSystem fs;
+  protected transient TypedProperties props;
+
+  static class Config {
+    private static String CHECKPOINT_PROVIDER_PATH_PROP = "hoodie.deltastreamer.checkpoint.provider.path";
+  }
+
+  /**
+   * Construct InitialCheckPointProvider.
+   * @param props All properties passed to Delta Streamer
+   */
+  public InitialCheckPointProvider(TypedProperties props) {
+    this.props = props;
+    this.path = new Path(props.getString(Config.CHECKPOINT_PROVIDER_PATH_PROP));
+  }
+
+  /**
+   * Initialize the class with the current filesystem.
+   *
+   * @param config Hadoop configuration
+   */
+  public abstract void init(Configuration config) throws HoodieException;
+
   /**
    * Get checkpoint string recognizable for delta streamer.
    */
-  String getCheckpoint() throws HoodieException;
+  public abstract String getCheckpoint() throws HoodieException;
 }
