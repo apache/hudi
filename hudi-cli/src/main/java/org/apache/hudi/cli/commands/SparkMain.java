@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.table.compact.strategy.UnBoundedCompactionStrategy;
+import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.HDFSParquetImporter.Config;
 import org.apache.hudi.utilities.HoodieCleaner;
@@ -283,10 +283,11 @@ public class SparkMain {
 
   private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
     HoodieWriteClient client = createHoodieClient(jsc, basePath);
-    if (client.restoreToSavepoint(savepointTime)) {
+    try {
+      client.restoreToSavepoint(savepointTime);
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
       return 0;
-    } else {
+    } catch (Exception e) {
       LOG.info(String.format("The commit \"%s\" failed to roll back.", savepointTime));
       return -1;
     }

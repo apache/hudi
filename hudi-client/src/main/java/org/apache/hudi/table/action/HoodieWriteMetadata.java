@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.commit;
+package org.apache.hudi.table.action;
 
 import java.util.List;
 import org.apache.hudi.client.WriteStatus;

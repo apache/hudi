@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.compact;
+package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
@@ -42,7 +42,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -71,7 +71,6 @@ import static java.util.stream.Collectors.toList;
  * passes it through a CompactionFilter and executes all the compactions and writes a new version of base files and make
  * a normal commit
  *
- * @see HoodieCompactor
  */
 public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
 

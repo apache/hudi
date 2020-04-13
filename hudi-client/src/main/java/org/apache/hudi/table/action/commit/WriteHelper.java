@@ -25,6 +25,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -35,9 +36,9 @@ import scala.Tuple2;
 public class WriteHelper<T extends HoodieRecordPayload<T>> {
 
   public static <T extends HoodieRecordPayload<T>> HoodieWriteMetadata write(String instantTime,
-      JavaRDD<HoodieRecord<T>> inputRecordsRDD, JavaSparkContext jsc,
-      HoodieTable<T> table, boolean shouldCombine,
-      int shuffleParallelism, CommitActionExecutor<T> executor, boolean performTagging) {
+                                                                             JavaRDD<HoodieRecord<T>> inputRecordsRDD, JavaSparkContext jsc,
+                                                                             HoodieTable<T> table, boolean shouldCombine,
+                                                                             int shuffleParallelism, CommitActionExecutor<T> executor, boolean performTagging) {
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
