@@ -115,7 +115,8 @@ public class TestInLineFileSystem {
     }
   }
 
-  @Test
+  // @Test
+  // Disabling flaky test for now https://issues.apache.org/jira/browse/HUDI-786
   public void testFileSystemApis() throws IOException {
     OuterPathInfo outerPathInfo = generateOuterFileAndGetInfo(1000);
     Path inlinePath = FileSystemTestUtils.getPhantomFile(outerPathInfo.outerPath, outerPathInfo.startOffset, outerPathInfo.length);
