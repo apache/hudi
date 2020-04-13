@@ -131,6 +131,9 @@ public class HoodieTableConfig implements Serializable {
         // Use latest Version as default unless forced by client
         properties.setProperty(HOODIE_TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.CURR_VERSION.toString());
       }
+      if (!properties.containsKey(HOODIE_BASE_FILE_FORMAT_PROP_NAME)) {
+        properties.setProperty(HOODIE_BASE_FILE_FORMAT_PROP_NAME, DEFAULT_BASE_FILE_FORMAT.name());
+      }
       properties.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }
   }

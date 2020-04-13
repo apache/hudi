@@ -61,6 +61,7 @@ private[hudi] object HoodieSparkSqlWriter {
       case _ => throw new HoodieException("hoodie only support org.apache.spark.serializer.KryoSerializer as spark.serializer")
     }
     val tableType = parameters(TABLE_TYPE_OPT_KEY)
+    val tableBaseFormat = parameters(TABLE_FILE_FORMAT_OPT_KEY)
     val operation =
     // It does not make sense to allow upsert() operation if INSERT_DROP_DUPS_OPT_KEY is true
     // Auto-correct the operation to "insert" if OPERATION_OPT_KEY is set to "upsert" wrongly
@@ -122,7 +123,7 @@ private[hudi] object HoodieSparkSqlWriter {
       // Create the table if not present
       if (!exists) {
         HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get, tableType,
-          tblName.get, "archived", parameters(PAYLOAD_CLASS_OPT_KEY))
+          tblName.get, tableBaseFormat, "archived", parameters(PAYLOAD_CLASS_OPT_KEY))
       }
 
       // Create a HoodieWriteClient & issue the write.
@@ -210,7 +211,8 @@ private[hudi] object HoodieSparkSqlWriter {
       HIVE_URL_OPT_KEY -> DEFAULT_HIVE_URL_OPT_VAL,
       HIVE_PARTITION_FIELDS_OPT_KEY -> DEFAULT_HIVE_PARTITION_FIELDS_OPT_VAL,
       HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY -> DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL,
-      HIVE_STYLE_PARTITIONING_OPT_KEY -> DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL
+      HIVE_STYLE_PARTITIONING_OPT_KEY -> DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL,
+      TABLE_FILE_FORMAT_OPT_KEY -> DEFAULT_TABLE_FILE_FORMAT_OPT_VAL
     ) ++ translateStorageTypeToTableType(parameters)
   }
 

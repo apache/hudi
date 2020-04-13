@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -299,12 +300,21 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
+   * Helper method to initialize a table, with given basePath, tableType, name, baseFormat, archiveFolder.
+   */
+  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, String tableType,
+      String tableName, String tableBaseFormat, String archiveLogFolder, String payloadClassName) throws IOException {
+    return initTableType(hadoopConf, basePath, HoodieTableType.valueOf(tableType), tableName,
+        HoodieFileFormat.valueOf(tableBaseFormat), archiveLogFolder, payloadClassName, null);
+  }
+
+  /**
    * Helper method to initialize a table, with given basePath, tableType, name, archiveFolder.
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, String tableType,
       String tableName, String archiveLogFolder, String payloadClassName) throws IOException {
     return initTableType(hadoopConf, basePath, HoodieTableType.valueOf(tableType), tableName,
-        archiveLogFolder, payloadClassName, null);
+        HoodieFileFormat.PARQUET, archiveLogFolder, payloadClassName, null);
   }
 
   /**
@@ -312,15 +322,28 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
       HoodieTableType tableType, String tableName, String payloadClassName) throws IOException {
-    return initTableType(hadoopConf, basePath, tableType, tableName, null, payloadClassName, null);
+    return initTableType(hadoopConf, basePath, tableType, tableName,
+        HoodieFileFormat.PARQUET, null, payloadClassName, null);
   }
 
+  /**
+   * Helper method to initialize a table, with given basePath, tableType, name, archiveFolder, payloadClassName,
+   * timelineLayoutVersion.
+   */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
       HoodieTableType tableType, String tableName, String archiveLogFolder, String payloadClassName,
       Integer timelineLayoutVersion) throws IOException {
+    return initTableType(hadoopConf, basePath, tableType, tableName, HoodieFileFormat.PARQUET,
+        archiveLogFolder, payloadClassName, timelineLayoutVersion);
+  }
+
+  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
+      HoodieTableType tableType, String tableName, HoodieFileFormat fileFormat, String archiveLogFolder,
+      String payloadClassName, Integer timelineLayoutVersion) throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
+    properties.setProperty(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME, fileFormat.name());
     if (tableType == HoodieTableType.MERGE_ON_READ && payloadClassName != null) {
       properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, payloadClassName);
     }
