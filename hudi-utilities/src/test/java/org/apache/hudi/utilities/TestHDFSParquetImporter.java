@@ -42,6 +42,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -88,9 +89,9 @@ public class TestHDFSParquetImporter implements Serializable {
   }
 
   private String basePath;
-  private Path hoodieFolder;
-  private Path srcFolder;
-  private List<GenericRecord> insertData;
+  private transient Path hoodieFolder;
+  private transient Path srcFolder;
+  private transient List<GenericRecord> insertData;
 
   @Before
   public void init() throws IOException, ParseException {
@@ -102,6 +103,11 @@ public class TestHDFSParquetImporter implements Serializable {
     // Create generic records.
     srcFolder = new Path(basePath, "testSrc");
     insertData = createRecords(srcFolder);
+  }
+
+  @After
+  public void clean() throws IOException {
+    dfs.delete(new Path(basePath), true);
   }
 
   /**
@@ -187,25 +193,31 @@ public class TestHDFSParquetImporter implements Serializable {
    */
   @Test
   public void testImportInsert() throws IOException, ParseException {
-    JavaSparkContext jsc = getJavaSparkContext();
-    insert(jsc);
-    SQLContext sqlContext = new SQLContext(jsc);
-    Dataset<Row> ds = HoodieClientTestUtils.read(jsc, basePath + "/testTarget", sqlContext, dfs, basePath + "/testTarget/*/*/*/*");
+    JavaSparkContext jsc = null;
+    try {
+      jsc = getJavaSparkContext();
+      insert(jsc);
+      SQLContext sqlContext = new SQLContext(jsc);
+      Dataset<Row> ds = HoodieClientTestUtils.read(jsc, basePath + "/testTarget", sqlContext, dfs, basePath + "/testTarget/*/*/*/*");
 
-    List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
-    List<HoodieModel> result = readData.stream().map(row ->
-        new HoodieModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
-        row.getDouble(5), row.getDouble(6), row.getDouble(7)))
-        .collect(Collectors.toList());
+      List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
+      List<HoodieModel> result = readData.stream().map(row ->
+          new HoodieModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
+              row.getDouble(5), row.getDouble(6), row.getDouble(7)))
+          .collect(Collectors.toList());
 
-    List<HoodieModel> expected = insertData.stream().map(g ->
-        new HoodieModel(Double.valueOf(g.get("timestamp").toString()), g.get("_row_key").toString(), g.get("rider").toString(), g.get("driver").toString(),
-        Double.valueOf(g.get("begin_lat").toString()), Double.valueOf(g.get("begin_lon").toString()), Double.valueOf(g.get("end_lat").toString()),
-          Double.valueOf(g.get("end_lon").toString())))
-        .collect(Collectors.toList());
+      List<HoodieModel> expected = insertData.stream().map(g ->
+          new HoodieModel(Double.valueOf(g.get("timestamp").toString()), g.get("_row_key").toString(), g.get("rider").toString(), g.get("driver").toString(),
+              Double.valueOf(g.get("begin_lat").toString()), Double.valueOf(g.get("begin_lon").toString()), Double.valueOf(g.get("end_lat").toString()),
+              Double.valueOf(g.get("end_lon").toString())))
+          .collect(Collectors.toList());
 
-    assertTrue(result.containsAll(expected) && expected.containsAll(result) && result.size() == expected.size());
-    jsc.stop();
+      assertTrue(result.containsAll(expected) && expected.containsAll(result) && result.size() == expected.size());
+    } finally {
+      if (jsc != null) {
+        jsc.stop();
+      }
+    }
   }
 
   /**
@@ -213,45 +225,51 @@ public class TestHDFSParquetImporter implements Serializable {
    */
   @Test
   public void testImportWithUpsert() throws IOException, ParseException {
-    JavaSparkContext jsc = getJavaSparkContext();
-    insert(jsc);
+    JavaSparkContext jsc = null;
+    try {
+      jsc = getJavaSparkContext();
+      insert(jsc);
 
-    // Create schema file.
-    String schemaFile = new Path(basePath, "file.schema").toString();
+      // Create schema file.
+      String schemaFile = new Path(basePath, "file.schema").toString();
 
-    Path upsertFolder = new Path(basePath, "testUpsertSrc");
-    List<GenericRecord> upsertData = createUpsertRecords(upsertFolder);
+      Path upsertFolder = new Path(basePath, "testUpsertSrc");
+      List<GenericRecord> upsertData = createUpsertRecords(upsertFolder);
 
-    HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(upsertFolder.toString(), hoodieFolder.toString(),
-        "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1, schemaFile);
-    cfg.command = "upsert";
-    HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
+      HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(upsertFolder.toString(), hoodieFolder.toString(),
+          "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1, schemaFile);
+      cfg.command = "upsert";
+      HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
 
-    dataImporter.dataImport(jsc, 0);
+      dataImporter.dataImport(jsc, 0);
 
-    // construct result, remove top 10 and add upsert data.
-    List<GenericRecord> expectData = insertData.subList(11, 96);
-    expectData.addAll(upsertData);
+      // construct result, remove top 10 and add upsert data.
+      List<GenericRecord> expectData = insertData.subList(11, 96);
+      expectData.addAll(upsertData);
 
-    // read latest data
-    SQLContext sqlContext = new SQLContext(jsc);
-    Dataset<Row> ds = HoodieClientTestUtils.read(jsc, basePath + "/testTarget", sqlContext, dfs, basePath + "/testTarget/*/*/*/*");
+      // read latest data
+      SQLContext sqlContext = new SQLContext(jsc);
+      Dataset<Row> ds = HoodieClientTestUtils.read(jsc, basePath + "/testTarget", sqlContext, dfs, basePath + "/testTarget/*/*/*/*");
 
-    List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
-    List<HoodieModel> result = readData.stream().map(row ->
-        new HoodieModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
-            row.getDouble(5), row.getDouble(6), row.getDouble(7)))
-        .collect(Collectors.toList());
+      List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
+      List<HoodieModel> result = readData.stream().map(row ->
+          new HoodieModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
+              row.getDouble(5), row.getDouble(6), row.getDouble(7)))
+          .collect(Collectors.toList());
 
-    // get expected result
-    List<HoodieModel> expected = expectData.stream().map(g ->
-        new HoodieModel(Double.valueOf(g.get("timestamp").toString()), g.get("_row_key").toString(), g.get("rider").toString(), g.get("driver").toString(),
-            Double.valueOf(g.get("begin_lat").toString()), Double.valueOf(g.get("begin_lon").toString()), Double.valueOf(g.get("end_lat").toString()),
-            Double.valueOf(g.get("end_lon").toString())))
-        .collect(Collectors.toList());
+      // get expected result
+      List<HoodieModel> expected = expectData.stream().map(g ->
+          new HoodieModel(Double.valueOf(g.get("timestamp").toString()), g.get("_row_key").toString(), g.get("rider").toString(), g.get("driver").toString(),
+              Double.valueOf(g.get("begin_lat").toString()), Double.valueOf(g.get("begin_lon").toString()), Double.valueOf(g.get("end_lat").toString()),
+              Double.valueOf(g.get("end_lon").toString())))
+          .collect(Collectors.toList());
 
-    assertTrue(result.containsAll(expected) && expected.containsAll(result) && result.size() == expected.size());
-    jsc.stop();
+      assertTrue(result.containsAll(expected) && expected.containsAll(result) && result.size() == expected.size());
+    } finally {
+      if (jsc != null) {
+        jsc.stop();
+      }
+    }
   }
 
   private List<GenericRecord> createRecords(Path srcFolder) throws ParseException, IOException {
@@ -338,10 +356,6 @@ public class TestHDFSParquetImporter implements Serializable {
     JavaSparkContext jsc = null;
     try {
       jsc = getJavaSparkContext();
-
-      // Create generic records.
-      Path srcFolder = new Path(basePath, "testSrc");
-      createRecords(srcFolder);
 
       // Create schema file.
       Path schemaFile = new Path(basePath.toString(), "missingFile.schema");
