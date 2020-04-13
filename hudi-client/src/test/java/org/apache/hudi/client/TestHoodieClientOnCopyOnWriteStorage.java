@@ -18,8 +18,10 @@
 
 package org.apache.hudi.client;
 
+import java.util.HashSet;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -50,6 +52,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.table.action.commit.WriteHelper;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -195,7 +198,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     String recordKey = UUID.randomUUID().toString();
     HoodieKey keyOne = new HoodieKey(recordKey, "2018-01-01");
-    HoodieRecord recordOne =
+    HoodieRecord<TestRawTripPayload> recordOne =
         new HoodieRecord(keyOne, HoodieTestDataGenerator.generateRandomValue(keyOne, newCommitTime));
 
     HoodieKey keyTwo = new HoodieKey(recordKey, "2018-02-01");
@@ -206,42 +209,51 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     HoodieRecord recordThree =
         new HoodieRecord(keyTwo, HoodieTestDataGenerator.generateRandomValue(keyTwo, newCommitTime));
 
-    JavaRDD<HoodieRecord> records = jsc.parallelize(Arrays.asList(recordOne, recordTwo, recordThree), 1);
+    JavaRDD<HoodieRecord<TestRawTripPayload>> records =
+        jsc.parallelize(Arrays.asList(recordOne, recordTwo, recordThree), 1);
 
-    // dedup should be done based on recordKey only
-    HoodieWriteClient clientWithDummyGlobalIndex = getWriteClientWithDummyIndex(true);
-    List<HoodieRecord> dedupedRecs = clientWithDummyGlobalIndex.deduplicateRecords(records, 1).collect();
+    // Global dedup should be done based on recordKey only
+    HoodieIndex index = mock(HoodieIndex.class);
+    when(index.isGlobal()).thenReturn(true);
+    List<HoodieRecord<TestRawTripPayload>> dedupedRecs = WriteHelper.deduplicateRecords(records, index, 1).collect();
     assertEquals(1, dedupedRecs.size());
     assertNodupesWithinPartition(dedupedRecs);
 
-    // dedup should be done based on both recordKey and partitionPath
-    HoodieWriteClient clientWithDummyNonGlobalIndex = getWriteClientWithDummyIndex(false);
-    dedupedRecs = clientWithDummyNonGlobalIndex.deduplicateRecords(records, 1).collect();
+    // non-Global dedup should be done based on both recordKey and partitionPath
+    index = mock(HoodieIndex.class);
+    when(index.isGlobal()).thenReturn(false);
+    dedupedRecs = WriteHelper.deduplicateRecords(records, index, 1).collect();
     assertEquals(2, dedupedRecs.size());
     assertNodupesWithinPartition(dedupedRecs);
 
     // Perform write-action and check
+    JavaRDD<HoodieRecord> recordList = jsc.parallelize(Arrays.asList(recordOne, recordTwo, recordThree), 1);
     try (HoodieWriteClient client = getHoodieWriteClient(getConfigBuilder().combineInput(true, true).build(), false);) {
       client.startCommitWithTime(newCommitTime);
-      List<WriteStatus> statuses = writeFn.apply(client, records, newCommitTime).collect();
+      List<WriteStatus> statuses = writeFn.apply(client, recordList, newCommitTime).collect();
       assertNoWriteErrors(statuses);
       assertEquals(2, statuses.size());
-      assertNodupesWithinPartition(statuses.stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
+      assertNodupesInPartition(statuses.stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
           .collect(Collectors.toList()));
     }
   }
 
   /**
-   * Build a test Hoodie WriteClient with dummy index to configure isGlobal flag.
+   * Assert that there is no duplicate key at the partition level.
    *
-   * @param isGlobal Flag to control HoodieIndex.isGlobal
-   * @return Hoodie Write Client
-   * @throws Exception in case of error
+   * @param records List of Hoodie records
    */
-  private HoodieWriteClient getWriteClientWithDummyIndex(final boolean isGlobal) {
-    HoodieIndex index = mock(HoodieIndex.class);
-    when(index.isGlobal()).thenReturn(isGlobal);
-    return getHoodieWriteClient(getConfigBuilder().build(), false, index);
+  void assertNodupesInPartition(List<HoodieRecord> records) {
+    Map<String, Set<String>> partitionToKeys = new HashMap<>();
+    for (HoodieRecord r : records) {
+      String key = r.getRecordKey();
+      String partitionPath = r.getPartitionPath();
+      if (!partitionToKeys.containsKey(partitionPath)) {
+        partitionToKeys.put(partitionPath, new HashSet<>());
+      }
+      assertFalse("key " + key + " is duplicate within partition " + partitionPath, partitionToKeys.get(partitionPath).contains(key));
+      partitionToKeys.get(partitionPath).add(key);
+    }
   }
 
   /**

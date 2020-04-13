@@ -32,6 +32,7 @@ import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -54,16 +55,15 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.action.commit.HoodieWriteMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
@@ -127,19 +127,83 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Provides a partitioner to perform the upsert operation, based on the workload profile.
+   * Upsert a batch of new records into Hoodie table at the supplied instantTime.
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param records  JavaRDD of hoodieRecords to upsert
+   * @return HoodieWriteMetadata
    */
-  public abstract Partitioner getUpsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc);
+  public abstract HoodieWriteMetadata upsert(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> records);
 
   /**
-   * Provides a partitioner to perform the insert operation, based on the workload profile.
+   * Insert a batch of new records into Hoodie table at the supplied instantTime.
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param records  JavaRDD of hoodieRecords to upsert
+   * @return HoodieWriteMetadata
    */
-  public abstract Partitioner getInsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc);
+  public abstract HoodieWriteMetadata insert(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> records);
 
   /**
-   * Return whether this HoodieTable implementation can benefit from workload profiling.
+   * Bulk Insert a batch of new records into Hoodie table at the supplied instantTime.
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param records  JavaRDD of hoodieRecords to upsert
+   * @param bulkInsertPartitioner User Defined Partitioner
+   * @return HoodieWriteMetadata
    */
-  public abstract boolean isWorkloadProfileNeeded();
+  public abstract HoodieWriteMetadata bulkInsert(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> records, Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
+
+  /**
+   * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
+   * de-duped and non existent keys will be removed before deleting.
+   *
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param keys   {@link List} of {@link HoodieKey}s to be deleted
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieWriteMetadata delete(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieKey> keys);
+
+  /**
+   * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   * <p>
+   * This implementation requires that the input records are already tagged, and de-duped if needed.
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param preppedRecords  JavaRDD of hoodieRecords to upsert
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieWriteMetadata upsertPrepped(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> preppedRecords);
+
+  /**
+   * Inserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   * <p>
+   * This implementation requires that the input records are already tagged, and de-duped if needed.
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param preppedRecords  JavaRDD of hoodieRecords to upsert
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieWriteMetadata insertPrepped(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> preppedRecords);
+
+  /**
+   * Bulk Insert the given prepared records into the Hoodie table, at the supplied instantTime.
+   * <p>
+   * This implementation requires that the input records are already tagged, and de-duped if needed.
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param preppedRecords  JavaRDD of hoodieRecords to upsert
+   * @param bulkInsertPartitioner User Defined Partitioner
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieWriteMetadata bulkInsertPrepped(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
 
   public HoodieWriteConfig getConfig() {
     return config;
@@ -258,18 +322,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   public HoodieIndex<T> getIndex() {
     return index;
   }
-
-  /**
-   * Perform the ultimate IO for a given upserted (RDD) partition.
-   */
-  public abstract Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition,
-      Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
-
-  /**
-   * Perform the ultimate IO for a given inserted (RDD) partition.
-   */
-  public abstract Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition,
-      Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
 
   /**
    * Schedule compaction for the instant time.

@@ -166,6 +166,18 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
 
       postCommit(metadata, instantTime, extraMetadata);
+      emitCommitMetrics(instantTime, metadata, actionType);
+
+      LOG.info("Committed " + instantTime);
+    } catch (IOException e) {
+      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
+          e);
+    }
+    return true;
+  }
+
+  void emitCommitMetrics(String instantTime, HoodieCommitMetadata metadata, String actionType) {
+    try {
 
       if (writeContext != null) {
         long durationInMs = metrics.getDurationInMs(writeContext.stop());
@@ -173,15 +185,10 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
             metadata, actionType);
         writeContext = null;
       }
-      LOG.info("Committed " + instantTime);
-    } catch (IOException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
-          e);
     } catch (ParseException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime
           + "Instant time is not of valid format", e);
     }
-    return true;
   }
 
   /**
@@ -189,10 +196,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
    * @param metadata      Commit Metadata corresponding to committed instant
    * @param instantTime   Instant Time
    * @param extraMetadata Additional Metadata passed by user
-   * @throws IOException in case of error
    */
   protected abstract void postCommit(HoodieCommitMetadata metadata, String instantTime,
-      Option<Map<String, String>> extraMetadata) throws IOException;
+      Option<Map<String, String>> extraMetadata);
 
   /**
    * Finalize Write operation.

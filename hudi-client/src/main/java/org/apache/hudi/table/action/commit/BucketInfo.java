@@ -16,29 +16,26 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action;
+package org.apache.hudi.table.action.commit;
 
 import java.io.Serializable;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieTable;
-import org.apache.spark.api.java.JavaSparkContext;
 
-public abstract class BaseActionExecutor<R> implements Serializable {
+/**
+ * Helper class for a bucket's type (INSERT and UPDATE) and its file location.
+ */
+public class BucketInfo implements Serializable {
 
-  protected final transient JavaSparkContext jsc;
+  BucketType bucketType;
+  String fileIdPrefix;
+  String partitionPath;
 
-  protected final HoodieWriteConfig config;
-
-  protected final HoodieTable<?> table;
-
-  protected final String instantTime;
-
-  public BaseActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable<?> table, String instantTime) {
-    this.jsc = jsc;
-    this.config = config;
-    this.table = table;
-    this.instantTime = instantTime;
+  @Override
+  public String toString() {
+    final StringBuilder sb = new StringBuilder("BucketInfo {");
+    sb.append("bucketType=").append(bucketType).append(", ");
+    sb.append("fileIdPrefix=").append(fileIdPrefix).append(", ");
+    sb.append("partitionPath=").append(partitionPath);
+    sb.append('}');
+    return sb.toString();
   }
-
-  public abstract R execute();
 }
