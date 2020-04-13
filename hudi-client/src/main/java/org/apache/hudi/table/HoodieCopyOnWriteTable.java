@@ -22,10 +22,10 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ParquetReaderIterator;
-import org.apache.hudi.common.HoodieRollbackStat;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
@@ -33,9 +33,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
@@ -56,8 +54,8 @@ import org.apache.hudi.table.action.commit.InsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.InsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.UpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.UpsertPreppedCommitActionExecutor;
-import org.apache.hudi.table.rollback.RollbackHelper;
-import org.apache.hudi.table.rollback.RollbackRequest;
+import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
+import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -68,12 +66,10 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Implementation of a very heavily read-optimized Hoodie Table where, all data is stored in base files, with
@@ -202,69 +198,12 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, HoodieInstant instant, boolean deleteInstants)
-      throws IOException {
-    long startTime = System.currentTimeMillis();
-    List<HoodieRollbackStat> stats = new ArrayList<>();
-    HoodieActiveTimeline activeTimeline = this.getActiveTimeline();
-
-    if (instant.isCompleted()) {
-      LOG.info("Unpublishing instant " + instant);
-      instant = activeTimeline.revertToInflight(instant);
-    }
-
-    // For Requested State (like failure during index lookup), there is nothing to do rollback other than
-    // deleting the timeline file
-    if (!instant.isRequested()) {
-      String commit = instant.getTimestamp();
-
-      // delete all the data files for this commit
-      LOG.info("Clean out all parquet files generated for commit: " + commit);
-      List<RollbackRequest> rollbackRequests = generateRollbackRequests(instant);
-
-      //TODO: We need to persist this as rollback workload and use it in case of partial failures
-      stats = new RollbackHelper(metaClient, config).performRollback(jsc, instant, rollbackRequests);
-    }
-    // Delete Inflight instant if enabled
-    deleteInflightAndRequestedInstant(deleteInstants, activeTimeline, instant);
-    LOG.info("Time(in ms) taken to finish rollback " + (System.currentTimeMillis() - startTime));
-    return stats;
+  public HoodieRollbackMetadata rollback(JavaSparkContext jsc, String rollbackInstantTime, HoodieInstant commitInstant, boolean deleteInstants) {
+    return new CopyOnWriteRollbackActionExecutor(jsc, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
   }
 
-  private List<RollbackRequest> generateRollbackRequests(HoodieInstant instantToRollback)
-      throws IOException {
-    return FSUtils.getAllPartitionPaths(this.metaClient.getFs(), this.getMetaClient().getBasePath(),
-        config.shouldAssumeDatePartitioning()).stream().map(partitionPath -> RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback))
-            .collect(Collectors.toList());
-  }
-
-
-  /**
-   * Delete Inflight instant if enabled.
-   *
-   * @param deleteInstant Enable Deletion of Inflight instant
-   * @param activeTimeline Hoodie active timeline
-   * @param instantToBeDeleted Instant to be deleted
-   */
-  protected void deleteInflightAndRequestedInstant(boolean deleteInstant, HoodieActiveTimeline activeTimeline,
-      HoodieInstant instantToBeDeleted) {
-    // Remove marker files always on rollback
-    deleteMarkerDir(instantToBeDeleted.getTimestamp());
-
-    // Remove the rolled back inflight commits
-    if (deleteInstant) {
-      LOG.info("Deleting instant=" + instantToBeDeleted);
-      activeTimeline.deletePending(instantToBeDeleted);
-      if (instantToBeDeleted.isInflight() && !metaClient.getTimelineLayoutVersion().isNullVersion()) {
-        // Delete corresponding requested instant
-        instantToBeDeleted = new HoodieInstant(State.REQUESTED, instantToBeDeleted.getAction(),
-            instantToBeDeleted.getTimestamp());
-        activeTimeline.deletePending(instantToBeDeleted);
-      }
-      LOG.info("Deleted pending commit " + instantToBeDeleted);
-    } else {
-      LOG.warn("Rollback finished without deleting inflight instant file. Instant=" + instantToBeDeleted);
-    }
+  public HoodieRestoreMetadata restore(JavaSparkContext jsc, String restoreInstantTime, String instantToRestore) {
+    return new CopyOnWriteRestoreActionExecutor(jsc, config, this, restoreInstantTime, instantToRestore).execute();
   }
 
   enum BucketType {
@@ -295,8 +234,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       return null;
     }
   }
-
-
 
   /**
    * Helper class for a small file's location and its actual size on disk.

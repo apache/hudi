@@ -57,6 +57,10 @@ public class CleanActionExecutor extends BaseActionExecutor<HoodieCleanMetadata>
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(CleanActionExecutor.class);
 
+  public CleanActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable<?> table, String instantTime) {
+    super(jsc, config, table, instantTime);
+  }
+
   /**
    * Generates List of files to be cleaned.
    *
@@ -170,10 +174,6 @@ public class CleanActionExecutor extends BaseActionExecutor<HoodieCleanMetadata>
           .withFailedDeletes(partitionCleanStat.failedDeleteFiles())
           .build();
     }).collect(Collectors.toList());
-  }
-
-  public CleanActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable<?> table, String instantTime) {
-    super(jsc, config, table, instantTime);
   }
 
   /**

@@ -51,15 +51,12 @@ public class TimelineMetadataUtils {
 
   private static final Integer DEFAULT_VERSION = 1;
 
-  public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime, Option<Long> durationInMs,
-      List<String> commits, Map<String, List<HoodieRollbackStat>> commitToStats) {
-    Map<String, List<HoodieRollbackMetadata>> commitToStatsMap = new HashMap<>();
-    for (Map.Entry<String, List<HoodieRollbackStat>> commitToStat : commitToStats.entrySet()) {
-      commitToStatsMap.put(commitToStat.getKey(),
-          Collections.singletonList(convertRollbackMetadata(startRestoreTime, durationInMs, commits, commitToStat.getValue())));
-    }
-    return new HoodieRestoreMetadata(startRestoreTime, durationInMs.orElseGet(() -> -1L), commits,
-      Collections.unmodifiableMap(commitToStatsMap), DEFAULT_VERSION);
+  public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime,
+                                                             long durationInMs,
+                                                             List<String> commits,
+                                                             Map<String, List<HoodieRollbackMetadata>> instantToRollbackMetadata) {
+    return new HoodieRestoreMetadata(startRestoreTime, durationInMs, commits,
+        Collections.unmodifiableMap(instantToRollbackMetadata), DEFAULT_VERSION);
   }
 
   public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime, Option<Long> durationInMs,
