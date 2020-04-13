@@ -166,7 +166,7 @@ public class SparkMain {
     return masterContained.contains(command);
   }
 
-  private static void clean(JavaSparkContext jsc, String basePath, String propsFilePath,
+  protected static void clean(JavaSparkContext jsc, String basePath, String propsFilePath,
       List<String> configs) {
     HoodieCleaner.Config cfg = new HoodieCleaner.Config();
     cfg.basePath = basePath;
