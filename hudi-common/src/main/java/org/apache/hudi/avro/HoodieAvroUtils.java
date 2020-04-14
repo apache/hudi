@@ -339,8 +339,8 @@ public class HoodieAvroUtils {
     switch (schema.getType()) {
       case RECORD:
         for (Field field : schema.getFields()) {
-          boolean nullFound = false;
           if (Type.UNION.equals(field.schema().getType())) {
+            boolean nullFound = false;
             List<Schema> unionTypes = new ArrayList<>();
             unionTypes.add(Schema.create(Type.NULL));
             for (Schema typeSchema : field.schema().getTypes()) {
@@ -378,7 +378,6 @@ public class HoodieAvroUtils {
         break;
       case UNION:
         for (Schema typeSchema : schema.getTypes()) {
-          // Make sure null is first.
           rewriteIncorrectDefaults(typeSchema, visited);
         }
         break;
