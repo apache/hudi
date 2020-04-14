@@ -20,48 +20,73 @@
   "name": "triprec",
   "namespace": "hoodie.triprec",
   "fields": [
-  {
-    "name":"ID",
-    "type": "int"
-  },
-  {
-	"name": "TIMESTAMP",
-	"type": ["null","double"],
-  "default": null
-  },
-  {
-	"name": "RIDER",
-	"type": ["null", "string"],
-  "default": null
-  },
-  {
-	"name": "DRIVER",
-	"type": ["null", "string"],
-  "default": null
-  },
-  {
-	"name": "BEGIN_LAT",
-	"type": ["null", "double"],
-  "default": null
-  },
-  {
-	"name": "BEGIN_LON",
-	"type": ["null", "double"],
-  "default": null
-  },
-  {
-	"name": "END_LAT",
-	"type": ["null", "double"],
-  "default": null
-  },
-  {
-	"name": "END_LON",
-	"type": ["null", "double"],
-  "default": null
-  },
-  {
-	"name": "FARE",
-	"type": ["null", "double"],
-  "default": null
-  } ]
+    {
+      "name": "ID",
+      "type": "int"
+    },
+    {
+      "name": "TIMESTAMP",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
+    },
+    {
+      "name": "RIDER",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "DRIVER",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "BEGIN_LAT",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
+    },
+    {
+      "name": "BEGIN_LON",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
+    },
+    {
+      "name": "END_LAT",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
+    },
+    {
+      "name": "END_LON",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
+    },
+    {
+      "name": "FARE",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
+    }
+  ]
 }
