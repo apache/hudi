@@ -296,10 +296,21 @@ public class DeltaSync implements Serializable {
 
       // Use Transformed Row's schema if not overridden. If target schema is not specified
       // default to RowBasedSchemaProvider
-      schemaProvider = this.schemaProvider == null || this.schemaProvider.getTargetSchema() == null
-          ? transformed.map(r -> (SchemaProvider) new RowBasedSchemaProvider(r.schema())).orElse(
-          dataAndCheckpoint.getSchemaProvider())
-          : this.schemaProvider;
+      if (this.schemaProvider == null) {
+        schemaProvider =
+            transformed
+                .map(r -> (SchemaProvider) new RowBasedSchemaProvider(r.schema()))
+                .orElse(dataAndCheckpoint.getSchemaProvider());
+      } else if (this.schemaProvider.getTargetSchema() == null) {
+        schemaProvider =
+            transformed
+                .map(r -> (SchemaProvider) new RowBasedSchemaProvider(r.schema()))
+                .orElse(dataAndCheckpoint.getSchemaProvider());
+      } else {
+        schemaProvider = this.schemaProvider;
+      }
+
+      setupWriteClient(schemaProvider, true);
     } else {
       // Pull the data from the source & prepare the write
       InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint =
@@ -459,8 +470,17 @@ public class DeltaSync implements Serializable {
    * this constraint.
    */
   public void setupWriteClient() {
+    setupWriteClient(schemaProvider, false);
+  }
+
+  /**
+   * Note that depending on configs and source-type, schemaProvider could either be eagerly or lazily created.
+   * SchemaProvider creation is a precursor to HoodieWriteClient and AsyncCompactor creation. This method takes care of
+   * this constraint.
+   */
+  private void setupWriteClient(SchemaProvider schemaProvider, boolean forceRecreate) {
     LOG.info("Setting up Hoodie Write Client");
-    if ((null != schemaProvider) && (null == writeClient)) {
+    if (forceRecreate || (null != schemaProvider) && (null == writeClient)) {
       registerAvroSchemas(schemaProvider);
       HoodieWriteConfig hoodieCfg = getHoodieClientConfig(schemaProvider);
       writeClient = new HoodieWriteClient<>(jssc, hoodieCfg, true);
