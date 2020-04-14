@@ -47,12 +47,13 @@ public class TestHoodieAvroUtils {
       + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
       + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"}]}";
 
-
-  private static String SCHEMA_WITH_METADATA_FIELD = "{\"type\": \"record\",\"name\": \"testrec2\",\"fields\": [ "
+  private static String SCHEMA_WITH_METADATA_FIELD =
+      "{\"type\": \"record\",\"name\": \"testrec2\",\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
       + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"},"
-      + "{\"name\": \"_hoodie_commit_time\", \"type\": [\"null\", \"string\"]}]}";
+      + "{\"name\": \"_hoodie_commit_time\", \"type\": [\"null\", \"string\"]},"
+      + "{\"name\": \"nullable_field\",\"type\": [\"null\" ,\"string\"],\"default\": null}]}";
 
   @Test
   public void testPropsPresent() {
