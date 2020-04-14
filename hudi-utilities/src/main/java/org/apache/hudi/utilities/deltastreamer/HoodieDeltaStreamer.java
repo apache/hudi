@@ -35,6 +35,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.JsonDFSSource;
 
@@ -45,7 +46,6 @@ import com.beust.jcommander.ParameterException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -90,38 +90,37 @@ public class HoodieDeltaStreamer implements Serializable {
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
-        getDefaultHiveConf(jssc.hadoopConfiguration()));
+        jssc.hadoopConfiguration(), null);
   }
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, TypedProperties props) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
-        getDefaultHiveConf(jssc.hadoopConfiguration()), props);
+        jssc.hadoopConfiguration(), props);
   }
 
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf) throws IOException {
+    this(cfg, jssc, fs, conf, null);
+  }
+
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                              TypedProperties properties) throws IOException {
+    if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
+      InitialCheckPointProvider checkPointProvider =
+          UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, properties);
+      checkPointProvider.init(conf);
+      cfg.checkpoint = checkPointProvider.getCheckpoint();
+    }
     this.cfg = cfg;
-    this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, hiveConf, properties);
-  }
-
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf) throws IOException {
-    this.cfg = cfg;
-    this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, hiveConf);
+    this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, conf, properties);
   }
 
   public void shutdownGracefully() {
     deltaSyncService.shutdown(false);
   }
 
-  private static HiveConf getDefaultHiveConf(Configuration cfg) {
-    HiveConf hiveConf = new HiveConf();
-    hiveConf.addResource(cfg);
-    return hiveConf;
-  }
-
   /**
    * Main method to start syncing.
-   * 
+   *
    * @throws Exception
    */
   public void sync() throws Exception {
@@ -141,6 +140,10 @@ public class HoodieDeltaStreamer implements Serializable {
         LOG.info("Shut down delta streamer");
       }
     }
+  }
+
+  public Config getConfig() {
+    return cfg;
   }
 
   private boolean onDeltaSyncShutdown(boolean error) {
@@ -293,6 +296,12 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
     public String checkpoint = null;
 
+    @Parameter(names = {"--initial-checkpoint-provider"}, description = "subclass of "
+        + "org.apache.hudi.utilities.checkpointing.InitialCheckpointProvider. Generate check point for delta streamer "
+        + "for the first run. This field will override the checkpoint of last commit using the checkpoint field. "
+        + "Use this field only when switching source, for example, from DFS source to Kafka Source.")
+    public String initialCheckpointProvider = null;
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
@@ -371,7 +380,7 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient DeltaSync deltaSync;
 
-    public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+    public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                             TypedProperties properties) throws IOException {
       this.cfg = cfg;
       this.jssc = jssc;
@@ -395,13 +404,13 @@ public class HoodieDeltaStreamer implements Serializable {
       LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
 
-      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, hiveConf,
-        this::onInitializingWriteClient);
+      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, conf,
+          this::onInitializingWriteClient);
     }
 
-    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf)
+    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf)
         throws IOException {
-      this(cfg, jssc, fs, hiveConf, null);
+      this(cfg, jssc, fs, conf, null);
     }
 
     public DeltaSync getDeltaSync() {
@@ -461,7 +470,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     /**
      * Callback to initialize write client and start compaction service if required.
-     * 
+     *
      * @param writeClient HoodieWriteClient
      * @return
      */
@@ -545,7 +554,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     /**
      * Wait till outstanding pending compactions reduces to the passed in value.
-     * 
+     *
      * @param numPendingCompactions Maximum pending compactions allowed
      * @throws InterruptedException
      */
@@ -562,7 +571,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     /**
      * Fetch Next pending compaction if available.
-     * 
+     *
      * @return
      * @throws InterruptedException
      */

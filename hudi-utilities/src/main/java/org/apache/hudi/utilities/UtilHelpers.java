@@ -32,6 +32,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
@@ -85,7 +86,7 @@ public class UtilHelpers {
   private static final Logger LOG = LogManager.getLogger(UtilHelpers.class);
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
-      SparkSession sparkSession, SchemaProvider schemaProvider) throws IOException {
+                                    SparkSession sparkSession, SchemaProvider schemaProvider) throws IOException {
     try {
       return (Source) ReflectionUtils.loadClass(sourceClass,
           new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class}, cfg,
@@ -96,7 +97,7 @@ public class UtilHelpers {
   }
 
   public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,
-      JavaSparkContext jssc) throws IOException {
+                                                    JavaSparkContext jssc) throws IOException {
     try {
       return schemaProviderClass == null ? null
           : (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
@@ -117,7 +118,17 @@ public class UtilHelpers {
     }
   }
 
+  public static InitialCheckPointProvider createInitialCheckpointProvider(
+      String className, TypedProperties props) throws IOException {
+    try {
+      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[] {TypedProperties.class}, props);
+    } catch (Throwable e) {
+      throw new IOException("Could not load initial checkpoint provider class " + className, e);
+    }
+  }
+
   /**
+   *
    */
   public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
     DFSPropertiesConfiguration conf;
@@ -157,7 +168,7 @@ public class UtilHelpers {
   /**
    * Parse Schema from file.
    *
-   * @param fs File System
+   * @param fs         File System
    * @param schemaFile Schema File
    */
   public static String parseSchema(FileSystem fs, String schemaFile) throws Exception {
@@ -207,7 +218,7 @@ public class UtilHelpers {
 
   /**
    * Build Spark Context for ingestion/compaction.
-   * 
+   *
    * @return
    */
   public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
@@ -219,13 +230,13 @@ public class UtilHelpers {
   /**
    * Build Hoodie write client.
    *
-   * @param jsc Java Spark Context
-   * @param basePath Base Path
-   * @param schemaStr Schema
+   * @param jsc         Java Spark Context
+   * @param basePath    Base Path
+   * @param schemaStr   Schema
    * @param parallelism Parallelism
    */
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
+                                                     int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
@@ -264,6 +275,7 @@ public class UtilHelpers {
 
   /**
    * Returns a factory for creating connections to the given JDBC URL.
+   *
    * @param options - JDBC options that contains url, table and other information.
    * @return
    * @throws SQLException if the driver could not open a JDBC connection.
@@ -323,7 +335,7 @@ public class UtilHelpers {
     Connection conn = createConnectionFactory(options);
     String url = options.get(JDBCOptions.JDBC_URL());
     String table = options.get(JDBCOptions.JDBC_TABLE_NAME());
-    boolean tableExists = tableExists(conn,options);
+    boolean tableExists = tableExists(conn, options);
 
     if (tableExists) {
       JdbcDialect dialect = JdbcDialects.get(url);

@@ -130,7 +130,7 @@ public class DeltaSync implements Serializable {
   /**
    * Hive Config.
    */
-  private transient HiveConf hiveConf;
+  private transient Configuration conf;
 
   /**
    * Bag of properties with source, hoodie client, key generator etc.
@@ -153,7 +153,7 @@ public class DeltaSync implements Serializable {
   private transient HoodieWriteClient writeClient;
 
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
-                   TypedProperties props, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+                   TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                    Function<HoodieWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
 
     this.cfg = cfg;
@@ -172,7 +172,7 @@ public class DeltaSync implements Serializable {
     this.formatAdapter = new SourceFormatAdapter(
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider));
 
-    this.hiveConf = hiveConf;
+    this.conf = conf;
 
     // If schemaRegistry already resolved, setup write-client
     setupWriteClient();
@@ -449,8 +449,7 @@ public class DeltaSync implements Serializable {
       HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath);
       LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
           + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
-
-      new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
+      new HiveSyncTool(hiveSyncConfig, new HiveConf(conf, HiveConf.class), fs).syncHoodieTable();
     }
   }
 

@@ -19,13 +19,11 @@
 package org.apache.hudi.utilities.checkpointing;
 
 import org.apache.hudi.common.HoodieCommonTestHarness;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -34,15 +32,14 @@ import java.io.File;
 import static org.junit.Assert.assertEquals;
 
 public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
-  private FileSystem fs = null;
   private String topicPath = null;
+  private Configuration hadoopConf = null;
 
   @Before
   public void init() {
     // Prepare directories
     initPath();
-    final Configuration hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    fs = FSUtils.getFs(basePath, hadoopConf);
+    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
   }
 
   @Test
@@ -70,7 +67,10 @@ public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
         + "random_snappy_1.parquet").createNewFile();
     new File(topicPath + "/year=2016/month=05/day=02/"
         + "random_snappy_2.parquet").createNewFile();
-    InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(new Path(topicPath), fs);
+    final TypedProperties props = new TypedProperties();
+    props.put("hoodie.deltastreamer.checkpoint.provider.path", topicPath);
+    final InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(props);
+    provider.init(hadoopConf);
     assertEquals(provider.getCheckpoint(), "topic1,0:300,1:200");
   }
 
@@ -88,7 +88,10 @@ public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
         + "topic1+2+100+200.parquet").createNewFile();
     new File(topicPath + "/year=2016/month=05/day=02/"
         + "topic1+0+201+300.parquet").createNewFile();
-    InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(new Path(topicPath), fs);
+    final TypedProperties props = new TypedProperties();
+    props.put("hoodie.deltastreamer.checkpoint.provider.path", topicPath);
+    final InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(props);
+    provider.init(hadoopConf);
     provider.getCheckpoint();
   }
 }

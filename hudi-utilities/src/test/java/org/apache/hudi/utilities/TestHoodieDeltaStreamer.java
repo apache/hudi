@@ -256,21 +256,21 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, List<String> transformerClassNames,
-        String propsFilename, boolean enableHiveSync) {
+                                                 String propsFilename, boolean enableHiveSync) {
       return makeConfig(basePath, op, transformerClassNames, propsFilename, enableHiveSync, true,
           false, null, null);
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, List<String> transformerClassNames,
-        String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass, boolean updatePayloadClass,
-        String payloadClassName, String tableType) {
+                                                 String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass, boolean updatePayloadClass,
+                                                 String payloadClassName, String tableType) {
       return makeConfig(basePath, op, TestDataSource.class.getName(), transformerClassNames, propsFilename, enableHiveSync,
           useSchemaProviderClass, 1000, updatePayloadClass, payloadClassName, tableType, "timestamp");
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, String sourceClassName,
-        List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
-        int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField) {
+                                                 List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
+                                                 int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField) {
       HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
       cfg.targetBasePath = basePath;
       cfg.targetTableName = "hoodie_trips";
@@ -392,6 +392,28 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     assertEquals("_row_key", props.getString("hoodie.datasource.write.recordkey.field"));
     assertEquals("org.apache.hudi.utilities.TestHoodieDeltaStreamer$TestGenerator",
         props.getString("hoodie.datasource.write.keygenerator.class"));
+  }
+
+  @Test
+  public void testKafkaConnectCheckpointProvider() throws IOException {
+    String tableBasePath = dfsBasePath + "/test_table";
+    String bootstrapPath = dfsBasePath + "/kafka_topic1";
+    String partitionPath = bootstrapPath + "/year=2016/month=05/day=01";
+    String filePath = partitionPath + "/kafka_topic1+0+100+200.parquet";
+    String checkpointProviderClass = "org.apache.hudi.utilities.checkpointing.KafkaConnectHdfsProvider";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeDropAllConfig(tableBasePath, Operation.UPSERT);
+    TypedProperties props =
+        new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getConfig();
+    props.put("hoodie.deltastreamer.checkpoint.provider.path", bootstrapPath);
+    cfg.initialCheckpointProvider = checkpointProviderClass;
+    // create regular kafka connect hdfs dirs
+    dfs.mkdirs(new Path(bootstrapPath));
+    dfs.mkdirs(new Path(partitionPath));
+    // generate parquet files using kafka connect naming convention
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    Helpers.saveParquetToDFS(Helpers.toGenericRecords(dataGenerator.generateInserts("000", 100)), new Path(filePath));
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc, dfs, hdfsTestService.getHadoopConf(), props);
+    assertEquals(deltaStreamer.getConfig().checkpoint, "kafka_topic1,0:200");
   }
 
   @Test
@@ -595,7 +617,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       assertTrue(e.getMessage().contains("Please provide a valid schema provider class!"));
     }
   }
-  
+
   @Test
   public void testPayloadClassUpdate() throws Exception {
     String dataSetBasePath = dfsBasePath + "/test_dataset_mor";
