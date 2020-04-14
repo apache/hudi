@@ -309,4 +309,87 @@ public class HoodieAvroUtils {
       throw new HoodieIOException("IOException while decompressing text", e);
     }
   }
+
+  /**
+   * This method rewrites passed avro schema to make sure:
+   * If the union has null element it should be the first and default value should be set to null.
+   *
+   * @param schema schema to modify
+   */
+  public static Schema rewriteIncorrectDefaults(Schema schema) {
+    rewriteIncorrectDefaults(schema, new HashSet<>());
+    return schema;
+  }
+
+  /**
+   * This method rewrites passed avro schema to make sure:
+   * If the union has null element it should be the first and default value should be set to null.
+   *
+   * @param schema schema to modify
+   * @param visited set used to prevent infinite loops.
+   */
+  private static void rewriteIncorrectDefaults(Schema schema, Set<Schema> visited) {
+    // Mark schema as visited to avoid infinite loop.
+    if (visited.contains(schema)) {
+      return;
+    }
+
+    visited.add(schema);
+
+    switch (schema.getType()) {
+      case RECORD:
+        for (Field field : schema.getFields()) {
+          boolean nullFound = false;
+          if (Type.UNION.equals(field.schema().getType())) {
+            List<Schema> unionTypes = new ArrayList<>();
+            unionTypes.add(Schema.create(Type.NULL));
+            for (Schema typeSchema : field.schema().getTypes()) {
+              if (!typeSchema.getName().equals(Type.NULL.getName().toLowerCase())) {
+                unionTypes.add(typeSchema);
+              } else {
+                nullFound = true;
+              }
+            }
+
+            if (nullFound) {
+              Schema newUnionSchema = Schema.createUnion(unionTypes);
+              try {
+                java.lang.reflect.Field schemaField = field.getClass().getDeclaredField("schema");
+                schemaField.setAccessible(true);
+                schemaField.set(field, newUnionSchema);
+              } catch (NoSuchFieldException | IllegalAccessException e) {
+                throw new RuntimeException(e);
+              }
+
+              try {
+                java.lang.reflect.Field defaultValueField =
+                    field.getClass().getDeclaredField("defaultValue");
+                defaultValueField.setAccessible(true);
+                defaultValueField.set(field, NullNode.getInstance());
+              } catch (NoSuchFieldException | IllegalAccessException e) {
+                throw new RuntimeException(e);
+              }
+            }
+          }
+
+          rewriteIncorrectDefaults(field.schema(), visited);
+        }
+
+        break;
+      case UNION:
+        for (Schema typeSchema : schema.getTypes()) {
+          // Make sure null is first.
+          rewriteIncorrectDefaults(typeSchema, visited);
+        }
+        break;
+      case ARRAY:
+        rewriteIncorrectDefaults(schema.getElementType(), visited);
+        break;
+      case MAP:
+        rewriteIncorrectDefaults(schema.getValueType(), visited);
+        break;
+      default:
+        break;
+    }
+  }
 }

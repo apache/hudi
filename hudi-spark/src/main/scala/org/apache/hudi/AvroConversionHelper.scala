@@ -27,6 +27,7 @@ import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{Fixed, Record}
 import org.apache.avro.generic.{GenericData, GenericFixed, GenericRecord}
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.avro.{IncompatibleSchemaException, SchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.GenericRow
@@ -336,7 +337,8 @@ object AvroConversionHelper {
           }
         }
       case structType: StructType =>
-        val schema: Schema = SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
+        val schema: Schema = HoodieAvroUtils.rewriteIncorrectDefaults(
+          SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace))
         val childNameSpace = if (recordNamespace != "") s"$recordNamespace.$structName" else structName
         val fieldConverters = structType.fields.map(field =>
           createConverterToAvro(
