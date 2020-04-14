@@ -111,7 +111,7 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
     assertTrue(cr.isSuccess());
 
     HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().findFirst().orElse(null);
-    assertTrue(clean != null);
+    assertNotNull(clean);
 
     TableHeader header =
         new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_CLEAN_TIME)

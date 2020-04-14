@@ -95,7 +95,7 @@ public class ITTestCleansCommand extends AbstractShellIntegrationTest {
     assertTrue(cr.isSuccess());
 
     // After run clean, there should have 1 clean instant
-    assertEquals("Loaded 1 clean and the count should match",1,
+    assertEquals("Loaded 1 clean and the count should match", 1,
         metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count());
   }
 }

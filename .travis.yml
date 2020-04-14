@@ -39,9 +39,3 @@ script:
   - scripts/run_travis_tests.sh $TEST_SUITE
 after_success:
   - bash <(curl -s https://codecov.io/bash)
-before_script:
-  - echo "=====[ Download spark]====="
-  - wget http://archive.apache.org/dist/spark/spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz -O /tmp/spark-2.4.4.tgz
-  - tar -xvf /tmp/spark-2.4.4.tgz
-  - export SPARK_HOME=$PWD/spark-2.4.4-bin-hadoop2.7
-  - mkdir /tmp/spark-events/
