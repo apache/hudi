@@ -100,8 +100,7 @@ public class CompactionCommand implements CommandMarker {
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
-      throws IOException {
+          unspecifiedDefaultValue = "false") final boolean headerOnly) {
     HoodieTableMetaClient client = checkAndGetMetaClient();
     HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
     return printAllCompactions(activeTimeline,
@@ -142,8 +141,7 @@ public class CompactionCommand implements CommandMarker {
           @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
           @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
           @CliOption(key = {"headeronly"}, help = "Print Header Only",
-                  unspecifiedDefaultValue = "false") final boolean headerOnly)
-          throws Exception {
+                  unspecifiedDefaultValue = "false") final boolean headerOnly) {
     if (StringUtils.isNullOrEmpty(startTs)) {
       startTs = CommitUtil.getTimeDaysAgo(10);
     }
@@ -191,19 +189,19 @@ public class CompactionCommand implements CommandMarker {
   }
 
   @CliCommand(value = "compaction schedule", help = "Schedule Compaction")
-  public String scheduleCompact(@CliOption(key = "sparkMemory", unspecifiedDefaultValue = "1G",
+  public String scheduleCompact(@CliOption(key = "sparkMemory", unspecifiedDefaultValue = "1g",
       help = "Spark executor memory") final String sparkMemory,
                                 @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for compacting",
                                   unspecifiedDefaultValue = "") final String propsFilePath,
                                 @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
-                                  unspecifiedDefaultValue = "") final String[] configs,
-                                @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master ") String master) throws Exception {
+                                  unspecifiedDefaultValue = "") final String[] configs) throws Exception {
     checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
     // First get a compaction instant time and pass it to spark launcher for scheduling compaction
     String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    System.out.println("running compaction schedule command now .... ");
 
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
@@ -221,15 +219,15 @@ public class CompactionCommand implements CommandMarker {
       config.propsFilePath = propsFilePath;
     }
     config.schemaFile = "";
-    config.sparkMaster = master;
     String[] commandConfig = config.getCommandConfigsAsStringArray(SparkCommand.COMPACT_SCHEDULE.toString());
 
     sparkLauncher.addAppArgs(commandConfig);
+    System.out.println("launching spark launcher.. ");
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
     if (exitCode != 0) {
-      return "Failed to run compaction for " + compactionInstantTime;
+      return "Failed to schedule compaction for " + compactionInstantTime;
     }
     return "Compaction successfully completed for " + compactionInstantTime;
   }
@@ -240,7 +238,7 @@ public class CompactionCommand implements CommandMarker {
           help = "Parallelism for hoodie compaction") final String parallelism,
       @CliOption(key = "schemaFilePath", mandatory = true,
           help = "Path for Avro schema file") final String schemaFilePath,
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4g",
           help = "Spark executor memory") final String sparkMemory,
       @CliOption(key = "retry", unspecifiedDefaultValue = "1", help = "Number of retries") final String retry,
       @CliOption(key = "compactionInstant", help = "Base path for the target hoodie table") String compactionInstantTime,

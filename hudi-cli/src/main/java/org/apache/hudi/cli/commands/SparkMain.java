@@ -79,6 +79,7 @@ public class SparkMain {
         break;
       case COMPACT_RUN:
       case COMPACT_SCHEDULE:
+        LOG.info("now came to SparkMain for compact_schedule run.. ");
         returnCode = compact(jsc, getConfig(HoodieCompactor.Config.class, commandConfigs));
         break;
       case COMPACT_VALIDATE:
@@ -100,6 +101,7 @@ public class SparkMain {
 
   private static <T extends AbstractCommandConfig> T getConfig(Class<T> configClass, String[] configs) {
     try {
+      LOG.info("getting config now for config class: " + configClass);
       T configObject = configClass.newInstance();
       configObject.parseCommandConfig(configs);
       return configObject;
@@ -124,13 +126,14 @@ public class SparkMain {
   }
 
   private static int compact(JavaSparkContext jsc, HoodieCompactor.Config config) {
-    LOG.info("Command config: " + config.toString());
+    LOG.info("Command config for HoodieCompactor: " + config.toString());
+    jsc.getConf().set("spark.executor.memory", config.sparkMemory);
     return new HoodieCompactor(config).compact(jsc, config.retry);
   }
 
   private static boolean sparkMasterContained(SparkCommand command) {
     List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
-        SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN, SparkCommand.COMPACT_RUN, SparkCommand.COMPACT_SCHEDULE);
+        SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN);
     return masterContained.contains(command);
   }
 

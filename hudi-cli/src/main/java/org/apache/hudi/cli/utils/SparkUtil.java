@@ -68,6 +68,7 @@ public class SparkUtil {
 
   public static JavaSparkContext initJavaSparkConf(String name, Option<String> master,
       Option<String> executorMemory) {
+    System.out.println("init spark conf now.. ");
     SparkConf sparkConf = new SparkConf().setAppName(name);
 
     String defMaster = master.orElse(sparkConf.getenv(HoodieCliSparkConfig.CLI_SPARK_MASTER));
@@ -82,6 +83,7 @@ public class SparkUtil {
     sparkConf.set(HoodieCliSparkConfig.CLI_EVENT_LOG_OVERWRITE, "true");
     sparkConf.set(HoodieCliSparkConfig.CLI_EVENT_LOG_ENABLED, "true");
     if (executorMemory.isPresent()) {
+      System.out.println("setting executor memory in sparkConf");
       sparkConf.set(HoodieCliSparkConfig.CLI_EXECUTOR_MEMORY, executorMemory.get());
     }
 

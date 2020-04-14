@@ -102,8 +102,8 @@ public class HoodieCompactor {
           ret = doCompact(jsc);
         }
       } while (ret != 0 && retry-- > 0);
-    } catch (Throwable t) {
-      LOG.error(t);
+    } catch (Exception e) {
+      LOG.error("error when running HoodieCompactor: " + e);
     }
     return ret;
   }
