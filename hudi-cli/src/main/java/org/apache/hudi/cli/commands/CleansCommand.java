@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
@@ -76,13 +77,15 @@ public class CleansCommand implements CommandMarker {
     }
 
     TableHeader header =
-        new TableHeader().addTableHeaderField("CleanTime").addTableHeaderField("EarliestCommandRetained")
-            .addTableHeaderField("Total Files Deleted").addTableHeaderField("Total Time Taken");
+        new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_CLEAN_TIME)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_EARLIEST_COMMAND_RETAINED)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_DELETED)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_TIME_TAKEN);
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
   @CliCommand(value = "cleans refresh", help = "Refresh the commits")
-  public String refreshCleans() throws IOException {
+  public String refreshCleans() {
     HoodieCLI.refreshTableMetadata();
     return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
   }
@@ -116,8 +119,10 @@ public class CleansCommand implements CommandMarker {
       rows.add(new Comparable[] {path, policy, totalSuccessDeletedFiles, totalFailedDeletedFiles});
     }
 
-    TableHeader header = new TableHeader().addTableHeaderField("Partition Path").addTableHeaderField("Cleaning policy")
-        .addTableHeaderField("Total Files Successfully Deleted").addTableHeaderField("Total Failed Deletions");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_CLEANING_POLICY)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_SUCCESSFULLY_DELETED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FAILED_DELETIONS);
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
 
   }
