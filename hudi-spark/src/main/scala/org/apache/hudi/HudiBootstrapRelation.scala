@@ -155,15 +155,10 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
     try {
       metaClient = new HoodieTableMetaClient(fs.getConf, path)
       logInfo("Found Hudi table at path => " + path)
-      val partitionPaths = FSUtils.getAllPartitionPaths(fs, path, false)
-      val fullPartitionPaths = partitionPaths.asScala.map(partitionPath => {
-        val fullPartitionPath = path + "/" + partitionPath
-        fullPartitionPath
-      })
-      logInfo("Partition paths : " + fullPartitionPaths.mkString(","))
 
       // Listing using input format listing api.
-      jobConf.set("mapreduce.input.fileinputformat.inputdir", fullPartitionPaths.mkString(","))
+      jobConf.set("mapreduce.input.fileinputformat.inputdir", path)
+      jobConf.set("mapreduce.input.fileinputformat.input.dir.recursive", "true")
     } catch {
       case ex: TableNotFoundException => {
         val partitionPath = new Path(path)
