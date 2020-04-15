@@ -206,7 +206,7 @@ public class HoodieMultiTableDeltaStreamer {
         description = "base path prefix for multi table support via HoodieMultiTableDeltaStreamer class")
     public String basePathPrefix;
 
-    @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
+    @Parameter(names = {"--target-table"}, description = "name of the target table", required = true)
     public String targetTableName;
 
     @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
