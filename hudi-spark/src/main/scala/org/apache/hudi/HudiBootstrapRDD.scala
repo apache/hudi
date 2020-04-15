@@ -29,6 +29,7 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
 class HudiBootstrapRDD(@transient spark: SparkSession,
                        dataReadFunction: PartitionedFile => Iterator[Any],
                        skeletonReadFunction: PartitionedFile => Iterator[Any],
+                       regularReadFunction: PartitionedFile => Iterator[Any],
                        dataSchema: StructType,
                        skeletonSchema: StructType,
                        requiredColumns: Array[String],
@@ -38,18 +39,27 @@ class HudiBootstrapRDD(@transient spark: SparkSession,
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val bootstrapPartition = split.asInstanceOf[HudiBootstrapPartition]
 
-    logInfo("Got Split => " + bootstrapPartition.index + ","
-      + bootstrapPartition.split.dataFile.filePath + ","
-      + bootstrapPartition.split.skeletonFile.filePath)
+    if (bootstrapPartition.split.skeletonFile.isDefined) {
+      logInfo("Got Split => Index: " + bootstrapPartition.index + ", Data File: "
+        + bootstrapPartition.split.dataFile.filePath + ", Skeleton File: "
+        + bootstrapPartition.split.skeletonFile.get.filePath)
+    } else {
+      logInfo("Got Split => Index: " + bootstrapPartition.index + ", Data File: "
+        + bootstrapPartition.split.dataFile.filePath)
+    }
 
+    var partitionedFileIterator: Iterator[Any] = null
 
-    val dataFileIterator = dataReadFunction(bootstrapPartition.split.dataFile)
-    val skeletonFileIterator = skeletonReadFunction(bootstrapPartition.split.skeletonFile)
-
-    val mergedIterator = merge(skeletonFileIterator, dataFileIterator)
+    if (bootstrapPartition.split.skeletonFile.isDefined) {
+      val dataFileIterator = dataReadFunction(bootstrapPartition.split.dataFile)
+      val skeletonFileIterator = skeletonReadFunction(bootstrapPartition.split.skeletonFile.get)
+      partitionedFileIterator = merge(skeletonFileIterator, dataFileIterator)
+    } else {
+      partitionedFileIterator = regularReadFunction(bootstrapPartition.split.dataFile)
+    }
 
     import scala.collection.JavaConverters._
-    val rows = mergedIterator.flatMap(_ match {
+    val rows = partitionedFileIterator.flatMap(_ match {
       case r: InternalRow => Seq(r)
       case b: ColumnarBatch => b.rowIterator().asScala
     })
@@ -128,9 +138,14 @@ class HudiBootstrapRDD(@transient spark: SparkSession,
     logInfo("Getting partitions..")
 
     tableState.files.zipWithIndex.map(file => {
-      logInfo("Forming partition with => " + file._2 + "," + file._1.dataFile.filePath
-        + "," + file._1.skeletonFile.filePath)
-      HudiBootstrapPartition(file._2, file._1)
+      if (file._1.skeletonFile.isDefined) {
+        logInfo("Forming partition with => " + file._2 + "," + file._1.dataFile.filePath
+          + "," + file._1.skeletonFile.get.filePath)
+        HudiBootstrapPartition(file._2, file._1)
+      } else {
+        logInfo("Forming partition with => " + file._2 + "," + file._1.dataFile.filePath)
+        HudiBootstrapPartition(file._2, file._1)
+      }
     }).toArray
   }
 }

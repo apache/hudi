@@ -63,26 +63,7 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
 
   override def schema: StructType = {
     if (completeSchema == null) {
-      logInfo("Inferring schema..")
-
-      // We need to infer schema from the external data files and then merge the skeleton schema which is fixed
-      // to get the complete schema
-      val fs = FSUtils.getFs(path, _sqlContext.sparkContext.hadoopConfiguration)
-
-      val externalFileStatus = fs.listStatus(
-        fileIndex.files.map(file => new Path(file.getExternalDataFile.get())).toArray)
-
-      val inferredDataSchema = new ParquetFileFormat().inferSchema(
-        _sqlContext.sparkSession,
-        optParams,
-        externalFileStatus
-      )
-
-      logInfo("Inferred data schema => " + inferredDataSchema.get.toString())
-
-      dataSchema = inferredDataSchema.get
-      completeSchema = StructType(skeletonSchema.fields ++ dataSchema.fields)
-      logInfo("Complete schema => " + completeSchema.toString())
+      inferFullSchema()
     }
     completeSchema
   }
@@ -104,9 +85,16 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
     logInfo("Udith : Revision 3 Scan..")
     // Compute splits
     val bootstrapSplits = fileIndex.files.map(hoodieBaseFile => {
-      val skeletonFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen)
-      val dataFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getExternalDataFile.get(), 0,
-        hoodieBaseFile.getFileLen)
+      var skeletonFile: Option[PartitionedFile] = Option.empty
+      var dataFile: PartitionedFile = null
+
+      if (hoodieBaseFile.getExternalDataFile.isPresent) {
+        skeletonFile = Option(PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen))
+        dataFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getExternalDataFile.get(), 0,
+          hoodieBaseFile.getFileLen)
+      } else {
+        dataFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen)
+      }
       HudiBootstrapSplit(dataFile, skeletonFile)
     })
     val tableState = HudiBootstrapTableState(bootstrapSplits)
@@ -114,6 +102,9 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
     // Get required schemas for column pruning
     val requiredDataSchema = StructType(dataSchema.filter(field => requiredColumns.contains(field.name)))
     val requiredSkeletonSchema = StructType(skeletonSchema.filter(field => requiredColumns.contains(field.name)))
+    val requiredRegularSchema = StructType(requiredColumns.map(col => {
+      completeSchema.find(_.name == col).get
+    }))
 
     // Prepare readers for reading data file and skeleton files
     val dataReadFunction = new ParquetFileFormat()
@@ -138,14 +129,64 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
         hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
       )
 
-    val rdd = new HudiBootstrapRDD(_sqlContext.sparkSession, dataReadFunction, skeletonReadFunction, requiredDataSchema,
-      requiredSkeletonSchema, requiredColumns, tableState)
+    val regularReadFunction = new ParquetFileFormat()
+      .buildReaderWithPartitionValues(
+        sparkSession = _sqlContext.sparkSession,
+        dataSchema = completeSchema,
+        partitionSchema = StructType(Seq.empty),
+        requiredSchema = requiredRegularSchema,
+        filters = Nil,
+        options = Map.empty,
+        hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf())
+
+    val rdd = new HudiBootstrapRDD(_sqlContext.sparkSession, dataReadFunction, skeletonReadFunction,
+      regularReadFunction, requiredDataSchema, requiredSkeletonSchema, requiredColumns, tableState)
 
     logInfo("Number of partitions for HudiBootstrapRDD => " + rdd.partitions.length)
     rdd.asInstanceOf[RDD[Row]]
   }
 
-  def buildFileIndex() : HudiBootstrapFileIndex = {
+  def inferFullSchema(): StructType = {
+    logInfo("Inferring schema..")
+
+    // We need to infer schema from the external data files and then merge the skeleton schema which is fixed
+    // to get the complete schema
+    val fs = FSUtils.getFs(path, _sqlContext.sparkContext.hadoopConfiguration)
+
+    val headFile = fileIndex.files.head
+    if (headFile.getExternalDataFile.isPresent) {
+      // Get the data schema from external file and merge with skeleton schema
+      val externalFileStatus = fs.listStatus(new Path(headFile.getExternalDataFile.get()))
+      val inferredDataSchema = new ParquetFileFormat().inferSchema(
+        _sqlContext.sparkSession,
+        optParams,
+        externalFileStatus
+      )
+
+      logInfo("Inferred schema from external file => " + inferredDataSchema.get.toString())
+      dataSchema = inferredDataSchema.get
+      completeSchema = StructType(skeletonSchema.fields ++ dataSchema.fields)
+      logInfo("Data schema => " + dataSchema.toString())
+      logInfo("Complete schema => " + completeSchema.toString())
+    } else {
+      // Get the merged schema from regular file and filter out the skeleton fields to get just data schema
+      val regularFileStatus = Array(headFile.getFileStatus)
+      val inferredDataSchema = new ParquetFileFormat().inferSchema(
+        _sqlContext.sparkSession,
+        optParams,
+        regularFileStatus
+      )
+
+      logInfo("Inferred schema from regular file => " + inferredDataSchema.get.toString())
+      completeSchema = inferredDataSchema.get
+      dataSchema = StructType(completeSchema.filterNot(field => skeletonSchema.fieldNames.contains(field.name)))
+      logInfo("Data schema => " + dataSchema.toString())
+      logInfo("Complete schema => " + completeSchema.toString())
+    }
+    completeSchema
+  }
+
+  def buildFileIndex(): HudiBootstrapFileIndex = {
     logInfo("Building file index..")
 
     val fs = FSUtils.getFs(path, _sqlContext.sparkContext.hadoopConfiguration)
@@ -198,4 +239,4 @@ case class HudiBootstrapFileIndex(files: List[HoodieBaseFile])
 
 case class HudiBootstrapTableState(files: List[HudiBootstrapSplit])
 
-case class HudiBootstrapSplit(dataFile: PartitionedFile, skeletonFile: PartitionedFile)
+case class HudiBootstrapSplit(dataFile: PartitionedFile, skeletonFile: Option[PartitionedFile])
