@@ -27,8 +27,8 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 class HudiBootstrapRDD(@transient spark: SparkSession,
-                       dataReadFunction: PartitionedFile => Iterator[InternalRow],
-                       skeletonReadFunction: PartitionedFile => Iterator[InternalRow],
+                       dataReadFunction: PartitionedFile => Iterator[Any],
+                       skeletonReadFunction: PartitionedFile => Iterator[Any],
                        dataSchema: StructType,
                        skeletonSchema: StructType,
                        requiredColumns: Array[String],
@@ -42,36 +42,73 @@ class HudiBootstrapRDD(@transient spark: SparkSession,
       + bootstrapPartition.split.dataFile.filePath + ","
       + bootstrapPartition.split.skeletonFile.filePath)
 
-    val dataFileIterator = read(bootstrapPartition.split.dataFile, dataReadFunction)
-    val skeletonFileIterator = read(bootstrapPartition.split.skeletonFile, skeletonReadFunction)
-    merge(skeletonFileIterator, dataFileIterator)
+
+    val dataFileIterator = dataReadFunction(bootstrapPartition.split.dataFile)
+    val skeletonFileIterator = skeletonReadFunction(bootstrapPartition.split.skeletonFile)
+
+    val mergedIterator = merge(skeletonFileIterator, dataFileIterator)
+
+    import scala.collection.JavaConverters._
+    val rows = mergedIterator.flatMap(_ match {
+      case r: InternalRow => Seq(r)
+      case b: ColumnarBatch => b.rowIterator().asScala
+    })
+    rows
   }
 
-  def merge(skeletonFileIterator: Iterator[InternalRow], dataFileIterator: Iterator[InternalRow])
-  : Iterator[InternalRow] = {
-    new Iterator[InternalRow] {
-      override def hasNext: Boolean = dataFileIterator.hasNext && skeletonFileIterator.hasNext
+  def merge(skeletonFileIterator: Iterator[Any], dataFileIterator: Iterator[Any]): Iterator[Any] = {
+    new Iterator[Any] {
+      override def hasNext: Boolean = skeletonFileIterator.hasNext && dataFileIterator.hasNext
 
-      override def next(): InternalRow = {
-        val leftArr  = skeletonFileIterator.next().toSeq(skeletonSchema)
-        val rightArr = dataFileIterator.next().toSeq(dataSchema)
+      override def next(): Any = {
+        val skeletonEntity = skeletonFileIterator.next()
+        val dataEntity = dataFileIterator.next()
 
-        // We need to return it in the order requested
-        val mergedArr = requiredColumns.map(col => {
-          if (skeletonSchema.fieldNames.contains(col)) {
-            val idx = skeletonSchema.fieldIndex(col)
-            leftArr(idx)
-          } else {
-            val idx = dataSchema.fieldIndex(col)
-            rightArr(idx)
+        (skeletonEntity, dataEntity) match {
+          case (skeleton: ColumnarBatch, data: ColumnarBatch) => {
+            mergeColumnarBatch(skeleton, data)
           }
-        })
-
-        logDebug("Merged data and skeleton values => " + mergedArr.mkString(","))
-        val mergedRow = InternalRow.fromSeq(mergedArr)
-        mergedRow
+          case (skeleton: InternalRow, data: InternalRow) => {
+            mergeInternalRow(skeleton, data)
+          }
+        }
       }
     }
+  }
+
+  def mergeColumnarBatch(skeletonBatch: ColumnarBatch, dataBatch: ColumnarBatch): ColumnarBatch = {
+    val mergedColumnVectors = requiredColumns.map(col => {
+      if (skeletonSchema.fieldNames.contains(col)) {
+        val idx = skeletonSchema.fieldIndex(col)
+        skeletonBatch.column(idx)
+      } else {
+        val idx = dataSchema.fieldIndex(col)
+        dataBatch.column(idx)
+      }
+    })
+
+    val mergedBatch = new ColumnarBatch(mergedColumnVectors)
+    mergedBatch.setNumRows(dataBatch.numRows())
+    mergedBatch
+  }
+
+  def mergeInternalRow(skeletonRow: InternalRow, dataRow: InternalRow): InternalRow = {
+    val skeletonArr  = skeletonRow.toSeq(skeletonSchema)
+    val dataArr = dataRow.toSeq(dataSchema)
+    // We need to return it in the order requested
+    val mergedArr = requiredColumns.map(col => {
+      if (skeletonSchema.fieldNames.contains(col)) {
+        val idx = skeletonSchema.fieldIndex(col)
+        skeletonArr(idx)
+      } else {
+        val idx = dataSchema.fieldIndex(col)
+        dataArr(idx)
+      }
+    })
+
+    logDebug("Merged data and skeleton values => " + mergedArr.mkString(","))
+    val mergedRow = InternalRow.fromSeq(mergedArr)
+    mergedRow
   }
 
   def read(partitionedFile: PartitionedFile, readFileFunction: PartitionedFile => Iterator[Any])
