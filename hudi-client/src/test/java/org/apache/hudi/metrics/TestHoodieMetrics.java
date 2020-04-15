@@ -22,22 +22,23 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.Timer;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Random;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.metrics.Metrics.registerGauge;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class TestHoodieMetrics {
+
   private HoodieMetrics metrics;
 
-  @Before
+  @BeforeEach
   public void start() {
     HoodieWriteConfig config = mock(HoodieWriteConfig.class);
     when(config.isMetricsOn()).thenReturn(true);
@@ -97,7 +98,7 @@ public class TestHoodieMetrics {
     assertEquals((long)Metrics.getInstance().getRegistry().getGauges().get(metricName).getValue(), numFilesFinalized);
 
     // Commit / deltacommit / compaction metrics
-    Arrays.asList("commit", "deltacommit", "compaction").stream().forEach(action -> {
+    Stream.of("commit", "deltacommit", "compaction").forEach(action -> {
       Timer.Context commitTimer = action.equals("commit") ? metrics.getCommitCtx() :
           action.equals("deltacommit") ? metrics.getDeltaCommitCtx() : metrics.getCompactionCtx();
 

@@ -21,12 +21,11 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
-import org.apache.spark.sql.streaming.{OutputMode, ProcessingTime}
 import org.apache.spark.sql.functions.col
-import org.junit.Assert._
-import org.junit.rules.TemporaryFolder
-import org.junit.{Before, Test}
-import org.scalatest.junit.AssertionsForJUnit
+import org.apache.spark.sql.streaming.{OutputMode, ProcessingTime}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.collection.JavaConversions._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -34,9 +33,9 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
 /**
-  * Basic tests on the spark datasource
-  */
-class TestDataSource extends AssertionsForJUnit {
+ * Basic tests on the spark datasource
+ */
+class TestDataSource {
 
   var spark: SparkSession = null
   var dataGen: HoodieTestDataGenerator = null
@@ -51,16 +50,14 @@ class TestDataSource extends AssertionsForJUnit {
   var basePath: String = null
   var fs: FileSystem = null
 
-  @Before def initialize() {
+  @BeforeEach def initialize(@TempDir tempDir: java.nio.file.Path) {
     spark = SparkSession.builder
       .appName("Hoodie Datasource test")
       .master("local[2]")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .getOrCreate
     dataGen = new HoodieTestDataGenerator()
-    val folder = new TemporaryFolder
-    folder.create
-    basePath = folder.getRoot.getAbsolutePath
+    basePath = tempDir.toAbsolutePath.toString
     fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
   }
 

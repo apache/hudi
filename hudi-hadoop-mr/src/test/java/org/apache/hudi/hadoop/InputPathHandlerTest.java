@@ -29,10 +29,10 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -40,7 +40,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class InputPathHandlerTest {
 
@@ -53,6 +53,9 @@ public class InputPathHandlerTest {
 
   // non Hoodie table
   public static final String TRIPS_STATS_TEST_NAME = "trips_stats";
+
+  @TempDir
+  static java.nio.file.Path parentPath;
 
   private static MiniDFSCluster dfsCluster;
   private static DistributedFileSystem dfs;
@@ -68,7 +71,7 @@ public class InputPathHandlerTest {
   private static List<Path> nonHoodiePaths;
   private static List<Path> inputPaths;
 
-  @BeforeClass
+  @BeforeAll
   public static void setUpDFS() throws IOException {
     // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
     // same JVM
@@ -86,7 +89,7 @@ public class InputPathHandlerTest {
     initTables();
   }
 
-  @AfterClass
+  @AfterAll
   public static void cleanUp() throws Exception {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
@@ -101,13 +104,10 @@ public class InputPathHandlerTest {
   }
 
   static void initTables() throws IOException {
-    // Create a temp folder as the base path
-    TemporaryFolder parentFolder = new TemporaryFolder();
-    parentFolder.create();
-    basePathTable1 = parentFolder.newFolder(RAW_TRIPS_TEST_NAME).getAbsolutePath();
-    basePathTable2 = parentFolder.newFolder(MODEL_TRIPS_TEST_NAME).getAbsolutePath();
-    basePathTable3 = parentFolder.newFolder(ETL_TRIPS_TEST_NAME).getAbsolutePath();
-    basePathTable4 = parentFolder.newFolder(TRIPS_STATS_TEST_NAME).getAbsolutePath();
+    basePathTable1 = parentPath.resolve(RAW_TRIPS_TEST_NAME).toAbsolutePath().toString();
+    basePathTable2 = parentPath.resolve(MODEL_TRIPS_TEST_NAME).toAbsolutePath().toString();
+    basePathTable3 = parentPath.resolve(ETL_TRIPS_TEST_NAME).toAbsolutePath().toString();
+    basePathTable4 = parentPath.resolve(TRIPS_STATS_TEST_NAME).toAbsolutePath().toString();
 
     dfs.mkdirs(new Path(basePathTable1));
     initTableType(dfs.getConf(), basePathTable1, RAW_TRIPS_TEST_NAME, HoodieTableType.MERGE_ON_READ);
