@@ -161,7 +161,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
    * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
    */
   protected GenericRecord rewriteRecord(GenericRecord record) {
-    return HoodieAvroUtils.rewriteRecord(record, writerSchema);
+    return HoodieAvroUtils.rewriteHoodieRecord(record, writerSchema);
   }
 
   public abstract WriteStatus close();
