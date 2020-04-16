@@ -21,12 +21,13 @@ package org.apache.hudi.hadoop.realtime;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.FileSplit;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InOrder;
 import org.mockito.invocation.InvocationOnMock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.stubbing.Answer;
 
 import java.io.DataInput;
@@ -36,11 +37,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.AdditionalMatchers.aryEq;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyByte;
-import static org.mockito.Matchers.anyInt;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.eq;
@@ -49,6 +49,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 public class TestHoodieRealtimeFileSplit {
 
   private HoodieRealtimeFileSplit split;
@@ -57,25 +58,16 @@ public class TestHoodieRealtimeFileSplit {
   private String fileSplitName;
   private FileSplit baseFileSplit;
   private String maxCommitTime;
-  private TemporaryFolder tmp;
 
-  @Before
-  public void setUp() throws Exception {
-    tmp = new TemporaryFolder();
-    tmp.create();
-
-    basePath = tmp.getRoot().toString();
+  @BeforeEach
+  public void setUp(@TempDir java.nio.file.Path tempDir) throws Exception {
+    basePath = tempDir.toAbsolutePath().toString();
     deltaLogPaths = Collections.singletonList(basePath + "/1.log");
     fileSplitName = basePath + "/test.file";
-    baseFileSplit = new FileSplit(new Path(fileSplitName), 0, 100, new String[]{});
+    baseFileSplit = new FileSplit(new Path(fileSplitName), 0, 100, new String[] {});
     maxCommitTime = "10001";
 
     split = new HoodieRealtimeFileSplit(baseFileSplit, basePath, deltaLogPaths, maxCommitTime);
-  }
-
-  @After
-  public void tearDown() throws Exception {
-    tmp.delete();
   }
 
   @Test
@@ -86,7 +78,7 @@ public class TestHoodieRealtimeFileSplit {
 
     // register expected method calls for void functions
     // so that we can verify what was called after the method call finishes
-    doNothing().when(out).writeByte(anyByte());
+    doNothing().when(out).writeByte(anyInt());
     doNothing().when(out).writeInt(anyInt());
     doNothing().when(out).write(any(byte[].class), anyInt(), anyInt());
     doNothing().when(out).write(any(byte[].class));
@@ -140,7 +132,7 @@ public class TestHoodieRealtimeFileSplit {
 
       @Override
       public Void answer(InvocationOnMock invocation) throws Throwable {
-        byte[] bytes = invocation.getArgumentAt(0, byte[].class);
+        byte[] bytes = invocation.getArgument(0);
         byte[] answer = answers[count++];
         System.arraycopy(answer, 0, bytes, 0, answer.length);
         return null;

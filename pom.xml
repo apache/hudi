@@ -85,7 +85,7 @@
     <junit.version>4.12</junit.version>
     <junit.jupiter.version>5.6.1</junit.jupiter.version>
     <junit.vintage.version>5.6.1</junit.vintage.version>
-    <mockito.version>1.10.19</mockito.version>
+    <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
     <log4j.version>1.2.17</log4j.version>
     <slf4j.version>1.7.5</slf4j.version>
     <joda.version>2.9.9</joda.version>
@@ -852,9 +852,9 @@
 
       <dependency>
         <groupId>org.mockito</groupId>
-        <artifactId>mockito-all</artifactId>
+        <artifactId>mockito-junit-jupiter</artifactId>
         <scope>test</scope>
-        <version>${mockito.version}</version>
+        <version>${mockito.jupiter.version}</version>
       </dependency>
 
       <dependency>
