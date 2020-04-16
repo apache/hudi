@@ -164,17 +164,6 @@ public class HoodieDeltaStreamer implements Serializable {
     }
   }
 
-  protected static class TransformersConverter implements IStringConverter<List<String>> {
-
-    @Override
-    public List<String> convert(String value) throws ParameterException {
-      return value == null ? null : Arrays.stream(value.split(","))
-          .map(String::trim)
-          .filter(s -> !s.isEmpty())
-          .collect(Collectors.toList());
-    }
-  }
-
   public static class Config implements Serializable {
 
     @Parameter(names = {"--target-base-path"},
@@ -228,8 +217,7 @@ public class HoodieDeltaStreamer implements Serializable {
             + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
             + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
             + "allows a SQL query templated to be passed as a transformation function). "
-            + "Pass a comma-separated list of subclass names to chain the transformations.",
-        converter = TransformersConverter.class)
+            + "Pass a comma-separated list of subclass names to chain the transformations.")
     public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
