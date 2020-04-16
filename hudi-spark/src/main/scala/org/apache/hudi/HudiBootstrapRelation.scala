@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.{Row, SQLContext}
-import org.apache.spark.sql.sources.{BaseRelation, PrunedScan}
+import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
 import scala.collection.JavaConverters._
@@ -41,7 +41,7 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
                             val userSchema: StructType,
                             val path: String,
                             val optParams: Map[String, String]) extends BaseRelation
-  with PrunedScan with Logging {
+  with PrunedFilteredScan with Logging {
 
   val fileIndex: HudiBootstrapFileIndex = buildFileIndex()
 
@@ -81,8 +81,10 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
     *                        dataframe
     * @return
     */
-  override def buildScan(requiredColumns: Array[String]): RDD[Row] = {
-    logInfo("Udith : Revision 3 Scan..")
+  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
+    filters.foreach(filter => logInfo("Obtained filter: " + filter.references.mkString(",") + " "
+      + filter.getClass))
+
     // Compute splits
     val bootstrapSplits = fileIndex.files.map(hoodieBaseFile => {
       var skeletonFile: Option[PartitionedFile] = Option.empty
@@ -135,7 +137,7 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
         dataSchema = completeSchema,
         partitionSchema = StructType(Seq.empty),
         requiredSchema = requiredRegularSchema,
-        filters = Nil,
+        filters = filters,
         options = Map.empty,
         hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf())
 
