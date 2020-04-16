@@ -107,7 +107,7 @@ and more importantly also try to improve the process along the way as well.
    - For involved changes, it's best to also run the entire integration test suite using `mvn clean install`
    - For website changes, please build the site locally & test navigation, formatting & links thoroughly
    - If your code change changes some aspect of documentation (e.g new config, default value change), 
-     please ensure there is another PR to [update the docs](https://github.com/apache/incubator-hudi/blob/asf-site/docs/README.md) as well.
+     please ensure there is another PR to [update the docs](https://github.com/apache/incubator-hudi/tree/asf-site/README.md) as well.
  - Sending a Pull Request
    - Format commit and the pull request title like `[HUDI-XXX] Fixes bug in Spark Datasource`, 
      where you replace `HUDI-XXX` with the appropriate JIRA issue. 
