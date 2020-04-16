@@ -29,29 +29,26 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 
-import junit.framework.TestCase;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
-public class TestPriorityBasedFileSystemView extends TestCase {
+@ExtendWith(MockitoExtension.class)
+public class TestPriorityBasedFileSystemView {
 
   @Mock
   private SyncableFileSystemView primary;
@@ -62,26 +59,19 @@ public class TestPriorityBasedFileSystemView extends TestCase {
   @InjectMocks
   private PriorityBasedFileSystemView fsView;
 
-  @Rule
-  public MockitoRule rule = MockitoJUnit.rule();
-
   private Stream<HoodieBaseFile> testBaseFileStream;
   private Stream<FileSlice> testFileSliceStream;
 
-  @Before
+  @BeforeEach
   public void setUp() {
     fsView = new PriorityBasedFileSystemView(primary, secondary);
-    testBaseFileStream = Collections.singleton(new HoodieBaseFile("test")).stream();
-    testFileSliceStream = Collections
-        .singleton(new FileSlice("2020-01-01", "20:20", "file0001.parquet")).stream();
+    testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
+    testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20", "file0001.parquet"));
   }
 
   private void resetMocks() {
     reset(primary, secondary);
   }
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   @Test
   public void testGetLatestBaseFiles() {
@@ -105,8 +95,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getLatestBaseFiles()).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getLatestBaseFiles();
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestBaseFiles();
+    });
   }
 
   @Test
@@ -132,8 +123,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getLatestBaseFiles(partitionPath)).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getLatestBaseFiles(partitionPath);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestBaseFiles(partitionPath);
+    });
   }
 
   @Test
@@ -165,8 +157,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
     resetMocks();
     when(secondary.getLatestBaseFilesBeforeOrOn(partitionPath, maxCommitTime))
         .thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getLatestBaseFilesBeforeOrOn(partitionPath, maxCommitTime);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestBaseFilesBeforeOrOn(partitionPath, maxCommitTime);
+    });
   }
 
   @Test
@@ -193,8 +186,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getLatestBaseFile(partitionPath, fileID)).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getLatestBaseFile(partitionPath, fileID);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestBaseFile(partitionPath, fileID);
+    });
   }
 
   @Test
@@ -224,8 +218,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
     resetMocks();
     when(secondary.getBaseFileOn(partitionPath, instantTime, fileID))
         .thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getBaseFileOn(partitionPath, instantTime, fileID);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getBaseFileOn(partitionPath, instantTime, fileID);
+    });
   }
 
   @Test
@@ -251,8 +246,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getLatestBaseFilesInRange(commitsToReturn)).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getLatestBaseFilesInRange(commitsToReturn);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestBaseFilesInRange(commitsToReturn);
+    });
   }
 
   @Test
@@ -278,8 +274,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getAllBaseFiles(partitionPath)).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getAllBaseFiles(partitionPath);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getAllBaseFiles(partitionPath);
+    });
   }
 
   @Test
@@ -305,8 +302,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getLatestFileSlices(partitionPath)).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getLatestFileSlices(partitionPath);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestFileSlices(partitionPath);
+    });
   }
 
   @Test
@@ -332,8 +330,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getLatestUnCompactedFileSlices(partitionPath)).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getLatestUnCompactedFileSlices(partitionPath);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestUnCompactedFileSlices(partitionPath);
+    });
   }
 
   @Test
@@ -365,8 +364,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
     resetMocks();
     when(secondary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false))
         .thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false);
+    });
   }
 
   @Test
@@ -398,8 +398,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
     resetMocks();
     when(secondary.getLatestMergedFileSlicesBeforeOrOn(partitionPath, maxInstantTime))
         .thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getLatestMergedFileSlicesBeforeOrOn(partitionPath, maxInstantTime);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestMergedFileSlicesBeforeOrOn(partitionPath, maxInstantTime);
+    });
   }
 
   @Test
@@ -425,8 +426,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getLatestFileSliceInRange(commitsToReturn)).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getLatestFileSliceInRange(commitsToReturn);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestFileSliceInRange(commitsToReturn);
+    });
   }
 
   @Test
@@ -452,8 +454,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getAllFileSlices(partitionPath)).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getAllFileSlices(partitionPath);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getAllFileSlices(partitionPath);
+    });
   }
 
   @Test
@@ -481,8 +484,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getAllFileGroups(partitionPath)).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getAllFileGroups(partitionPath);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getAllFileGroups(partitionPath);
+    });
   }
 
   @Test
@@ -509,8 +513,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getPendingCompactionOperations()).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getPendingCompactionOperations();
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getPendingCompactionOperations();
+    });
   }
 
   @Test
@@ -549,8 +554,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getLastInstant()).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getLastInstant();
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLastInstant();
+    });
   }
 
   @Test
@@ -575,8 +581,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getTimeline()).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getTimeline();
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getTimeline();
+    });
   }
 
   @Test
@@ -610,8 +617,9 @@ public class TestPriorityBasedFileSystemView extends TestCase {
 
     resetMocks();
     when(secondary.getLatestFileSlice(partitionPath, fileID)).thenThrow(new RuntimeException());
-    thrown.expect(RuntimeException.class);
-    fsView.getLatestFileSlice(partitionPath, fileID);
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestFileSlice(partitionPath, fileID);
+    });
   }
 
   @Test

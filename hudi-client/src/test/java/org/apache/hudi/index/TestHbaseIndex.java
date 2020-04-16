@@ -52,7 +52,6 @@ import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.After;
 import org.junit.AfterClass;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
@@ -70,9 +69,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.anyObject;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Note :: HBaseTestingUtility is really flaky with issues where the HbaseMiniCluster fails to shutdown across tests,
@@ -258,8 +259,8 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // Mock hbaseConnection and related entities
     Connection hbaseConnection = Mockito.mock(Connection.class);
     HTable table = Mockito.mock(HTable.class);
-    Mockito.when(hbaseConnection.getTable(TableName.valueOf(tableName))).thenReturn(table);
-    Mockito.when(table.get((List<Get>) anyObject())).thenReturn(new Result[0]);
+    when(hbaseConnection.getTable(TableName.valueOf(tableName))).thenReturn(table);
+    when(table.get((List<Get>) any())).thenReturn(new Result[0]);
 
     // only for test, set the hbaseConnection to mocked object
     index.setHbaseConnection(hbaseConnection);
@@ -281,7 +282,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     index.tagLocation(writeRecords, jsc, hoodieTable);
 
     // 3 batches should be executed given batchSize = 100 and parallelism = 1
-    Mockito.verify(table, times(3)).get((List<Get>) anyObject());
+    verify(table, times(3)).get((List<Get>) any());
 
   }
 
@@ -307,8 +308,8 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // Mock hbaseConnection and related entities
     Connection hbaseConnection = Mockito.mock(Connection.class);
     HTable table = Mockito.mock(HTable.class);
-    Mockito.when(hbaseConnection.getTable(TableName.valueOf(tableName))).thenReturn(table);
-    Mockito.when(table.get((List<Get>) anyObject())).thenReturn(new Result[0]);
+    when(hbaseConnection.getTable(TableName.valueOf(tableName))).thenReturn(table);
+    when(table.get((List<Get>) any())).thenReturn(new Result[0]);
 
     // only for test, set the hbaseConnection to mocked object
     index.setHbaseConnection(hbaseConnection);
@@ -319,7 +320,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     index.updateLocation(writeStatues, jsc, hoodieTable);
     // 3 batches should be executed given batchSize = 100 and <=numberOfDataFileIds getting updated,
     // so each fileId ideally gets updates
-    Mockito.verify(table, atMost(numberOfDataFileIds)).put((List<Put>) anyObject());
+    verify(table, atMost(numberOfDataFileIds)).put((List<Put>) any());
   }
 
   @Test
@@ -334,28 +335,28 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // 8 (batchSize) * 200 (parallelism) * 10 (maxReqsInOneSecond) * 10 (numRegionServers) * 0.1 (qpsFraction)) => 16000
     // We assume requests get distributed to Region Servers uniformly, so each RS gets 1600 request
     // 1600 happens to be 10% of 16667 (maxQPSPerRegionServer) as expected.
-    Assert.assertEquals(putBatchSize, 8);
+    assertEquals(putBatchSize, 8);
 
     // Number of Region Servers are halved, total requests sent in a second are also halved, so batchSize is also halved
     int putBatchSize2 = batchSizeCalculator.getBatchSize(5, 16667, 1200, 200, 100, 0.1f);
-    Assert.assertEquals(putBatchSize2, 4);
+    assertEquals(putBatchSize2, 4);
 
     // If the parallelism is halved, batchSize has to double
     int putBatchSize3 = batchSizeCalculator.getBatchSize(10, 16667, 1200, 100, 100, 0.1f);
-    Assert.assertEquals(putBatchSize3, 16);
+    assertEquals(putBatchSize3, 16);
 
     // If the parallelism is halved, batchSize has to double.
     // This time parallelism is driven by numTasks rather than numExecutors
     int putBatchSize4 = batchSizeCalculator.getBatchSize(10, 16667, 100, 200, 100, 0.1f);
-    Assert.assertEquals(putBatchSize4, 16);
+    assertEquals(putBatchSize4, 16);
 
     // If sleepTimeMs is halved, batchSize has to halve
     int putBatchSize5 = batchSizeCalculator.getBatchSize(10, 16667, 1200, 200, 100, 0.05f);
-    Assert.assertEquals(putBatchSize5, 4);
+    assertEquals(putBatchSize5, 4);
 
     // If maxQPSPerRegionServer is doubled, batchSize also doubles
     int putBatchSize6 = batchSizeCalculator.getBatchSize(10, 33334, 1200, 200, 100, 0.1f);
-    Assert.assertEquals(putBatchSize6, 16);
+    assertEquals(putBatchSize6, 16);
   }
 
   @Test
@@ -367,9 +368,9 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     final Tuple2<Long, Integer> tuple = index.getHBasePutAccessParallelism(writeStatusRDD);
     final int hbasePutAccessParallelism = Integer.parseInt(tuple._2.toString());
     final int hbaseNumPuts = Integer.parseInt(tuple._1.toString());
-    Assert.assertEquals(10, writeStatusRDD.getNumPartitions());
-    Assert.assertEquals(2, hbasePutAccessParallelism);
-    Assert.assertEquals(11, hbaseNumPuts);
+    assertEquals(10, writeStatusRDD.getNumPartitions());
+    assertEquals(2, hbasePutAccessParallelism);
+    assertEquals(11, hbaseNumPuts);
   }
 
   @Test
@@ -381,9 +382,9 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     final Tuple2<Long, Integer> tuple = index.getHBasePutAccessParallelism(writeStatusRDD);
     final int hbasePutAccessParallelism = Integer.parseInt(tuple._2.toString());
     final int hbaseNumPuts = Integer.parseInt(tuple._1.toString());
-    Assert.assertEquals(10, writeStatusRDD.getNumPartitions());
-    Assert.assertEquals(0, hbasePutAccessParallelism);
-    Assert.assertEquals(0, hbaseNumPuts);
+    assertEquals(10, writeStatusRDD.getNumPartitions());
+    assertEquals(0, hbasePutAccessParallelism);
+    assertEquals(0, hbaseNumPuts);
   }
 
   @Test
@@ -391,9 +392,9 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
     HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = index.createQPSResourceAllocator(config);
-    Assert.assertEquals(hBaseIndexQPSResourceAllocator.getClass().getName(),
+    assertEquals(hBaseIndexQPSResourceAllocator.getClass().getName(),
         DefaultHBaseQPSResourceAllocator.class.getName());
-    Assert.assertEquals(config.getHbaseIndexQPSFraction(),
+    assertEquals(config.getHbaseIndexQPSFraction(),
         hBaseIndexQPSResourceAllocator.acquireQPSResources(config.getHbaseIndexQPSFraction(), 100), 0.0f);
   }
 
