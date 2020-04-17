@@ -96,9 +96,9 @@ hudi_options = {
 'hoodie.insert.shuffle.parallelism': 2
 }
 
-df.write.format("hudi").
-  options(**hudi_options).
-  mode('overwrite').
+df.write.format("hudi"). \
+  options(**hudi_options). \
+  mode('overwrite'). \
   save(basePath)
 {% endhighlight %}
 
@@ -164,9 +164,9 @@ df.write.format("hudi").
 {% highlight python %}
 updates = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateUpdates(10))
 df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
-df.write.format("hudi").
-  options(**hudi_options).
-  mode('append').
+df.write.format("hudi"). \
+  options(**hudi_options). \
+  mode('append'). \
   save(basePath)
 {% endhighlight %}
 
@@ -204,14 +204,14 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 {% highlight python %}
 // reload data
-spark.
-  read.
-  format("hudi").
-  load(basePath + "/*/*/*/*").
+spark. \
+  read. \
+  format("hudi"). \
+  load(basePath + "/*/*/*/*"). \
   createOrReplaceTempView("hudi_trips_snapshot")
 
 commits = list(map(lambda row: row[0], spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_trips_snapshot order by commitTime").limit(50).collect()))
-beginTime = commits[len(commits) - 2] // commit time we are interested in
+beginTime = commits[len(commits) - 2] # commit time we are interested in
 
 // incrementally query data
 incremental_read_options = {
@@ -219,8 +219,8 @@ incremental_read_options = {
 'hoodie.datasource.read.begin.instanttime': 'beginTime',
 }
 
-tripsIncrementalDF = spark.read.format("hudi").
-  options(**incremental_read_options).
+tripsIncrementalDF = spark.read.format("hudi"). \
+  options(**incremental_read_options). \
   load(basePath)
 tripsIncrementalDF.createOrReplaceTempView("hudi_trips_incremental")
 
@@ -249,7 +249,19 @@ val tripsPointInTimeDF = spark.read.format("hudi").
 tripsPointInTimeDF.createOrReplaceTempView("hudi_trips_point_in_time")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_point_in_time where fare > 20.0").show()
 ```
+{% highlight python %}
+beginTime = "000" # Represents all commits > this time.
+endTime = commits[len(commits) - 2]
 
+//query point in time data
+point_in_time_read_options = {**incremental_read_options, **{"hoodie.datasource.read.end.instanttime": endTime}}
+tripsPointInTimeDF = spark.read.format("hudi"). \
+  options(**point_in_time_read_options). \
+  load(basePath)
+
+tripsPointInTimeDF.createOrReplaceTempView("hudi_trips_point_in_time")
+spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_point_in_time where fare > 20.0").show()
+{% endhighlight %}
 ## Delete data {#deletes}
 Delete records for the HoodieKeys passed in.
 
@@ -282,6 +294,42 @@ roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
 ```
 Note: Only `Append` mode is supported for delete operation.
+
+{% highlight python %}
+# fetch total records count
+spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
+# fetch two records to be deleted
+ds = spark.sql("select uuid, partitionPath from hudi_trips_snapshot").limit(2)
+
+# issue deletes
+hudi_delete_options = {
+'hoodie.table.name': tableName,
+'hoodie.datasource.write.recordkey.field': 'uuid',
+'hoodie.datasource.write.partitionpath.field': 'partitionpath',
+'hoodie.datasource.write.table.name': tableName,
+'hoodie.datasource.write.operation': 'delete',
+'hoodie.datasource.write.precombine.field': 'ts',
+'hoodie.upsert.shuffle.parallelism': 2, 
+'hoodie.insert.shuffle.parallelism': 2
+}
+
+from pyspark.sql.functions import lit
+deletes = list(map(lambda row: (row[0], row[1]), ds.collect()))
+df = spark.sparkContext.parallelize(deletes).toDF(['partitionpath', 'uuid']).withColumn('ts', lit(0.0))
+df.write.format("hudi"). \
+  options(**hudi_delete_options). \
+  mode('append'). \
+  save(basePath)
+
+# run the same read query as above.
+roAfterDeleteViewDF = spark. \
+  read. \
+  format("hudi"). \
+  load(basePath + "/*/*/*/*") 
+roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
+# fetch should return (total - 2) records
+spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
+{% endhighlight %}
 
 ## Where to go from here?
 
