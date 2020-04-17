@@ -336,7 +336,7 @@ object AvroConversionHelper {
           }
         }
       case structType: StructType =>
-        val schema: Schema = SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
+        val schema: Schema = SchemaConverters.toAvroType(structType, nullable = true, structName, recordNamespace)
         val childNameSpace = if (recordNamespace != "") s"$recordNamespace.$structName" else structName
         val fieldConverters = structType.fields.map(field =>
           createConverterToAvro(
