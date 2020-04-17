@@ -98,7 +98,7 @@ hudi_options = {
 
 df.write.format("hudi"). \
   options(**hudi_options). \
-  mode('overwrite'). \
+  mode("overwrite"). \
   save(basePath)
 {% endhighlight %}
 
@@ -128,10 +128,11 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 ```
 
 {% highlight python %}
-tripsSnapshotDF = spark.
-  read.
-  format("hudi").
+tripsSnapshotDF = spark. \
+  read. \
+  format("hudi"). \
   load(basePath + "/*/*/*/*")
+
 tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
 
 spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0").show()
@@ -166,7 +167,7 @@ updates = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.ge
 df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
 df.write.format("hudi"). \
   options(**hudi_options). \
-  mode('append'). \
+  mode("append"). \
   save(basePath)
 {% endhighlight %}
 
@@ -203,7 +204,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 ``` 
 
 {% highlight python %}
-// reload data
+# reload data
 spark. \
   read. \
   format("hudi"). \
@@ -213,7 +214,7 @@ spark. \
 commits = list(map(lambda row: row[0], spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_trips_snapshot order by commitTime").limit(50).collect()))
 beginTime = commits[len(commits) - 2] # commit time we are interested in
 
-// incrementally query data
+# incrementally query data
 incremental_read_options = {
 'hoodie.datasource.query.type': 'incremental',
 'hoodie.datasource.read.begin.instanttime': 'beginTime',
@@ -247,20 +248,22 @@ val tripsPointInTimeDF = spark.read.format("hudi").
   option(END_INSTANTTIME_OPT_KEY, endTime).
   load(basePath)
 tripsPointInTimeDF.createOrReplaceTempView("hudi_trips_point_in_time")
-spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_point_in_time where fare > 20.0").show()
+spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hudi_trips_point_in_time where fare > 20.0").show()
 ```
 {% highlight python %}
 beginTime = "000" # Represents all commits > this time.
 endTime = commits[len(commits) - 2]
 
-//query point in time data
-point_in_time_read_options = {**incremental_read_options, **{"hoodie.datasource.read.end.instanttime": endTime}}
+# query point in time data
+point_in_time_read_options = {**incremental_read_options, 
+                              **{"hoodie.datasource.read.end.instanttime": endTime,
+                                "hoodie.datasource.read.begin.instanttime": beginTime}}
 tripsPointInTimeDF = spark.read.format("hudi"). \
   options(**point_in_time_read_options). \
   load(basePath)
 
 tripsPointInTimeDF.createOrReplaceTempView("hudi_trips_point_in_time")
-spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_point_in_time where fare > 20.0").show()
+spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hudi_trips_point_in_time where fare > 20.0").show()
 {% endhighlight %}
 ## Delete data {#deletes}
 Delete records for the HoodieKeys passed in.
@@ -318,7 +321,7 @@ deletes = list(map(lambda row: (row[0], row[1]), ds.collect()))
 df = spark.sparkContext.parallelize(deletes).toDF(['partitionpath', 'uuid']).withColumn('ts', lit(0.0))
 df.write.format("hudi"). \
   options(**hudi_delete_options). \
-  mode('append'). \
+  mode("append"). \
   save(basePath)
 
 # run the same read query as above.
