@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.commons.lang.builder.HashCodeBuilder;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.HoodieClientTestUtils;
@@ -423,16 +422,28 @@ public class TestHDFSParquetImporter implements Serializable {
 
     @Override
     public int hashCode() {
-      HashCodeBuilder builder = new HashCodeBuilder();
-      builder.append(timestamp);
-      builder.append(rowKey);
-      builder.append(rider);
-      builder.append(driver);
-      builder.append(beginLat);
-      builder.append(beginLon);
-      builder.append(endLat);
-      builder.append(endLon);
-      return builder.toHashCode();
+      int iConstant = 37;
+      int iTotal = 17;
+      iTotal = appendHash(iTotal, iConstant, Double.doubleToLongBits(timestamp));
+      iTotal = appendHash(iTotal, iConstant, rowKey);
+      iTotal = appendHash(iTotal, iConstant, rider);
+      iTotal = appendHash(iTotal, iConstant, driver);
+      iTotal = appendHash(iTotal, iConstant, Double.doubleToLongBits(beginLat));
+      iTotal = appendHash(iTotal, iConstant, Double.doubleToLongBits(beginLon));
+      iTotal = appendHash(iTotal, iConstant, Double.doubleToLongBits(endLat));
+      iTotal = appendHash(iTotal, iConstant, Double.doubleToLongBits(endLon));
+      return iTotal;
+    }
+
+    // Generate hashcode, refer to org.apache.commons.lang.builder.HashCodeBuilder.
+    // It is forbidden to import class HashCodeBuilder， because of checkstyle.
+    //
+    private int appendHash(int total, int constant, long value) {
+      return total * constant + ((int) (value ^ (value >> 32)));
+    }
+
+    private int appendHash(int total, int constant, String value) {
+      return total * constant + value.hashCode();
     }
   }
 }
