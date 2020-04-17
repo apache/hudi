@@ -202,6 +202,31 @@ tripsIncrementalDF.createOrReplaceTempView("hudi_trips_incremental")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
 ``` 
 
+{% highlight python %}
+// reload data
+spark.
+  read.
+  format("hudi").
+  load(basePath + "/*/*/*/*").
+  createOrReplaceTempView("hudi_trips_snapshot")
+
+commits = list(map(lambda row: row[0], spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_trips_snapshot order by commitTime").limit(50).collect()))
+beginTime = commits[len(commits) - 2] // commit time we are interested in
+
+// incrementally query data
+incremental_read_options = {
+'hoodie.datasource.query.type': 'incremental',
+'hoodie.datasource.read.begin.instanttime': 'beginTime',
+}
+
+tripsIncrementalDF = spark.read.format("hudi").
+  options(**incremental_read_options).
+  load(basePath)
+tripsIncrementalDF.createOrReplaceTempView("hudi_trips_incremental")
+
+spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
+{% endhighlight %}
+
 This will give all changes that happened after the beginTime commit with the filter of fare > 20.0. The unique thing about this
 feature is that it now lets you author streaming pipelines on batch data.
 {: .notice--info}
