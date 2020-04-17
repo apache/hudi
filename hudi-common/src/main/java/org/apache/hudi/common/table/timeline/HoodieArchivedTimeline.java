@@ -62,7 +62,7 @@ import java.util.stream.Stream;
  */
 public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private static final Pattern ARCHIVE_FILE_PATTERN =
-          Pattern.compile("^\\.commits_\\.archive\\.([0-9]+)$");
+          Pattern.compile("^\\.commits_\\.archive\\.([0-9]*)$");
 
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE_PREFIX = "commits";
   private static final String ACTION_TYPE_KEY = "actionType";
