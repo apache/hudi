@@ -18,20 +18,20 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.Path
-import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodiePartitionMetadata, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.TableNotFoundException
-import org.apache.hudi.hadoop.{HoodieHiveUtil, HoodieParquetInputFormat}
+import org.apache.hudi.hadoop.HoodieHiveUtil
+import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
-import org.apache.spark.sql.{Row, SQLContext}
+import org.apache.spark.sql.{AnalysisException, Row, SQLContext}
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
@@ -190,50 +190,64 @@ class HudiBootstrapRelation(@transient val _sqlContext: SQLContext,
 
   def buildFileIndex(): HudiBootstrapFileIndex = {
     logInfo("Building file index..")
+    val globPaths = checkAndGlobPathIfNecessary(path)
+    val inMemoryFileIndex = createInMemoryFileIndex(globPaths)
+    val fileStatuses = inMemoryFileIndex.allFiles()
 
-    val fs = FSUtils.getFs(path, _sqlContext.sparkContext.hadoopConfiguration)
-    var metaClient: HoodieTableMetaClient = null
-    val jobConf = new JobConf()
-
-    try {
-      metaClient = new HoodieTableMetaClient(fs.getConf, path)
-      logInfo("Found Hudi table at path => " + path)
-
-      // Listing using input format listing api.
-      jobConf.set("mapreduce.input.fileinputformat.inputdir", path)
-      jobConf.set("mapreduce.input.fileinputformat.input.dir.recursive", "true")
-    } catch {
-      case ex: TableNotFoundException => {
-        val partitionPath = new Path(path)
-        if (HoodiePartitionMetadata.hasPartitionMetadata(fs, partitionPath)) {
-          val metadata = new HoodiePartitionMetadata(fs, partitionPath)
-          metadata.readFromFS()
-          val basePath = HoodieHiveUtil.getNthParent(partitionPath, metadata.getPartitionDepth)
-          metaClient = new HoodieTableMetaClient(fs.getConf, basePath.toString)
-          jobConf.set("mapreduce.input.fileinputformat.inputdir", partitionPath.toString)
-        }
-        else {
-          throw ex
-        }
-      }
+    if (fileStatuses.isEmpty) {
+      throw new AnalysisException(s"No files found for path: $path")
     }
 
-    val inputFormat = new HoodieParquetInputFormat()
-    inputFormat.setConf(_sqlContext.sparkContext.hadoopConfiguration)
+    val fs = FSUtils.getFs(path, _sqlContext.sparkContext.hadoopConfiguration)
+    val tablePath = getTablePath(fs, fileStatuses)
+    if (tablePath.isEmpty) {
+      throw new TableNotFoundException("Unable to determine table path")
+    }
 
-    val fileStatuses = inputFormat.listStatus(jobConf)
-    fileStatuses.foreach(f => logInfo(f.getPath.toString))
-
+    val metaClient = new HoodieTableMetaClient(fs.getConf, tablePath.get)
     val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitsTimeline
-      .filterCompletedInstants, fileStatuses)
+      .filterCompletedInstants, fileStatuses.toArray)
     val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
-
     latestFiles.foreach(file => logInfo("Skeleton file path: " + file.getPath))
     latestFiles.filter(_.getExternalDataFile.isPresent).foreach(file => {
       logInfo("External data file path: " + file.getExternalDataFile.get())
     })
 
     HudiBootstrapFileIndex(latestFiles)
+  }
+
+  private def checkAndGlobPathIfNecessary(path: String): Seq[Path] = {
+    val fs = FSUtils.getFs(path, _sqlContext.sparkContext.hadoopConfiguration)
+    val qualified = new Path(path).makeQualified(fs.getUri, fs.getWorkingDirectory)
+    val globPath = SparkHadoopUtil.get.globPathIfNecessary(fs, qualified)
+    globPath
+  }
+
+  private def createInMemoryFileIndex(globbedPaths: Seq[Path]): InMemoryFileIndex = {
+    val fileStatusCache = FileStatusCache.getOrCreate(_sqlContext.sparkSession)
+    new InMemoryFileIndex(_sqlContext.sparkSession, globbedPaths, Map(), Option.empty, fileStatusCache)
+  }
+
+  private def getTablePath(fs: FileSystem, fileStatusArr: Seq[FileStatus]): Option[String] = {
+    fileStatusArr.foreach(fileStatus => {
+      val filePath = fileStatus.getPath
+      if (filePath.toString.contains("/" + HoodieTableMetaClient.METAFOLDER_NAME + "/")) {
+        // Handle file inside metadata folder
+        var tablePath = filePath
+        while (!tablePath.toString.endsWith(HoodieTableMetaClient.METAFOLDER_NAME)) {
+          tablePath = tablePath.getParent
+        }
+        return Option(tablePath.getParent.toString)
+      } else if (HoodiePartitionMetadata.hasPartitionMetadata(fs, filePath.getParent)) {
+        // Handle partition path
+        val partitionPath = filePath.getParent
+        val metadata = new HoodiePartitionMetadata(fs, partitionPath)
+        metadata.readFromFS()
+        return Option(HoodieHiveUtil.getNthParent(partitionPath, metadata.getPartitionDepth).toString)
+      }
+    })
+
+    Option.empty
   }
 }
 
