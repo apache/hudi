@@ -97,7 +97,7 @@ public class TestHDFSParquetImporter implements Serializable {
   public void init() throws IOException, ParseException {
     basePath = (new Path(dfsBasePath, Thread.currentThread().getStackTrace()[1].getMethodName())).toString();
 
-    // Hoodie root folder
+    // Hoodie root folder.
     hoodieFolder = new Path(basePath, "testTarget");
 
     // Create generic records.
