@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.commons.lang.builder.HashCodeBuilder;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.HoodieClientTestUtils;
@@ -82,7 +83,7 @@ public class TestHDFSParquetImporter implements Serializable {
   }
 
   @AfterClass
-  public static void cleanupClass() throws Exception {
+  public static void cleanupClass() {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
     }
@@ -115,10 +116,7 @@ public class TestHDFSParquetImporter implements Serializable {
    */
   @Test
   public void testImportWithRetries() throws Exception {
-    JavaSparkContext jsc = null;
-    try {
-      jsc = getJavaSparkContext();
-
+    try (JavaSparkContext jsc = getJavaSparkContext()) {
       // Create schema file.
       String schemaFile = new Path(basePath, "file.schema").toString();
 
@@ -169,14 +167,10 @@ public class TestHDFSParquetImporter implements Serializable {
       for (Entry<String, Long> e : recordCounts.entrySet()) {
         assertEquals("missing records", 24, e.getValue().longValue());
       }
-    } finally {
-      if (jsc != null) {
-        jsc.stop();
-      }
     }
   }
 
-  private void insert(JavaSparkContext jsc) throws IOException, ParseException {
+  private void insert(JavaSparkContext jsc) throws IOException {
     // Create schema file.
     String schemaFile = new Path(basePath, "file.schema").toString();
     createSchemaFile(schemaFile);
@@ -193,9 +187,7 @@ public class TestHDFSParquetImporter implements Serializable {
    */
   @Test
   public void testImportInsert() throws IOException, ParseException {
-    JavaSparkContext jsc = null;
-    try {
-      jsc = getJavaSparkContext();
+    try (JavaSparkContext jsc = getJavaSparkContext()) {
       insert(jsc);
       SQLContext sqlContext = new SQLContext(jsc);
       Dataset<Row> ds = HoodieClientTestUtils.read(jsc, basePath + "/testTarget", sqlContext, dfs, basePath + "/testTarget/*/*/*/*");
@@ -207,16 +199,17 @@ public class TestHDFSParquetImporter implements Serializable {
           .collect(Collectors.toList());
 
       List<HoodieModel> expected = insertData.stream().map(g ->
-          new HoodieModel(Double.valueOf(g.get("timestamp").toString()), g.get("_row_key").toString(), g.get("rider").toString(), g.get("driver").toString(),
-              Double.valueOf(g.get("begin_lat").toString()), Double.valueOf(g.get("begin_lon").toString()), Double.valueOf(g.get("end_lat").toString()),
-              Double.valueOf(g.get("end_lon").toString())))
+          new HoodieModel(Double.parseDouble(g.get("timestamp").toString()),
+              g.get("_row_key").toString(),
+              g.get("rider").toString(),
+              g.get("driver").toString(),
+              Double.parseDouble(g.get("begin_lat").toString()),
+              Double.parseDouble(g.get("begin_lon").toString()),
+              Double.parseDouble(g.get("end_lat").toString()),
+              Double.parseDouble(g.get("end_lon").toString())))
           .collect(Collectors.toList());
 
       assertTrue(result.containsAll(expected) && expected.containsAll(result) && result.size() == expected.size());
-    } finally {
-      if (jsc != null) {
-        jsc.stop();
-      }
     }
   }
 
@@ -225,9 +218,7 @@ public class TestHDFSParquetImporter implements Serializable {
    */
   @Test
   public void testImportWithUpsert() throws IOException, ParseException {
-    JavaSparkContext jsc = null;
-    try {
-      jsc = getJavaSparkContext();
+    try (JavaSparkContext jsc = getJavaSparkContext()) {
       insert(jsc);
 
       // Create schema file.
@@ -259,16 +250,17 @@ public class TestHDFSParquetImporter implements Serializable {
 
       // get expected result
       List<HoodieModel> expected = expectData.stream().map(g ->
-          new HoodieModel(Double.valueOf(g.get("timestamp").toString()), g.get("_row_key").toString(), g.get("rider").toString(), g.get("driver").toString(),
-              Double.valueOf(g.get("begin_lat").toString()), Double.valueOf(g.get("begin_lon").toString()), Double.valueOf(g.get("end_lat").toString()),
-              Double.valueOf(g.get("end_lon").toString())))
+          new HoodieModel(Double.parseDouble(g.get("timestamp").toString()),
+              g.get("_row_key").toString(),
+              g.get("rider").toString(),
+              g.get("driver").toString(),
+              Double.parseDouble(g.get("begin_lat").toString()),
+              Double.parseDouble(g.get("begin_lon").toString()),
+              Double.parseDouble(g.get("end_lat").toString()),
+              Double.parseDouble(g.get("end_lon").toString())))
           .collect(Collectors.toList());
 
       assertTrue(result.containsAll(expected) && expected.containsAll(result) && result.size() == expected.size());
-    } finally {
-      if (jsc != null) {
-        jsc.stop();
-      }
     }
   }
 
@@ -323,10 +315,7 @@ public class TestHDFSParquetImporter implements Serializable {
    */
   @Test
   public void testSchemaFile() throws Exception {
-    JavaSparkContext jsc = null;
-    try {
-      jsc = getJavaSparkContext();
-
+    try (JavaSparkContext jsc = getJavaSparkContext()) {
       // Hoodie root folder
       Path hoodieFolder = new Path(basePath, "testTarget");
       Path srcFolder = new Path(basePath.toString(), "srcTest");
@@ -341,10 +330,6 @@ public class TestHDFSParquetImporter implements Serializable {
       // Should fail - return : -1.
       assertEquals(-1, dataImporter.dataImport(jsc, 0));
 
-    } finally {
-      if (jsc != null) {
-        jsc.stop();
-      }
     }
   }
 
@@ -353,10 +338,7 @@ public class TestHDFSParquetImporter implements Serializable {
    */
   @Test
   public void testRowAndPartitionKey() throws Exception {
-    JavaSparkContext jsc = null;
-    try {
-      jsc = getJavaSparkContext();
-
+    try (JavaSparkContext jsc = getJavaSparkContext()) {
       // Create schema file.
       Path schemaFile = new Path(basePath.toString(), "missingFile.schema");
       createSchemaFile(schemaFile.toString());
@@ -376,10 +358,6 @@ public class TestHDFSParquetImporter implements Serializable {
       dataImporter = new HDFSParquetImporter(cfg);
       assertEquals(-1, dataImporter.dataImport(jsc, 0));
 
-    } finally {
-      if (jsc != null) {
-        jsc.stop();
-      }
     }
   }
 
@@ -441,6 +419,20 @@ public class TestHDFSParquetImporter implements Serializable {
       return timestamp == other.timestamp && rowKey.equals(other.rowKey) && rider.equals(other.rider)
           && driver.equals(other.driver) && beginLat == other.beginLat && beginLon == other.beginLon
           && endLat == other.endLat && endLon == other.endLon;
+    }
+
+    @Override
+    public int hashCode() {
+      HashCodeBuilder builder = new HashCodeBuilder();
+      builder.append(timestamp);
+      builder.append(rowKey);
+      builder.append(rider);
+      builder.append(driver);
+      builder.append(beginLat);
+      builder.append(beginLon);
+      builder.append(endLat);
+      builder.append(endLon);
+      return builder.toHashCode();
     }
   }
 }
