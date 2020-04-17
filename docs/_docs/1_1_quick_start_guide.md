@@ -21,6 +21,13 @@ spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
+{% highlight python %}
+export PYSPARK_PYTHON=$(which python3)
+spark-2.4.4-bin-hadoop2.7/bin/pyspark \
+  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+{% endhighlight %}
+
 <div class="notice--info">
   <h4>Please note the following: </h4>
 <ul>
@@ -46,6 +53,12 @@ val basePath = "file:///tmp/hudi_trips_cow"
 val dataGen = new DataGenerator
 ```
 
+{% highlight python %}
+tableName = "hudi_trips_cow"
+basePath = "file:///tmp/hudi_trips_cow"
+dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
+{% endhighlight %}
+
 The [DataGenerator](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50) 
 can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
 {: .notice--info}
@@ -68,6 +81,25 @@ df.write.format("hudi").
   save(basePath)
 ``` 
 
+{% highlight python %}
+inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateInserts(10))
+df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+
+hudi_options = {
+'hoodie.table.name': tableName,
+'hoodie.datasource.write.recordkey.field': 'uuid',
+'hoodie.datasource.write.partitionpath.field': 'partitionpath',
+'hoodie.datasource.write.table.name': tableName,
+'hoodie.datasource.write.operation': 'insert',
+'hoodie.datasource.write.precombine.field': 'ts',
+}
+
+df.write.format("hudi").
+  options(**hudi_options).
+  mode('overwrite').
+  save(basePath)
+{% endhighlight %}
+
 `mode(Overwrite)` overwrites and recreates the table if it already exists.
 You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. We provided a record key 
 (`uuid` in [schema](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/county/city`) and combine logic (`ts` in 
@@ -77,7 +109,7 @@ and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/d
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
 {: .notice--info}
- 
+
 ## Query data 
 
 Load the data files into a DataFrame.
