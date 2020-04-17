@@ -92,6 +92,8 @@ hudi_options = {
 'hoodie.datasource.write.table.name': tableName,
 'hoodie.datasource.write.operation': 'insert',
 'hoodie.datasource.write.precombine.field': 'ts',
+'hoodie.upsert.shuffle.parallelism': 2, 
+'hoodie.insert.shuffle.parallelism': 2
 }
 
 df.write.format("hudi").
@@ -125,6 +127,17 @@ spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
 ```
 
+{% highlight python %}
+tripsSnapshotDF = spark.
+  read.
+  format("hudi").
+  load(basePath + "/*/*/*/*")
+tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
+
+spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0").show()
+spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
+{% endhighlight %}
+
 This query provides snapshot querying of the ingested data. Since our partition path (`region/country/city`) is 3 levels nested 
 from base path we ve used `load(basePath + "/*/*/*/*")`. 
 Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
@@ -147,6 +160,15 @@ df.write.format("hudi").
   mode(Append).
   save(basePath)
 ```
+
+{% highlight python %}
+updates = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateUpdates(10))
+df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
+df.write.format("hudi").
+  options(**hudi_options).
+  mode('append').
+  save(basePath)
+{% endhighlight %}
 
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 [Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](http://hudi.incubator.apache.org/docs/concepts.html) 
