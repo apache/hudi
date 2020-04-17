@@ -296,21 +296,15 @@ public class DeltaSync implements Serializable {
 
       // Use Transformed Row's schema if not overridden. If target schema is not specified
       // default to RowBasedSchemaProvider
-      if (this.schemaProvider == null) {
+      if (this.schemaProvider == null || this.schemaProvider.getTargetSchema() == null) {
         schemaProvider =
             transformed
                 .map(r -> (SchemaProvider) new RowBasedSchemaProvider(r.schema()))
                 .orElse(dataAndCheckpoint.getSchemaProvider());
-      } else if (this.schemaProvider.getTargetSchema() == null) {
-        schemaProvider =
-            transformed
-                .map(r -> (SchemaProvider) new RowBasedSchemaProvider(r.schema()))
-                .orElse(dataAndCheckpoint.getSchemaProvider());
+        setupWriteClient(schemaProvider, true);
       } else {
         schemaProvider = this.schemaProvider;
       }
-
-      setupWriteClient(schemaProvider, true);
     } else {
       // Pull the data from the source & prepare the write
       InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint =
