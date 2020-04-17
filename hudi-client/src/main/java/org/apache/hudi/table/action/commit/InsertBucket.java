@@ -32,7 +32,7 @@ public class InsertBucket implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("WorkloadStat {");
+    final StringBuilder sb = new StringBuilder("InsertBucket {");
     sb.append("bucketNumber=").append(bucketNumber).append(", ");
     sb.append("weight=").append(weight);
     sb.append('}');
