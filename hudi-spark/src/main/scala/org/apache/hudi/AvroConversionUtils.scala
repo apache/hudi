@@ -74,7 +74,7 @@ object AvroConversionUtils {
   def convertStructTypeToAvroSchema(structType: StructType,
                                     structName: String,
                                     recordNamespace: String): Schema = {
-    SchemaConverters.toAvroType(structType, nullable = true, structName, recordNamespace)
+    SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
   }
 
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
