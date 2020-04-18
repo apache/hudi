@@ -18,26 +18,26 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieSnapshotCopier extends HoodieCommonTestHarness {
 
@@ -49,10 +49,10 @@ public class TestHoodieSnapshotCopier extends HoodieCommonTestHarness {
   private FileSystem fs = null;
   private JavaSparkContext jsc = null;
 
-  @Before
+  @BeforeEach
   public void init() throws IOException {
     // Prepare directories
-    rootPath = "file://" + folder.getRoot().getAbsolutePath();
+    rootPath = "file://" + tempDir.toString();
     basePath = rootPath + "/" + HoodieTestUtils.RAW_TRIPS_TEST_NAME;
     outputPath = rootPath + "/output";
 
@@ -147,7 +147,7 @@ public class TestHoodieSnapshotCopier extends HoodieCommonTestHarness {
     assertTrue(fs.exists(new Path(outputPath + "/_SUCCESS")));
   }
 
-  @After
+  @AfterEach
   public void cleanup() {
     if (rootPath != null) {
       new File(rootPath).delete();

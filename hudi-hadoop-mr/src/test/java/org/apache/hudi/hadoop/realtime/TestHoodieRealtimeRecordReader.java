@@ -52,11 +52,9 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
@@ -68,29 +66,29 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieRealtimeRecordReader {
 
   private static final String PARTITION_COLUMN = "datestr";
-  @Rule
-  public TemporaryFolder basePath = new TemporaryFolder();
   private JobConf jobConf;
   private FileSystem fs;
   private Configuration hadoopConf;
 
-  @Before
+  @BeforeEach
   public void setUp() {
     jobConf = new JobConf();
     jobConf.set(AbstractRealtimeRecordReader.MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(1024 * 1024));
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    fs = FSUtils.getFs(basePath.getRoot().getAbsolutePath(), hadoopConf);
+    fs = FSUtils.getFs(basePath.toString(), hadoopConf);
   }
 
-  private Writer writeLogFile(File partitionDir, Schema schema, String fileId, String baseCommit, String
-      newCommit,
+  @TempDir
+  public java.nio.file.Path basePath;
+
+  private Writer writeLogFile(File partitionDir, Schema schema, String fileId, String baseCommit, String newCommit,
       int numberOfRecords) throws InterruptedException, IOException {
     return InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, fileId, baseCommit, newCommit,
         numberOfRecords, 0,
@@ -125,7 +123,7 @@ public class TestHoodieRealtimeRecordReader {
   private void testReader(boolean partitioned) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
     File partitionDir = partitioned ? InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant)
         : InputFormatTestUtil.prepareNonPartitionedParquetTable(basePath, schema, 1, 100, baseInstant);
@@ -139,7 +137,7 @@ public class TestHoodieRealtimeRecordReader {
     // TODO: HUDI-154 Once Hive 2.x PR (PR-674) is merged, enable this change
     // logVersionsWithAction.add(Pair.of(HoodieTimeline.ROLLBACK_ACTION, 3));
     FileSlice fileSlice =
-        new FileSlice(partitioned ? FSUtils.getRelativePartitionPath(new Path(basePath.getRoot().getAbsolutePath()),
+        new FileSlice(partitioned ? FSUtils.getRelativePartitionPath(new Path(basePath.toString()),
             new Path(partitionDir.getAbsolutePath())) : "default", baseInstant, "fileid0");
     logVersionsWithAction.forEach(logVersionWithAction -> {
       try {
@@ -163,13 +161,13 @@ public class TestHoodieRealtimeRecordReader {
         }
         long size = writer.getCurrentSize();
         writer.close();
-        assertTrue("block - size should be > 0", size > 0);
+        assertTrue(size > 0, "block - size should be > 0");
 
         // create a split with baseFile (parquet file written earlier) and new log file(s)
         fileSlice.addLogFile(writer.getLogFile());
         HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
             new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + baseInstant + ".parquet"), 0, 1, jobConf),
-            basePath.getRoot().getPath(), fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+            basePath.toString(), fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
             .map(h -> h.getPath().toString()).collect(Collectors.toList()),
             instantTime);
 
@@ -210,7 +208,7 @@ public class TestHoodieRealtimeRecordReader {
   public void testUnMergedReader() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     final int numRecords = 1000;
     final int firstBatchLastRecordKey = numRecords - 1;
@@ -227,13 +225,13 @@ public class TestHoodieRealtimeRecordReader {
             numRecords, numRecords, 0);
     long size = writer.getCurrentSize();
     writer.close();
-    assertTrue("block - size should be > 0", size > 0);
+    assertTrue(size > 0, "block - size should be > 0");
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)
     String logFilePath = writer.getLogFile().getPath().toString();
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
         new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + instantTime + ".parquet"), 0, 1, jobConf),
-        basePath.getRoot().getPath(), Collections.singletonList(logFilePath), newCommitTime);
+        basePath.toString(), Collections.singletonList(logFilePath), newCommitTime);
 
     // create a RecordReader to be used by HoodieRealtimeRecordReader
     RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(
@@ -262,17 +260,17 @@ public class TestHoodieRealtimeRecordReader {
       int gotKey = Integer.parseInt(keyStr.substring("key".length()));
       if (gotCommit.equals(newCommitTime)) {
         numRecordsAtCommit2++;
-        Assert.assertTrue(gotKey > firstBatchLastRecordKey);
-        Assert.assertTrue(gotKey <= secondBatchLastRecordKey);
+        assertTrue(gotKey > firstBatchLastRecordKey);
+        assertTrue(gotKey <= secondBatchLastRecordKey);
         assertEquals(gotKey, lastSeenKeyFromLog + 1);
         lastSeenKeyFromLog++;
       } else {
         numRecordsAtCommit1++;
-        Assert.assertTrue(gotKey >= 0);
-        Assert.assertTrue(gotKey <= firstBatchLastRecordKey);
+        assertTrue(gotKey >= 0);
+        assertTrue(gotKey <= firstBatchLastRecordKey);
       }
       // Ensure unique key
-      Assert.assertFalse(seenKeys.contains(gotKey));
+      assertFalse(seenKeys.contains(gotKey));
       seenKeys.add(gotKey);
       key = recordReader.createKey();
       value = recordReader.createValue();
@@ -288,7 +286,7 @@ public class TestHoodieRealtimeRecordReader {
   public void testReaderWithNestedAndComplexSchema() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getComplexEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
@@ -303,14 +301,14 @@ public class TestHoodieRealtimeRecordReader {
         writeLogFile(partitionDir, schema, "fileid0", instantTime, newCommitTime, numberOfLogRecords);
     long size = writer.getCurrentSize();
     writer.close();
-    assertTrue("block - size should be > 0", size > 0);
+    assertTrue(size > 0, "block - size should be > 0");
     InputFormatTestUtil.deltaCommit(basePath, newCommitTime);
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)
     String logFilePath = writer.getLogFile().getPath().toString();
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
         new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + instantTime + ".parquet"), 0, 1, jobConf),
-        basePath.getRoot().getPath(), Collections.singletonList(logFilePath), newCommitTime);
+        basePath.toString(), Collections.singletonList(logFilePath), newCommitTime);
 
     // create a RecordReader to be used by HoodieRealtimeRecordReader
     RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(
@@ -345,66 +343,69 @@ public class TestHoodieRealtimeRecordReader {
       value = recordReader.createValue();
 
       // Assert type STRING
-      assertEquals("test value for field: field1", values[5].toString(), "field" + currentRecordNo);
-      assertEquals("test value for field: field2", values[6].toString(),
-          "field" + currentRecordNo + recordCommitTimeSuffix);
-      assertEquals("test value for field: name", values[7].toString(), "name" + currentRecordNo);
+      assertEquals(values[5].toString(), "field" + currentRecordNo, "test value for field: field1");
+      assertEquals(values[6].toString(), "field" + currentRecordNo + recordCommitTimeSuffix,
+          "test value for field: field2");
+      assertEquals(values[7].toString(), "name" + currentRecordNo,
+          "test value for field: name");
 
       // Assert type INT
       IntWritable intWritable = (IntWritable) values[8];
-      assertEquals("test value for field: favoriteIntNumber", intWritable.get(),
-          currentRecordNo + recordCommitTime.hashCode());
+      assertEquals(intWritable.get(), currentRecordNo + recordCommitTime.hashCode(),
+          "test value for field: favoriteIntNumber");
 
       // Assert type LONG
       LongWritable longWritable = (LongWritable) values[9];
-      assertEquals("test value for field: favoriteNumber", longWritable.get(),
-          currentRecordNo + recordCommitTime.hashCode());
+      assertEquals(longWritable.get(), currentRecordNo + recordCommitTime.hashCode(),
+          "test value for field: favoriteNumber");
 
       // Assert type FLOAT
       FloatWritable floatWritable = (FloatWritable) values[10];
-      assertEquals("test value for field: favoriteFloatNumber", floatWritable.get(),
-          (float) ((currentRecordNo + recordCommitTime.hashCode()) / 1024.0), 0);
+      assertEquals(floatWritable.get(), (float) ((currentRecordNo + recordCommitTime.hashCode()) / 1024.0), 0,
+          "test value for field: favoriteFloatNumber");
 
       // Assert type DOUBLE
       DoubleWritable doubleWritable = (DoubleWritable) values[11];
-      assertEquals("test value for field: favoriteDoubleNumber", doubleWritable.get(),
-          (currentRecordNo + recordCommitTime.hashCode()) / 1024.0, 0);
+      assertEquals(doubleWritable.get(), (currentRecordNo + recordCommitTime.hashCode()) / 1024.0, 0,
+          "test value for field: favoriteDoubleNumber");
 
       // Assert type MAP
       ArrayWritable mapItem = (ArrayWritable) values[12];
       Writable mapItemValue1 = mapItem.get()[0];
       Writable mapItemValue2 = mapItem.get()[1];
 
-      assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue1).get()[0].toString(),
-          "mapItem1");
-      assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue2).get()[0].toString(),
-          "mapItem2");
-      assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue1).get().length, 2);
-      assertEquals("test value for field: tags", ((ArrayWritable) mapItemValue2).get().length, 2);
+      assertEquals(((ArrayWritable) mapItemValue1).get()[0].toString(), "mapItem1",
+          "test value for field: tags");
+      assertEquals(((ArrayWritable) mapItemValue2).get()[0].toString(), "mapItem2",
+          "test value for field: tags");
+      assertEquals(((ArrayWritable) mapItemValue1).get().length, 2,
+          "test value for field: tags");
+      assertEquals(((ArrayWritable) mapItemValue2).get().length, 2,
+          "test value for field: tags");
       Writable mapItemValue1value = ((ArrayWritable) mapItemValue1).get()[1];
       Writable mapItemValue2value = ((ArrayWritable) mapItemValue2).get()[1];
-      assertEquals("test value for field: tags[\"mapItem1\"].item1",
-          ((ArrayWritable) mapItemValue1value).get()[0].toString(), "item" + currentRecordNo);
-      assertEquals("test value for field: tags[\"mapItem2\"].item1",
-          ((ArrayWritable) mapItemValue2value).get()[0].toString(), "item2" + currentRecordNo);
-      assertEquals("test value for field: tags[\"mapItem1\"].item2",
-          ((ArrayWritable) mapItemValue1value).get()[1].toString(), "item" + currentRecordNo + recordCommitTimeSuffix);
-      assertEquals("test value for field: tags[\"mapItem2\"].item2",
-          ((ArrayWritable) mapItemValue2value).get()[1].toString(), "item2" + currentRecordNo + recordCommitTimeSuffix);
+      assertEquals(((ArrayWritable) mapItemValue1value).get()[0].toString(), "item" + currentRecordNo,
+          "test value for field: tags[\"mapItem1\"].item1");
+      assertEquals(((ArrayWritable) mapItemValue2value).get()[0].toString(), "item2" + currentRecordNo,
+          "test value for field: tags[\"mapItem2\"].item1");
+      assertEquals(((ArrayWritable) mapItemValue1value).get()[1].toString(), "item" + currentRecordNo + recordCommitTimeSuffix,
+          "test value for field: tags[\"mapItem1\"].item2");
+      assertEquals(((ArrayWritable) mapItemValue2value).get()[1].toString(), "item2" + currentRecordNo + recordCommitTimeSuffix,
+          "test value for field: tags[\"mapItem2\"].item2");
 
       // Assert type RECORD
       ArrayWritable recordItem = (ArrayWritable) values[13];
       Writable[] nestedRecord = recordItem.get();
-      assertFalse("test value for field: testNestedRecord.isAdmin", ((BooleanWritable) nestedRecord[0]).get());
-      assertEquals("test value for field: testNestedRecord.userId", nestedRecord[1].toString(),
-          "UserId" + currentRecordNo + recordCommitTimeSuffix);
+      assertFalse(((BooleanWritable) nestedRecord[0]).get(), "test value for field: testNestedRecord.isAdmin");
+      assertEquals(nestedRecord[1].toString(), "UserId" + currentRecordNo + recordCommitTimeSuffix,
+          "test value for field: testNestedRecord.userId");
 
       // Assert type ARRAY
       ArrayWritable arrayValue = (ArrayWritable) values[14];
       Writable[] arrayValues = arrayValue.get();
       for (int i = 0; i < arrayValues.length; i++) {
-        assertEquals("test value for field: stringArray", "stringArray" + i + recordCommitTimeSuffix,
-            arrayValues[i].toString());
+        assertEquals("stringArray" + i + recordCommitTimeSuffix, arrayValues[i].toString(),
+            "test value for field: stringArray");
       }
     }
   }
@@ -414,7 +415,7 @@ public class TestHoodieRealtimeRecordReader {
     // initial commit
     List<String> logFilePaths = new ArrayList<>();
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
@@ -434,7 +435,7 @@ public class TestHoodieRealtimeRecordReader {
     long size = writer.getCurrentSize();
     logFilePaths.add(writer.getLogFile().getPath().toString());
     writer.close();
-    assertTrue("block - size should be > 0", size > 0);
+    assertTrue(size > 0, "block - size should be > 0");
 
     // write rollback for the previous block in new log file version
     newCommitTime = "102";
@@ -447,7 +448,7 @@ public class TestHoodieRealtimeRecordReader {
     // create a split with baseFile (parquet file written earlier) and new log file(s)
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
         new FileSplit(new Path(partitionDir + "/fileid0_1_" + instantTime + ".parquet"), 0, 1, jobConf),
-        basePath.getRoot().getPath(), logFilePaths, newCommitTime);
+        basePath.toString(), logFilePaths, newCommitTime);
 
     // create a RecordReader to be used by HoodieRealtimeRecordReader
     RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(

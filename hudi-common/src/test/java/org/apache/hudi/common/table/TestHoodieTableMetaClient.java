@@ -18,41 +18,41 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 /**
  * Tests hoodie table meta client {@link HoodieTableMetaClient}.
  */
 public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
-  @Before
+  @BeforeEach
   public void init() throws IOException {
     initMetaClient();
   }
 
   @Test
   public void checkMetadata() {
-    assertEquals("Table name should be raw_trips", HoodieTestUtils.RAW_TRIPS_TEST_NAME,
-        metaClient.getTableConfig().getTableName());
-    assertEquals("Basepath should be the one assigned", basePath, metaClient.getBasePath());
-    assertEquals("Metapath should be ${basepath}/.hoodie", basePath + "/.hoodie", metaClient.getMetaPath());
+    assertEquals(HoodieTestUtils.RAW_TRIPS_TEST_NAME, metaClient.getTableConfig().getTableName(), "Table name should be raw_trips");
+    assertEquals(basePath, metaClient.getBasePath(), "Basepath should be the one assigned");
+    assertEquals(basePath + "/.hoodie", metaClient.getMetaPath(), "Metapath should be ${basepath}/.hoodie");
   }
 
   @Test
@@ -67,16 +67,15 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     commitTimeline.saveAsComplete(instant, Option.of("test-detail".getBytes()));
     commitTimeline = commitTimeline.reload();
     HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
-    assertEquals("Commit should be 1 and completed", completedInstant, commitTimeline.getInstants().findFirst().get());
-    assertArrayEquals("Commit value should be \"test-detail\"", "test-detail".getBytes(),
-        commitTimeline.getInstantDetails(completedInstant).get());
+    assertEquals(completedInstant, commitTimeline.getInstants().findFirst().get(), "Commit should be 1 and completed");
+    assertArrayEquals("test-detail".getBytes(), commitTimeline.getInstantDetails(completedInstant).get(), "Commit value should be \"test-detail\"");
   }
 
   @Test
   public void checkCommitTimeline() {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
-    assertTrue("Should be empty commit timeline", activeCommitTimeline.empty());
+    assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
 
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     activeTimeline.createNewInstant(instant);
@@ -85,21 +84,20 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     // Commit timeline should not auto-reload every time getActiveCommitTimeline(), it should be cached
     activeTimeline = metaClient.getActiveTimeline();
     activeCommitTimeline = activeTimeline.getCommitTimeline();
-    assertTrue("Should be empty commit timeline", activeCommitTimeline.empty());
+    assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
 
     HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
     activeTimeline = activeTimeline.reload();
     activeCommitTimeline = activeTimeline.getCommitTimeline();
-    assertFalse("Should be the 1 commit we made", activeCommitTimeline.empty());
-    assertEquals("Commit should be 1", completedInstant, activeCommitTimeline.getInstants().findFirst().get());
-    assertArrayEquals("Commit value should be \"test-detail\"", "test-detail".getBytes(),
-        activeCommitTimeline.getInstantDetails(completedInstant).get());
+    assertFalse(activeCommitTimeline.empty(), "Should be the 1 commit we made");
+    assertEquals(completedInstant, activeCommitTimeline.getInstants().findFirst().get(), "Commit should be 1");
+    assertArrayEquals("test-detail".getBytes(), activeCommitTimeline.getInstantDetails(completedInstant).get(), "Commit value should be \"test-detail\"");
   }
 
   @Test
   public void testEquals() throws IOException {
-    HoodieTableMetaClient metaClient1 = HoodieTestUtils.init(folder.getRoot().getAbsolutePath(), getTableType());
-    HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(folder.getRoot().getAbsolutePath(), getTableType());
+    HoodieTableMetaClient metaClient1 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
+    HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
     assertEquals(metaClient1, metaClient1);
     assertEquals(metaClient1, metaClient2);
     assertNotEquals(metaClient1, null);
@@ -108,8 +106,8 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
   @Test
   public void testToString() throws IOException {
-    HoodieTableMetaClient metaClient1 = HoodieTestUtils.init(folder.getRoot().getAbsolutePath(), getTableType());
-    HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(folder.getRoot().getAbsolutePath(), getTableType());
+    HoodieTableMetaClient metaClient1 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
+    HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
     assertEquals(metaClient1.toString(), metaClient2.toString());
     assertNotEquals(metaClient1.toString(), new Object().toString());
   }
