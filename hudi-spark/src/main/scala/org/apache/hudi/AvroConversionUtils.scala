@@ -75,7 +75,7 @@ object AvroConversionUtils {
   def convertStructTypeToAvroSchema(structType: StructType,
                                     structName: String,
                                     recordNamespace: String): Schema = {
-    HoodieAvroUtils.rewriteIncorrectDefaults(SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace))
+    HoodieAvroUtils.rewriteIncorrectDefaults(SchemaConverters.toAvroType(structType, nullable = true, structName, recordNamespace))
   }
 
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {

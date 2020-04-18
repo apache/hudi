@@ -23,6 +23,7 @@ import java.util
 
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
+import org.apache.avro.Schema.Type
 import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{Fixed, Record}
@@ -289,7 +290,7 @@ object AvroConversionHelper {
         Option(item).map { _ =>
           val bigDecimalValue = item.asInstanceOf[java.math.BigDecimal]
           val decimalConversions = new DecimalConversion()
-          decimalConversions.toFixed(bigDecimalValue, avroSchema.getField(structName).schema().getTypes.get(0),
+          decimalConversions.toFixed(bigDecimalValue, getNonNullType(avroSchema, structName),
             LogicalTypes.decimal(dec.precision, dec.scale))
         }.orNull
       case TimestampType => (item: Any) =>
@@ -338,7 +339,7 @@ object AvroConversionHelper {
         }
       case structType: StructType =>
         val schema: Schema = HoodieAvroUtils.rewriteIncorrectDefaults(
-          SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace))
+          SchemaConverters.toAvroType(structType, nullable = true, structName, recordNamespace))
         val childNameSpace = if (recordNamespace != "") s"$recordNamespace.$structName" else structName
         val fieldConverters = structType.fields.map(field =>
           createConverterToAvro(
@@ -363,5 +364,11 @@ object AvroConversionHelper {
           }
         }
     }
+  }
+
+  private def getNonNullType(avroSchema: Schema, structName: String) = {
+    asScalaBufferConverter(avroSchema.getField(structName).schema().getTypes)
+      .asScala.find(!_.getName.equals(Type.NULL.getName.toLowerCase))
+      .orNull
   }
 }

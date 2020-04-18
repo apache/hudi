@@ -321,7 +321,17 @@ public class HoodieAvroUtils {
    */
   public static Schema rewriteIncorrectDefaults(Schema schema) {
     rewriteIncorrectDefaults(schema, new HashSet<>());
-    return schema;
+    return getSchemaFromMaybeUnion(schema);
+  }
+
+  private static Schema getSchemaFromMaybeUnion(Schema schema) {
+    if (!Type.UNION.equals(schema.getType())) {
+      return schema;
+    } else {
+      return schema.getTypes().stream()
+          .filter(type -> !type.getName().equals(Type.NULL.getName().toLowerCase()))
+          .findFirst().get();
+    }
   }
 
   /**
