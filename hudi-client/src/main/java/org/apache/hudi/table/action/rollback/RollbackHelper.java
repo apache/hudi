@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock.HoodieCommandBlockTypeEnum;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
@@ -151,25 +152,12 @@ public class RollbackHelper implements Serializable {
     final List<String> successDeleteFiles = new ArrayList<>();
     final List<String> failedDeleteFiles = new ArrayList<>();
     final Map<FileStatus, Long> commandBlocksCount = new HashMap<>();
-
-    if (stat1.getSuccessDeleteFiles() != null) {
-      successDeleteFiles.addAll(stat1.getSuccessDeleteFiles());
-    }
-    if (stat2.getSuccessDeleteFiles() != null) {
-      successDeleteFiles.addAll(stat2.getSuccessDeleteFiles());
-    }
-    if (stat1.getFailedDeleteFiles() != null) {
-      failedDeleteFiles.addAll(stat1.getFailedDeleteFiles());
-    }
-    if (stat2.getFailedDeleteFiles() != null) {
-      failedDeleteFiles.addAll(stat2.getFailedDeleteFiles());
-    }
-    if (stat1.getCommandBlocksCount() != null) {
-      commandBlocksCount.putAll(stat1.getCommandBlocksCount());
-    }
-    if (stat2.getCommandBlocksCount() != null) {
-      commandBlocksCount.putAll(stat2.getCommandBlocksCount());
-    }
+    Option.ofNullable(stat1.getSuccessDeleteFiles()).ifPresent(successDeleteFiles::addAll);
+    Option.ofNullable(stat2.getSuccessDeleteFiles()).ifPresent(successDeleteFiles::addAll);
+    Option.ofNullable(stat1.getFailedDeleteFiles()).ifPresent(failedDeleteFiles::addAll);
+    Option.ofNullable(stat2.getFailedDeleteFiles()).ifPresent(failedDeleteFiles::addAll);
+    Option.ofNullable(stat1.getCommandBlocksCount()).ifPresent(commandBlocksCount::putAll);
+    Option.ofNullable(stat2.getCommandBlocksCount()).ifPresent(commandBlocksCount::putAll);
     return new HoodieRollbackStat(stat1.getPartitionPath(), successDeleteFiles, failedDeleteFiles, commandBlocksCount);
   }
 
