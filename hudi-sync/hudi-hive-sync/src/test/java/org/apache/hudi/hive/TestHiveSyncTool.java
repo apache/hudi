@@ -23,8 +23,13 @@ import java.util.HashMap;
 import java.util.Map;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.session.SessionState;
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.util.ConfigUtils;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
@@ -734,4 +739,131 @@ public class TestHiveSyncTool {
     hiveClient.updateHiveSQL(dropTableSql);
   }
 
+  private void verifyOldParquetFileTest(HoodieHiveClient hiveClient, String emptyCommitTime) throws Exception {
+    assertTrue("Table " + TestUtil.hiveSyncConfig.tableName + " should exist after sync completes",
+        hiveClient.doesTableExist(TestUtil.hiveSyncConfig.tableName));
+    assertEquals("Hive Schema should match the table schema + partition field",
+        hiveClient.getTableSchema(TestUtil.hiveSyncConfig.tableName).size(),
+        hiveClient.getDataSchema().getColumns().size() + 1);
+    assertEquals("Table partitions should match the number of partitions we wrote", 1,
+        hiveClient.scanTablePartitions(TestUtil.hiveSyncConfig.tableName).size());
+    assertEquals("The last commit that was sycned should be updated in the TBLPROPERTIES", emptyCommitTime,
+        hiveClient.getLastCommitTimeSynced(TestUtil.hiveSyncConfig.tableName).get());
+
+    // make sure correct schema is picked
+    Schema schema = SchemaTestUtil.getSimpleSchema();
+    for (Field field : schema.getFields()) {
+      assertEquals(String.format("Hive Schema Field %s was added", field), field.schema().getType().getName(),
+          hiveClient.getTableSchema(TestUtil.hiveSyncConfig.tableName).get(field.name()).toLowerCase());
+    }
+    assertEquals("Hive Schema Field datestr was added", "string",
+        hiveClient.getTableSchema(TestUtil.hiveSyncConfig.tableName).get("datestr").toLowerCase());
+    assertEquals("Hive Schema fields size", schema.getFields().size() + 1,
+        hiveClient.getTableSchema(TestUtil.hiveSyncConfig.tableName).size());
+  }
+
+  @Test
+  public void testPickingOlderParquetFileIfLatestIsEmptyCommit() throws Exception {
+    TestUtil.hiveSyncConfig.useJdbc = this.useJdbc;
+    final String commitTime = "100";
+    TestUtil.createCOWTable(commitTime, 1);
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    // create empty commit
+    final String emptyCommitTime = "200";
+    TestUtil.createCommitFile(commitMetadata, emptyCommitTime);
+    HoodieHiveClient hiveClient =
+        new HoodieHiveClient(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
+    assertFalse("Table " + TestUtil.hiveSyncConfig.tableName + " should not exist initially",
+        hiveClient.doesTableExist(TestUtil.hiveSyncConfig.tableName));
+
+    HiveSyncTool tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
+    tool.syncHoodieTable();
+
+    verifyOldParquetFileTest(hiveClient, emptyCommitTime);
+  }
+
+  @Test
+  public void testNotPickingOlderParquetFileWhenLatestCommitReadFails() throws Exception {
+    TestUtil.hiveSyncConfig.useJdbc = this.useJdbc;
+    final String commitTime = "100";
+    TestUtil.createCOWTable(commitTime, 1);
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    // evolve the schema
+    DateTime dateTime = DateTime.now().plusDays(6);
+    String commitTime2 = "101";
+    TestUtil.addCOWPartitions(1, false, dateTime, commitTime2);
+
+    // create empty commit
+    final String emptyCommitTime = "200";
+    TestUtil.createCommitFile(commitMetadata, emptyCommitTime);
+
+    HoodieHiveClient hiveClient =
+        new HoodieHiveClient(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
+    assertFalse("Table " + TestUtil.hiveSyncConfig.tableName + " should not exist initially",
+        hiveClient.doesTableExist(TestUtil.hiveSyncConfig.tableName));
+
+    HiveSyncTool tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
+
+    // now delete the evolved commit instant
+    Path fullPath = new Path(TestUtil.hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + hiveClient.getActiveTimeline().getInstants()
+        .filter(inst -> inst.getTimestamp().equals(commitTime2))
+        .findFirst().get().getFileName());
+    assertTrue(TestUtil.fileSystem.delete(fullPath, false));
+
+    try {
+      tool.syncHoodieTable();
+    } catch (RuntimeException e) {
+      // we expect the table sync to fail
+    }
+
+    // table should not be synced yet
+    assertFalse("Table " + TestUtil.hiveSyncConfig.tableName + " should not exist at all",
+        hiveClient.doesTableExist(TestUtil.hiveSyncConfig.tableName));
+  }
+
+  @Test
+  public void testNotPickingOlderParquetFileWhenLatestCommitReadFailsForExistingTable() throws Exception {
+    TestUtil.hiveSyncConfig.useJdbc = this.useJdbc;
+    final String commitTime = "100";
+    TestUtil.createCOWTable(commitTime, 1);
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    // create empty commit
+    final String emptyCommitTime = "200";
+    TestUtil.createCommitFile(commitMetadata, emptyCommitTime);
+    HoodieHiveClient hiveClient =
+        new HoodieHiveClient(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
+    assertFalse("Table " + TestUtil.hiveSyncConfig.tableName + " should not exist initially",
+        hiveClient.doesTableExist(TestUtil.hiveSyncConfig.tableName));
+
+    HiveSyncTool tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
+    tool.syncHoodieTable();
+
+    verifyOldParquetFileTest(hiveClient, emptyCommitTime);
+
+    // evolve the schema
+    DateTime dateTime = DateTime.now().plusDays(6);
+    String commitTime2 = "301";
+    TestUtil.addCOWPartitions(1, false, dateTime, commitTime2);
+    TestUtil.createCommitFile(commitMetadata, "400"); // create another empty commit
+
+    tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
+    HoodieHiveClient hiveClientLatest = new HoodieHiveClient(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
+    // now delete the evolved commit instant
+    Path fullPath = new Path(TestUtil.hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + hiveClientLatest.getActiveTimeline().getInstants()
+            .filter(inst -> inst.getTimestamp().equals(commitTime2))
+            .findFirst().get().getFileName());
+    assertTrue(TestUtil.fileSystem.delete(fullPath, false));
+
+    try {
+      tool.syncHoodieTable();
+    } catch (RuntimeException e) {
+      // we expect the table sync to fail
+    }
+
+    // old sync values should be left intact
+    verifyOldParquetFileTest(hiveClient, emptyCommitTime);
+  }
 }
