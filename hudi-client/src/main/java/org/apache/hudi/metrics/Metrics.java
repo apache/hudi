@@ -52,9 +52,11 @@ public class Metrics {
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       try {
         reporter.report();
-        getReporter().close();
+        if (getReporter() != null) {
+          getReporter().close();
+        }
       } catch (Exception e) {
-        e.printStackTrace();
+        LOG.warn("Error while closing reporter", e);
       }
     }));
   }
