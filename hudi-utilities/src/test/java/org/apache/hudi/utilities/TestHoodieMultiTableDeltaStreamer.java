@@ -105,10 +105,10 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
     assertEquals(streamer.getTableExecutionContexts().size(), 2);
     assertEquals(executionContext.getConfig().targetBasePath, dfsBasePath + "/multi_table_dataset/uber_db/dummy_table_uber");
     assertEquals(executionContext.getConfig().targetTableName, "uber_db.dummy_table_uber");
-    assertEquals(executionContext.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.KAFKA_TOPIC_PROP), "topic1");
+    assertEquals(executionContext.getProperties().getString(DeltaStreamerUtility.Constants.KAFKA_TOPIC_PROP), "topic1");
     assertEquals(executionContext.getProperties().getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()), "_row_key");
     assertEquals(executionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY()), TestHoodieDeltaStreamer.TestGenerator.class.getName());
-    assertEquals(executionContext.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.HIVE_SYNC_TABLE_PROP), "uber_hive_dummy_table");
+    assertEquals(executionContext.getProperties().getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY()), "uber_hive_dummy_table");
   }
 
   @Test

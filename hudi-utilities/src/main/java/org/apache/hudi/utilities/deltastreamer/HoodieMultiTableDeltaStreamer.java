@@ -26,12 +26,12 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.DeltaStreamerUtility;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 
 import com.beust.jcommander.JCommander;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.utilities.sources.JsonDFSSource;
 import org.apache.log4j.LogManager;
@@ -72,7 +72,7 @@ public class HoodieMultiTableDeltaStreamer {
     FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
     configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
     checkIfPropsFileAndConfigFolderExist(commonPropsFile, configFolder, fs);
-    TypedProperties properties = UtilHelpers.readConfig(fs, new Path(commonPropsFile), new ArrayList<>()).getConfig();
+    TypedProperties properties = UtilHelpers.readConfig(fs, new Path(commonPropsFile), config.configs).getConfig();
     //get the tables to be ingested and their corresponding config files from this properties instance
     populateTableExecutionContextList(properties, configFolder, fs, config);
   }
@@ -87,18 +87,6 @@ public class HoodieMultiTableDeltaStreamer {
     }
   }
 
-  private void checkIfTableConfigFileExists(String configFolder, FileSystem fs, String configFilePath) throws IOException {
-    if (!fs.exists(new Path(configFilePath)) || !fs.isFile(new Path(configFilePath))) {
-      throw new IllegalArgumentException("Please provide valid table config file path!");
-    }
-
-    Path path = new Path(configFilePath);
-    Path filePathInConfigFolder = new Path(configFolder, path.getName());
-    if (!fs.exists(filePathInConfigFolder)) {
-      FileUtil.copy(fs, path, fs, filePathInConfigFolder, false, fs.getConf());
-    }
-  }
-
   //commonProps are passed as parameter which contain table to config file mapping
   private void populateTableExecutionContextList(TypedProperties properties, String configFolder, FileSystem fs, Config config) throws IOException {
     List<String> tablesToBeIngested = getTablesToBeIngested(properties);
@@ -108,9 +96,9 @@ public class HoodieMultiTableDeltaStreamer {
       String[] tableWithDatabase = table.split("\\.");
       String database = tableWithDatabase.length > 1 ? tableWithDatabase[0] : "default";
       String currentTable = tableWithDatabase.length > 1 ? tableWithDatabase[1] : table;
-      String configProp = Constants.INGESTION_PREFIX + database + Constants.DELIMITER + currentTable + Constants.INGESTION_CONFIG_SUFFIX;
-      String configFilePath = properties.getString(configProp, Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
-      checkIfTableConfigFileExists(configFolder, fs, configFilePath);
+      String configProp = DeltaStreamerUtility.Constants.INGESTION_PREFIX + database + DeltaStreamerUtility.Constants.DELIMITER + currentTable + DeltaStreamerUtility.Constants.INGESTION_CONFIG_SUFFIX;
+      String configFilePath = properties.getString(configProp, DeltaStreamerUtility.getDefaultConfigFilePath(configFolder, database, currentTable));
+      DeltaStreamerUtility.checkIfTableConfigFileExists(configFolder, fs, configFilePath);
       TypedProperties tableProperties = UtilHelpers.readConfig(fs, new Path(configFilePath), new ArrayList<>()).getConfig();
       properties.forEach((k,v) -> {
         tableProperties.setProperty(k.toString(), v.toString());
@@ -118,8 +106,8 @@ public class HoodieMultiTableDeltaStreamer {
       final HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
       //copy all the values from config to cfg
       String targetBasePath = resetTarget(config, database, currentTable);
-      Helpers.deepCopyConfigs(config, cfg);
-      String overriddenTargetBasePath = tableProperties.getString(Constants.TARGET_BASE_PATH_PROP, "");
+      DeltaStreamerUtility.deepCopyConfigs(config, cfg);
+      String overriddenTargetBasePath = tableProperties.getString(DeltaStreamerUtility.Constants.TARGET_BASE_PATH_PROP, "");
       cfg.targetBasePath = StringUtils.isNullOrEmpty(overriddenTargetBasePath) ? targetBasePath : overriddenTargetBasePath;
       if (cfg.enableHiveSync && StringUtils.isNullOrEmpty(tableProperties.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), ""))) {
         throw new HoodieException("Hive sync table field not provided!");
@@ -135,56 +123,22 @@ public class HoodieMultiTableDeltaStreamer {
   }
 
   private List<String> getTablesToBeIngested(TypedProperties properties) {
-    String combinedTablesString = properties.getString(Constants.TABLES_TO_BE_INGESTED_PROP);
+    String combinedTablesString = properties.getString(DeltaStreamerUtility.Constants.TABLES_TO_BE_INGESTED_PROP);
     if (combinedTablesString == null) {
       return new ArrayList<>();
     }
-    String[] tablesArray = combinedTablesString.split(Constants.COMMA_SEPARATOR);
+    String[] tablesArray = combinedTablesString.split(DeltaStreamerUtility.Constants.COMMA_SEPARATOR);
     return Arrays.asList(tablesArray);
   }
 
   private void populateSchemaProviderProps(HoodieDeltaStreamer.Config cfg, TypedProperties typedProperties) {
     if (cfg.schemaProviderClassName.equals(SchemaRegistryProvider.class.getName())) {
-      String schemaRegistryBaseUrl = typedProperties.getString(Constants.SCHEMA_REGISTRY_BASE_URL_PROP);
-      String schemaRegistrySuffix = typedProperties.getString(Constants.SCHEMA_REGISTRY_URL_SUFFIX_PROP);
-      typedProperties.setProperty(Constants.SOURCE_SCHEMA_REGISTRY_URL_PROP, schemaRegistryBaseUrl + typedProperties.getString(Constants.KAFKA_TOPIC_PROP) + schemaRegistrySuffix);
-      typedProperties.setProperty(Constants.TARGET_SCHEMA_REGISTRY_URL_PROP, schemaRegistryBaseUrl + typedProperties.getString(Constants.KAFKA_TOPIC_PROP) + schemaRegistrySuffix);
-    }
-  }
-
-  public static class Helpers {
-
-    static String getDefaultConfigFilePath(String configFolder, String database, String currentTable) {
-      return configFolder + Constants.FILEDELIMITER + database + Constants.UNDERSCORE + currentTable + Constants.DEFAULT_CONFIG_FILE_NAME_SUFFIX;
-    }
-
-    static String getTableWithDatabase(TableExecutionContext context) {
-      return context.getDatabase() + Constants.DELIMITER + context.getTableName();
-    }
-
-    static void deepCopyConfigs(Config globalConfig, HoodieDeltaStreamer.Config tableConfig) {
-      tableConfig.enableHiveSync = globalConfig.enableHiveSync;
-      tableConfig.schemaProviderClassName = globalConfig.schemaProviderClassName;
-      tableConfig.sourceOrderingField = globalConfig.sourceOrderingField;
-      tableConfig.sourceClassName = globalConfig.sourceClassName;
-      tableConfig.tableType = globalConfig.tableType;
-      tableConfig.targetTableName = globalConfig.targetTableName;
-      tableConfig.operation = globalConfig.operation;
-      tableConfig.sourceLimit = globalConfig.sourceLimit;
-      tableConfig.checkpoint = globalConfig.checkpoint;
-      tableConfig.continuousMode = globalConfig.continuousMode;
-      tableConfig.filterDupes = globalConfig.filterDupes;
-      tableConfig.payloadClassName = globalConfig.payloadClassName;
-      tableConfig.forceDisableCompaction = globalConfig.forceDisableCompaction;
-      tableConfig.maxPendingCompactions = globalConfig.maxPendingCompactions;
-      tableConfig.minSyncIntervalSeconds = globalConfig.minSyncIntervalSeconds;
-      tableConfig.transformerClassNames = globalConfig.transformerClassNames;
-      tableConfig.commitOnErrors = globalConfig.commitOnErrors;
-      tableConfig.compactSchedulingMinShare = globalConfig.compactSchedulingMinShare;
-      tableConfig.compactSchedulingWeight = globalConfig.compactSchedulingWeight;
-      tableConfig.deltaSyncSchedulingMinShare = globalConfig.deltaSyncSchedulingMinShare;
-      tableConfig.deltaSyncSchedulingWeight = globalConfig.deltaSyncSchedulingWeight;
-      tableConfig.sparkMaster = globalConfig.sparkMaster;
+      String schemaRegistryBaseUrl = typedProperties.getString(DeltaStreamerUtility.Constants.SCHEMA_REGISTRY_BASE_URL_PROP);
+      String schemaRegistrySuffix = typedProperties.getString(DeltaStreamerUtility.Constants.SCHEMA_REGISTRY_URL_SUFFIX_PROP);
+      typedProperties.setProperty(DeltaStreamerUtility.Constants.SOURCE_SCHEMA_REGISTRY_URL_PROP, schemaRegistryBaseUrl
+          + typedProperties.getString(DeltaStreamerUtility.Constants.KAFKA_TOPIC_PROP) + schemaRegistrySuffix);
+      typedProperties.setProperty(DeltaStreamerUtility.Constants.TARGET_SCHEMA_REGISTRY_URL_PROP, schemaRegistryBaseUrl
+          + typedProperties.getString(DeltaStreamerUtility.Constants.KAFKA_TOPIC_PROP) + schemaRegistrySuffix);
     }
   }
 
@@ -195,7 +149,7 @@ public class HoodieMultiTableDeltaStreamer {
       cmd.usage();
       System.exit(1);
     }
-    JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-delta-streamer", Constants.LOCAL_SPARK_MASTER);
+    JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-delta-streamer", DeltaStreamerUtility.Constants.LOCAL_SPARK_MASTER);
     try {
       new HoodieMultiTableDeltaStreamer(config, jssc).sync();
     } finally {
@@ -338,8 +292,8 @@ public class HoodieMultiTableDeltaStreamer {
   private static String resetTarget(Config configuration, String database, String tableName) {
     String basePathPrefix = configuration.basePathPrefix;
     basePathPrefix = basePathPrefix.charAt(basePathPrefix.length() - 1) == '/' ? basePathPrefix.substring(0, basePathPrefix.length() - 1) : basePathPrefix;
-    String targetBasePath = basePathPrefix + Constants.FILEDELIMITER + database + Constants.FILEDELIMITER + tableName;
-    configuration.targetTableName = database + Constants.DELIMITER + tableName;
+    String targetBasePath = basePathPrefix + DeltaStreamerUtility.Constants.FILEDELIMITER + database + DeltaStreamerUtility.Constants.FILEDELIMITER + tableName;
+    configuration.targetTableName = database + DeltaStreamerUtility.Constants.DELIMITER + tableName;
     return targetBasePath;
   }
 
@@ -350,10 +304,10 @@ public class HoodieMultiTableDeltaStreamer {
     for (TableExecutionContext context : tableExecutionContexts) {
       try {
         new HoodieDeltaStreamer(context.getConfig(), jssc, context.getProperties()).sync();
-        successTables.add(Helpers.getTableWithDatabase(context));
+        successTables.add(DeltaStreamerUtility.getTableWithDatabase(context));
       } catch (Exception e) {
         logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
-        failedTables.add(Helpers.getTableWithDatabase(context));
+        failedTables.add(DeltaStreamerUtility.getTableWithDatabase(context));
       }
     }
 
@@ -361,25 +315,6 @@ public class HoodieMultiTableDeltaStreamer {
     if (!failedTables.isEmpty()) {
       logger.info("Ingestion failed for topics: " + failedTables);
     }
-  }
-
-  public static class Constants {
-    public static final String KAFKA_TOPIC_PROP = "hoodie.deltastreamer.source.kafka.topic";
-    private static final String SOURCE_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
-    private static final String TARGET_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
-    public static final String HIVE_SYNC_TABLE_PROP = "hoodie.datasource.hive_sync.table";
-    private static final String SCHEMA_REGISTRY_BASE_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.baseUrl";
-    private static final String SCHEMA_REGISTRY_URL_SUFFIX_PROP = "hoodie.deltastreamer.schemaprovider.registry.urlSuffix";
-    private static final String TABLES_TO_BE_INGESTED_PROP = "hoodie.deltastreamer.ingestion.tablesToBeIngested";
-    private static final String INGESTION_PREFIX = "hoodie.deltastreamer.ingestion.";
-    private static final String INGESTION_CONFIG_SUFFIX = ".configFile";
-    private static final String DEFAULT_CONFIG_FILE_NAME_SUFFIX = "_config.properties";
-    private static final String TARGET_BASE_PATH_PROP = "hoodie.deltastreamer.ingestion.targetBasePath";
-    private static final String LOCAL_SPARK_MASTER = "local[2]";
-    private static final String FILEDELIMITER = "/";
-    private static final String DELIMITER = ".";
-    private static final String UNDERSCORE = "_";
-    private static final String COMMA_SEPARATOR = ",";
   }
 
   public Set<String> getSuccessTables() {

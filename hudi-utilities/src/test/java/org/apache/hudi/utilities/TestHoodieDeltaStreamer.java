@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -102,6 +103,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final Random RANDOM = new Random();
   private static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
   public static final String PROPS_FILENAME_TEST_SOURCE1 = "test-source1.properties";
+  public static final String PROPS_CUSTOM_CONFIG_TABLE_FILENAME = "custom-config-table.properties";
+  public static final String PROPS_INVALID_CONFIG_TABLE_FILENAME = "custom-table-invalid-config.properties";
   public static final String PROPS_INVALID_HIVE_SYNC_TEST_SOURCE1 = "test-invalid-hive-sync-source1.properties";
   public static final String PROPS_INVALID_FILE = "test-invalid-props.properties";
   public static final String PROPS_INVALID_TABLE_CONFIG_FILE = "test-invalid-table-config.properties";
@@ -140,12 +143,13 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/invalid_hive_sync_uber_config.properties", dfs, dfsBasePath + "/config/invalid_hive_sync_uber_config.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/uber_config.properties", dfs, dfsBasePath + "/config/uber_config.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/short_trip_uber_config.properties", dfs, dfsBasePath + "/config/short_trip_uber_config.properties");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/customised_table_config.properties", dfs, dfsBasePath + "/config/customised_table_config.properties");
 
     TypedProperties props = new TypedProperties();
     props.setProperty("include", "sql-transformer.properties");
-    props.setProperty("hoodie.datasource.write.keygenerator.class", TestGenerator.class.getName());
-    props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    props.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    props.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(), TestGenerator.class.getName());
+    props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key");
+    props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "not_there");
     props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
 
@@ -162,8 +166,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // downstream hudi table
     TypedProperties downstreamProps = new TypedProperties();
     downstreamProps.setProperty("include", "base.properties");
-    downstreamProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    downstreamProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    downstreamProps.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key");
+    downstreamProps.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "not_there");
 
     // Source schema is the target schema of upstream table
     downstreamProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/target.avsc");
@@ -173,9 +177,9 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // Properties used for testing invalid key generator
     TypedProperties invalidProps = new TypedProperties();
     invalidProps.setProperty("include", "sql-transformer.properties");
-    invalidProps.setProperty("hoodie.datasource.write.keygenerator.class", "invalid");
-    invalidProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    invalidProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    invalidProps.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(), "invalid");
+    invalidProps.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key");
+    invalidProps.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "not_there");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_INVALID);
@@ -183,6 +187,14 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     TypedProperties props1 = new TypedProperties();
     populateCommonProps(props1);
     UtilitiesTestBase.Helpers.savePropsToDFS(props1, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
+
+    TypedProperties props2 = new TypedProperties();
+    populateCommonPropsFile(props2);
+    UtilitiesTestBase.Helpers.savePropsToDFS(props2, dfs, dfsBasePath + "/" + PROPS_CUSTOM_CONFIG_TABLE_FILENAME);
+
+    TypedProperties propsWithInvalidConfigFilePath = new TypedProperties();
+    populateInvalidConfigFilePathProps(propsWithInvalidConfigFilePath);
+    UtilitiesTestBase.Helpers.savePropsToDFS(propsWithInvalidConfigFilePath, dfs, dfsBasePath + "/" + PROPS_INVALID_CONFIG_TABLE_FILENAME);
 
     TypedProperties properties = new TypedProperties();
     populateInvalidTableConfigFilePathProps(properties);
@@ -197,14 +209,25 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   private static void populateInvalidTableConfigFilePathProps(TypedProperties props) {
-    props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
+    props.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(), TestHoodieDeltaStreamer.TestGenerator.class.getName());
     props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
     props.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "uber_db.dummy_table_uber");
     props.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/invalid_uber_config.properties");
   }
 
+  private static void populateInvalidConfigFilePathProps(TypedProperties props) {
+    props.setProperty("hoodie.deltastreamer.ingestion.default.customised_config_table.configFile", dfsBasePath + "/config/random_table_config2.properties");
+    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "custom_hive_db");
+  }
+
+  private static void populateCommonPropsFile(TypedProperties props) {
+    props.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(), TestHoodieDeltaStreamer.TestGenerator.class.getName());
+    props.setProperty("hoodie.deltastreamer.ingestion.default.customised_config_table.configFile", dfsBasePath + "/config/customised_table_config.properties");
+    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "custom_hive_db");
+  }
+
   private static void populateCommonProps(TypedProperties props) {
-    props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
+    props.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(), TestHoodieDeltaStreamer.TestGenerator.class.getName());
     props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
     props.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "short_trip_db.dummy_table_short_trip,uber_db.dummy_table_uber");
     props.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/uber_config.properties");
@@ -265,15 +288,17 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
                                                  String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass, boolean updatePayloadClass,
                                                  String payloadClassName, String tableType) {
       return makeConfig(basePath, op, TestDataSource.class.getName(), transformerClassNames, propsFilename, enableHiveSync,
-          useSchemaProviderClass, 1000, updatePayloadClass, payloadClassName, tableType, "timestamp");
+          useSchemaProviderClass, 1000, updatePayloadClass, payloadClassName, tableType, "timestamp", null, null);
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, String sourceClassName,
                                                  List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
-                                                 int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField) {
+                                                 int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField,
+                                                 String configFolder, String targetTableName) {
       HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
       cfg.targetBasePath = basePath;
-      cfg.targetTableName = "hoodie_trips";
+      cfg.configFolder = configFolder;
+      cfg.targetTableName = StringUtils.isNullOrEmpty(targetTableName) ? "hoodie_trips" : targetTableName;
       cfg.tableType = tableType == null ? "COPY_ON_WRITE" : tableType;
       cfg.sourceClassName = sourceClassName;
       cfg.transformerClassNames = transformerClassNames;
@@ -389,9 +414,40 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     TypedProperties props =
         new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getConfig();
     assertEquals(2, props.getInteger("hoodie.upsert.shuffle.parallelism"));
-    assertEquals("_row_key", props.getString("hoodie.datasource.write.recordkey.field"));
+    assertEquals("_row_key", props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()));
     assertEquals("org.apache.hudi.utilities.TestHoodieDeltaStreamer$TestGenerator",
-        props.getString("hoodie.datasource.write.keygenerator.class"));
+        props.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY()));
+  }
+
+  @Test
+  public void testPropsWithConfigFolder() throws IOException {
+    String tableBasePath = dfsBasePath + "/customised_config_table";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.UPSERT, TestDataSource.class.getCanonicalName(), null,
+        PROPS_CUSTOM_CONFIG_TABLE_FILENAME, false, false, 1000, false, null, null,
+        "timestamp", dfsBasePath + "/config", "customised_config_table");
+    TypedProperties properties = DeltaStreamerUtility.getTablePropertiesFromConfigFolder(cfg, dfs);
+    assertEquals(properties.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()), "custom_id");
+    assertEquals(properties.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()), "custom_time");
+    assertEquals(properties.getString(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY()), "custom_hive_db");
+    assertEquals(properties.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY()), TestHoodieDeltaStreamer.TestGenerator.class.getName());
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testInvalidPropsWithConfigFolder() throws IOException {
+    String tableBasePath = dfsBasePath + "/customised_config_table";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.UPSERT, TestDataSource.class.getCanonicalName(), null,
+        "invalid-common-props-file.properties", false, false, 1000, false, null, null,
+        "timestamp", dfsBasePath + "/config", "customised_config_table");
+    DeltaStreamerUtility.getTablePropertiesFromConfigFolder(cfg, dfs);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testInvalidConfigFilePathWithConfigFolder() throws IOException {
+    String tableBasePath = dfsBasePath + "/customised_config_table";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.UPSERT, TestDataSource.class.getCanonicalName(), null,
+        PROPS_INVALID_CONFIG_TABLE_FILENAME, false, false, 1000, false, null, null,
+        "timestamp", dfsBasePath + "/config", "customised_config_table");
+    DeltaStreamerUtility.getTablePropertiesFromConfigFolder(cfg, dfs);
   }
 
   @Test
@@ -748,8 +804,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = new TypedProperties();
     parquetProps.setProperty("include", "base.properties");
-    parquetProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    parquetProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    parquetProps.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key");
+    parquetProps.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "not_there");
     if (useSchemaProvider) {
       parquetProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
       if (hasTransformer) {
@@ -767,7 +823,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
         TestHelpers.makeConfig(tableBasePath, Operation.INSERT, ParquetDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
-            useSchemaProvider, 100000, false, null, null, "timestamp"), jsc);
+            useSchemaProvider, 100000, false, null, null, "timestamp", null, null), jsc);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
     testNum++;
@@ -801,8 +857,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // Properties used for testing delta-streamer with CSV source
     TypedProperties csvProps = new TypedProperties();
     csvProps.setProperty("include", "base.properties");
-    csvProps.setProperty("hoodie.datasource.write.recordkey.field", recordKeyField);
-    csvProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    csvProps.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), recordKeyField);
+    csvProps.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "not_there");
     if (useSchemaProvider) {
       csvProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source-flattened.avsc");
       if (hasTransformer) {
@@ -841,7 +897,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
         new HoodieDeltaStreamer(TestHelpers.makeConfig(
             tableBasePath, Operation.INSERT, CsvDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_CSV, false,
-            useSchemaProvider, 1000, false, null, null, sourceOrderingField), jsc);
+            useSchemaProvider, 1000, false, null, null, sourceOrderingField, null, null), jsc);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(CSV_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
     testNum++;
