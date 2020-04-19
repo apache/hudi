@@ -21,7 +21,7 @@ spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
-{% highlight python %}
+```python
 export PYSPARK_PYTHON=$(which python3)
 spark-2.4.4-bin-hadoop2.7/bin/pyspark \
   --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
@@ -53,7 +53,7 @@ val basePath = "file:///tmp/hudi_trips_cow"
 val dataGen = new DataGenerator
 ```
 
-{% highlight python %}
+```python
 tableName = "hudi_trips_cow"
 basePath = "file:///tmp/hudi_trips_cow"
 dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
@@ -81,7 +81,7 @@ df.write.format("hudi").
   save(basePath)
 ``` 
 
-{% highlight python %}
+```python
 inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateInserts(10))
 df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 
@@ -127,7 +127,7 @@ spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
 ```
 
-{% highlight python %}
+```python
 tripsSnapshotDF = spark. \
   read. \
   format("hudi"). \
@@ -162,7 +162,7 @@ df.write.format("hudi").
   save(basePath)
 ```
 
-{% highlight python %}
+```python
 updates = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateUpdates(10))
 df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
 df.write.format("hudi"). \
@@ -203,7 +203,7 @@ tripsIncrementalDF.createOrReplaceTempView("hudi_trips_incremental")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
 ``` 
 
-{% highlight python %}
+```python
 # reload data
 spark. \
   read. \
@@ -250,7 +250,8 @@ val tripsPointInTimeDF = spark.read.format("hudi").
 tripsPointInTimeDF.createOrReplaceTempView("hudi_trips_point_in_time")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hudi_trips_point_in_time where fare > 20.0").show()
 ```
-{% highlight python %}
+
+```python
 beginTime = "000" # Represents all commits > this time.
 endTime = commits[len(commits) - 2]
 
@@ -265,6 +266,7 @@ tripsPointInTimeDF = spark.read.format("hudi"). \
 tripsPointInTimeDF.createOrReplaceTempView("hudi_trips_point_in_time")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hudi_trips_point_in_time where fare > 20.0").show()
 ```
+
 ## Delete data {#deletes}
 Delete records for the HoodieKeys passed in.
 
@@ -298,7 +300,7 @@ spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
 ```
 Note: Only `Append` mode is supported for delete operation.
 
-{% highlight python %}
+```python
 # fetch total records count
 spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
 # fetch two records to be deleted
