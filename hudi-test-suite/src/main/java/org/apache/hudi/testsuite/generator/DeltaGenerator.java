@@ -34,12 +34,12 @@ import org.apache.hudi.testsuite.writer.WriteStats;
 import org.apache.hudi.utilities.converter.Converter;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.storage.StorageLevel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -60,7 +60,7 @@ import scala.Tuple2;
  */
 public class DeltaGenerator implements Serializable {
 
-  private static Logger log = LogManager.getLogger(DFSHoodieDatasetInputReader.class);
+  private static Logger log = LoggerFactory.getLogger(DFSHoodieDatasetInputReader.class);
 
   private DeltaConfig deltaOutputConfig;
   private transient JavaSparkContext jsc;

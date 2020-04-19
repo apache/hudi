@@ -21,8 +21,8 @@ package org.apache.hudi.testsuite.dag.nodes;
 import org.apache.hudi.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.testsuite.dag.ExecutionContext;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -35,7 +35,7 @@ import java.util.UUID;
  */
 public abstract class DagNode<O> implements Comparable<DagNode<O>> {
 
-  protected static Logger log = LogManager.getLogger(DagNode.class);
+  protected static Logger log = LoggerFactory.getLogger(DagNode.class);
 
   protected List<DagNode<O>> childNodes;
   protected List<DagNode<O>> parentNodes;

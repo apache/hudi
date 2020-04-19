@@ -24,8 +24,8 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -42,7 +42,7 @@ import java.util.UUID;
 public class GenericRecordFullPayloadGenerator implements Serializable {
 
   public static final int DEFAULT_PAYLOAD_SIZE = 1024 * 10; // 10 KB
-  private static Logger log = LogManager.getLogger(GenericRecordFullPayloadGenerator.class);
+  private static Logger log = LoggerFactory.getLogger(GenericRecordFullPayloadGenerator.class);
   protected final Random random = new Random();
   // The source schema used to generate a payload
   private final transient Schema baseSchema;
@@ -71,8 +71,8 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     if (this.shouldAddMore) {
       this.numberOfBytesToAdd = minPayloadSize - estimatedFullPayloadSize;
       if (numberOfComplexFields < 1) {
-        log.warn("The schema does not have any collections/complex fields. Cannot achieve minPayloadSize => "
-            + minPayloadSize);
+        log.warn("The schema does not have any collections/complex fields. Cannot achieve minPayloadSize : {}",
+            minPayloadSize);
       }
     }
   }

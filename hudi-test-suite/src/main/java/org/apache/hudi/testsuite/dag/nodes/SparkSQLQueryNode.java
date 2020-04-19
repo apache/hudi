@@ -38,7 +38,7 @@ public class SparkSQLQueryNode extends DagNode<Boolean> {
 
   @Override
   public void execute(ExecutionContext executionContext) throws Exception {
-    log.info("Executing spark sql query node...");
+    log.info("Executing spark sql query node");
     this.hiveServiceProvider.startLocalHiveServiceIfNeeded(executionContext.getDeltaWriter().getConfiguration());
     this.hiveServiceProvider.syncToLocalHiveIfNeeded(executionContext.getDeltaWriter());
     SparkSession session = SparkSession.builder().sparkContext(executionContext.getJsc().sc()).getOrCreate();
@@ -46,7 +46,7 @@ public class SparkSQLQueryNode extends DagNode<Boolean> {
       session.sql(hiveProperty).count();
     }
     for (Pair<String, Integer> queryAndResult : this.config.getHiveQueries()) {
-      log.info("Running => " + queryAndResult.getLeft());
+      log.info("Running {}", queryAndResult.getLeft());
       Dataset<Row> res = session.sql(queryAndResult.getLeft());
       if (res.count() == 0) {
         assert 0 == queryAndResult.getRight();

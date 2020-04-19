@@ -27,7 +27,7 @@ public class CleanNode extends DagNode<Boolean> {
 
   @Override
   public void execute(ExecutionContext executionContext) throws Exception {
-    log.info("Executing clean node " + this.getName());
+    log.info("Executing clean node {}", this.getName());
     executionContext.getDeltaWriter().getWriteClient().clean();
   }
 

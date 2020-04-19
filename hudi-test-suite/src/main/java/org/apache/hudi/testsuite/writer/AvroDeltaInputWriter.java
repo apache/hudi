@@ -30,7 +30,8 @@ import org.apache.avro.io.DatumWriter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -42,7 +43,7 @@ import java.util.UUID;
 public class AvroDeltaInputWriter implements FileDeltaInputWriter<GenericRecord> {
 
   public static final String AVRO_EXTENSION = ".avro";
-  private static Logger log = Logger.getLogger(AvroDeltaInputWriter.class);
+  private static Logger log = LoggerFactory.getLogger(AvroDeltaInputWriter.class);
   // The maximum file size for an avro file before being rolled over to a new one
   private final Long maxFileSize;
   private final Configuration configuration;
@@ -97,7 +98,7 @@ public class AvroDeltaInputWriter implements FileDeltaInputWriter<GenericRecord>
     this.writeStats.setRecordsWritten(this.recordsWritten);
     this.writeStats.setFilePath(this.file.toUri().getPath());
     this.dataFileWriter.close();
-    log.info("New Avro File => " + getPath());
+    log.info("New Avro File : {}", getPath());
   }
 
   @Override

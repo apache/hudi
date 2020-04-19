@@ -22,11 +22,11 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.testsuite.DeltaInputFormat;
 import org.apache.hudi.testsuite.DeltaOutputType;
 import org.apache.hudi.testsuite.configuration.DFSDeltaConfig;
@@ -46,10 +46,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -60,7 +60,7 @@ import java.io.IOException;
  */
 public class HoodieTestSuiteJob {
 
-  private static volatile Logger log = LogManager.getLogger(HoodieTestSuiteJob.class);
+  private static volatile Logger log = LoggerFactory.getLogger(HoodieTestSuiteJob.class);
 
   private final HoodieTestSuiteConfig cfg;
   /**
@@ -96,7 +96,7 @@ public class HoodieTestSuiteJob {
     this.sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
     this.fs = FSUtils.getFs(cfg.inputBasePath, jsc.hadoopConfiguration());
     this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
-    log.info("Creating workload generator with configs : " + props.toString());
+    log.info("Creating workload generator with configs : {}", props.toString());
     this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jsc);
     this.hiveConf = getDefaultHiveConf(jsc.hadoopConfiguration());
     this.keyGenerator = DataSourceUtils.createKeyGenerator(props);
