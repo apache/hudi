@@ -10,18 +10,20 @@ code snippets that allows you to insert and update a Hudi table of default table
 [Copy on Write](/docs/concepts.html#copy-on-write-table). 
 After each write operation we will also show how to read the data both snapshot and incrementally.
 
-## Setup spark-shell
+## Setup
 
 Hudi works with Spark-2.x versions. You can follow instructions [here](https://spark.apache.org/downloads.html) for setting up spark. 
 From the extracted directory run spark-shell with Hudi as:
 
 ```scala
+// spark-shell
 spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
   --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
 ```python
+# pyspark
 export PYSPARK_PYTHON=$(which python3)
 spark-2.4.4-bin-hadoop2.7/bin/pyspark \
   --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
@@ -41,6 +43,7 @@ spark-2.4.4-bin-hadoop2.7/bin/pyspark \
 Setup table name, base path and a data generator to generate records for this guide.
 
 ```scala
+// spark-shell
 import org.apache.hudi.QuickstartUtils._
 import scala.collection.JavaConversions._
 import org.apache.spark.sql.SaveMode._
@@ -54,6 +57,7 @@ val dataGen = new DataGenerator
 ```
 
 ```python
+# pyspark
 tableName = "hudi_trips_cow"
 basePath = "file:///tmp/hudi_trips_cow"
 dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
@@ -69,6 +73,7 @@ can generate sample inserts and updates based on the the sample trip schema [her
 Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi table as below.
 
 ```scala
+// spark-shell
 val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
@@ -82,6 +87,7 @@ df.write.format("hudi").
 ``` 
 
 ```python
+# pyspark
 inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateInserts(10))
 df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 
@@ -117,6 +123,7 @@ Here we are using the default write operation : `upsert`. If you have a workload
 Load the data files into a DataFrame.
 
 ```scala
+// spark-shell
 val tripsSnapshotDF = spark.
   read.
   format("hudi").
@@ -128,6 +135,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 ```
 
 ```python
+# pyspark
 tripsSnapshotDF = spark. \
   read. \
   format("hudi"). \
@@ -150,6 +158,7 @@ This is similar to inserting new data. Generate updates to existing trips using 
 and write DataFrame into the hudi table.
 
 ```scala
+// spark-shell
 val updates = convertToStringList(dataGen.generateUpdates(10))
 val df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
 df.write.format("hudi").
@@ -163,6 +172,7 @@ df.write.format("hudi").
 ```
 
 ```python
+# pyspark
 updates = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateUpdates(10))
 df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
 df.write.format("hudi"). \
@@ -183,6 +193,7 @@ This can be achieved using Hudi's incremental querying and providing a begin tim
 We do not need to specify endTime, if we want all changes after the given commit (as is the common case). 
 
 ```scala
+// spark-shell
 // reload data
 spark.
   read.
@@ -204,6 +215,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 ``` 
 
 ```python
+# pyspark
 # reload data
 spark. \
   read. \
@@ -238,6 +250,7 @@ Lets look at how to query data as of a specific time. The specific time can be r
 specific commit time and beginTime to "000" (denoting earliest possible commit time). 
 
 ```scala
+// spark-shell
 val beginTime = "000" // Represents all commits > this time.
 val endTime = commits(commits.length - 2) // commit time we are interested in
 
@@ -252,6 +265,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hud
 ```
 
 ```python
+# pyspark
 beginTime = "000" # Represents all commits > this time.
 endTime = commits[len(commits) - 2]
 
@@ -271,6 +285,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hud
 Delete records for the HoodieKeys passed in.
 
 ```scala
+// spark-shell
 // fetch total records count
 spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
 // fetch two records to be deleted
@@ -301,6 +316,7 @@ spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
 Note: Only `Append` mode is supported for delete operation.
 
 ```python
+# pyspark
 # fetch total records count
 spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
 # fetch two records to be deleted
