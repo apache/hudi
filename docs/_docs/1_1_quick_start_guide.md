@@ -26,7 +26,7 @@ export PYSPARK_PYTHON=$(which python3)
 spark-2.4.4-bin-hadoop2.7/bin/pyspark \
   --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating,org.apache.spark:spark-avro_2.11:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-{% endhighlight %}
+```
 
 <div class="notice--info">
   <h4>Please note the following: </h4>
@@ -57,7 +57,7 @@ val dataGen = new DataGenerator
 tableName = "hudi_trips_cow"
 basePath = "file:///tmp/hudi_trips_cow"
 dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
-{% endhighlight %}
+```
 
 The [DataGenerator](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50) 
 can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
@@ -86,21 +86,21 @@ inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.ge
 df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 
 hudi_options = {
-'hoodie.table.name': tableName,
-'hoodie.datasource.write.recordkey.field': 'uuid',
-'hoodie.datasource.write.partitionpath.field': 'partitionpath',
-'hoodie.datasource.write.table.name': tableName,
-'hoodie.datasource.write.operation': 'insert',
-'hoodie.datasource.write.precombine.field': 'ts',
-'hoodie.upsert.shuffle.parallelism': 2, 
-'hoodie.insert.shuffle.parallelism': 2
+  'hoodie.table.name': tableName,
+  'hoodie.datasource.write.recordkey.field': 'uuid',
+  'hoodie.datasource.write.partitionpath.field': 'partitionpath',
+  'hoodie.datasource.write.table.name': tableName,
+  'hoodie.datasource.write.operation': 'insert',
+  'hoodie.datasource.write.precombine.field': 'ts',
+  'hoodie.upsert.shuffle.parallelism': 2, 
+  'hoodie.insert.shuffle.parallelism': 2
 }
 
 df.write.format("hudi"). \
   options(**hudi_options). \
   mode("overwrite"). \
   save(basePath)
-{% endhighlight %}
+```
 
 `mode(Overwrite)` overwrites and recreates the table if it already exists.
 You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. We provided a record key 
@@ -137,7 +137,7 @@ tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
 
 spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0").show()
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
-{% endhighlight %}
+```
 
 This query provides snapshot querying of the ingested data. Since our partition path (`region/country/city`) is 3 levels nested 
 from base path we ve used `load(basePath + "/*/*/*/*")`. 
@@ -169,7 +169,7 @@ df.write.format("hudi"). \
   options(**hudi_options). \
   mode("append"). \
   save(basePath)
-{% endhighlight %}
+```
 
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 [Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](http://hudi.incubator.apache.org/docs/concepts.html) 
@@ -216,8 +216,8 @@ beginTime = commits[len(commits) - 2] # commit time we are interested in
 
 # incrementally query data
 incremental_read_options = {
-'hoodie.datasource.query.type': 'incremental',
-'hoodie.datasource.read.begin.instanttime': 'beginTime',
+  'hoodie.datasource.query.type': 'incremental',
+  'hoodie.datasource.read.begin.instanttime': 'beginTime',
 }
 
 tripsIncrementalDF = spark.read.format("hudi"). \
@@ -226,7 +226,7 @@ tripsIncrementalDF = spark.read.format("hudi"). \
 tripsIncrementalDF.createOrReplaceTempView("hudi_trips_incremental")
 
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
-{% endhighlight %}
+```
 
 This will give all changes that happened after the beginTime commit with the filter of fare > 20.0. The unique thing about this
 feature is that it now lets you author streaming pipelines on batch data.
@@ -264,7 +264,7 @@ tripsPointInTimeDF = spark.read.format("hudi"). \
 
 tripsPointInTimeDF.createOrReplaceTempView("hudi_trips_point_in_time")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hudi_trips_point_in_time where fare > 20.0").show()
-{% endhighlight %}
+```
 ## Delete data {#deletes}
 Delete records for the HoodieKeys passed in.
 
@@ -332,7 +332,7 @@ roAfterDeleteViewDF = spark. \
 roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 # fetch should return (total - 2) records
 spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
-{% endhighlight %}
+```
 
 ## Where to go from here?
 
