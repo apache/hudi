@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import java.util.HashSet;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.TestRawTripPayload;
@@ -49,15 +48,14 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.WriteHelper;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.table.action.commit.WriteHelper;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -65,6 +63,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -75,10 +74,10 @@ import static org.apache.hudi.common.HoodieTestDataGenerator.NULL_SCHEMA;
 import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -154,11 +153,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
       JavaRDD<WriteStatus> result = insertFirstBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, writeFn,
           isPrepped, false, numRecords);
 
-      assertFalse("If Autocommit is false, then commit should not be made automatically",
-          HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
-      assertTrue("Commit should succeed", client.commit(newCommitTime, result));
-      assertTrue("After explicit commit, commit file should be created",
-          HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+      assertFalse(HoodieTestUtils.doesCommitExist(basePath, newCommitTime),
+          "If Autocommit is false, then commit should not be made automatically");
+      assertTrue(client.commit(newCommitTime, result), "Commit should succeed");
+      assertTrue(HoodieTestUtils.doesCommitExist(basePath, newCommitTime),
+          "After explicit commit, commit file should be created");
     }
   }
 
@@ -251,7 +250,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
       if (!partitionToKeys.containsKey(partitionPath)) {
         partitionToKeys.put(partitionPath, new HashSet<>());
       }
-      assertFalse("key " + key + " is duplicate within partition " + partitionPath, partitionToKeys.get(partitionPath).contains(key));
+      assertFalse(partitionToKeys.get(partitionPath).contains(key), "key " + key + " is duplicate within partition " + partitionPath);
       partitionToKeys.get(partitionPath).add(key);
     }
   }
@@ -326,8 +325,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals("Must contain " + 200 + " records", 200,
-        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+    assertEquals(200, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        "Must contain " + 200 + " records");
 
     // Perform Delete again on upgraded dataset.
     prevCommitTime = newCommitTime;
@@ -340,17 +339,17 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     HoodieActiveTimeline activeTimeline = new HoodieActiveTimeline(metaClient, false);
     List<HoodieInstant> instants = activeTimeline.getCommitTimeline().getInstants().collect(Collectors.toList());
-    Assert.assertEquals(5, instants.size());
-    Assert.assertEquals(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001"),
+    assertEquals(5, instants.size());
+    assertEquals(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001"),
         instants.get(0));
-    Assert.assertEquals(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "004"),
+    assertEquals(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "004"),
         instants.get(1));
     // New Format should have all states of instants
-    Assert.assertEquals(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "006"),
+    assertEquals(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "006"),
         instants.get(2));
-    Assert.assertEquals(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "006"),
+    assertEquals(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "006"),
         instants.get(3));
-    Assert.assertEquals(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "006"),
+    assertEquals(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "006"),
         instants.get(4));
   }
 
@@ -425,8 +424,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals("Must contain 100 records", 100,
-        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+    assertEquals(100, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        "Must contain 100 records");
 
     /**
      * Write 2. Updates with different partition
@@ -448,8 +447,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals("Must contain 100 records", 100,
-        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+    assertEquals(100, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        "Must contain 100 records");
   }
 
   /**
@@ -476,12 +475,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     assertNoWriteErrors(statuses);
 
-    assertEquals("Just 1 file needs to be added.", 1, statuses.size());
+    assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
     String file1 = statuses.get(0).getFileId();
-    Assert.assertEquals("file should contain 100 records",
+    assertEquals(100,
         readRowKeysFromParquet(jsc.hadoopConfiguration(), new Path(basePath, statuses.get(0).getStat().getPath()))
-            .size(),
-        100);
+            .size(), "file should contain 100 records");
 
     // Update + Inserts such that they just expand file1
     String commitTime2 = "002";
@@ -496,18 +494,18 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     statuses = client.upsert(insertAndUpdatesRDD2, commitTime2).collect();
     assertNoWriteErrors(statuses);
 
-    assertEquals("Just 1 file needs to be updated.", 1, statuses.size());
-    assertEquals("Existing file should be expanded", file1, statuses.get(0).getFileId());
-    assertEquals("Existing file should be expanded", commitTime1, statuses.get(0).getStat().getPrevCommit());
+    assertEquals(1, statuses.size(), "Just 1 file needs to be updated.");
+    assertEquals(file1, statuses.get(0).getFileId(), "Existing file should be expanded");
+    assertEquals(commitTime1, statuses.get(0).getStat().getPrevCommit(), "Existing file should be expanded");
     Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
-    assertEquals("file should contain 140 records", readRowKeysFromParquet(jsc.hadoopConfiguration(), newFile).size(),
-        140);
+    assertEquals(140, readRowKeysFromParquet(jsc.hadoopConfiguration(), newFile).size(),
+        "file should contain 140 records");
 
     List<GenericRecord> records = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), newFile);
     for (GenericRecord record : records) {
       String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-      assertEquals("only expect commit2", commitTime2, record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
-      assertTrue("key expected to be part of commit2", keys2.contains(recordKey) || keys1.contains(recordKey));
+      assertEquals(commitTime2, record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString(), "only expect commit2");
+      assertTrue(keys2.contains(recordKey) || keys1.contains(recordKey), "key expected to be part of commit2");
     }
 
     // update + inserts such that file1 is updated and expanded, a new file2 is created.
@@ -522,7 +520,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     statuses = client.upsert(insertAndUpdatesRDD3, commitTime3).collect();
     assertNoWriteErrors(statuses);
 
-    assertEquals("2 files needs to be committed.", 2, statuses.size());
+    assertEquals(2, statuses.size(), "2 files needs to be committed.");
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
 
     HoodieTable table = getHoodieTable(metadata, config);
@@ -533,7 +531,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     int numTotalUpdatesInCommit3 = 0;
     for (HoodieBaseFile file : files) {
       if (file.getFileName().contains(file1)) {
-        assertEquals("Existing file should be expanded", commitTime3, file.getCommitTime());
+        assertEquals(commitTime3, file.getCommitTime(), "Existing file should be expanded");
         records = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), new Path(file.getPath()));
         for (GenericRecord record : records) {
           String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
@@ -547,21 +545,21 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
             }
           }
         }
-        assertEquals("All keys added in commit 2 must be updated in commit3 correctly", 0, keys2.size());
+        assertEquals(0, keys2.size(), "All keys added in commit 2 must be updated in commit3 correctly");
       } else {
-        assertEquals("New file must be written for commit 3", commitTime3, file.getCommitTime());
+        assertEquals(commitTime3, file.getCommitTime(), "New file must be written for commit 3");
         records = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), new Path(file.getPath()));
         for (GenericRecord record : records) {
           String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-          assertEquals("only expect commit3", commitTime3,
-              record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
-          assertTrue("key expected to be part of commit3", keys3.contains(recordKey));
+          assertEquals(commitTime3, record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString(),
+              "only expect commit3");
+          assertTrue(keys3.contains(recordKey), "key expected to be part of commit3");
         }
         numTotalInsertsInCommit3 += records.size();
       }
     }
-    assertEquals("Total updates in commit3 must add up", inserts2.size(), numTotalUpdatesInCommit3);
-    assertEquals("Total inserts in commit3 must add up", keys3.size(), numTotalInsertsInCommit3);
+    assertEquals(numTotalUpdatesInCommit3, inserts2.size(), "Total updates in commit3 must add up");
+    assertEquals(numTotalInsertsInCommit3, keys3.size(), "Total inserts in commit3 must add up");
   }
 
   /**
@@ -588,12 +586,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertNoWriteErrors(statuses);
     assertPartitionMetadata(new String[] {testPartitionPath}, fs);
 
-    assertEquals("Just 1 file needs to be added.", 1, statuses.size());
+    assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
     String file1 = statuses.get(0).getFileId();
-    assertEquals("file should contain 100 records",
+    assertEquals(100,
         readRowKeysFromParquet(jsc.hadoopConfiguration(), new Path(basePath, statuses.get(0).getStat().getPath()))
-            .size(),
-        100);
+            .size(), "file should contain 100 records");
 
     // Second, set of Inserts should just expand file1
     String commitTime2 = "002";
@@ -604,21 +601,21 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     statuses = client.insert(insertRecordsRDD2, commitTime2).collect();
     assertNoWriteErrors(statuses);
 
-    assertEquals("Just 1 file needs to be updated.", 1, statuses.size());
-    assertEquals("Existing file should be expanded", file1, statuses.get(0).getFileId());
-    assertEquals("Existing file should be expanded", commitTime1, statuses.get(0).getStat().getPrevCommit());
+    assertEquals(1, statuses.size(), "Just 1 file needs to be updated.");
+    assertEquals(file1, statuses.get(0).getFileId(), "Existing file should be expanded");
+    assertEquals(commitTime1, statuses.get(0).getStat().getPrevCommit(), "Existing file should be expanded");
     Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
-    assertEquals("file should contain 140 records", readRowKeysFromParquet(jsc.hadoopConfiguration(), newFile).size(),
-        140);
+    assertEquals(140, readRowKeysFromParquet(jsc.hadoopConfiguration(), newFile).size(),
+        "file should contain 140 records");
 
     List<GenericRecord> records = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), newFile);
     for (GenericRecord record : records) {
       String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       String recCommitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
-      assertTrue("Record expected to be part of commit 1 or commit2",
-          commitTime1.equals(recCommitTime) || commitTime2.equals(recCommitTime));
-      assertTrue("key expected to be part of commit 1 or commit2",
-          keys2.contains(recordKey) || keys1.contains(recordKey));
+      assertTrue(commitTime1.equals(recCommitTime) || commitTime2.equals(recCommitTime),
+          "Record expected to be part of commit 1 or commit2");
+      assertTrue(keys2.contains(recordKey) || keys1.contains(recordKey),
+          "key expected to be part of commit 1 or commit2");
     }
 
     // Lots of inserts such that file1 is updated and expanded, a new file2 is created.
@@ -628,22 +625,22 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     JavaRDD<HoodieRecord> insertRecordsRDD3 = jsc.parallelize(insert3, 1);
     statuses = client.insert(insertRecordsRDD3, commitTime3).collect();
     assertNoWriteErrors(statuses);
-    assertEquals("2 files needs to be committed.", 2, statuses.size());
+    assertEquals(2, statuses.size(), "2 files needs to be committed.");
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = getHoodieTable(metaClient, config);
     List<HoodieBaseFile> files = table.getBaseFileOnlyView()
         .getLatestBaseFilesBeforeOrOn(testPartitionPath, commitTime3).collect(Collectors.toList());
-    assertEquals("Total of 2 valid data files", 2, files.size());
+    assertEquals(2, files.size(), "Total of 2 valid data files");
 
     int totalInserts = 0;
     for (HoodieBaseFile file : files) {
-      assertEquals("All files must be at commit 3", commitTime3, file.getCommitTime());
+      assertEquals(commitTime3, file.getCommitTime(), "All files must be at commit 3");
       records = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), new Path(file.getPath()));
       totalInserts += records.size();
     }
-    assertEquals("Total number of records must add up", totalInserts,
-        inserts1.size() + inserts2.size() + insert3.size());
+    assertEquals(totalInserts, inserts1.size() + inserts2.size() + insert3.size(),
+        "Total number of records must add up");
   }
 
   /**
@@ -670,12 +667,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     assertNoWriteErrors(statuses);
 
-    assertEquals("Just 1 file needs to be added.", 1, statuses.size());
+    assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
     String file1 = statuses.get(0).getFileId();
-    Assert.assertEquals("file should contain 100 records",
+    assertEquals(100,
         readRowKeysFromParquet(jsc.hadoopConfiguration(), new Path(basePath, statuses.get(0).getStat().getPath()))
-            .size(),
-        100);
+            .size(), "file should contain 100 records");
 
     // Delete 20 among 100 inserted
     testDeletes(client, inserts1, 20, file1, "002", 80, keysSoFar);
@@ -701,15 +697,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     JavaRDD<HoodieKey> deleteKeys3 = jsc.parallelize(hoodieKeysToDelete3, 1);
     statuses = client.delete(deleteKeys3, commitTime6).collect();
     assertNoWriteErrors(statuses);
-    assertEquals("Just 0 write status for delete.", 0, statuses.size());
+    assertEquals(0, statuses.size(), "Just 0 write status for delete.");
 
     // Check the entire dataset has all records still
     String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals("Must contain " + 150 + " records", 150,
-        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+    assertEquals(150,
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        "Must contain " + 150 + " records");
 
     // delete another batch. previous delete commit should have persisted the schema. If not,
     // this will throw exception
@@ -735,8 +732,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals("Must contain " + expectedTotalRecords + " records", expectedTotalRecords,
-        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+    assertEquals(expectedTotalRecords,
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        "Must contain " + expectedTotalRecords + " records");
     return Pair.of(keys, inserts);
   }
 
@@ -751,26 +749,28 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     assertNoWriteErrors(statuses);
 
-    assertEquals("Just 1 file needs to be added.", 1, statuses.size());
-    assertEquals("Existing file should be expanded", existingFile, statuses.get(0).getFileId());
+    assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
+    assertEquals(existingFile, statuses.get(0).getFileId(), "Existing file should be expanded");
 
     // Check the entire dataset has all records still
     String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals("Must contain " + exepctedRecords + " records", exepctedRecords,
-        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+    assertEquals(exepctedRecords,
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        "Must contain " + exepctedRecords + " records");
 
     Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
-    assertEquals("file should contain 110 records", readRowKeysFromParquet(jsc.hadoopConfiguration(), newFile).size(),
-        exepctedRecords);
+    assertEquals(exepctedRecords,
+        readRowKeysFromParquet(jsc.hadoopConfiguration(), newFile).size(),
+        "file should contain 110 records");
 
     List<GenericRecord> records = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), newFile);
     for (GenericRecord record : records) {
       String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-      assertTrue("key expected to be part of " + instantTime, keys.contains(recordKey));
-      assertFalse("Key deleted", hoodieKeysToDelete.contains(recordKey));
+      assertTrue(keys.contains(recordKey), "key expected to be part of " + instantTime);
+      assertFalse(hoodieKeysToDelete.contains(recordKey), "Key deleted");
     }
   }
 
@@ -795,12 +795,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     List<HoodieKey> hoodieKeysToDelete = HoodieClientTestUtils
         .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(dummyInserts), 20);
     JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(hoodieKeysToDelete, 1);
-    try {
+    assertThrows(HoodieIOException.class, () -> {
       client.delete(deleteKeys, commitTime1).collect();
-      fail("Should have thrown Exception");
-    } catch (HoodieIOException e) {
-      // ignore
-    }
+    }, "Should have thrown Exception");
   }
 
   /**
@@ -822,9 +819,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
       JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, instantTime);
 
-      assertTrue("Commit should succeed", client.commit(instantTime, result));
-      assertTrue("After explicit commit, commit file should be created",
-          HoodieTestUtils.doesCommitExist(basePath, instantTime));
+      assertTrue(client.commit(instantTime, result), "Commit should succeed");
+      assertTrue(HoodieTestUtils.doesCommitExist(basePath, instantTime),
+          "After explicit commit, commit file should be created");
 
       // Get parquet file paths from commit metadata
       String actionType = metaClient.getCommitActionType();
@@ -868,9 +865,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, instantTime);
 
-    assertTrue("Commit should succeed", client.commit(instantTime, result));
-    assertTrue("After explicit commit, commit file should be created",
-        HoodieTestUtils.doesCommitExist(basePath, instantTime));
+    assertTrue(client.commit(instantTime, result), "Commit should succeed");
+    assertTrue(HoodieTestUtils.doesCommitExist(basePath, instantTime),
+        "After explicit commit, commit file should be created");
 
     // Read from commit file
     String filename = HoodieTestUtils.getCommitFilePath(basePath, instantTime);
@@ -888,7 +885,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
         inserts += stat.getValue().getInserts();
       }
     }
-    Assert.assertEquals(inserts, 200);
+    assertEquals(200, inserts);
 
     // Update + Inserts such that they just expand file1
     instantTime = "001";
@@ -898,9 +895,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     writeRecords = jsc.parallelize(records, 1);
     result = client.upsert(writeRecords, instantTime);
 
-    assertTrue("Commit should succeed", client.commit(instantTime, result));
-    assertTrue("After explicit commit, commit file should be created",
-        HoodieTestUtils.doesCommitExist(basePath, instantTime));
+    assertTrue(client.commit(instantTime, result), "Commit should succeed");
+    assertTrue(HoodieTestUtils.doesCommitExist(basePath, instantTime),
+        "After explicit commit, commit file should be created");
 
     // Read from commit file
     filename = HoodieTestUtils.getCommitFilePath(basePath, instantTime);
@@ -919,8 +916,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
         upserts += stat.getValue().getUpserts();
       }
     }
-    Assert.assertEquals(inserts, 200);
-    Assert.assertEquals(upserts, 200);
+    assertEquals(200, inserts);
+    assertEquals(200, upserts);
 
   }
 
@@ -937,9 +934,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     // Delete orphan marker and commit should succeed
     metaClient.getFs().delete(result.getKey(), false);
-    assertTrue("Commit should succeed", client.commit(instantTime, result.getRight()));
-    assertTrue("After explicit commit, commit file should be created",
-        HoodieTestUtils.doesCommitExist(basePath, instantTime));
+    assertTrue(client.commit(instantTime, result.getRight()), "Commit should succeed");
+    assertTrue(HoodieTestUtils.doesCommitExist(basePath, instantTime),
+        "After explicit commit, commit file should be created");
     // Marker directory must be removed
     assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
   }
@@ -954,8 +951,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     // Rollback of this commit should succeed
     client.rollback(instantTime);
-    assertFalse("After explicit rollback, commit file should not be present",
-        HoodieTestUtils.doesCommitExist(basePath, instantTime));
+    assertFalse(HoodieTestUtils.doesCommitExist(basePath, instantTime),
+        "After explicit rollback, commit file should not be present");
     // Marker directory must be removed after rollback
     assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
   }
@@ -984,12 +981,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     metaClient.getFs().create(markerFilePath);
     LOG.info("Created a dummy marker path=" + markerFilePath);
 
-    try {
+    Exception e = assertThrows(HoodieCommitException.class, () -> {
       client.commit(instantTime, result);
-      fail("Commit should fail due to consistency check");
-    } catch (HoodieCommitException cme) {
-      assertTrue(cme.getCause() instanceof HoodieIOException);
-    }
+    }, "Commit should fail due to consistency check");
+    assertTrue(e.getCause() instanceof HoodieIOException);
     return Pair.of(markerFilePath, result);
   }
 

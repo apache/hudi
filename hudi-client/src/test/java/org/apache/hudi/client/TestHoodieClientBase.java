@@ -51,9 +51,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.SQLContext;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -64,9 +63,9 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests.
@@ -75,12 +74,12 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(TestHoodieClientBase.class);
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initResources();
   }
 
-  @After
+  @AfterEach
   public void tearDown() throws Exception {
     cleanupResources();
   }
@@ -170,7 +169,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   public static void assertNoWriteErrors(List<WriteStatus> statuses) {
     // Verify there are no errors
     for (WriteStatus status : statuses) {
-      assertFalse("Errors found in write of " + status.getFileId(), status.hasErrors());
+      assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId());
     }
   }
 
@@ -200,7 +199,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
       assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(fs, new Path(basePath, partitionPath)));
       HoodiePartitionMetadata pmeta = new HoodiePartitionMetadata(fs, new Path(basePath, partitionPath));
       pmeta.readFromFS();
-      Assert.assertEquals(HoodieTestDataGenerator.DEFAULT_PARTITION_DEPTH, pmeta.getPartitionDepth());
+      assertEquals(HoodieTestDataGenerator.DEFAULT_PARTITION_DEPTH, pmeta.getPartitionDepth());
     }
   }
 
@@ -212,9 +211,9 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    */
   protected void checkTaggedRecords(List<HoodieRecord> taggedRecords, String instantTime) {
     for (HoodieRecord rec : taggedRecords) {
-      assertTrue("Record " + rec + " found with no location.", rec.isCurrentLocationKnown());
-      assertEquals("All records should have commit time " + instantTime + ", since updates were made",
-          rec.getCurrentLocation().getInstantTime(), instantTime);
+      assertTrue(rec.isCurrentLocationKnown(), "Record " + rec + " found with no location.");
+      assertEquals(rec.getCurrentLocation().getInstantTime(), instantTime,
+          "All records should have commit time " + instantTime + ", since updates were made");
     }
   }
 
@@ -231,7 +230,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
       if (!partitionToKeys.containsKey(partitionPath)) {
         partitionToKeys.put(partitionPath, new HashSet<>());
       }
-      assertFalse("key " + key + " is duplicate within partition " + partitionPath, partitionToKeys.get(partitionPath).contains(key));
+      assertFalse(partitionToKeys.get(partitionPath).contains(key), "key " + key + " is duplicate within partition " + partitionPath);
       partitionToKeys.get(partitionPath).add(key);
     }
   }
@@ -472,30 +471,30 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
 
     if (assertForCommit) {
-      assertEquals("Expecting " + expTotalCommits + " commits.", expTotalCommits,
-          timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants());
-      Assert.assertEquals("Latest commit should be " + newCommitTime, newCommitTime,
-          timeline.lastInstant().get().getTimestamp());
-      assertEquals("Must contain " + expRecordsInThisCommit + " records", expRecordsInThisCommit,
-          HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count());
+      assertEquals(expTotalCommits, timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants(),
+          "Expecting " + expTotalCommits + " commits.");
+      assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(),
+          "Latest commit should be " + newCommitTime);
+      assertEquals(expRecordsInThisCommit, HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+          "Must contain " + expRecordsInThisCommit + " records");
 
       // Check the entire dataset has all records still
       String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
       for (int i = 0; i < fullPartitionPaths.length; i++) {
         fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
       }
-      assertEquals("Must contain " + expTotalRecords + " records", expTotalRecords,
-          HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+      assertEquals(expTotalRecords, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+          "Must contain " + expTotalRecords + " records");
 
       // Check that the incremental consumption from prevCommitTime
-      assertEquals("Incremental consumption from " + prevCommitTime + " should give all records in latest commit",
-          HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-          HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, prevCommitTime).count());
+      assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+          HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, prevCommitTime).count(),
+          "Incremental consumption from " + prevCommitTime + " should give all records in latest commit");
       if (commitTimesBetweenPrevAndNew.isPresent()) {
         commitTimesBetweenPrevAndNew.get().forEach(ct -> {
-          assertEquals("Incremental consumption from " + ct + " should give all records in latest commit",
-              HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-              HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, ct).count());
+          assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+              HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, ct).count(),
+              "Incremental consumption from " + ct + " should give all records in latest commit");
         });
       }
     }
@@ -540,26 +539,26 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
 
     if (assertForCommit) {
-      assertEquals("Expecting 3 commits.", 3,
-          timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants());
-      Assert.assertEquals("Latest commit should be " + newCommitTime, newCommitTime,
-          timeline.lastInstant().get().getTimestamp());
-      assertEquals("Must contain " + expRecordsInThisCommit + " records", expRecordsInThisCommit,
-          HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count());
+      assertEquals(3, timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants(),
+          "Expecting 3 commits.");
+      assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(),
+          "Latest commit should be " + newCommitTime);
+      assertEquals(expRecordsInThisCommit, HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+          "Must contain " + expRecordsInThisCommit + " records");
 
       // Check the entire dataset has all records still
       String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
       for (int i = 0; i < fullPartitionPaths.length; i++) {
         fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
       }
-      assertEquals("Must contain " + expTotalRecords + " records", expTotalRecords,
-          HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+      assertEquals(expTotalRecords, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+          "Must contain " + expTotalRecords + " records");
 
       // Check that the incremental consumption from prevCommitTime
-      assertEquals("Incremental consumption from " + prevCommitTime + " should give no records in latest commit,"
-              + " since it is a delete operation",
-          HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-          HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, prevCommitTime).count());
+      assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+          HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, prevCommitTime).count(),
+          "Incremental consumption from " + prevCommitTime + " should give no records in latest commit,"
+              + " since it is a delete operation");
     }
     return result;
   }

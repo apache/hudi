@@ -36,10 +36,9 @@ import org.apache.hudi.table.action.compact.OperationResult;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -52,6 +51,9 @@ import java.util.stream.Stream;
 import static org.apache.hudi.client.CompactionAdminClient.getRenamingActionsToAlignWithCompactionOperation;
 import static org.apache.hudi.client.CompactionAdminClient.renameLogFile;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestCompactionAdminClient extends TestHoodieClientBase {
 
@@ -60,7 +62,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
   private HoodieTableMetaClient metaClient;
   private CompactionAdminClient client;
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initPath();
     initSparkContexts();
@@ -68,7 +70,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     client = new CompactionAdminClient(jsc, basePath);
   }
 
-  @After
+  @AfterEach
   public void tearDown() {
     client.close();
     metaClient = null;
@@ -137,7 +139,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
     List<ValidationOpResult> result = client.validateCompactionPlan(metaClient, compactionInstant, 1);
     if (expNumRepairs > 0) {
-      Assert.assertTrue("Expect some failures in validation", result.stream().anyMatch(r -> !r.isSuccess()));
+      assertTrue(result.stream().anyMatch(r -> !r.isSuccess()), "Expect some failures in validation");
     }
     // Now repair
     List<Pair<HoodieLogFile, HoodieLogFile>> undoFiles =
@@ -155,18 +157,18 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     Map<String, String> expRenameFiles = renameFiles.stream()
         .collect(Collectors.toMap(p -> p.getLeft().getPath().toString(), x -> x.getRight().getPath().toString()));
     if (expNumRepairs > 0) {
-      Assert.assertFalse("Rename Files must be non-empty", renameFiles.isEmpty());
+      assertFalse(renameFiles.isEmpty(), "Rename Files must be non-empty");
     } else {
-      Assert.assertTrue("Rename Files must be empty", renameFiles.isEmpty());
+      assertTrue(renameFiles.isEmpty(), "Rename Files must be empty");
     }
     expRenameFiles.forEach((key, value) -> LOG.info("Key :" + key + " renamed to " + value + " rolled back to "
         + renameFilesFromUndo.get(key)));
 
-    Assert.assertEquals("Undo must completely rollback renames", expRenameFiles, renameFilesFromUndo);
+    assertEquals(expRenameFiles, renameFilesFromUndo, "Undo must completely rollback renames");
     // Now expect validation to succeed
     result = client.validateCompactionPlan(metaClient, compactionInstant, 1);
-    Assert.assertTrue("Expect no failures in validation", result.stream().allMatch(OperationResult::isSuccess));
-    Assert.assertEquals("Expected Num Repairs", expNumRepairs, undoFiles.size());
+    assertTrue(result.stream().allMatch(OperationResult::isSuccess), "Expect no failures in validation");
+    assertEquals(expNumRepairs, undoFiles.size(), "Expected Num Repairs");
   }
 
   /**
@@ -178,8 +180,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
     // Ensure compaction-plan is good to begin with
     List<ValidationOpResult> validationResults = client.validateCompactionPlan(metaClient, compactionInstant, 1);
-    Assert.assertFalse("Some validations failed",
-        validationResults.stream().anyMatch(v -> !v.isSuccess()));
+    assertFalse(validationResults.stream().anyMatch(v -> !v.isSuccess()),
+        "Some validations failed");
   }
 
   private void validateRenameFiles(List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles, String ingestionInstant,
@@ -189,8 +191,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     Set<HoodieLogFile> uniqOldLogFiles = new HashSet<>();
 
     renameFiles.forEach(lfPair -> {
-      Assert.assertFalse("Old Log File Names do not collide", uniqOldLogFiles.contains(lfPair.getKey()));
-      Assert.assertFalse("New Log File Names do not collide", uniqNewLogFiles.contains(lfPair.getValue()));
+      assertFalse(uniqOldLogFiles.contains(lfPair.getKey()), "Old Log File Names do not collide");
+      assertFalse(uniqNewLogFiles.contains(lfPair.getValue()), "New Log File Names do not collide");
       uniqOldLogFiles.add(lfPair.getKey());
       uniqNewLogFiles.add(lfPair.getValue());
     });
@@ -198,17 +200,17 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     renameFiles.forEach(lfPair -> {
       HoodieLogFile oldLogFile = lfPair.getLeft();
       HoodieLogFile newLogFile = lfPair.getValue();
-      Assert.assertEquals("Base Commit time is expected", ingestionInstant, newLogFile.getBaseCommitTime());
-      Assert.assertEquals("Base Commit time is expected", compactionInstant, oldLogFile.getBaseCommitTime());
-      Assert.assertEquals("File Id is expected", oldLogFile.getFileId(), newLogFile.getFileId());
+      assertEquals(ingestionInstant, newLogFile.getBaseCommitTime(), "Base Commit time is expected");
+      assertEquals(compactionInstant, oldLogFile.getBaseCommitTime(), "Base Commit time is expected");
+      assertEquals(oldLogFile.getFileId(), newLogFile.getFileId(), "File Id is expected");
       HoodieLogFile lastLogFileBeforeCompaction =
           fsView.getLatestMergedFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], ingestionInstant)
               .filter(fs -> fs.getFileId().equals(oldLogFile.getFileId())).map(fs -> fs.getLogFiles().findFirst().get())
               .findFirst().get();
-      Assert.assertEquals("Log Version expected",
-          lastLogFileBeforeCompaction.getLogVersion() + oldLogFile.getLogVersion(), newLogFile.getLogVersion());
-      Assert.assertTrue("Log version does not collide",
-          newLogFile.getLogVersion() > lastLogFileBeforeCompaction.getLogVersion());
+      assertEquals(lastLogFileBeforeCompaction.getLogVersion() + oldLogFile.getLogVersion(),
+          newLogFile.getLogVersion(), "Log Version expected");
+      assertTrue(newLogFile.getLogVersion() > lastLogFileBeforeCompaction.getLogVersion(),
+          "Log version does not collide");
     });
   }
 
@@ -243,8 +245,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     Set<HoodieLogFile> expLogFilesToBeRenamed = fsView.getLatestFileSlices(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0])
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant)).flatMap(FileSlice::getLogFiles)
         .collect(Collectors.toSet());
-    Assert.assertEquals("Log files belonging to file-slices created because of compaction request must be renamed",
-        expLogFilesToBeRenamed, gotLogFilesToBeRenamed);
+    assertEquals(expLogFilesToBeRenamed, gotLogFilesToBeRenamed,
+        "Log files belonging to file-slices created because of compaction request must be renamed");
 
     if (skipUnSchedule) {
       // Do the renaming only but do not touch the compaction plan - Needed for repair tests
@@ -274,9 +276,10 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
         new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
     // Expect all file-slice whose base-commit is same as compaction commit to contain no new Log files
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
-        .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant)).forEach(fs -> {
-          Assert.assertFalse("No Data file must be present", fs.getBaseFile().isPresent());
-          Assert.assertEquals("No Log Files", 0, fs.getLogFiles().count());
+        .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))
+        .forEach(fs -> {
+          assertFalse(fs.getBaseFile().isPresent(), "No Data file must be present");
+          assertEquals(0, fs.getLogFiles().count(), "No Log Files");
         });
 
     // Ensure same number of log-files before and after renaming per fileId
@@ -286,10 +289,10 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
             .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().count()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    Assert.assertEquals("Each File Id has same number of log-files", fileIdToCountsBeforeRenaming,
-        fileIdToCountsAfterRenaming);
-    Assert.assertEquals("Not Empty", numEntriesPerInstant, fileIdToCountsAfterRenaming.size());
-    Assert.assertEquals("Expected number of renames", expNumRenames, renameFiles.size());
+    assertEquals(fileIdToCountsBeforeRenaming, fileIdToCountsAfterRenaming,
+        "Each File Id has same number of log-files");
+    assertEquals(numEntriesPerInstant, fileIdToCountsAfterRenaming.size(), "Not Empty");
+    assertEquals(expNumRenames, renameFiles.size(), "Expected number of renames");
     return renameFiles;
   }
 
@@ -315,8 +318,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))
         .filter(fs -> fs.getFileId().equals(op.getFileId())).flatMap(FileSlice::getLogFiles)
         .collect(Collectors.toSet());
-    Assert.assertEquals("Log files belonging to file-slices created because of compaction request must be renamed",
-        expLogFilesToBeRenamed, gotLogFilesToBeRenamed);
+    assertEquals(expLogFilesToBeRenamed, gotLogFilesToBeRenamed,
+        "Log files belonging to file-slices created because of compaction request must be renamed");
     validateRenameFiles(renameFiles, ingestionInstant, compactionInstant, fsView);
 
     Map<String, Long> fileIdToCountsBeforeRenaming =
@@ -335,9 +338,10 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     // Expect all file-slice whose base-commit is same as compaction commit to contain no new Log files
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))
-        .filter(fs -> fs.getFileId().equals(op.getFileId())).forEach(fs -> {
-          Assert.assertFalse("No Data file must be present", fs.getBaseFile().isPresent());
-          Assert.assertEquals("No Log Files", 0, fs.getLogFiles().count());
+        .filter(fs -> fs.getFileId().equals(op.getFileId()))
+        .forEach(fs -> {
+          assertFalse(fs.getBaseFile().isPresent(), "No Data file must be present");
+          assertEquals(0, fs.getLogFiles().count(), "No Log Files");
         });
 
     // Ensure same number of log-files before and after renaming per fileId
@@ -348,9 +352,9 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
             .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().count()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    Assert.assertEquals("Each File Id has same number of log-files", fileIdToCountsBeforeRenaming,
-        fileIdToCountsAfterRenaming);
-    Assert.assertEquals("Not Empty", 1, fileIdToCountsAfterRenaming.size());
-    Assert.assertEquals("Expected number of renames", expNumRenames, renameFiles.size());
+    assertEquals(fileIdToCountsBeforeRenaming, fileIdToCountsAfterRenaming,
+        "Each File Id has same number of log-files");
+    assertEquals(1, fileIdToCountsAfterRenaming.size(), "Not Empty");
+    assertEquals(expNumRenames, renameFiles.size(), "Expected number of renames");
   }
 }

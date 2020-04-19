@@ -50,14 +50,13 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.FixMethodOrder;
-import org.junit.Test;
-import org.junit.runners.MethodSorters;
-import org.mockito.Mockito;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,12 +64,13 @@ import java.util.List;
 
 import scala.Tuple2;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atMost;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -78,9 +78,9 @@ import static org.mockito.Mockito.when;
 /**
  * Note :: HBaseTestingUtility is really flaky with issues where the HbaseMiniCluster fails to shutdown across tests,
  * (see one problem here : https://issues.apache .org/jira/browse/HBASE-15835). Hence, the need to use
- * MethodSorters.NAME_ASCENDING to make sure the tests run in order. Please alter the order of tests running carefully.
+ * {@link MethodOrderer.Alphanumeric} to make sure the tests run in order. Please alter the order of tests running carefully.
  */
-@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+@TestMethodOrder(MethodOrderer.Alphanumeric.class)
 public class TestHbaseIndex extends HoodieClientTestHarness {
 
   private static HBaseTestingUtility utility;
@@ -89,14 +89,14 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
 
   public TestHbaseIndex() {}
 
-  @AfterClass
+  @AfterAll
   public static void clean() throws Exception {
     if (utility != null) {
       utility.shutdownMiniCluster();
     }
   }
 
-  @BeforeClass
+  @BeforeAll
   public static void init() throws Exception {
     // Initialize HbaseMiniCluster
     hbaseConfig = HBaseConfiguration.create();
@@ -108,7 +108,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     utility.createTable(TableName.valueOf(tableName), Bytes.toBytes("_s"));
   }
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     // Initialize a local spark env
     initSparkContexts("TestHbaseIndex");
@@ -120,7 +120,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     initMetaClient();
   }
 
-  @After
+  @AfterEach
   public void tearDown() throws Exception {
     cleanupSparkContexts();
     cleanupTestDataGenerator();
@@ -257,8 +257,8 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     HBaseIndex index = new HBaseIndex(config);
 
     // Mock hbaseConnection and related entities
-    Connection hbaseConnection = Mockito.mock(Connection.class);
-    HTable table = Mockito.mock(HTable.class);
+    Connection hbaseConnection = mock(Connection.class);
+    HTable table = mock(HTable.class);
     when(hbaseConnection.getTable(TableName.valueOf(tableName))).thenReturn(table);
     when(table.get((List<Get>) any())).thenReturn(new Result[0]);
 
@@ -306,8 +306,8 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     writeClient.commit(newCommitTime, writeStatues);
 
     // Mock hbaseConnection and related entities
-    Connection hbaseConnection = Mockito.mock(Connection.class);
-    HTable table = Mockito.mock(HTable.class);
+    Connection hbaseConnection = mock(Connection.class);
+    HTable table = mock(HTable.class);
     when(hbaseConnection.getTable(TableName.valueOf(tableName))).thenReturn(table);
     when(table.get((List<Get>) any())).thenReturn(new Result[0]);
 
@@ -335,28 +335,28 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // 8 (batchSize) * 200 (parallelism) * 10 (maxReqsInOneSecond) * 10 (numRegionServers) * 0.1 (qpsFraction)) => 16000
     // We assume requests get distributed to Region Servers uniformly, so each RS gets 1600 request
     // 1600 happens to be 10% of 16667 (maxQPSPerRegionServer) as expected.
-    assertEquals(putBatchSize, 8);
+    assertEquals(8, putBatchSize);
 
     // Number of Region Servers are halved, total requests sent in a second are also halved, so batchSize is also halved
     int putBatchSize2 = batchSizeCalculator.getBatchSize(5, 16667, 1200, 200, 100, 0.1f);
-    assertEquals(putBatchSize2, 4);
+    assertEquals(4, putBatchSize2);
 
     // If the parallelism is halved, batchSize has to double
     int putBatchSize3 = batchSizeCalculator.getBatchSize(10, 16667, 1200, 100, 100, 0.1f);
-    assertEquals(putBatchSize3, 16);
+    assertEquals(16, putBatchSize3);
 
     // If the parallelism is halved, batchSize has to double.
     // This time parallelism is driven by numTasks rather than numExecutors
     int putBatchSize4 = batchSizeCalculator.getBatchSize(10, 16667, 100, 200, 100, 0.1f);
-    assertEquals(putBatchSize4, 16);
+    assertEquals(16, putBatchSize4);
 
     // If sleepTimeMs is halved, batchSize has to halve
     int putBatchSize5 = batchSizeCalculator.getBatchSize(10, 16667, 1200, 200, 100, 0.05f);
-    assertEquals(putBatchSize5, 4);
+    assertEquals(4, putBatchSize5);
 
     // If maxQPSPerRegionServer is doubled, batchSize also doubles
     int putBatchSize6 = batchSizeCalculator.getBatchSize(10, 33334, 1200, 200, 100, 0.1f);
-    assertEquals(putBatchSize6, 16);
+    assertEquals(16, putBatchSize6);
   }
 
   @Test
@@ -494,19 +494,15 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testFeatureSupport() throws Exception {
+  public void testFeatureSupport() {
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
 
     assertTrue(index.canIndexLogFiles());
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc);
       index.fetchRecordLocation(jsc.parallelize(new ArrayList<HoodieKey>(), 1), jsc, hoodieTable);
-      fail("HbaseIndex supports fetchRecordLocation");
-    } catch (UnsupportedOperationException ex) {
-      // Expected so ignore
-      ex.getStackTrace();
-    }
+    }, "HbaseIndex supports fetchRecordLocation");
   }
 
   private WriteStatus getSampleWriteStatus(final int numInserts, final int numUpdateWrites) {
@@ -521,7 +517,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   private void assertNoWriteErrors(List<WriteStatus> statuses) {
     // Verify there are no errors
     for (WriteStatus status : statuses) {
-      assertFalse("Errors found in write of " + status.getFileId(), status.hasErrors());
+      assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId());
     }
   }
 

@@ -39,23 +39,28 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieIndex extends HoodieClientTestHarness {
 
-  @Before
+  private HoodieWriteConfig.Builder clientConfigBuilder;
+  private HoodieIndexConfig.Builder indexConfigBuilder;
+
+  @BeforeEach
   public void setUp() throws Exception {
     initSparkContexts("TestHoodieIndex");
     initPath();
     initMetaClient();
+    clientConfigBuilder = HoodieWriteConfig.newBuilder();
+    indexConfigBuilder = HoodieIndexConfig.newBuilder();
   }
 
-  @After
+  @AfterEach
   public void tearDown() {
     cleanupSparkContexts();
     cleanupMetaClient();
@@ -63,8 +68,6 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
 
   @Test
   public void testCreateIndex() {
-    HoodieWriteConfig.Builder clientConfigBuilder = HoodieWriteConfig.newBuilder();
-    HoodieIndexConfig.Builder indexConfigBuilder = HoodieIndexConfig.newBuilder();
     // Different types
     HoodieWriteConfig config = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.HBASE)
@@ -84,27 +87,27 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     config = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexClass(DummyHoodieIndex.class.getName()).build()).build();
     assertTrue(HoodieIndex.createIndex(config, jsc) instanceof DummyHoodieIndex);
+  }
 
-    config = clientConfigBuilder.withPath(basePath)
+  @Test
+  public void testCreateIndex_withException() {
+    final HoodieWriteConfig config1 = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexClass(IndexWithConstructor.class.getName()).build()).build();
-    try {
-      HoodieIndex.createIndex(config, jsc);
-      fail("exception is expected");
-    } catch (HoodieIndexException e) {
-      assertTrue(e.getMessage().contains("is not a subclass of HoodieIndex"));
-    }
+    final Throwable thrown1 = assertThrows(HoodieException.class, () -> {
+      HoodieIndex.createIndex(config1, jsc);
+    }, "exception is expected");
+    assertTrue(thrown1.getMessage().contains("is not a subclass of HoodieIndex"));
 
-    config = clientConfigBuilder.withPath(basePath)
-            .withIndexConfig(indexConfigBuilder.withIndexClass(IndexWithoutConstructor.class.getName()).build()).build();
-    try {
-      HoodieIndex.createIndex(config, jsc);
-      fail("exception is expected");
-    } catch (HoodieException e) {
-      assertTrue(e.getMessage().contains("Unable to instantiate class"));
-    }
+    final HoodieWriteConfig config2 = clientConfigBuilder.withPath(basePath)
+        .withIndexConfig(indexConfigBuilder.withIndexClass(IndexWithoutConstructor.class.getName()).build()).build();
+    final Throwable thrown2 = assertThrows(HoodieException.class, () -> {
+      HoodieIndex.createIndex(config2, jsc);
+    }, "exception is expected");
+    assertTrue(thrown2.getMessage().contains("Unable to instantiate class"));
   }
 
   public static class DummyHoodieIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
+
     public DummyHoodieIndex(HoodieWriteConfig config) {
       super(config);
     }
@@ -146,7 +149,9 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   public static class IndexWithConstructor {
-    public IndexWithConstructor(HoodieWriteConfig config) {}
+
+    public IndexWithConstructor(HoodieWriteConfig config) {
+    }
   }
 
   public static class IndexWithoutConstructor {

@@ -35,9 +35,9 @@ import org.apache.hudi.table.HoodieTimelineArchiveLog;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -47,16 +47,16 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
 
   private Configuration hadoopConf;
   private HoodieTableMetaClient metaClient;
 
-  @Before
+  @BeforeEach
   public void init() throws Exception {
     initDFS();
     initPath();
@@ -67,7 +67,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     metaClient = HoodieTestUtils.init(hadoopConf, basePath);
   }
 
-  @After
+  @AfterEach
   public void clean() throws IOException {
     cleanupDFS();
     cleanupSparkContexts();
@@ -137,7 +137,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
 
-    assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
+    assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
 
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "100", dfs.getConf());
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "101", dfs.getConf());
@@ -151,7 +151,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
     List<HoodieInstant> originalCommits = timeline.getInstants().collect(Collectors.toList());
 
-    assertEquals("Loaded 6 commits and the count should match", 12, timeline.countInstants());
+    assertEquals(12, timeline.countInstants(), "Loaded 6 commits and the count should match");
 
     // verify in-flight instants before archive
     verifyInflightInstants(metaClient, 2);
@@ -168,42 +168,42 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     // Check compaction instants
     List<HoodieInstant> instants = metaClient.scanHoodieInstantsFromFileSystem(
         new Path(metaClient.getMetaAuxiliaryPath()), HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE, false);
-    assertEquals("Should delete all compaction instants < 104", 4, instants.size());
-    assertFalse("Requested Compaction must be absent for 100",
-        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "100")));
-    assertFalse("Inflight Compaction must be absent for 100",
-        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "100")));
-    assertFalse("Requested Compaction must be absent for 101",
-        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "101")));
-    assertFalse("Inflight Compaction must be absent for 101",
-        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "101")));
-    assertFalse("Requested Compaction must be absent for 102",
-        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "102")));
-    assertFalse("Inflight Compaction must be absent for 102",
-        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "102")));
-    assertFalse("Requested Compaction must be absent for 103",
-        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "103")));
-    assertFalse("Inflight Compaction must be absent for 103",
-        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "103")));
-    assertTrue("Requested Compaction must be present for 104",
-        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "104")));
-    assertTrue("Inflight Compaction must be present for 104",
-        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "104")));
-    assertTrue("Requested Compaction must be present for 105",
-        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "105")));
-    assertTrue("Inflight Compaction must be present for 105",
-        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "105")));
+    assertEquals(4, instants.size(), "Should delete all compaction instants < 104");
+    assertFalse(instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "100")),
+        "Requested Compaction must be absent for 100");
+    assertFalse(instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "100")),
+        "Inflight Compaction must be absent for 100");
+    assertFalse(instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "101")),
+        "Requested Compaction must be absent for 101");
+    assertFalse(instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "101")),
+        "Inflight Compaction must be absent for 101");
+    assertFalse(instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "102")),
+        "Requested Compaction must be absent for 102");
+    assertFalse(instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "102")),
+        "Inflight Compaction must be absent for 102");
+    assertFalse(instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "103")),
+        "Requested Compaction must be absent for 103");
+    assertFalse(instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "103")),
+        "Inflight Compaction must be absent for 103");
+    assertTrue(instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "104")),
+        "Requested Compaction must be present for 104");
+    assertTrue(instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "104")),
+        "Inflight Compaction must be present for 104");
+    assertTrue(instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "105")),
+        "Requested Compaction must be present for 105");
+    assertTrue(instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "105")),
+        "Inflight Compaction must be present for 105");
 
     // read the file
     HoodieArchivedTimeline archivedTimeline = new HoodieArchivedTimeline(metaClient);
-    assertEquals("Total archived records and total read records are the same count",
-            24, archivedTimeline.countInstants());
+    assertEquals(24, archivedTimeline.countInstants(),
+        "Total archived records and total read records are the same count");
 
     //make sure the archived commits are the same as the (originalcommits - commitsleft)
     Set<String> readCommits =
-            archivedTimeline.getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
-    assertEquals("Read commits map should match the originalCommits - commitsLoadedFromArchival",
-            originalCommits.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet()), readCommits);
+        archivedTimeline.getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+    assertEquals(originalCommits.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet()), readCommits,
+        "Read commits map should match the originalCommits - commitsLoadedFromArchival");
 
     // verify in-flight instants after archive
     verifyInflightInstants(metaClient, 2);
@@ -247,31 +247,31 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     HoodieTestDataGenerator.createCommitFile(basePath, "103", dfs.getConf());
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    assertEquals("Loaded 4 commits and the count should match", 4, timeline.countInstants());
+    assertEquals(4, timeline.countInstants(), "Loaded 4 commits and the count should match");
     boolean result = archiveLog.archiveIfRequired(jsc);
     assertTrue(result);
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
-    assertEquals("Should not archive commits when maxCommitsToKeep is 5", 4, timeline.countInstants());
+    assertEquals(4, timeline.countInstants(), "Should not archive commits when maxCommitsToKeep is 5");
 
     List<HoodieInstant> instants = metaClient.scanHoodieInstantsFromFileSystem(
         new Path(metaClient.getMetaAuxiliaryPath()), HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE, false);
-    assertEquals("Should not delete any aux compaction files when maxCommitsToKeep is 5", 8, instants.size());
-    assertTrue("Requested Compaction must be present for 100",
-        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "100")));
-    assertTrue("Inflight Compaction must be present for 100",
-        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "100")));
-    assertTrue("Requested Compaction must be present for 101",
-        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "101")));
-    assertTrue("Inflight Compaction must be present for 101",
-        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "101")));
-    assertTrue("Requested Compaction must be present for 102",
-        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "102")));
-    assertTrue("Inflight Compaction must be present for 102",
-        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "102")));
-    assertTrue("Requested Compaction must be present for 103",
-        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "103")));
-    assertTrue("Inflight Compaction must be present for 103",
-        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "103")));
+    assertEquals(8, instants.size(), "Should not delete any aux compaction files when maxCommitsToKeep is 5");
+    assertTrue(instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "100")),
+        "Requested Compaction must be present for 100");
+    assertTrue(instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "100")),
+        "Inflight Compaction must be present for 100");
+    assertTrue(instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "101")),
+        "Requested Compaction must be present for 101");
+    assertTrue(instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "101")),
+        "Inflight Compaction must be present for 101");
+    assertTrue(instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "102")),
+        "Requested Compaction must be present for 102");
+    assertTrue(instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "102")),
+        "Inflight Compaction must be present for 102");
+    assertTrue(instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "103")),
+        "Requested Compaction must be present for 103");
+    assertTrue(instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "103")),
+        "Inflight Compaction must be present for 103");
   }
 
   @Test
@@ -290,14 +290,14 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     HoodieTestDataGenerator.createCommitFile(basePath, "105", dfs.getConf());
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
+    assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
     boolean result = archiveLog.archiveIfRequired(jsc);
     assertTrue(result);
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
-    assertTrue("Archived commits should always be safe", timeline.containsOrBeforeTimelineStarts("100"));
-    assertTrue("Archived commits should always be safe", timeline.containsOrBeforeTimelineStarts("101"));
-    assertTrue("Archived commits should always be safe", timeline.containsOrBeforeTimelineStarts("102"));
-    assertTrue("Archived commits should always be safe", timeline.containsOrBeforeTimelineStarts("103"));
+    assertTrue(timeline.containsOrBeforeTimelineStarts("100"), "Archived commits should always be safe");
+    assertTrue(timeline.containsOrBeforeTimelineStarts("101"), "Archived commits should always be safe");
+    assertTrue(timeline.containsOrBeforeTimelineStarts("102"), "Archived commits should always be safe");
+    assertTrue(timeline.containsOrBeforeTimelineStarts("103"), "Archived commits should always be safe");
   }
 
   @Test
@@ -317,19 +317,18 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     HoodieTestDataGenerator.createCommitFile(basePath, "105", dfs.getConf());
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
+    assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
     boolean result = archiveLog.archiveIfRequired(jsc);
     assertTrue(result);
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
-    assertEquals(
-        "Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)", 5,
-        timeline.countInstants());
-    assertTrue("Archived commits should always be safe",
-        timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101")));
-    assertTrue("Archived commits should always be safe",
-        timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102")));
-    assertTrue("Archived commits should always be safe",
-        timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")));
+    assertEquals(5, timeline.countInstants(),
+        "Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101")),
+        "Archived commits should always be safe");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102")),
+        "Archived commits should always be safe");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")),
+        "Archived commits should always be safe");
   }
 
   @Test
@@ -354,28 +353,29 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     HoodieTestDataGenerator.createCommitFile(basePath, "107", dfs.getConf());
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline();
-    assertEquals("Loaded 6 commits and the count should match", 8, timeline.countInstants());
+    assertEquals(8, timeline.countInstants(), "Loaded 6 commits and the count should match");
     boolean result = archiveLog.archiveIfRequired(jsc);
     assertTrue(result);
     timeline = metaClient.getActiveTimeline().reload().getCommitsAndCompactionTimeline();
-    assertFalse("Instants before oldest pending compaction can be removed",
-        timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "100")));
-    assertEquals("Since we have a pending compaction at 101, we should never archive any commit "
-        + "after 101 (we only archive 100)", 7, timeline.countInstants());
-    assertTrue("Requested Compaction must still be present",
-        timeline.containsInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "101")));
-    assertTrue("Instants greater than oldest pending compaction must be present",
-        timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102")));
-    assertTrue("Instants greater than oldest pending compaction must be present",
-        timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")));
-    assertTrue("Instants greater than oldest pending compaction must be present",
-        timeline.containsInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "104")));
-    assertTrue("Instants greater than oldest pending compaction must be present",
-        timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "105")));
-    assertTrue("Instants greater than oldest pending compaction must be present",
-        timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "106")));
-    assertTrue("Instants greater than oldest pending compaction must be present",
-        timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "107")));
+    assertFalse(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "100")),
+        "Instants before oldest pending compaction can be removed");
+    assertEquals(7, timeline.countInstants(),
+        "Since we have a pending compaction at 101, we should never archive any commit "
+            + "after 101 (we only archive 100)");
+    assertTrue(timeline.containsInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "101")),
+        "Requested Compaction must still be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102")),
+        "Instants greater than oldest pending compaction must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")),
+        "Instants greater than oldest pending compaction must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "104")),
+        "Instants greater than oldest pending compaction must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "105")),
+        "Instants greater than oldest pending compaction must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "106")),
+        "Instants greater than oldest pending compaction must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "107")),
+        "Instants greater than oldest pending compaction must be present");
   }
 
   @Test
@@ -412,8 +412,8 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   private void verifyInflightInstants(HoodieTableMetaClient metaClient, int expectedTotalInstants) {
     HoodieTimeline timeline = metaClient.getActiveTimeline().reload()
         .getTimelineOfActions(Collections.singleton(HoodieTimeline.CLEAN_ACTION)).filterInflights();
-    assertEquals("Loaded inflight clean actions and the count should match", expectedTotalInstants,
-        timeline.countInstants());
+    assertEquals(expectedTotalInstants, timeline.countInstants(),
+        "Loaded inflight clean actions and the count should match");
   }
 
   @Test

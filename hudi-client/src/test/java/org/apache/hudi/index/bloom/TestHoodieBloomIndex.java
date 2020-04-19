@@ -41,17 +41,18 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,40 +60,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import scala.Tuple2;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(Parameterized.class)
 public class TestHoodieBloomIndex extends HoodieClientTestHarness {
 
   private String schemaStr;
   private Schema schema;
 
-  private boolean rangePruning;
-  private boolean treeFiltering;
-  private boolean bucketizedChecking;
+  private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}";
 
-  @Parameterized.Parameters(name = "{index}: Test with rangePruning={0}, treeFiltering ={1}, bucketizedChecking is:{2}")
-  public static Collection<Object[]> data() {
+  public static Stream<Arguments> configParams() {
     Object[][] data =
         new Object[][] {{true, true, true}, {false, true, true}, {true, true, false}, {true, false, true}};
-    return Arrays.asList(data);
+    return Stream.of(data).map(Arguments::of);
   }
 
-  public TestHoodieBloomIndex(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
-    this.rangePruning = rangePruning;
-    this.treeFiltering = treeFiltering;
-    this.bucketizedChecking = bucketizedChecking;
-  }
-
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initSparkContexts("TestHoodieBloomIndex");
     initPath();
@@ -103,14 +95,14 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     initMetaClient();
   }
 
-  @After
+  @AfterEach
   public void tearDown() throws Exception {
     cleanupSparkContexts();
     cleanupFileSystem();
     cleanupMetaClient();
   }
 
-  private HoodieWriteConfig makeConfig() {
+  private HoodieWriteConfig makeConfig(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().bloomIndexPruneByRanges(rangePruning)
             .bloomIndexTreebasedFilter(treeFiltering).bloomIndexBucketizedChecking(bucketizedChecking)
@@ -118,9 +110,10 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         .build();
   }
 
-  @Test
-  public void testLoadInvolvedFiles() throws IOException {
-    HoodieWriteConfig config = makeConfig();
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
+  public void testLoadInvolvedFiles(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws IOException {
+    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieBloomIndex index = new HoodieBloomIndex(config);
 
     // Create some partitions, and put some files
@@ -128,9 +121,9 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     // "2016/04/01": 1 file (2_0_20160401010101.parquet)
     // "2015/03/12": 3 files (1_0_20150312101010.parquet, 3_0_20150312101010.parquet,
     // 4_0_20150312101010.parquet)
-    new File(basePath + "/2016/01/21").mkdirs();
-    new File(basePath + "/2016/04/01").mkdirs();
-    new File(basePath + "/2015/03/12").mkdirs();
+    Files.createDirectories(Paths.get(basePath, "2016", "01", "21"));
+    Files.createDirectories(Paths.get(basePath, "2016", "04", "01"));
+    Files.createDirectories(Paths.get(basePath, "2015", "03", "12"));
 
     TestRawTripPayload rowChange1 =
         new TestRawTripPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
@@ -163,16 +156,16 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     HoodieTable table = HoodieTable.create(metaClient, config, jsc);
     List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, jsc, table);
     // Still 0, as no valid commit
-    assertEquals(filesList.size(), 0);
+    assertEquals(0, filesList.size());
 
     // Add some commits
-    new File(basePath + "/.hoodie").mkdirs();
-    new File(basePath + "/.hoodie/20160401010101.commit").createNewFile();
-    new File(basePath + "/.hoodie/20150312101010.commit").createNewFile();
+    java.nio.file.Path hoodieDir = Files.createDirectories(Paths.get(basePath, ".hoodie"));
+    Files.createFile(hoodieDir.resolve("20160401010101.commit"));
+    Files.createFile(hoodieDir.resolve("20150312101010.commit"));
 
     table = HoodieTable.create(metaClient, config, jsc);
     filesList = index.loadInvolvedFiles(partitions, jsc, table);
-    assertEquals(filesList.size(), 4);
+    assertEquals(4, filesList.size());
 
     if (rangePruning) {
       // these files will not have the key ranges
@@ -194,9 +187,10 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     }
   }
 
-  @Test
-  public void testRangePruning() {
-    HoodieWriteConfig config = makeConfig();
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
+  public void testRangePruning(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
+    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieBloomIndex index = new HoodieBloomIndex(config);
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
@@ -277,27 +271,27 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     // assertTrue(results.get(1)._2().equals(filename));
   }
 
-  @Test
-  public void testTagLocationWithEmptyRDD() {
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
+  public void testTagLocationWithEmptyRDD(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
     // We have some records to be tagged (two different partitions)
     JavaRDD<HoodieRecord> recordRDD = jsc.emptyRDD();
     // Also create the metadata and config
-    HoodieWriteConfig config = makeConfig();
+    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, jsc);
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
 
-    try {
+    assertDoesNotThrow(() -> {
       bloomIndex.tagLocation(recordRDD, jsc, table);
-    } catch (IllegalArgumentException e) {
-      fail("EmptyRDD should not result in IllegalArgumentException: Positive number of slices required");
-    }
+    }, "EmptyRDD should not result in IllegalArgumentException: Positive number of slices required");
   }
 
-  @Test
-  public void testTagLocation() throws Exception {
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
+  public void testTagLocation(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     // We have some records to be tagged (two different partitions)
     String rowKey1 = UUID.randomUUID().toString();
     String rowKey2 = UUID.randomUUID().toString();
@@ -322,7 +316,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
 
     // Also create the metadata and config
-    HoodieWriteConfig config = makeConfig();
+    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, jsc);
 
@@ -365,8 +359,9 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     }
   }
 
-  @Test
-  public void testCheckExists() throws Exception {
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
+  public void testCheckExists(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     // We have some records to be tagged (two different partitions)
 
     String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -392,7 +387,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     JavaRDD<HoodieKey> keysRDD = jsc.parallelize(Arrays.asList(key1, key2, key3, key4));
 
     // Also create the metadata and config
-    HoodieWriteConfig config = makeConfig();
+    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, jsc);
 
@@ -437,8 +432,9 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     }
   }
 
-  @Test
-  public void testBloomFilterFalseError() throws IOException, InterruptedException {
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
+  public void testBloomFilterFalseError(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws IOException, InterruptedException {
     // We have two hoodie records
     String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
@@ -463,7 +459,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
 
     // We do the tag
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2));
-    HoodieWriteConfig config = makeConfig();
+    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, jsc);
 

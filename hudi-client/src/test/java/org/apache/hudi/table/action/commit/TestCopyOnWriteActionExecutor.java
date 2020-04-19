@@ -47,26 +47,25 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.TaskContext;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -74,7 +73,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(TestCopyOnWriteActionExecutor.class);
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initSparkContexts("TestCopyOnWriteActionExecutor");
     initPath();
@@ -83,7 +82,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     initFileSystem();
   }
 
-  @After
+  @AfterEach
   public void tearDown() throws Exception {
     cleanupSparkContexts();
     cleanupMetaClient();
@@ -110,8 +109,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
       return Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
     }).collect().get(0);
 
-    Assert.assertEquals(newPathWithWriteToken.getKey().toString(), this.basePath + "/" + partitionPath + "/"
-        + FSUtils.makeDataFileName(instantTime, newPathWithWriteToken.getRight(), fileName));
+    assertEquals(newPathWithWriteToken.getKey().toString(), Paths.get(this.basePath, partitionPath,
+        FSUtils.makeDataFileName(instantTime, newPathWithWriteToken.getRight(), fileName)).toString());
   }
 
   private HoodieWriteConfig makeHoodieClientConfig() throws Exception {
@@ -134,7 +133,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    String partitionPath = "/2016/01/31";
+    String partitionPath = "2016/01/31";
     HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
 
     // Get some records belong to the same partition (2016/01/31)
@@ -227,7 +226,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     updatedReader.close();
     // Also check the numRecordsWritten
     WriteStatus writeStatus = statuses.get(0);
-    assertEquals("Should be only one file generated", 1, statuses.size());
+    assertEquals(1, statuses.size(), "Should be only one file generated");
     assertEquals(4, writeStatus.getStat().getNumWrites());// 3 rewritten records + 1 new record
   }
 
@@ -239,7 +238,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     hoodieInputFormat.setConf(jobConf);
     HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, HoodieTableType.COPY_ON_WRITE);
     setupIncremental(jobConf, startCommitTime, numCommitsToPull);
-    FileInputFormat.setInputPaths(jobConf, basePath + partitionPath);
+    FileInputFormat.setInputPaths(jobConf, Paths.get(basePath, partitionPath).toString());
     return hoodieInputFormat.listStatus(jobConf);
   }
 
@@ -390,13 +389,13 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
 
     // Check the updated file
     int counts = 0;
-    for (File file : new File(basePath + "/2016/01/31").listFiles()) {
+    for (File file : Paths.get(basePath, "2016/01/31").toFile().listFiles()) {
       if (file.getName().endsWith(".parquet") && FSUtils.getCommitTime(file.getName()).equals(instantTime)) {
         LOG.info(file.getName() + "-" + file.length());
         counts++;
       }
     }
-    assertEquals("If the number of records are more than 1150, then there should be a new file", 3, counts);
+    assertEquals(3, counts, "If the number of records are more than 1150, then there should be a new file");
   }
 
   @Test
@@ -416,7 +415,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
 
     WriteStatus writeStatus = ws.get(0).get(0);
     String fileId = writeStatus.getFileId();
-    metaClient.getFs().create(new Path(basePath + "/.hoodie/000.commit")).close();
+    metaClient.getFs().create(new Path(Paths.get(basePath, ".hoodie", "000.commit").toString())).close();
     final List<HoodieRecord> updates = dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts);
 
     String partitionPath = updates.get(0).getPartitionPath();
@@ -429,11 +428,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
 
-  @After
+  @AfterEach
   public void cleanup() {
-    if (basePath != null) {
-      new File(basePath).delete();
-    }
     if (jsc != null) {
       jsc.stop();
     }
