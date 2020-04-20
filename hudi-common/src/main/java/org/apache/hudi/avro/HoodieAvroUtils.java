@@ -64,7 +64,7 @@ public class HoodieAvroUtils {
   private static ThreadLocal<BinaryDecoder> reuseDecoder = ThreadLocal.withInitial(() -> null);
 
   // All metadata fields are optional strings.
-  private static final Schema METADATA_FIELD_SCHEMA =
+  public static final Schema METADATA_FIELD_SCHEMA =
       Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)));
 
   private static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
@@ -96,7 +96,6 @@ public class HoodieAvroUtils {
     writer.write(record, jsonEncoder);
     jsonEncoder.flush();
     return out.toByteArray();
-    //metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
   }
 
   /**
