@@ -18,6 +18,7 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.avro.JsonProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatabilityException;
@@ -60,7 +61,7 @@ public class HoodieAvroUtils {
   private static ThreadLocal<BinaryDecoder> reuseDecoder = ThreadLocal.withInitial(() -> null);
 
   // All metadata fields are optional strings.
-  private static final Schema METADATA_FIELD_SCHEMA =
+  public static final Schema METADATA_FIELD_SCHEMA =
       Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)));
 
   private static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
@@ -214,7 +215,11 @@ public class HoodieAvroUtils {
     GenericRecord newRecord = new GenericData.Record(newSchema);
     for (Schema.Field f : fieldsToWrite) {
       if (record.get(f.name()) == null) {
-        newRecord.put(f.name(), f.defaultVal());
+        if (f.defaultVal() instanceof JsonProperties.Null) {
+          newRecord.put(f.name(), null);
+        } else {
+          newRecord.put(f.name(), f.defaultVal());
+        }
       } else {
         newRecord.put(f.name(), record.get(f.name()));
       }
