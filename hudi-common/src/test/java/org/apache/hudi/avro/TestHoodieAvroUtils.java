@@ -141,14 +141,17 @@ public class TestHoodieAvroUtils {
     Assert.assertEquals(updatedUnion.schema().getTypes().get(1).getType(), Type.STRING);
 
     Field notNullString = schema.getFields().get(1);
-    Assert.assertNull(notNullString.defaultVal());
-    Assert.assertEquals(notNullString.schema().getType(), Type.STRING);
+    Assert.assertEquals(notNullString.schema().getType(), Type.UNION);
+    Assert.assertEquals(notNullString.schema().getTypes().size(), 2);
+    Assert.assertEquals(notNullString.schema().getTypes().get(0).getType(), Type.NULL);
+    Assert.assertEquals(notNullString.schema().getTypes().get(1).getType(), Type.STRING);
 
     Field notNullUnion = schema.getFields().get(2);
-    Assert.assertNull(notNullUnion.defaultVal());
+    Assert.assertTrue(notNullUnion.defaultVal() instanceof Null);
     Assert.assertEquals(notNullUnion.schema().getType(), Type.UNION);
-    Assert.assertEquals(notNullUnion.schema().getTypes().size(), 2);
-    Assert.assertEquals(notNullUnion.schema().getTypes().get(0).getType(), Type.STRING);
-    Assert.assertEquals(notNullUnion.schema().getTypes().get(1).getType(), Type.BOOLEAN);
+    Assert.assertEquals(notNullUnion.schema().getTypes().size(), 3);
+    Assert.assertEquals(notNullUnion.schema().getTypes().get(0).getType(), Type.NULL);
+    Assert.assertEquals(notNullUnion.schema().getTypes().get(1).getType(), Type.STRING);
+    Assert.assertEquals(notNullUnion.schema().getTypes().get(2).getType(), Type.BOOLEAN);
   }
 }

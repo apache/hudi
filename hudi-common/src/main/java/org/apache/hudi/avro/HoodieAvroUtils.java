@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatabilityException;
 
+import com.google.common.collect.Lists;
 import org.apache.avro.JsonProperties.Null;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -61,6 +62,8 @@ import java.util.zip.InflaterInputStream;
  * Helper class to do common stuff across Avro.
  */
 public class HoodieAvroUtils {
+
+  public static final Schema NULL_SCHEMA = Schema.create(Type.NULL);
 
   private static ThreadLocal<BinaryEncoder> reuseEncoder = ThreadLocal.withInitial(() -> null);
 
@@ -330,13 +333,15 @@ public class HoodieAvroUtils {
     } else {
       return schema.getTypes().stream()
           .filter(type -> !type.getName().equals(Type.NULL.getName().toLowerCase()))
-          .findFirst().get();
+          .findFirst()
+          .get();
     }
   }
 
   /**
-   * This method rewrites passed avro schema to make sure:
-   * If the union has null element it should be the first and default value should be set to null.
+   * This method rewrites passed avro schema to make sure that all the types are nullable and
+   * have correct default value set to null. Having not null columns in this schema can result
+   * in breakages down the road (especially in compaction logic).
    *
    * @param schema schema to modify
    * @param visited set used to prevent infinite loops.
@@ -353,44 +358,34 @@ public class HoodieAvroUtils {
       case RECORD:
         for (Field field : schema.getFields()) {
           if (Type.UNION.equals(field.schema().getType())) {
-            boolean nullFound = false;
             List<Schema> unionTypes = new ArrayList<>();
-            unionTypes.add(Schema.create(Type.NULL));
+            unionTypes.add(NULL_SCHEMA);
             for (Schema typeSchema : field.schema().getTypes()) {
               if (!typeSchema.getName().equals(Type.NULL.getName().toLowerCase())) {
                 unionTypes.add(typeSchema);
-              } else {
-                nullFound = true;
               }
             }
 
-            if (nullFound) {
-              Schema newUnionSchema = Schema.createUnion(unionTypes);
-              try {
-                java.lang.reflect.Field schemaField = field.getClass().getDeclaredField("schema");
-                schemaField.setAccessible(true);
-                schemaField.set(field, newUnionSchema);
-              } catch (NoSuchFieldException | IllegalAccessException e) {
-                throw new RuntimeException(e);
-              }
-
-              try {
-                java.lang.reflect.Field defaultValueField =
-                    field.getClass().getDeclaredField("defaultValue");
-                defaultValueField.setAccessible(true);
-                defaultValueField.set(field, NullNode.getInstance());
-              } catch (NoSuchFieldException | IllegalAccessException e) {
-                throw new RuntimeException(e);
-              }
-            }
+            resetTypes(field, unionTypes);
           }
 
+          try {
+            java.lang.reflect.Field defaultValueField =
+                field.getClass().getDeclaredField("defaultValue");
+            defaultValueField.setAccessible(true);
+            defaultValueField.set(field, NullNode.getInstance());
+          } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new RuntimeException(e);
+          }
+
+          rewriteIfNonUnionSimple(field);
           rewriteIncorrectDefaults(field.schema(), visited);
         }
 
         break;
       case UNION:
         for (Schema typeSchema : schema.getTypes()) {
+          // Make sure null is first.
           rewriteIncorrectDefaults(typeSchema, visited);
         }
         break;
@@ -400,6 +395,41 @@ public class HoodieAvroUtils {
       case MAP:
         rewriteIncorrectDefaults(schema.getValueType(), visited);
         break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Resets types of the field.
+   */
+  private static void resetTypes(Field field, List<Schema> unionTypes) {
+    Schema newUnionSchema = Schema.createUnion(unionTypes);
+    try {
+      java.lang.reflect.Field schemaField = field.getClass().getDeclaredField("schema");
+      schemaField.setAccessible(true);
+      schemaField.set(field, newUnionSchema);
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Rewrites schema for a simple type which is not part of union.
+   * @param field
+   */
+  private static void rewriteIfNonUnionSimple(Field field) {
+    Schema fieldSchema = field.schema();
+    switch (fieldSchema.getType()) {
+      case FIXED:
+      case STRING:
+      case BYTES:
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+      case BOOLEAN:
+        resetTypes(field, Lists.newArrayList(NULL_SCHEMA, fieldSchema));
       default:
         break;
     }
