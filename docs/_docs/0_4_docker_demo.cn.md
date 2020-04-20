@@ -90,7 +90,7 @@ At this point, the docker cluster will be up and running. The demo cluster bring
    * HDFS Services (NameNode, DataNode)
    * Spark Master and Worker
    * Hive Services (Metastore, HiveServer2 along with PostgresDB)
-   * Kafka Broker and a Zookeeper Node (Kakfa will be used as upstream source for the demo)
+   * Kafka Broker and a Zookeeper Node (Kafka will be used as upstream source for the demo)
    * Adhoc containers to run Hudi/Hive CLI commands
 
 ## Demo
