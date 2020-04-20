@@ -24,9 +24,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -42,14 +39,13 @@ import static java.util.Collections.reverse;
 
 /**
  * HoodieDefaultTimeline is a default implementation of the HoodieTimeline. It provides methods to inspect a
- * List[HoodieInstant]. Function to get the details of the instant is passed in as a lamdba.
+ * List[HoodieInstant]. Function to get the details of the instant is passed in as a lambda.
  *
  * @see HoodieTimeline
  */
 public class HoodieDefaultTimeline implements HoodieTimeline {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(HoodieDefaultTimeline.class);
 
   private static final String HASHING_ALGORITHM = "SHA-256";
 
