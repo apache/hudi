@@ -229,6 +229,12 @@ public class HoodieCommitArchiveLog {
               HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE,
               false);
     } catch (FileNotFoundException e) {
+      // On some FSs deletion of all files in the directory can auto remove the directory itself.
+      // GCS is one example, as it doesn't have real directories and subdirectories. When client
+      // removes all the files from a "folder" on GCS is has to create a special "/" to keep the folder
+      // around. If this doesn't happen (timeout, misconfigured client, ...) folder will be deleted and
+      // in this case we should not break when aux folder is not found.
+      // GCS information: (https://cloud.google.com/storage/docs/gsutil/addlhelp/HowSubdirectoriesWork)
       LOG.warn("Aux path not found. Skipping: " + metaClient.getMetaAuxiliaryPath());
       return success;
     }
