@@ -79,7 +79,11 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
       this.inputStream = fsDataInputStream;
     }
 
-    fsDataInputStream.seek(0);
+    // Defensive measure to make sure nothing advanced the stream.
+    if (fsDataInputStream.getPos() != 0) {
+      fsDataInputStream.seek(0);
+    }
+
     this.logFile = logFile;
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;
