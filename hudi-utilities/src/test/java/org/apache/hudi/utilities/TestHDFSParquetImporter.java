@@ -56,6 +56,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -102,7 +103,7 @@ public class TestHDFSParquetImporter implements Serializable {
 
     // Create generic records.
     srcFolder = new Path(basePath, "testSrc");
-    insertData = createRecords(srcFolder);
+    insertData = createInsertRecords(srcFolder);
   }
 
   @After
@@ -185,20 +186,20 @@ public class TestHDFSParquetImporter implements Serializable {
    * Test successful insert and verify data consistency.
    */
   @Test
-  public void testImportInsert() throws IOException, ParseException {
+  public void testImportWithInsert() throws IOException, ParseException {
     try (JavaSparkContext jsc = getJavaSparkContext()) {
       insert(jsc);
       SQLContext sqlContext = new SQLContext(jsc);
       Dataset<Row> ds = HoodieClientTestUtils.read(jsc, basePath + "/testTarget", sqlContext, dfs, basePath + "/testTarget/*/*/*/*");
 
       List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
-      List<HoodieModel> result = readData.stream().map(row ->
-          new HoodieModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
+      List<HoodieTripModel> result = readData.stream().map(row ->
+          new HoodieTripModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
               row.getDouble(5), row.getDouble(6), row.getDouble(7)))
           .collect(Collectors.toList());
 
-      List<HoodieModel> expected = insertData.stream().map(g ->
-          new HoodieModel(Double.parseDouble(g.get("timestamp").toString()),
+      List<HoodieTripModel> expected = insertData.stream().map(g ->
+          new HoodieTripModel(Double.parseDouble(g.get("timestamp").toString()),
               g.get("_row_key").toString(),
               g.get("rider").toString(),
               g.get("driver").toString(),
@@ -242,14 +243,14 @@ public class TestHDFSParquetImporter implements Serializable {
       Dataset<Row> ds = HoodieClientTestUtils.read(jsc, basePath + "/testTarget", sqlContext, dfs, basePath + "/testTarget/*/*/*/*");
 
       List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
-      List<HoodieModel> result = readData.stream().map(row ->
-          new HoodieModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
+      List<HoodieTripModel> result = readData.stream().map(row ->
+          new HoodieTripModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
               row.getDouble(5), row.getDouble(6), row.getDouble(7)))
           .collect(Collectors.toList());
 
       // get expected result
-      List<HoodieModel> expected = expectData.stream().map(g ->
-          new HoodieModel(Double.parseDouble(g.get("timestamp").toString()),
+      List<HoodieTripModel> expected = expectData.stream().map(g ->
+          new HoodieTripModel(Double.parseDouble(g.get("timestamp").toString()),
               g.get("_row_key").toString(),
               g.get("rider").toString(),
               g.get("driver").toString(),
@@ -263,7 +264,7 @@ public class TestHDFSParquetImporter implements Serializable {
     }
   }
 
-  private List<GenericRecord> createRecords(Path srcFolder) throws ParseException, IOException {
+  private List<GenericRecord> createInsertRecords(Path srcFolder) throws ParseException, IOException {
     Path srcFile = new Path(srcFolder.toString(), "file1.parquet");
     long startTime = HoodieActiveTimeline.COMMIT_FORMATTER.parse("20170203000000").getTime() / 1000;
     List<GenericRecord> records = new ArrayList<GenericRecord>();
@@ -271,12 +272,12 @@ public class TestHDFSParquetImporter implements Serializable {
       records.add(HoodieTestDataGenerator.generateGenericRecord(Long.toString(recordNum), "rider-" + recordNum,
           "driver-" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
-    ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
-        .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build();
-    for (GenericRecord record : records) {
-      writer.write(record);
+    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
+        .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {
+      for (GenericRecord record : records) {
+        writer.write(record);
+      }
     }
-    writer.close();
     return records;
   }
 
@@ -294,12 +295,12 @@ public class TestHDFSParquetImporter implements Serializable {
       records.add(HoodieTestDataGenerator.generateGenericRecord(Long.toString(recordNum), "rider-upsert-" + recordNum,
           "driver-upsert" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
-    ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
-        .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build();
-    for (GenericRecord record : records) {
-      writer.write(record);
+    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
+        .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {
+      for (GenericRecord record : records) {
+        writer.write(record);
+      }
     }
-    writer.close();
     return records;
   }
 
@@ -384,7 +385,7 @@ public class TestHDFSParquetImporter implements Serializable {
   /**
    * Class used for compare result and expected.
    */
-  private class HoodieModel {
+  public static class HoodieTripModel {
     double timestamp;
     String rowKey;
     String rider;
@@ -394,7 +395,7 @@ public class TestHDFSParquetImporter implements Serializable {
     double endLat;
     double endLon;
 
-    private HoodieModel(double timestamp, String rowKey, String rider, String driver, double beginLat,
+    private HoodieTripModel(double timestamp, String rowKey, String rider, String driver, double beginLat,
         double beginLon, double endLat, double endLon) {
       this.timestamp = timestamp;
       this.rowKey = rowKey;
@@ -414,7 +415,7 @@ public class TestHDFSParquetImporter implements Serializable {
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      HoodieModel other = (HoodieModel) o;
+      HoodieTripModel other = (HoodieTripModel) o;
       return timestamp == other.timestamp && rowKey.equals(other.rowKey) && rider.equals(other.rider)
           && driver.equals(other.driver) && beginLat == other.beginLat && beginLon == other.beginLon
           && endLat == other.endLat && endLon == other.endLon;
@@ -422,28 +423,7 @@ public class TestHDFSParquetImporter implements Serializable {
 
     @Override
     public int hashCode() {
-      int iConstant = 37;
-      int iTotal = 17;
-      iTotal = appendHash(iTotal, iConstant, Double.doubleToLongBits(timestamp));
-      iTotal = appendHash(iTotal, iConstant, rowKey);
-      iTotal = appendHash(iTotal, iConstant, rider);
-      iTotal = appendHash(iTotal, iConstant, driver);
-      iTotal = appendHash(iTotal, iConstant, Double.doubleToLongBits(beginLat));
-      iTotal = appendHash(iTotal, iConstant, Double.doubleToLongBits(beginLon));
-      iTotal = appendHash(iTotal, iConstant, Double.doubleToLongBits(endLat));
-      iTotal = appendHash(iTotal, iConstant, Double.doubleToLongBits(endLon));
-      return iTotal;
-    }
-
-    // Generate hashcode, refer to org.apache.commons.lang.builder.HashCodeBuilder.
-    // It is forbidden to import class HashCodeBuilder， because of checkstyle.
-    //
-    private int appendHash(int total, int constant, long value) {
-      return total * constant + ((int) (value ^ (value >> 32)));
-    }
-
-    private int appendHash(int total, int constant, String value) {
-      return total * constant + value.hashCode();
+      return Objects.hash(timestamp, rowKey, rider, driver, beginLat, beginLon, endLat, endLon);
     }
   }
 }
