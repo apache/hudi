@@ -35,6 +35,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.TimeZone;
+import java.util.concurrent.TimeUnit;
+
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 /**
  * Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
@@ -42,8 +45,10 @@ import java.util.TimeZone;
 public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   enum TimestampType implements Serializable {
-    UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS
+    UNIX_TIMESTAMP, DATE_STRING, MIXED
   }
+
+  private final TimeUnit timeUnit;
 
   private final TimestampType timestampType;
 
@@ -62,6 +67,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
     // One value from TimestampType above
     private static final String TIMESTAMP_TYPE_FIELD_PROP = "hoodie.deltastreamer.keygen.timebased.timestamp.type";
+    private static final String INPUT_TIME_UNIT =
+        "hoodie.deltastreamer.keygen.timebased.timestamp.time_unit";
     private static final String TIMESTAMP_INPUT_DATE_FORMAT_PROP =
         "hoodie.deltastreamer.keygen.timebased.input.dateformat";
     private static final String TIMESTAMP_OUTPUT_DATE_FORMAT_PROP =
@@ -77,6 +84,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     this.timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
     this.outputDateFormat = config.getString(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP);
     this.timeZone = TimeZone.getTimeZone(config.getString(Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, "GMT"));
+    String timeUnitStr = config.getString(Config.INPUT_TIME_UNIT, TimeUnit.SECONDS.toString());
+    timeUnit = TimeUnit.valueOf(timeUnitStr.toUpperCase());
 
     if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
       DataSourceUtils.checkRequiredProperties(config,
@@ -96,20 +105,20 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     partitionPathFormat.setTimeZone(timeZone);
 
     try {
-      long unixTime;
+      long timeMs;
       if (partitionVal instanceof Double) {
-        unixTime = ((Double) partitionVal).longValue();
+        timeMs = convertLongTimeToSeconds(((Double) partitionVal).longValue());
       } else if (partitionVal instanceof Float) {
-        unixTime = ((Float) partitionVal).longValue();
+        timeMs = convertLongTimeToSeconds(((Float) partitionVal).longValue());
       } else if (partitionVal instanceof Long) {
-        unixTime = (Long) partitionVal;
+        timeMs = convertLongTimeToSeconds((Long) partitionVal);
       } else if (partitionVal instanceof CharSequence) {
-        unixTime = inputDateFormat.parse(partitionVal.toString()).getTime() / 1000;
+        timeMs = inputDateFormat.parse(partitionVal.toString()).getTime() / 1000;
       } else {
         throw new HoodieNotSupportedException(
           "Unexpected type for partition field: " + partitionVal.getClass().getName());
       }
-      Date timestamp = this.timestampType == TimestampType.EPOCHMILLISECONDS ? new Date(unixTime) : new Date(unixTime * 1000);
+      Date timestamp = new Date(timeMs);
 
       String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
       if (recordKey == null || recordKey.isEmpty()) {
@@ -122,5 +131,9 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     } catch (ParseException pe) {
       throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, pe);
     }
+  }
+
+  private long convertLongTimeToSeconds(Long partitionVal) {
+    return MILLISECONDS.convert(partitionVal, timeUnit);
   }
 }
