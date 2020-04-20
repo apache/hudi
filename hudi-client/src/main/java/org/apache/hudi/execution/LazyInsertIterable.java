@@ -28,7 +28,8 @@ import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.io.CreateHandleFactory;
+import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 
@@ -43,26 +44,34 @@ import java.util.function.Function;
 /**
  * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new files.
  */
-public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
+public class LazyInsertIterable<T extends HoodieRecordPayload>
     extends LazyIterableIterator<HoodieRecord<T>, List<WriteStatus>> {
 
   protected final HoodieWriteConfig hoodieConfig;
   protected final String instantTime;
   protected final HoodieTable<T> hoodieTable;
   protected final String idPrefix;
-  protected int numFilesWritten;
   protected SparkTaskContextSupplier sparkTaskContextSupplier;
+  protected WriteHandleFactory<T> writeHandleFactory;
 
-  public CopyOnWriteLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
-                                       String instantTime, HoodieTable<T> hoodieTable, String idPrefix,
-                                       SparkTaskContextSupplier sparkTaskContextSupplier) {
+  public LazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
+                            String instantTime, HoodieTable<T> hoodieTable, String idPrefix,
+                            SparkTaskContextSupplier sparkTaskContextSupplier) {
+    this(sortedRecordItr, config, instantTime, hoodieTable, idPrefix, sparkTaskContextSupplier,
+        new CreateHandleFactory<>());
+  }
+
+  public LazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
+                            String instantTime, HoodieTable<T> hoodieTable, String idPrefix,
+                            SparkTaskContextSupplier sparkTaskContextSupplier,
+                            WriteHandleFactory<T> writeHandleFactory) {
     super(sortedRecordItr);
     this.hoodieConfig = config;
     this.instantTime = instantTime;
     this.hoodieTable = hoodieTable;
     this.idPrefix = idPrefix;
-    this.numFilesWritten = 0;
     this.sparkTaskContextSupplier = sparkTaskContextSupplier;
+    this.writeHandleFactory = writeHandleFactory;
   }
 
   // Used for caching HoodieRecord along with insertValue. We need this to offload computation work to buffering thread.
@@ -118,10 +127,6 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
   @Override
   protected void end() {}
 
-  protected String getNextFileId(String idPfx) {
-    return String.format("%s-%d", idPfx, numFilesWritten++);
-  }
-
   protected CopyOnWriteInsertHandler getInsertHandler() {
     return new CopyOnWriteInsertHandler();
   }
@@ -140,8 +145,8 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
       final HoodieRecord insertPayload = payload.record;
       // lazily initialize the handle, for the first time
       if (handle == null) {
-        handle = new HoodieCreateHandle(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),
-            getNextFileId(idPrefix), sparkTaskContextSupplier);
+        handle = writeHandleFactory.create(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),
+            idPrefix, sparkTaskContextSupplier);
       }
 
       if (handle.canWrite(payload.record)) {
@@ -151,8 +156,8 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
         // handle is full.
         statuses.add(handle.close());
         // Need to handle the rejected payload & open new handle
-        handle = new HoodieCreateHandle(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),
-            getNextFileId(idPrefix), sparkTaskContextSupplier);
+        handle = writeHandleFactory.create(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),
+            idPrefix, sparkTaskContextSupplier);
         handle.write(insertPayload, payload.insertValue, payload.exception); // we should be able to write 1 payload.
       }
     }

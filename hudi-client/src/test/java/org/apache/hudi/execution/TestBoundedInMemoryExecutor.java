@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.execution.CopyOnWriteLazyInsertIterable.HoodieInsertValueGenResult;
+import org.apache.hudi.execution.LazyInsertIterable.HoodieInsertValueGenResult;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.After;
@@ -37,7 +37,7 @@ import java.util.List;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.execution.CopyOnWriteLazyInsertIterable.getTransformFunction;
+import static org.apache.hudi.execution.LazyInsertIterable.getTransformFunction;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 

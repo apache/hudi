@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.execution.CopyOnWriteLazyInsertIterable.HoodieInsertValueGenResult;
+import org.apache.hudi.execution.LazyInsertIterable.HoodieInsertValueGenResult;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.After;
@@ -53,7 +53,7 @@ import java.util.stream.IntStream;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.execution.CopyOnWriteLazyInsertIterable.getTransformFunction;
+import static org.apache.hudi.execution.LazyInsertIterable.getTransformFunction;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
