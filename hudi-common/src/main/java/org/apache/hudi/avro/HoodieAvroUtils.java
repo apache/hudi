@@ -430,6 +430,7 @@ public class HoodieAvroUtils {
       case DOUBLE:
       case BOOLEAN:
         resetTypes(field, Lists.newArrayList(NULL_SCHEMA, fieldSchema));
+        break;
       default:
         break;
     }
