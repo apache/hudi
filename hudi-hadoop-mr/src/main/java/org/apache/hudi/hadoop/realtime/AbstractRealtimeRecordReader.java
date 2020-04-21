@@ -360,7 +360,9 @@ public abstract class AbstractRealtimeRecordReader {
   private Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap) {
     // Get all column names of hive table
     String hiveColumnString = jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS);
+    LOG.info("Hive Columns : " + hiveColumnString);
     String[] hiveColumns = hiveColumnString.split(",");
+    LOG.info("Hive Columns : " + hiveColumnString);
     List<Field> hiveSchemaFields = new ArrayList<>();
 
     for (String columnName : hiveColumns) {
@@ -378,6 +380,7 @@ public abstract class AbstractRealtimeRecordReader {
     Schema hiveSchema = Schema.createRecord(writerSchema.getName(), writerSchema.getDoc(), writerSchema.getNamespace(),
         writerSchema.isError());
     hiveSchema.setFields(hiveSchemaFields);
+    LOG.info("HIVE Schema is :" + hiveSchema.toString(true));
     return hiveSchema;
   }
 

@@ -50,7 +50,7 @@ public class HoodieMergeOnReadTestUtils {
   }
 
   public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths, String basePath,
-                                                                Configuration conf) {
+      Configuration conf) {
     JobConf jobConf = new JobConf(conf);
     return getRecordsUsingInputFormat(inputPaths, basePath, jobConf, new HoodieParquetRealtimeInputFormat());
   }
