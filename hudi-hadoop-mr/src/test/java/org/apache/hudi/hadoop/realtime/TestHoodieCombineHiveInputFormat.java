@@ -18,19 +18,15 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import static org.apache.hadoop.hive.ql.exec.Utilities.HAS_MAP_WORK;
-import static org.apache.hadoop.hive.ql.exec.Utilities.MAPRED_MAPPER_CLASS;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.minicluster.MiniClusterUtil;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarnessJunit5;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.hadoop.InputFormatTestUtil;
+import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -47,60 +43,60 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Ignore;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 
-public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
+import static org.apache.hadoop.hive.ql.exec.Utilities.HAS_MAP_WORK;
+import static org.apache.hadoop.hive.ql.exec.Utilities.MAPRED_MAPPER_CLASS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-  @Rule
-  public TemporaryFolder basePath = new TemporaryFolder();
+public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarnessJunit5 {
+
   private JobConf jobConf;
   private FileSystem fs;
   private Configuration hadoopConf;
 
-  @BeforeClass
+  @BeforeAll
   public static void setUpClass() throws IOException, InterruptedException {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     MiniClusterUtil.setUp();
   }
 
-  @AfterClass
+  @AfterAll
   public static void tearDownClass() {
     MiniClusterUtil.shutdown();
   }
 
-  @Before
+  @BeforeEach
   public void setUp() throws IOException, InterruptedException {
     this.fs = MiniClusterUtil.fileSystem;
     jobConf = new JobConf();
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     assertTrue(fs.mkdirs(new Path(folder.getRoot().getPath())));
-    HoodieTestUtils.init(MiniClusterUtil.configuration, basePath.getRoot().getPath(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(MiniClusterUtil.configuration, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
   }
 
   @Test
-  @Ignore
+  @Disabled
   public void testHoodieRealtimeCombineHoodieInputFormat() throws Exception {
 
     Configuration conf = new Configuration();
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(hadoopConf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
     // Create 3 parquet files with 1000 records each
-    File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 3, numRecords, commitTime);
-    InputFormatTestUtil.commit(basePath, commitTime);
+    File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
+    InputFormatTestUtil.commit(tempDir, commitTime);
 
     // insert 1000 update records to log file 0
     String newCommitTime = "101";
@@ -124,10 +120,10 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     tblDesc.setInputFileFormatClass(HoodieCombineHiveInputFormat.class);
     PartitionDesc partDesc = new PartitionDesc(tblDesc, null);
     LinkedHashMap<Path, PartitionDesc> pt = new LinkedHashMap<>();
-    pt.put(new Path(basePath.getRoot().getAbsolutePath()), partDesc);
+    pt.put(new Path(tempDir.toAbsolutePath().toString()), partDesc);
     MapredWork mrwork = new MapredWork();
     mrwork.getMapWork().setPathToPartitionInfo(pt);
-    Path mapWorkPath = new Path(basePath.getRoot().getAbsolutePath());
+    Path mapWorkPath = new Path(tempDir.toAbsolutePath().toString());
     Utilities.setMapRedWork(conf, mrwork, mapWorkPath);
     jobConf = new JobConf(conf);
     // Add the paths
@@ -143,7 +139,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     InputFormatTestUtil.setPropsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
     // Since the SPLIT_SIZE is 3, we should create only 1 split with all 3 file groups
-    assertEquals(splits.length, 1);
+    assertEquals(1, splits.length);
     RecordReader<NullWritable, ArrayWritable> recordReader =
         combineHiveInputFormat.getRecordReader(splits[0], jobConf, null);
     NullWritable nullWritable = recordReader.createKey();
