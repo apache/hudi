@@ -3,7 +3,7 @@ title: OSS Filesystem
 keywords: hudi, hive, aliyun, oss, spark, presto
 permalink: /docs/oss_hoodie.html
 summary: In this page, we go over how to configure Hudi with OSS filesystem.
-last_modified_at: 2020-04-12T11:23:24-10:00
+last_modified_at: 2020-04-21T11:38:24-10:00
 ---
 In this page, we explain how to get your Hudi spark job to store into Aliyun OSS.
 
@@ -50,12 +50,22 @@ Add the required configs in your core-site.xml from where Hudi can fetch them. R
 
 ### Aliyun OSS Libs
 
-Aliyun hadoop libraries jars to add to our pom.xml.
+Aliyun hadoop libraries jars to add to our pom.xml. Since hadoop-aliyun depends on the version of hadoop 2.9.1+, you need to use the version of hadoop 2.9.1 or later.
 
 ```xml
 <dependency>
     <groupId>org.apache.hadoop</groupId>
     <artifactId>hadoop-aliyun</artifactId>
     <version>3.2.1</version>
+</dependency>
+<dependency>
+    <groupId>com.aliyun.oss</groupId>
+    <artifactId>aliyun-sdk-oss</artifactId>
+    <version>3.8.1</version>
+</dependency>
+<dependency>
+    <groupId>org.jdom</groupId>
+    <artifactId>jdom</artifactId>
+    <version>1.1</version>
 </dependency>
 ```
