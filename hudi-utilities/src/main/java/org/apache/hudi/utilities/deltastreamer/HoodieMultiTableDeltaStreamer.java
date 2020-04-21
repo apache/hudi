@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import com.beust.jcommander.Parameter;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -30,6 +29,8 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 
 import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import com.beust.jcommander.converters.StringConverter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
@@ -257,7 +258,7 @@ public class HoodieMultiTableDeltaStreamer {
         + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
         + "allows a SQL query templated to be passed as a transformation function). "
         + "Pass a comma-separated list of subclass names to chain the transformations.",
-        converter = HoodieDeltaStreamer.TransformersConverter.class)
+        converter = StringConverter.class, listConverter = HoodieDeltaStreamer.TransformersConverter.class)
     public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
