@@ -248,7 +248,7 @@ public class TestHDFSParquetImporter implements Serializable {
               row.getDouble(5), row.getDouble(6), row.getDouble(7)))
           .collect(Collectors.toList());
 
-      // get expected result
+      // get expected result.
       List<HoodieTripModel> expected = expectData.stream().map(g ->
           new HoodieTripModel(Double.parseDouble(g.get("timestamp").toString()),
               g.get("_row_key").toString(),
