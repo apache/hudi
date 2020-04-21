@@ -54,7 +54,7 @@ df.write.format("org.apache.hudi").
 
 `mode(Overwrite)`覆盖并重新创建数据集(如果已经存在)。
 您可以检查在`/tmp/hudi_cow_table/<region>/<country>/<city>/`下生成的数据。我们提供了一个记录键
-([schema](#sample-schema)中的`uuid`)，分区字段(`region/county/city`）和组合逻辑([schema](#sample-schema)中的`ts`)
+([schema](#sample-schema)中的`uuid`)，分区字段(`region/country/city`）和组合逻辑([schema](#sample-schema)中的`ts`)
 以确保行程记录在每个分区中都是唯一的。更多信息请参阅
 [对Hudi中的数据进行建模](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)，
 有关将数据提取到Hudi中的方法的信息，请参阅[写入Hudi数据集](/cn/docs/writing_data.html)。
