@@ -30,7 +30,7 @@ import java.io.IOException;
  * <p>
  * To incrementally migrate test classes.
  */
-public class HoodieCommonTestHarness extends org.apache.hudi.common.HoodieCommonTestHarness {
+public class HoodieCommonTestHarnessJunit5 extends org.apache.hudi.common.HoodieCommonTestHarness {
 
   @TempDir
   public java.nio.file.Path tempDir;

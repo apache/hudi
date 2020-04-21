@@ -20,7 +20,7 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarnessJunit5;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  *
  */
-public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
+public class TestHoodieROTablePathFilter extends HoodieCommonTestHarnessJunit5 {
 
   @BeforeEach
   public void setUp() throws Exception {

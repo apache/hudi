@@ -21,7 +21,7 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarnessJunit5;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieSnapshotCopier extends HoodieCommonTestHarness {
+public class TestHoodieSnapshotCopier extends HoodieCommonTestHarnessJunit5 {
 
   private static final String TEST_WRITE_TOKEN = "1-0-1";
 
