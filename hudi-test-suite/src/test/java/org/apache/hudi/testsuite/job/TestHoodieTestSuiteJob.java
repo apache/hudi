@@ -27,11 +27,13 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.testsuite.DeltaInputFormat;
 import org.apache.hudi.testsuite.DeltaOutputType;
 import org.apache.hudi.testsuite.dag.ComplexDagGenerator;
 import org.apache.hudi.testsuite.dag.HiveSyncDagGenerator;
+import org.apache.hudi.testsuite.dag.HiveSyncDagGeneratorMOR;
 import org.apache.hudi.testsuite.dag.WorkflowDagGenerator;
 import org.apache.hudi.testsuite.job.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.utilities.UtilitiesTestBase;
@@ -60,9 +62,11 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
 
   @Parameterized.Parameters(name = "TableType")
   public static Collection<Object[]> data() {
-    return Arrays.asList(new Object[][]{{"COPY_ON_WRITE", false}, {"COPY_ON_WRITE", true}, {"MERGE_ON_READ", false},
+    return Arrays.asList(new Object[][]{{"MERGE_ON_READ", false},
         {"MERGE_ON_READ", true}});
   }
+
+  // {"COPY_ON_WRITE", false}, {"COPY_ON_WRITE", true},
 
   @BeforeClass
   public static void initClass() throws Exception {
@@ -153,7 +157,11 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     String inputBasePath = dfsBasePath + "/input";
     String outputBasePath = dfsBasePath + "/result";
     HoodieTestSuiteConfig cfg = makeConfig(inputBasePath, outputBasePath);
-    cfg.workloadDagGenerator = HiveSyncDagGenerator.class.getName();
+    if (this.tableType == HoodieTableType.COPY_ON_WRITE.name()) {
+      cfg.workloadDagGenerator = HiveSyncDagGenerator.class.getName();
+    } else {
+      cfg.workloadDagGenerator = HiveSyncDagGeneratorMOR.class.getName();
+    }
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(new Configuration(), cfg.targetBasePath);
