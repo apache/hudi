@@ -113,7 +113,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
       } else if (partitionVal instanceof Long) {
         timeMs = convertLongTimeToSeconds((Long) partitionVal);
       } else if (partitionVal instanceof CharSequence) {
-        timeMs = inputDateFormat.parse(partitionVal.toString()).getTime() / 1000;
+        timeMs = inputDateFormat.parse(partitionVal.toString()).getTime();
       } else {
         throw new HoodieNotSupportedException(
           "Unexpected type for partition field: " + partitionVal.getClass().getName());
