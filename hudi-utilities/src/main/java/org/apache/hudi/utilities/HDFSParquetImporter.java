@@ -99,6 +99,10 @@ public class HDFSParquetImporter implements Serializable {
 
   }
 
+  private boolean isUpsert() {
+    return "upsert".equals(cfg.command.toLowerCase());
+  }
+
   public int dataImport(JavaSparkContext jsc, int retry) {
     this.fs = FSUtils.getFs(cfg.targetPath, jsc.hadoopConfiguration());
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
@@ -107,7 +111,7 @@ public class HDFSParquetImporter implements Serializable {
     int ret = -1;
     try {
       // Verify that targetPath is not present.
-      if (fs.exists(new Path(cfg.targetPath))) {
+      if (fs.exists(new Path(cfg.targetPath)) && !isUpsert()) {
         throw new HoodieIOException(String.format("Make sure %s is not present.", cfg.targetPath));
       }
       do {
@@ -121,19 +125,21 @@ public class HDFSParquetImporter implements Serializable {
 
   protected int dataImport(JavaSparkContext jsc) throws IOException {
     try {
-      if (fs.exists(new Path(cfg.targetPath))) {
+      if (fs.exists(new Path(cfg.targetPath)) && !isUpsert()) {
         // cleanup target directory.
         fs.delete(new Path(cfg.targetPath), true);
       }
 
+      if (!fs.exists(new Path(cfg.targetPath))) {
+        // Initialize target hoodie table.
+        Properties properties = new Properties();
+        properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, cfg.tableName);
+        properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, cfg.tableType);
+        HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), cfg.targetPath, properties);
+      }
+
       // Get schema.
       String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
-
-      // Initialize target hoodie table.
-      Properties properties = new Properties();
-      properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, cfg.tableName);
-      properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, cfg.tableType);
-      HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), cfg.targetPath, properties);
 
       HoodieWriteClient client =
           UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr, cfg.parallelism, Option.empty(), props);
