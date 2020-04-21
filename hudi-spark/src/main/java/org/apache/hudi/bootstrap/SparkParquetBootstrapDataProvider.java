@@ -57,8 +57,9 @@ public class SparkParquetBootstrapDataProvider extends FullRecordBootstrapDataPr
   public JavaRDD<HoodieRecord> generateInputRecordRDD(String tableName, String sourceBasePath,
       List<Pair<String, List<HoodieFileStatus>>> partitionPathsWithFiles) {
     String[] filePaths = partitionPathsWithFiles.stream().map(Pair::getValue)
-        .flatMap(f -> f.stream().map(fs -> FileStatusUtils.toPath(fs.getPath()).toUri().getPath()))
+        .flatMap(f -> f.stream().map(fs -> FileStatusUtils.toPath(fs.getPath()).toString()))
         .toArray(String[]::new);
+
     Dataset inputDataset = sparkSession.read().parquet(filePaths);
     try {
       KeyGenerator keyGenerator = DataSourceUtils.createKeyGenerator(props);

@@ -90,4 +90,8 @@ object AvroConversionUtils {
     requiredFields.foreach(f => recordBuilder.set(f, record.get(positionIterator.next())))
     recordBuilder.build()
   }
+
+  def getAvroRecordNameAndNamespace(tableName: String): (String, String) = {
+    (s"${tableName}_record", s"hoodie.${tableName}")
+  }
 }

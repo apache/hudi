@@ -444,4 +444,8 @@ public class HoodieAvroUtils {
     }
     return fieldSchema.getLogicalType() == LogicalTypes.date();
   }
+
+  public static Schema getNullSchema() {
+    return Schema.create(Schema.Type.NULL);
+  }
 }

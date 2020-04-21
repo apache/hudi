@@ -18,17 +18,25 @@
 
 package org.apache.hudi.client.bootstrap;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.parquet.schema.MessageType;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.sql.avro.SchemaConverters;
+import org.apache.spark.sql.execution.datasources.parquet.ParquetToSparkSchemaConverter;
+import org.apache.spark.sql.internal.SQLConf;
+import org.apache.spark.sql.types.StructType;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Bootstrap Schema Provider. Schema provided in config is used. If not available, use schema from Parquet
@@ -50,7 +58,10 @@ public class BootstrapSchemaProvider {
   public final Schema getBootstrapSchema(JavaSparkContext jsc, List<Pair<String, List<HoodieFileStatus>>> partitions) {
     if (writeConfig.getSchema() != null) {
       // Use schema specified by user if set
-      return Schema.parse(writeConfig.getSchema());
+      Schema userSchema = Schema.parse(writeConfig.getSchema());
+      if (!HoodieAvroUtils.getNullSchema().equals(userSchema)) {
+        return userSchema;
+      }
     }
     return getBootstrapSourceSchema(jsc, partitions);
   }
@@ -64,14 +75,25 @@ public class BootstrapSchemaProvider {
    */
   protected Schema getBootstrapSourceSchema(JavaSparkContext jsc,
       List<Pair<String, List<HoodieFileStatus>>> partitions) {
-    return partitions.stream().flatMap(p -> p.getValue().stream())
-        .map(fs -> {
-          try {
-            Path filePath = FileStatusUtils.toPath(fs.getPath());
-            return ParquetUtils.readAvroSchema(jsc.hadoopConfiguration(), filePath);
-          } catch (Exception ex) {
-            return null;
-          }
-        }).filter(x -> x != null).findAny().get();
+    MessageType parquetSchema = partitions.stream().flatMap(p -> p.getValue().stream()).map(fs -> {
+      try {
+        Path filePath = FileStatusUtils.toPath(fs.getPath());
+        return ParquetUtils.readSchema(jsc.hadoopConfiguration(), filePath);
+      } catch (Exception ex) {
+        return null;
+      }
+    }).filter(Objects::nonNull).findAny()
+        .orElseThrow(() -> new HoodieException("Could not determine schema from the data files."));
+
+
+    ParquetToSparkSchemaConverter converter = new ParquetToSparkSchemaConverter(
+            Boolean.parseBoolean(SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString()),
+            Boolean.parseBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString()));
+    StructType sparkSchema = converter.convert(parquetSchema);
+    String tableName = writeConfig.getTableName();
+    String structName = tableName + "_record";
+    String recordNamespace = "hoodie." + tableName;
+
+    return SchemaConverters.toAvroType(sparkSchema, false, structName, recordNamespace);
   }
 }

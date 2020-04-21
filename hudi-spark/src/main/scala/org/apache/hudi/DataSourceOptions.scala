@@ -59,6 +59,8 @@ object DataSourceReadOptions {
   val REALTIME_PAYLOAD_COMBINE_OPT_VAL = "payload_combine"
   val DEFAULT_REALTIME_MERGE_OPT_VAL = REALTIME_PAYLOAD_COMBINE_OPT_VAL
 
+  val READ_PATHS_OPT_KEY = "hoodie.datasource.read.paths"
+
   @Deprecated
   val VIEW_TYPE_OPT_KEY = "hoodie.datasource.view.type"
   @Deprecated
@@ -138,6 +140,7 @@ object DataSourceWriteOptions {
   val INSERT_OPERATION_OPT_VAL = "insert"
   val UPSERT_OPERATION_OPT_VAL = "upsert"
   val DELETE_OPERATION_OPT_VAL = "delete"
+  val BOOTSTRAP_OPERATION_OPT_VAL = "bootstrap"
   val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL
 
   /**
