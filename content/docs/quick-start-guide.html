@@ -407,7 +407,7 @@ can generate sample inserts and updates based on the the sample trip schema <a h
 
 <p class="notice--info"><code class="highlighter-rouge">mode(Overwrite)</code> overwrites and recreates the table if it already exists.
 You can check the data generated under <code class="highlighter-rouge">/tmp/hudi_trips_cow/&lt;region&gt;/&lt;country&gt;/&lt;city&gt;/</code>. We provided a record key 
-(<code class="highlighter-rouge">uuid</code> in <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58">schema</a>), partition field (<code class="highlighter-rouge">region/county/city</code>) and combine logic (<code class="highlighter-rouge">ts</code> in 
+(<code class="highlighter-rouge">uuid</code> in <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58">schema</a>), partition field (<code class="highlighter-rouge">region/country/city</code>) and combine logic (<code class="highlighter-rouge">ts</code> in 
 <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58">schema</a>) to ensure trip records are unique within each partition. For more info, refer to 
 <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi">Modeling data stored in Hudi</a>
 and for info on ways to ingest data into Hudi, refer to <a href="/docs/writing_data.html">Writing Hudi Tables</a>.

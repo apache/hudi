@@ -391,7 +391,7 @@
 
 <p><code class="highlighter-rouge">mode(Overwrite)</code>覆盖并重新创建数据集(如果已经存在)。
 您可以检查在<code class="highlighter-rouge">/tmp/hudi_cow_table/&lt;region&gt;/&lt;country&gt;/&lt;city&gt;/</code>下生成的数据。我们提供了一个记录键
-(<a href="#sample-schema">schema</a>中的<code class="highlighter-rouge">uuid</code>)，分区字段(<code class="highlighter-rouge">region/county/city</code>）和组合逻辑(<a href="#sample-schema">schema</a>中的<code class="highlighter-rouge">ts</code>)
+(<a href="#sample-schema">schema</a>中的<code class="highlighter-rouge">uuid</code>)，分区字段(<code class="highlighter-rouge">region/country/city</code>）和组合逻辑(<a href="#sample-schema">schema</a>中的<code class="highlighter-rouge">ts</code>)
 以确保行程记录在每个分区中都是唯一的。更多信息请参阅
 <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi">对Hudi中的数据进行建模</a>，
 有关将数据提取到Hudi中的方法的信息，请参阅<a href="/cn/docs/writing_data.html">写入Hudi数据集</a>。
