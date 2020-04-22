@@ -169,7 +169,7 @@ public class HoodieDeltaStreamer implements Serializable {
         "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-        + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
+        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter")
     public List<String> configs = new ArrayList<>();
 
     @Parameter(names = {"--source-class"},
