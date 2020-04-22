@@ -55,6 +55,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -219,14 +220,31 @@ public class HoodieCommitArchiveLog {
    * @throws IOException in case of error
    */
   private boolean deleteAllInstantsOlderorEqualsInAuxMetaFolder(HoodieInstant thresholdInstant) throws IOException {
-    List<HoodieInstant> instants = metaClient.scanHoodieInstantsFromFileSystem(
-        new Path(metaClient.getMetaAuxiliaryPath()), HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE, false);
+    List<HoodieInstant> instants = null;
+    boolean success = true;
+    try {
+      instants =
+          metaClient.scanHoodieInstantsFromFileSystem(
+              new Path(metaClient.getMetaAuxiliaryPath()),
+              HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE,
+              false);
+    } catch (FileNotFoundException e) {
+      /*
+       * On some FSs deletion of all files in the directory can auto remove the directory itself.
+       * GCS is one example, as it doesn't have real directories and subdirectories. When client
+       * removes all the files from a "folder" on GCS is has to create a special "/" to keep the folder
+       * around. If this doesn't happen (timeout, misconfigured client, ...) folder will be deleted and
+       * in this case we should not break when aux folder is not found.
+       * GCS information: (https://cloud.google.com/storage/docs/gsutil/addlhelp/HowSubdirectoriesWork)
+       */
+      LOG.warn("Aux path not found. Skipping: " + metaClient.getMetaAuxiliaryPath());
+      return success;
+    }
 
     List<HoodieInstant> instantsToBeDeleted =
         instants.stream().filter(instant1 -> HoodieTimeline.compareTimestamps(instant1.getTimestamp(),
             thresholdInstant.getTimestamp(), HoodieTimeline.LESSER_OR_EQUAL)).collect(Collectors.toList());
 
-    boolean success = true;
     for (HoodieInstant deleteInstant : instantsToBeDeleted) {
       LOG.info("Deleting instant " + deleteInstant + " in auxiliary meta path " + metaClient.getMetaAuxiliaryPath());
       Path metaFile = new Path(metaClient.getMetaAuxiliaryPath(), deleteInstant.getFileName());
