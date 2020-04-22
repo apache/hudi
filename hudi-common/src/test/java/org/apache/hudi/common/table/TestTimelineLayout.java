@@ -24,12 +24,14 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestTimelineLayout  {
 
@@ -57,23 +59,23 @@ public class TestTimelineLayout  {
 
     List<HoodieInstant> layout0Instants = TimelineLayout.getLayout(new TimelineLayoutVersion(0))
         .filterHoodieInstants(rawInstants.stream()).collect(Collectors.toList());
-    Assert.assertEquals(rawInstants, layout0Instants);
+    assertEquals(rawInstants, layout0Instants);
     List<HoodieInstant> layout1Instants = TimelineLayout.getLayout(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
         .filterHoodieInstants(rawInstants.stream()).collect(Collectors.toList());
-    Assert.assertEquals(7, layout1Instants.size());
-    Assert.assertTrue(layout1Instants.contains(
+    assertEquals(7, layout1Instants.size());
+    assertTrue(layout1Instants.contains(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "007")));
-    Assert.assertTrue(layout1Instants.contains(
+    assertTrue(layout1Instants.contains(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "006")));
-    Assert.assertTrue(layout1Instants.contains(
+    assertTrue(layout1Instants.contains(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "005")));
-    Assert.assertTrue(layout1Instants.contains(
+    assertTrue(layout1Instants.contains(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "004")));
-    Assert.assertTrue(layout1Instants.contains(
+    assertTrue(layout1Instants.contains(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003")));
-    Assert.assertTrue(layout1Instants.contains(
+    assertTrue(layout1Instants.contains(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "002")));
-    Assert.assertTrue(layout1Instants.contains(
+    assertTrue(layout1Instants.contains(
         new HoodieInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "001")));
   }
 }

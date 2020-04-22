@@ -18,28 +18,28 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarnessJunit5;
 
 import org.apache.hadoop.fs.Path;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  *
  */
-public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
+public class TestHoodieROTablePathFilter extends HoodieCommonTestHarnessJunit5 {
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initMetaClient();
   }
@@ -61,7 +61,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
 
     HoodieROTablePathFilter pathFilter = new HoodieROTablePathFilter();
     Path partitionPath = new Path("file://" + basePath + File.separator + "2017/01/01");
-    assertTrue("Directories should be accepted", pathFilter.accept(partitionPath));
+    assertTrue(pathFilter.accept(partitionPath), "Directories should be accepted");
 
     assertTrue(
         pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f1"))));
@@ -87,10 +87,8 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testNonHoodiePaths() throws IOException {
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
-    String basePath = folder.getRoot().getAbsolutePath();
+  public void testNonHoodiePaths(@TempDir java.nio.file.Path tempDir) throws IOException {
+    String basePath = tempDir.toAbsolutePath().toString();
     HoodieROTablePathFilter pathFilter = new HoodieROTablePathFilter();
 
     String path = basePath + File.separator + "nonhoodiefolder";
@@ -100,7 +98,5 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     path = basePath + File.separator + "nonhoodiefolder/somefile";
     new File(path).createNewFile();
     assertTrue(pathFilter.accept(new Path("file:///" + path)));
-
-    folder.delete();
   }
 }

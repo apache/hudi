@@ -18,24 +18,26 @@
 
 package org.apache.hudi.utilities.checkpointing;
 
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarnessJunit5;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.conf.Configuration;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
+public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarnessJunit5 {
+
   private String topicPath = null;
   private Configuration hadoopConf = null;
 
-  @Before
+  @BeforeEach
   public void init() {
     // Prepare directories
     initPath();
@@ -71,10 +73,10 @@ public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
     props.put("hoodie.deltastreamer.checkpoint.provider.path", topicPath);
     final InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(props);
     provider.init(hadoopConf);
-    assertEquals(provider.getCheckpoint(), "topic1,0:300,1:200");
+    assertEquals("topic1,0:300,1:200", provider.getCheckpoint());
   }
 
-  @Test(expected = HoodieException.class)
+  @Test
   public void testMissingPartition() throws Exception {
     topicPath = basePath + "/topic2";
     new File(topicPath).mkdirs();
@@ -92,6 +94,6 @@ public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
     props.put("hoodie.deltastreamer.checkpoint.provider.path", topicPath);
     final InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(props);
     provider.init(hadoopConf);
-    provider.getCheckpoint();
+    assertThrows(HoodieException.class, provider::getCheckpoint);
   }
 }

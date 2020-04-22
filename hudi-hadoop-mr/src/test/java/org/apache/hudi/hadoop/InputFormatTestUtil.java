@@ -39,10 +39,11 @@ import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.parquet.avro.AvroParquetWriter;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -57,19 +58,19 @@ public class InputFormatTestUtil {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
-  public static File prepareTable(TemporaryFolder basePath, int numberOfFiles, String commitNumber)
+  public static File prepareTable(java.nio.file.Path basePath, int numberOfFiles, String commitNumber)
       throws IOException {
-    basePath.create();
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
-    File partitionPath = basePath.newFolder("2016", "05", "01");
-    return simulateInserts(partitionPath, "fileId1", numberOfFiles, commitNumber);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
+    java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
+    Files.createDirectories(partitionPath);
+    return simulateInserts(partitionPath.toFile(), "fileId1", numberOfFiles, commitNumber);
   }
 
   public static File simulateInserts(File partitionPath, String fileId, int numberOfFiles, String commitNumber)
-          throws IOException {
+      throws IOException {
     for (int i = 0; i < numberOfFiles; i++) {
-      File dataFile = new File(partitionPath, FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, fileId + i));
-      dataFile.createNewFile();
+      Files.createFile(partitionPath.toPath()
+          .resolve(FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, fileId + i)));
     }
     return partitionPath;
   }
@@ -86,19 +87,18 @@ public class InputFormatTestUtil {
     List<File> toUpdateList = dataFiles.subList(0, Math.min(numberOfFilesUpdated, dataFiles.size()));
     for (File file : toUpdateList) {
       String fileId = FSUtils.getFileId(file.getName());
-      File dataFile = new File(directory, FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId));
-      dataFile.createNewFile();
+      Files.createFile(directory.toPath().resolve(FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId)));
     }
   }
 
-  public static void commit(TemporaryFolder basePath, String commitNumber) throws IOException {
+  public static void commit(java.nio.file.Path basePath, String commitNumber) throws IOException {
     // create the commit
-    new File(basePath.getRoot().toString() + "/.hoodie/", commitNumber + ".commit").createNewFile();
+    Files.createFile(basePath.resolve(Paths.get(".hoodie", commitNumber + ".commit")));
   }
 
-  public static void deltaCommit(TemporaryFolder basePath, String commitNumber) throws IOException {
+  public static void deltaCommit(java.nio.file.Path basePath, String commitNumber) throws IOException {
     // create the commit
-    new File(basePath.getRoot().toString() + "/.hoodie/", commitNumber + ".deltacommit").createNewFile();
+    Files.createFile(basePath.resolve(Paths.get(".hoodie", commitNumber + ".deltacommit")));
   }
 
   public static void setupIncremental(JobConf jobConf, String startCommit, int numberOfCommitsToPull) {
@@ -119,40 +119,35 @@ public class InputFormatTestUtil {
     return new Schema.Parser().parse(InputFormatTestUtil.class.getResourceAsStream(location));
   }
 
-  public static File prepareParquetTable(TemporaryFolder basePath, Schema schema, int numberOfFiles,
+  public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws IOException {
-    basePath.create();
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
-    File partitionPath = basePath.newFolder("2016", "05", "01");
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
+    java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
     createData(schema, partitionPath, numberOfFiles, numberOfRecords, commitNumber);
-    return partitionPath;
+    return partitionPath.toFile();
   }
 
-  public static File prepareSimpleParquetTable(TemporaryFolder basePath, Schema schema, int numberOfFiles,
+  public static File prepareSimpleParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws Exception {
-    basePath.create();
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
-    File partitionPath = basePath.newFolder("2016", "05", "01");
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
+    java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
     createSimpleData(schema, partitionPath, numberOfFiles, numberOfRecords, commitNumber);
-    return partitionPath;
+    return partitionPath.toFile();
   }
 
-  public static File prepareNonPartitionedParquetTable(TemporaryFolder baseDir, Schema schema, int numberOfFiles,
+  public static File prepareNonPartitionedParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws IOException {
-    baseDir.create();
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), baseDir.getRoot().toString());
-    File basePath = baseDir.getRoot();
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
     createData(schema, basePath, numberOfFiles, numberOfRecords, commitNumber);
-    return basePath;
+    return basePath.toFile();
   }
 
-  private static void createData(Schema schema, File partitionPath, int numberOfFiles, int numberOfRecords,
+  private static void createData(Schema schema, java.nio.file.Path partitionPath, int numberOfFiles, int numberOfRecords,
       String commitNumber) throws IOException {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
       String fileId = FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i);
-      File dataFile = new File(partitionPath, fileId);
-      parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema);
+      parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema);
       try {
         for (GenericRecord record : generateAvroRecords(schema, numberOfRecords, commitNumber, fileId)) {
           parquetWriter.write(record);
@@ -163,13 +158,12 @@ public class InputFormatTestUtil {
     }
   }
 
-  private static void createSimpleData(Schema schema, File partitionPath, int numberOfFiles, int numberOfRecords,
+  private static void createSimpleData(Schema schema, java.nio.file.Path partitionPath, int numberOfFiles, int numberOfRecords,
       String commitNumber) throws Exception {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
       String fileId = FSUtils.makeDataFileName(commitNumber, "1", "fileid" + i);
-      File dataFile = new File(partitionPath, fileId);
-      parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema);
+      parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema);
       try {
         List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, numberOfRecords);
         Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(schema);
@@ -212,7 +206,6 @@ public class InputFormatTestUtil {
         parquetWriter.write(record);
       }
     }
-
   }
 
   public static HoodieLogFormat.Writer writeRollback(File partitionDir, FileSystem fs, String fileId, String baseCommit,
