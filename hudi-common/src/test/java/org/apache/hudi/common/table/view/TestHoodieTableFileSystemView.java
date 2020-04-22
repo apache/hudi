@@ -288,7 +288,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarnessJunit5
     refreshFsView();
     List<FileSlice> slices = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
     assertEquals(1, slices.size(), "Expected latest file-slices");
-    assertEquals(compactionRequestedTime, slices.get(0).getBaseInstantTime(), "Base-Instant must be compaction Instant");
+    assertEquals(compactionRequestedTime, slices.get(0).getBaseInstantTime(),
+        "Base-Instant must be compaction Instant");
     assertFalse(slices.get(0).getBaseFile().isPresent(), "Latest File Slice must not have data-file");
     assertEquals(0, slices.get(0).getLogFiles().count(), "Latest File Slice must not have any log-files");
 
@@ -328,7 +329,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarnessJunit5
     } else {
       assertFalse(fileSlice.getBaseFile().isPresent(), "No data-file expected as it was not created");
     }
-    assertEquals(instantTime1, fileSlice.getBaseInstantTime(), "Base Instant of penultimate file-slice must be base instant");
+    assertEquals(instantTime1, fileSlice.getBaseInstantTime(),
+        "Base Instant of penultimate file-slice must be base instant");
     List<HoodieLogFile> logFiles = fileSlice.getLogFiles().collect(Collectors.toList());
     assertEquals(4, logFiles.size(), "Log files must include those after compaction request");
     assertEquals(fileName4, logFiles.get(0).getFileName(), "Log File Order check");
@@ -342,7 +344,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarnessJunit5
     fileSlice = fileSliceList.get(0);
     assertEquals(fileId, fileSlice.getFileId());
     assertFalse(fileSlice.getBaseFile().isPresent(), "No data-file expected in latest file-slice");
-    assertEquals(compactionRequestedTime, fileSlice.getBaseInstantTime(), "Compaction requested instant must be base instant");
+    assertEquals(compactionRequestedTime, fileSlice.getBaseInstantTime(),
+        "Compaction requested instant must be base instant");
     logFiles = fileSlice.getLogFiles().collect(Collectors.toList());
     assertEquals(2, logFiles.size(), "Log files must include only those after compaction request");
     assertEquals(fileName4, logFiles.get(0).getFileName(), "Log File Order check");
@@ -457,7 +460,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarnessJunit5
           "Orphan File Slice with log-file check data-file");
       logFiles = orphanFileSliceWithLogFile.getLogFiles().collect(Collectors.toList());
       assertEquals(1, logFiles.size(), "Orphan File Slice with log-file check data-file");
-      assertEquals(orphanLogFileName, logFiles.get(0).getFileName(), "Orphan File Slice with log-file check data-file");
+      assertEquals(orphanLogFileName, logFiles.get(0).getFileName(),
+          "Orphan File Slice with log-file check data-file");
       assertEquals(inflightDeltaInstantTime, inflightFileSliceWithLogFile.getBaseInstantTime(),
           "Inflight File Slice with log-file check base-commit");
       assertFalse(inflightFileSliceWithLogFile.getBaseFile().isPresent(),
@@ -1115,7 +1119,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarnessJunit5
       fileSlice = fileSliceList.get(0);
       assertEquals(fileId, fileSlice.getFileId());
       assertFalse(fileSlice.getBaseFile().isPresent(), "No data-file expected in latest file-slice");
-      assertEquals(compactionRequestedTime, fileSlice.getBaseInstantTime(), "Compaction requested instant must be base instant");
+      assertEquals(compactionRequestedTime, fileSlice.getBaseInstantTime(),
+          "Compaction requested instant must be base instant");
       logFiles = fileSlice.getLogFiles().collect(Collectors.toList());
       assertEquals(2, logFiles.size(), "Log files must include only those after compaction request");
       assertEquals(fileName4, logFiles.get(0).getFileName(), "Log File Order check");
