@@ -256,8 +256,7 @@ public class HoodieMultiTableDeltaStreamer {
         + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
         + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
         + "allows a SQL query templated to be passed as a transformation function). "
-        + "Pass a comma-separated list of subclass names to chain the transformations.",
-        converter = HoodieDeltaStreamer.TransformersConverter.class)
+        + "Pass a comma-separated list of subclass names to chain the transformations.")
     public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
