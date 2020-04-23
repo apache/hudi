@@ -22,7 +22,6 @@ import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 
 /**
  * Empty payload used for deletions.
@@ -41,12 +40,12 @@ public class EmptyHoodieRecordPayload implements HoodieRecordPayload<EmptyHoodie
   }
 
   @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) {
+  public Option<GenericRecord> combineAndGetUpdateValue(GenericRecord currentValue, Schema schema) {
     return Option.empty();
   }
 
   @Override
-  public Option<IndexedRecord> getInsertValue(Schema schema) {
+  public Option<GenericRecord> getInsertValue(Schema schema) {
     return Option.empty();
   }
 }

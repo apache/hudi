@@ -21,7 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -50,14 +50,14 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    * @param schema Schema used for record
    * @return new combined/merged value to be written back to storage. EMPTY to skip writing this record.
    */
-  Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException;
+  Option<GenericRecord> combineAndGetUpdateValue(GenericRecord currentValue, Schema schema) throws IOException;
 
   /**
    * Generates an avro record out of the given HoodieRecordPayload, to be written out to storage. Called when writing a
    * new value for the given HoodieKey, wherein there is no existing record in storage to be combined against. (i.e
    * insert) Return EMPTY to skip writing this record.
    */
-  Option<IndexedRecord> getInsertValue(Schema schema) throws IOException;
+  Option<GenericRecord> getInsertValue(Schema schema) throws IOException;
 
   /**
    * This method can be used to extract some metadata from HoodieRecordPayload. The metadata is passed to

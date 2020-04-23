@@ -27,7 +27,7 @@ import org.apache.hudi.exception.HoodieException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.generic.GenericRecord;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -55,12 +55,12 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
   }
 
   @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
+  public Option<GenericRecord> combineAndGetUpdateValue(GenericRecord oldRec, Schema schema) throws IOException {
     return getInsertValue(schema);
   }
 
   @Override
-  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+  public Option<GenericRecord> getInsertValue(Schema schema) throws IOException {
     MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
     return Option.of(jsonConverter.convert(getJsonData(), schema));
   }

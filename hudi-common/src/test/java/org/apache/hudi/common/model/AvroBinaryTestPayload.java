@@ -24,7 +24,6 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 
@@ -54,12 +53,12 @@ public class AvroBinaryTestPayload implements HoodieRecordPayload {
   }
 
   @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+  public Option<GenericRecord> combineAndGetUpdateValue(GenericRecord currentValue, Schema schema) throws IOException {
     return getInsertValue(schema);
   }
 
   @Override
-  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+  public Option<GenericRecord> getInsertValue(Schema schema) throws IOException {
     return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 }

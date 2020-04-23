@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.Option;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.generic.GenericRecord;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -87,12 +87,12 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
   }
 
   @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
+  public Option<GenericRecord> combineAndGetUpdateValue(GenericRecord oldRec, Schema schema) throws IOException {
     return this.getInsertValue(schema);
   }
 
   @Override
-  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+  public Option<GenericRecord> getInsertValue(Schema schema) throws IOException {
     if (isDeleted) {
       return Option.empty();
     } else {

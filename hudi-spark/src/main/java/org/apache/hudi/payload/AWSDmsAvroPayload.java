@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 
@@ -54,14 +53,13 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   }
 
   @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
-      throws IOException {
-    IndexedRecord insertValue = getInsertValue(schema).get();
-    boolean delete = false;
-    if (insertValue instanceof GenericRecord) {
-      GenericRecord record = (GenericRecord) insertValue;
-      delete = record.get(OP_FIELD) != null && record.get(OP_FIELD).toString().equalsIgnoreCase("D");
-    }
+  public Option<GenericRecord> combineAndGetUpdateValue(
+      GenericRecord currentValue,
+      Schema schema
+  ) throws IOException {
+    final GenericRecord insertValue = getInsertValue(schema).get();
+    final boolean delete = insertValue.get(OP_FIELD) != null
+        && insertValue.get(OP_FIELD).toString().equalsIgnoreCase("D");
 
     return delete ? Option.empty() : Option.of(insertValue);
   }

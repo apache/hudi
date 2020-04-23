@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 
@@ -58,14 +57,14 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   }
 
   @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+  public Option<GenericRecord> combineAndGetUpdateValue(GenericRecord currentValue, Schema schema) throws IOException {
 
-    Option<IndexedRecord> recordOption = getInsertValue(schema);
+    Option<GenericRecord> recordOption = getInsertValue(schema);
     if (!recordOption.isPresent()) {
       return Option.empty();
     }
 
-    GenericRecord genericRecord = (GenericRecord) recordOption.get();
+    GenericRecord genericRecord = recordOption.get();
     // combining strategy here trivially ignores currentValue on disk and writes this record
     Object deleteMarker = genericRecord.get("_hoodie_is_deleted");
     if (deleteMarker instanceof Boolean && (boolean) deleteMarker) {
@@ -76,7 +75,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   }
 
   @Override
-  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+  public Option<GenericRecord> getInsertValue(Schema schema) throws IOException {
     return recordBytes.length == 0 ? Option.empty() : Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 }
