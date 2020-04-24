@@ -171,6 +171,16 @@ public class HoodieAvroUtils {
     return mergedSchema;
   }
 
+  public static Schema removeMetadataFields(Schema schema) {
+    List<Schema.Field> filteredFields = schema.getFields()
+                                              .stream()
+                                              .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name()))
+                                              .collect(Collectors.toList());
+    Schema filteredSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
+    filteredSchema.setFields(filteredFields);
+    return filteredSchema;
+  }
+
   public static String addMetadataColumnTypes(String hiveColumnTypes) {
     return "string,string,string,string,string," + hiveColumnTypes;
   }
