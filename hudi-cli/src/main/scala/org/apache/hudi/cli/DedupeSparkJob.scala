@@ -103,7 +103,7 @@ class DedupeSparkJob(basePath: String,
     val fileToDeleteKeyMap = new HashMap[String, HashSet[String]]()
 
     // Mark all files except the one with latest commits for deletion
-    dupeMap.foreach(f = rt => {
+    dupeMap.foreach(rt => {
       val (key, rows) = rt
 
       if (useCommitTimeForDedupe) {
