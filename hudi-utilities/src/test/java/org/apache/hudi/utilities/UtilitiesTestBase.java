@@ -214,6 +214,7 @@ public class UtilitiesTestBase {
       props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.bucket", "wish-tahoe-us-east-1");
       props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.region", "us-east-1");
       props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.name", "mongo_schema/source.avsc");
+      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.expired", "1800");
 
       return props;
     }
