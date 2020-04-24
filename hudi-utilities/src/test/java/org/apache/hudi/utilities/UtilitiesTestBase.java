@@ -209,6 +209,15 @@ public class UtilitiesTestBase {
       return props;
     }
 
+    public static TypedProperties setupSchemaOnS3() throws IOException {
+      TypedProperties props = new TypedProperties();
+      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.bucket", "wish-tahoe-us-east-1");
+      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.region", "us-east-1");
+      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.name", "mongo_schema/source.avsc");
+
+      return props;
+    }
+
     public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {
       try {
         Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.AVRO_SCHEMA);
