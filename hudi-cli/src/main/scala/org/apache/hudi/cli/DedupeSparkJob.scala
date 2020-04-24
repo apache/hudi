@@ -30,6 +30,7 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable._
+import scala.util.control.Breaks
 
 
 /**
@@ -39,7 +40,8 @@ class DedupeSparkJob(basePath: String,
                      duplicatedPartitionPath: String,
                      repairOutputPath: String,
                      sqlContext: SQLContext,
-                     fs: FileSystem) {
+                     fs: FileSystem,
+                     useCommitTimeForDedupe: java.lang.Boolean) {
 
 
   val sparkHelper = new SparkHelper(sqlContext, fs)
@@ -101,26 +103,53 @@ class DedupeSparkJob(basePath: String,
     val fileToDeleteKeyMap = new HashMap[String, HashSet[String]]()
 
     // Mark all files except the one with latest commits for deletion
-    dupeMap.foreach(rt => {
+    dupeMap.foreach(f = rt => {
       val (key, rows) = rt
-      var maxCommit = -1L
 
-      rows.foreach(r => {
-        val c = r(3).asInstanceOf[String].toLong
-        if (c > maxCommit)
-          maxCommit = c
-      })
+      if (useCommitTimeForDedupe) {
+        /*
+        This corresponds to the case where duplicates got created due to INSERT and have never been updated.
+         */
+        var maxCommit = -1L
 
-      rows.foreach(r => {
-        val c = r(3).asInstanceOf[String].toLong
-        if (c != maxCommit) {
-          val f = r(2).asInstanceOf[String].split("_")(0)
-          if (!fileToDeleteKeyMap.contains(f)) {
-            fileToDeleteKeyMap(f) = HashSet[String]()
+        rows.foreach(r => {
+          val c = r(3).asInstanceOf[String].toLong
+          if (c > maxCommit)
+            maxCommit = c
+        })
+        rows.foreach(r => {
+          val c = r(3).asInstanceOf[String].toLong
+          if (c != maxCommit) {
+            val f = r(2).asInstanceOf[String].split("_")(0)
+            if (!fileToDeleteKeyMap.contains(f)) {
+              fileToDeleteKeyMap(f) = HashSet[String]()
+            }
+            fileToDeleteKeyMap(f).add(key)
           }
-          fileToDeleteKeyMap(f).add(key)
+        })
+      } else {
+        /*
+        This corresponds to the case where duplicates have been updated at least once.
+        Once updated, duplicates are bound to have same commit time unless forcefully modified.
+         */
+        val size = rows.size - 1
+        var i = 0
+        val loop = new Breaks
+        loop.breakable {
+          rows.foreach(r => {
+            //Except one row, the key needs to be deleted from every other row.
+            if (i == size) {
+              loop.break
+            }
+            val f = r(2).asInstanceOf[String].split("_")(0)
+            if (!fileToDeleteKeyMap.contains(f)) {
+              fileToDeleteKeyMap(f) = HashSet[String]()
+            }
+            fileToDeleteKeyMap(f).add(key)
+            i = i + 1
+          })
         }
-      })
+      }
     })
     fileToDeleteKeyMap
   }

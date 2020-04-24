@@ -73,8 +73,8 @@ public class SparkMain {
         returnCode = rollback(jsc, args[1], args[2]);
         break;
       case DEDUPLICATE:
-        assert (args.length == 4);
-        returnCode = deduplicatePartitionPath(jsc, args[1], args[2], args[3]);
+        assert (args.length == 6);
+        returnCode = deduplicatePartitionPath(jsc, args[1], args[2], args[3], Boolean.parseBoolean(args[4]), Boolean.parseBoolean(args[5]));
         break;
       case ROLLBACK_TO_SAVEPOINT:
         assert (args.length == 3);
@@ -263,10 +263,10 @@ public class SparkMain {
   }
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
-      String repairedOutputPath, String basePath) {
+      String repairedOutputPath, String basePath, boolean useCommitTimeForDedupe, boolean druRun) {
     DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath, new SQLContext(jsc),
-        FSUtils.getFs(basePath, jsc.hadoopConfiguration()));
-    job.fixDuplicates(true);
+        FSUtils.getFs(basePath, jsc.hadoopConfiguration()), useCommitTimeForDedupe);
+    job.fixDuplicates(druRun);
     return 0;
   }
 

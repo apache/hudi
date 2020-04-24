@@ -64,11 +64,15 @@ public class RepairsCommand implements CommandMarker {
       @CliOption(key = {"repairedOutputPath"}, help = "Location to place the repaired files",
           mandatory = true) final String repairedOutputPath,
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path",
-          mandatory = true) final String sparkPropertiesPath)
+          mandatory = true) final String sparkPropertiesPath,
+      @CliOption(key = {"useCommitTimeForDedupe"}, help = "Set it to true if duplicates have never been updated",
+        unspecifiedDefaultValue = "true") final boolean useCommitTimeForDedupe,
+      @CliOption(key = {"dryrun"}, help = "Should we actually add or just print what would be done",
+        unspecifiedDefaultValue = "true") final boolean dryRun)
       throws Exception {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.DEDUPLICATE.toString(), duplicatedPartitionPath, repairedOutputPath,
-        HoodieCLI.getTableMetaClient().getBasePath());
+        HoodieCLI.getTableMetaClient().getBasePath(), String.valueOf(useCommitTimeForDedupe), String.valueOf(dryRun));
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
