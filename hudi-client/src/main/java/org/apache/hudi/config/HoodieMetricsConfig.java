@@ -48,6 +48,8 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
   public static final String GRAPHITE_SERVER_PORT = GRAPHITE_PREFIX + ".port";
   public static final int DEFAULT_GRAPHITE_SERVER_PORT = 4756;
 
+  public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_PREFIX + ".metric.prefix";
+
   // Jmx
   public static final String JMX_PREFIX = METRIC_PREFIX + ".jmx";
   public static final String JMX_HOST = JMX_PREFIX + ".host";
@@ -56,7 +58,16 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
   public static final String JMX_PORT = JMX_PREFIX + ".port";
   public static final int DEFAULT_JMX_PORT = 9889;
 
-  public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_PREFIX + ".metric.prefix";
+  // Datadog
+  public static final String DATADOG_PREFIX = METRIC_PREFIX + ".datadog";
+  public static final String DATADOG_API_SITE = DATADOG_PREFIX + ".api.site";
+  public static final String DATADOG_API_KEY = DATADOG_PREFIX + ".api.key";
+  public static final String DATADOG_API_KEY_SKIP_VALIDATION = DATADOG_PREFIX + ".api.key.skip.validation";
+  public static final boolean DEFAULT_DATADOG_API_KEY_SKIP_VALIDATION = false;
+  public static final String DATADOG_API_KEY_SUPPLIER = DATADOG_PREFIX + ".api.key.supplier";
+  public static final String DATADOG_METRIC_PREFIX = DATADOG_PREFIX + ".metric.prefix";
+  public static final String DATADOG_METRIC_HOST = DATADOG_PREFIX + ".metric.host";
+  public static final String DATADOG_METRIC_TAGS = DATADOG_PREFIX + ".metric.tags";
 
   private HoodieMetricsConfig(Properties props) {
     super(props);
@@ -82,7 +93,7 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder on(boolean metricsOn) {
+    public Builder withMetricsOn(boolean metricsOn) {
       props.setProperty(METRICS_ON, String.valueOf(metricsOn));
       return this;
     }
@@ -92,28 +103,63 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder toGraphiteHost(String host) {
+    public Builder withGraphiteHost(String host) {
       props.setProperty(GRAPHITE_SERVER_HOST, host);
       return this;
     }
 
-    public Builder onGraphitePort(int port) {
+    public Builder withGraphitePort(int port) {
       props.setProperty(GRAPHITE_SERVER_PORT, String.valueOf(port));
       return this;
     }
 
-    public Builder toJmxHost(String host) {
+    public Builder withGraphitePrefix(String prefix) {
+      props.setProperty(GRAPHITE_METRIC_PREFIX, prefix);
+      return this;
+    }
+
+    public Builder withJmxHost(String host) {
       props.setProperty(JMX_HOST, host);
       return this;
     }
 
-    public Builder onJmxPort(String port) {
+    public Builder withJmxPort(String port) {
       props.setProperty(JMX_PORT, port);
       return this;
     }
 
-    public Builder usePrefix(String prefix) {
-      props.setProperty(GRAPHITE_METRIC_PREFIX, prefix);
+    public Builder withDatadogApiSite(String apiSite) {
+      props.setProperty(DATADOG_API_SITE, apiSite);
+      return this;
+    }
+
+    public Builder withDatadogApiKey(String apiKey) {
+      props.setProperty(DATADOG_API_KEY, apiKey);
+      return this;
+    }
+
+    public Builder withDatadogApiKeySkipValidation(boolean skip) {
+      props.setProperty(DATADOG_API_KEY_SKIP_VALIDATION, String.valueOf(skip));
+      return this;
+    }
+
+    public Builder withDatadogApiKeySupplier(String apiKeySupplier) {
+      props.setProperty(DATADOG_API_KEY_SUPPLIER, apiKeySupplier);
+      return this;
+    }
+
+    public Builder withDatadogPrefix(String prefix) {
+      props.setProperty(DATADOG_METRIC_PREFIX, prefix);
+      return this;
+    }
+
+    public Builder withDatadogHost(String host) {
+      props.setProperty(DATADOG_METRIC_HOST, host);
+      return this;
+    }
+
+    public Builder withDatadogTags(String tags) {
+      props.setProperty(DATADOG_METRIC_TAGS, tags);
       return this;
     }
 
@@ -130,6 +176,9 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
           DEFAULT_JMX_HOST);
       setDefaultOnCondition(props, !props.containsKey(JMX_PORT), JMX_PORT,
           String.valueOf(DEFAULT_JMX_PORT));
+      setDefaultOnCondition(props, !props.containsKey(DATADOG_API_KEY_SKIP_VALIDATION),
+          DATADOG_API_KEY_SKIP_VALIDATION,
+          String.valueOf(DEFAULT_DATADOG_API_KEY_SKIP_VALIDATION));
       return config;
     }
   }
