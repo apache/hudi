@@ -58,6 +58,10 @@ public class SchemaRegistryProvider extends SchemaProvider {
     return node.get("schema").asText();
   }
 
+  public SchemaRegistryProvider(TypedProperties properties) {
+    this(properties, null);
+  }
+
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL_PROP));

@@ -106,6 +106,16 @@ public class UtilHelpers {
     }
   }
 
+  public static SchemaProvider createSchemaProvider(String schemaProviderClass,
+                                                    TypedProperties cfg) throws IOException {
+    try {
+      return schemaProviderClass == null ? null :
+        (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg);
+    } catch (Throwable e) {
+      throw new IOException("Could not load schema provider class " + schemaProviderClass, e);
+    }
+  }
+
   public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
     try {
       List<Transformer> transformers = new ArrayList<>();
