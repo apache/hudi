@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.cli.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.HoodieCLI;
@@ -36,20 +35,23 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.apache.hadoop.conf.Configuration;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test Cases for {@link CleansCommand}.
@@ -59,7 +61,7 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
   private String tablePath;
   private URL propsFilePath;
 
-  @Before
+  @BeforeEach
   public void init() throws IOException {
     HoodieCLI.conf = jsc.hadoopConfiguration();
 
@@ -98,14 +100,15 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
   @Test
   public void testShowCleans() throws Exception {
     // Check properties file exists.
-    assertNotNull("Not found properties file", propsFilePath);
+    assertNotNull(propsFilePath, "Not found properties file");
 
     // First, run clean
-    new File(tablePath + File.separator + HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH
-        + File.separator + HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE).createNewFile();
+    Files.createFile(Paths.get(tablePath,
+        HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH,
+        HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
     SparkMain.clean(jsc, HoodieCLI.basePath, propsFilePath.getPath(), new ArrayList<>());
-    assertEquals("Loaded 1 clean and the count should match", 1,
-        metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count());
+    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count(),
+        "Loaded 1 clean and the count should match");
 
     CommandResult cr = getShell().executeCommand("cleans show");
     assertTrue(cr.isSuccess());
@@ -122,7 +125,7 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
 
     // EarliestCommandRetained should be 102, since hoodie.cleaner.commits.retained=2
     // Total Time Taken need read from metadata
-    rows.add(new Comparable[]{clean.getTimestamp(), "102", "0", getLatestCleanTimeTakenInMillis().toString()});
+    rows.add(new Comparable[] {clean.getTimestamp(), "102", "0", getLatestCleanTimeTakenInMillis().toString()});
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
     assertEquals(expected, cr.getResult().toString());
@@ -134,16 +137,18 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
   @Test
   public void testShowCleanPartitions() throws IOException {
     // Check properties file exists.
-    assertNotNull("Not found properties file", propsFilePath);
+    assertNotNull(propsFilePath, "Not found properties file");
 
     // First, run clean with two partition
-    new File(tablePath + File.separator + HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH
-        + File.separator + HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE).createNewFile();
-    new File(tablePath + File.separator + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH
-        + File.separator + HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE).createNewFile();
+    Files.createFile(Paths.get(tablePath,
+        HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH,
+        HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
+    Files.createFile(Paths.get(tablePath,
+        HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH,
+        HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
     SparkMain.clean(jsc, HoodieCLI.basePath, propsFilePath.toString(), new ArrayList<>());
-    assertEquals("Loaded 1 clean and the count should match", 1,
-        metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count());
+    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count(),
+        "Loaded 1 clean and the count should match");
 
     HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().findFirst().get();
 
@@ -157,9 +162,9 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
 
     // There should be two partition path
     List<Comparable[]> rows = new ArrayList<>();
-    rows.add(new Comparable[]{HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH,
+    rows.add(new Comparable[] {HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH,
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS, "0", "0"});
-    rows.add(new Comparable[]{HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH,
+    rows.add(new Comparable[] {HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH,
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS, "0", "0"});
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);

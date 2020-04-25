@@ -32,9 +32,9 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
 import java.io.File;
@@ -43,8 +43,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test Cases for {@link ArchivedCommitsCommand}.
@@ -53,7 +53,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
 
   private String tablePath;
 
-  @Before
+  @BeforeEach
   public void init() throws IOException {
     initDFS();
     jsc.hadoopConfiguration().addResource(dfs.getConf());
@@ -95,7 +95,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     archiveLog.archiveIfRequired(jsc);
   }
 
-  @After
+  @AfterEach
   public void clean() throws IOException {
     cleanupDFS();
   }
@@ -122,7 +122,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     for (int i = 100; i < 104; i++) {
       String instant = String.valueOf(i);
       for (int j = 0; j < 3; j++) {
-        Comparable[] defaultComp = new Comparable[]{"commit", instant,
+        Comparable[] defaultComp = new Comparable[] {"commit", instant,
             HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH,
             HoodieTestCommitMetadataGenerator.DEFAULT_FILEID,
             HoodieTestCommitMetadataGenerator.DEFAULT_PRE_COMMIT,
@@ -162,12 +162,12 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("CommitType");
     for (int i = 100; i < 103; i++) {
       String instant = String.valueOf(i);
-      Comparable[] result = new Comparable[]{instant, "commit"};
+      Comparable[] result = new Comparable[] {instant, "commit"};
       rows.add(result);
       rows.add(result);
       rows.add(result);
     }
-    rows.add(new Comparable[]{"103", "commit"});
+    rows.add(new Comparable[] {"103", "commit"});
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 10, false, rows);
     assertEquals(expected, cr.getResult().toString());
 
@@ -181,7 +181,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     for (int i = 100; i < 104; i++) {
       String instant = String.valueOf(i);
       // Since HoodiePrintHelper order data by default, need to order commitMetadata
-      Comparable[] result = new Comparable[]{
+      Comparable[] result = new Comparable[] {
           instant, "commit", HoodieTestCommitUtilities.convertAndOrderCommitMetadata(metadata)};
       rows.add(result);
       rows.add(result);
