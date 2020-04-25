@@ -6,8 +6,8 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 language: cn
 ---
 
-本指南通过使用spark-shell简要介绍了Hudi功能。使用Spark数据源，我们将通过代码段展示如何插入和更新的Hudi默认存储类型数据集：
-[写时复制](/cn/docs/concepts.html#copy-on-write-storage)。每次写操作之后，我们还将展示如何读取快照和增量读取数据。 
+本指南通过使用spark-shell简要介绍了Hudi功能。使用Spark数据源，我们将通过代码段展示如何插入和更新Hudi的默认存储类型数据集：
+[写时复制](/cn/docs/concepts.html#copy-on-write-storage)。每次写操作之后，我们还将展示如何读取快照和增量数据。 
 
 ## 设置spark-shell
 Hudi适用于Spark-2.x版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
