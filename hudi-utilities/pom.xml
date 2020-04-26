@@ -251,7 +251,6 @@
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka_${scala.binary.version}</artifactId>
       <version>${kafka.version}</version>
-      <scope>test</scope>
     </dependency>
 
     <!-- Httpcomponents -->

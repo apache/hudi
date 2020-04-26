@@ -40,8 +40,9 @@ public class FilebasedSchemaProvider extends SchemaProvider {
    * Configs supported.
    */
   public static class Config {
-    private static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider.source.schema.file";
+    public static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider.source.schema.file";
     private static final String TARGET_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider.target.schema.file";
+    public static final String SOURCE_SCHEMA_PROP = "hoodie.deltastreamer.schemaprovider.source.schema";
   }
 
   private final FileSystem fs;
@@ -49,13 +50,16 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   private final Schema sourceSchema;
 
   private Schema targetSchema;
+  private TypedProperties props;
 
   public FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
+    this.props = props;
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_FILE_PROP));
     this.fs = FSUtils.getFs(props.getString(Config.SOURCE_SCHEMA_FILE_PROP), jssc.hadoopConfiguration());
     try {
       this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(props.getString(Config.SOURCE_SCHEMA_FILE_PROP))));
+      props.setProperty(Config.SOURCE_SCHEMA_PROP, sourceSchema.toString());
       if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {
         this.targetSchema =
             new Schema.Parser().parse(fs.open(new Path(props.getString(Config.TARGET_SCHEMA_FILE_PROP))));

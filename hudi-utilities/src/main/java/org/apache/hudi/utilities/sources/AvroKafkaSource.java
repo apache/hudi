@@ -18,9 +18,12 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.serde.HoodieKafkaAvroDecoder;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
@@ -36,6 +39,8 @@ import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 
+import java.util.Collections;
+
 /**
  * Reads avro serialized Kafka data, based on the confluent schema-registry.
  */
@@ -45,11 +50,19 @@ public class AvroKafkaSource extends AvroSource {
 
   private final KafkaOffsetGen offsetGen;
 
+  private final String useSchemaRegistry = "hoodie.deltastreamer.source.avro.serde.useSchemaRegistry";
+
   public AvroKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
+    boolean useSchemaRegistryForDeserialization = props.getBoolean(useSchemaRegistry, true);
     props.put("key.deserializer", StringDeserializer.class);
-    props.put("value.deserializer", KafkaAvroDeserializer.class);
+    if (useSchemaRegistryForDeserialization) {
+      props.put("value.deserializer", KafkaAvroDeserializer.class);
+    } else {
+      DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(FilebasedSchemaProvider.Config.SOURCE_SCHEMA_FILE_PROP));
+      props.put("value.deserializer", HoodieKafkaAvroDecoder.class);
+    }
     offsetGen = new KafkaOffsetGen(props);
   }
 
