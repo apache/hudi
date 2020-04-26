@@ -20,7 +20,6 @@ package org.apache.hudi.client;
 
 import com.codahale.metrics.Timer;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.client.utils.SparkConfigUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRollingStat;
@@ -57,7 +56,6 @@ import java.util.Map;
 public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(AbstractHoodieWriteClient.class);
-  private static final String UPDATE_STR = "update";
 
   private final transient HoodieMetrics metrics;
   private final transient HoodieIndex<T> index;
@@ -96,32 +94,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     return commit(instantTime, writeStatuses, extraMetadata, metaClient.getCommitActionType());
   }
 
-  protected JavaRDD<WriteStatus> updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD, HoodieTable<T> table,
-      String instantTime) {
-    // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
-    // RDD actions that are performed after updating the index.
-    writeStatusRDD = writeStatusRDD.persist(SparkConfigUtils.getWriteStatusStorageLevel(config.getProps()));
-    Timer.Context indexTimer = metrics.getIndexCtx();
-    // Update the index back
-    JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, jsc, table);
-    metrics.updateIndexMetrics(UPDATE_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
-    // Trigger the insert and collect statuses
-    commitOnAutoCommit(instantTime, statuses, table.getMetaClient().getCommitActionType());
-    return statuses;
-  }
-
-  protected void commitOnAutoCommit(String instantTime, JavaRDD<WriteStatus> resultRDD, String actionType) {
-    if (config.shouldAutoCommit()) {
-      LOG.info("Auto commit enabled: Committing " + instantTime);
-      boolean commitResult = commit(instantTime, resultRDD, Option.empty(), actionType);
-      if (!commitResult) {
-        throw new HoodieCommitException("Failed to commit " + instantTime);
-      }
-    } else {
-      LOG.info("Auto commit disabled for " + instantTime);
-    }
-  }
-
   private boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata, String actionType) {
 
@@ -131,7 +103,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
 
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-
     List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();
 
     updateMetadataAndRollingStats(actionType, metadata, stats);
@@ -149,10 +120,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     try {
       activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-
       postCommit(metadata, instantTime, extraMetadata);
       emitCommitMetrics(instantTime, metadata, actionType);
-
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
@@ -182,8 +151,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
    * @param instantTime   Instant Time
    * @param extraMetadata Additional Metadata passed by user
    */
-  protected abstract void postCommit(HoodieCommitMetadata metadata, String instantTime,
-      Option<Map<String, String>> extraMetadata);
+  protected abstract void postCommit(HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata);
 
   /**
    * Finalize Write operation.
@@ -260,7 +228,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
   protected HoodieTable getTableAndInitCtx(WriteOperationType operationType) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     if (operationType == WriteOperationType.DELETE) {
-      setWriteSchemaFromLastInstant(metaClient);
+      setWriteSchemaForDeletes(metaClient);
     }
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = HoodieTable.create(metaClient, config, jsc);
@@ -275,7 +243,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
   /**
    * Sets write schema from last instant since deletes may not have schema set in the config.
    */
-  private void setWriteSchemaFromLastInstant(HoodieTableMetaClient metaClient) {
+  private void setWriteSchemaForDeletes(HoodieTableMetaClient metaClient) {
     try {
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
       Option<HoodieInstant> lastInstant =

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.compact;
+package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;

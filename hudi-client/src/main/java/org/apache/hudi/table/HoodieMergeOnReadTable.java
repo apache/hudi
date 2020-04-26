@@ -21,19 +21,17 @@ package org.apache.hudi.table;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.table.action.commit.HoodieWriteMetadata;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.deltacommit.BulkInsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.BulkInsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.DeleteDeltaCommitActionExecutor;
@@ -41,17 +39,16 @@ import org.apache.hudi.table.action.deltacommit.InsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.InsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.UpsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.UpsertPreppedDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.restore.MergeOnReadRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
-import org.apache.hudi.table.compact.HoodieMergeOnReadTableCompactor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
-import java.io.IOException;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 /**
  * Implementation of a more real-time Hoodie Table the provides tradeoffs on read and write cost/amplification.
@@ -119,46 +116,16 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public HoodieCompactionPlan scheduleCompaction(JavaSparkContext jsc, String instantTime) {
-    LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
-    Option<HoodieInstant> lastCompaction =
-        getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
-    String deltaCommitsSinceTs = "0";
-    if (lastCompaction.isPresent()) {
-      deltaCommitsSinceTs = lastCompaction.get().getTimestamp();
-    }
-
-    int deltaCommitsSinceLastCompaction = getActiveTimeline().getDeltaCommitTimeline()
-        .findInstantsAfter(deltaCommitsSinceTs, Integer.MAX_VALUE).countInstants();
-    if (config.getInlineCompactDeltaCommitMax() > deltaCommitsSinceLastCompaction) {
-      LOG.info("Not running compaction as only " + deltaCommitsSinceLastCompaction
-          + " delta commits was found since last compaction " + deltaCommitsSinceTs + ". Waiting for "
-          + config.getInlineCompactDeltaCommitMax());
-      return new HoodieCompactionPlan();
-    }
-
-    LOG.info("Compacting merge on read table " + config.getBasePath());
-    HoodieMergeOnReadTableCompactor compactor = new HoodieMergeOnReadTableCompactor();
-    try {
-      return compactor.generateCompactionPlan(jsc, this, config, instantTime,
-          ((SyncableFileSystemView) getSliceView()).getPendingCompactionOperations()
-              .map(instantTimeCompactionopPair -> instantTimeCompactionopPair.getValue().getFileGroupId())
-              .collect(Collectors.toSet()));
-
-    } catch (IOException e) {
-      throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
-    }
+  public Option<HoodieCompactionPlan> scheduleCompaction(JavaSparkContext jsc, String instantTime, Option<Map<String, String>> extraMetadata) {
+    ScheduleCompactionActionExecutor scheduleCompactionExecutor = new ScheduleCompactionActionExecutor(
+        jsc, config, this, instantTime, extraMetadata);
+    return scheduleCompactionExecutor.execute();
   }
 
   @Override
-  public JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String compactionInstantTime,
-      HoodieCompactionPlan compactionPlan) {
-    HoodieMergeOnReadTableCompactor compactor = new HoodieMergeOnReadTableCompactor();
-    try {
-      return compactor.compact(jsc, compactionPlan, this, config, compactionInstantTime);
-    } catch (IOException e) {
-      throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
-    }
+  public HoodieWriteMetadata compact(JavaSparkContext jsc, String compactionInstantTime) {
+    RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(jsc, config, this, compactionInstantTime);
+    return compactionExecutor.execute();
   }
 
   @Override

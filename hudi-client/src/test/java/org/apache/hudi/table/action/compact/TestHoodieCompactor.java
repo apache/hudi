@@ -16,8 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.compact;
+package org.apache.hudi.table.action.compact;
 
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieClientTestHarness;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
@@ -50,6 +52,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 public class TestHoodieCompactor extends HoodieClientTestHarness {
 
@@ -100,9 +103,10 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   @Test(expected = HoodieNotSupportedException.class)
   public void testCompactionOnCopyOnWriteFail() throws Exception {
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
-    HoodieTable table = HoodieTable.create(metaClient, getConfig(), jsc);
+    HoodieTable<?> table = HoodieTable.create(metaClient, getConfig(), jsc);
     String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    table.compact(jsc, compactionInstantTime, table.scheduleCompaction(jsc, compactionInstantTime));
+    table.scheduleCompaction(jsc, compactionInstantTime, Option.empty());
+    table.compact(jsc, compactionInstantTime);
   }
 
   @Test
@@ -118,9 +122,8 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       writeClient.insert(recordsRDD, newCommitTime).collect();
 
       String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
-      JavaRDD<WriteStatus> result =
-          table.compact(jsc, compactionInstantTime, table.scheduleCompaction(jsc, compactionInstantTime));
-      assertTrue("If there is nothing to compact, result will be empty", result.isEmpty());
+      Option<HoodieCompactionPlan> plan = table.scheduleCompaction(jsc, compactionInstantTime, Option.empty());
+      assertFalse("If there is nothing to compact, result will be empty", plan.isPresent());
     }
   }
 
@@ -128,18 +131,16 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   public void testWriteStatusContentsAfterCompaction() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfig();
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+    try (HoodieWriteClient writeClient = getWriteClient(config)) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
-      List<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime).collect();
+      writeClient.insert(recordsRDD, newCommitTime).collect();
 
       // Update all the 100 records
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.create(metaClient, config, jsc);
-
+      HoodieTable table = HoodieTable.create(config, jsc);
       newCommitTime = "101";
       writeClient.startCommitWithTime(newCommitTime);
 
@@ -153,8 +154,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
           HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, updatedRecords);
 
       // Verify that all data file has one log file
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieTable.create(metaClient, config, jsc);
+      table = HoodieTable.create(config, jsc);
       for (String partitionPath : dataGen.getPartitionPaths()) {
         List<FileSlice> groupedLogFiles =
             table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
@@ -162,14 +162,14 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
           assertEquals("There should be 1 log file written for every data file", 1, fileSlice.getLogFiles().count());
         }
       }
+      HoodieTestUtils.createDeltaCommitFiles(basePath, newCommitTime);
 
       // Do a compaction
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieTable.create(metaClient, config, jsc);
-
-      String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
-      JavaRDD<WriteStatus> result =
-          table.compact(jsc, compactionInstantTime, table.scheduleCompaction(jsc, compactionInstantTime));
+      table = HoodieTable.create(config, jsc);
+      String compactionInstantTime = "102";
+      table.scheduleCompaction(jsc, compactionInstantTime, Option.empty());
+      table.getMetaClient().reloadActiveTimeline();
+      JavaRDD<WriteStatus> result = table.compact(jsc, compactionInstantTime).getWriteStatuses();
 
       // Verify that all partition paths are present in the WriteStatus result
       for (String partitionPath : dataGen.getPartitionPaths()) {
@@ -184,8 +184,4 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;
   }
-
-  // TODO - after modifying HoodieReadClient to support mor tables - add more tests to make
-  // sure the data read is the updated data (compaction correctness)
-  // TODO - add more test cases for compactions after a failed commit/compaction
 }

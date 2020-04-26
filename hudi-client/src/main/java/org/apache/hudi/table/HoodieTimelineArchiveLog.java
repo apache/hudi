@@ -68,18 +68,18 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Archiver to bound the growth of <action>.commit files.
+ * Archiver to bound the growth of files under .hoodie meta path.
  */
-public class HoodieCommitArchiveLog {
+public class HoodieTimelineArchiveLog {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCommitArchiveLog.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieTimelineArchiveLog.class);
 
   private final Path archiveFilePath;
   private final HoodieTableMetaClient metaClient;
   private final HoodieWriteConfig config;
   private Writer writer;
 
-  public HoodieCommitArchiveLog(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+  public HoodieTimelineArchiveLog(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.metaClient = metaClient;
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());

@@ -58,7 +58,7 @@ public class TestClientRollback extends TestHoodieClientBase {
   public void testSavepointAndRollback() throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(HoodieCompactionConfig.newBuilder()
         .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build()).build();
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg)) {
       HoodieTestDataGenerator.writePartitionMetadata(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
       /**

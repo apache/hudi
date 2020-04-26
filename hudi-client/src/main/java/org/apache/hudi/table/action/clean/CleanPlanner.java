@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.clean;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -39,6 +40,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -50,6 +52,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Cleaner is responsible for garbage collecting older files in a given partition path. Such that
@@ -79,6 +82,25 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
                 new HoodieFileGroupId(entry.getValue().getPartitionPath(), entry.getValue().getFileId()),
                 entry.getValue()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+  }
+
+  /**
+   * Get the list of data file names savepointed.
+   */
+  public Stream<String> getSavepointedDataFiles(String savepointTime) {
+    if (!hoodieTable.getSavepoints().contains(savepointTime)) {
+      throw new HoodieSavepointException(
+          "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
+    }
+    HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
+    HoodieSavepointMetadata metadata;
+    try {
+      metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(
+          hoodieTable.getActiveTimeline().getInstantDetails(instant).get());
+    } catch (IOException e) {
+      throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTime, e);
+    }
+    return metadata.getPartitionMetadata().values().stream().flatMap(s -> s.getSavepointDataFile().stream());
   }
 
   /**
@@ -131,7 +153,8 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
     List<String> deletePaths = new ArrayList<>();
     // Collect all the datafiles savepointed by all the savepoints
     List<String> savepointedFiles = hoodieTable.getSavepoints().stream()
-        .flatMap(s -> hoodieTable.getSavepointedDataFiles(s)).collect(Collectors.toList());
+        .flatMap(this::getSavepointedDataFiles)
+        .collect(Collectors.toList());
 
     for (HoodieFileGroup fileGroup : fileGroups) {
       int keepVersions = config.getCleanerFileVersionsRetained();
@@ -190,7 +213,8 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
 
     // Collect all the datafiles savepointed by all the savepoints
     List<String> savepointedFiles = hoodieTable.getSavepoints().stream()
-        .flatMap(s -> hoodieTable.getSavepointedDataFiles(s)).collect(Collectors.toList());
+        .flatMap(this::getSavepointedDataFiles)
+        .collect(Collectors.toList());
 
     // determine if we have enough commits, to start cleaning.
     if (commitTimeline.countInstants() > commitsRetained) {

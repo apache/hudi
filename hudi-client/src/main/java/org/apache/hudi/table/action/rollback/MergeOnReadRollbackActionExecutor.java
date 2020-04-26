@@ -118,7 +118,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
         config.shouldAssumeDatePartitioning());
     int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
     return jsc.parallelize(partitions, Math.min(partitions.size(), sparkPartitions)).flatMap(partitionPath -> {
-      HoodieActiveTimeline activeTimeline = table.getActiveTimeline().reload();
+      HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
       List<RollbackRequest> partitionRollbackRequests = new ArrayList<>();
       switch (instantToRollback.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:

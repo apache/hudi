@@ -138,6 +138,20 @@ public class HoodieTestUtils {
     }
   }
 
+  public static void createDeltaCommitFiles(String basePath, String... instantTimes) throws IOException {
+    for (String instantTime : instantTimes) {
+      new File(
+          basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+              + HoodieTimeline.makeRequestedDeltaFileName(instantTime)).createNewFile();
+      new File(
+          basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+              + HoodieTimeline.makeInflightDeltaFileName(instantTime)).createNewFile();
+      new File(
+          basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeDeltaFileName(instantTime))
+          .createNewFile();
+    }
+  }
+
   public static void createMetadataFolder(String basePath) {
     new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME).mkdirs();
   }
