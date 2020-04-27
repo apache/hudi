@@ -25,6 +25,7 @@ import java.util.Date;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.avro.Schema;
+import org.apache.avro.Schema.Type;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -70,7 +71,6 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
     try {
       s3Client = AmazonS3ClientBuilder.standard().withRegion(props.getString(Config.SOURCE_SCHEMA_REGION)).build();
       this.sourceSchema = getSchemaFromS3();
-      //S3Object object = s3Client.getObject(new GetObjectRequest(props.getString(Config.SOURCE_SCHEMA_S3_BUCKET), props.getString(Config.SOURCE_SCHEMA_FILENAME)));
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading schema From S3", ioe);
     }
@@ -85,7 +85,7 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
         this.sourceSchema = getSchemaFromS3();
         this.schemaCachedTS = currentTimestamp;
       } catch (IOException ioe) {
-        ioe.printStackTrace();
+        LOG.error("Got errors while fetching the new schema", ioe);
       }
     }
     
@@ -108,13 +108,17 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
    */
   private Schema getSchemaFromS3() throws IOException {
     InputStream stream = s3Client.getObject(getSchemaRequest()).getObjectContent();
+    try {
+      Schema schemaCache = new Schema.Parser().parse(stream);
+      if (schemaCache.getType() != Type.RECORD) {
+        throw new IllegalArgumentException("Record schema type is expected");
+      }
 
-    Schema schemaCache = new Schema.Parser().parse(stream);
-
-    readStream(stream);
-    stream.close();
-
-    return schemaCache;
+      return schemaCache;
+    } finally {
+      readStream(stream);
+      stream.close();
+    }
   }
 
   /**
