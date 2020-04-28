@@ -30,8 +30,6 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable._
-import scala.util.control.Breaks
-
 
 /**
   * Spark job to de-duplicate data present in a partition path
