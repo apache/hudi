@@ -21,11 +21,11 @@ package org.apache.hudi.cli.commands;
 import org.apache.hudi.cli.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.HoodiePrintHelper;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test Cases for {@link SparkEnvCommand}.
@@ -48,7 +48,7 @@ public class TestSparkEnvCommand extends AbstractShellIntegrationTest {
 
     //Get
     cr = getShell().executeCommand("show env --key SPARK_HOME");
-    String result = HoodiePrintHelper.print(new String[] {"key", "value"}, new String[][]{new String[]{"SPARK_HOME", "/usr/etc/spark"}});
+    String result = HoodiePrintHelper.print(new String[] {"key", "value"}, new String[][] {new String[] {"SPARK_HOME", "/usr/etc/spark"}});
     assertEquals(result, cr.getResult().toString());
   }
 }

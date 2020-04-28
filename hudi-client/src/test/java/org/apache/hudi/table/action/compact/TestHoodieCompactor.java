@@ -43,23 +43,24 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieCompactor extends HoodieClientTestHarness {
 
   private Configuration hadoopConf;
   private HoodieTableMetaClient metaClient;
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     // Initialize a local spark env
     initSparkContexts("TestHoodieCompactor");
@@ -72,7 +73,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     initTestDataGenerator();
   }
 
-  @After
+  @AfterEach
   public void tearDown() throws Exception {
     cleanupFileSystem();
     cleanupTestDataGenerator();
@@ -100,13 +101,15 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
   }
 
-  @Test(expected = HoodieNotSupportedException.class)
+  @Test
   public void testCompactionOnCopyOnWriteFail() throws Exception {
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
     HoodieTable<?> table = HoodieTable.create(metaClient, getConfig(), jsc);
     String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    table.scheduleCompaction(jsc, compactionInstantTime, Option.empty());
-    table.compact(jsc, compactionInstantTime);
+    assertThrows(HoodieNotSupportedException.class, () -> {
+      table.scheduleCompaction(jsc, compactionInstantTime, Option.empty());
+      table.compact(jsc, compactionInstantTime);
+    });
   }
 
   @Test
@@ -123,7 +126,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
       String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
       Option<HoodieCompactionPlan> plan = table.scheduleCompaction(jsc, compactionInstantTime, Option.empty());
-      assertFalse("If there is nothing to compact, result will be empty", plan.isPresent());
+      assertFalse(plan.isPresent(), "If there is nothing to compact, result will be empty");
     }
   }
 
@@ -159,7 +162,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
         List<FileSlice> groupedLogFiles =
             table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
         for (FileSlice fileSlice : groupedLogFiles) {
-          assertEquals("There should be 1 log file written for every data file", 1, fileSlice.getLogFiles().count());
+          assertEquals(1, fileSlice.getLogFiles().count(), "There should be 1 log file written for every data file");
         }
       }
       HoodieTestUtils.createDeltaCommitFiles(basePath, newCommitTime);

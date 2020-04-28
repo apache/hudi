@@ -52,8 +52,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -63,9 +62,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test Cases for Async Compaction and Ingestion interaction.
@@ -111,9 +111,9 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
 
       HoodieInstant pendingCompactionInstant =
           metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
-      assertEquals("Pending Compaction instant has expected instant time", pendingCompactionInstant.getTimestamp(),
-          compactionInstantTime);
-      assertEquals("Pending Compaction instant has expected state", pendingCompactionInstant.getState(), State.REQUESTED);
+      assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp(),
+          "Pending Compaction instant has expected instant time");
+      assertEquals(State.REQUESTED, pendingCompactionInstant.getState(), "Pending Compaction instant has expected state");
 
       moveCompactionFromRequestedToInflight(compactionInstantTime, cfg);
 
@@ -169,11 +169,11 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
       HoodieInstant pendingCompactionInstant =
           metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
-      assertEquals("Pending Compaction instant has expected instant time", pendingCompactionInstant.getTimestamp(),
-          compactionInstantTime);
+      assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp(),
+          "Pending Compaction instant has expected instant time");
       HoodieInstant inflightInstant =
           metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
-      assertEquals("inflight instant has expected instant time", inflightInstant.getTimestamp(), inflightInstantTime);
+      assertEquals(inflightInstantTime, inflightInstant.getTimestamp(), "inflight instant has expected instant time");
 
       // This should rollback
       client.startCommitWithTime(nextInflightInstantTime);
@@ -181,13 +181,14 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       // Validate
       metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
       inflightInstant = metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
-      assertEquals("inflight instant has expected instant time", inflightInstant.getTimestamp(), nextInflightInstantTime);
-      assertEquals("Expect only one inflight instant", 1, metaClient.getActiveTimeline()
-          .filterPendingExcludingCompaction().getInstants().count());
+      assertEquals(inflightInstant.getTimestamp(), nextInflightInstantTime, "inflight instant has expected instant time");
+      assertEquals(1, metaClient.getActiveTimeline()
+              .filterPendingExcludingCompaction().getInstants().count(),
+          "Expect only one inflight instant");
       // Expect pending Compaction to be present
       pendingCompactionInstant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
-      assertEquals("Pending Compaction instant has expected instant time", pendingCompactionInstant.getTimestamp(),
-          compactionInstantTime);
+      assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp(),
+          "Pending Compaction instant has expected instant time");
     }
   }
 
@@ -237,8 +238,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     String compactionInstantTime = "006";
     int numRecs = 2000;
 
-    List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
-    records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
+    final List<HoodieRecord> initalRecords = dataGen.generateInserts(firstInstantTime, numRecs);
+    final List<HoodieRecord> records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), initalRecords, cfg, true,
         new ArrayList<>());
 
     // Schedule compaction but do not run them
@@ -246,17 +247,12 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
     HoodieInstant pendingCompactionInstant =
         metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
-    assertEquals("Pending Compaction instant has expected instant time", pendingCompactionInstant.getTimestamp(), compactionInstantTime);
+    assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp(), "Pending Compaction instant has expected instant time");
 
-    boolean gotException = false;
-    try {
+    assertThrows(IllegalArgumentException.class, () -> {
       runNextDeltaCommits(client, readClient, Arrays.asList(failedInstantTime), records, cfg, false,
           Arrays.asList(compactionInstantTime));
-    } catch (IllegalArgumentException iex) {
-      // Latest pending compaction instant time must be earlier than this instant time. Should fail here
-      gotException = true;
-    }
-    assertTrue("Latest pending compaction instant time must be earlier than this instant time", gotException);
+    }, "Latest pending compaction instant time must be earlier than this instant time");
   }
 
   @Test
@@ -283,17 +279,12 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
     HoodieInstant inflightInstant =
         metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
-    assertEquals("inflight instant has expected instant time", inflightInstant.getTimestamp(), inflightInstantTime);
+    assertEquals(inflightInstantTime, inflightInstant.getTimestamp(), "inflight instant has expected instant time");
 
-    boolean gotException = false;
-    try {
+    assertThrows(IllegalArgumentException.class, () -> {
       // Schedule compaction but do not run them
       scheduleCompaction(compactionInstantTime, client, cfg);
-    } catch (IllegalArgumentException iex) {
-      // Earliest ingestion inflight instant time must be later than compaction time. Should fail here
-      gotException = true;
-    }
-    assertTrue("Earliest ingestion inflight instant time must be later than compaction time", gotException);
+    }, "Earliest ingestion inflight instant time must be later than compaction time");
   }
 
   @Test
@@ -304,44 +295,32 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     HoodieWriteClient client = getHoodieWriteClient(cfg, true);
     HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
-    String firstInstantTime = "001";
-    String secondInstantTime = "004";
-    String compactionInstantTime = "002";
+    final String firstInstantTime = "001";
+    final String secondInstantTime = "004";
+    final String compactionInstantTime = "002";
     int numRecs = 2000;
 
     List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
     runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
         new ArrayList<>());
 
-    boolean gotException = false;
-    try {
+    assertThrows(IllegalArgumentException.class, () -> {
       // Schedule compaction but do not run them
       scheduleCompaction(compactionInstantTime, client, cfg);
-    } catch (IllegalArgumentException iex) {
-      gotException = true;
-    }
-    assertTrue("Compaction Instant to be scheduled cannot have older timestamp", gotException);
+    }, "Compaction Instant to be scheduled cannot have older timestamp");
 
     // Schedule with timestamp same as that of committed instant
-    gotException = false;
-    try {
+    assertThrows(IllegalArgumentException.class, () -> {
       // Schedule compaction but do not run them
       scheduleCompaction(secondInstantTime, client, cfg);
-    } catch (IllegalArgumentException iex) {
-      gotException = true;
-    }
-    assertTrue("Compaction Instant to be scheduled cannot have same timestamp as committed instant", gotException);
+    }, "Compaction Instant to be scheduled cannot have same timestamp as committed instant");
 
-    compactionInstantTime = "006";
-    scheduleCompaction(compactionInstantTime, client, cfg);
-    gotException = false;
-    try {
+    final String compactionInstantTime2 = "006";
+    scheduleCompaction(compactionInstantTime2, client, cfg);
+    assertThrows(IllegalArgumentException.class, () -> {
       // Schedule compaction with the same times as a pending compaction
       scheduleCompaction(secondInstantTime, client, cfg);
-    } catch (IllegalArgumentException iex) {
-      gotException = true;
-    }
-    assertTrue("Compaction Instant to be scheduled cannot have same timestamp as a pending compaction", gotException);
+    }, "Compaction Instant to be scheduled cannot have same timestamp as a pending compaction");
   }
 
   @Test
@@ -406,13 +385,13 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     fileSliceList.forEach(fileSlice -> {
       Pair<String, HoodieCompactionOperation> opPair = fgIdToCompactionOperation.get(fileSlice.getFileGroupId());
       if (opPair != null) {
-        assertEquals("Expect baseInstant to match compaction Instant", fileSlice.getBaseInstantTime(), opPair.getKey());
-        assertTrue("Expect atleast one log file to be present where the latest delta commit was written",
-            fileSlice.getLogFiles().count() > 0);
-        assertFalse("Expect no data-file to be present", fileSlice.getBaseFile().isPresent());
+        assertEquals(fileSlice.getBaseInstantTime(), opPair.getKey(), "Expect baseInstant to match compaction Instant");
+        assertTrue(fileSlice.getLogFiles().count() > 0,
+            "Expect atleast one log file to be present where the latest delta commit was written");
+        assertFalse(fileSlice.getBaseFile().isPresent(), "Expect no data-file to be present");
       } else {
-        assertTrue("Expect baseInstant to be less than or equal to latestDeltaCommit",
-            fileSlice.getBaseInstantTime().compareTo(latestDeltaCommit) <= 0);
+        assertTrue(fileSlice.getBaseInstantTime().compareTo(latestDeltaCommit) <= 0,
+            "Expect baseInstant to be less than or equal to latestDeltaCommit");
       }
     });
   }
@@ -446,8 +425,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       List<HoodieBaseFile> dataFilesToRead = getCurrentLatestDataFiles(hoodieTable, cfg);
-      assertTrue("should list the parquet files we wrote in the delta commit",
-          dataFilesToRead.stream().findAny().isPresent());
+      assertTrue(dataFilesToRead.stream().findAny().isPresent(),
+          "should list the parquet files we wrote in the delta commit");
       validateDeltaCommit(firstInstant, fgIdToCompactionOperation, cfg);
     }
 
@@ -467,7 +446,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(compactionInstant);
     HoodieInstant instant = metaClient.getActiveTimeline().reload().filterPendingCompactionTimeline().getInstants()
         .filter(in -> in.getTimestamp().equals(compactionInstantTime)).findAny().get();
-    assertTrue("Instant must be marked inflight", instant.isInflight());
+    assertTrue(instant.isInflight(), "Instant must be marked inflight");
   }
 
   private void scheduleCompaction(String compactionInstantTime, HoodieWriteClient client, HoodieWriteConfig cfg)
@@ -475,7 +454,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
     HoodieInstant instant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().get();
-    assertEquals("Last compaction instant must be the one set", instant.getTimestamp(), compactionInstantTime);
+    assertEquals(compactionInstantTime, instant.getTimestamp(), "Last compaction instant must be the one set");
   }
 
   private void scheduleAndExecuteCompaction(String compactionInstantTime, HoodieWriteClient client, HoodieTable table,
@@ -489,28 +468,30 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
 
     client.compact(compactionInstantTime);
     List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table);
-    assertTrue("Ensure latest file-slices are not empty", fileSliceList.stream().findAny().isPresent());
-    assertFalse("Verify all file-slices have base-instant same as compaction instant", fileSliceList.stream()
-        .anyMatch(fs -> !fs.getBaseInstantTime().equals(compactionInstantTime)));
-    assertFalse("Verify all file-slices have data-files",
-        fileSliceList.stream().anyMatch(fs -> !fs.getBaseFile().isPresent()));
+    assertTrue(fileSliceList.stream().findAny().isPresent(), "Ensure latest file-slices are not empty");
+    assertFalse(fileSliceList.stream()
+            .anyMatch(fs -> !fs.getBaseInstantTime().equals(compactionInstantTime)),
+        "Verify all file-slices have base-instant same as compaction instant");
+    assertFalse(fileSliceList.stream().anyMatch(fs -> !fs.getBaseFile().isPresent()),
+        "Verify all file-slices have data-files");
 
     if (hasDeltaCommitAfterPendingCompaction) {
-      assertFalse("Verify all file-slices have atleast one log-file",
-          fileSliceList.stream().anyMatch(fs -> fs.getLogFiles().count() == 0));
+      assertFalse(fileSliceList.stream().anyMatch(fs -> fs.getLogFiles().count() == 0),
+          "Verify all file-slices have atleast one log-file");
     } else {
-      assertFalse("Verify all file-slices have no log-files",
-          fileSliceList.stream().anyMatch(fs -> fs.getLogFiles().count() > 0));
+      assertFalse(fileSliceList.stream().anyMatch(fs -> fs.getLogFiles().count() > 0),
+          "Verify all file-slices have no log-files");
     }
 
     // verify that there is a commit
     table = getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath(), true), cfg);
     HoodieTimeline timeline = table.getMetaClient().getCommitTimeline().filterCompletedInstants();
     String latestCompactionCommitTime = timeline.lastInstant().get().getTimestamp();
-    assertEquals("Expect compaction instant time to be the latest commit time", latestCompactionCommitTime,
-        compactionInstantTime);
-    Assert.assertEquals("Must contain expected records", expectedNumRecs,
-        HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, "000").count());
+    assertEquals(latestCompactionCommitTime, compactionInstantTime,
+        "Expect compaction instant time to be the latest commit time");
+    assertEquals(expectedNumRecs,
+        HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, "000").count(),
+        "Must contain expected records");
 
   }
 
@@ -530,11 +511,11 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     Option<HoodieInstant> deltaCommit =
         metaClient.getActiveTimeline().reload().getDeltaCommitTimeline().filterCompletedInstants().lastInstant();
     if (skipCommit && !cfg.shouldAutoCommit()) {
-      assertTrue("Delta commit should not be latest instant",
-          deltaCommit.get().getTimestamp().compareTo(instantTime) < 0);
+      assertTrue(deltaCommit.get().getTimestamp().compareTo(instantTime) < 0,
+          "Delta commit should not be latest instant");
     } else {
       assertTrue(deltaCommit.isPresent());
-      assertEquals("Delta commit should be latest instant", instantTime, deltaCommit.get().getTimestamp());
+      assertEquals(instantTime, deltaCommit.get().getTimestamp(), "Delta commit should be latest instant");
     }
     return statusList;
   }

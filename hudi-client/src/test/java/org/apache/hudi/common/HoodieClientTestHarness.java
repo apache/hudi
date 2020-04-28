@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.minicluster.HdfsTestService;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarnessJunit5;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -44,7 +45,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * The test harness for resource initialization and cleanup.
  */
-public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness implements Serializable {
+public abstract class HoodieClientTestHarness extends HoodieCommonTestHarnessJunit5 implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestHarness.class);
 

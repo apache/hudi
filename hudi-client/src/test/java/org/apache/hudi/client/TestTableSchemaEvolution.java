@@ -18,8 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
@@ -36,9 +34,12 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.List;
@@ -51,10 +52,10 @@ import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA
 import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_SCHEMA_PREFIX;
 import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_SCHEMA_SUFFIX;
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_1;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestTableSchemaEvolution extends TestHoodieClientBase {
   private final String initCommitTime = "000";
@@ -73,60 +74,60 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
   public static final String TRIP_EXAMPLE_SCHEMA_DEVOLVED = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
       + TRIP_SCHEMA_SUFFIX;
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initResources();
   }
 
-  @After
+  @AfterEach
   public void tearDown() {
     cleanupSparkContexts();
   }
 
   @Test
   public void testSchemaCompatibilityBasic() throws Exception {
-    assertTrue("Same schema is compatible",
-               TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA));
+    assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA),
+        "Same schema is compatible");
 
-    String reorderedSchema = TRIP_SCHEMA_PREFIX  + TIP_NESTED_SCHEMA + FARE_NESTED_SCHEMA
+    String reorderedSchema = TRIP_SCHEMA_PREFIX + TIP_NESTED_SCHEMA + FARE_NESTED_SCHEMA
         + MAP_TYPE_SCHEMA + TRIP_SCHEMA_SUFFIX;
-    assertTrue("Reordered fields are compatible",
-        TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, reorderedSchema));
-    assertTrue("Reordered fields are compatible",
-        TableSchemaResolver.isSchemaCompatible(reorderedSchema, TRIP_EXAMPLE_SCHEMA));
+    assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, reorderedSchema),
+        "Reordered fields are compatible");
+    assertTrue(TableSchemaResolver.isSchemaCompatible(reorderedSchema, TRIP_EXAMPLE_SCHEMA),
+        "Reordered fields are compatible");
 
     String renamedSchema = TRIP_EXAMPLE_SCHEMA.replace("tip_history", "tip_future");
-    assertFalse("Renamed fields are not compatible",
-        TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, renamedSchema));
+    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, renamedSchema),
+        "Renamed fields are not compatible");
 
-    assertFalse("Deleted single field is not compatible",
-        TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_DEVOLVED));
-    String deletedMultipleFieldSchema = TRIP_SCHEMA_PREFIX  + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
-    assertFalse("Deleted multiple fields are not compatible",
-        TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, deletedMultipleFieldSchema));
+    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_DEVOLVED),
+        "Deleted single field is not compatible");
+    String deletedMultipleFieldSchema = TRIP_SCHEMA_PREFIX + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
+    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, deletedMultipleFieldSchema),
+        "Deleted multiple fields are not compatible");
 
     String renamedRecordSchema = TRIP_EXAMPLE_SCHEMA.replace("triprec", "triprec_renamed");
-    assertFalse("Renamed record name is not compatible",
-        TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, renamedRecordSchema));
+    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, renamedRecordSchema),
+        "Renamed record name is not compatible");
 
     String swappedFieldSchema = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA.replace("city_to_state", "fare")
         + FARE_NESTED_SCHEMA.replace("fare", "city_to_state") + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
-    assertFalse("Swapped fields are not compatible",
-        TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, swappedFieldSchema));
+    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, swappedFieldSchema),
+        "Swapped fields are not compatible");
 
     String typeChangeSchema = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
         + TIP_NESTED_SCHEMA.replace("string", "boolean") + TRIP_SCHEMA_SUFFIX;
-    assertFalse("Field type change is not compatible",
-        TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, typeChangeSchema));
+    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, typeChangeSchema),
+        "Field type change is not compatible");
 
-    assertTrue("Added field with default is compatible (Evolved Schema)",
-        TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED));
+    assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED),
+        "Added field with default is compatible (Evolved Schema)");
 
     String multipleAddedFieldSchema = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
         + TIP_NESTED_SCHEMA + EXTRA_FIELD_SCHEMA + EXTRA_FIELD_SCHEMA.replace("new_field", "new_new_field")
         + TRIP_SCHEMA_SUFFIX;
-    assertTrue("Multiple added fields with defauls are compatible",
-        TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, multipleAddedFieldSchema));
+    assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, multipleAddedFieldSchema),
+        "Multiple added fields with defauls are compatible");
   }
 
   @Test

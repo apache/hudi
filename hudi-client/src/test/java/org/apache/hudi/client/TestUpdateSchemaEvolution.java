@@ -31,26 +31,26 @@ import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.table.HoodieTable;
 import org.apache.parquet.avro.AvroReadSupport;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initPath();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath);
@@ -58,7 +58,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     initFileSystem();
   }
 
-  @After
+  @AfterEach
   public void tearDown() {
     cleanupSparkContexts();
   }
@@ -103,7 +103,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     String fileId = insertResult.getFileId();
 
     final HoodieTable table2 = HoodieTable.create(config2, jsc);
-    Assert.assertEquals(1, jsc.parallelize(Arrays.asList(1)).map(x -> {
+    assertEquals(1, jsc.parallelize(Arrays.asList(1)).map(x -> {
       // New content with values for the newly added field
       String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
           + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
@@ -116,9 +116,9 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
       record1.seal();
       updateRecords.add(record1);
 
-      try {
+      assertDoesNotThrow(() -> {
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config2, "101", table2,
-                updateRecords.iterator(), record1.getPartitionPath(), fileId, supplier);
+            updateRecords.iterator(), record1.getPartitionPath(), fileId, supplier);
         Configuration conf = new Configuration();
         AvroReadSupport.setAvroReadSchema(conf, mergeHandle.getWriterSchema());
         List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(conf,
@@ -127,10 +127,9 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
           mergeHandle.write(rec);
         }
         mergeHandle.close();
-      } catch (ClassCastException e) {
-        fail("UpdateFunction could not read records written with exampleSchema.txt using the "
-            + "exampleEvolvedSchema.txt");
-      }
+      }, "UpdateFunction could not read records written with exampleSchema.txt using the "
+          + "exampleEvolvedSchema.txt");
+
       return 1;
     }).collect().size());
   }
