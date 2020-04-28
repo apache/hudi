@@ -26,7 +26,7 @@ import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.{HoodieWriteClient, WriteStatus}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecordPayload
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecordPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.config.TypedProperties
@@ -61,7 +61,8 @@ private[hudi] object HoodieSparkSqlWriter {
       case _ => throw new HoodieException("hoodie only support org.apache.spark.serializer.KryoSerializer as spark.serializer")
     }
     val tableType = parameters(TABLE_TYPE_OPT_KEY)
-    val tableBaseFormat = parameters(TABLE_FILE_FORMAT_OPT_KEY)
+
+    val tableBaseFormat = parameters.getOrDefault(HoodieWriteConfig.TABLE_BASE_FILE_FORMAT, HoodieFileFormat.PARQUET.name)
     val operation =
     // It does not make sense to allow upsert() operation if INSERT_DROP_DUPS_OPT_KEY is true
     // Auto-correct the operation to "insert" if OPERATION_OPT_KEY is set to "upsert" wrongly
@@ -211,8 +212,7 @@ private[hudi] object HoodieSparkSqlWriter {
       HIVE_URL_OPT_KEY -> DEFAULT_HIVE_URL_OPT_VAL,
       HIVE_PARTITION_FIELDS_OPT_KEY -> DEFAULT_HIVE_PARTITION_FIELDS_OPT_VAL,
       HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY -> DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL,
-      HIVE_STYLE_PARTITIONING_OPT_KEY -> DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL,
-      TABLE_FILE_FORMAT_OPT_KEY -> DEFAULT_TABLE_FILE_FORMAT_OPT_VAL
+      HIVE_STYLE_PARTITIONING_OPT_KEY -> DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL
     ) ++ translateStorageTypeToTableType(parameters)
   }
 

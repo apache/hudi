@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
@@ -142,16 +141,6 @@ object DataSourceWriteOptions {
   val COW_TABLE_TYPE_OPT_VAL = HoodieTableType.COPY_ON_WRITE.name
   val MOR_TABLE_TYPE_OPT_VAL = HoodieTableType.MERGE_ON_READ.name
   val DEFAULT_TABLE_TYPE_OPT_VAL = COW_TABLE_TYPE_OPT_VAL
-
-  /**
-    * The table base file format for the underlying data, for this write.
-    * Note that this can't change across writes.
-    *
-    * Default: PARQUET
-    */
-  val TABLE_FILE_FORMAT_OPT_KEY = "hoodie.table.base.file.format"
-  val PARQUET_TABLE_FILE_FORMAT_OPT_VAL = HoodieFileFormat.PARQUET.name
-  val DEFAULT_TABLE_FILE_FORMAT_OPT_VAL = PARQUET_TABLE_FILE_FORMAT_OPT_VAL
 
   @Deprecated
   val STORAGE_TYPE_OPT_KEY = "hoodie.datasource.write.storage.type"

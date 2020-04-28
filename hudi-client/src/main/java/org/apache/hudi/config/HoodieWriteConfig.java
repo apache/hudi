@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -51,6 +52,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String TABLE_NAME = "hoodie.table.name";
   private static final String TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
   private static final String BASE_PATH_PROP = "hoodie.base.path";
+  public static final String TABLE_BASE_FILE_FORMAT = "hoodie.table.base.file.format";
+  private static final String DEFAULT_TABLE_BASE_FILE_FORMAT = HoodieFileFormat.PARQUET.name();
   private static final String AVRO_SCHEMA = "hoodie.avro.schema";
   private static final String AVRO_SCHEMA_VALIDATE = "hoodie.avro.schema.validate";
   private static final String DEFAULT_AVRO_SCHEMA_VALIDATE = "false";
@@ -140,6 +143,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public String getTableName() {
     return props.getProperty(TABLE_NAME);
+  }
+
+  public String getTableBaseFileFormat() {
+    return props.getProperty(TABLE_BASE_FILE_FORMAT);
   }
 
   public Boolean shouldAutoCommit() {
@@ -743,6 +750,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP),
           FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP, DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED);
       setDefaultOnCondition(props, !props.containsKey(AVRO_SCHEMA_VALIDATE), AVRO_SCHEMA_VALIDATE, DEFAULT_AVRO_SCHEMA_VALIDATE);
+      setDefaultOnCondition(props, !props.containsKey(TABLE_BASE_FILE_FORMAT), TABLE_BASE_FILE_FORMAT, DEFAULT_TABLE_BASE_FILE_FORMAT);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());
