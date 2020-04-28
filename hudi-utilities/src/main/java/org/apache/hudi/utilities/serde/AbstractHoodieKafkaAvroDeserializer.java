@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.serde;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.serde.config.HoodieKafkaAvroDeserializationConfig;
 
-import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import kafka.utils.VerifiableProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
@@ -45,7 +44,7 @@ public class AbstractHoodieKafkaAvroDeserializer {
 
   protected void configure(HoodieKafkaAvroDeserializationConfig config) {
     useSpecificAvroReader = config
-      .getBoolean(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG);
+      .getBoolean(HoodieKafkaAvroDeserializationConfig.SPECIFIC_AVRO_READER_CONFIG);
   }
 
   protected Object deserialize(byte[] payload) throws SerializationException {
