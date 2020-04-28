@@ -67,7 +67,7 @@ public class RepairsCommand implements CommandMarker {
           mandatory = true) final String sparkPropertiesPath,
       @CliOption(key = {"useCommitTimeForDedupe"}, help = "Set it to true if duplicates have never been updated",
         unspecifiedDefaultValue = "true") final boolean useCommitTimeForDedupe,
-      @CliOption(key = {"dryrun"}, help = "Should we actually add or just print what would be done",
+      @CliOption(key = {"dryrun"}, help = "Should we actually remove duplicates or just run and store result to repairedOutputPath",
         unspecifiedDefaultValue = "true") final boolean dryRun)
       throws Exception {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);

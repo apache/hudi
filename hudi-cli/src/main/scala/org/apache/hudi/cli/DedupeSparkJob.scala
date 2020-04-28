@@ -132,23 +132,13 @@ class DedupeSparkJob(basePath: String,
         This corresponds to the case where duplicates have been updated at least once.
         Once updated, duplicates are bound to have same commit time unless forcefully modified.
          */
-        val size = rows.size - 1
-        var i = 0
-        val loop = new Breaks
-        loop.breakable {
-          rows.foreach(r => {
-            //Except one row, the key needs to be deleted from every other row.
-            if (i == size) {
-              loop.break
-            }
-            val f = r(2).asInstanceOf[String].split("_")(0)
-            if (!fileToDeleteKeyMap.contains(f)) {
-              fileToDeleteKeyMap(f) = HashSet[String]()
-            }
-            fileToDeleteKeyMap(f).add(key)
-            i = i + 1
-          })
-        }
+        rows.init.foreach(r => {
+          val f = r(2).asInstanceOf[String].split("_")(0)
+          if (!fileToDeleteKeyMap.contains(f)) {
+            fileToDeleteKeyMap(f) = HashSet[String]()
+          }
+          fileToDeleteKeyMap(f).add(key)
+        })
       }
     })
     fileToDeleteKeyMap
