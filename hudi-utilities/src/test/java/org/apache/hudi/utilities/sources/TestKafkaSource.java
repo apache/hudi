@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.UtilitiesTestBase;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
-import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.S3FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
 
@@ -55,7 +55,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
   private static String TEST_TOPIC_NAME = "hoodie_test";
 
-  private FilebasedSchemaProvider schemaProvider;
+  private S3FilebasedSchemaProvider schemaProvider;
   private KafkaTestUtils testUtils;
 
   @BeforeClass
@@ -71,7 +71,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
   @Before
   public void setup() throws Exception {
     super.setup();
-    schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
+    schemaProvider = new S3FilebasedSchemaProvider(Helpers.setupSchemaOnS3(), jsc);
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }

@@ -69,6 +69,13 @@
   </build>
 
   <dependencies>
+    <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-s3 -->
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>aws-java-sdk-s3</artifactId>
+      <version>1.11.711</version>
+    </dependency>	
+    
     <!-- H2 database for JdbcbaseSchemaProvider -->
     <dependency>
       <groupId>com.h2database</groupId>
@@ -253,8 +260,13 @@
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpcore</artifactId>
+      <version>4.4.11</version>
     </dependency>
-
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+      <version>4.5.9</version>
+    </dependency>
     <!-- Hadoop -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
