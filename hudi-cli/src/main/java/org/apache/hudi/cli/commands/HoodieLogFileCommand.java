@@ -20,6 +20,7 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -53,6 +54,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -134,7 +136,6 @@ public class HoodieLogFileCommand implements CommandMarker {
       reader.close();
     }
     List<Comparable[]> rows = new ArrayList<>();
-    int i = 0;
     ObjectMapper objectMapper = new ObjectMapper();
     for (Map.Entry<String, List<Tuple3<HoodieLogBlockType, Tuple2<Map<HeaderMetadataType, String>, Map<HeaderMetadataType, String>>, Integer>>> entry : commitCountAndMetadata
         .entrySet()) {
@@ -148,12 +149,14 @@ public class HoodieLogFileCommand implements CommandMarker {
         output[3] = objectMapper.writeValueAsString(tuple3._2()._1());
         output[4] = objectMapper.writeValueAsString(tuple3._2()._2());
         rows.add(output);
-        i++;
       }
     }
 
-    TableHeader header = new TableHeader().addTableHeaderField("InstantTime").addTableHeaderField("RecordCount")
-        .addTableHeaderField("BlockType").addTableHeaderField("HeaderMetadata").addTableHeaderField("FooterMetadata");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT_TIME)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_RECORD_COUNT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_BLOCK_TYPE)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_HEADER_METADATA)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_FOOTER_METADATA);
 
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
@@ -173,7 +176,11 @@ public class HoodieLogFileCommand implements CommandMarker {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     FileSystem fs = client.getFs();
     List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(logFilePathPattern)))
-        .map(status -> status.getPath().toString()).collect(Collectors.toList());
+        .map(status -> status.getPath().toString()).sorted(Comparator.reverseOrder())
+        .collect(Collectors.toList());
+
+    // logFilePaths size must > 1
+    assert logFilePaths.size() > 0 : "There is no log file";
 
     // TODO : readerSchema can change across blocks/log files, fix this inside Scanner
     AvroSchemaConverter converter = new AvroSchemaConverter();
@@ -232,6 +239,6 @@ public class HoodieLogFileCommand implements CommandMarker {
       rows[i] = data;
       i++;
     }
-    return HoodiePrintHelper.print(new String[] {"Records"}, rows);
+    return HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_RECORDS}, rows);
   }
 }
