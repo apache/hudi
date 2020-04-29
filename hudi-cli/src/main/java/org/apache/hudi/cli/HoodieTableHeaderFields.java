@@ -26,14 +26,24 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_PARTITION_PATH = HEADER_PARTITION + " Path";
   public static final String HEADER_FILE_ID = "FileId";
   public static final String HEADER_BASE_INSTANT = "Base-Instant";
-
+  public static final String HEADER_INSTANT_TIME = "InstantTime";
   public static final String HEADER_CLEAN_TIME = "CleanTime";
   public static final String HEADER_EARLIEST_COMMAND_RETAINED = "EarliestCommandRetained";
   public static final String HEADER_CLEANING_POLICY = "Cleaning policy";
+
   public static final String HEADER_TOTAL_FILES_DELETED = "Total Files Deleted";
   public static final String HEADER_TOTAL_FILES_SUCCESSFULLY_DELETED = "Total Files Successfully Deleted";
   public static final String HEADER_TOTAL_FAILED_DELETIONS = "Total Failed Deletions";
   public static final String HEADER_TOTAL_TIME_TAKEN = "Total Time Taken";
+
+  /**
+   * Fields of log file.
+   */
+  public static final String HEADER_RECORDS = "Records";
+  public static final String HEADER_RECORD_COUNT = "RecordCount";
+  public static final String HEADER_BLOCK_TYPE = "BlockType";
+  public static final String HEADER_HEADER_METADATA = "HeaderMetadata";
+  public static final String HEADER_FOOTER_METADATA = "FooterMetadata";
 
   /**
    * Fields of data header.
