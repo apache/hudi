@@ -27,8 +27,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.fs.Path;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -42,8 +41,8 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieCompactionStrategy {
 
@@ -63,7 +62,7 @@ public class TestHoodieCompactionStrategy {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).build()).build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
     List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
-    assertEquals("UnBounded should not re-order or filter", operations, returned);
+    assertEquals(operations, returned, "UnBounded should not re-order or filter");
   }
 
   @Test
@@ -80,13 +79,13 @@ public class TestHoodieCompactionStrategy {
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
     List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
 
-    assertTrue("BoundedIOCompaction should have resulted in fewer compactions", returned.size() < operations.size());
-    assertEquals("BoundedIOCompaction should have resulted in 2 compactions being chosen", 2, returned.size());
+    assertTrue(returned.size() < operations.size(), "BoundedIOCompaction should have resulted in fewer compactions");
+    assertEquals(2, returned.size(), "BoundedIOCompaction should have resulted in 2 compactions being chosen");
     // Total size of all the log files
     Long returnedSize = returned.stream().map(s -> s.getMetrics().get(BoundedIOCompactionStrategy.TOTAL_IO_MB))
         .map(Double::longValue).reduce(Long::sum).orElse(0L);
-    assertEquals("Should chose the first 2 compactions which should result in a total IO of 690 MB", 610,
-        (long) returnedSize);
+    assertEquals(610, (long) returnedSize,
+        "Should chose the first 2 compactions which should result in a total IO of 690 MB");
   }
 
   @Test
@@ -103,14 +102,14 @@ public class TestHoodieCompactionStrategy {
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
     List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
 
-    assertTrue("LogFileSizeBasedCompactionStrategy should have resulted in fewer compactions",
-        returned.size() < operations.size());
-    assertEquals("LogFileSizeBasedCompactionStrategy should have resulted in 1 compaction", 1, returned.size());
+    assertTrue(returned.size() < operations.size(),
+        "LogFileSizeBasedCompactionStrategy should have resulted in fewer compactions");
+    assertEquals(1, returned.size(), "LogFileSizeBasedCompactionStrategy should have resulted in 1 compaction");
     // Total size of all the log files
     Long returnedSize = returned.stream().map(s -> s.getMetrics().get(BoundedIOCompactionStrategy.TOTAL_IO_MB))
         .map(Double::longValue).reduce(Long::sum).orElse(0L);
-    assertEquals("Should chose the first 2 compactions which should result in a total IO of 690 MB", 1204,
-        (long) returnedSize);
+    assertEquals(1204, (long) returnedSize,
+        "Should chose the first 2 compactions which should result in a total IO of 690 MB");
   }
 
   @Test
@@ -137,14 +136,14 @@ public class TestHoodieCompactionStrategy {
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
     List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
 
-    assertTrue("DayBasedCompactionStrategy should have resulted in fewer compactions",
-        returned.size() < operations.size());
-    Assert.assertEquals("DayBasedCompactionStrategy should have resulted in fewer compactions", returned.size(), 2);
+    assertTrue(returned.size() < operations.size(),
+        "DayBasedCompactionStrategy should have resulted in fewer compactions");
+    assertEquals(2, returned.size(), "DayBasedCompactionStrategy should have resulted in fewer compactions");
 
     int comparision = strategy.getComparator().compare(returned.get(returned.size() - 1).getPartitionPath(),
         returned.get(0).getPartitionPath());
     // Either the partition paths are sorted in descending order or they are equal
-    assertTrue("DayBasedCompactionStrategy should sort partitions in descending order", comparision >= 0);
+    assertTrue(comparision >= 0, "DayBasedCompactionStrategy should sort partitions in descending order");
   }
 
   @Test
@@ -185,15 +184,15 @@ public class TestHoodieCompactionStrategy {
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
     List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
 
-    assertTrue("BoundedPartitionAwareCompactionStrategy should have resulted in fewer compactions",
-        returned.size() < operations.size());
-    Assert.assertEquals("BoundedPartitionAwareCompactionStrategy should have resulted in fewer compactions",
-        returned.size(), 5);
+    assertTrue(returned.size() < operations.size(),
+        "BoundedPartitionAwareCompactionStrategy should have resulted in fewer compactions");
+    assertEquals(5, returned.size(),
+        "BoundedPartitionAwareCompactionStrategy should have resulted in fewer compactions");
 
     int comparision = strategy.getComparator().compare(returned.get(returned.size() - 1).getPartitionPath(),
         returned.get(0).getPartitionPath());
     // Either the partition paths are sorted in descending order or they are equal
-    assertTrue("BoundedPartitionAwareCompactionStrategy should sort partitions in descending order", comparision >= 0);
+    assertTrue(comparision >= 0, "BoundedPartitionAwareCompactionStrategy should sort partitions in descending order");
   }
 
   @Test
@@ -234,12 +233,11 @@ public class TestHoodieCompactionStrategy {
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
     List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
 
-    assertTrue(
+    assertTrue(returned.size() < operations.size(),
         "UnBoundedPartitionAwareCompactionStrategy should not include last "
-            + writeConfig.getTargetPartitionsPerDayBasedCompaction() + " partitions or later partitions from today",
-        returned.size() < operations.size());
-    Assert.assertEquals("BoundedPartitionAwareCompactionStrategy should have resulted in 1 compaction", returned.size(),
-        1);
+            + writeConfig.getTargetPartitionsPerDayBasedCompaction() + " partitions or later partitions from today");
+    assertEquals(1, returned.size(),
+        "BoundedPartitionAwareCompactionStrategy should have resulted in 1 compaction");
   }
 
   private List<HoodieCompactionOperation> createCompactionOperations(HoodieWriteConfig config,
