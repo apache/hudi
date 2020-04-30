@@ -40,6 +40,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
   public static final String CLEANER_POLICY_PROP = "hoodie.cleaner.policy";
   public static final String AUTO_CLEAN_PROP = "hoodie.clean.automatic";
+  public static final String PARALLEL_AUTO_CLEAN_PROP = "hoodie.clean.automatic.parallel";
   // Turn on inline compaction - after fw delta commits a inline compaction will be run
   public static final String INLINE_COMPACT_PROP = "hoodie.compact.inline";
   // Run a compaction every N delta commits
@@ -101,6 +102,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED = "false";
   private static final String DEFAULT_CLEANER_POLICY = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
   private static final String DEFAULT_AUTO_CLEAN = "true";
+  private static final String DEFAULT_RUN_PARALLEL_AUTO_CLEAN = "false";
   private static final String DEFAULT_INLINE_COMPACT = "false";
   private static final String DEFAULT_INCREMENTAL_CLEANER = "true";
   private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "5";
@@ -140,6 +142,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
     public Builder withAutoClean(Boolean autoClean) {
       props.setProperty(AUTO_CLEAN_PROP, String.valueOf(autoClean));
+      return this;
+    }
+
+    public Builder withRunParallelAutoClean(Boolean runParallelAutoClean) {
+      props.setProperty(PARALLEL_AUTO_CLEAN_PROP, String.valueOf(runParallelAutoClean));
       return this;
     }
 
@@ -247,6 +254,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
     public HoodieCompactionConfig build() {
       HoodieCompactionConfig config = new HoodieCompactionConfig(props);
       setDefaultOnCondition(props, !props.containsKey(AUTO_CLEAN_PROP), AUTO_CLEAN_PROP, DEFAULT_AUTO_CLEAN);
+      setDefaultOnCondition(props, !props.containsKey(PARALLEL_AUTO_CLEAN_PROP), PARALLEL_AUTO_CLEAN_PROP,
+          DEFAULT_RUN_PARALLEL_AUTO_CLEAN);
       setDefaultOnCondition(props, !props.containsKey(CLEANER_INCREMENTAL_MODE), CLEANER_INCREMENTAL_MODE,
           DEFAULT_INCREMENTAL_CLEANER);
       setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_PROP), INLINE_COMPACT_PROP,

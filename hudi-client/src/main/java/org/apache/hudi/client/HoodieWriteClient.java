@@ -81,6 +81,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private final transient HoodieMetrics metrics;
   private transient Timer.Context compactionTimer;
 
+  private transient AutoCleanerService autoCleanerService;
+
   /**
    * Create a write client, without cleaning up failed/inflight commits.
    *
@@ -158,6 +160,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT);
     table.validateUpsertSchema();
     setOperationType(WriteOperationType.UPSERT);
+    AutoCleanerService.spawnAutoCleanerIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.upsert(jsc, instantTime, records);
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
@@ -178,6 +181,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT_PREPPED);
     table.validateUpsertSchema();
     setOperationType(WriteOperationType.UPSERT_PREPPED);
+    AutoCleanerService.spawnAutoCleanerIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.upsertPrepped(jsc,instantTime, preppedRecords);
     return postWrite(result, instantTime, table);
   }
@@ -196,6 +200,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.INSERT);
+    AutoCleanerService.spawnAutoCleanerIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.insert(jsc,instantTime, records);
     return postWrite(result, instantTime, table);
   }
@@ -215,6 +220,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT_PREPPED);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.INSERT_PREPPED);
+    AutoCleanerService.spawnAutoCleanerIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.insertPrepped(jsc,instantTime, preppedRecords);
     return postWrite(result, instantTime, table);
   }
@@ -254,6 +260,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT);
+    AutoCleanerService.spawnAutoCleanerIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.bulkInsert(jsc,instantTime, records, bulkInsertPartitioner);
     return postWrite(result, instantTime, table);
   }
@@ -279,6 +286,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT_PREPPED);
+    AutoCleanerService.spawnAutoCleanerIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.bulkInsertPrepped(jsc,instantTime, preppedRecords, bulkInsertPartitioner);
     return postWrite(result, instantTime, table);
   }
@@ -338,15 +346,27 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, createMetaClient(true));
       archiveLog.archiveIfRequired(hadoopConf);
-      if (config.isAutoClean()) {
-        // Call clean to cleanup if there is anything to cleanup after the commit,
-        LOG.info("Auto cleaning is enabled. Running cleaner now");
-        clean(instantTime);
-      } else {
-        LOG.info("Auto cleaning is not enabled. Not running cleaner now");
-      }
+      autoCleanOnCommit(instantTime);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+  }
+
+  /**
+   * Handle auto clean during commit.
+   * @param instantTime
+   */
+  private void autoCleanOnCommit(String instantTime) {
+    if (config.isAutoClean()) {
+      // Call clean to cleanup if there is anything to cleanup after the commit,
+      if (config.isRunParallelAutoClean()) {
+        LOG.info("Cleaner has been spawned already. Waiting for it to finish");
+        AutoCleanerService.waitForAutoCleanerToFinish(autoCleanerService);
+        LOG.info("Cleaner has finished");
+      } else {
+        LOG.info("Auto cleaning is enabled. Running cleaner now");
+        clean(instantTime);
+      }
     }
   }
 
@@ -477,6 +497,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   @Override
   public void close() {
+    AutoCleanerService.shutdownAutoCleaner(autoCleanerService);
+    autoCleanerService = null;
     // Stop timeline-server if running
     super.close();
   }

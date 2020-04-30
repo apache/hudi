@@ -185,8 +185,9 @@ public class CleanActionExecutor extends BaseActionExecutor<HoodieCleanMetadata>
   Option<HoodieCleanerPlan> requestClean(String startCleanTime) {
     final HoodieCleanerPlan cleanerPlan = requestClean(jsc);
     if ((cleanerPlan.getFilesToBeDeletedPerPartition() != null)
-        && !cleanerPlan.getFilesToBeDeletedPerPartition().isEmpty()) {
-
+        && !cleanerPlan.getFilesToBeDeletedPerPartition().isEmpty()
+        && cleanerPlan.getFilesToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0) {
+      // Only create cleaner plan which does some work
       final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
       // Save to both aux and timeline folder
       try {
