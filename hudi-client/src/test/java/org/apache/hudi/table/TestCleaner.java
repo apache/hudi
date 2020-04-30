@@ -1103,7 +1103,7 @@ public class TestCleaner extends TestHoodieClientBase {
           if (expFileIdToPendingCompaction.containsKey(fileIdWithCommitTime.getKey())) {
             assertTrue(HoodieTimeline.compareTimestamps(
                 fileIdToLatestInstantBeforeCompaction.get(fileIdWithCommitTime.getKey()),
-                fileIdWithCommitTime.getValue(), HoodieTimeline.GREATER),
+                HoodieTimeline.GREATER_THAN, fileIdWithCommitTime.getValue()),
                 "Deleted instant time must be less than pending compaction");
             return true;
           }

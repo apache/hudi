@@ -182,8 +182,8 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     // 2) is less than the first commit ts in the timeline
     return !commitTimeline.empty()
         && (commitTimeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTs))
-            || HoodieTimeline.compareTimestamps(commitTimeline.firstInstant().get().getTimestamp(), commitTs,
-                HoodieTimeline.GREATER));
+            || HoodieTimeline.compareTimestamps(commitTimeline.firstInstant().get().getTimestamp(), HoodieTimeline.GREATER_THAN, commitTs
+    ));
   }
 
   /**
