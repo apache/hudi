@@ -41,6 +41,13 @@ public abstract class SchemaProvider implements Serializable {
 
   public abstract Schema getSourceSchema();
 
+  /**
+   * Refresh and get latest source schema.
+   */
+  public Schema getLatestSourceSchema() {
+    return getSourceSchema();
+  }
+
   public Schema getTargetSchema() {
     // by default, use source schema as target for hoodie table as well
     return getSourceSchema();

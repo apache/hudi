@@ -18,6 +18,10 @@
 
 package org.apache.hudi.utilities.schema;
 
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.S3Object;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Date;
@@ -29,9 +33,6 @@ import org.apache.avro.Schema.Type;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.spark.api.java.JavaSparkContext;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.GetObjectRequest;
 
 /**
  * A simple schema provider, that reads off files on S3.
@@ -56,21 +57,25 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
 
   private Schema sourceSchema;
   private AmazonS3 s3Client;
+  private long lastModifiedTS;
   private long schemaCachedTS;
+
+  private static long getTimestamp(Date date) {
+    return date.getTime() / 1000L;
+  }
 
   public S3FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     this.s3Bucket = props.getString(Config.SOURCE_SCHEMA_S3_BUCKET);
-    this.s3File   = props.getString(Config.SOURCE_SCHEMA_FILENAME);
+    this.s3File = props.getString(Config.SOURCE_SCHEMA_FILENAME);
 
     LOG.info("S3 Path of the schema file: " + this.s3Bucket + "/" + this.s3File);
 
-    this.schemaCachedTS = (new Date()).getTime() / 1000L;
     this.schemaExpiredTime = Long.parseLong(props.getString(Config.SOURCE_SCHEMA_EXPIRED));
-    
+
     try {
       s3Client = AmazonS3ClientBuilder.standard().withRegion(props.getString(Config.SOURCE_SCHEMA_REGION)).build();
-      this.sourceSchema = getSchemaFromS3();
+      fetchSchemaFromS3();
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading schema From S3", ioe);
     }
@@ -78,17 +83,20 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    long currentTimestamp = (new Date()).getTime() / 1000L;
+    return sourceSchema;
+  }
+
+  @Override
+  public Schema getLatestSourceSchema() {
+    long currentTimestamp = getTimestamp(new Date());
     if (currentTimestamp - schemaCachedTS >= schemaExpiredTime) {
-      LOG.info("Fetching new schema......");
+      LOG.info("Fetching the latest schema......");
       try {
-        this.sourceSchema = getSchemaFromS3();
-        this.schemaCachedTS = currentTimestamp;
+        fetchSchemaFromS3();
       } catch (IOException ioe) {
         LOG.error("Got errors while fetching the new schema", ioe);
       }
     }
-    
     return sourceSchema;
   }
 
@@ -106,15 +114,20 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
   /**
    * Read Avro Schema from S3.
    */
-  private Schema getSchemaFromS3() throws IOException {
-    InputStream stream = s3Client.getObject(getSchemaRequest()).getObjectContent();
+  private void fetchSchemaFromS3() throws IOException {
+    S3Object s3Object = s3Client.getObject(getSchemaRequest());
+    InputStream stream = s3Object.getObjectContent();
     try {
-      Schema schemaCache = new Schema.Parser().parse(stream);
-      if (schemaCache.getType() != Type.RECORD) {
-        throw new IllegalArgumentException("Record schema type is expected");
+      long fileTS = getTimestamp(s3Object.getObjectMetadata().getLastModified());
+      if (sourceSchema == null || fileTS == 0 || lastModifiedTS != fileTS) {
+        Schema schemaCache = new Schema.Parser().parse(stream);
+        if (schemaCache.getType() != Type.RECORD) {
+          throw new IllegalArgumentException("Record schema type is expected");
+        }
+        sourceSchema = schemaCache;
+        lastModifiedTS = fileTS;
       }
-
-      return schemaCache;
+      schemaCachedTS = getTimestamp(new Date());
     } finally {
       readStream(stream);
       stream.close();
