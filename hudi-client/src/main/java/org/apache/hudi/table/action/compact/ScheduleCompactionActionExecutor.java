@@ -89,7 +89,7 @@ public class ScheduleCompactionActionExecutor extends BaseActionExecutor<Option<
     // if there are inflight writes, their instantTime must not be less than that of compaction instant time
     table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction().firstInstant()
         .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
-            HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), instantTime, HoodieTimeline.GREATER),
+            HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime),
             "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
                 + ", Compaction scheduled at " + instantTime));
 
@@ -97,7 +97,7 @@ public class ScheduleCompactionActionExecutor extends BaseActionExecutor<Option<
     List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
         .getCommitsAndCompactionTimeline().getInstants()
         .filter(instant -> HoodieTimeline.compareTimestamps(
-            instant.getTimestamp(), instantTime, HoodieTimeline.GREATER_OR_EQUAL))
+            instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime))
         .collect(Collectors.toList());
     ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
         "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"

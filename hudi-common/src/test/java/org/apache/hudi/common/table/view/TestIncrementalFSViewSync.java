@@ -381,8 +381,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         }
         Assert.assertEquals(State.COMPLETED, view.getLastInstant().get().getState());
 
-        if (HoodieTimeline.compareTimestamps(newRestoreInstants.get(idx), emptyRestoreInstant,
-            HoodieTimeline.GREATER_OR_EQUAL)) {
+        if (HoodieTimeline.compareTimestamps(newRestoreInstants.get(idx), HoodieTimeline.GREATER_THAN_OR_EQUALS, emptyRestoreInstant
+        )) {
           partitions.forEach(p -> Assert.assertEquals(0, view.getLatestFileSlices(p).count()));
         } else {
           partitions.forEach(p -> Assert.assertEquals(fileIdsPerPartition.size(), view.getLatestFileSlices(p).count()));
@@ -510,7 +510,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       });
       view.getLatestMergedFileSlicesBeforeOrOn(p, instantTime).forEach(fs -> {
         Assert
-            .assertTrue(HoodieTimeline.compareTimestamps(instantTime, fs.getBaseInstantTime(), HoodieTimeline.GREATER));
+            .assertTrue(HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.GREATER_THAN, fs.getBaseInstantTime()));
         Assert.assertEquals(p, fs.getPartitionPath());
       });
     });

@@ -88,11 +88,11 @@ public class IncrSourceHelper {
    */
   public static void validateInstantTime(Row row, String instantTime, String sinceInstant, String endInstant) {
     Objects.requireNonNull(instantTime);
-    ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(instantTime, sinceInstant, HoodieTimeline.GREATER),
+    ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.GREATER_THAN, sinceInstant),
         "Instant time(_hoodie_commit_time) in row (" + row + ") was : " + instantTime + "but expected to be between "
             + sinceInstant + "(excl) - " + endInstant + "(incl)");
     ValidationUtils.checkArgument(
-        HoodieTimeline.compareTimestamps(instantTime, endInstant, HoodieTimeline.LESSER_OR_EQUAL),
+        HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, endInstant),
         "Instant time(_hoodie_commit_time) in row (" + row + ") was : " + instantTime + "but expected to be between "
             + sinceInstant + "(excl) - " + endInstant + "(incl)");
   }

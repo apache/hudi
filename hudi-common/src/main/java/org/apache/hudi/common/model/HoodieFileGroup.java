@@ -114,7 +114,7 @@ public class HoodieFileGroup implements Serializable {
   private boolean isFileSliceCommitted(FileSlice slice) {
     String maxCommitTime = lastInstant.get().getTimestamp();
     return timeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime())
-        && HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(), maxCommitTime, HoodieTimeline.LESSER_OR_EQUAL);
+        && HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, maxCommitTime);
 
   }
 
@@ -164,7 +164,7 @@ public class HoodieFileGroup implements Serializable {
    */
   public Option<FileSlice> getLatestFileSliceBeforeOrOn(String maxInstantTime) {
     return Option.fromJavaOptional(getAllFileSlices().filter(slice -> HoodieTimeline
-        .compareTimestamps(slice.getBaseInstantTime(), maxInstantTime, HoodieTimeline.LESSER_OR_EQUAL)).findFirst());
+        .compareTimestamps(slice.getBaseInstantTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, maxInstantTime)).findFirst());
   }
 
   /**
@@ -175,7 +175,7 @@ public class HoodieFileGroup implements Serializable {
    */
   public Option<FileSlice> getLatestFileSliceBefore(String maxInstantTime) {
     return Option.fromJavaOptional(getAllFileSlices().filter(
-        slice -> HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(), maxInstantTime, HoodieTimeline.LESSER))
+        slice -> HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(), HoodieTimeline.LESSER_THAN, maxInstantTime))
         .findFirst());
   }
 

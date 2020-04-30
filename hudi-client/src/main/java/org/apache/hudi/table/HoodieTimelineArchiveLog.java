@@ -169,10 +169,10 @@ public class HoodieTimelineArchiveLog {
       instants = Stream.concat(instants, commitTimeline.getInstants().filter(s -> {
         // if no savepoint present, then dont filter
         return !(firstSavepoint.isPresent() && HoodieTimeline.compareTimestamps(firstSavepoint.get().getTimestamp(),
-            s.getTimestamp(), HoodieTimeline.LESSER_OR_EQUAL));
+            HoodieTimeline.LESSER_THAN_OR_EQUALS, s.getTimestamp()));
       }).filter(s -> {
         // Ensure commits >= oldest pending compaction commit is retained
-        return oldestPendingCompactionInstant.map(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), s.getTimestamp(), HoodieTimeline.GREATER)).orElse(true);
+        return oldestPendingCompactionInstant.map(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, s.getTimestamp())).orElse(true);
       }).limit(commitTimeline.countInstants() - minCommitsToKeep));
     }
 
@@ -243,7 +243,7 @@ public class HoodieTimelineArchiveLog {
 
     List<HoodieInstant> instantsToBeDeleted =
         instants.stream().filter(instant1 -> HoodieTimeline.compareTimestamps(instant1.getTimestamp(),
-            thresholdInstant.getTimestamp(), HoodieTimeline.LESSER_OR_EQUAL)).collect(Collectors.toList());
+            HoodieTimeline.LESSER_THAN_OR_EQUALS, thresholdInstant.getTimestamp())).collect(Collectors.toList());
 
     for (HoodieInstant deleteInstant : instantsToBeDeleted) {
       LOG.info("Deleting instant " + deleteInstant + " in auxiliary meta path " + metaClient.getMetaAuxiliaryPath());

@@ -164,7 +164,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       assertEquals(1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(),
           "Expecting a single commit.");
       String latestCompactionCommitTime = timeline.lastInstant().get().getTimestamp();
-      assertTrue(HoodieTimeline.compareTimestamps("000", latestCompactionCommitTime, HoodieTimeline.LESSER));
+      assertTrue(HoodieTimeline.compareTimestamps("000", HoodieTimeline.LESSER_THAN, latestCompactionCommitTime));
 
       assertEquals(200, HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, "000").count(),
           "Must contain 200 records");
@@ -877,7 +877,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
 
       assertTrue(HoodieTimeline
-              .compareTimestamps(timeline.lastInstant().get().getTimestamp(), newCommitTime, HoodieTimeline.GREATER),
+              .compareTimestamps(timeline.lastInstant().get().getTimestamp(), HoodieTimeline.GREATER_THAN, newCommitTime),
           "Compaction commit should be > than last insert");
 
       for (String partitionPath : dataGen.getPartitionPaths()) {

@@ -704,8 +704,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     ds2.sync();
     mClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), tableBasePath, true);
     HoodieInstant newLastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
-    assertTrue(HoodieTimeline.compareTimestamps(newLastFinished.getTimestamp(), lastFinished.getTimestamp(),
-        HoodieTimeline.GREATER));
+    assertTrue(HoodieTimeline.compareTimestamps(newLastFinished.getTimestamp(), HoodieTimeline.GREATER_THAN, lastFinished.getTimestamp()
+    ));
 
     // Ensure it is empty
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata

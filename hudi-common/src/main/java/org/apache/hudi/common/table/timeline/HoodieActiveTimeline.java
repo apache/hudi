@@ -80,7 +80,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       String newCommitTime;
       do {
         newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
-      } while (HoodieTimeline.compareTimestamps(newCommitTime, oldVal, LESSER_OR_EQUAL));
+      } while (HoodieTimeline.compareTimestamps(newCommitTime, LESSER_THAN_OR_EQUALS, oldVal));
       return newCommitTime;
     });
   }

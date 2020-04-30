@@ -123,9 +123,11 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
           LOG.warn("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
               + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
               + ". New Instant to retain : " + newInstantToRetain);
-          return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), cleanMetadata.getEarliestCommitToRetain(),
-              HoodieTimeline.GREATER_OR_EQUAL) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
-              newInstantToRetain.get().getTimestamp(), HoodieTimeline.LESSER)).flatMap(instant -> {
+          return hoodieTable.getCompletedCommitsTimeline().getInstants()
+              .filter(instant ->
+                  HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, cleanMetadata.getEarliestCommitToRetain())
+                  && HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.LESSER_THAN, newInstantToRetain.get().getTimestamp())
+              ).flatMap(instant -> {
                 try {
                   HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(hoodieTable.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
                   return commitMetadata.getPartitionToWriteStats().keySet().stream();
@@ -252,7 +254,7 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
 
           // Always keep the last commit
           if (!isFileSliceNeededForPendingCompaction(aSlice) && HoodieTimeline
-              .compareTimestamps(earliestCommitToRetain.getTimestamp(), fileCommitTime, HoodieTimeline.GREATER)) {
+              .compareTimestamps(earliestCommitToRetain.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
             // this is a commit, that should be cleaned.
             aFile.ifPresent(hoodieDataFile -> deletePaths.add(hoodieDataFile.getFileName()));
             if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
@@ -273,7 +275,7 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
   private String getLatestVersionBeforeCommit(List<FileSlice> fileSliceList, HoodieInstant instantTime) {
     for (FileSlice file : fileSliceList) {
       String fileCommitTime = file.getBaseInstantTime();
-      if (HoodieTimeline.compareTimestamps(instantTime.getTimestamp(), fileCommitTime, HoodieTimeline.GREATER)) {
+      if (HoodieTimeline.compareTimestamps(instantTime.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
         // fileList is sorted on the reverse, so the first commit we find <= instantTime is the
         // one we want
         return fileCommitTime;
@@ -324,8 +326,8 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
     CompactionOperation op = fgIdToPendingCompactionOperations.get(fileSlice.getFileGroupId());
     if (null != op) {
       // If file slice's instant time is newer or same as that of operation, do not clean
-      return HoodieTimeline.compareTimestamps(fileSlice.getBaseInstantTime(), op.getBaseInstantTime(),
-          HoodieTimeline.GREATER_OR_EQUAL);
+      return HoodieTimeline.compareTimestamps(fileSlice.getBaseInstantTime(), HoodieTimeline.GREATER_THAN_OR_EQUALS, op.getBaseInstantTime()
+      );
     }
     return false;
   }

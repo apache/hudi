@@ -48,7 +48,7 @@ public class TimelineDiffHelper {
 
     if (lastSeenInstant.isPresent() && firstInstantInNewTimeline.isPresent()) {
       if (HoodieTimeline.compareTimestamps(lastSeenInstant.get().getTimestamp(),
-          firstInstantInNewTimeline.get().getTimestamp(), HoodieTimeline.LESSER)) {
+          HoodieTimeline.LESSER_THAN, firstInstantInNewTimeline.get().getTimestamp())) {
         // The last seen instant is no longer in the timeline. Do not incrementally Sync.
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
