@@ -39,7 +39,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
@@ -48,6 +47,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -111,36 +111,77 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
    * @throws IOException when underlying file-system throws this exception
    */
   public List<String> getPartitionPathsToClean(Option<HoodieInstant> newInstantToRetain) throws IOException {
-    if (config.incrementalCleanerModeEnabled() && newInstantToRetain.isPresent()
-        && (HoodieCleaningPolicy.KEEP_LATEST_COMMITS == config.getCleanerPolicy())) {
-      Option<HoodieInstant> lastClean =
-          hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
+    switch (config.getCleanerPolicy()) {
+      case KEEP_LATEST_COMMITS:
+        return getPartitionPathsForCleanByCommits(newInstantToRetain);
+      case KEEP_LATEST_FILE_VERSIONS:
+        return getPartitionPathsForFullCleaning();
+      default:
+        throw new IllegalStateException("Unknown Cleaner Policy");
+    }
+  }
+
+  /**
+   * Return partition paths for cleaning by commits mode.
+   * @param instantToRetain Earliest Instant to retain
+   * @return list of partitions
+   * @throws IOException
+   */
+  private List<String> getPartitionPathsForCleanByCommits(Option<HoodieInstant> instantToRetain) throws IOException {
+    if (!instantToRetain.isPresent()) {
+      LOG.info("No earliest commit to retain. No need to scan partitions !!");
+      return Collections.emptyList();
+    }
+
+    if (config.incrementalCleanerModeEnabled()) {
+      Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
       if (lastClean.isPresent()) {
         HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
             .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
         if ((cleanMetadata.getEarliestCommitToRetain() != null)
             && (cleanMetadata.getEarliestCommitToRetain().length() > 0)) {
-          LOG.warn("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
-              + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
-              + ". New Instant to retain : " + newInstantToRetain);
-          return hoodieTable.getCompletedCommitsTimeline().getInstants()
-              .filter(instant ->
-                  HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, cleanMetadata.getEarliestCommitToRetain())
-                  && HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.LESSER_THAN, newInstantToRetain.get().getTimestamp())
-              ).flatMap(instant -> {
-                try {
-                  HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(hoodieTable.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-                  return commitMetadata.getPartitionToWriteStats().keySet().stream();
-                } catch (IOException e) {
-                  throw new HoodieIOException(e.getMessage(), e);
-                }
-              }).distinct().collect(Collectors.toList());
+          return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
         }
       }
     }
-    // Otherwise go to brute force mode of scanning all partitions
-    return FSUtils.getAllPartitionPaths(hoodieTable.getMetaClient().getFs(),
-        hoodieTable.getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning());
+    return getPartitionPathsForFullCleaning();
+  }
+
+  /**
+   * Use Incremental Mode for finding partition paths.
+   * @param cleanMetadata
+   * @param newInstantToRetain
+   * @return
+   */
+  private List<String> getPartitionPathsForIncrementalCleaning(HoodieCleanMetadata cleanMetadata,
+      Option<HoodieInstant> newInstantToRetain) {
+    LOG.warn("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
+        + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
+        + ". New Instant to retain : " + newInstantToRetain);
+    return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(
+        instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
+            cleanMetadata.getEarliestCommitToRetain()) && HoodieTimeline.compareTimestamps(instant.getTimestamp(),
+            HoodieTimeline.LESSER_THAN, newInstantToRetain.get().getTimestamp())).flatMap(instant -> {
+              try {
+                HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+                    .fromBytes(hoodieTable.getActiveTimeline().getInstantDetails(instant).get(),
+                        HoodieCommitMetadata.class);
+                return commitMetadata.getPartitionToWriteStats().keySet().stream();
+              } catch (IOException e) {
+                throw new HoodieIOException(e.getMessage(), e);
+              }
+            }).distinct().collect(Collectors.toList());
+  }
+
+  /**
+   * Scan and list all paritions for cleaning.
+   * @return all partitions paths for the dataset.
+   * @throws IOException
+   */
+  private List<String> getPartitionPathsForFullCleaning() throws IOException {
+    // Go to brute force mode of scanning all partitions
+    return FSUtils.getAllPartitionPaths(hoodieTable.getMetaClient().getFs(), hoodieTable.getMetaClient().getBasePath(),
+        config.shouldAssumeDatePartitioning());
   }
 
   /**
