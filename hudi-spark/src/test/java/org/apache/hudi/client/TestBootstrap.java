@@ -164,7 +164,7 @@ public class TestBootstrap extends HoodieClientTestBase {
   public Schema generateNewDataSetAndReturnSchema(double timestamp, int numRecords, List<String> partitionPaths,
       String srcPath) throws Exception {
     boolean isPartitioned = partitionPaths != null && !partitionPaths.isEmpty();
-    Dataset<Row> df = generateTestRawTripDataset(timestamp, numRecords, partitionPaths, jsc, sqlContext);
+    Dataset<Row> df = generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths, jsc, sqlContext);
     df.printSchema();
     if (isPartitioned) {
       df.write().partitionBy("datestr").format("parquet").mode(SaveMode.Overwrite).save(srcPath);
@@ -557,11 +557,11 @@ public class TestBootstrap extends HoodieClientTestBase {
     return builder;
   }
 
-  private static Dataset<Row> generateTestRawTripDataset(double timestamp, int numRecords, List<String> partitionPaths,
+  public static Dataset<Row> generateTestRawTripDataset(double timestamp, int from, int to, List<String> partitionPaths,
                                                          JavaSparkContext jsc, SQLContext sqlContext) {
     boolean isPartitioned = partitionPaths != null && !partitionPaths.isEmpty();
     final List<String> records = new ArrayList<>();
-    IntStream.range(0, numRecords).forEach(i -> {
+    IntStream.range(from, to).forEach(i -> {
       String id = "" + i;
       records.add(generateGenericRecord("trip_" + id, "rider_" + id, "driver_" + id,
           timestamp, false, false).toString());

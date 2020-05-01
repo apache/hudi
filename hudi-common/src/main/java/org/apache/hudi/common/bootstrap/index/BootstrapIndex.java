@@ -73,12 +73,12 @@ public abstract class BootstrapIndex implements Serializable {
   /**
    * Check if bootstrap Index is present and ensures readable.
    */
-  protected abstract boolean isPresent();
+  public abstract boolean isPresent();
 
   /**
    * Bootstrap Index Reader Interface.
    */
-  public abstract static  class IndexReader implements Serializable, AutoCloseable {
+  public abstract static class IndexReader implements Serializable, AutoCloseable {
 
     protected final HoodieTableMetaClient metaClient;
 
