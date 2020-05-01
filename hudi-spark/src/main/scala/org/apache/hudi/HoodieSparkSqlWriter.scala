@@ -25,11 +25,11 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.{HoodieWriteClient, WriteStatus}
+import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
-import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
@@ -117,6 +117,12 @@ private[hudi] object HoodieSparkSqlWriter {
         log.warn(s"hoodie table at $basePath already exists. Deleting existing data & overwriting with new data.")
         fs.delete(basePath, true)
         exists = false
+      }
+      if (exists && mode == SaveMode.Append) {
+        val existingTableName = new HoodieTableMetaClient(sparkContext.hadoopConfiguration, path.get).getTableConfig.getTableName
+        if (!existingTableName.equals(tblName.get)) {
+          throw new HoodieException(s"hoodie table with name $existingTableName already exist at $basePath")
+        }
       }
 
       // Create the table if not present
