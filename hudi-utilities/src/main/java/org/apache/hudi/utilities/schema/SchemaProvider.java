@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -43,9 +44,11 @@ public abstract class SchemaProvider implements Serializable {
 
   /**
    * Refresh and get latest source schema.
+   * Return a pair whose first member is the latest schema, and second member is set to true
+   * if a new schema was fetched or false if the schema has not changed.
    */
-  public Schema getLatestSourceSchema() {
-    return getSourceSchema();
+  public Pair<Schema, Boolean> getLatestSourceSchema() {
+    return Pair.of(getSourceSchema(), false);
   }
 
   public Schema getTargetSchema() {

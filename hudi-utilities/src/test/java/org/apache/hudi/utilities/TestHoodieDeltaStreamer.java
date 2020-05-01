@@ -20,6 +20,7 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -383,6 +384,28 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     TestHelpers.assertCommitMetadata("00001", tableBasePath, dfs, 2);
     List<Row> counts = TestHelpers.countsPerCommit(tableBasePath + "/*/*.parquet", sqlContext);
     assertEquals(1950, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+  }
+
+  @Test
+  public void testBulkInsertsAndUpsertsWithProviderSchemaChange() throws Exception {
+    String tableBasePath = dfsBasePath + "/test_table_schema_change";
+
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.BULK_INSERT);
+    cfg.sourceLimit = 10;
+    cfg.schemaProviderClassName = UpdatableFilebasedSchemaProvider.class.getName();
+    cfg.checkProviderSchemaChange = true;
+    cfg.continuousMode = true;
+    Future dsFuture = Executors.newSingleThreadExecutor().submit(() -> {
+      try {
+        new HoodieDeltaStreamer(cfg, jsc).sync();
+      } catch (Exception ex) {
+        ex.printStackTrace();
+      }
+    });
+    dsFuture.get(180, TimeUnit.SECONDS);
+    TestHelpers.assertRecordCount(10, tableBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertDistanceCount(10, tableBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, dfs, 1);
   }
 
   @Test
@@ -750,6 +773,17 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
                          TypedProperties properties) {
       System.out.println("DropAllTransformer called !!");
       return sparkSession.createDataFrame(jsc.emptyRDD(), rowDataset.schema());
+    }
+  }
+
+  public static class UpdatableFilebasedSchemaProvider extends FilebasedSchemaProvider {
+    public UpdatableFilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
+      super(props, jssc);
+    }
+
+    @Override
+    public Pair<Schema, Boolean> getLatestSourceSchema() {
+      return Pair.of(Schema.create(Schema.Type.NULL),true);
     }
   }
 
