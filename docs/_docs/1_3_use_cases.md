@@ -48,7 +48,7 @@ Unfortunately, in today's post-mobile & pre-IoT world, __late data from intermit
 In such cases, the only remedy to guarantee correctness is to [reprocess the last few hours](https://falcon.apache.org/FalconDocumentation.html#Handling_late_input_data) worth of data,
 over and over again each hour, which can significantly hurt the efficiency across the entire ecosystem. For e.g; imagine reprocessing TBs worth of data every hour across hundreds of workflows.
 
-Hudi comes to the rescue again, by providing a way to consume new data (including late data) from an upsteam Hudi table `HU` at a record granularity (not folders/partitions),
+Hudi comes to the rescue again, by providing a way to consume new data (including late data) from an upstream Hudi table `HU` at a record granularity (not folders/partitions),
 apply the processing logic, and efficiently update/reconcile late data with a downstream Hudi table `HD`. Here, `HU` and `HD` can be continuously scheduled at a much more frequent schedule
 like 15 mins, and providing an end-end latency of 30 mins at `HD`.
 
