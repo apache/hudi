@@ -56,6 +56,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     }
   }
 
+
   test("throw hoodie exception when there already exist a table with different name with Append Save mode") {
 
     val session = SparkSession.builder()
@@ -87,6 +88,11 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       val dataFrame2 = session.createDataFrame(Seq(Test(UUID.randomUUID().toString, new Date().getTime)))
       val tableAlreadyExistException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, barTableParams, dataFrame2))
       assert(tableAlreadyExistException.getMessage.contains("hoodie table with name " + hoodieFooTableName + " already exist"))
+
+      //on same path try append with delete operation and different("hoodie_bar_tbl") table name which should throw an exception
+      val deleteTableParams = barTableParams ++ Map(OPERATION_OPT_KEY -> "delete")
+      val deleteCmdException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, deleteTableParams, dataFrame2))
+      assert(deleteCmdException.getMessage.contains("hoodie table with name " + hoodieFooTableName + " already exist"))
     } finally {
       session.stop()
       FileUtils.deleteDirectory(path.toFile)
