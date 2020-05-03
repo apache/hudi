@@ -376,9 +376,12 @@ beginTime = "000" # Represents all commits > this time.
 endTime = commits[len(commits) - 2]
 
 # query point in time data
-point_in_time_read_options = {**incremental_read_options, 
-                              **{"hoodie.datasource.read.end.instanttime": endTime,
-                                "hoodie.datasource.read.begin.instanttime": beginTime}}
+point_in_time_read_options = {
+  'hoodie.datasource.query.type': 'incremental',
+  'hoodie.datasource.read.end.instanttime': endTime,
+  'hoodie.datasource.read.begin.instanttime': beginTime
+}
+
 tripsPointInTimeDF = spark.read.format("hudi"). \
   options(**point_in_time_read_options). \
   load(basePath)
@@ -401,14 +404,14 @@ ds = spark.sql("select uuid, partitionPath from hudi_trips_snapshot").limit(2)
 
 # issue deletes
 hudi_delete_options = {
-'hoodie.table.name': tableName,
-'hoodie.datasource.write.recordkey.field': 'uuid',
-'hoodie.datasource.write.partitionpath.field': 'partitionpath',
-'hoodie.datasource.write.table.name': tableName,
-'hoodie.datasource.write.operation': 'delete',
-'hoodie.datasource.write.precombine.field': 'ts',
-'hoodie.upsert.shuffle.parallelism': 2, 
-'hoodie.insert.shuffle.parallelism': 2
+  'hoodie.table.name': tableName,
+  'hoodie.datasource.write.recordkey.field': 'uuid',
+  'hoodie.datasource.write.partitionpath.field': 'partitionpath',
+  'hoodie.datasource.write.table.name': tableName,
+  'hoodie.datasource.write.operation': 'delete',
+  'hoodie.datasource.write.precombine.field': 'ts',
+  'hoodie.upsert.shuffle.parallelism': 2, 
+  'hoodie.insert.shuffle.parallelism': 2
 }
 
 from pyspark.sql.functions import lit
