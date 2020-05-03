@@ -56,10 +56,10 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -86,7 +86,7 @@ public class UtilitiesTestBase {
   protected static HiveTestService hiveTestService;
   private static ObjectMapper mapper = new ObjectMapper();
 
-  @BeforeClass
+  @BeforeAll
   public static void initClass() throws Exception {
     initClass(false);
   }
@@ -104,7 +104,7 @@ public class UtilitiesTestBase {
     }
   }
 
-  @AfterClass
+  @AfterAll
   public static void cleanupClass() {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
@@ -117,7 +117,7 @@ public class UtilitiesTestBase {
     }
   }
 
-  @Before
+  @BeforeEach
   public void setup() throws Exception {
     TestDataSource.initDataGen();
     jsc = UtilHelpers.buildSparkContext(this.getClass().getName() + "-hoodie", "local[2]");
@@ -125,7 +125,7 @@ public class UtilitiesTestBase {
     sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
   }
 
-  @After
+  @AfterEach
   public void teardown() throws Exception {
     TestDataSource.resetDataGen();
     if (jsc != null) {

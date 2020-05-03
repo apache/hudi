@@ -22,12 +22,12 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.SchedulerConfGenerator;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class TestSchedulerConfGenerator {
 
@@ -35,21 +35,21 @@ public class TestSchedulerConfGenerator {
   public void testGenerateSparkSchedulingConf() throws Exception {
     HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
     Map<String, String> configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    assertNull("spark.scheduler.mode not set", configs.get(SchedulerConfGenerator.SPARK_SCHEDULER_ALLOCATION_FILE_KEY));
+    assertNull(configs.get(SchedulerConfGenerator.SPARK_SCHEDULER_ALLOCATION_FILE_KEY), "spark.scheduler.mode not set");
 
     System.setProperty(SchedulerConfGenerator.SPARK_SCHEDULER_MODE_KEY, "FAIR");
     cfg.continuousMode = false;
     configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    assertNull("continuousMode is false", configs.get(SchedulerConfGenerator.SPARK_SCHEDULER_ALLOCATION_FILE_KEY));
+    assertNull(configs.get(SchedulerConfGenerator.SPARK_SCHEDULER_ALLOCATION_FILE_KEY), "continuousMode is false");
 
     cfg.continuousMode = true;
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
     configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    assertNull("table type is not MERGE_ON_READ",
-        configs.get(SchedulerConfGenerator.SPARK_SCHEDULER_ALLOCATION_FILE_KEY));
+    assertNull(configs.get(SchedulerConfGenerator.SPARK_SCHEDULER_ALLOCATION_FILE_KEY),
+        "table type is not MERGE_ON_READ");
 
     cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
     configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    assertNotNull("all satisfies", configs.get(SchedulerConfGenerator.SPARK_SCHEDULER_ALLOCATION_FILE_KEY));
+    assertNotNull(configs.get(SchedulerConfGenerator.SPARK_SCHEDULER_ALLOCATION_FILE_KEY), "all satisfies");
   }
 }

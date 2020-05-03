@@ -36,16 +36,16 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.apache.spark.streaming.kafka010.OffsetRange;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.UUID;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests against {@link AvroKafkaSource}.
@@ -57,17 +57,17 @@ public class TestKafkaSource extends UtilitiesTestBase {
   private FilebasedSchemaProvider schemaProvider;
   private KafkaTestUtils testUtils;
 
-  @BeforeClass
+  @BeforeAll
   public static void initClass() throws Exception {
     UtilitiesTestBase.initClass();
   }
 
-  @AfterClass
+  @AfterAll
   public static void cleanupClass() {
     UtilitiesTestBase.cleanupClass();
   }
 
-  @Before
+  @BeforeEach
   public void setup() throws Exception {
     super.setup();
     schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
@@ -75,7 +75,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     testUtils.setup();
   }
 
-  @After
+  @AfterEach
   public void teardown() throws Exception {
     super.teardown();
     testUtils.teardown();
