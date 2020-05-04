@@ -19,13 +19,13 @@
 package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.AvroBinaryTestPayload;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SchemaTestUtil;
@@ -35,9 +35,9 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -53,15 +53,15 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.SchemaTestUtil.getSimpleSchema;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests dis based map {@link DiskBasedMap}.
  */
 public class TestDiskBasedMap extends HoodieCommonTestHarness {
 
-  @Before
+  @BeforeEach
   public void setup() {
     initPath();
   }
@@ -212,7 +212,7 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
   /**
    * @na: Leaving this test here for a quick performance test
    */
-  @Ignore
+  @Disabled
   @Test
   public void testSizeEstimatorPerformance() throws IOException, URISyntaxException {
     // Test sizeEstimatorPerformance with simpleSchema

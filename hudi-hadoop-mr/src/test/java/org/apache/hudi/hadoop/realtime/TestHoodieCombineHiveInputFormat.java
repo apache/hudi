@@ -23,7 +23,7 @@ import org.apache.hudi.common.minicluster.MiniClusterUtil;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarnessJunit5;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.hadoop.InputFormatTestUtil;
 import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
@@ -58,7 +58,7 @@ import static org.apache.hadoop.hive.ql.exec.Utilities.MAPRED_MAPPER_CLASS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarnessJunit5 {
+public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
   private JobConf jobConf;
   private FileSystem fs;
@@ -80,7 +80,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarnessJun
     this.fs = MiniClusterUtil.fileSystem;
     jobConf = new JobConf();
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    assertTrue(fs.mkdirs(new Path(folder.getRoot().getPath())));
+    assertTrue(fs.mkdirs(new Path(tempDir.toAbsolutePath().toString())));
     HoodieTestUtils.init(MiniClusterUtil.configuration, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
   }
 

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
@@ -25,8 +25,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 
@@ -36,17 +35,15 @@ import java.io.IOException;
 public class HoodieCommonTestHarness {
 
   protected String basePath = null;
-
-  @Rule
-  public TemporaryFolder folder = new TemporaryFolder();
-
   protected transient HoodieTableMetaClient metaClient;
+  @TempDir
+  public java.nio.file.Path tempDir;
 
   /**
    * Initializes basePath.
    */
   protected void initPath() {
-    this.basePath = folder.getRoot().getAbsolutePath();
+    this.basePath = tempDir.toAbsolutePath().toString();
   }
 
   /**
@@ -56,7 +53,7 @@ public class HoodieCommonTestHarness {
    * @throws IOException
    */
   protected void initMetaClient() throws IOException {
-    metaClient = HoodieTestUtils.init(folder.getRoot().getAbsolutePath(), getTableType());
+    metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
     basePath = metaClient.getBasePath();
   }
 

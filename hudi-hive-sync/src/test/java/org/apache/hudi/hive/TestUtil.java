@@ -59,7 +59,7 @@ import org.apache.zookeeper.server.ZooKeeperServer;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
-import org.junit.runners.model.InitializationError;
+import org.junit.platform.commons.JUnitException;
 
 import java.io.File;
 import java.io.IOException;
@@ -156,7 +156,7 @@ public class TestUtil {
   }
 
   static void createCOWTable(String instantTime, int numberOfPartitions)
-      throws IOException, InitializationError, URISyntaxException {
+      throws IOException, URISyntaxException {
     Path path = new Path(hiveSyncConfig.basePath);
     FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
     HoodieTableMetaClient.initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
@@ -170,8 +170,7 @@ public class TestUtil {
   }
 
   static void createMORTable(String commitTime, String deltaCommitTime, int numberOfPartitions,
-                             boolean createDeltaCommit)
-      throws IOException, InitializationError, URISyntaxException, InterruptedException {
+      boolean createDeltaCommit) throws IOException, URISyntaxException, InterruptedException {
     Path path = new Path(hiveSyncConfig.basePath);
     FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
     HoodieTableMetaClient.initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.MERGE_ON_READ,
@@ -312,9 +311,9 @@ public class TestUtil {
     return logWriter.getLogFile();
   }
 
-  private static void checkResult(boolean result) throws InitializationError {
+  private static void checkResult(boolean result) {
     if (!result) {
-      throw new InitializationError("Could not initialize");
+      throw new JUnitException("Could not initialize");
     }
   }
 
