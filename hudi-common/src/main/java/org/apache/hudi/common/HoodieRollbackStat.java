@@ -21,6 +21,7 @@ package org.apache.hudi.common;
 import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -82,6 +83,15 @@ public class HoodieRollbackStat implements Serializable {
           .map(s -> s.getKey().getPath().toString()).collect(Collectors.toList());
       failedDeleteFiles = deletedFiles.entrySet().stream().filter(s -> !s.getValue())
           .map(s -> s.getKey().getPath().toString()).collect(Collectors.toList());
+      return this;
+    }
+
+    public Builder withDeletedFileResult(String fileName, boolean isDeleted) {
+      if (isDeleted) {
+        successDeleteFiles = Collections.singletonList(fileName);
+      } else {
+        failedDeleteFiles = Collections.singletonList(fileName);
+      }
       return this;
     }
 

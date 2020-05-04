@@ -90,7 +90,7 @@ public class HoodieMergeOnReadTestUtils {
     }).reduce((a, b) -> {
       a.addAll(b);
       return a;
-    }).orElse(new ArrayList<GenericRecord>());
+    }).orElse(new ArrayList<>());
   }
 
   private static void setPropsForInputFormat(HoodieParquetInputFormat inputFormat, JobConf jobConf,

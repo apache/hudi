@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -28,9 +29,8 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock.HoodieCommandBlockTypeEnum;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -42,8 +42,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.io.UncheckedIOException;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,14 +53,14 @@ import scala.Tuple2;
 /**
  * Performs Rollback of Hoodie Tables.
  */
-public class RollbackHelper implements Serializable {
+public class ListingBasedRollbackHelper implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(RollbackHelper.class);
+  private static final Logger LOG = LogManager.getLogger(ListingBasedRollbackHelper.class);
 
   private final HoodieTableMetaClient metaClient;
   private final HoodieWriteConfig config;
 
-  public RollbackHelper(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
+  public ListingBasedRollbackHelper(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
     this.metaClient = metaClient;
     this.config = config;
   }
@@ -69,13 +68,13 @@ public class RollbackHelper implements Serializable {
   /**
    * Performs all rollback actions that we have collected in parallel.
    */
-  public List<HoodieRollbackStat> performRollback(JavaSparkContext jsc, HoodieInstant instantToRollback, List<RollbackRequest> rollbackRequests) {
+  public List<HoodieRollbackStat> performRollback(JavaSparkContext jsc, HoodieInstant instantToRollback, List<ListingBasedRollbackRequest> rollbackRequests) {
 
     SerializablePathFilter filter = (path) -> {
-      if (path.toString().contains(".parquet")) {
+      if (path.toString().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
         return instantToRollback.getTimestamp().equals(fileCommitTime);
-      } else if (path.toString().contains(".log")) {
+      } else if (path.toString().endsWith(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
         // Since the baseCommitTime is the only commit for new log files, it's okay here
         String fileCommitTime = FSUtils.getBaseCommitTimeFromLogPath(path);
         return instantToRollback.getTimestamp().equals(fileCommitTime);
@@ -85,17 +84,16 @@ public class RollbackHelper implements Serializable {
 
     int sparkPartitions = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
     return jsc.parallelize(rollbackRequests, sparkPartitions).mapToPair(rollbackRequest -> {
-      final Map<FileStatus, Boolean> filesToDeletedStatus = new HashMap<>();
-      switch (rollbackRequest.getRollbackAction()) {
+      switch (rollbackRequest.getType()) {
         case DELETE_DATA_FILES_ONLY: {
-          deleteCleanedFiles(metaClient, config, filesToDeletedStatus, instantToRollback.getTimestamp(),
+          final Map<FileStatus, Boolean> filesToDeletedStatus = deleteCleanedFiles(metaClient, config, instantToRollback.getTimestamp(),
               rollbackRequest.getPartitionPath());
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
                   HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
                           .withDeletedFileResults(filesToDeletedStatus).build());
         }
         case DELETE_DATA_AND_LOG_FILES: {
-          deleteCleanedFiles(metaClient, config, filesToDeletedStatus, rollbackRequest.getPartitionPath(), filter);
+          final Map<FileStatus, Boolean> filesToDeletedStatus = deleteCleanedFiles(metaClient, config, rollbackRequest.getPartitionPath(), filter);
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
                   HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
                           .withDeletedFileResults(filesToDeletedStatus).build());
@@ -121,15 +119,17 @@ public class RollbackHelper implements Serializable {
                 writer.close();
               }
             } catch (IOException io) {
-              throw new UncheckedIOException(io);
+              throw new HoodieIOException("Error appending rollback block..", io);
             }
           }
 
           // This step is intentionally done after writer is closed. Guarantees that
           // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
           // cloud-storage : HUDI-168
-          Map<FileStatus, Long> filesToNumBlocksRollback = new HashMap<>();
-          filesToNumBlocksRollback.put(metaClient.getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()), 1L);
+          Map<FileStatus, Long> filesToNumBlocksRollback = Collections.singletonMap(
+              metaClient.getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
+              1L
+          );
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
                   HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
                           .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
@@ -137,36 +137,18 @@ public class RollbackHelper implements Serializable {
         default:
           throw new IllegalStateException("Unknown Rollback action " + rollbackRequest);
       }
-    }).reduceByKey(this::mergeRollbackStat).map(Tuple2::_2).collect();
+    }).reduceByKey(RollbackUtils::mergeRollbackStat).map(Tuple2::_2).collect();
   }
 
-  /**
-   * Helper to merge 2 rollback-stats for a given partition.
-   *
-   * @param stat1 HoodieRollbackStat
-   * @param stat2 HoodieRollbackStat
-   * @return Merged HoodieRollbackStat
-   */
-  private HoodieRollbackStat mergeRollbackStat(HoodieRollbackStat stat1, HoodieRollbackStat stat2) {
-    ValidationUtils.checkArgument(stat1.getPartitionPath().equals(stat2.getPartitionPath()));
-    final List<String> successDeleteFiles = new ArrayList<>();
-    final List<String> failedDeleteFiles = new ArrayList<>();
-    final Map<FileStatus, Long> commandBlocksCount = new HashMap<>();
-    Option.ofNullable(stat1.getSuccessDeleteFiles()).ifPresent(successDeleteFiles::addAll);
-    Option.ofNullable(stat2.getSuccessDeleteFiles()).ifPresent(successDeleteFiles::addAll);
-    Option.ofNullable(stat1.getFailedDeleteFiles()).ifPresent(failedDeleteFiles::addAll);
-    Option.ofNullable(stat2.getFailedDeleteFiles()).ifPresent(failedDeleteFiles::addAll);
-    Option.ofNullable(stat1.getCommandBlocksCount()).ifPresent(commandBlocksCount::putAll);
-    Option.ofNullable(stat2.getCommandBlocksCount()).ifPresent(commandBlocksCount::putAll);
-    return new HoodieRollbackStat(stat1.getPartitionPath(), successDeleteFiles, failedDeleteFiles, commandBlocksCount);
-  }
+
 
   /**
    * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits.
    */
   private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
-      Map<FileStatus, Boolean> results, String partitionPath, PathFilter filter) throws IOException {
+                                                      String partitionPath, PathFilter filter) throws IOException {
     LOG.info("Cleaning path " + partitionPath);
+    final Map<FileStatus, Boolean> results = new HashMap<>();
     FileSystem fs = metaClient.getFs();
     FileStatus[] toBeDeleted = fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
     for (FileStatus file : toBeDeleted) {
@@ -181,11 +163,12 @@ public class RollbackHelper implements Serializable {
    * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits.
    */
   private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
-      Map<FileStatus, Boolean> results, String commit, String partitionPath) throws IOException {
+                                                      String commit, String partitionPath) throws IOException {
+    final Map<FileStatus, Boolean> results = new HashMap<>();
     LOG.info("Cleaning path " + partitionPath);
     FileSystem fs = metaClient.getFs();
     PathFilter filter = (path) -> {
-      if (path.toString().contains(".parquet")) {
+      if (path.toString().contains(HoodieFileFormat.PARQUET.getFileExtension())) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
         return commit.equals(fileCommitTime);
       }
@@ -211,6 +194,5 @@ public class RollbackHelper implements Serializable {
   }
 
   public interface SerializablePathFilter extends PathFilter, Serializable {
-
   }
 }

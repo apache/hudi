@@ -48,7 +48,8 @@ public class CopyOnWriteRestoreActionExecutor extends BaseRestoreActionExecutor 
         HoodieActiveTimeline.createNewInstantTime(),
         instantToRollback,
         true,
-        true);
+        true,
+        false);
     if (!instantToRollback.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
       throw new HoodieRollbackException("Unsupported action in rollback instant:" + instantToRollback);
     }

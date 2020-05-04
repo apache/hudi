@@ -22,7 +22,9 @@ import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -52,13 +54,16 @@ public class CopyOnWriteRollbackActionExecutor extends BaseRollbackActionExecuto
                                            String instantTime,
                                            HoodieInstant commitInstant,
                                            boolean deleteInstants,
-                                           boolean skipTimelinePublish) {
-    super(jsc, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish);
+                                           boolean skipTimelinePublish,
+                                           boolean useMarkerBasedStrategy) {
+    super(jsc, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, useMarkerBasedStrategy);
   }
 
   @Override
-  protected List<HoodieRollbackStat> executeRollback() throws IOException {
-    long startTime = System.currentTimeMillis();
+  protected List<HoodieRollbackStat> executeRollback() {
+    HoodieTimer rollbackTimer = new HoodieTimer();
+    rollbackTimer.startTimer();
+
     List<HoodieRollbackStat> stats = new ArrayList<>();
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     HoodieInstant resolvedInstant = instantToRollback;
@@ -72,23 +77,29 @@ public class CopyOnWriteRollbackActionExecutor extends BaseRollbackActionExecuto
     // deleting the timeline file
     if (!resolvedInstant.isRequested()) {
       // delete all the data files for this commit
-      LOG.info("Clean out all parquet files generated for commit: " + resolvedInstant);
-      List<RollbackRequest> rollbackRequests = generateRollbackRequests(resolvedInstant);
-
-      //TODO: We need to persist this as rollback workload and use it in case of partial failures
-      stats = new RollbackHelper(table.getMetaClient(), config).performRollback(jsc, resolvedInstant, rollbackRequests);
+      LOG.info("Clean out all base files generated for commit: " + resolvedInstant);
+      stats = getRollbackStrategy().execute(resolvedInstant);
     }
     // Delete Inflight instant if enabled
     deleteInflightAndRequestedInstant(deleteInstants, activeTimeline, resolvedInstant);
-    LOG.info("Time(in ms) taken to finish rollback " + (System.currentTimeMillis() - startTime));
+    LOG.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
     return stats;
   }
 
-  private List<RollbackRequest> generateRollbackRequests(HoodieInstant instantToRollback)
-      throws IOException {
-    return FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
-        config.shouldAssumeDatePartitioning()).stream()
-        .map(partitionPath -> RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback))
-        .collect(Collectors.toList());
+  private List<ListingBasedRollbackRequest> generateRollbackRequestsByListing() {
+    try {
+      return FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
+          config.shouldAssumeDatePartitioning()).stream()
+          .map(ListingBasedRollbackRequest::createRollbackRequestWithDeleteDataAndLogFilesAction)
+          .collect(Collectors.toList());
+    } catch (IOException e) {
+      throw new HoodieIOException("Error generating rollback requests", e);
+    }
+  }
+
+  @Override
+  protected List<HoodieRollbackStat> executeRollbackUsingFileListing(HoodieInstant instantToRollback) {
+    List<ListingBasedRollbackRequest> rollbackRequests = generateRollbackRequestsByListing();
+    return new ListingBasedRollbackHelper(table.getMetaClient(), config).performRollback(jsc, instantToRollback, rollbackRequests);
   }
 }

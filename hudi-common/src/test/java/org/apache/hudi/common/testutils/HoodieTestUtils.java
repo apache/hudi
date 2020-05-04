@@ -242,12 +242,6 @@ public class HoodieTestUtils {
     return createDataFileFixLength(basePath, partitionPath, instantTime, fileID, length);
   }
 
-  public static String createNewMarkerFile(String basePath, String partitionPath, String instantTime)
-      throws IOException {
-    String fileID = UUID.randomUUID().toString();
-    return createMarkerFile(basePath, partitionPath, instantTime, fileID);
-  }
-
   public static String createDataFile(String basePath, String partitionPath, String instantTime, String fileID)
       throws IOException {
     String folderPath = basePath + "/" + partitionPath + "/";
@@ -266,16 +260,6 @@ public class HoodieTestUtils {
       output.write(ByteBuffer.allocate(1), length - 1);
     }
     return fileID;
-  }
-
-  public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileID)
-      throws IOException {
-    String folderPath =
-        basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME + "/" + instantTime + "/" + partitionPath + "/";
-    new File(folderPath).mkdirs();
-    File f = new File(folderPath + FSUtils.makeMarkerFile(instantTime, DEFAULT_WRITE_TOKEN, fileID));
-    f.createNewFile();
-    return f.getAbsolutePath();
   }
 
   public static String createNewLogFile(FileSystem fs, String basePath, String partitionPath, String instantTime,

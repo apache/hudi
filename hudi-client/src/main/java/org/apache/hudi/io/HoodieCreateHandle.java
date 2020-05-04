@@ -37,6 +37,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.table.MarkerFiles;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -67,7 +68,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(getPartitionId());
-      createMarkerFile(partitionPath);
+      createMarkerFile(partitionPath, FSUtils.makeDataFileName(this.instantTime, this.writeToken, this.fileId));
       this.storageWriter =
           HoodieStorageWriterFactory.getStorageWriter(instantTime, path, hoodieTable, config, writerSchema, this.sparkTaskContextSupplier);
     } catch (IOException e) {
@@ -145,6 +146,11 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
   @Override
   public WriteStatus getWriteStatus() {
     return writeStatus;
+  }
+
+  @Override
+  public MarkerFiles.MarkerType getIOType() {
+    return MarkerFiles.MarkerType.CREATE;
   }
 
   /**

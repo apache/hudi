@@ -26,15 +26,16 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -60,13 +61,16 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
                                            String instantTime,
                                            HoodieInstant commitInstant,
                                            boolean deleteInstants,
-                                           boolean skipTimelinePublish) {
-    super(jsc, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish);
+                                           boolean skipTimelinePublish,
+                                           boolean useMarkerBasedStrategy) {
+    super(jsc, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, useMarkerBasedStrategy);
   }
 
   @Override
   protected List<HoodieRollbackStat> executeRollback() throws IOException {
-    long startTime = System.currentTimeMillis();
+    HoodieTimer rollbackTimer = new HoodieTimer();
+    rollbackTimer.startTimer();
+
     LOG.error("Rolling back instant " + instantToRollback.getTimestamp());
 
     HoodieInstant resolvedInstant = instantToRollback;
@@ -83,48 +87,52 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
     // (commitToRollback).
     // NOTE {@link HoodieCompactionConfig#withCompactionLazyBlockReadEnabled} needs to be set to TRUE. This is
     // required to avoid OOM when merging multiple LogBlocks performed during nested rollbacks.
-    // Atomically un-publish all non-inflight commits
-    // Atomically un-publish all non-inflight commits
+
+
     // For Requested State (like failure during index lookup), there is nothing to do rollback other than
     // deleting the timeline file
     if (!resolvedInstant.isRequested()) {
       LOG.info("Unpublished " + resolvedInstant);
-      List<RollbackRequest> rollbackRequests = generateRollbackRequests(jsc, resolvedInstant);
-      // TODO: We need to persist this as rollback workload and use it in case of partial failures
-      allRollbackStats = new RollbackHelper(table.getMetaClient(), config).performRollback(jsc, resolvedInstant, rollbackRequests);
+      allRollbackStats = getRollbackStrategy().execute(resolvedInstant);
     }
 
     // Delete Inflight instants if enabled
     deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), resolvedInstant);
-
-    LOG.info("Time(in ms) taken to finish rollback " + (System.currentTimeMillis() - startTime));
-
+    LOG.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
     return allRollbackStats;
+  }
+
+  @Override
+  protected List<HoodieRollbackStat> executeRollbackUsingFileListing(HoodieInstant resolvedInstant) {
+    List<ListingBasedRollbackRequest> rollbackRequests;
+    try {
+      rollbackRequests = generateRollbackRequestsUsingFileListing(resolvedInstant);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error generating rollback requests by file listing.", e);
+    }
+    return new ListingBasedRollbackHelper(table.getMetaClient(), config).performRollback(jsc, resolvedInstant, rollbackRequests);
   }
 
   /**
    * Generate all rollback requests that we need to perform for rolling back this action without actually performing
    * rolling back.
    *
-   * @param jsc JavaSparkContext
    * @param instantToRollback Instant to Rollback
    * @return list of rollback requests
-   * @throws IOException
    */
-  private List<RollbackRequest> generateRollbackRequests(JavaSparkContext jsc, HoodieInstant instantToRollback)
-      throws IOException {
+  private List<ListingBasedRollbackRequest> generateRollbackRequestsUsingFileListing(HoodieInstant instantToRollback) throws IOException {
     String commit = instantToRollback.getTimestamp();
     List<String> partitions = FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
         config.shouldAssumeDatePartitioning());
     int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
     return jsc.parallelize(partitions, Math.min(partitions.size(), sparkPartitions)).flatMap(partitionPath -> {
       HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
-      List<RollbackRequest> partitionRollbackRequests = new ArrayList<>();
+      List<ListingBasedRollbackRequest> partitionRollbackRequests = new ArrayList<>();
       switch (instantToRollback.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:
-          LOG.info("Rolling back commit action. There are higher delta commits. So only rolling back this instant");
+          LOG.info("Rolling back commit action.");
           partitionRollbackRequests.add(
-              RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback));
+              ListingBasedRollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath));
           break;
         case HoodieTimeline.COMPACTION_ACTION:
           // If there is no delta commit present after the current commit (if compaction), no action, else we
@@ -139,7 +147,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
             // have been written to the log files.
             LOG.info("Rolling back compaction. There are higher delta commits. So only deleting data files");
             partitionRollbackRequests.add(
-                RollbackRequest.createRollbackRequestWithDeleteDataFilesOnlyAction(partitionPath, instantToRollback));
+                ListingBasedRollbackRequest.createRollbackRequestWithDeleteDataFilesOnlyAction(partitionPath));
           } else {
             // No deltacommits present after this compaction commit (inflight or requested). In this case, we
             // can also delete any log files that were created with this compaction commit as base
@@ -147,7 +155,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
             LOG.info("Rolling back compaction plan. There are NO higher delta commits. So deleting both data and"
                 + " log files");
             partitionRollbackRequests.add(
-                RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback));
+                ListingBasedRollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath));
           }
           break;
         case HoodieTimeline.DELTA_COMMIT_ACTION:
@@ -177,8 +185,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
           try {
             HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
                 table.getMetaClient().getCommitTimeline()
-                    .getInstantDetails(
-                        new HoodieInstant(true, instantToRollback.getAction(), instantToRollback.getTimestamp()))
+                    .getInstantDetails(new HoodieInstant(true, instantToRollback.getAction(), instantToRollback.getTimestamp()))
                     .get(),
                 HoodieCommitMetadata.class);
 
@@ -186,7 +193,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
             // We do not know fileIds for inserts (first inserts are either log files or parquet files),
             // delete all files for the corresponding failed commit, if present (same as COW)
             partitionRollbackRequests.add(
-                RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback));
+                ListingBasedRollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath));
 
             // append rollback blocks for updates
             if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
@@ -195,7 +202,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
             }
             break;
           } catch (IOException io) {
-            throw new UncheckedIOException("Failed to collect rollback actions for commit " + commit, io);
+            throw new HoodieIOException("Failed to collect rollback actions for commit " + commit, io);
           }
         default:
           break;
@@ -204,8 +211,8 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
     }).filter(Objects::nonNull).collect();
   }
 
-  private List<RollbackRequest> generateAppendRollbackBlocksAction(String partitionPath, HoodieInstant rollbackInstant,
-                                                                   HoodieCommitMetadata commitMetadata) {
+  private List<ListingBasedRollbackRequest> generateAppendRollbackBlocksAction(String partitionPath, HoodieInstant rollbackInstant,
+                                                                               HoodieCommitMetadata commitMetadata) {
     ValidationUtils.checkArgument(rollbackInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
 
     // wStat.getPrevCommit() might not give the right commit time in the following
@@ -234,8 +241,8 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
           wStat.getFileId()), HoodieTimeline.LESSER_THAN, rollbackInstant.getTimestamp());
     }).map(wStat -> {
       String baseCommitTime = fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId());
-      return RollbackRequest.createRollbackRequestWithAppendRollbackBlockAction(partitionPath, wStat.getFileId(),
-          baseCommitTime, rollbackInstant);
+      return ListingBasedRollbackRequest.createRollbackRequestWithAppendRollbackBlockAction(partitionPath, wStat.getFileId(),
+          baseCommitTime);
     }).collect(Collectors.toList());
   }
 }

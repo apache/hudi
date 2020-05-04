@@ -46,6 +46,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.table.MarkerFiles;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -78,6 +79,7 @@ public class HoodieClientTestUtils {
 
   private static final Logger LOG = LogManager.getLogger(HoodieClientTestUtils.class);
   private static final Random RANDOM = new Random();
+  public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
 
   public static List<WriteStatus> collectStatuses(Iterator<List<WriteStatus>> statusListItr) {
     List<WriteStatus> statuses = new ArrayList<>();
@@ -259,5 +261,22 @@ public class HoodieClientTestUtils {
     HoodieTestUtils.createCommitFiles(basePath, instantTime);
     return HoodieClientTestUtils.writeParquetFile(basePath, partitionPath, filename, records, schema, filter,
         createCommitTime);
+  }
+
+  public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileID)
+      throws IOException {
+    String folderPath =
+        basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME + "/" + instantTime + "/" + partitionPath + "/";
+    new File(folderPath).mkdirs();
+    String markerFileName = String.format("%s_%s_%s%s.%s", fileID, DEFAULT_WRITE_TOKEN, instantTime,
+        HoodieTableMetaClient.MARKER_EXTN, MarkerFiles.MarkerType.MERGE);
+    File f = new File(folderPath + markerFileName);
+    f.createNewFile();
+    return f.getAbsolutePath();
+  }
+
+  public static String createNewMarkerFile(String basePath, String partitionPath, String instantTime)
+      throws IOException {
+    return createMarkerFile(basePath, partitionPath, instantTime, UUID.randomUUID().toString());
   }
 }
