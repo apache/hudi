@@ -82,6 +82,13 @@ private[hudi] object HoodieSparkSqlWriter {
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     var exists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
 
+    if (exists && mode == SaveMode.Append) {
+      val existingTableName = new HoodieTableMetaClient(sparkContext.hadoopConfiguration, path.get).getTableConfig.getTableName
+      if (!existingTableName.equals(tblName.get)) {
+        throw new HoodieException(s"hoodie table with name $existingTableName already exist at $basePath")
+      }
+    }
+
     val (writeStatuses, writeClient: HoodieWriteClient[HoodieRecordPayload[Nothing]]) =
       if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
       // register classes & schemas
