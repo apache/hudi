@@ -25,11 +25,11 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.{HoodieWriteClient, WriteStatus}
+import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
-import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
@@ -82,6 +82,13 @@ private[hudi] object HoodieSparkSqlWriter {
     val instantTime = HoodieActiveTimeline.createNewInstantTime()
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     var exists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
+
+    if (exists && mode == SaveMode.Append) {
+      val existingTableName = new HoodieTableMetaClient(sparkContext.hadoopConfiguration, path.get).getTableConfig.getTableName
+      if (!existingTableName.equals(tblName.get)) {
+        throw new HoodieException(s"hoodie table with name $existingTableName already exist at $basePath")
+      }
+    }
 
     val (writeStatuses, writeClient: HoodieWriteClient[HoodieRecordPayload[Nothing]]) =
       if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
