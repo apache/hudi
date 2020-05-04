@@ -46,6 +46,7 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
+import org.apache.hudi.hadoop.UseRecordReaderFromInputFormat;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -62,6 +63,7 @@ import java.util.stream.Stream;
 /**
  * Input Format, that provides a real-time view of data in a Hoodie table.
  */
+@UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
 public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat implements Configurable {
 
