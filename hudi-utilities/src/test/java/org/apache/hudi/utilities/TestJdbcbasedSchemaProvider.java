@@ -26,9 +26,9 @@ import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -36,7 +36,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestJdbcbasedSchemaProvider {
 
@@ -44,7 +44,7 @@ public class TestJdbcbasedSchemaProvider {
   private static final TypedProperties PROPS = new TypedProperties();
   protected transient JavaSparkContext jsc = null;
 
-  @Before
+  @BeforeEach
   public void init() {
     jsc = UtilHelpers.buildSparkContext(this.getClass().getName() + "-hoodie", "local[2]");
     PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.connection.url", "jdbc:h2:mem:test_mem");
@@ -56,7 +56,7 @@ public class TestJdbcbasedSchemaProvider {
     PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.jdbc.nullable", "false");
   }
 
-  @After
+  @AfterEach
   public void teardown() throws Exception {
     if (jsc != null) {
       jsc.stop();

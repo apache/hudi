@@ -26,18 +26,18 @@ import org.apache.hudi.utilities.keygen.TimestampBasedKeyGenerator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestTimestampBasedKeyGenerator {
   private GenericRecord baseRecord;
   private TypedProperties properties = new TypedProperties();
 
-  @Before
+  @BeforeEach
   public void initialize() throws IOException {
     Schema schema = SchemaTestUtil.getTimestampEvolvedSchema();
     baseRecord = SchemaTestUtil
@@ -61,23 +61,23 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord.put("createTime", 1578283932000L);
     properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00");
     HoodieKey hk1 = new TimestampBasedKeyGenerator(properties).getKey(baseRecord);
-    assertEquals(hk1.getPartitionPath(), "2020-01-06 12");
+    assertEquals("2020-01-06 12", hk1.getPartitionPath());
 
     // timezone is GMT
     properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT");
     HoodieKey hk2 = new TimestampBasedKeyGenerator(properties).getKey(baseRecord);
-    assertEquals(hk2.getPartitionPath(), "2020-01-06 04");
+    assertEquals("2020-01-06 04", hk2.getPartitionPath());
 
     // timestamp is DATE_STRING, timezone is GMT+8:00
     baseRecord.put("createTime", "2020-01-06 12:12:12");
     properties = getBaseKeyConfig("DATE_STRING", "yyyy-MM-dd hh", "GMT+8:00");
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.input.dateformat", "yyyy-MM-dd hh:mm:ss");
     HoodieKey hk3 = new TimestampBasedKeyGenerator(properties).getKey(baseRecord);
-    assertEquals(hk3.getPartitionPath(), "2020-01-06 12");
+    assertEquals("2020-01-06 12", hk3.getPartitionPath());
 
     // timezone is GMT
     properties = getBaseKeyConfig("DATE_STRING", "yyyy-MM-dd hh", "GMT");
     HoodieKey hk4 = new TimestampBasedKeyGenerator(properties).getKey(baseRecord);
-    assertEquals(hk4.getPartitionPath(), "2020-01-06 12");
+    assertEquals("2020-01-06 12", hk4.getPartitionPath());
   }
 }

@@ -70,12 +70,11 @@ import org.apache.spark.sql.api.java.UDF4;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -89,10 +88,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Basic tests against {@link HoodieDeltaStreamer}, by issuing bulk_inserts, upserts, inserts. Check counts at the end.
@@ -116,7 +115,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
   private static int testNum = 1;
 
-  @BeforeClass
+  @BeforeAll
   public static void initClass() throws Exception {
     UtilitiesTestBase.initClass(true);
     PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
@@ -226,17 +225,17 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
         MultiPartKeysValueExtractor.class.getName());
   }
 
-  @AfterClass
+  @AfterAll
   public static void cleanupClass() {
     UtilitiesTestBase.cleanupClass();
   }
 
-  @Before
+  @BeforeEach
   public void setup() throws Exception {
     super.setup();
   }
 
-  @After
+  @AfterEach
   public void teardown() throws Exception {
     super.teardown();
   }
@@ -343,7 +342,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
       int numCompactionCommits = (int) timeline.getInstants().count();
-      assertTrue("Got=" + numCompactionCommits + ", exp >=" + minExpected, minExpected <= numCompactionCommits);
+      assertTrue(minExpected <= numCompactionCommits, "Got=" + numCompactionCommits + ", exp >=" + minExpected);
     }
 
     static void assertAtleastNDeltaCommits(int minExpected, String tablePath, FileSystem fs) {
@@ -351,7 +350,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       HoodieTimeline timeline = meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
       int numDeltaCommits = (int) timeline.getInstants().count();
-      assertTrue("Got=" + numDeltaCommits + ", exp >=" + minExpected, minExpected <= numDeltaCommits);
+      assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
 
     static String assertCommitMetadata(String expected, String tablePath, FileSystem fs, int totalCommits)
@@ -413,37 +412,33 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     Helpers.saveParquetToDFS(Helpers.toGenericRecords(dataGenerator.generateInserts("000", 100)), new Path(filePath));
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc, dfs, hdfsTestService.getHadoopConf(), props);
-    assertEquals(deltaStreamer.getConfig().checkpoint, "kafka_topic1,0:200");
+    assertEquals("kafka_topic1,0:200", deltaStreamer.getConfig().checkpoint);
   }
 
   @Test
   public void testPropsWithInvalidKeyGenerator() throws Exception {
-    try {
+    Exception e = assertThrows(IOException.class, () -> {
       String tableBasePath = dfsBasePath + "/test_table";
       HoodieDeltaStreamer deltaStreamer =
           new HoodieDeltaStreamer(TestHelpers.makeConfig(tableBasePath, Operation.BULK_INSERT,
               Collections.singletonList(TripsWithDistanceTransformer.class.getName()), PROPS_FILENAME_TEST_INVALID, false), jsc);
       deltaStreamer.sync();
-      fail("Should error out when setting the key generator class property to an invalid value");
-    } catch (IOException e) {
-      // expected
-      LOG.error("Expected error during getting the key generator", e);
-      assertTrue(e.getMessage().contains("Could not load key generator class"));
-    }
+    }, "Should error out when setting the key generator class property to an invalid value");
+    // expected
+    LOG.debug("Expected error during getting the key generator", e);
+    assertTrue(e.getMessage().contains("Could not load key generator class"));
   }
 
   @Test
   public void testTableCreation() throws Exception {
-    try {
+    Exception e = assertThrows(TableNotFoundException.class, () -> {
       dfs.mkdirs(new Path(dfsBasePath + "/not_a_table"));
       HoodieDeltaStreamer deltaStreamer =
           new HoodieDeltaStreamer(TestHelpers.makeConfig(dfsBasePath + "/not_a_table", Operation.BULK_INSERT), jsc);
       deltaStreamer.sync();
-      fail("Should error out when pointed out at a dir thats not a table");
-    } catch (TableNotFoundException e) {
-      // expected
-      LOG.error("Expected error during table creation", e);
-    }
+    }, "Should error out when pointed out at a dir thats not a table");
+    // expected
+    LOG.debug("Expected error during table creation", e);
   }
 
   @Test
@@ -596,11 +591,12 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     // Test Hive integration
     HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), dfs);
-    assertTrue("Table " + hiveSyncConfig.tableName + " should exist", hiveClient.doesTableExist(hiveSyncConfig.tableName));
-    assertEquals("Table partitions should match the number of partitions we wrote", 1,
-        hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size());
-    assertEquals("The last commit that was sycned should be updated in the TBLPROPERTIES", lastInstantForUpstreamTable,
-        hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get());
+    assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName), "Table " + hiveSyncConfig.tableName + " should exist");
+    assertEquals(1, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
+        "Table partitions should match the number of partitions we wrote");
+    assertEquals(lastInstantForUpstreamTable,
+        hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
+        "The last commit that was sycned should be updated in the TBLPROPERTIES");
   }
 
   @Test
@@ -609,13 +605,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.BULK_INSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, true,
         false, false, null, null);
-    try {
+    Exception e = assertThrows(HoodieException.class, () -> {
       new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf()).sync();
-      fail("Should error out when schema provider is not provided");
-    } catch (HoodieException e) {
-      LOG.error("Expected error during reading data from source ", e);
-      assertTrue(e.getMessage().contains("Please provide a valid schema provider class!"));
-    }
+    }, "Should error out when schema provider is not provided");
+    LOG.debug("Expected error during reading data from source ", e);
+    assertTrue(e.getMessage().contains("Please provide a valid schema provider class!"));
   }
 
   @Test
@@ -734,7 +728,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     InputBatch<JavaRDD<GenericRecord>> batch = distributedTestDataSource.fetchNext(Option.empty(), 10000000);
     batch.getBatch().get().cache();
     long c = batch.getBatch().get().count();
-    Assert.assertEquals(1000, c);
+    assertEquals(1000, c);
   }
 
   private static void prepareParquetDFSFiles(int numRecords) throws IOException {
@@ -916,13 +910,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // Target schema is determined based on the Dataframe after transformation
     // No CSV header and no schema provider at the same time are not recommended,
     // as the transformer behavior may be unexpected
-    try {
+    Exception e = assertThrows(AnalysisException.class, () -> {
       testCsvDFSSource(false, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
-      fail("Should error out when doing the transformation.");
-    } catch (AnalysisException e) {
-      LOG.error("Expected error during transformation", e);
-      assertTrue(e.getMessage().contains("cannot resolve '`begin_lat`' given input columns:"));
-    }
+    }, "Should error out when doing the transformation.");
+    LOG.debug("Expected error during transformation", e);
+    assertTrue(e.getMessage().contains("cannot resolve '`begin_lat`' given input columns:"));
   }
 
   @Test

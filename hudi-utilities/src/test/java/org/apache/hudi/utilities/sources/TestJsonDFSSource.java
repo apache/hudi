@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.utilities.UtilitiesTestBase;
 
 import org.apache.hadoop.fs.Path;
-import org.junit.Before;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.io.IOException;
 import java.util.List;
@@ -33,7 +33,7 @@ import java.util.List;
  */
 public class TestJsonDFSSource extends AbstractDFSSourceTestBase {
 
-  @Before
+  @BeforeEach
   public void setup() throws Exception {
     super.setup();
     this.dfsRoot = dfsBasePath + "/jsonFiles";

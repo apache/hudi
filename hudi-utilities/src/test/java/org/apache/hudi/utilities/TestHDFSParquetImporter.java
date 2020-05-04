@@ -41,12 +41,11 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -61,8 +60,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHDFSParquetImporter implements Serializable {
 
@@ -71,7 +70,7 @@ public class TestHDFSParquetImporter implements Serializable {
   private static MiniDFSCluster dfsCluster;
   private static DistributedFileSystem dfs;
 
-  @BeforeClass
+  @BeforeAll
   public static void initClass() throws Exception {
     hdfsTestService = new HdfsTestService();
     dfsCluster = hdfsTestService.start(true);
@@ -82,7 +81,7 @@ public class TestHDFSParquetImporter implements Serializable {
     dfs.mkdirs(new Path(dfsBasePath));
   }
 
-  @AfterClass
+  @AfterAll
   public static void cleanupClass() {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
@@ -94,7 +93,7 @@ public class TestHDFSParquetImporter implements Serializable {
   private transient Path srcFolder;
   private transient List<GenericRecord> insertData;
 
-  @Before
+  @BeforeEach
   public void init() throws IOException, ParseException {
     basePath = (new Path(dfsBasePath, Thread.currentThread().getStackTrace()[1].getMethodName())).toString();
 
@@ -106,7 +105,7 @@ public class TestHDFSParquetImporter implements Serializable {
     insertData = createInsertRecords(srcFolder);
   }
 
-  @After
+  @AfterEach
   public void clean() throws IOException {
     dfs.delete(new Path(basePath), true);
   }
@@ -138,8 +137,8 @@ public class TestHDFSParquetImporter implements Serializable {
       };
       // Schema file is not created so this operation should fail.
       assertEquals(0, dataImporter.dataImport(jsc, retry.get()));
-      assertEquals(retry.get(), -1);
-      assertEquals(fileCreated.get(), 1);
+      assertEquals(-1, retry.get());
+      assertEquals(1, fileCreated.get());
 
       // Check if
       // 1. .commit file is present
@@ -162,10 +161,10 @@ public class TestHDFSParquetImporter implements Serializable {
           recordCounts.put(partitionPath, recordCounts.get(partitionPath) + count);
         }
       }
-      assertTrue("commit file is missing", isCommitFilePresent);
-      assertEquals("partition is missing", 4, recordCounts.size());
+      assertTrue(isCommitFilePresent, "commit file is missing");
+      assertEquals(4, recordCounts.size(), "partition is missing");
       for (Entry<String, Long> e : recordCounts.entrySet()) {
-        assertEquals("missing records", 24, e.getValue().longValue());
+        assertEquals(24, e.getValue().longValue(), "missing records");
       }
     }
   }

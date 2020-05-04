@@ -28,29 +28,29 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestAWSDatabaseMigrationServiceSource {
 
   private static JavaSparkContext jsc;
   private static SparkSession spark;
 
-  @BeforeClass
+  @BeforeAll
   public static void setupTest() {
     jsc = UtilHelpers.buildSparkContext("aws-dms-test", "local[2]");
     spark = SparkSession.builder().config(jsc.getConf()).getOrCreate();
   }
 
-  @AfterClass
+  @AfterAll
   public static void tearDownTest() {
     if (jsc != null) {
       jsc.stop();
@@ -99,7 +99,7 @@ public class TestAWSDatabaseMigrationServiceSource {
         new Record("2", 3433L)), Record.class);
 
     Dataset<Row> outputFrame = transformer.apply(jsc, spark, inputFrame, null);
-    assertTrue(Arrays.asList(outputFrame.schema().fields()).stream()
+    assertTrue(Arrays.stream(outputFrame.schema().fields())
         .map(f -> f.name()).anyMatch(n -> n.equals(AWSDmsAvroPayload.OP_FIELD)));
     assertTrue(outputFrame.select(AWSDmsAvroPayload.OP_FIELD).collectAsList().stream()
         .allMatch(r -> r.getString(0).equals("")));

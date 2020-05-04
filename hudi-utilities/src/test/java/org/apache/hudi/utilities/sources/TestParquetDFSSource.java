@@ -22,7 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.hadoop.fs.Path;
-import org.junit.Before;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.io.IOException;
 import java.util.List;
@@ -32,7 +32,7 @@ import java.util.List;
  */
 public class TestParquetDFSSource extends AbstractDFSSourceTestBase {
 
-  @Before
+  @BeforeEach
   public void setup() throws Exception {
     super.setup();
     this.dfsRoot = dfsBasePath + "/parquetFiles";
