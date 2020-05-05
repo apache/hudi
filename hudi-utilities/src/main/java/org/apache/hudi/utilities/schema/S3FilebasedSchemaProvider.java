@@ -25,11 +25,15 @@ import com.amazonaws.services.s3.model.S3Object;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Date;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
+import org.apache.avro.SchemaBuilder;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -49,6 +53,46 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
     private static final String SOURCE_SCHEMA_EXPIRED   = "hoodie.deltastreamer.schemaprovider" + ".source.schema.expired";
   }
 
+  /*
+   * Embedded schema provider that build oplog schemas
+   */
+  private class OplogSchemaProvider {
+    private Schema baseSchema;
+    private final String[] fieldNames = new String[] {
+      "oplog_op", "oplog_ts_ms", "oplog_patch"
+    };
+
+    private final Type[] fieldTypes = new Type[] {
+      Type.STRING, Type.LONG, Type.STRING
+    };
+
+    private Schema buildOplogBaseSchema() {
+      SchemaBuilder.FieldAssembler<Schema> fieldAssembler = SchemaBuilder
+          .record("MongoOplog")
+          .namespace("com.wish.log")
+          .fields();
+
+      Schema nullSchema = Schema.create(Schema.Type.NULL);
+
+      for (int i = 0; i < fieldNames.length; ++i) {
+        Schema schema = Schema.create(fieldTypes[i]);
+        Schema unionSchema = Schema.createUnion(Arrays.asList(nullSchema, schema));
+
+        fieldAssembler.name(fieldNames[i]).type(unionSchema).withDefault(null);
+      }
+
+      return fieldAssembler.endRecord();
+    }
+
+    private OplogSchemaProvider() {
+      baseSchema = buildOplogBaseSchema();
+    }
+
+    public Schema getBaseSchema() {
+      return this.baseSchema;
+    }
+  }
+
   private static final Logger LOG = LogManager.getLogger(S3FilebasedSchemaProvider.class);
 
   private final String s3Bucket;
@@ -56,6 +100,7 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
   private final long schemaExpiredTime;
 
   private Schema sourceSchema;
+  private OplogSchemaProvider oplogSchemaProvider;
   private AmazonS3 s3Client;
   private long lastModifiedTS;
   private long schemaCachedTS;
@@ -75,6 +120,7 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
 
     try {
       s3Client = AmazonS3ClientBuilder.standard().withRegion(props.getString(Config.SOURCE_SCHEMA_REGION)).build();
+      oplogSchemaProvider = new OplogSchemaProvider();
       fetchSchemaFromS3();
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading schema From S3", ioe);
@@ -124,7 +170,7 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
         if (schemaCache.getType() != Type.RECORD) {
           throw new IllegalArgumentException("Record schema type is expected");
         }
-        sourceSchema = schemaCache;
+        sourceSchema = combineSchemaFromS3(schemaCache);
         lastModifiedTS = fileTS;
       }
       schemaCachedTS = getTimestamp(new Date());
@@ -132,6 +178,28 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
       readStream(stream);
       stream.close();
     }
+  }
+
+  /**
+   * Combine Avro Schemas from S3.
+   */
+  private Schema combineSchemaFromS3(Schema tableSchema) throws IOException {
+    Schema oplogSchema = oplogSchemaProvider.getBaseSchema();
+
+    List<Schema.Field> fieldList = oplogSchema.getFields().stream()
+        .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
+        .collect(Collectors.toList());
+
+    for (Schema.Field f: tableSchema.getFields()) {
+      Schema.Field ff = new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal());
+
+      for (String alias : f.aliases()) {
+        ff.addAlias(alias);
+      }
+      fieldList.add(ff);
+    }
+
+    return Schema.createRecord(tableSchema.getName(), tableSchema.getDoc(), tableSchema.getNamespace(), tableSchema.isError(), fieldList);
   }
 
   /**

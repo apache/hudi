@@ -29,6 +29,7 @@ import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.Schema;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.api.java.JavaRDD;
@@ -44,6 +45,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
@@ -140,6 +142,34 @@ public class TestKafkaSource extends UtilitiesTestBase {
     InputBatch<Dataset<Row>> fetch4AsRows =
         kafkaSource.fetchNewDataInRowFormat(Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(Option.empty(), fetch4AsRows.getBatch());
+  }
+
+  @Test
+  public void testCombineSchemaFromS3() throws IOException {
+    Schema sourceSchema = schemaProvider.getLatestSourceSchema();
+
+    HashMap<String, String> fieldNames = new HashMap<String, String>();
+    fieldNames.put("oplog_op", "string");
+    fieldNames.put("oplog_ts_ms", "long");
+    fieldNames.put("oplog_patch", "string");
+    
+    for (Schema.Field f: sourceSchema.getFields()) {
+      if (fieldNames.containsKey(f.name())) {
+        Schema oplogFieldSchema = f.schema();
+        assertEquals(oplogFieldSchema.getType().toString().equals("UNION"), true);
+
+        List<Schema> list = oplogFieldSchema.getTypes();
+        for (Schema ff : list) {
+          if (!ff.getName().equals("null")) {
+            assertEquals(ff.getName().equals(fieldNames.get(f.name())), true);
+          }
+        }
+
+        fieldNames.remove(f.name());
+      }
+    }
+
+    assertEquals(fieldNames.isEmpty(), true);
   }
 
   @Test
