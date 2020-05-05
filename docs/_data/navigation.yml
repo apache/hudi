@@ -5,8 +5,8 @@ main:
     url: /docs/quick-start-guide.html
   - title: "Community"
     url: /community.html
-  - title: "Activities"
-    url: /activity.html
+  - title: "Blog"
+    url: /blog.html
   - title: "FAQ"
     url: https://cwiki.apache.org/confluence/display/HUDI/FAQ
   - title: "Releases"

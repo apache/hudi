@@ -30,6 +30,11 @@
         <a href="{{ post.url | relative_url }}" rel="permalink">{{ title }}</a>
       {% endif %}
     </h2>
-    {% if post.excerpt %}<p class="archive__item-excerpt" itemprop="description">{{ post.excerpt | markdownify | strip_html | truncate: 160 }}</p>{% endif %}
+    <!-- Look the author details up from the site config. -->
+    {% assign author = site.data.authors[post.author] %}
+    <!-- Output author details if some exist. -->
+    {% if author %}<div class="archive__item-meta"><a href="{{ author.web }}">{{ author.name }}</a> posted on <time datetime="{{ post.date | date: "%Y-%m-%d" }}">{{ post.date | date: "%B %-d, %Y" }}</time></div>{% endif %}
+ 
+    {% if post.excerpt %}<p class="archive__item-excerpt" itemprop="description">{{ post.excerpt | markdownify | strip_html }}</p>{% endif %}
   </article>
 </div>

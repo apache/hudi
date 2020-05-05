@@ -78,6 +78,12 @@ body {
   }
 }
 
+.page__author {
+  font-size: 0.8em;
+  margin-top:0;
+  margin-bottom: 1em;
+}
+
 .page__lead {
   font-family: $global-font-family;
   font-size: $type-size-4;
