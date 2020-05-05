@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities;
+package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.HoodieTestDataGenerator;
@@ -43,12 +43,13 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Operation;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.CsvDFSSource;
-import org.apache.hudi.utilities.sources.DistributedTestDataSource;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
-import org.apache.hudi.utilities.sources.config.TestSourceConfig;
+import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+import org.apache.hudi.utilities.testutils.sources.DistributedTestDataSource;
+import org.apache.hudi.utilities.testutils.sources.config.TestSourceConfig;
 import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -389,7 +390,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
         new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getConfig();
     assertEquals(2, props.getInteger("hoodie.upsert.shuffle.parallelism"));
     assertEquals("_row_key", props.getString("hoodie.datasource.write.recordkey.field"));
-    assertEquals("org.apache.hudi.utilities.TestHoodieDeltaStreamer$TestGenerator",
+    assertEquals("org.apache.hudi.utilities.functional.TestHoodieDeltaStreamer$TestGenerator",
         props.getString("hoodie.datasource.write.keygenerator.class"));
   }
 

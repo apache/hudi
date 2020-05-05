@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class InputPathHandlerTest {
+public class TestInputPathHandler {
 
   // Incremental Table
   public static final String RAW_TRIPS_TEST_NAME = "raw_trips";

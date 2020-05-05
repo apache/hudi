@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities;
+package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.HoodieTestDataGenerator;

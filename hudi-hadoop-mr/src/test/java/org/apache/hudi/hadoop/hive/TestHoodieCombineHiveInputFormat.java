@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hadoop.realtime;
+package org.apache.hudi.hadoop.hive;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.minicluster.MiniClusterUtil;
@@ -25,8 +25,7 @@ import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.SchemaTestUtil;
-import org.apache.hudi.hadoop.InputFormatTestUtil;
-import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
+import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;

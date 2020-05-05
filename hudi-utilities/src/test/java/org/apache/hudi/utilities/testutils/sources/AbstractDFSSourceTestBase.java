@@ -16,15 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.sources;
+package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.UtilitiesTestBase;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
@@ -52,11 +54,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
 
-  FilebasedSchemaProvider schemaProvider;
-  String dfsRoot;
-  String fileSuffix;
-  HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-  boolean useFlattenedSchema = false;
+  protected FilebasedSchemaProvider schemaProvider;
+  protected String dfsRoot;
+  protected String fileSuffix;
+  protected HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+  protected boolean useFlattenedSchema = false;
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -84,27 +86,25 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
    *
    * @return A {@link Source} using DFS as the file system.
    */
-  abstract Source prepareDFSSource();
+  protected abstract Source prepareDFSSource();
 
   /**
    * Writes test data, i.e., a {@link List} of {@link HoodieRecord}, to a file on DFS.
    *
    * @param records Test data.
-   * @param path    The path in {@link Path} of the file to write.
-   * @throws IOException
+   * @param path The path in {@link Path} of the file to write.
    */
-  abstract void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException;
+  protected abstract void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException;
 
   /**
    * Generates a batch of test data and writes the data to a file.
    *
-   * @param filename  The name of the file.
-   * @param instantTime  The commit time.
-   * @param n  The number of records to generate.
-   * @return  The file path.
-   * @throws IOException
+   * @param filename The name of the file.
+   * @param instantTime The commit time.
+   * @param n The number of records to generate.
+   * @return The file path.
    */
-  Path generateOneFile(String filename, String instantTime, int n) throws IOException {
+  protected Path generateOneFile(String filename, String instantTime, int n) throws IOException {
     Path path = new Path(dfsRoot, filename + fileSuffix);
     writeNewDataToFile(dataGenerator.generateInserts(instantTime, n, useFlattenedSchema), path);
     return path;

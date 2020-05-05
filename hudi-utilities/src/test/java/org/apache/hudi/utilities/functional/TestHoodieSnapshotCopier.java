@@ -16,12 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities;
+package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.utilities.HoodieSnapshotCopier;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;

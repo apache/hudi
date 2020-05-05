@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.utilities.testutils.sources.AbstractDFSSourceTestBase;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,14 +41,14 @@ public class TestParquetDFSSource extends AbstractDFSSourceTestBase {
   }
 
   @Override
-  Source prepareDFSSource() {
+  public Source prepareDFSSource() {
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsRoot);
     return new ParquetDFSSource(props, jsc, sparkSession, schemaProvider);
   }
 
   @Override
-  void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
+  public void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
     Helpers.saveParquetToDFS(Helpers.toGenericRecords(records), path);
   }
 }

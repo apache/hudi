@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities;
+package org.apache.hudi.utilities.testutils;
 
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.TestRawTripPayload;
@@ -32,6 +32,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.hive.util.HiveTestService;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -91,7 +92,7 @@ public class UtilitiesTestBase {
     initClass(false);
   }
 
-  static void initClass(boolean startHiveService) throws Exception {
+  public static void initClass(boolean startHiveService) throws Exception {
     hdfsTestService = new HdfsTestService();
     dfsCluster = hdfsTestService.start(true);
     dfs = dfsCluster.getFileSystem();

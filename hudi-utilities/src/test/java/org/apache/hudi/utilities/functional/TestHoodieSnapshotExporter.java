@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities;
+package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.HoodieClientTestHarness;
@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.utilities.HoodieSnapshotExporter;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.Config;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.OutputFormatValidator;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.Partitioner;

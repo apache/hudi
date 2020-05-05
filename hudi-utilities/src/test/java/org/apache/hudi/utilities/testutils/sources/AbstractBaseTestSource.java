@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.sources;
+package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.config.TypedProperties;
@@ -25,7 +25,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.RocksDBBasedMap;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.config.TestSourceConfig;
+import org.apache.hudi.utilities.sources.AvroSource;
+import org.apache.hudi.utilities.testutils.sources.config.TestSourceConfig;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -44,7 +45,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
 
   private static final Logger LOG = LogManager.getLogger(AbstractBaseTestSource.class);
 
-  static final int DEFAULT_PARTITION_NUM = 0;
+  public static final int DEFAULT_PARTITION_NUM = 0;
 
   // Static instance, helps with reuse across a test.
   protected static transient Map<Integer, HoodieTestDataGenerator> dataGeneratorMap = new HashMap<>();

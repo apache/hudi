@@ -16,9 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities;
+package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.payload.AWSDmsAvroPayload;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.transform.AWSDmsTransformer;
 
 import org.apache.avro.Schema;

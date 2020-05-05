@@ -16,11 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities;
+package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.JdbcbasedSchemaProvider;
+import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;

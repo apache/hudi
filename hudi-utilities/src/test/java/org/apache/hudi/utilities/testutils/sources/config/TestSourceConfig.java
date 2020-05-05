@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.sources.config;
+package org.apache.hudi.utilities.testutils.sources.config;
 
 /**
  * Configurations for Test Data Sources.

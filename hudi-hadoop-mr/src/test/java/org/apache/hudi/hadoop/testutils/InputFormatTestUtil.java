@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hadoop;
+package org.apache.hudi.hadoop.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.SchemaTestUtil;
+import org.apache.hudi.hadoop.HoodieHiveUtil;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
