@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.timeline.table.view;
+package org.apache.hudi.timeline.service.functional;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
