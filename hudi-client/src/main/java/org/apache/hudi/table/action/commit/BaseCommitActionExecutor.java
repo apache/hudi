@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.client.EncodableWriteStatus;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkConfigUtils;
@@ -38,8 +39,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.BaseActionExecutor;
-
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -51,6 +52,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -110,10 +112,9 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
   }
 
   /**
-   * Save the workload profile in an intermediate file (here re-using commit files) This is useful when performing
-   * rollback for MOR tables. Only updates are recorded in the workload profile metadata since updates to log blocks
-   * are unknown across batches Inserts (which are new parquet files) are rolled back based on commit time. // TODO :
-   * Create a new WorkloadProfile metadata file instead of using HoodieCommitMetadata
+   * Save the workload profile in an intermediate file (here re-using commit files) This is useful when performing rollback for MOR tables. Only updates are recorded in the workload profile metadata
+   * since updates to log blocks are unknown across batches Inserts (which are new parquet files) are rolled back based on commit time. // TODO : Create a new WorkloadProfile metadata file instead of
+   * using HoodieCommitMetadata
    */
   void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime)
       throws HoodieCommitException {
@@ -162,8 +163,8 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
     writeStatusRDD = writeStatusRDD.persist(SparkConfigUtils.getWriteStatusStorageLevel(config.getProps()));
     Instant indexStartTime = Instant.now();
     // Update the index back
-    JavaRDD<WriteStatus> statuses = ((HoodieTable<T>)table).getIndex().updateLocation(writeStatusRDD, jsc,
-        (HoodieTable<T>)table);
+    JavaRDD<WriteStatus> statuses = ((HoodieTable<T>) table).getIndex().updateLocation(writeStatusRDD, jsc,
+        (HoodieTable<T>) table);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     commitOnAutoCommit(result);
@@ -180,6 +181,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
 
   private void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata result) {
     String actionType = table.getMetaClient().getCommitActionType();
+
     LOG.info("Committing " + instantTime + ", action Type " + actionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.create(config, jsc);
@@ -188,9 +190,13 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
 
     result.setCommitted(true);
-    List<HoodieWriteStat> stats = result.getWriteStatuses().map(WriteStatus::getStat).collect();
+    List<HoodieWriteStat> stats = new ArrayList<>();
+    if (!result.isEncodableDataset()) {
+      stats = result.getWriteStatuses().map(WriteStatus::getStat).collect();
+    } else {
+      stats = result.getEncodableWriteStatuses().toJavaRDD().map(EncodableWriteStatus::getStat).collect();
+    }
     result.setWriteStats(stats);
-
     updateMetadataAndRollingStats(metadata, stats);
 
     // Finalize write
@@ -216,6 +222,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
 
   /**
    * Finalize Write operation.
+   *
    * @param instantTime Instant Time
    * @param stats Hoodie Write Stat
    */

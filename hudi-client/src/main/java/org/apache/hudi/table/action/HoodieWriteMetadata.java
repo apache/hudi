@@ -18,15 +18,17 @@
 
 package org.apache.hudi.table.action;
 
-import java.util.List;
+import org.apache.hudi.client.EncodableWriteStatus;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Dataset;
 
 import java.time.Duration;
+import java.util.List;
 
 /**
  * Contains metadata, write-statuses and latency times corresponding to a commit/delta-commit action.
@@ -34,6 +36,7 @@ import java.time.Duration;
 public class HoodieWriteMetadata {
 
   private JavaRDD<WriteStatus> writeStatuses;
+  private Dataset<EncodableWriteStatus> encWriteStatuses;
   private Option<Duration> indexLookupDuration = Option.empty();
 
   // Will be set when auto-commit happens
@@ -42,8 +45,13 @@ public class HoodieWriteMetadata {
   private Option<List<HoodieWriteStat>> writeStats = Option.empty();
   private Option<Duration> indexUpdateDuration = Option.empty();
   private Option<Duration> finalizeDuration = Option.empty();
+  private boolean encodableDataset = false;
 
   public HoodieWriteMetadata() {
+  }
+
+  public Dataset<EncodableWriteStatus> getEncodableWriteStatuses() {
+    return encWriteStatuses;
   }
 
   public JavaRDD<WriteStatus> getWriteStatuses() {
@@ -56,6 +64,15 @@ public class HoodieWriteMetadata {
 
   public void setWriteStatuses(JavaRDD<WriteStatus> writeStatuses) {
     this.writeStatuses = writeStatuses;
+  }
+
+  public void setEncodableWriteStatuses(Dataset<EncodableWriteStatus> encWriteStatuses) {
+    this.encWriteStatuses = encWriteStatuses;
+    this.encodableDataset = true;
+  }
+
+  public boolean isEncodableDataset() {
+    return encodableDataset;
   }
 
   public void setCommitMetadata(Option<HoodieCommitMetadata> commitMetadata) {

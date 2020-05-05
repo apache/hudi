@@ -84,6 +84,8 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
       + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
       + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},";
+
+
   public static final String TRIP_SCHEMA_SUFFIX = "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false} ]}";
   public static final String FARE_NESTED_SCHEMA = "{\"name\": \"fare\",\"type\": {\"type\":\"record\", \"name\":\"fare\",\"fields\": ["
       + "{\"name\": \"amount\",\"type\": \"double\"},{\"name\": \"currency\", \"type\": \"string\"}]}},";
@@ -115,6 +117,18 @@ public class HoodieTestDataGenerator {
   public static final Schema AVRO_TRIP_SCHEMA = new Schema.Parser().parse(TRIP_SCHEMA);
   public static final Schema FLATTENED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
 
+  public static final String TRIP_SCHEMA_PREFIX_1 = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
+      + "{\"name\": \"timestamp\",\"type\": \"double\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"_partition_path\", \"type\": \"string\"}," + "{\"name\": \"uuid\", \"type\": \"string\"},"
+      + "{\"name\": \"partitionpath\", \"type\": \"string\"},"
+      + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
+      + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
+      + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},";
+
+  public static final String TRIP_EXAMPLE_SCHEMA_1_STR =
+      TRIP_SCHEMA_PREFIX_1.substring(0, TRIP_SCHEMA_PREFIX_1.length() - 1) + "]}";
+  public static final Schema AVRO_SCHEMA_1 = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA_1_STR);
+
   private static final Random RAND = new Random(46474747);
 
   //Maintains all the existing keys schema wise
@@ -144,6 +158,11 @@ public class HoodieTestDataGenerator {
     }
   }
 
+  public GenericRecord generateRandomGenRecPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) {
+    return generateGenRec(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0,
+        false, isFlattened, key.getPartitionPath(), commitTime);
+  }
+
   public TestRawTripPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
     if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
       return generateRandomValue(key, commitTime, isFlattened);
@@ -152,7 +171,6 @@ public class HoodieTestDataGenerator {
     } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
       return generatePayloadForShortTripSchema(key, commitTime);
     }
-
     return null;
   }
 
@@ -160,9 +178,9 @@ public class HoodieTestDataGenerator {
    * Generates a new avro record of the above nested schema format,
    * retaining the key if optionally provided.
    *
-   * @param key  Hoodie key.
-   * @param instantTime  Instant time to use.
-   * @return  Raw paylaod of a test record.
+   * @param key         Hoodie key.
+   * @param instantTime Instant time to use.
+   * @return Raw paylaod of a test record.
    * @throws IOException
    */
   public static TestRawTripPayload generateRandomValue(HoodieKey key, String instantTime) throws IOException {
@@ -173,10 +191,10 @@ public class HoodieTestDataGenerator {
    * Generates a new avro record with the specified schema (nested or flattened),
    * retaining the key if optionally provided.
    *
-   * @param key  Hoodie key.
-   * @param instantTime  Commit time to use.
-   * @param isFlattened  whether the schema of the record should be flattened.
-   * @return  Raw paylaod of a test record.
+   * @param key         Hoodie key.
+   * @param instantTime Commit time to use.
+   * @param isFlattened whether the schema of the record should be flattened.
+   * @return Raw paylaod of a test record.
    * @throws IOException
    */
   public static TestRawTripPayload generateRandomValue(
@@ -260,6 +278,24 @@ public class HoodieTestDataGenerator {
     } else {
       rec.put("_hoodie_is_deleted", false);
     }
+    return rec;
+  }
+
+  public static GenericRecord generateGenRec(String rowKey, String riderName, String driverName,
+                                             double timestamp, boolean isDeleteRecord,
+                                             boolean isFlattened, String partitionPath, String commitTime) {
+    GenericRecord rec = new GenericData.Record(AVRO_SCHEMA_1);
+    rec.put("_row_key", rowKey);
+    rec.put("_partition_path", partitionPath);
+    rec.put("uuid", rowKey);
+    rec.put("partitionpath", partitionPath);
+    rec.put("timestamp", timestamp);
+    rec.put("rider", riderName);
+    rec.put("driver", driverName);
+    rec.put("begin_lat", RAND.nextDouble());
+    rec.put("begin_lon", RAND.nextDouble());
+    rec.put("end_lat", RAND.nextDouble());
+    rec.put("end_lon", RAND.nextDouble());
     return rec;
   }
 
@@ -361,16 +397,28 @@ public class HoodieTestDataGenerator {
   }
 
   /**
+   * Generates new inserts with nested schema, uniformly across the partition paths above.
+   * It also updates the list of existing keys.
+   */
+  public List<GenericRecord> generateInsertsGenRec(String instantTime, Integer n) {
+    return generateInsertsGenRec(instantTime, n, false);
+  }
+
+  /**
    * Generates new inserts, uniformly across the partition paths above.
    * It also updates the list of existing keys.
    *
-   * @param instantTime  Commit time to use.
-   * @param n  Number of records.
-   * @param isFlattened  whether the schema of the generated record is flattened
-   * @return  List of {@link HoodieRecord}s
+   * @param instantTime Commit time to use.
+   * @param n           Number of records.
+   * @param isFlattened whether the schema of the generated record is flattened
+   * @return List of {@link HoodieRecord}s
    */
   public List<HoodieRecord> generateInserts(String instantTime, Integer n, boolean isFlattened) {
     return generateInsertsStream(instantTime, n, isFlattened, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
+  }
+
+  public List<GenericRecord> generateInsertsGenRec(String instantTime, Integer n, boolean isFlattened) {
+    return generateInsertsStreamGenRec(instantTime, n, isFlattened, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
   }
 
   /**
@@ -400,6 +448,22 @@ public class HoodieTestDataGenerator {
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
+    });
+  }
+
+  public Stream<GenericRecord> generateInsertsStreamGenRec(
+      String instantTime, Integer n, boolean isFlattened, String schemaStr) {
+    int currSize = getNumExistingKeys(schemaStr);
+
+    return IntStream.range(0, n).boxed().map(i -> {
+      String partitionPath = partitionPaths[RAND.nextInt(partitionPaths.length)];
+      HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
+      KeyPartition kp = new KeyPartition();
+      kp.key = key;
+      kp.partitionPath = partitionPath;
+      populateKeysBySchema(schemaStr, currSize + i, kp);
+      incrementNumExistingKeysBySchema(schemaStr);
+      return generateRandomGenRecPerSchema(schemaStr, key, instantTime, isFlattened);
     });
   }
 
@@ -521,7 +585,7 @@ public class HoodieTestDataGenerator {
    * list
    *
    * @param instantTime Instant Timestamp
-   * @param n          Number of updates (including dups)
+   * @param n           Number of updates (including dups)
    * @return list of hoodie record updates
    */
   public List<HoodieRecord> generateUpdates(String instantTime, Integer n) throws IOException {
@@ -544,7 +608,7 @@ public class HoodieTestDataGenerator {
    * Generates deduped updates of keys previously inserted, randomly distributed across the keys above.
    *
    * @param instantTime Instant Timestamp
-   * @param n          Number of unique records
+   * @param n           Number of unique records
    * @return list of hoodie record updates
    */
   public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n) {
@@ -565,7 +629,7 @@ public class HoodieTestDataGenerator {
    * Generates deduped updates of keys previously inserted, randomly distributed across the keys above.
    *
    * @param instantTime Commit Timestamp
-   * @param n          Number of unique records
+   * @param n           Number of unique records
    * @return stream of hoodie record updates
    */
   public Stream<HoodieRecord> generateUniqueUpdatesStream(String instantTime, Integer n, String schemaStr) {
@@ -629,7 +693,7 @@ public class HoodieTestDataGenerator {
    * Generates deduped delete records previously inserted, randomly distributed across the keys above.
    *
    * @param instantTime Commit Timestamp
-   * @param n          Number of unique records
+   * @param n           Number of unique records
    * @return stream of hoodie records for delete
    */
   public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n) {
@@ -665,7 +729,7 @@ public class HoodieTestDataGenerator {
   public boolean deleteExistingKeyIfPresent(HoodieKey key) {
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
     Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-    for (Map.Entry<Integer, KeyPartition> entry: existingKeys.entrySet()) {
+    for (Map.Entry<Integer, KeyPartition> entry : existingKeys.entrySet()) {
       if (entry.getValue().key.equals(key)) {
         int index = entry.getKey();
         existingKeys.put(index, existingKeys.get(numExistingKeys - 1));

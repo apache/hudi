@@ -96,7 +96,6 @@ public class HoodiePartitionMetadata {
         os.hsync();
         os.hflush();
         os.close();
-
         // move to actual path
         fs.rename(tmpMetaPath, metaPath);
       }

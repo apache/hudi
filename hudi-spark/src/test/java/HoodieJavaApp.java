@@ -16,10 +16,8 @@
  * limitations under the License.
  */
 
-import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
-import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -28,6 +26,7 @@ import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.utils.DataSourceTestUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -111,7 +110,7 @@ public class HoodieJavaApp {
     HoodieTestDataGenerator dataGen = null;
     if (nonPartitionedTable) {
       // All data goes to base-path
-      dataGen = new HoodieTestDataGenerator(new String[]{""});
+      dataGen = new HoodieTestDataGenerator(new String[] {""});
     } else {
       dataGen = new HoodieTestDataGenerator();
     }
@@ -159,9 +158,9 @@ public class HoodieJavaApp {
     /**
      * Commit that updates records
      */
-    List<HoodieRecord> recordsToBeUpdated = dataGen.generateUpdates("002"/* ignore */, 100);
+    /*List<HoodieRecord> recordsToBeUpdated = dataGen.generateUpdates("002", 100);
     recordsSoFar.addAll(recordsToBeUpdated);
-    List<String> records2 = DataSourceTestUtils.convertToStringList(recordsToBeUpdated);
+    List<String> records2 = org.apache.hudi.utils.DataSourceTestUtils.convertToStringList(recordsToBeUpdated);
     Dataset<Row> inputDF2 = spark.read().json(jssc.parallelize(records2, 2));
     writer = inputDF2.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
@@ -182,7 +181,7 @@ public class HoodieJavaApp {
     /**
      * Commit that Deletes some records
      */
-    List<String> deletes = DataSourceTestUtils.convertKeysToStringList(
+    /*List<String> deletes = org.apache.hudi.utils.DataSourceTestUtils.convertKeysToStringList(
         HoodieClientTestUtils
             .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(recordsSoFar), 20));
     Dataset<Row> inputDF3 = spark.read().json(jssc.parallelize(deletes, 2));
@@ -215,20 +214,20 @@ public class HoodieJavaApp {
     // all trips whose fare amount was greater than 2.
     spark.sql("select fare.amount, begin_lon, begin_lat, timestamp from hoodie_ro where fare.amount > 2.0").show();
 
-    if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) {
+    /*if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) {
       /**
        * Consume incrementally, only changes in commit 2 above. Currently only supported for COPY_ON_WRITE TABLE
        */
-      Dataset<Row> incQueryDF = spark.read().format("org.apache.hudi")
+    /*Dataset<Row> incQueryDF = spark.read().format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          // Only changes in write 2 above
+         // Only changes in write 2 above
           .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), commitInstantTime1)
           // For incremental view, pass in the root/base path of dataset
           .load(tablePath);
 
       LOG.info("You will only see records from : " + commitInstantTime2);
       incQueryDF.groupBy(incQueryDF.col("_hoodie_commit_time")).count().show();
-    }
+    }*/
   }
 
   /**

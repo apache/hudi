@@ -16,36 +16,42 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.avro;
+package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 
-import org.apache.avro.Schema;
-import org.apache.parquet.avro.AvroWriteSupport;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.WriteSupport;
-import org.apache.parquet.schema.MessageType;
+import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
+import org.apache.spark.sql.types.StructType;
 
 import java.util.HashMap;
 
-/**
- * Wrap AvroWriterSupport for plugging in the bloom filter.
- */
-public class HoodieAvroWriteSupport extends AvroWriteSupport {
+import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
+import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE;
+import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
+import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER;
 
-  protected BloomFilter bloomFilter;
+public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
+
+  private Configuration hadoopConf;
+  private BloomFilter bloomFilter;
   protected String minRecordKey;
   protected String maxRecordKey;
 
-  public static final String OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "com.uber.hoodie.bloomfilter";
-  public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "org.apache.hudi.bloomfilter";
-  public static final String HOODIE_MIN_RECORD_KEY_FOOTER = "hoodie_min_record_key";
-  public static final String HOODIE_MAX_RECORD_KEY_FOOTER = "hoodie_max_record_key";
-  public static final String HOODIE_BLOOM_FILTER_TYPE_CODE = "hoodie_bloom_filter_type_code";
-
-  public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, BloomFilter bloomFilter) {
-    super(schema, avroSchema);
+  public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, BloomFilter bloomFilter) {
+    super();
+    Configuration hadoopConf = new Configuration(conf);
+    hadoopConf.set("spark.sql.parquet.writeLegacyFormat", "false");
+    hadoopConf.set("spark.sql.parquet.outputTimestampType", "TIMESTAMP_MILLIS");
+    this.hadoopConf = hadoopConf;
+    setSchema(structType, hadoopConf);
     this.bloomFilter = bloomFilter;
+  }
+
+  public Configuration getHadoopConf() {
+    return hadoopConf;
   }
 
   @Override

@@ -332,7 +332,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
     /*
     This record has the same record key as originalRecord and the same partition
-    Though GLOBAL_BLOOM_INDEX_SHOULD_UPDATE_PARTITION_PATH = true,
+    Though GLOBAL_BLOOM_INDEX_SHOULD_UPDATE_PARTITION_PATH = false,
     globalBloomIndex should just tag the original partition
     */
     TestRawTripPayload incomingPayloadSamePartition =

@@ -22,10 +22,12 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
 
 public class HoodieParquetConfig {
 
   private HoodieAvroWriteSupport writeSupport;
+  private ParquetWriteSupport parquetWriteSupport;
   private CompressionCodecName compressionCodecName;
   private int blockSize;
   private int pageSize;
@@ -34,7 +36,7 @@ public class HoodieParquetConfig {
   private double compressionRatio;
 
   public HoodieParquetConfig(HoodieAvroWriteSupport writeSupport, CompressionCodecName compressionCodecName,
-      int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio) {
+                             int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio) {
     this.writeSupport = writeSupport;
     this.compressionCodecName = compressionCodecName;
     this.blockSize = blockSize;
@@ -42,6 +44,21 @@ public class HoodieParquetConfig {
     this.maxFileSize = maxFileSize;
     this.hadoopConf = hadoopConf;
     this.compressionRatio = compressionRatio;
+  }
+
+  public HoodieParquetConfig(ParquetWriteSupport parquetWriteSupport, CompressionCodecName compressionCodecName,
+                             int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio) {
+    this.parquetWriteSupport = parquetWriteSupport;
+    this.compressionCodecName = compressionCodecName;
+    this.blockSize = blockSize;
+    this.pageSize = pageSize;
+    this.maxFileSize = maxFileSize;
+    this.hadoopConf = hadoopConf;
+    this.compressionRatio = compressionRatio;
+  }
+
+  public ParquetWriteSupport getParquetWriteSupport() {
+    return parquetWriteSupport;
   }
 
   public HoodieAvroWriteSupport getWriteSupport() {

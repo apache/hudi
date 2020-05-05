@@ -24,13 +24,14 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
-
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.time.Duration;
 import java.time.Instant;
+
 import scala.Tuple2;
 
 public class WriteHelper<T extends HoodieRecordPayload<T>> {
@@ -77,7 +78,7 @@ public class WriteHelper<T extends HoodieRecordPayload<T>> {
   /**
    * Deduplicate Hoodie records, using the given deduplication function.
    *
-   * @param records hoodieRecords to deduplicate
+   * @param records     hoodieRecords to deduplicate
    * @param parallelism parallelism or partitions to be used while reducing/deduplicating
    * @return RDD of HoodieRecord already be deduplicated
    */

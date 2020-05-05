@@ -18,8 +18,10 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.client.HoodieDatasetWriteClient;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.EncodableWriteStatus;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
@@ -46,6 +48,8 @@ import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -212,8 +216,28 @@ public class DataSourceUtils {
             .withInlineCompaction(inlineCompact).build())
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();
-
     return new HoodieWriteClient<>(jssc, writeConfig, true);
+  }
+
+  public static HoodieDatasetWriteClient createHoodieDatasetClient(JavaSparkContext jssc, String schemaStr, String basePath,
+      String tblName, Map<String, String> parameters) {
+
+    // inline compaction is on by default for MOR
+    boolean inlineCompact = parameters.get(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY())
+        .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
+
+    // insert/bulk-insert combining to be true, if filtering for duplicates
+    boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS_OPT_KEY()));
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).withAutoCommit(false)
+        .combineInput(combineInserts, true).withSchema(schemaStr).forTable(tblName)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY()))
+            .withInlineCompaction(inlineCompact).build())
+        // override above with Hoodie configs specified as options.
+        .withProps(parameters).build();
+    return new HoodieDatasetWriteClient(jssc, writeConfig, true);
   }
 
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
@@ -228,6 +252,11 @@ public class DataSourceUtils {
       // default is upsert
       return client.upsert(hoodieRecords, instantTime);
     }
+  }
+
+  public static Dataset<EncodableWriteStatus> doWriteOperationDataset(HoodieDatasetWriteClient client, Dataset<Row> rows,
+                                                      String instantTime, String operation) throws HoodieException {
+    return client.bulkInsertDataset(rows, instantTime);
   }
 
   public static JavaRDD<WriteStatus> doDeleteOperation(HoodieWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
