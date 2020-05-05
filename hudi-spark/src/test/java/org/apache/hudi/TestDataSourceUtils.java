@@ -16,13 +16,14 @@
  * limitations under the License.
  */
 
-import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.DataSourceWriteOptions;
+package org.apache.hudi;
+
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.testutils.DataSourceTestUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -52,7 +53,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class DataSourceUtilsTest {
+public class TestDataSourceUtils {
 
   @Mock
   private HoodieWriteClient hoodieWriteClient;

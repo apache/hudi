@@ -15,12 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.hudi
+package org.apache.hudi.functional
 
 import java.util.{Date, UUID}
 
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.{SaveMode, SparkSession}

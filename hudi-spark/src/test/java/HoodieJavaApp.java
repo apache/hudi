@@ -28,6 +28,7 @@ import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.testutils.DataSourceTestUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;

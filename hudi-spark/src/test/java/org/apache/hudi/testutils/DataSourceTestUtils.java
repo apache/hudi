@@ -16,12 +16,15 @@
  * limitations under the License.
  */
 
+package org.apache.hudi.testutils;
+
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
+
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;

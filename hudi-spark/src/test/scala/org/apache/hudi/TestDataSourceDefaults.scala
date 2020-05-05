@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
+package org.apache.hudi
+
 import org.apache.avro.generic.GenericRecord
-import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{EmptyHoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.util.{Option, SchemaTestUtil}
