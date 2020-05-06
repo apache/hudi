@@ -1,0 +1,17 @@
+{
+  "schema":{
+    "type":"struct",
+    "fields":[
+      {
+        "type":"string",
+        "optional":false,
+        "field":"id"
+      }
+    ],
+    "optional":false,
+    "name":"snapshot_debezium.sweeper_merchant.merchanttransaction.Key"
+  },
+  "payload":{
+    "id":"{ \"$oid\" : \"55555505d648da1824d45a1d\"}"
+  }
+}
