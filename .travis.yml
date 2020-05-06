@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+os: linux
 language: java
 dist: trusty
 jdk:
   - openjdk8
-sudo: required
 env:
   - HUDI_QUIETER_LOGGING=1 TEST_SUITE=unit
   - TEST_SUITE=integration
