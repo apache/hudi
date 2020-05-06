@@ -349,7 +349,7 @@ Consequently, Kudu does not support incremental pulling (as of early 2017), some
 
 <p>Kudu diverges from a distributed file system abstraction and HDFS altogether, with its own set of storage servers talking to each  other via RAFT.
 Hudi, on the other hand, is designed to work with an underlying Hadoop compatible filesystem (HDFS,S3 or Ceph) and does not have its own fleet of storage servers,
-instead relying on Apache Spark to do the heavy-lifting. Thu, Hudi can be scaled easily, just like other Spark jobs, while Kudu would require hardware
+instead relying on Apache Spark to do the heavy-lifting. Thus, Hudi can be scaled easily, just like other Spark jobs, while Kudu would require hardware
 &amp; operational support, typical to datastores like HBase or Vertica. We have not at this point, done any head to head benchmarks against Kudu (given RTTable is WIP).
 But, if we were to go with results shared by <a href="https://db-blog.web.cern.ch/blog/zbigniew-baranowski/2017-01-performance-comparison-different-file-formats-and-storage-engines">CERN</a> ,
 we expect Hudi to positioned at something that ingests parquet with superior performance.</p>
