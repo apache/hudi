@@ -8,15 +8,14 @@ import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.utilities.mongo.Operation;
-import org.apache.hudi.utilities.sources.helpers.KafkaAvroConverter
+import org.apache.hudi.utilities.sources.helpers.KafkaAvroConverter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-
-public class MongoAvroConverter extends KafkaAvroConverter{
+public class MongoAvroConverter extends KafkaAvroConverter {
   private static final Logger LOG = LogManager.getLogger(MongoAvroConverter.class);
   private static final String AFTER_OPLOGFIELD = "after";
   private static final String OP_OPLOGFIELD = "op";
@@ -33,6 +32,7 @@ public class MongoAvroConverter extends KafkaAvroConverter{
     super(avroSchema);
   }
 
+  @Override
   public GenericRecord transform(String key, String value) {
     JSONObject valueJson = new JSONObject(value);
     GenericRecord genericRecord = new Record(this.getSchema());

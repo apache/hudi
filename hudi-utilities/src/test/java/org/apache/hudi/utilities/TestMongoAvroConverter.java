@@ -14,7 +14,6 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
-
 public class TestMongoAvroConverter {
 
   @Test
@@ -28,8 +27,6 @@ public class TestMongoAvroConverter {
     MongoAvroConverter transformer = new MongoAvroConverter(schema);
     String createSampleId = "55555505d648da1824d45a1d";
     assertEquals(createSampleId, transformer.readKey(sampleKeyStr));
-
-
   }
 
   @Test
@@ -46,8 +43,8 @@ public class TestMongoAvroConverter {
 
     Schema schema = parser.parse(sampleSchemaStr);
     MongoAvroConverter transformer = new MongoAvroConverter(schema);
-    GenericRecord resultUpdate = transformer.keyValueTransform(sampleKeyStr, sampleUpdateValueStr);
-    GenericRecord resultCreate = transformer.keyValueTransform(sampleKeyStr, sampleCreateValueStr);
+    GenericRecord resultUpdate = transformer.transform(sampleKeyStr, sampleUpdateValueStr);
+    GenericRecord resultCreate = transformer.transform(sampleKeyStr, sampleCreateValueStr);
 
     String updateSampleId = "55555505d648da1824d45a1d";
     String updateSampleOp = "u";
