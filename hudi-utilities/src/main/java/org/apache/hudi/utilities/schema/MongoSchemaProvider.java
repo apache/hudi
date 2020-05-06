@@ -40,9 +40,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * A simple schema provider, that reads off files on S3.
+ * This is a mongo  schema provider, that reads off mongo schema files on S3.
  */
-public class S3FilebasedSchemaProvider extends SchemaProvider {
+public class MongoSchemaProvider extends SchemaProvider {
 
   /**
    * Configs supported.
@@ -57,7 +57,7 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
   /*
    * Embedded schema provider that build oplog schemas
    */
-  private class OplogSchemaProvider {
+  private static class OplogSchemaProvider {
     private Schema baseSchema;
     private final String[] fieldNames = new String[] {
       "oplog_op", "oplog_ts_ms", "oplog_patch"
@@ -67,6 +67,7 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
       Type.STRING, Type.LONG, Type.STRING
     };
 
+    //private static final OplogSchemaProvider instance;
     private Schema buildOplogBaseSchema() {
       SchemaBuilder.FieldAssembler<Schema> fieldAssembler = SchemaBuilder
           .record("MongoOplog")
@@ -94,14 +95,14 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
     }
   }
 
-  private static final Logger LOG = LogManager.getLogger(S3FilebasedSchemaProvider.class);
+  private static final Logger LOG = LogManager.getLogger(MongoSchemaProvider.class);
 
   private final String s3Bucket;
   private final String s3File;
   private final long schemaExpiredTime;
 
   private Schema sourceSchema;
-  private OplogSchemaProvider oplogSchemaProvider;
+  private static final OplogSchemaProvider OPLOG_SCHEMA_PROVIDER = new OplogSchemaProvider();
   private AmazonS3 s3Client;
   private long lastModifiedTS;
   private long schemaCachedTS;
@@ -110,7 +111,7 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
     return date.getTime() / 1000L;
   }
 
-  public S3FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
+  public MongoSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     this.s3Bucket = props.getString(Config.SOURCE_SCHEMA_S3_BUCKET);
     this.s3File = props.getString(Config.SOURCE_SCHEMA_FILENAME);
@@ -121,7 +122,6 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
 
     try {
       s3Client = AmazonS3ClientBuilder.standard().withRegion(props.getString(Config.SOURCE_SCHEMA_REGION)).build();
-      oplogSchemaProvider = new OplogSchemaProvider();
       fetchSchemaFromS3();
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading schema From S3", ioe);
@@ -187,10 +187,10 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
   }
 
   /**
-   * Combine Avro Schemas from S3.
+   * Combine Mongo table and oplog schemas.
    */
   private Schema combineSchemaFromS3(Schema tableSchema) throws IOException {
-    Schema oplogSchema = oplogSchemaProvider.getBaseSchema();
+    Schema oplogSchema = OPLOG_SCHEMA_PROVIDER.getBaseSchema();
 
     List<Schema.Field> fieldList = oplogSchema.getFields().stream()
         .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))

@@ -22,9 +22,10 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.UtilitiesTestBase;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
-import org.apache.hudi.utilities.schema.S3FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.MongoSchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
 
@@ -57,7 +58,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
   private static String TEST_TOPIC_NAME = "hoodie_test";
 
-  private S3FilebasedSchemaProvider schemaProvider;
+  private MongoSchemaProvider schemaProvider;
   private KafkaTestUtils testUtils;
 
   @BeforeClass
@@ -73,7 +74,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
   @Before
   public void setup() throws Exception {
     super.setup();
-    schemaProvider = new S3FilebasedSchemaProvider(Helpers.setupSchemaOnS3(), jsc);
+    schemaProvider = new MongoSchemaProvider(Helpers.setupSchemaOnS3(), jsc);
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
@@ -146,7 +147,8 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
   @Test
   public void testCombineSchemaFromS3() throws IOException {
-    Schema sourceSchema = schemaProvider.getLatestSourceSchema();
+    Pair<Schema, Boolean> schemaPair = schemaProvider.getLatestSourceSchema();
+    Schema sourceSchema = schemaPair.getKey();
 
     HashMap<String, String> fieldNames = new HashMap<String, String>();
     fieldNames.put("oplog_op", "string");
