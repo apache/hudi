@@ -18,72 +18,65 @@
 
 package org.apache.hudi.common.bloom;
 
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests {@link SimpleBloomFilter} and {@link HoodieDynamicBoundedBloomFilter}.
  */
-@RunWith(Parameterized.class)
 public class TestBloomFilter {
-
-  private final String versionToTest;
 
   // name attribute is optional, provide a unique name for test
   // multiple parameters, uses Collection<Object[]>
-  @Parameters()
-  public static Collection<Object[]> data() {
-    return Arrays.asList(new Object[][] {
-        {BloomFilterTypeCode.SIMPLE.name()},
-        {BloomFilterTypeCode.DYNAMIC_V0.name()}
-    });
+  public static List<Arguments> bloomFilterTypeCodes() {
+    return Arrays.asList(
+        Arguments.of(BloomFilterTypeCode.SIMPLE.name()),
+        Arguments.of(BloomFilterTypeCode.DYNAMIC_V0.name())
+    );
   }
 
-  public TestBloomFilter(String versionToTest) {
-    this.versionToTest = versionToTest;
-  }
-
-  @Test
-  public void testAddKey() {
+  @ParameterizedTest
+  @MethodSource("bloomFilterTypeCodes")
+  public void testAddKey(String typeCode) {
     List<String> inputs;
     int[] sizes = {100, 1000, 10000};
     for (int size : sizes) {
       inputs = new ArrayList<>();
-      BloomFilter filter = getBloomFilter(versionToTest, size, 0.000001, size * 10);
+      BloomFilter filter = getBloomFilter(typeCode, size, 0.000001, size * 10);
       for (int i = 0; i < size; i++) {
         String key = UUID.randomUUID().toString();
         inputs.add(key);
         filter.add(key);
       }
       for (java.lang.String key : inputs) {
-        Assert.assertTrue("Filter should have returned true for " + key, filter.mightContain(key));
+        assertTrue(filter.mightContain(key), "Filter should have returned true for " + key);
       }
       for (int i = 0; i < 100; i++) {
         String randomKey = UUID.randomUUID().toString();
         if (inputs.contains(randomKey)) {
-          Assert.assertTrue("Filter should have returned true for " + randomKey, filter.mightContain(randomKey));
+          assertTrue(filter.mightContain(randomKey), "Filter should have returned true for " + randomKey);
         }
       }
     }
   }
 
-  @Test
-  public void testSerialize() {
+  @ParameterizedTest
+  @MethodSource("bloomFilterTypeCodes")
+  public void testSerialize(String typeCode) {
 
     List<String> inputs;
     int[] sizes = {100, 1000, 10000};
     for (int size : sizes) {
       inputs = new ArrayList<>();
-      BloomFilter filter = getBloomFilter(versionToTest, size, 0.000001, size * 10);
+      BloomFilter filter = getBloomFilter(typeCode, size, 0.000001, size * 10);
       for (int i = 0; i < size; i++) {
         String key = UUID.randomUUID().toString();
         inputs.add(key);
@@ -92,9 +85,9 @@ public class TestBloomFilter {
 
       String serString = filter.serializeToString();
       BloomFilter recreatedBloomFilter = BloomFilterFactory
-          .fromString(serString, versionToTest);
+          .fromString(serString, typeCode);
       for (String key : inputs) {
-        Assert.assertTrue("Filter should have returned true for " + key, recreatedBloomFilter.mightContain(key));
+        assertTrue(recreatedBloomFilter.mightContain(key), "Filter should have returned true for " + key);
       }
     }
   }

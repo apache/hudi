@@ -19,10 +19,12 @@
 package org.apache.hudi.common.bloom;
 
 import org.apache.hadoop.util.hash.Hash;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests {@link InternalDynamicBloomFilter} for size bounding.
@@ -48,9 +50,9 @@ public class TestInternalDynamicBloomFilter {
       if (index != 0) {
         int curLength = serString.length();
         if (index > indexForMaxGrowth) {
-          Assert.assertEquals("Length should not increase after hitting max entries", curLength, lastKnownBloomSize);
+          assertEquals(curLength, lastKnownBloomSize, "Length should not increase after hitting max entries");
         } else {
-          Assert.assertTrue("Length should increase until max entries are reached", curLength > lastKnownBloomSize);
+          assertTrue(curLength > lastKnownBloomSize, "Length should increase until max entries are reached");
         }
       }
       lastKnownBloomSize = serString.length();

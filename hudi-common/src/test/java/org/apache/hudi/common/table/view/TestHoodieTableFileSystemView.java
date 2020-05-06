@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarnessJunit5;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -66,7 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests hoodie table file system view {@link HoodieTableFileSystemView}.
  */
 @SuppressWarnings("ResultOfMethodCallIgnored")
-public class TestHoodieTableFileSystemView extends HoodieCommonTestHarnessJunit5 {
+public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(TestHoodieTableFileSystemView.class);
 

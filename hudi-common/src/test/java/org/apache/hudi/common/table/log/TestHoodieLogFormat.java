@@ -19,7 +19,6 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.minicluster.MiniClusterUtil;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
@@ -36,6 +35,7 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.exception.CorruptedLogFileException;
 
@@ -46,19 +46,18 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -69,56 +68,45 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.SchemaTestUtil.getSimpleSchema;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests hoodie log format {@link HoodieLogFormat}.
  */
 @SuppressWarnings("Duplicates")
-@RunWith(Parameterized.class)
 public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   private static String BASE_OUTPUT_PATH = "/tmp/";
   private FileSystem fs;
   private Path partitionPath;
   private int bufferSize = 4096;
-  private Boolean readBlocksLazily;
 
-  public TestHoodieLogFormat(Boolean readBlocksLazily) {
-    this.readBlocksLazily = readBlocksLazily;
-  }
-
-  @Parameterized.Parameters(name = "LogBlockReadMode")
-  public static Collection<Boolean[]> data() {
-    return Arrays.asList(new Boolean[][] {{true}, {false}});
-  }
-
-  @BeforeClass
+  @BeforeAll
   public static void setUpClass() throws IOException, InterruptedException {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     MiniClusterUtil.setUp();
   }
 
-  @AfterClass
+  @AfterAll
   public static void tearDownClass() {
     MiniClusterUtil.shutdown();
   }
 
-  @Before
+  @BeforeEach
   public void setUp() throws IOException, InterruptedException {
     this.fs = MiniClusterUtil.fileSystem;
 
-    assertTrue(fs.mkdirs(new Path(folder.getRoot().getPath())));
-    this.partitionPath = new Path(folder.getRoot().getPath());
-    this.basePath = folder.getRoot().getParent();
+    assertTrue(fs.mkdirs(new Path(tempDir.toAbsolutePath().toString())));
+    this.partitionPath = new Path(tempDir.toAbsolutePath().toString());
+    this.basePath = tempDir.getParent().toString();
     HoodieTestUtils.init(MiniClusterUtil.configuration, basePath, HoodieTableType.MERGE_ON_READ);
   }
 
-  @After
+  @AfterEach
   public void tearDown() throws IOException {
     fs.delete(partitionPath, true);
   }
@@ -128,9 +116,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
-    assertEquals("Just created this log, size should be 0", 0, writer.getCurrentSize());
-    assertTrue("Check all log files should start with a .", writer.getLogFile().getFileName().startsWith("."));
-    assertEquals("Version should be 1 for new log created", 1, writer.getLogFile().getLogVersion());
+    assertEquals(0, writer.getCurrentSize(), "Just created this log, size should be 0");
+    assertTrue(writer.getLogFile().getFileName().startsWith("."), "Check all log files should start with a .");
+    assertEquals(1, writer.getLogFile().getLogVersion(), "Version should be 1 for new log created");
   }
 
   @Test
@@ -145,9 +133,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
     long size = writer.getCurrentSize();
-    assertTrue("We just wrote a block - size should be > 0", size > 0);
-    assertEquals("Write should be auto-flushed. The size reported by FileStatus and the writer should match", size,
-        fs.getFileStatus(writer.getLogFile().getPath()).getLen());
+    assertTrue(size > 0, "We just wrote a block - size should be > 0");
+    assertEquals(size, fs.getFileStatus(writer.getLogFile().getPath()).getLen(),
+        "Write should be auto-flushed. The size reported by FileStatus and the writer should match");
     writer.close();
   }
 
@@ -175,8 +163,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     dataBlock = new HoodieAvroDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
-    assertEquals("This should be a new log file and hence size should be 0", 0, writer.getCurrentSize());
-    assertEquals("Version should be rolled to 2", 2, writer.getLogFile().getLogVersion());
+    assertEquals(0, writer.getCurrentSize(), "This should be a new log file and hence size should be 0");
+    assertEquals(2, writer.getLogFile().getLogVersion(), "Version should be rolled to 2");
     writer.close();
   }
 
@@ -232,7 +220,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
     writer2.close();
     assertNotNull(logFile1.getLogWriteToken());
-    assertEquals("Log Files must have different versions", logFile1.getLogVersion(), logFile2.getLogVersion() - 1);
+    assertEquals(logFile1.getLogVersion(), logFile2.getLogVersion() - 1, "Log Files must have different versions");
   }
 
   @Test
@@ -257,9 +245,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     dataBlock = new HoodieAvroDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
     long size2 = writer.getCurrentSize();
-    assertTrue("We just wrote a new block - size2 should be > size1", size2 > size1);
-    assertEquals("Write should be auto-flushed. The size reported by FileStatus and the writer should match", size2,
-        fs.getFileStatus(writer.getLogFile().getPath()).getLen());
+    assertTrue(size2 > size1, "We just wrote a new block - size2 should be > size1");
+    assertEquals(size2, fs.getFileStatus(writer.getLogFile().getPath()).getLen(),
+        "Write should be auto-flushed. The size reported by FileStatus and the writer should match");
     writer.close();
 
     // Close and Open again and append 100 more records
@@ -271,18 +259,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     dataBlock = new HoodieAvroDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
     long size3 = writer.getCurrentSize();
-    assertTrue("We just wrote a new block - size3 should be > size2", size3 > size2);
-    assertEquals("Write should be auto-flushed. The size reported by FileStatus and the writer should match", size3,
-        fs.getFileStatus(writer.getLogFile().getPath()).getLen());
+    assertTrue(size3 > size2, "We just wrote a new block - size3 should be > size2");
+    assertEquals(size3, fs.getFileStatus(writer.getLogFile().getPath()).getLen(),
+        "Write should be auto-flushed. The size reported by FileStatus and the writer should match");
     writer.close();
 
     // Cannot get the current size after closing the log
-    try {
-      writer.getCurrentSize();
-      fail("getCurrentSize should fail after the logAppender is closed");
-    } catch (IllegalStateException e) {
-      // pass
-    }
+    final Writer closedWriter = writer;
+    assertThrows(IllegalStateException.class, () -> {
+      closedWriter.getCurrentSize();
+    }, "getCurrentSize should fail after the logAppender is closed");
   }
 
   /*
@@ -354,14 +340,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
-    assertTrue("We wrote a block, we should be able to read it", reader.hasNext());
+    assertTrue(reader.hasNext(), "We wrote a block, we should be able to read it");
     HoodieLogBlock nextBlock = reader.next();
-    assertEquals("The next block should be a data block", HoodieLogBlockType.AVRO_DATA_BLOCK, nextBlock.getBlockType());
+    assertEquals(HoodieLogBlockType.AVRO_DATA_BLOCK, nextBlock.getBlockType(), "The next block should be a data block");
     HoodieAvroDataBlock dataBlockRead = (HoodieAvroDataBlock) nextBlock;
-    assertEquals("Read records size should be equal to the written records size", copyOfRecords.size(),
-        dataBlockRead.getRecords().size());
-    assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords,
-        dataBlockRead.getRecords());
+    assertEquals(copyOfRecords.size(), dataBlockRead.getRecords().size(),
+        "Read records size should be equal to the written records size");
+    assertEquals(copyOfRecords, dataBlockRead.getRecords(),
+        "Both records lists should be the same. (ordering guaranteed)");
     reader.close();
   }
 
@@ -405,35 +391,37 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
 
     Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
-    assertTrue("First block should be available", reader.hasNext());
+    assertTrue(reader.hasNext(), "First block should be available");
     HoodieLogBlock nextBlock = reader.next();
     HoodieAvroDataBlock dataBlockRead = (HoodieAvroDataBlock) nextBlock;
-    assertEquals("Read records size should be equal to the written records size", copyOfRecords1.size(),
-        dataBlockRead.getRecords().size());
-    assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords1,
-        dataBlockRead.getRecords());
+    assertEquals(copyOfRecords1.size(), dataBlockRead.getRecords().size(),
+        "Read records size should be equal to the written records size");
+    assertEquals(copyOfRecords1, dataBlockRead.getRecords(),
+        "Both records lists should be the same. (ordering guaranteed)");
     assertEquals(dataBlockRead.getSchema(), getSimpleSchema());
 
     reader.hasNext();
     nextBlock = reader.next();
     dataBlockRead = (HoodieAvroDataBlock) nextBlock;
-    assertEquals("Read records size should be equal to the written records size", copyOfRecords2.size(),
-        dataBlockRead.getRecords().size());
-    assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords2,
-        dataBlockRead.getRecords());
+    assertEquals(copyOfRecords2.size(), dataBlockRead.getRecords().size(),
+        "Read records size should be equal to the written records size");
+    assertEquals(copyOfRecords2, dataBlockRead.getRecords(),
+        "Both records lists should be the same. (ordering guaranteed)");
 
     reader.hasNext();
     nextBlock = reader.next();
     dataBlockRead = (HoodieAvroDataBlock) nextBlock;
-    assertEquals("Read records size should be equal to the written records size", copyOfRecords3.size(),
-        dataBlockRead.getRecords().size());
-    assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords3,
-        dataBlockRead.getRecords());
+    assertEquals(copyOfRecords3.size(), dataBlockRead.getRecords().size(),
+        "Read records size should be equal to the written records size");
+    assertEquals(copyOfRecords3, dataBlockRead.getRecords(),
+        "Both records lists should be the same. (ordering guaranteed)");
     reader.close();
   }
 
-  @Test
-  public void testBasicAppendAndScanMultipleFiles() throws IOException, URISyntaxException, InterruptedException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testBasicAppendAndScanMultipleFiles(boolean readBlocksLazily)
+      throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withSizeThreshold(1024).withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
@@ -467,8 +455,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       scannedRecords.add((IndexedRecord) record.getData().getInsertValue(schema).get());
     }
 
-    assertEquals("Scanner records count should be the same as appended records", scannedRecords.size(),
-        allRecords.stream().mapToLong(Collection::size).sum());
+    assertEquals(scannedRecords.size(), allRecords.stream().mapToLong(Collection::size).sum(),
+        "Scanner records count should be the same as appended records");
 
   }
 
@@ -511,17 +499,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
-
     // First round of reads - we should be able to read the first block and then EOF
     Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
-    assertTrue("First block should be available", reader.hasNext());
+    assertTrue(reader.hasNext(), "First block should be available");
     reader.next();
-    assertTrue("We should have corrupted block next", reader.hasNext());
+    assertTrue(reader.hasNext(), "We should have corrupted block next");
     HoodieLogBlock block = reader.next();
-    assertEquals("The read block should be a corrupt block", HoodieLogBlockType.CORRUPT_BLOCK, block.getBlockType());
-    assertTrue("Third block should be available", reader.hasNext());
+    assertEquals(HoodieLogBlockType.CORRUPT_BLOCK, block.getBlockType(), "The read block should be a corrupt block");
+    assertTrue(reader.hasNext(), "Third block should be available");
     reader.next();
-    assertFalse("There should be no more block left", reader.hasNext());
+    assertFalse(reader.hasNext(), "There should be no more block left");
 
     reader.close();
 
@@ -552,23 +539,25 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // Second round of reads - we should be able to read the first and last block
     reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
-    assertTrue("First block should be available", reader.hasNext());
+    assertTrue(reader.hasNext(), "First block should be available");
     reader.next();
-    assertTrue("We should get the 1st corrupted block next", reader.hasNext());
+    assertTrue(reader.hasNext(), "We should get the 1st corrupted block next");
     reader.next();
-    assertTrue("Third block should be available", reader.hasNext());
+    assertTrue(reader.hasNext(), "Third block should be available");
     reader.next();
-    assertTrue("We should get the 2nd corrupted block next", reader.hasNext());
+    assertTrue(reader.hasNext(), "We should get the 2nd corrupted block next");
     block = reader.next();
-    assertEquals("The read block should be a corrupt block", HoodieLogBlockType.CORRUPT_BLOCK, block.getBlockType());
-    assertTrue("We should get the last block next", reader.hasNext());
+    assertEquals(HoodieLogBlockType.CORRUPT_BLOCK, block.getBlockType(), "The read block should be a corrupt block");
+    assertTrue(reader.hasNext(), "We should get the last block next");
     reader.next();
-    assertFalse("We should have no more blocks left", reader.hasNext());
+    assertFalse(reader.hasNext(), "We should have no more blocks left");
     reader.close();
   }
 
-  @Test
-  public void testAvroLogRecordReaderBasic() throws IOException, URISyntaxException, InterruptedException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAvroLogRecordReaderBasic(boolean readBlocksLazily)
+      throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
     Writer writer =
@@ -600,19 +589,20 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema, "100",
         10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
-    assertEquals("", 200, scanner.getTotalLogRecords());
+    assertEquals(200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
-    assertEquals("Stream collect should return all 200 records", 200, readKeys.size());
+    assertEquals(200, readKeys.size(), "Stream collect should return all 200 records");
     copyOfRecords1.addAll(copyOfRecords2);
     Set<String> originalKeys =
         copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
             .collect(Collectors.toSet());
-    assertEquals("CompositeAvroLogReader should return 200 records from 2 versions", originalKeys, readKeys);
+    assertEquals(originalKeys, readKeys, "CompositeAvroLogReader should return 200 records from 2 versions");
   }
 
-  @Test
-  public void testAvroLogRecordReaderWithRollbackTombstone()
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAvroLogRecordReaderWithRollbackTombstone(boolean readBlocksLazily)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
@@ -661,15 +651,15 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema, "102",
         10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
-    assertEquals("We read 200 records from 2 write batches", 200, scanner.getTotalLogRecords());
+    assertEquals(200, scanner.getTotalLogRecords(), "We read 200 records from 2 write batches");
     Set<String> readKeys = new HashSet<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
-    assertEquals("Stream collect should return all 200 records", 200, readKeys.size());
+    assertEquals(200, readKeys.size(), "Stream collect should return all 200 records");
     copyOfRecords1.addAll(copyOfRecords3);
     Set<String> originalKeys =
         copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
             .collect(Collectors.toSet());
-    assertEquals("CompositeAvroLogReader should return 200 records from 2 versions", originalKeys, readKeys);
+    assertEquals(originalKeys, readKeys, "CompositeAvroLogReader should return 200 records from 2 versions");
   }
 
   @Test
@@ -740,19 +730,20 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema, "103",
         10240L, true, false, bufferSize, BASE_OUTPUT_PATH);
-    assertEquals("We would read 200 records", 200, scanner.getTotalLogRecords());
+    assertEquals(200, scanner.getTotalLogRecords(), "We would read 200 records");
     Set<String> readKeys = new HashSet<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
-    assertEquals("Stream collect should return all 200 records", 200, readKeys.size());
+    assertEquals(200, readKeys.size(), "Stream collect should return all 200 records");
     copyOfRecords1.addAll(copyOfRecords3);
     Set<String> originalKeys =
         copyOfRecords1.stream().map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
             .collect(Collectors.toSet());
-    assertEquals("CompositeAvroLogReader should return 200 records from 2 versions", originalKeys, readKeys);
+    assertEquals(originalKeys, readKeys, "CompositeAvroLogReader should return 200 records from 2 versions");
   }
 
-  @Test
-  public void testAvroLogRecordReaderWithDeleteAndRollback()
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAvroLogRecordReaderWithDeleteAndRollback(boolean readBlocksLazily)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
@@ -799,7 +790,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema, "102",
         10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
-    assertEquals("We still would read 200 records", 200, scanner.getTotalLogRecords());
+    assertEquals(200, scanner.getTotalLogRecords(), "We still would read 200 records");
     final List<String> readKeys = new ArrayList<>(200);
     final List<Boolean> emptyPayloads = new ArrayList<>();
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
@@ -812,12 +803,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         throw new UncheckedIOException(io);
       }
     });
-    assertEquals("Stream collect should return all 200 records", 200, readKeys.size());
-    assertEquals("Stream collect should return all 50 records with empty payloads", 50, emptyPayloads.size());
+    assertEquals(200, readKeys.size(), "Stream collect should return all 200 records");
+    assertEquals(50, emptyPayloads.size(), "Stream collect should return all 50 records with empty payloads");
     originalKeys.removeAll(deletedKeys);
     Collections.sort(originalKeys);
     Collections.sort(readKeys);
-    assertEquals("CompositeAvroLogReader should return 150 records from 2 versions", originalKeys, readKeys);
+    assertEquals(originalKeys, readKeys, "CompositeAvroLogReader should return 150 records from 2 versions");
 
     // Rollback the last block
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "103");
@@ -831,11 +822,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema, "101", 10240L, readBlocksLazily,
         false, bufferSize, BASE_OUTPUT_PATH);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
-    assertEquals("Stream collect should return all 200 records after rollback of delete", 200, readKeys.size());
+    assertEquals(200, readKeys.size(), "Stream collect should return all 200 records after rollback of delete");
   }
 
-  @Test
-  public void testAvroLogRecordReaderWithFailedRollbacks()
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAvroLogRecordReaderWithFailedRollbacks(boolean readBlocksLazily)
       throws IOException, URISyntaxException, InterruptedException {
 
     // Write a Data block and Delete block with same InstantTime (written in same batch)
@@ -894,15 +886,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // all data must be rolled back before merge
     HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema, "100",
         10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
-    assertEquals("We would have scanned 0 records because of rollback", 0, scanner.getTotalLogRecords());
+    assertEquals(0, scanner.getTotalLogRecords(), "We would have scanned 0 records because of rollback");
 
     final List<String> readKeys = new ArrayList<>();
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
-    assertEquals("Stream collect should return all 0 records", 0, readKeys.size());
+    assertEquals(0, readKeys.size(), "Stream collect should return all 0 records");
   }
 
-  @Test
-  public void testAvroLogRecordReaderWithInsertDeleteAndRollback()
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAvroLogRecordReaderWithInsertDeleteAndRollback(boolean readBlocksLazily)
       throws IOException, URISyntaxException, InterruptedException {
 
     // Write a Data block and Delete block with same InstantTime (written in same batch)
@@ -944,11 +937,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema, "100",
         10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
-    assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
+    assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
   }
 
-  @Test
-  public void testAvroLogRecordReaderWithInvalidRollback()
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAvroLogRecordReaderWithInvalidRollback(boolean readBlocksLazily)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
@@ -977,14 +971,15 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema, "100",
         10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
-    assertEquals("We still would read 100 records", 100, scanner.getTotalLogRecords());
+    assertEquals(100, scanner.getTotalLogRecords(), "We still would read 100 records");
     final List<String> readKeys = new ArrayList<>(100);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
-    assertEquals("Stream collect should return all 150 records", 100, readKeys.size());
+    assertEquals(100, readKeys.size(), "Stream collect should return all 150 records");
   }
 
-  @Test
-  public void testAvroLogRecordReaderWithInsertsDeleteAndRollback()
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAvroLogRecordReaderWithInsertsDeleteAndRollback(boolean readBlocksLazily)
       throws IOException, URISyntaxException, InterruptedException {
 
     // Write a 3 Data blocs with same InstantTime (written in same batch)
@@ -1029,11 +1024,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema, "101",
         10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
-    assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
+    assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
   }
 
-  @Test
-  public void testAvroLogRecordReaderWithMixedInsertsCorruptsAndRollback()
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAvroLogRecordReaderWithMixedInsertsCorruptsAndRollback(boolean readBlocksLazily)
       throws IOException, URISyntaxException, InterruptedException {
 
     // Write a 3 Data blocs with same InstantTime (written in same batch)
@@ -1118,7 +1114,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema, "101",
         10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
-    assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
+    assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
   }
 
   /*
@@ -1134,7 +1130,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
    * duplicate data.
    *
    */
-  private void testAvroLogRecordReaderMergingMultipleLogFiles(int numRecordsInLog1, int numRecordsInLog2) {
+  private void testAvroLogRecordReaderMergingMultipleLogFiles(int numRecordsInLog1, int numRecordsInLog2,
+      boolean readBlocksLazily) {
     try {
       // Write one Data block with same InstantTime (written in same batch)
       Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
@@ -1175,43 +1172,48 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema,
           "100", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
 
-      assertEquals("We would read 100 records",
-          Math.max(numRecordsInLog1, numRecordsInLog2), scanner.getNumMergedRecordsInLog());
+      assertEquals(Math.max(numRecordsInLog1, numRecordsInLog2), scanner.getNumMergedRecordsInLog(),
+          "We would read 100 records");
 
     } catch (Exception e) {
       e.printStackTrace();
     }
   }
 
-  @Test
-  public void testAvroLogRecordReaderWithFailedTaskInFirstStageAttempt() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAvroLogRecordReaderWithFailedTaskInFirstStageAttempt(boolean readBlocksLazily) {
     /*
      * FIRST_ATTEMPT_FAILED:
      * Original task from the stage attempt failed, but subsequent stage retry succeeded.
      */
-    testAvroLogRecordReaderMergingMultipleLogFiles(77, 100);
+    testAvroLogRecordReaderMergingMultipleLogFiles(77, 100, readBlocksLazily);
   }
 
-  @Test
-  public void testAvroLogRecordReaderWithFailedTaskInSecondStageAttempt() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAvroLogRecordReaderWithFailedTaskInSecondStageAttempt(boolean readBlocksLazily) {
     /*
      * SECOND_ATTEMPT_FAILED:
      * Original task from stage attempt succeeded, but subsequent retry attempt failed.
      */
-    testAvroLogRecordReaderMergingMultipleLogFiles(100, 66);
+    testAvroLogRecordReaderMergingMultipleLogFiles(100, 66, readBlocksLazily);
   }
 
-  @Test
-  public void testAvroLogRecordReaderTasksSucceededInBothStageAttempts() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAvroLogRecordReaderTasksSucceededInBothStageAttempts(boolean readBlocksLazily) {
     /*
      * BOTH_ATTEMPTS_SUCCEEDED:
      * Original task from the stage attempt and duplicate task from the stage retry succeeded.
      */
-    testAvroLogRecordReaderMergingMultipleLogFiles(100, 100);
+    testAvroLogRecordReaderMergingMultipleLogFiles(100, 100, readBlocksLazily);
   }
 
-  @Test
-  public void testBasicAppendAndReadInReverse() throws IOException, URISyntaxException, InterruptedException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testBasicAppendAndReadInReverse(boolean readBlocksLazily)
+      throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
@@ -1250,37 +1252,39 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieLogFileReader reader = new HoodieLogFileReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(),
         bufferSize, readBlocksLazily, true);
 
-    assertTrue("Last block should be available", reader.hasPrev());
+    assertTrue(reader.hasPrev(), "Last block should be available");
     HoodieLogBlock prevBlock = reader.prev();
     HoodieAvroDataBlock dataBlockRead = (HoodieAvroDataBlock) prevBlock;
 
-    assertEquals("Third records size should be equal to the written records size", copyOfRecords3.size(),
-        dataBlockRead.getRecords().size());
-    assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords3,
-        dataBlockRead.getRecords());
+    assertEquals(copyOfRecords3.size(), dataBlockRead.getRecords().size(),
+        "Third records size should be equal to the written records size");
+    assertEquals(copyOfRecords3, dataBlockRead.getRecords(),
+        "Both records lists should be the same. (ordering guaranteed)");
 
-    assertTrue("Second block should be available", reader.hasPrev());
+    assertTrue(reader.hasPrev(), "Second block should be available");
     prevBlock = reader.prev();
     dataBlockRead = (HoodieAvroDataBlock) prevBlock;
-    assertEquals("Read records size should be equal to the written records size", copyOfRecords2.size(),
-        dataBlockRead.getRecords().size());
-    assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords2,
-        dataBlockRead.getRecords());
+    assertEquals(copyOfRecords2.size(), dataBlockRead.getRecords().size(),
+        "Read records size should be equal to the written records size");
+    assertEquals(copyOfRecords2, dataBlockRead.getRecords(),
+        "Both records lists should be the same. (ordering guaranteed)");
 
-    assertTrue("First block should be available", reader.hasPrev());
+    assertTrue(reader.hasPrev(), "First block should be available");
     prevBlock = reader.prev();
     dataBlockRead = (HoodieAvroDataBlock) prevBlock;
-    assertEquals("Read records size should be equal to the written records size", copyOfRecords1.size(),
-        dataBlockRead.getRecords().size());
-    assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords1,
-        dataBlockRead.getRecords());
+    assertEquals(copyOfRecords1.size(), dataBlockRead.getRecords().size(),
+        "Read records size should be equal to the written records size");
+    assertEquals(copyOfRecords1, dataBlockRead.getRecords(),
+        "Both records lists should be the same. (ordering guaranteed)");
 
     assertFalse(reader.hasPrev());
     reader.close();
   }
 
-  @Test
-  public void testAppendAndReadOnCorruptedLogInReverse() throws IOException, URISyntaxException, InterruptedException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAppendAndReadOnCorruptedLogInReverse(boolean readBlocksLazily)
+      throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
@@ -1323,22 +1327,21 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieLogFileReader reader =
         new HoodieLogFileReader(fs, writer.getLogFile(), schema, bufferSize, readBlocksLazily, true);
 
-    assertTrue("Last block should be available", reader.hasPrev());
+    assertTrue(reader.hasPrev(), "Last block should be available");
     HoodieLogBlock block = reader.prev();
-    assertTrue("Last block should be datablock", block instanceof HoodieAvroDataBlock);
+    assertTrue(block instanceof HoodieAvroDataBlock, "Last block should be datablock");
 
-    assertTrue("Last block should be available", reader.hasPrev());
-    try {
+    assertTrue(reader.hasPrev(), "Last block should be available");
+    assertThrows(CorruptedLogFileException.class, () -> {
       reader.prev();
-    } catch (CorruptedLogFileException e) {
-      e.printStackTrace();
-      // We should have corrupted block
-    }
+    });
     reader.close();
   }
 
-  @Test
-  public void testBasicAppendAndTraverseInReverse() throws IOException, URISyntaxException, InterruptedException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testBasicAppendAndTraverseInReverse(boolean readBlocksLazily)
+      throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
@@ -1373,20 +1376,20 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieLogFileReader reader = new HoodieLogFileReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(),
         bufferSize, readBlocksLazily, true);
 
-    assertTrue("Third block should be available", reader.hasPrev());
+    assertTrue(reader.hasPrev(), "Third block should be available");
     reader.moveToPrev();
 
-    assertTrue("Second block should be available", reader.hasPrev());
+    assertTrue(reader.hasPrev(), "Second block should be available");
     reader.moveToPrev();
 
     // After moving twice, this last reader.prev() should read the First block written
-    assertTrue("First block should be available", reader.hasPrev());
+    assertTrue(reader.hasPrev(), "First block should be available");
     HoodieLogBlock prevBlock = reader.prev();
     HoodieAvroDataBlock dataBlockRead = (HoodieAvroDataBlock) prevBlock;
-    assertEquals("Read records size should be equal to the written records size", copyOfRecords1.size(),
-        dataBlockRead.getRecords().size());
-    assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords1,
-        dataBlockRead.getRecords());
+    assertEquals(copyOfRecords1.size(), dataBlockRead.getRecords().size(),
+        "Read records size should be equal to the written records size");
+    assertEquals(copyOfRecords1, dataBlockRead.getRecords(),
+        "Both records lists should be the same. (ordering guaranteed)");
 
     assertFalse(reader.hasPrev());
     reader.close();
@@ -1400,15 +1403,15 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Schema schema = getSimpleSchema();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> recordsCopy = new ArrayList<>(records);
-    assertEquals(records.size(), 100);
-    assertEquals(recordsCopy.size(), 100);
+    assertEquals(100, records.size());
+    assertEquals(100, recordsCopy.size());
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, schema);
     byte[] content = dataBlock.getBytes(schema);
     assertTrue(content.length > 0);
 
     HoodieLogBlock logBlock = HoodieAvroDataBlock.getBlock(content, schema);
-    assertEquals(logBlock.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
-    List<IndexedRecord> readRecords = ((HoodieAvroDataBlock)logBlock).getRecords();
+    assertEquals(HoodieLogBlockType.AVRO_DATA_BLOCK, logBlock.getBlockType());
+    List<IndexedRecord> readRecords = ((HoodieAvroDataBlock) logBlock).getRecords();
     assertEquals(readRecords.size(), recordsCopy.size());
     for (int i = 0; i < recordsCopy.size(); ++i) {
       assertEquals(recordsCopy.get(i), readRecords.get(i));
@@ -1416,8 +1419,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // Reader schema is optional if it is same as write schema
     logBlock = HoodieAvroDataBlock.getBlock(content, null);
-    assertEquals(logBlock.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
-    readRecords = ((HoodieAvroDataBlock)logBlock).getRecords();
+    assertEquals(HoodieLogBlockType.AVRO_DATA_BLOCK, logBlock.getBlockType());
+    readRecords = ((HoodieAvroDataBlock) logBlock).getRecords();
     assertEquals(readRecords.size(), recordsCopy.size());
     for (int i = 0; i < recordsCopy.size(); ++i) {
       assertEquals(recordsCopy.get(i), readRecords.get(i));
