@@ -252,6 +252,9 @@ public class HoodieDeltaStreamer implements Serializable {
         + "https://spark.apache.org/docs/latest/job-scheduling.html")
     public Integer compactSchedulingMinShare = 0;
 
+    @Parameter(names = {"--check-provider-schema-change"}, description = "Check for provider schema change")
+    public Boolean checkProviderSchemaChange = false;
+
     /**
      * Compaction is enabled for MoR table by default. This flag disables it
      */
@@ -276,6 +279,10 @@ public class HoodieDeltaStreamer implements Serializable {
     public boolean isInlineCompactionEnabled() {
       return !continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
+    }
+
+    public boolean providerSchemaChangeEnabled() {
+      return continuousMode && checkProviderSchemaChange;
     }
   }
 

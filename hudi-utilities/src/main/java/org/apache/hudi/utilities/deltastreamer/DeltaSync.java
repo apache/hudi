@@ -51,6 +51,7 @@ import org.apache.hudi.utilities.transform.Transformer;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Preconditions;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaNormalization;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -157,6 +158,11 @@ public class DeltaSync implements Serializable {
    */
   private final HoodieTableType tableType;
 
+  /**
+   * The last fingerprint of provider source schema.
+   */
+  private transient Long lastSchemaFingerprint;
+
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    HoodieTableType tableType, TypedProperties props, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
                    Function<HoodieWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
@@ -216,6 +222,14 @@ public class DeltaSync implements Serializable {
    * Run one round of delta sync and return new compaction instant if one got scheduled.
    */
   public Option<String> syncOnce() throws Exception {
+    // Throw exception to restart the program if provider schema changed, with appropriate
+    // Spark configuration:
+    //  --conf spark.yarn.max.maxAppAttempts
+    //  --conf spark.yarn.am.attemptFailuresValidityInterval
+    if (cfg.providerSchemaChangeEnabled() && providerSchemaChanged()) {
+      throw new HoodieException("Restart the program as the provider schema changed");
+    }
+
     Option<String> scheduledCompaction = Option.empty();
     HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(schemaProvider));
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
@@ -479,6 +493,25 @@ public class DeltaSync implements Serializable {
       writeClient = new HoodieWriteClient<>(jssc, hoodieCfg, true);
       onInitializingHoodieWriteClient.apply(writeClient);
     }
+  }
+
+  /**
+   * Helper to check if provider schema has changed or not.
+   */
+  private boolean providerSchemaChanged() {
+    if (null != schemaProvider) {
+      if (null == lastSchemaFingerprint) {
+        lastSchemaFingerprint = SchemaNormalization
+            .parsingFingerprint64(schemaProvider.getSourceSchema());
+      } else {
+        Pair<Schema, Boolean> result = schemaProvider.getLatestSourceSchema();
+        if (result.getValue()) {
+          return !lastSchemaFingerprint
+              .equals(SchemaNormalization.parsingFingerprint64(result.getKey()));
+        }
+      }
+    }
+    return false;
   }
 
   /**

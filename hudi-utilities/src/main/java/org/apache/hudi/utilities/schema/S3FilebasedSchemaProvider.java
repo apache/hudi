@@ -31,6 +31,7 @@ import org.apache.log4j.Logger;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -87,17 +88,18 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
   }
 
   @Override
-  public Schema getLatestSourceSchema() {
+  public Pair<Schema, Boolean> getLatestSourceSchema() {
     long currentTimestamp = getTimestamp(new Date());
+    boolean schemaChanged = false;
     if (currentTimestamp - schemaCachedTS >= schemaExpiredTime) {
       LOG.info("Fetching the latest schema......");
       try {
-        fetchSchemaFromS3();
+        schemaChanged = fetchSchemaFromS3();
       } catch (IOException ioe) {
         LOG.error("Got errors while fetching the new schema", ioe);
       }
     }
-    return sourceSchema;
+    return Pair.of(sourceSchema, schemaChanged);
   }
 
   /**
@@ -113,10 +115,12 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
 
   /**
    * Read Avro Schema from S3.
+   * Return true if latest schema is fetched, and false if the schema has not changed.
    */
-  private void fetchSchemaFromS3() throws IOException {
+  private boolean fetchSchemaFromS3() throws IOException {
     S3Object s3Object = s3Client.getObject(getSchemaRequest());
     InputStream stream = s3Object.getObjectContent();
+    boolean schemaChanged = false;
     try {
       long fileTS = getTimestamp(s3Object.getObjectMetadata().getLastModified());
       if (sourceSchema == null || fileTS == 0 || lastModifiedTS != fileTS) {
@@ -126,8 +130,10 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
         }
         sourceSchema = schemaCache;
         lastModifiedTS = fileTS;
+        schemaChanged = true;
       }
       schemaCachedTS = getTimestamp(new Date());
+      return schemaChanged;
     } finally {
       readStream(stream);
       stream.close();
