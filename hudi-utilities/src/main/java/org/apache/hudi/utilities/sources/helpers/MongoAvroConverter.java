@@ -138,10 +138,10 @@ public class MongoAvroConverter extends KafkaAvroConverter {
     String matchedAliasName = null;
     for (String aliasName: field.aliases()) {
       if (after.has(aliasName)) {
-        matchedAliasName = aliasName;
+        return aliasName;
       }
     }
-    if (matchedAliasName == null && after.has(field.name())) {
+    if (after.has(field.name())) {
       matchedAliasName = field.name();
     }
     return matchedAliasName;
