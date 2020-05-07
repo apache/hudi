@@ -28,7 +28,8 @@ import org.apache.spark.api.java.JavaRDD;
  * Output spark partition will have records from only one hoodie partition. - Average records per output spark
  * partitions should be almost equal to (#inputRecords / #outputSparkPartitions) to avoid possible skews.
  */
-public interface UserDefinedBulkInsertPartitioner<T extends HoodieRecordPayload> {
+public interface UserDefinedBulkInsertPartitioner<T extends HoodieRecordPayload<T>> {
 
   JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions);
+
 }

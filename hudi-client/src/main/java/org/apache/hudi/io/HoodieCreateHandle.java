@@ -42,8 +42,9 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Map;
 
-public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
+public class HoodieCreateHandle<T extends HoodieRecordPayload<T>> extends HoodieWriteHandle<T> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieCreateHandle.class);
 
@@ -87,7 +88,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   @Override
-  public boolean canWrite(HoodieRecord record) {
+  public boolean canWrite(HoodieRecord<T> record) {
     return storageWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath());
   }
 
@@ -95,8 +96,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
    * Perform the actual writing of the given record into the backing file.
    */
   @Override
-  public void write(HoodieRecord record, Option<IndexedRecord> avroRecord) {
-    Option recordMetadata = record.getData().getMetadata();
+  public void write(HoodieRecord<T> record, Option<IndexedRecord> avroRecord) {
+    final Option<Map<String, String>> recordMetadata = record.getData().getMetadata();
     try {
       if (avroRecord.isPresent()) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema

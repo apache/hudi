@@ -25,6 +25,7 @@ import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.TestRawTripPayload.MetadataMergeWriteStatus;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -123,14 +124,14 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
     cleanupTestDataGenerator();
   }
 
-  private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
-    return new HoodieWriteClient(jsc, config);
+  private HoodieWriteClient<TestRawTripPayload> getWriteClient(HoodieWriteConfig config) throws Exception {
+    return new HoodieWriteClient<>(jsc, config);
   }
 
   @Test
   public void testSimpleInsertAndUpdate() throws Exception {
     HoodieWriteConfig cfg = getConfig(true);
-    try (HoodieWriteClient client = getWriteClient(cfg);) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getWriteClient(cfg);) {
 
       /**
        * Write 1 (only inserts)
@@ -138,7 +139,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 200);
       insertAndGetFilePaths(records, client, cfg, newCommitTime);
 
       /**
@@ -153,7 +154,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       client.compact(compactionCommitTime);
 
       FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(dfs, cfg.getBasePath());
-      HoodieTable hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
+      HoodieTable<TestRawTripPayload> hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
       HoodieTableFileSystemView roView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
       assertTrue(dataFilesToRead.findAny().isPresent());
@@ -178,7 +179,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
     String partitionPath = "2020/02/20"; // use only one partition for this test
     dataGen = new HoodieTestDataGenerator(new String[] { partitionPath });
     HoodieWriteConfig cfg = getConfig(true);
-    try (HoodieWriteClient client = getWriteClient(cfg);) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getWriteClient(cfg);) {
 
       /**
        * Write 1 (only inserts)
@@ -186,7 +187,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       String commitTime1 = "001";
       client.startCommitWithTime(commitTime1);
 
-      List<HoodieRecord> records001 = dataGen.generateInserts(commitTime1, 200);
+      List<HoodieRecord<TestRawTripPayload>> records001 = dataGen.generateInserts(commitTime1, 200);
       insertAndGetFilePaths(records001, client, cfg, commitTime1);
 
       // verify only one parquet file shows up with commit time 001
@@ -205,7 +206,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
        */
       String updateTime = "004";
       client.startCommitWithTime(updateTime);
-      List<HoodieRecord> records004 = dataGen.generateUpdates(updateTime, 100);
+      List<HoodieRecord<TestRawTripPayload>> records004 = dataGen.generateUpdates(updateTime, 100);
       updateAndGetFilePaths(records004, client, cfg, updateTime);
 
       // verify RO incremental reads - only one parquet file shows up because updates to into log files
@@ -235,7 +236,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
 
       // write 3 - more inserts
       String insertsTime = "006";
-      List<HoodieRecord> records006 = dataGen.generateInserts(insertsTime, 200);
+      List<HoodieRecord<TestRawTripPayload>> records006 = dataGen.generateInserts(insertsTime, 200);
       client.startCommitWithTime(insertsTime);
       insertAndGetFilePaths(records006, client, cfg, insertsTime);
 
@@ -270,11 +271,11 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   @Test
   public void testMetadataAggregateFromWriteStatus() throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder(false).withWriteStatusClass(MetadataMergeWriteStatus.class).build();
-    try (HoodieWriteClient client = getWriteClient(cfg);) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getWriteClient(cfg);) {
 
       String newCommitTime = "001";
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 200);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
 
       client.startCommitWithTime(newCommitTime);
 
@@ -293,7 +294,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   @Test
   public void testSimpleInsertUpdateAndDelete() throws Exception {
     HoodieWriteConfig cfg = getConfig(true);
-    try (HoodieWriteClient client = getWriteClient(cfg);) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getWriteClient(cfg);) {
 
       /**
        * Write 1 (only inserts, written as parquet file)
@@ -301,14 +302,14 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 20);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
 
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
 
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-      HoodieTable hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
+      HoodieTable<TestRawTripPayload> hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
@@ -345,7 +346,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       newCommitTime = "004";
       client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> fewRecordsForDelete = dataGen.generateDeletesFromExistingRecords(records);
+      List<HoodieRecord<TestRawTripPayload>> fewRecordsForDelete = dataGen.generateDeletesFromExistingRecords(records);
 
       statuses = client.upsert(jsc.parallelize(fewRecordsForDelete, 1), newCommitTime).collect();
       // Verify there are no errors
@@ -378,7 +379,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
     HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, HoodieTableType.COPY_ON_WRITE);
 
     HoodieWriteConfig cfg = getConfig(true);
-    try (HoodieWriteClient client = getWriteClient(cfg);) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getWriteClient(cfg);) {
 
       /**
        * Write 1 (only inserts)
@@ -386,8 +387,8 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 200);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
 
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       // verify there are no errors
@@ -417,7 +418,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       client.rollback(newCommitTime);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
+      HoodieTable<TestRawTripPayload> hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
       FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
       HoodieTableFileSystemView roView =
           new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
@@ -431,7 +432,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   public void testRollbackWithDeltaAndCompactionCommit() throws Exception {
 
     HoodieWriteConfig cfg = getConfig(false);
-    try (HoodieWriteClient client = getWriteClient(cfg);) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getWriteClient(cfg);) {
 
       // Test delta commit rollback
       /**
@@ -440,8 +441,8 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 200);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
 
       JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
       client.commit(newCommitTime, writeStatusJavaRDD);
@@ -449,7 +450,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       assertNoWriteErrors(statuses);
 
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-      HoodieTable hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
+      HoodieTable<TestRawTripPayload> hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
@@ -474,10 +475,10 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
        */
       final String commitTime1 = "002";
       // WriteClient with custom config (disable small file handling)
-      try (HoodieWriteClient secondClient = getWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff());) {
+      try (HoodieWriteClient<TestRawTripPayload> secondClient = getWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff());) {
         secondClient.startCommitWithTime(commitTime1);
 
-        List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
+        List<HoodieRecord<TestRawTripPayload>> copyOfRecords = new ArrayList<>(records);
         copyOfRecords = dataGen.generateUpdates(commitTime1, copyOfRecords);
         copyOfRecords.addAll(dataGen.generateInserts(commitTime1, 200));
 
@@ -504,10 +505,10 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
        * Write 3 (inserts + updates - testing successful delta commit)
        */
       final String commitTime2 = "002";
-      try (HoodieWriteClient thirdClient = getWriteClient(cfg);) {
+      try (HoodieWriteClient<TestRawTripPayload> thirdClient = getWriteClient(cfg);) {
         thirdClient.startCommitWithTime(commitTime2);
 
-        List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
+        List<HoodieRecord<TestRawTripPayload>> copyOfRecords = new ArrayList<>(records);
         copyOfRecords = dataGen.generateUpdates(commitTime2, copyOfRecords);
         copyOfRecords.addAll(dataGen.generateInserts(commitTime2, 200));
 
@@ -580,15 +581,15 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   public void testMultiRollbackWithDeltaAndCompactionCommit() throws Exception {
 
     HoodieWriteConfig cfg = getConfig(false);
-    try (final HoodieWriteClient client = getWriteClient(cfg);) {
+    try (final HoodieWriteClient<TestRawTripPayload> client = getWriteClient(cfg);) {
       /**
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 200);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
 
       JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
       client.commit(newCommitTime, writeStatusJavaRDD);
@@ -596,7 +597,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       assertNoWriteErrors(statuses);
 
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-      HoodieTable hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
+      HoodieTable<TestRawTripPayload> hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
@@ -621,10 +622,10 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
        */
       newCommitTime = "002";
       // WriteClient with custom config (disable small file handling)
-      HoodieWriteClient nClient = getWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff());
+      HoodieWriteClient<TestRawTripPayload> nClient = getWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff());
       nClient.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
+      List<HoodieRecord<TestRawTripPayload>> copyOfRecords = new ArrayList<>(records);
       copyOfRecords = dataGen.generateUpdates(newCommitTime, copyOfRecords);
       copyOfRecords.addAll(dataGen.generateInserts(newCommitTime, 200));
 
@@ -645,7 +646,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       newCommitTime = "003";
       client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> newInserts = dataGen.generateInserts(newCommitTime, 100);
+      List<HoodieRecord<TestRawTripPayload>> newInserts = dataGen.generateInserts(newCommitTime, 100);
       records = dataGen.generateUpdates(newCommitTime, records);
       records.addAll(newInserts);
       writeRecords = jsc.parallelize(records, 1);
@@ -744,7 +745,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   @Test
   public void testUpsertPartitioner() throws Exception {
     HoodieWriteConfig cfg = getConfig(true);
-    try (HoodieWriteClient client = getWriteClient(cfg);) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getWriteClient(cfg);) {
 
       /**
        * Write 1 (only inserts, written as parquet file)
@@ -752,14 +753,14 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 20);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
 
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
 
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-      HoodieTable hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
+      HoodieTable<TestRawTripPayload> hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
@@ -787,7 +788,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       newCommitTime = "002";
       client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> newRecords = dataGen.generateUpdates(newCommitTime, records);
+      List<HoodieRecord<TestRawTripPayload>> newRecords = dataGen.generateUpdates(newCommitTime, records);
       newRecords.addAll(dataGen.generateInserts(newCommitTime, 20));
 
       statuses = client.upsert(jsc.parallelize(newRecords), newCommitTime).collect();
@@ -823,12 +824,12 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   public void testLogFileCountsAfterCompaction() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfig(true);
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+    try (HoodieWriteClient<TestRawTripPayload> writeClient = getWriteClient(config);) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
-      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> recordsRDD = jsc.parallelize(records, 1);
       writeClient.insert(recordsRDD, newCommitTime).collect();
 
       // Update all the 100 records
@@ -837,10 +838,10 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       newCommitTime = "101";
       writeClient.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
-      JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
+      List<HoodieRecord<TestRawTripPayload>> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
 
-      HoodieReadClient readClient = new HoodieReadClient(jsc, config);
+      HoodieReadClient<TestRawTripPayload> readClient = new HoodieReadClient<>(jsc, config);
       updatedRecords = readClient.tagLocation(updatedRecordsRDD).collect();
 
       // Write them to corresponding avro logfiles
@@ -849,7 +850,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
 
       // Verify that all data file has one log file
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.create(metaClient, config, jsc);
+      HoodieTable<TestRawTripPayload> table = HoodieTable.create(metaClient, config, jsc);
       // In writeRecordsToLogFiles, no commit files are getting added, so resetting file-system view state
       ((SyncableFileSystemView) (table.getSliceView())).reset();
 
@@ -897,16 +898,16 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
     HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+    try (HoodieWriteClient<TestRawTripPayload> writeClient = getWriteClient(config);) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
-      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> recordsRDD = jsc.parallelize(records, 1);
       JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
       writeClient.commit(newCommitTime, statuses);
 
-      HoodieTable table =
+      HoodieTable<TestRawTripPayload> table =
           HoodieTable.create(new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath), config, jsc);
       SliceView tableRTFileSystemView = table.getSliceView();
 
@@ -934,12 +935,12 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
     HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+    try (HoodieWriteClient<TestRawTripPayload> writeClient = getWriteClient(config);) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
-      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> recordsRDD = jsc.parallelize(records, 1);
       JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
       // trigger an action
       List<WriteStatus> writeStatuses = statuses.collect();
@@ -981,7 +982,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       writeClient.rollback(newCommitTime);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.create(metaClient, config, jsc);
+      HoodieTable<TestRawTripPayload> table = HoodieTable.create(metaClient, config, jsc);
       SliceView tableRTFileSystemView = table.getSliceView();
 
       long numLogFiles = 0;
@@ -1005,18 +1006,18 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
     HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+    try (HoodieWriteClient<TestRawTripPayload> writeClient = getWriteClient(config);) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
-      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> recordsRDD = jsc.parallelize(records, 1);
       JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
       writeClient.commit(newCommitTime, statuses);
       // trigger an action
       statuses.collect();
 
-      HoodieTable table =
+      HoodieTable<TestRawTripPayload> table =
           HoodieTable.create(new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath), config, jsc);
       SliceView tableRTFileSystemView = table.getSliceView();
 
@@ -1057,9 +1058,9 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   public void testRollingStatsInMetadata() throws Exception {
 
     HoodieWriteConfig cfg = getConfigBuilder(false, IndexType.INMEMORY).withAutoCommit(false).build();
-    try (HoodieWriteClient client = getWriteClient(cfg);) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getWriteClient(cfg);) {
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-      HoodieTable table = HoodieTable.create(metaClient, cfg, jsc);
+      HoodieTable<TestRawTripPayload> table = HoodieTable.create(metaClient, cfg, jsc);
 
       // Create a commit without rolling stats in metadata to test backwards compatibility
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
@@ -1073,8 +1074,8 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       String instantTime = "001";
       client.startCommitWithTime(instantTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(instantTime, 200);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(instantTime, 200);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
 
       JavaRDD<WriteStatus> statuses = client.insert(writeRecords, instantTime);
       assertTrue(client.commit(instantTime, statuses), "Commit should succeed");
@@ -1156,7 +1157,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   @Test
   public void testRollingStatsWithSmallFileHandling() throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder(false, IndexType.INMEMORY).withAutoCommit(false).build();
-    try (HoodieWriteClient client = getWriteClient(cfg);) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getWriteClient(cfg);) {
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
       Map<String, Long> fileIdToInsertsMap = new HashMap<>();
       Map<String, Long> fileIdToUpsertsMap = new HashMap<>();
@@ -1164,14 +1165,14 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       String instantTime = "000";
       client.startCommitWithTime(instantTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(instantTime, 200);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(instantTime, 200);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
 
       JavaRDD<WriteStatus> statuses = client.insert(writeRecords, instantTime);
       assertTrue(client.commit(instantTime, statuses), "Commit should succeed");
 
       // Read from commit file
-      HoodieTable table = HoodieTable.create(cfg, jsc);
+      HoodieTable<TestRawTripPayload> table = HoodieTable.create(cfg, jsc);
       HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(
           table.getActiveTimeline()
               .getInstantDetails(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get()).get(),
@@ -1290,7 +1291,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   @Test
   public void testHandleUpdateWithMultiplePartitions() throws Exception {
     HoodieWriteConfig cfg = getConfig(true);
-    try (HoodieWriteClient client = getWriteClient(cfg);) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getWriteClient(cfg);) {
 
       /**
        * Write 1 (only inserts, written as parquet file)
@@ -1298,14 +1299,14 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 20);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
 
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
 
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-      HoodieMergeOnReadTable hoodieTable = (HoodieMergeOnReadTable) HoodieTable.create(metaClient, cfg, jsc);
+      HoodieMergeOnReadTable<TestRawTripPayload> hoodieTable = (HoodieMergeOnReadTable<TestRawTripPayload>) HoodieTable.create(metaClient, cfg, jsc);
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
@@ -1344,16 +1345,21 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       final String fileId = statuses.get(0).getFileId();
       client.startCommitWithTime(newDeleteTime);
 
-      List<HoodieRecord> fewRecordsForDelete = dataGen.generateDeletesFromExistingRecords(records);
-      JavaRDD<HoodieRecord> deleteRDD = jsc.parallelize(fewRecordsForDelete, 1);
+      List<HoodieRecord<TestRawTripPayload>> fewRecordsForDelete = dataGen.generateDeletesFromExistingRecords(records);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> deleteRDD = jsc.parallelize(fewRecordsForDelete, 1);
 
       // initialize partitioner
-      DeltaCommitActionExecutor actionExecutor = new DeleteDeltaCommitActionExecutor(jsc, cfg, hoodieTable,
-          newDeleteTime, deleteRDD);
-      actionExecutor.getUpsertPartitioner(new WorkloadProfile(deleteRDD));
-      final List<List<WriteStatus>> deleteStatus = jsc.parallelize(Arrays.asList(1)).map(x -> {
-        return actionExecutor.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator());
-      }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();
+      DeltaCommitActionExecutor<TestRawTripPayload> actionExecutor = new DeleteDeltaCommitActionExecutor<TestRawTripPayload>(
+          jsc,
+          cfg,
+          hoodieTable,
+          newDeleteTime,
+          (JavaRDD) deleteRDD);
+      actionExecutor.getUpsertPartitioner(new WorkloadProfile<>(deleteRDD));
+      final List<List<WriteStatus>> deleteStatus = jsc.parallelize(Arrays.asList(1))
+          .map(x -> actionExecutor.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator()))
+          .map(HoodieClientTestUtils::collectStatuses)
+          .collect();
 
       // Verify there are  errors because records are from multiple partitions (but handleUpdate is invoked for
       // specific partition)
@@ -1390,15 +1396,19 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
     }
   }
   
-  private FileStatus[] insertAndGetFilePaths(List<HoodieRecord> records, HoodieWriteClient client,
-                                             HoodieWriteConfig cfg, String commitTime) throws IOException {
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+  private FileStatus[] insertAndGetFilePaths(
+      List<HoodieRecord<TestRawTripPayload>> records,
+      HoodieWriteClient<TestRawTripPayload> client,
+      HoodieWriteConfig cfg,
+      String commitTime
+  ) throws IOException {
+    JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
 
     List<WriteStatus> statuses = client.insert(writeRecords, commitTime).collect();
     assertNoWriteErrors(statuses);
 
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-    HoodieTable hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
+    HoodieTable<TestRawTripPayload> hoodieTable = HoodieTable.create(metaClient, cfg, jsc);
 
     Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
     assertTrue(deltaCommit.isPresent());
@@ -1420,10 +1430,14 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
     return allFiles;
   }
 
-  private FileStatus[] updateAndGetFilePaths(List<HoodieRecord> records, HoodieWriteClient client,
-                                             HoodieWriteConfig cfg, String commitTime) throws IOException {
-    Map<HoodieKey, HoodieRecord> recordsMap = new HashMap<>();
-    for (HoodieRecord rec : records) {
+  private FileStatus[] updateAndGetFilePaths(
+      List<HoodieRecord<TestRawTripPayload>> records,
+      HoodieWriteClient<TestRawTripPayload> client,
+      HoodieWriteConfig cfg,
+      String commitTime
+  ) throws IOException {
+    Map<HoodieKey, HoodieRecord<TestRawTripPayload>> recordsMap = new HashMap<>();
+    for (HoodieRecord<TestRawTripPayload> rec : records) {
       if (!recordsMap.containsKey(rec.getKey())) {
         recordsMap.put(rec.getKey(), rec);
       }

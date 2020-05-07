@@ -35,22 +35,32 @@ public class BulkInsertPreppedCommitActionExecutor<T extends HoodieRecordPayload
     extends CommitActionExecutor<T> {
 
   private final JavaRDD<HoodieRecord<T>> preppedInputRecordRdd;
-  private final Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner;
+  private final Option<UserDefinedBulkInsertPartitioner<T>> bulkInsertPartitioner;
 
-  public BulkInsertPreppedCommitActionExecutor(JavaSparkContext jsc,
-      HoodieWriteConfig config, HoodieTable table,
+  public BulkInsertPreppedCommitActionExecutor(
+      JavaSparkContext jsc,
+      HoodieWriteConfig config,
+      HoodieTable<T> table,
       String instantTime, JavaRDD<HoodieRecord<T>> preppedInputRecordRdd,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      Option<UserDefinedBulkInsertPartitioner<T>> bulkInsertPartitioner
+  ) {
     super(jsc, config, table, instantTime, WriteOperationType.BULK_INSERT);
     this.preppedInputRecordRdd = preppedInputRecordRdd;
     this.bulkInsertPartitioner = bulkInsertPartitioner;
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public HoodieWriteMetadata execute() {
     try {
-      return BulkInsertHelper.bulkInsert(preppedInputRecordRdd, instantTime, (HoodieTable<T>) table, config,
-          this, false, bulkInsertPartitioner);
+      return BulkInsertHelper.bulkInsert(
+          preppedInputRecordRdd,
+          instantTime,
+          (HoodieTable<T>) table,
+          config,
+          this,
+          false,
+          bulkInsertPartitioner);
     } catch (Throwable e) {
       if (e instanceof HoodieInsertException) {
         throw e;

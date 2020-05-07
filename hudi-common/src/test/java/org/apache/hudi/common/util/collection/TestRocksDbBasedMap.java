@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.common.util.SpillableMapTestUtils;
@@ -49,16 +48,16 @@ public class TestRocksDbBasedMap extends HoodieCommonTestHarness {
 
   @Test
   public void testSimple() throws IOException, URISyntaxException {
-    RocksDBBasedMap records = new RocksDBBasedMap(basePath);
+    RocksDBBasedMap<String, HoodieRecord<?>> records = new RocksDBBasedMap<>(basePath);
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    ((GenericRecord) iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+    ((GenericRecord) iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
 
     // make sure records have spilled to disk
-    Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
-    List<HoodieRecord> oRecords = new ArrayList<>();
+    Iterator<HoodieRecord<?>> itr = records.iterator();
+    List<HoodieRecord<?>> oRecords = new ArrayList<>();
     while (itr.hasNext()) {
-      HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
+      HoodieRecord<?> rec = itr.next();
       oRecords.add(rec);
       assert recordKeys.contains(rec.getRecordKey());
     }

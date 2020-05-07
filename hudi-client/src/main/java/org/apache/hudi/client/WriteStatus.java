@@ -40,9 +40,9 @@ public class WriteStatus implements Serializable {
 
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
-  private final List<HoodieRecord> writtenRecords = new ArrayList<>();
+  private final List<HoodieRecord<?>> writtenRecords = new ArrayList<>();
 
-  private final List<HoodieRecord> failedRecords = new ArrayList<>();
+  private final List<HoodieRecord<?>> failedRecords = new ArrayList<>();
 
   private Throwable globalError = null;
 
@@ -72,7 +72,7 @@ public class WriteStatus implements Serializable {
    * @param record deflated {@code HoodieRecord} containing information that uniquely identifies it.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markSuccess(HoodieRecord record, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markSuccess(HoodieRecord<?> record, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
       writtenRecords.add(record);
     }
@@ -86,7 +86,7 @@ public class WriteStatus implements Serializable {
    * @param record deflated {@code HoodieRecord} containing information that uniquely identifies it.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markFailure(HoodieRecord<?> record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
       failedRecords.add(record);
@@ -128,11 +128,11 @@ public class WriteStatus implements Serializable {
     this.globalError = t;
   }
 
-  public List<HoodieRecord> getWrittenRecords() {
+  public List<HoodieRecord<?>> getWrittenRecords() {
     return writtenRecords;
   }
 
-  public List<HoodieRecord> getFailedRecords() {
+  public List<HoodieRecord<?>> getFailedRecords() {
     return failedRecords;
   }
 

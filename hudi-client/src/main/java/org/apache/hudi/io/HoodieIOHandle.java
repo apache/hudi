@@ -24,7 +24,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileSystem;
 
-public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
+public abstract class HoodieIOHandle<T extends HoodieRecordPayload<T>> {
 
   protected final String instantTime;
   protected final HoodieWriteConfig config;
@@ -39,4 +39,5 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
   }
 
   protected abstract FileSystem getFileSystem();
+
 }

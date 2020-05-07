@@ -59,8 +59,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
-import scala.Tuple2;
-
 /**
  * Loads data from Parquet Sources.
  */
@@ -142,10 +140,10 @@ public class HDFSParquetImporter implements Serializable {
       // Get schema.
       String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
 
-      HoodieWriteClient client =
+      HoodieWriteClient<HoodieJsonPayload> client =
           UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr, cfg.parallelism, Option.empty(), props);
 
-      JavaRDD<HoodieRecord<HoodieRecordPayload>> hoodieRecords = buildHoodieRecordsForImport(jsc, schemaStr);
+      JavaRDD<HoodieRecord<HoodieJsonPayload>> hoodieRecords = buildHoodieRecordsForImport(jsc, schemaStr);
       // Get instant time.
       String instantTime = client.startCommit();
       JavaRDD<WriteStatus> writeResponse = load(client, instantTime, hoodieRecords);
@@ -156,7 +154,7 @@ public class HDFSParquetImporter implements Serializable {
     return -1;
   }
 
-  protected JavaRDD<HoodieRecord<HoodieRecordPayload>> buildHoodieRecordsForImport(JavaSparkContext jsc,
+  protected JavaRDD<HoodieRecord<HoodieJsonPayload>> buildHoodieRecordsForImport(JavaSparkContext jsc,
       String schemaStr) throws IOException {
     Job job = Job.getInstance(jsc.hadoopConfiguration());
     // Allow recursive directories to be found
@@ -166,11 +164,15 @@ public class HDFSParquetImporter implements Serializable {
     AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(), (new Schema.Parser().parse(schemaStr)));
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
-    return jsc.newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class, GenericRecord.class,
-            job.getConfiguration())
+    return jsc.newAPIHadoopFile(
+        cfg.srcPath,
+        ParquetInputFormat.class,
+        Void.class,
+        GenericRecord.class,
+        job.getConfiguration())
         // To reduce large number of tasks.
         .coalesce(16 * cfg.parallelism).map(entry -> {
-          GenericRecord genericRecord = ((Tuple2<Void, GenericRecord>) entry)._2();
+          GenericRecord genericRecord = entry._2();
           Object partitionField = genericRecord.get(cfg.partitionKey);
           if (partitionField == null) {
             throw new HoodieIOException("partition key is missing. :" + cfg.partitionKey);
@@ -189,7 +191,8 @@ public class HDFSParquetImporter implements Serializable {
               LOG.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
             }
           }
-          return new HoodieRecord<>(new HoodieKey(rowField.toString(), partitionPath),
+          return new HoodieRecord<>(
+              new HoodieKey(rowField.toString(), partitionPath),
               new HoodieJsonPayload(genericRecord.toString()));
         });
   }
@@ -202,7 +205,7 @@ public class HDFSParquetImporter implements Serializable {
    * @param hoodieRecords Hoodie Records
    * @param <T> Type
    */
-  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(HoodieWriteClient client, String instantTime,
+  protected <T extends HoodieRecordPayload<T>> JavaRDD<WriteStatus> load(HoodieWriteClient<T> client, String instantTime,
       JavaRDD<HoodieRecord<T>> hoodieRecords) {
     switch (cfg.command.toLowerCase()) {
       case "upsert": {

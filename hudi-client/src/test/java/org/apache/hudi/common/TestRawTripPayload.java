@@ -172,7 +172,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     }
 
     @Override
-    public void markSuccess(HoodieRecord record, Option<Map<String, String>> recordMetadata) {
+    public void markSuccess(HoodieRecord<?> record, Option<Map<String, String>> recordMetadata) {
       super.markSuccess(record, recordMetadata);
       if (recordMetadata.isPresent()) {
         mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
@@ -180,7 +180,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     }
 
     @Override
-    public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> recordMetadata) {
+    public void markFailure(HoodieRecord<?> record, Throwable t, Option<Map<String, String>> recordMetadata) {
       super.markFailure(record, t, recordMetadata);
       if (recordMetadata.isPresent()) {
         mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);

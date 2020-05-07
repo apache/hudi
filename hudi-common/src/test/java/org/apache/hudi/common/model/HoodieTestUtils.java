@@ -373,9 +373,9 @@ public class HoodieTestUtils {
     return deseralizedObject;
   }
 
-  public static void writeRecordsToLogFiles(FileSystem fs, String basePath, Schema schema,
-      List<HoodieRecord> updatedRecords) {
-    Map<HoodieRecordLocation, List<HoodieRecord>> groupedUpdated =
+  public static <T extends HoodieRecordPayload<T>> void writeRecordsToLogFiles(FileSystem fs, String basePath, Schema schema,
+      List<HoodieRecord<T>> updatedRecords) {
+    Map<HoodieRecordLocation, List<HoodieRecord<T>>> groupedUpdated =
         updatedRecords.stream().collect(Collectors.groupingBy(HoodieRecord::getCurrentLocation));
 
     groupedUpdated.forEach((location, value) -> {
@@ -415,7 +415,7 @@ public class HoodieTestUtils {
         returns.add(status);
       }
     }
-    return returns.toArray(new FileStatus[returns.size()]);
+    return returns.toArray(new FileStatus[0]);
   }
 
   public static List<String> monotonicIncreasingCommitTimestamps(int numTimestamps, int startSecsDelta) {

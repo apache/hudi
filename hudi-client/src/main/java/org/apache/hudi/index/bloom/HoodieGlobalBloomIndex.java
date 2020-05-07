@@ -48,7 +48,7 @@ import scala.Tuple2;
  * This filter will only work with hoodie table since it will only load partitions with .hoodie_partition_metadata
  * file in it.
  */
-public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends HoodieBloomIndex<T> {
+public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload<T>> extends HoodieBloomIndex<T> {
 
   public HoodieGlobalBloomIndex(HoodieWriteConfig config) {
     super(config);
@@ -58,8 +58,11 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
    * Load all involved files as <Partition, filename> pair RDD from all partitions in the table.
    */
   @Override
-  List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final JavaSparkContext jsc,
-                                                             final HoodieTable hoodieTable) {
+  List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(
+      final List<String> partitions,
+      final JavaSparkContext jsc,
+      final HoodieTable<T> hoodieTable
+  ) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     try {
       List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(),
@@ -122,8 +125,8 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
         if (config.getBloomIndexUpdatePartitionPath()
             && !recordLocationHoodieKeyPair.get()._2.getPartitionPath().equals(hoodieRecord.getPartitionPath())) {
           // Create an empty record to delete the record in the old partition
-          HoodieRecord<T> emptyRecord = new HoodieRecord(recordLocationHoodieKeyPair.get()._2,
-              new EmptyHoodieRecordPayload());
+          @SuppressWarnings("unchecked")
+          HoodieRecord<T> emptyRecord = new HoodieRecord<>(recordLocationHoodieKeyPair.get()._2, (T) new EmptyHoodieRecordPayload());
           // Tag the incoming record for inserting to the new partition
           HoodieRecord<T> taggedRecord = getTaggedRecord(hoodieRecord, Option.empty());
           return Arrays.asList(emptyRecord, taggedRecord).iterator();

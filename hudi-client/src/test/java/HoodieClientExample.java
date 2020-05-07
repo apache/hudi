@@ -20,6 +20,7 @@ import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -96,18 +97,17 @@ public class HoodieClientExample {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(20, 30).build()).build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient<TestRawTripPayload> client = new HoodieWriteClient<>(jsc, cfg);
 
-    List<HoodieRecord> recordsSoFar = new ArrayList<>();
     /**
      * Write 1 (only inserts)
      */
     String newCommitTime = client.startCommit();
     LOG.info("Starting commit " + newCommitTime);
 
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
-    recordsSoFar.addAll(records);
-    JavaRDD<HoodieRecord> writeRecords = jsc.<HoodieRecord>parallelize(records, 1);
+    List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 100);
+    List<HoodieRecord<TestRawTripPayload>> recordsSoFar = new ArrayList<>(records);
+    JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
     client.upsert(writeRecords, newCommitTime);
 
     /**
@@ -115,10 +115,10 @@ public class HoodieClientExample {
      */
     newCommitTime = client.startCommit();
     LOG.info("Starting commit " + newCommitTime);
-    List<HoodieRecord> toBeUpdated = dataGen.generateUpdates(newCommitTime, 100);
+    List<HoodieRecord<TestRawTripPayload>> toBeUpdated = dataGen.generateUpdates(newCommitTime, 100);
     records.addAll(toBeUpdated);
     recordsSoFar.addAll(toBeUpdated);
-    writeRecords = jsc.<HoodieRecord>parallelize(records, 1);
+    writeRecords = jsc.parallelize(records, 1);
     client.upsert(writeRecords, newCommitTime);
 
     /**
@@ -128,7 +128,7 @@ public class HoodieClientExample {
     LOG.info("Starting commit " + newCommitTime);
     List<HoodieKey> toBeDeleted = HoodieClientTestUtils
         .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(recordsSoFar), 10);
-    JavaRDD<HoodieKey> deleteRecords = jsc.<HoodieKey>parallelize(toBeDeleted, 1);
+    JavaRDD<HoodieKey> deleteRecords = jsc.parallelize(toBeDeleted, 1);
     client.delete(deleteRecords, newCommitTime);
 
     /**

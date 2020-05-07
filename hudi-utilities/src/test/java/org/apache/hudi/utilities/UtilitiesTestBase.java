@@ -267,7 +267,7 @@ public class UtilitiesTestBase {
       return props;
     }
 
-    public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
+    public static GenericRecord toGenericRecord(HoodieRecord<TestRawTripPayload> hoodieRecord) {
       try {
         Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA);
         return (GenericRecord) recordOpt.get();
@@ -276,23 +276,23 @@ public class UtilitiesTestBase {
       }
     }
 
-    public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords) {
-      List<GenericRecord> records = new ArrayList<GenericRecord>();
-      for (HoodieRecord hoodieRecord : hoodieRecords) {
+    public static List<GenericRecord> toGenericRecords(List<HoodieRecord<TestRawTripPayload>> hoodieRecords) {
+      List<GenericRecord> records = new ArrayList<>();
+      for (HoodieRecord<TestRawTripPayload> hoodieRecord : hoodieRecords) {
         records.add(toGenericRecord(hoodieRecord));
       }
       return records;
     }
 
-    public static String toJsonString(HoodieRecord hr) {
+    public static String toJsonString(HoodieRecord<TestRawTripPayload> hr) {
       try {
-        return ((TestRawTripPayload) hr.getData()).getJsonData();
+        return hr.getData().getJsonData();
       } catch (IOException ioe) {
         return null;
       }
     }
 
-    public static String[] jsonifyRecords(List<HoodieRecord> records) {
+    public static String[] jsonifyRecords(List<HoodieRecord<TestRawTripPayload>> records) {
       return records.stream().map(Helpers::toJsonString).toArray(String[]::new);
     }
   }

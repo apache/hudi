@@ -43,7 +43,7 @@ import java.io.Serializable;
 /**
  * Base class for different types of indexes to determine the mapping from uuid.
  */
-public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Serializable {
+public abstract class HoodieIndex<T extends HoodieRecordPayload<T>> implements Serializable {
 
   protected final HoodieWriteConfig config;
 
@@ -51,15 +51,18 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
     this.config = config;
   }
 
-  public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(HoodieWriteConfig config,
-      JavaSparkContext jsc) throws HoodieIndexException {
+  @SuppressWarnings("unchecked")
+  public static <T extends HoodieRecordPayload<T>> HoodieIndex<T> createIndex(
+      HoodieWriteConfig config,
+      JavaSparkContext jsc
+  ) throws HoodieIndexException {
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
       Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
       if (!(instance instanceof HoodieIndex)) {
         throw new HoodieIndexException(config.getIndexClass() + " is not a subclass of HoodieIndex");
       }
-      return (HoodieIndex) instance;
+      return (HoodieIndex<T>) instance;
     }
     switch (config.getIndexType()) {
       case HBASE:

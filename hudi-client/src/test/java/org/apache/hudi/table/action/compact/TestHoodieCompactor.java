@@ -23,6 +23,7 @@ import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -80,8 +81,8 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     cleanupSparkContexts();
   }
 
-  private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
-    return new HoodieWriteClient(jsc, config);
+  private HoodieWriteClient<TestRawTripPayload> getWriteClient(HoodieWriteConfig config) throws Exception {
+    return new HoodieWriteClient<>(jsc, config);
   }
 
   private HoodieWriteConfig getConfig() {
@@ -116,12 +117,12 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   public void testCompactionEmpty() throws Exception {
     HoodieWriteConfig config = getConfig();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+    HoodieTable<TestRawTripPayload> table = HoodieTable.create(metaClient, config, jsc);
+    try (HoodieWriteClient<TestRawTripPayload> writeClient = getWriteClient(config);) {
 
       String newCommitTime = writeClient.startCommit();
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
-      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> recordsRDD = jsc.parallelize(records, 1);
       writeClient.insert(recordsRDD, newCommitTime).collect();
 
       String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
@@ -134,22 +135,22 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   public void testWriteStatusContentsAfterCompaction() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfig();
-    try (HoodieWriteClient writeClient = getWriteClient(config)) {
+    try (HoodieWriteClient<TestRawTripPayload> writeClient = getWriteClient(config)) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
-      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> recordsRDD = jsc.parallelize(records, 1);
       writeClient.insert(recordsRDD, newCommitTime).collect();
 
       // Update all the 100 records
-      HoodieTable table = HoodieTable.create(config, jsc);
+      HoodieTable<TestRawTripPayload> table = HoodieTable.create(config, jsc);
       newCommitTime = "101";
       writeClient.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
-      JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
-      HoodieIndex index = new HoodieBloomIndex<>(config);
+      List<HoodieRecord<TestRawTripPayload>> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
+      HoodieIndex<TestRawTripPayload> index = new HoodieBloomIndex<>(config);
       updatedRecords = index.tagLocation(updatedRecordsRDD, jsc, table).collect();
 
       // Write them to corresponding avro logfiles

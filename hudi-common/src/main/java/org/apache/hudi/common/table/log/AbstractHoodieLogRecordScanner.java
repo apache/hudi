@@ -272,7 +272,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     List<IndexedRecord> recs = dataBlock.getRecords();
     totalLogRecords.addAndGet(recs.size());
     for (IndexedRecord rec : recs) {
-      HoodieRecord<? extends HoodieRecordPayload> hoodieRecord =
+      HoodieRecord<? extends HoodieRecordPayload<?>> hoodieRecord =
           SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
       processNextRecord(hoodieRecord);
     }
@@ -283,7 +283,7 @@ public abstract class AbstractHoodieLogRecordScanner {
    *
    * @param hoodieRecord Hoodie Record to process
    */
-  protected abstract void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws Exception;
+  protected abstract <T extends HoodieRecordPayload<T>> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception;
 
   /**
    * Process next deleted key.

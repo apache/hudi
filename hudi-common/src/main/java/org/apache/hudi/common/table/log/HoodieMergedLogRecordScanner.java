@@ -33,6 +33,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
@@ -51,13 +52,12 @@ import java.util.Map;
  * This results in two I/O passes over the log file.
  */
 
-public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
-    implements Iterable<HoodieRecord<? extends HoodieRecordPayload>> {
+public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner implements Iterable<HoodieRecord<?>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergedLogRecordScanner.class);
 
   // Final map of compacted/merged records
-  private final ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records;
+  private final ExternalSpillableMap<String, HoodieRecord<?>> records;
 
   // count of merged records in log
   private long numMergedRecordsInLog;
@@ -93,11 +93,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   }
 
   @Override
-  public Iterator<HoodieRecord<? extends HoodieRecordPayload>> iterator() {
+  @Nonnull
+  public Iterator<HoodieRecord<?>> iterator() {
     return records.iterator();
   }
 
-  public Map<String, HoodieRecord<? extends HoodieRecordPayload>> getRecords() {
+  public Map<String, HoodieRecord<?>> getRecords() {
     return records;
   }
 
@@ -106,12 +107,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   }
 
   @Override
-  protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws IOException {
+  @SuppressWarnings("unchecked")
+  protected <T extends HoodieRecordPayload<T>> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception {
     String key = hoodieRecord.getRecordKey();
     if (records.containsKey(key)) {
       // Merge and store the merged record. The HoodieRecordPayload implementation is free to decide what should be
       // done when a delete (empty payload) is encountered before or after an insert/update.
-      HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(records.get(key).getData());
+      T combinedValue = hoodieRecord.getData().preCombine((T) records.get(key).getData());
       records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue));
     } else {
       // Put the record as is

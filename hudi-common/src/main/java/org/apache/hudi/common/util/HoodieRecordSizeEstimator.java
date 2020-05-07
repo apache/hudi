@@ -31,7 +31,7 @@ import org.apache.log4j.Logger;
  * 
  * @param <T>
  */
-public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload> implements SizeEstimator<HoodieRecord<T>> {
+public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload<T>> implements SizeEstimator<HoodieRecord<T>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieRecordSizeEstimator.class);
 

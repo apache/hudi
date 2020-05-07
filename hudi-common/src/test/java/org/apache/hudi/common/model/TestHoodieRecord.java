@@ -37,13 +37,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 public class TestHoodieRecord {
 
-  private HoodieRecord hoodieRecord;
+  private HoodieRecord<AvroBinaryTestPayload> hoodieRecord;
 
   @BeforeEach
   public void setUp() throws Exception {
     final List<IndexedRecord> indexedRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1);
-    final List<HoodieRecord> hoodieRecords =
-        indexedRecords.stream().map(r -> new HoodieRecord(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+    final List<HoodieRecord<AvroBinaryTestPayload>> hoodieRecords =
+        indexedRecords.stream().map(r -> new HoodieRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
             new AvroBinaryTestPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
     hoodieRecord = hoodieRecords.get(0);
   }

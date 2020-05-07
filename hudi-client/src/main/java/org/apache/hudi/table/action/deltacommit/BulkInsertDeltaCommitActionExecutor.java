@@ -36,12 +36,16 @@ public class BulkInsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<T
     extends DeltaCommitActionExecutor<T> {
 
   private final JavaRDD<HoodieRecord<T>> inputRecordsRDD;
-  private final Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner;
+  private final Option<UserDefinedBulkInsertPartitioner<T>> bulkInsertPartitioner;
 
-  public BulkInsertDeltaCommitActionExecutor(JavaSparkContext jsc,
-      HoodieWriteConfig config, HoodieTable table,
-      String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+  public BulkInsertDeltaCommitActionExecutor(
+      JavaSparkContext jsc,
+      HoodieWriteConfig config,
+      HoodieTable<T> table,
+      String instantTime,
+      JavaRDD<HoodieRecord<T>> inputRecordsRDD,
+      Option<UserDefinedBulkInsertPartitioner<T>> bulkInsertPartitioner
+  ) {
     super(jsc, config, table, instantTime, WriteOperationType.BULK_INSERT);
     this.inputRecordsRDD = inputRecordsRDD;
     this.bulkInsertPartitioner = bulkInsertPartitioner;
@@ -50,8 +54,14 @@ public class BulkInsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<T
   @Override
   public HoodieWriteMetadata execute() {
     try {
-      return BulkInsertHelper.bulkInsert(inputRecordsRDD, instantTime, (HoodieTable<T>) table, config,
-          this, true, bulkInsertPartitioner);
+      return BulkInsertHelper.bulkInsert(
+          inputRecordsRDD,
+          instantTime,
+          (HoodieTable<T>) table,
+          config,
+          this,
+          true,
+          bulkInsertPartitioner);
     } catch (Throwable e) {
       if (e instanceof HoodieInsertException) {
         throw e;

@@ -55,7 +55,7 @@ import java.util.Map;
 import java.util.Set;
 
 @SuppressWarnings("Duplicates")
-public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
+public class HoodieMergeHandle<T extends HoodieRecordPayload<T>> extends HoodieWriteHandle<T> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergeHandle.class);
 
@@ -179,7 +179,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   }
 
   private boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
-    Option recordMetadata = hoodieRecord.getData().getMetadata();
+    final Option<Map<String, String>> recordMetadata = hoodieRecord.getData().getMetadata();
     if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
           + hoodieRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);

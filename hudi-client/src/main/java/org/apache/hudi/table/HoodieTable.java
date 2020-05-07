@@ -76,7 +76,7 @@ import java.util.stream.Stream;
 /**
  * Abstract implementation of a HoodieTable.
  */
-public abstract class HoodieTable<T extends HoodieRecordPayload> implements Serializable {
+public abstract class HoodieTable<T extends HoodieRecordPayload<T>> implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTable.class);
 
@@ -105,7 +105,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     return viewManager;
   }
 
-  public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieWriteConfig config, JavaSparkContext jsc) {
+  public static <T extends HoodieRecordPayload<T>> HoodieTable<T> create(HoodieWriteConfig config, JavaSparkContext jsc) {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(
         jsc.hadoopConfiguration(),
         config.getBasePath(),
@@ -116,9 +116,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     return HoodieTable.create(metaClient, config, jsc);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieTableMetaClient metaClient,
-                                                                      HoodieWriteConfig config,
-                                                                      JavaSparkContext jsc) {
+  public static <T extends HoodieRecordPayload<T>> HoodieTable<T> create(
+      HoodieTableMetaClient metaClient,
+      HoodieWriteConfig config,
+      JavaSparkContext jsc
+  ) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
         return new HoodieCopyOnWriteTable<>(config, jsc, metaClient);
@@ -157,8 +159,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param bulkInsertPartitioner User Defined Partitioner
    * @return HoodieWriteMetadata
    */
-  public abstract HoodieWriteMetadata bulkInsert(JavaSparkContext jsc, String instantTime,
-      JavaRDD<HoodieRecord<T>> records, Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
+  public abstract HoodieWriteMetadata bulkInsert(
+      JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> records,
+      Option<UserDefinedBulkInsertPartitioner<T>> bulkInsertPartitioner);
 
   /**
    * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
@@ -205,8 +209,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param bulkInsertPartitioner User Defined Partitioner
    * @return HoodieWriteMetadata
    */
-  public abstract HoodieWriteMetadata bulkInsertPrepped(JavaSparkContext jsc, String instantTime,
-      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
+  public abstract HoodieWriteMetadata bulkInsertPrepped(
+      JavaSparkContext jsc,
+      String instantTime,
+      JavaRDD<HoodieRecord<T>> preppedRecords,
+      Option<UserDefinedBulkInsertPartitioner<T>> bulkInsertPartitioner);
 
   public HoodieWriteConfig getConfig() {
     return config;

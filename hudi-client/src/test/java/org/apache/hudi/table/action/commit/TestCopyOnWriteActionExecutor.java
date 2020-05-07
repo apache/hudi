@@ -26,6 +26,7 @@ import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.TestRawTripPayload.MetadataMergeWriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -98,14 +99,15 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     String instantTime = HoodieTestUtils.makeNewCommitTime();
     HoodieWriteConfig config = makeHoodieClientConfig();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
+    HoodieTable<TestRawTripPayload> table = HoodieTable.create(metaClient, config, jsc);
 
     Pair<Path, String> newPathWithWriteToken = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      HoodieRecord record = mock(HoodieRecord.class);
+      @SuppressWarnings("unchecked")
+      HoodieRecord<TestRawTripPayload> record = (HoodieRecord<TestRawTripPayload>) mock(HoodieRecord.class);
       when(record.getPartitionPath()).thenReturn(partitionPath);
       String writeToken = FSUtils.makeWriteToken(TaskContext.getPartitionId(), TaskContext.get().stageId(),
           TaskContext.get().taskAttemptId());
-      HoodieCreateHandle io = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileName, supplier);
+      HoodieCreateHandle<TestRawTripPayload> io = new HoodieCreateHandle<>(config, instantTime, table, partitionPath, fileName, supplier);
       return Pair.of(io.makeNewPath(record.getPartitionPath()), writeToken);
     }).collect().get(0);
 
@@ -129,12 +131,12 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     // Prepare the AvroParquetIO
     HoodieWriteConfig config = makeHoodieClientConfig();
     String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient<TestRawTripPayload> writeClient = new HoodieWriteClient<>(jsc, config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     String partitionPath = "2016/01/31";
-    HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
+    HoodieCopyOnWriteTable<TestRawTripPayload> table = (HoodieCopyOnWriteTable<TestRawTripPayload>) HoodieTable.create(metaClient, config, jsc);
 
     // Get some records belong to the same partition (2016/01/31)
     String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -146,16 +148,16 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     String recordStr4 = "{\"_row_key\":\"8eb5b87d-1fej-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":51}";
 
-    List<HoodieRecord> records = new ArrayList<>();
+    List<HoodieRecord<TestRawTripPayload>> records = new ArrayList<>();
     TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
-    records.add(new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
+    records.add(new HoodieRecord<>(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
     TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
-    records.add(new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
+    records.add(new HoodieRecord<>(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
     TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
-    records.add(new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
+    records.add(new HoodieRecord<>(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
     // Insert new records
-    final HoodieCopyOnWriteTable cowTable = table;
+    final HoodieCopyOnWriteTable<TestRawTripPayload> cowTable = table;
     writeClient.insert(jsc.parallelize(records, 1), firstCommitTime);
 
     FileStatus[] allFiles = getIncrementalFiles(partitionPath, "0", -1);
@@ -164,7 +166,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     // Read out the bloom filter and make sure filter can answer record exist or not
     Path parquetFilePath = allFiles[0].getPath();
     BloomFilter filter = ParquetUtils.readBloomFilterFromParquetMetadata(jsc.hadoopConfiguration(), parquetFilePath);
-    for (HoodieRecord record : records) {
+    for (HoodieRecord<TestRawTripPayload> record : records) {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
 
@@ -182,14 +184,14 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     String updateRecordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
     TestRawTripPayload updateRowChanges1 = new TestRawTripPayload(updateRecordStr1);
-    HoodieRecord updatedRecord1 = new HoodieRecord(
+    HoodieRecord<TestRawTripPayload> updatedRecord1 = new HoodieRecord<>(
         new HoodieKey(updateRowChanges1.getRowKey(), updateRowChanges1.getPartitionPath()), updateRowChanges1);
 
     TestRawTripPayload rowChange4 = new TestRawTripPayload(recordStr4);
-    HoodieRecord insertedRecord1 =
-        new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
+    HoodieRecord<TestRawTripPayload> insertedRecord1 =
+        new HoodieRecord<>(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
-    List<HoodieRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
+    List<HoodieRecord<TestRawTripPayload>> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
 
     Thread.sleep(1000);
     String newCommitTime = HoodieTestUtils.makeNewCommitTime();
@@ -206,7 +208,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     Path updatedParquetFilePath = allFiles[0].getPath();
     BloomFilter updatedFilter =
         ParquetUtils.readBloomFilterFromParquetMetadata(jsc.hadoopConfiguration(), updatedParquetFilePath);
-    for (HoodieRecord record : records) {
+    for (HoodieRecord<TestRawTripPayload> record : records) {
       // No change to the _row_key
       assertTrue(updatedFilter.mightContain(record.getRecordKey()));
     }
@@ -214,9 +216,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     assertTrue(updatedFilter.mightContain(insertedRecord1.getRecordKey()));
     records.add(insertedRecord1);// add this so it can further check below
 
-    ParquetReader updatedReader = ParquetReader.builder(new AvroReadSupport<>(), updatedParquetFilePath).build();
+    ParquetReader<GenericRecord> updatedReader = ParquetReader.builder(new AvroReadSupport<GenericRecord>(), updatedParquetFilePath).build();
     index = 0;
-    while ((newRecord = (GenericRecord) updatedReader.read()) != null) {
+    while ((newRecord = updatedReader.read()) != null) {
       assertEquals(newRecord.get("_row_key").toString(), records.get(index).getRecordKey());
       if (index == 0) {
         assertEquals("15", newRecord.get("number").toString());
@@ -256,13 +258,13 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     jobConf.setInt(maxCommitPulls, numberOfCommitsToPull);
   }
 
-  private List<HoodieRecord> newHoodieRecords(int n, String time) throws Exception {
-    List<HoodieRecord> records = new ArrayList<>();
+  private List<HoodieRecord<TestRawTripPayload>> newHoodieRecords(int n, String time) throws Exception {
+    List<HoodieRecord<TestRawTripPayload>> records = new ArrayList<>();
     for (int i = 0; i < n; i++) {
       String recordStr =
           String.format("{\"_row_key\":\"%s\",\"time\":\"%s\",\"number\":%d}", UUID.randomUUID().toString(), time, i);
       TestRawTripPayload rowChange = new TestRawTripPayload(recordStr);
-      records.add(new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
+      records.add(new HoodieRecord<>(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
     }
     return records;
   }
@@ -276,7 +278,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
+    HoodieCopyOnWriteTable<TestRawTripPayload> table = (HoodieCopyOnWriteTable<TestRawTripPayload>) HoodieTable.create(metaClient, config, jsc);
 
     // Get some records belong to the same partition (2016/01/31)
     String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -286,16 +288,16 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     String recordStr3 = "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
 
-    List<HoodieRecord> records = new ArrayList<>();
+    List<HoodieRecord<TestRawTripPayload>> records = new ArrayList<>();
     TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
-    records.add(new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
+    records.add(new HoodieRecord<>(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
     TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
-    records.add(new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
+    records.add(new HoodieRecord<>(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
     TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
-    records.add(new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
+    records.add(new HoodieRecord<>(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
     // Insert new records
-    CommitActionExecutor actionExecutor = new InsertCommitActionExecutor(jsc, config, table,
+    CommitActionExecutor<TestRawTripPayload> actionExecutor = new InsertCommitActionExecutor<>(jsc, config, table,
         firstCommitTime, jsc.parallelize(records));
     List<WriteStatus> writeStatuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       return actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator());
@@ -314,16 +316,16 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     HoodieWriteConfig config = makeHoodieClientConfig();
     String instantTime = HoodieTestUtils.makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
+    HoodieCopyOnWriteTable<TestRawTripPayload> table = (HoodieCopyOnWriteTable<TestRawTripPayload>) HoodieTable.create(metaClient, config, jsc);
 
     // Case 1:
     // 10 records for partition 1, 1 record for partition 2.
-    List<HoodieRecord> records = newHoodieRecords(10, "2016-01-31T03:16:41.415Z");
+    List<HoodieRecord<TestRawTripPayload>> records = newHoodieRecords(10, "2016-01-31T03:16:41.415Z");
     records.addAll(newHoodieRecords(1, "2016-02-01T03:16:41.415Z"));
 
     // Insert new records
-    final List<HoodieRecord> recs2 = records;
-    CommitActionExecutor actionExecutor = new InsertPreppedCommitActionExecutor(jsc, config, table,
+    final List<HoodieRecord<TestRawTripPayload>> recs2 = records;
+    CommitActionExecutor<TestRawTripPayload> actionExecutor = new InsertPreppedCommitActionExecutor<>(jsc, config, table,
         instantTime, jsc.parallelize(recs2));
     List<WriteStatus> returnedStatuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       return actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs2.iterator());
@@ -345,8 +347,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     records.addAll(newHoodieRecords(1, "2016-02-02T03:16:41.415Z"));
 
     // Insert new records
-    final List<HoodieRecord> recs3 = records;
-    CommitActionExecutor newActionExecutor = new UpsertPreppedCommitActionExecutor(jsc, config, table,
+    final List<HoodieRecord<TestRawTripPayload>> recs3 = records;
+    CommitActionExecutor<TestRawTripPayload> newActionExecutor = new UpsertPreppedCommitActionExecutor<>(jsc, config, table,
         instantTime, jsc.parallelize(recs3));
     returnedStatuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       return newActionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs3.iterator());
@@ -369,23 +371,23 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
         .limitFileSize(64 * 1024).parquetBlockSize(64 * 1024).parquetPageSize(64 * 1024).build()).build();
     String instantTime = HoodieTestUtils.makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
+    HoodieCopyOnWriteTable<TestRawTripPayload> table = (HoodieCopyOnWriteTable<TestRawTripPayload>) HoodieTable.create(metaClient, config, jsc);
 
-    List<HoodieRecord> records = new ArrayList<>();
+    List<HoodieRecord<TestRawTripPayload>> records = new ArrayList<>();
     // Approx 1150 records are written for block size of 64KB
     for (int i = 0; i < 2000; i++) {
       String recordStr = "{\"_row_key\":\"" + UUID.randomUUID().toString()
           + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":" + i + "}";
       TestRawTripPayload rowChange = new TestRawTripPayload(recordStr);
-      records.add(new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
+      records.add(new HoodieRecord<>(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
     }
 
     // Insert new records
-    CommitActionExecutor actionExecutor = new UpsertCommitActionExecutor(jsc, config, table,
+    CommitActionExecutor<TestRawTripPayload> actionExecutor = new UpsertCommitActionExecutor<>(jsc, config, table,
         instantTime, jsc.parallelize(records));
     jsc.parallelize(Arrays.asList(1))
         .map(i -> actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator()))
-        .map(x -> HoodieClientTestUtils.collectStatuses(x)).collect();
+        .map(HoodieClientTestUtils::collectStatuses).collect();
 
     // Check the updated file
     int counts = 0;
@@ -403,28 +405,28 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
             .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    final HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
+    final HoodieCopyOnWriteTable<TestRawTripPayload> table = (HoodieCopyOnWriteTable<TestRawTripPayload>) HoodieTable.create(metaClient, config, jsc);
     String instantTime = "000";
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
-    final List<HoodieRecord> inserts = dataGen.generateInsertsWithHoodieAvroPayload(instantTime, 100);
-    CommitActionExecutor actionExecutor = new InsertCommitActionExecutor(jsc, config, table,
+    final List<HoodieRecord<HoodieAvroPayload>> inserts = dataGen.generateInsertsWithHoodieAvroPayload(instantTime, 100);
+    CommitActionExecutor<HoodieAvroPayload> actionExecutor = new InsertCommitActionExecutor<>(jsc, config, table,
         instantTime, jsc.parallelize(inserts));
     final List<List<WriteStatus>> ws = jsc.parallelize(Arrays.asList(1)).map(x -> {
       return actionExecutor.handleInsert(UUID.randomUUID().toString(), inserts.iterator());
-    }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();
+    }).map(x -> HoodieClientTestUtils.collectStatuses(x)).collect();
 
     WriteStatus writeStatus = ws.get(0).get(0);
     String fileId = writeStatus.getFileId();
     metaClient.getFs().create(new Path(Paths.get(basePath, ".hoodie", "000.commit").toString())).close();
-    final List<HoodieRecord> updates = dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts);
+    final List<HoodieRecord<HoodieAvroPayload>> updates = dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts);
 
     String partitionPath = updates.get(0).getPartitionPath();
     long numRecordsInPartition = updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
-    CommitActionExecutor newActionExecutor = new UpsertCommitActionExecutor(jsc, config, table,
+    CommitActionExecutor<HoodieAvroPayload> newActionExecutor = new UpsertCommitActionExecutor<>(jsc, config, table,
         instantTime, jsc.parallelize(updates));
     final List<List<WriteStatus>> updateStatus = jsc.parallelize(Arrays.asList(1)).map(x -> {
       return newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator());
-    }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();
+    }).map(x -> HoodieClientTestUtils.collectStatuses(x)).collect();
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
 

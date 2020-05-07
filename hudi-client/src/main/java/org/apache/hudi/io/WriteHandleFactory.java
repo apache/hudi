@@ -23,11 +23,16 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-public abstract class WriteHandleFactory<T extends HoodieRecordPayload> {
+public abstract class WriteHandleFactory<T extends HoodieRecordPayload<T>> {
   private int numFilesWritten = 0;
 
-  public abstract HoodieWriteHandle<T> create(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
-      String partitionPath, String fileIdPrefix, SparkTaskContextSupplier sparkTaskContextSupplier);
+  public abstract HoodieWriteHandle<T> create(
+      HoodieWriteConfig config,
+      String commitTime,
+      HoodieTable<T> hoodieTable,
+      String partitionPath,
+      String fileIdPrefix,
+      SparkTaskContextSupplier sparkTaskContextSupplier);
 
   protected String getNextFileId(String idPfx) {
     return String.format("%s-%d", idPfx, numFilesWritten++);

@@ -152,10 +152,16 @@ public class DeltaSync implements Serializable {
    */
   private transient HoodieWriteClient writeClient;
 
-  public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
-                   TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
-                   Function<HoodieWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
-
+  public DeltaSync(
+      HoodieDeltaStreamer.Config cfg,
+      SparkSession sparkSession,
+      SchemaProvider schemaProvider,
+      TypedProperties props,
+      JavaSparkContext jssc,
+      FileSystem fs,
+      Configuration conf,
+      Function<HoodieWriteClient, Boolean> onInitializingHoodieWriteClient
+  ) throws IOException {
     this.cfg = cfg;
     this.jssc = jssc;
     this.sparkSession = sparkSession;
@@ -205,7 +211,7 @@ public class DeltaSync implements Serializable {
   /**
    * Run one round of delta sync and return new compaction instant if one got scheduled.
    */
-  public Option<String> syncOnce() throws Exception {
+  public <T extends HoodieRecordPayload<T>> Option<String> syncOnce() throws Exception {
     Option<String> scheduledCompaction = Option.empty();
     HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(schemaProvider));
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
@@ -213,7 +219,7 @@ public class DeltaSync implements Serializable {
     // Refresh Timeline
     refreshTimeline();
 
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(commitTimelineOpt);
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord<T>>>> srcRecordsWithCkpt = readFromSource(commitTimelineOpt);
 
     if (null != srcRecordsWithCkpt) {
       // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
@@ -225,8 +231,11 @@ public class DeltaSync implements Serializable {
         setupWriteClient();
       }
 
-      scheduledCompaction = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
-          srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
+      scheduledCompaction = writeToSink(
+          srcRecordsWithCkpt.getRight().getRight(),
+          srcRecordsWithCkpt.getRight().getLeft(),
+          metrics,
+          overallTimerContext);
     }
 
     // Clear persistent RDDs
@@ -237,7 +246,7 @@ public class DeltaSync implements Serializable {
   /**
    * Read from Upstream Source and apply transformation if needed.
    */
-  private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(
+  private <T extends HoodieRecordPayload<T>> Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord<T>>>> readFromSource(
       Option<HoodieTimeline> commitTimelineOpt) throws Exception {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
@@ -321,9 +330,11 @@ public class DeltaSync implements Serializable {
     }
 
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
-    JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
-      HoodieRecordPayload payload = DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-          (Comparable) DataSourceUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false));
+    JavaRDD<HoodieRecord<T>> records = avroRDD.map(gr -> {
+      T payload = DataSourceUtils.createPayload(
+          cfg.payloadClassName,
+          gr,
+          (Comparable<?>) DataSourceUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false));
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 
@@ -339,9 +350,12 @@ public class DeltaSync implements Serializable {
    * @param overallTimerContext Timer Context
    * @return Option Compaction instant if one is scheduled
    */
-  private Option<String> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
-                                     HoodieDeltaStreamerMetrics metrics, Timer.Context overallTimerContext) throws Exception {
-
+  private <T extends HoodieRecordPayload<T>> Option<String> writeToSink(
+      JavaRDD<HoodieRecord<T>> records,
+      String checkpointStr,
+      HoodieDeltaStreamerMetrics metrics,
+      Timer.Context overallTimerContext
+  ) throws Exception {
     Option<String> scheduledCompactionInstant = Option.empty();
     // filter dupes if needed
     if (cfg.filterDupes) {

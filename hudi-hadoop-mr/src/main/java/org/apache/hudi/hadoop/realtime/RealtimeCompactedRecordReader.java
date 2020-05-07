@@ -21,11 +21,11 @@ package org.apache.hudi.hadoop.realtime;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
@@ -43,7 +43,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
 
   protected final RecordReader<NullWritable, ArrayWritable> parquetReader;
-  private final Map<String, HoodieRecord<? extends HoodieRecordPayload>> deltaRecordMap;
+  private final Map<String, HoodieRecord<?>> deltaRecordMap;
 
   public RealtimeCompactedRecordReader(HoodieRealtimeFileSplit split, JobConf job,
       RecordReader<NullWritable, ArrayWritable> realReader) throws IOException {
@@ -85,7 +85,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
       if (deltaRecordMap.containsKey(key)) {
         // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
         // deltaRecord may not be a full record and needs values of columns from the parquet
-        Option<GenericRecord> rec;
+        Option<IndexedRecord> rec;
         if (usesCustomPayload) {
           rec = deltaRecordMap.get(key).getData().getInsertValue(getWriterSchema());
         } else {
@@ -96,11 +96,11 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
           // and move to the next record
           return next(aVoid, arrayWritable);
         }
-        GenericRecord recordToReturn = rec.get();
+        GenericRecord recordToReturn = (GenericRecord) rec.get();
         if (usesCustomPayload) {
           // If using a custom payload, return only the projection fields. The readerSchema is a schema derived from
           // the writerSchema with only the projection fields
-          recordToReturn = HoodieAvroUtils.rewriteRecordWithOnlyNewSchemaFields(rec.get(), getReaderSchema());
+          recordToReturn = HoodieAvroUtils.rewriteRecordWithOnlyNewSchemaFields((GenericRecord) rec.get(), getReaderSchema());
         }
         // we assume, a later safe record in the log, is newer than what we have in the map &
         // replace it. Since we want to return an arrayWritable which is the same length as the elements in the latest

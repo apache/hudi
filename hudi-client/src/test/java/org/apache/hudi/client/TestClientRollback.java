@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -58,7 +59,7 @@ public class TestClientRollback extends TestHoodieClientBase {
   public void testSavepointAndRollback() throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(HoodieCompactionConfig.newBuilder()
         .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build()).build();
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg)) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getHoodieWriteClient(cfg)) {
       HoodieTestDataGenerator.writePartitionMetadata(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
       /**
@@ -67,8 +68,8 @@ public class TestClientRollback extends TestHoodieClientBase {
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 200);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
 
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
@@ -99,7 +100,7 @@ public class TestClientRollback extends TestHoodieClientBase {
       List<String> partitionPaths =
           FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), getConfig().shouldAssumeDatePartitioning());
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.create(metaClient, getConfig(), jsc);
+      HoodieTable<TestRawTripPayload> table = HoodieTable.create(metaClient, getConfig(), jsc);
       final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
 
       List<HoodieBaseFile> dataFiles = partitionPaths.stream().flatMap(s -> {
@@ -189,7 +190,7 @@ public class TestClientRollback extends TestHoodieClientBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    try (HoodieWriteClient client = getHoodieWriteClient(config, false);) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getHoodieWriteClient(config, false);) {
 
       // Rollback commit 1 (this should fail, since commit2 is still around)
       assertThrows(HoodieRollbackException.class, () -> {
@@ -279,7 +280,7 @@ public class TestClientRollback extends TestHoodieClientBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    try (HoodieWriteClient client = getHoodieWriteClient(config, false);) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getHoodieWriteClient(config, false);) {
       client.startCommitWithTime(commitTime4);
       // Check results, nothing changed
       assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
@@ -297,7 +298,7 @@ public class TestClientRollback extends TestHoodieClientBase {
     }
 
     // Turn auto rollback on
-    try (HoodieWriteClient client = getHoodieWriteClient(config, true)) {
+    try (HoodieWriteClient<TestRawTripPayload> client = getHoodieWriteClient(config, true)) {
       client.startCommitWithTime(commitTime5);
       assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
       assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));

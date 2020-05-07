@@ -30,7 +30,7 @@ import org.apache.hadoop.fs.Path;
 /**
  * Extract range information for a given file slice.
  */
-public class HoodieRangeInfoHandle<T extends HoodieRecordPayload> extends HoodieReadHandle<T> {
+public class HoodieRangeInfoHandle<T extends HoodieRecordPayload<T>> extends HoodieReadHandle<T> {
 
   public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieTable<T> hoodieTable,
       Pair<String, String> partitionPathFilePair) {

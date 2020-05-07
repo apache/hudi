@@ -66,7 +66,7 @@ import java.util.Map;
  * action
  * </p>
  */
-public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends HoodieCopyOnWriteTable<T> {
+public class HoodieMergeOnReadTable<T extends HoodieRecordPayload<T>> extends HoodieCopyOnWriteTable<T> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergeOnReadTable.class);
 
@@ -85,10 +85,13 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public HoodieWriteMetadata bulkInsert(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieRecord<T>> records,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    return new BulkInsertDeltaCommitActionExecutor<>(jsc, config,
-        this, instantTime, records, bulkInsertPartitioner).execute();
+  public HoodieWriteMetadata bulkInsert(
+      JavaSparkContext jsc,
+      String instantTime,
+      JavaRDD<HoodieRecord<T>> records,
+      Option<UserDefinedBulkInsertPartitioner<T>> bulkInsertPartitioner
+  ) {
+    return new BulkInsertDeltaCommitActionExecutor<>(jsc, config, this, instantTime, records, bulkInsertPartitioner).execute();
   }
 
   @Override

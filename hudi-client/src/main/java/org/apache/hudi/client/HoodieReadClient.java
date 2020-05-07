@@ -55,7 +55,7 @@ import scala.Tuple2;
 /**
  * Provides an RDD based API for accessing/filtering Hoodie tables, based on keys.
  */
-public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializable {
+public class HoodieReadClient<T extends HoodieRecordPayload<T>> implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieReadClient.class);
@@ -65,7 +65,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    * basepath pointing to the table. Until, then just always assume a BloomIndex
    */
   private final transient HoodieIndex<T> index;
-  private HoodieTable hoodieTable;
+  private HoodieTable<T> hoodieTable;
   private transient Option<SQLContext> sqlContextOpt;
   private final transient JavaSparkContext jsc;
 
@@ -161,7 +161,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    * FullFilePath value is not present, then the key is not found. If the FullFilePath value is present, it is the path
    * component (without scheme) of the URI underlying file
    */
-  public JavaPairRDD<HoodieKey, Option<String>> checkExists(JavaRDD<HoodieKey> hoodieKeys) {
+  public JavaPairRDD<HoodieKey, Option<Pair<String, String>>> checkExists(JavaRDD<HoodieKey> hoodieKeys) {
     return index.fetchRecordLocation(hoodieKeys, jsc, hoodieTable);
   }
 

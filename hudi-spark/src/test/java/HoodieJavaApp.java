@@ -21,6 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -116,11 +117,11 @@ public class HoodieJavaApp {
       dataGen = new HoodieTestDataGenerator();
     }
 
-    /**
+    /*
      * Commit with only inserts
      */
     // Generate some input..
-    List<HoodieRecord> recordsSoFar = new ArrayList<>(dataGen.generateInserts("001"/* ignore */, 100));
+    List<HoodieRecord<TestRawTripPayload>> recordsSoFar = new ArrayList<>(dataGen.generateInserts("001"/* ignore */, 100));
     List<String> records1 = DataSourceTestUtils.convertToStringList(recordsSoFar);
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));
 
@@ -156,10 +157,10 @@ public class HoodieJavaApp {
     String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
     LOG.info("First commit at instant time :" + commitInstantTime1);
 
-    /**
+    /*
      * Commit that updates records
      */
-    List<HoodieRecord> recordsToBeUpdated = dataGen.generateUpdates("002"/* ignore */, 100);
+    List<HoodieRecord<TestRawTripPayload>> recordsToBeUpdated = dataGen.generateUpdates("002"/* ignore */, 100);
     recordsSoFar.addAll(recordsToBeUpdated);
     List<String> records2 = DataSourceTestUtils.convertToStringList(recordsToBeUpdated);
     Dataset<Row> inputDF2 = spark.read().json(jssc.parallelize(records2, 2));
@@ -179,7 +180,7 @@ public class HoodieJavaApp {
     String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
     LOG.info("Second commit at instant time :" + commitInstantTime2);
 
-    /**
+    /*
      * Commit that Deletes some records
      */
     List<String> deletes = DataSourceTestUtils.convertKeysToStringList(
@@ -203,7 +204,7 @@ public class HoodieJavaApp {
     String commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
     LOG.info("Third commit at instant time :" + commitInstantTime3);
 
-    /**
+    /*
      * Read & do some queries
      */
     Dataset<Row> snapshotQueryDF = spark.read().format("org.apache.hudi")
@@ -216,7 +217,7 @@ public class HoodieJavaApp {
     spark.sql("select fare.amount, begin_lon, begin_lat, timestamp from hoodie_ro where fare.amount > 2.0").show();
 
     if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) {
-      /**
+      /*
        * Consume incrementally, only changes in commit 2 above. Currently only supported for COPY_ON_WRITE TABLE
        */
       Dataset<Row> incQueryDF = spark.read().format("org.apache.hudi")

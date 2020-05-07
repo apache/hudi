@@ -63,7 +63,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * IO Operation to append data onto an existing file.
  */
-public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
+public class HoodieAppendHandle<T extends HoodieRecordPayload<T>> extends HoodieWriteHandle<T> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieAppendHandle.class);
   // This acts as the sequenceID for records written
@@ -113,7 +113,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
     this(config, instantTime, hoodieTable, partitionPath, fileId, null, sparkTaskContextSupplier);
   }
 
-  private void init(HoodieRecord record) {
+  private void init(HoodieRecord<T> record) {
     if (doInit) {
       // extract some information from the first record
       SliceView rtView = hoodieTable.getSliceView();
@@ -156,7 +156,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   private Option<IndexedRecord> getIndexedRecord(HoodieRecord<T> hoodieRecord) {
-    Option recordMetadata = hoodieRecord.getData().getMetadata();
+    final Option<Map<String, String>> recordMetadata = hoodieRecord.getData().getMetadata();
     try {
       Option<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(originalSchema);
       if (avroRecord.isPresent()) {
@@ -193,7 +193,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
 
   public void doAppend() {
     while (recordItr.hasNext()) {
-      HoodieRecord record = recordItr.next();
+      final HoodieRecord<T> record = recordItr.next();
       init(record);
       flushToDiskIfRequired(record);
       writeToBuffer(record);
@@ -211,7 +211,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
         recordList.clear();
       }
       if (keysToDelete.size() > 0) {
-        writer = writer.appendBlock(new HoodieDeleteBlock(keysToDelete.toArray(new HoodieKey[keysToDelete.size()]), header));
+        writer = writer.appendBlock(new HoodieDeleteBlock(keysToDelete.toArray(new HoodieKey[0]), header));
         keysToDelete.clear();
       }
     } catch (Exception e) {
@@ -220,14 +220,14 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   @Override
-  public boolean canWrite(HoodieRecord record) {
+  public boolean canWrite(HoodieRecord<T> record) {
     return config.getParquetMaxFileSize() >= estimatedNumberOfBytesWritten
         * config.getLogFileToParquetCompressionRatio();
   }
 
   @Override
-  public void write(HoodieRecord record, Option<IndexedRecord> insertValue) {
-    Option recordMetadata = record.getData().getMetadata();
+  public void write(HoodieRecord<T> record, Option<IndexedRecord> insertValue) {
+    final Option<Map<String, String>> recordMetadata = record.getData().getMetadata();
     try {
       init(record);
       flushToDiskIfRequired(record);
@@ -315,7 +315,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   /**
    * Checks if the number of records have reached the set threshold and then flushes the records to disk.
    */
-  private void flushToDiskIfRequired(HoodieRecord record) {
+  private void flushToDiskIfRequired(HoodieRecord<T> record) {
     // Append if max number of records reached to achieve block size
     if (numberOfRecords >= (int) (maxBlockSize / averageRecordSize)) {
       // Recompute averageRecordSize before writing a new block and update existing value with

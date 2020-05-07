@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.UtilitiesTestBase;
@@ -93,7 +94,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
    * @param path    The path in {@link Path} of the file to write.
    * @throws IOException
    */
-  abstract void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException;
+  abstract void writeNewDataToFile(List<HoodieRecord<TestRawTripPayload>> records, Path path) throws IOException;
 
   /**
    * Generates a batch of test data and writes the data to a file.

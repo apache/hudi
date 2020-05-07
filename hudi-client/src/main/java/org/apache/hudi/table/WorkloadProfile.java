@@ -37,7 +37,7 @@ import scala.Tuple2;
  * <p>
  * TODO(vc): Think about obtaining this directly from index.tagLocation
  */
-public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializable {
+public class WorkloadProfile<T extends HoodieRecordPayload<T>> implements Serializable {
 
   /**
    * Input workload.

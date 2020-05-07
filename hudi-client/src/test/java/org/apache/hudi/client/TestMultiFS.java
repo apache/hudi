@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -68,8 +69,8 @@ public class TestMultiFS extends HoodieClientTestHarness {
     cleanupTestDataGenerator();
   }
 
-  private HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig config) {
-    return new HoodieWriteClient(jsc, config);
+  private HoodieWriteClient<TestRawTripPayload> getHoodieWriteClient(HoodieWriteConfig config) {
+    return new HoodieWriteClient<>(jsc, config);
   }
 
   protected HoodieWriteConfig getHoodieWriteConfig(String basePath) {
@@ -88,14 +89,14 @@ public class TestMultiFS extends HoodieClientTestHarness {
     HoodieWriteConfig cfg = getHoodieWriteConfig(dfsBasePath);
     HoodieWriteConfig localConfig = getHoodieWriteConfig(tablePath);
 
-    try (HoodieWriteClient hdfsWriteClient = getHoodieWriteClient(cfg);
-        HoodieWriteClient localWriteClient = getHoodieWriteClient(localConfig)) {
+    try (HoodieWriteClient<TestRawTripPayload> hdfsWriteClient = getHoodieWriteClient(cfg);
+         HoodieWriteClient<TestRawTripPayload> localWriteClient = getHoodieWriteClient(localConfig)) {
 
       // Write generated data to hdfs (only inserts)
       String readCommitTime = hdfsWriteClient.startCommit();
       LOG.info("Starting commit " + readCommitTime);
-      List<HoodieRecord> records = dataGen.generateInserts(readCommitTime, 100);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(readCommitTime, 100);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
       hdfsWriteClient.upsert(writeRecords, readCommitTime);
 
       // Read from hdfs
@@ -111,8 +112,8 @@ public class TestMultiFS extends HoodieClientTestHarness {
 
       String writeCommitTime = localWriteClient.startCommit();
       LOG.info("Starting write commit " + writeCommitTime);
-      List<HoodieRecord> localRecords = dataGen.generateInserts(writeCommitTime, 100);
-      JavaRDD<HoodieRecord> localWriteRecords = jsc.parallelize(localRecords, 1);
+      List<HoodieRecord<TestRawTripPayload>> localRecords = dataGen.generateInserts(writeCommitTime, 100);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> localWriteRecords = jsc.parallelize(localRecords, 1);
       LOG.info("Writing to path: " + tablePath);
       localWriteClient.upsert(localWriteRecords, writeCommitTime);
 

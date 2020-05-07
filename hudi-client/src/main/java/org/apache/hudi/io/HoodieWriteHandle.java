@@ -41,11 +41,12 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * Base class for all write operations logically performed at the file group level.
  */
-public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends HoodieIOHandle {
+public abstract class HoodieWriteHandle<T extends HoodieRecordPayload<T>> extends HoodieIOHandle<T> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
   protected final Schema originalSchema;
@@ -128,23 +129,23 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
    * - Whether it belongs to the same partitionPath as existing records - Whether the current file written bytes lt max
    * file size
    */
-  public boolean canWrite(HoodieRecord record) {
+  public boolean canWrite(HoodieRecord<T> record) {
     return false;
   }
 
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  public void write(HoodieRecord record, Option<IndexedRecord> insertValue) {
+  public void write(HoodieRecord<T> record, Option<IndexedRecord> insertValue) {
     // NO_OP
   }
 
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  public void write(HoodieRecord record, Option<IndexedRecord> avroRecord, Option<Exception> exception) {
-    Option recordMetadata = record.getData().getMetadata();
-    if (exception.isPresent() && exception.get() instanceof Throwable) {
+  public void write(HoodieRecord<T> record, Option<IndexedRecord> avroRecord, Option<Exception> exception) {
+    Option<Map<String, String>> recordMetadata = record.getData().getMetadata();
+    if (exception.isPresent() && exception.get() != null) {
       // Not throwing exception from here, since we don't want to fail the entire job for a single record
       writeStatus.markFailure(record, exception.get(), recordMetadata);
       LOG.error("Error writing record " + record, exception.get());

@@ -33,9 +33,9 @@ import java.util.stream.Collectors;
  */
 public class DataSourceTestUtils {
 
-  public static Option<String> convertToString(HoodieRecord record) {
+  public static Option<String> convertToString(HoodieRecord<TestRawTripPayload> record) {
     try {
-      String str = ((TestRawTripPayload) record.getData()).getJsonData();
+      String str = record.getData().getJsonData();
       str = "{" + str.substring(str.indexOf("\"timestamp\":"));
       // Remove the last } bracket
       str = str.substring(0, str.length() - 1);
@@ -45,8 +45,11 @@ public class DataSourceTestUtils {
     }
   }
 
-  public static List<String> convertToStringList(List<HoodieRecord> records) {
-    return records.stream().map(DataSourceTestUtils::convertToString).filter(Option::isPresent).map(Option::get)
+  public static List<String> convertToStringList(List<HoodieRecord<TestRawTripPayload>> records) {
+    return records.stream()
+        .map(DataSourceTestUtils::convertToString)
+        .filter(Option::isPresent)
+        .map(Option::get)
         .collect(Collectors.toList());
   }
 
@@ -56,9 +59,7 @@ public class DataSourceTestUtils {
         .collect(Collectors.toList());
   }
 
-  public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>
-          implements UserDefinedBulkInsertPartitioner<T> {
-
+  public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload<T>> implements UserDefinedBulkInsertPartitioner<T> {
     @Override
     public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
       return records;

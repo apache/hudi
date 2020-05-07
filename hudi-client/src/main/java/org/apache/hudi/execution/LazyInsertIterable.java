@@ -44,7 +44,7 @@ import java.util.function.Function;
 /**
  * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new files.
  */
-public class LazyInsertIterable<T extends HoodieRecordPayload>
+public class LazyInsertIterable<T extends HoodieRecordPayload<T>>
     extends LazyIterableIterator<HoodieRecord<T>, List<WriteStatus>> {
 
   protected final HoodieWriteConfig hoodieConfig;
@@ -75,13 +75,13 @@ public class LazyInsertIterable<T extends HoodieRecordPayload>
   }
 
   // Used for caching HoodieRecord along with insertValue. We need this to offload computation work to buffering thread.
-  static class HoodieInsertValueGenResult<T extends HoodieRecord> {
-    public T record;
+  static class HoodieInsertValueGenResult<U extends HoodieRecord<?>> {
+    public U record;
     public Option<IndexedRecord> insertValue;
     // It caches the exception seen while fetching insert value.
     public Option<Exception> exception = Option.empty();
 
-    public HoodieInsertValueGenResult(T record, Schema schema) {
+    public HoodieInsertValueGenResult(U record, Schema schema) {
       this.record = record;
       try {
         this.insertValue = record.getData().getInsertValue(schema);
@@ -95,9 +95,8 @@ public class LazyInsertIterable<T extends HoodieRecordPayload>
    * Transformer function to help transform a HoodieRecord. This transformer is used by BufferedIterator to offload some
    * expensive operations of transformation to the reader thread.
    */
-  static <T extends HoodieRecordPayload> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformFunction(
-      Schema schema) {
-    return hoodieRecord -> new HoodieInsertValueGenResult(hoodieRecord, schema);
+  static <T extends HoodieRecordPayload<T>> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord<T>>> getTransformFunction(Schema schema) {
+    return hoodieRecord -> new HoodieInsertValueGenResult<>(hoodieRecord, schema);
   }
 
   @Override
@@ -106,12 +105,10 @@ public class LazyInsertIterable<T extends HoodieRecordPayload>
   @Override
   protected List<WriteStatus> computeNext() {
     // Executor service used for launching writer thread.
-    BoundedInMemoryExecutor<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> bufferedIteratorExecutor =
-        null;
+    BoundedInMemoryExecutor<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord<T>>, List<WriteStatus>> bufferedIteratorExecutor = null;
     try {
       final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
-      bufferedIteratorExecutor =
-          new SparkBoundedInMemoryExecutor<>(hoodieConfig, inputItr, getInsertHandler(), getTransformFunction(schema));
+      bufferedIteratorExecutor = new SparkBoundedInMemoryExecutor<>(hoodieConfig, inputItr, getInsertHandler(), getTransformFunction(schema));
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
       assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
       return result;
@@ -135,14 +132,14 @@ public class LazyInsertIterable<T extends HoodieRecordPayload>
    * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles.
    */
   protected class CopyOnWriteInsertHandler
-      extends BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
+      extends BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord<T>>, List<WriteStatus>> {
 
     protected final List<WriteStatus> statuses = new ArrayList<>();
-    protected HoodieWriteHandle handle;
+    protected HoodieWriteHandle<T> handle;
 
     @Override
-    protected void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> payload) {
-      final HoodieRecord insertPayload = payload.record;
+    protected void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord<T>> payload) {
+      final HoodieRecord<T> insertPayload = payload.record;
       // lazily initialize the handle, for the first time
       if (handle == null) {
         handle = writeHandleFactory.create(hoodieConfig, instantTime, hoodieTable, insertPayload.getPartitionPath(),

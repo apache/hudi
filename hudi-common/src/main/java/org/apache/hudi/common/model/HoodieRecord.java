@@ -28,7 +28,7 @@ import java.util.Objects;
 /**
  * A Single Record managed by Hoodie.
  */
-public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable {
+public class HoodieRecord<T extends HoodieRecordPayload<T>> implements Serializable {
 
   public static final String COMMIT_TIME_METADATA_FIELD = "_hoodie_commit_time";
   public static final String COMMIT_SEQNO_METADATA_FIELD = "_hoodie_commit_seqno";
@@ -43,7 +43,7 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   /**
    * Identifies the record across the table.
    */
-  private HoodieKey key;
+  private final HoodieKey key;
 
   /**
    * Actual payload of the record.
@@ -102,7 +102,7 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   /**
    * Sets the current currentLocation of the record. This should happen exactly-once
    */
-  public HoodieRecord setCurrentLocation(HoodieRecordLocation location) {
+  public HoodieRecord<T> setCurrentLocation(HoodieRecordLocation location) {
     checkState();
     assert currentLocation == null;
     this.currentLocation = location;
@@ -116,7 +116,7 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   /**
    * Sets the new currentLocation of the record, after being written. This again should happen exactly-once.
    */
-  public HoodieRecord setNewLocation(HoodieRecordLocation location) {
+  public HoodieRecord<T> setNewLocation(HoodieRecordLocation location) {
     checkState();
     assert newLocation == null;
     this.newLocation = location;
@@ -136,12 +136,18 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
     if (this == o) {
       return true;
     }
+
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    HoodieRecord that = (HoodieRecord) o;
-    return Objects.equals(key, that.key) && Objects.equals(data, that.data)
-        && Objects.equals(currentLocation, that.currentLocation) && Objects.equals(newLocation, that.newLocation);
+
+    final HoodieRecord<?> that = (HoodieRecord<?>) o;
+
+    return sealed == that.sealed &&
+            Objects.equals(key, that.key) &&
+            Objects.equals(data, that.data) &&
+            Objects.equals(currentLocation, that.currentLocation) &&
+            Objects.equals(newLocation, that.newLocation);
   }
 
   @Override
@@ -151,12 +157,10 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieRecord{");
-    sb.append("key=").append(key);
-    sb.append(", currentLocation='").append(currentLocation).append('\'');
-    sb.append(", newLocation='").append(newLocation).append('\'');
-    sb.append('}');
-    return sb.toString();
+    return "HoodieRecord{" + "key=" + key +
+            ", currentLocation='" + currentLocation + '\'' +
+            ", newLocation='" + newLocation + '\'' +
+            '}';
   }
 
   public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {

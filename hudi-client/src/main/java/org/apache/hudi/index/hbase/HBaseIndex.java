@@ -72,7 +72,7 @@ import scala.Tuple2;
 /**
  * Hoodie Index implementation backed by HBase.
  */
-public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
+public class HBaseIndex<T extends HoodieRecordPayload<T>> extends HoodieIndex<T> {
 
   public static final String DEFAULT_SPARK_EXECUTOR_INSTANCES_CONFIG_NAME = "spark.executor.instances";
   public static final String DEFAULT_SPARK_DYNAMIC_ALLOCATION_ENABLED_CONFIG_NAME = "spark.dynamicAllocation.enabled";
@@ -192,8 +192,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   private Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>> locationTagFunction(
       HoodieTableMetaClient metaClient) {
 
-    return (Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>>) (partitionNum,
-        hoodieRecordIterator) -> {
+    return (Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>>) (partitionNum, hoodieRecordIterator) -> {
 
       int multiGetBatchSize = config.getHbaseIndexGetBatchSize();
 
@@ -206,10 +205,10 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
       List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
       try (HTable hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName))) {
         List<Get> statements = new ArrayList<>();
-        List<HoodieRecord> currentBatchOfRecords = new LinkedList<>();
+        List<HoodieRecord<T>> currentBatchOfRecords = new LinkedList<>();
         // Do the tagging.
         while (hoodieRecordIterator.hasNext()) {
-          HoodieRecord rec = hoodieRecordIterator.next();
+          HoodieRecord<T> rec = hoodieRecordIterator.next();
           statements.add(generateStatement(rec.getRecordKey()));
           currentBatchOfRecords.add(rec);
           // iterator till we reach batch size
@@ -220,7 +219,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
             statements.clear();
             for (Result result : results) {
               // first, attempt to grab location from HBase
-              HoodieRecord currentRecord = currentBatchOfRecords.remove(0);
+              HoodieRecord<T> currentRecord = currentBatchOfRecords.remove(0);
               if (result.getRow() != null) {
                 String keyFromResult = Bytes.toString(result.getRow());
                 String commitTs = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN));
@@ -228,7 +227,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
                 String partitionPath = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN));
 
                 if (checkIfValidCommit(metaClient, commitTs)) {
-                  currentRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
+                  currentRecord = new HoodieRecord<>(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
                       currentRecord.getData());
                   currentRecord.unseal();
                   currentRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
@@ -279,7 +278,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
           WriteStatus writeStatus = statusIterator.next();
           List<Mutation> mutations = new ArrayList<>();
           try {
-            for (HoodieRecord rec : writeStatus.getWrittenRecords()) {
+            for (HoodieRecord<?> rec : writeStatus.getWrittenRecords()) {
               if (!writeStatus.isErrored(rec.getKey())) {
                 Option<HoodieRecordLocation> loc = rec.getNewLocation();
                 if (loc.isPresent()) {

@@ -42,7 +42,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
   }
 
   @Override
-  protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws Exception {
+  protected <T extends HoodieRecordPayload<T>> void processNextRecord(HoodieRecord<T> hoodieRecord) throws Exception {
     // Just call callback without merging
     callback.apply(hoodieRecord);
   }
@@ -56,8 +56,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
    * A callback for log record scanner.
    */
   @FunctionalInterface
-  public static interface LogRecordScannerCallback {
+  public interface LogRecordScannerCallback {
 
-    public void apply(HoodieRecord<? extends HoodieRecordPayload> record) throws Exception;
+    void apply(HoodieRecord<?> record) throws Exception;
+
   }
 }

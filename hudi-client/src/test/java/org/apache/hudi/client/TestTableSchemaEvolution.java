@@ -141,7 +141,7 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
         metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1);
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
-    HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
+    HoodieWriteClient<TestRawTripPayload> client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     // Initial inserts with TRIP_EXAMPLE_SCHEMA
     int numRecords = 10;
@@ -171,7 +171,7 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
     // Insert with evolved schema is not allowed
     HoodieWriteConfig hoodieDevolvedWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA_DEVOLVED);
     client = getHoodieWriteClient(hoodieDevolvedWriteConfig, false);
-    final List<HoodieRecord> failedRecords = generateInsertsWithSchema("004", numRecords, TRIP_EXAMPLE_SCHEMA_DEVOLVED);
+    final List<HoodieRecord<TestRawTripPayload>> failedRecords = generateInsertsWithSchema("004", numRecords, TRIP_EXAMPLE_SCHEMA_DEVOLVED);
     try {
       // We cannot use insertBatch directly here because we want to insert records
       // with a devolved schema and insertBatch inserts records using the TRIP_EXMPLE_SCHEMA.
@@ -203,7 +203,7 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
 
     // We cannot use insertBatch directly here because we want to insert records
     // with a evolved schemaand insertBatch inserts records using the TRIP_EXMPLE_SCHEMA.
-    final List<HoodieRecord> evolvedRecords = generateInsertsWithSchema("005", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
+    final List<HoodieRecord<TestRawTripPayload>> evolvedRecords = generateInsertsWithSchema("005", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
     writeBatch(client, "005", "004", Option.empty(), initCommitTime, numRecords,
         (String s, Integer a) -> evolvedRecords, HoodieWriteClient::insert, false, 0, 0, 0);
 
@@ -212,7 +212,7 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
     checkReadRecords("000", 2 * numRecords);
 
     // Updates with evolved schema is allowed
-    final List<HoodieRecord> updateRecords = generateUpdatesWithSchema("006", numUpdateRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
+    final List<HoodieRecord<TestRawTripPayload>> updateRecords = generateUpdatesWithSchema("006", numUpdateRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
     writeBatch(client, "006", "005", Option.empty(), initCommitTime,
         numUpdateRecords, (String s, Integer a) -> updateRecords, HoodieWriteClient::upsert, false, 0, 0, 0);
     // new commit
@@ -286,7 +286,7 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
         metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1);
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
-    HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
+    HoodieWriteClient<TestRawTripPayload> client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     // Initial inserts with TRIP_EXAMPLE_SCHEMA
     int numRecords = 10;
@@ -311,7 +311,7 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
     // Insert with devolved schema is not allowed
     HoodieWriteConfig hoodieDevolvedWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA_DEVOLVED);
     client = getHoodieWriteClient(hoodieDevolvedWriteConfig, false);
-    final List<HoodieRecord> failedRecords = generateInsertsWithSchema("004", numRecords, TRIP_EXAMPLE_SCHEMA_DEVOLVED);
+    final List<HoodieRecord<TestRawTripPayload>> failedRecords = generateInsertsWithSchema("004", numRecords, TRIP_EXAMPLE_SCHEMA_DEVOLVED);
     try {
       // We cannot use insertBatch directly here because we want to insert records
       // with a devolved schema.
@@ -341,7 +341,7 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
     // Insert with evolved scheme is allowed
     HoodieWriteConfig hoodieEvolvedWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA_EVOLVED);
     client = getHoodieWriteClient(hoodieEvolvedWriteConfig, false);
-    final List<HoodieRecord> evolvedRecords = generateInsertsWithSchema("004", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
+    final List<HoodieRecord<TestRawTripPayload>> evolvedRecords = generateInsertsWithSchema("004", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
     // We cannot use insertBatch directly here because we want to insert records
     // with a evolved schema.
     writeBatch(client, "004", "003", Option.empty(), initCommitTime, numRecords,
@@ -352,7 +352,7 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
     checkReadRecords("000", 2 * numRecords);
 
     // Updates with evolved schema is allowed
-    final List<HoodieRecord> updateRecords = generateUpdatesWithSchema("005", numUpdateRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
+    final List<HoodieRecord<TestRawTripPayload>> updateRecords = generateUpdatesWithSchema("005", numUpdateRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED);
     writeBatch(client, "005", "004", Option.empty(), initCommitTime,
         numUpdateRecords, (String s, Integer a) -> updateRecords, HoodieWriteClient::upsert, true, numUpdateRecords, 2 * numRecords, 5);
     checkReadRecords("000", 2 * numRecords);
@@ -393,7 +393,7 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
       // as these records were never inserted in the dataset. This is required so
       // that future calls to updateBatch or deleteBatch do not generate updates
       // or deletes for records which do not even exist.
-      for (HoodieRecord record : failedRecords) {
+      for (HoodieRecord<TestRawTripPayload> record : failedRecords) {
         assertTrue(dataGen.deleteExistingKeyIfPresent(record.getKey()));
       }
     }
@@ -448,19 +448,19 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
     assertTrue(timeline.lastInstant().get().getTimestamp().equals(instantTime));
   }
 
-  private List<HoodieRecord> generateInsertsWithSchema(String commitTime, int numRecords, String schemaStr) {
+  private List<HoodieRecord<TestRawTripPayload>> generateInsertsWithSchema(String commitTime, int numRecords, String schemaStr) {
     HoodieTestDataGenerator gen = schemaStr.equals(TRIP_EXAMPLE_SCHEMA_EVOLVED) ? dataGenEvolved : dataGenDevolved;
-    List<HoodieRecord> records = gen.generateInserts(commitTime, numRecords);
+    List<HoodieRecord<TestRawTripPayload>> records = gen.generateInserts(commitTime, numRecords);
     return convertToSchema(records, schemaStr);
   }
 
-  private List<HoodieRecord> generateUpdatesWithSchema(String commitTime, int numRecords, String schemaStr) {
+  private List<HoodieRecord<TestRawTripPayload>> generateUpdatesWithSchema(String commitTime, int numRecords, String schemaStr) {
     HoodieTestDataGenerator gen = schemaStr.equals(TRIP_EXAMPLE_SCHEMA_EVOLVED) ? dataGenEvolved : dataGenDevolved;
-    List<HoodieRecord> records = gen.generateUniqueUpdates(commitTime, numRecords);
+    List<HoodieRecord<TestRawTripPayload>> records = gen.generateUniqueUpdates(commitTime, numRecords);
     return convertToSchema(records, schemaStr);
   }
 
-  private List<HoodieRecord> convertToSchema(List<HoodieRecord> records, String schemaStr) {
+  private List<HoodieRecord<TestRawTripPayload>> convertToSchema(List<HoodieRecord<TestRawTripPayload>> records, String schemaStr) {
     Schema newSchema = new Schema.Parser().parse(schemaStr);
     return records.stream().map(r -> {
       HoodieKey key = r.getKey();
@@ -468,7 +468,7 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
       try {
         payload = (GenericRecord)r.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get();
         GenericRecord newPayload = HoodieAvroUtils.rewriteRecordWithOnlyNewSchemaFields(payload, newSchema);
-        return new HoodieRecord(key, new TestRawTripPayload(newPayload.toString(), key.getRecordKey(), key.getPartitionPath(), schemaStr));
+        return new HoodieRecord<>(key, new TestRawTripPayload(newPayload.toString(), key.getRecordKey(), key.getPartitionPath(), schemaStr));
       } catch (IOException e) {
         throw new RuntimeException("Conversion to new schema failed");
       }

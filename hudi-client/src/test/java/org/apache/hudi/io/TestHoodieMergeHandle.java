@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -93,18 +94,18 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
        */
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 4);
-      HoodieRecord record1 = records.get(0);
-      HoodieRecord record2 = records.get(1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 4);
+      HoodieRecord<TestRawTripPayload> record1 = records.get(0);
+      HoodieRecord<TestRawTripPayload> record2 = records.get(1);
       for (int i = 0; i < 20; i++) {
-        HoodieRecord dup = dataGen.generateUpdateRecord(record1.getKey(), newCommitTime);
+        HoodieRecord<TestRawTripPayload> dup = dataGen.generateUpdateRecord(record1.getKey(), newCommitTime);
         records.add(dup);
       }
       for (int i = 0; i < 20; i++) {
-        HoodieRecord dup = dataGen.generateUpdateRecord(record2.getKey(), newCommitTime);
+        HoodieRecord<TestRawTripPayload> dup = dataGen.generateUpdateRecord(record2.getKey(), newCommitTime);
         records.add(dup);
       }
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> writeRecords = jsc.parallelize(records, 1);
       List<WriteStatus> statuses = client.bulkInsert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
 
@@ -127,8 +128,8 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       client.startCommitWithTime(newCommitTime);
 
       // Do 1 more bulk insert with the same dup record1
-      List<HoodieRecord> newRecords = new ArrayList<>();
-      HoodieRecord sameAsRecord1 = dataGen.generateUpdateRecord(record1.getKey(), newCommitTime);
+      List<HoodieRecord<TestRawTripPayload>> newRecords = new ArrayList<>();
+      HoodieRecord<TestRawTripPayload> sameAsRecord1 = dataGen.generateUpdateRecord(record1.getKey(), newCommitTime);
       newRecords.add(sameAsRecord1);
       writeRecords = jsc.parallelize(newRecords, 1);
       statuses = client.bulkInsert(writeRecords, newCommitTime).collect();
@@ -170,16 +171,16 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
        */
       newCommitTime = "004";
       client.startCommitWithTime(newCommitTime);
-      List<HoodieRecord> updateRecords = new ArrayList<>();
+      List<HoodieRecord<TestRawTripPayload>> updateRecords = new ArrayList<>();
 
       // This exists in 001 and 002 and should be updated in both
       sameAsRecord1 = dataGen.generateUpdateRecord(record1.getKey(), newCommitTime);
       updateRecords.add(sameAsRecord1);
 
       // This exists in 001 and should be updated
-      HoodieRecord sameAsRecord2 = dataGen.generateUpdateRecord(record2.getKey(), newCommitTime);
+      HoodieRecord<TestRawTripPayload> sameAsRecord2 = dataGen.generateUpdateRecord(record2.getKey(), newCommitTime);
       updateRecords.add(sameAsRecord2);
-      JavaRDD<HoodieRecord> updateRecordsRDD = jsc.parallelize(updateRecords, 1);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> updateRecordsRDD = jsc.parallelize(updateRecords, 1);
       statuses = client.upsert(updateRecordsRDD, newCommitTime).collect();
 
       // Verify there are no errors
@@ -193,7 +194,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       // Check the entire dataset has 47 records still
       dataSet = getRecords();
       assertEquals(47, dataSet.count(), "Must contain 47 records");
-      Row[] rows = (Row[]) dataSet.collect();
+      Row[] rows = dataSet.collect();
       int record1Count = 0;
       int record2Count = 0;
       for (Row row : rows) {
@@ -226,12 +227,12 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
   public void testHoodieMergeHandleWriteStatMetrics() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfigBuilder().build();
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+    try (HoodieWriteClient<TestRawTripPayload> writeClient = getWriteClient(config);) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
-      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> recordsRDD = jsc.parallelize(records, 1);
       List<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime).collect();
 
       // All records should be inserts into new parquet
@@ -254,8 +255,8 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       newCommitTime = "101";
       writeClient.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
-      JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
+      List<HoodieRecord<TestRawTripPayload>> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
       statuses = writeClient.upsert(updatedRecordsRDD, newCommitTime).collect();
 
       // All records should be upserts into existing parquet
@@ -275,9 +276,9 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       newCommitTime = "102";
       writeClient.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> allRecords = dataGen.generateInserts(newCommitTime, 100);
+      List<HoodieRecord<TestRawTripPayload>> allRecords = dataGen.generateInserts(newCommitTime, 100);
       allRecords.addAll(updatedRecords);
-      JavaRDD<HoodieRecord> allRecordsRDD = jsc.parallelize(allRecords, 1);
+      JavaRDD<HoodieRecord<TestRawTripPayload>> allRecordsRDD = jsc.parallelize(allRecords, 1);
       statuses = writeClient.upsert(allRecordsRDD, newCommitTime).collect();
 
       // All records should be upserts into existing parquet (with inserts as updates small file handled)

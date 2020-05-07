@@ -27,10 +27,12 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -87,17 +89,17 @@ public class HoodieClientTestUtils {
     return statuses;
   }
 
-  public static Set<String> getRecordKeys(List<HoodieRecord> hoodieRecords) {
+  public static <T extends HoodieRecordPayload<T>> Set<String> getRecordKeys(List<HoodieRecord<T>> hoodieRecords) {
     Set<String> keys = new HashSet<>();
-    for (HoodieRecord rec : hoodieRecords) {
+    for (HoodieRecord<T> rec : hoodieRecords) {
       keys.add(rec.getRecordKey());
     }
     return keys;
   }
 
-  public static List<HoodieKey> getHoodieKeys(List<HoodieRecord> hoodieRecords) {
+  public static List<HoodieKey> getHoodieKeys(List<HoodieRecord<TestRawTripPayload>> hoodieRecords) {
     List<HoodieKey> keys = new ArrayList<>();
-    for (HoodieRecord rec : hoodieRecords) {
+    for (HoodieRecord<TestRawTripPayload> rec : hoodieRecords) {
       keys.add(rec.getKey());
     }
     return keys;
@@ -217,8 +219,15 @@ public class HoodieClientTestUtils {
     }
   }
 
-  public static String writeParquetFile(String basePath, String partitionPath, String filename,
-                                        List<HoodieRecord> records, Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException {
+  public static String writeParquetFile(
+      String basePath,
+      String partitionPath,
+      String filename,
+      List<HoodieRecord<?>> records,
+      Schema schema,
+      BloomFilter filter,
+      boolean createCommitTime
+  ) throws IOException {
 
     if (filter == null) {
       filter = BloomFilterFactory
@@ -250,8 +259,14 @@ public class HoodieClientTestUtils {
     return filename;
   }
 
-  public static String writeParquetFile(String basePath, String partitionPath, List<HoodieRecord> records,
-                                        Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException, InterruptedException {
+  public static String writeParquetFile(
+      String basePath,
+      String partitionPath,
+      List<HoodieRecord<?>> records,
+      Schema schema,
+      BloomFilter filter,
+      boolean createCommitTime
+  ) throws IOException, InterruptedException {
     Thread.sleep(1000);
     String instantTime = HoodieTestUtils.makeNewCommitTime();
     String fileId = UUID.randomUUID().toString();

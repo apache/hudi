@@ -71,7 +71,7 @@ import java.util.stream.Collectors;
  * <p>
  * Note that, at any given time, there can only be one Spark job performing these operations on a Hoodie table.
  */
-public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHoodieWriteClient<T> {
+public class HoodieWriteClient<T extends HoodieRecordPayload<T>> extends AbstractHoodieWriteClient<T> {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieWriteClient.class);
@@ -101,7 +101,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     this(jsc, clientConfig, rollbackPending, HoodieIndex.createIndex(clientConfig, jsc));
   }
 
-  HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending, HoodieIndex index) {
+  HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending, HoodieIndex<T> index) {
     this(jsc, clientConfig, rollbackPending, index, Option.empty());
   }
 
@@ -113,8 +113,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @param rollbackPending whether need to cleanup pending commits
    * @param timelineService Timeline Service that runs as part of write client.
    */
-  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending,
-      HoodieIndex index, Option<EmbeddedTimelineService> timelineService) {
+  public HoodieWriteClient(
+      JavaSparkContext jsc,
+      HoodieWriteConfig clientConfig,
+      boolean rollbackPending,
+      HoodieIndex<T> index,
+      Option<EmbeddedTimelineService> timelineService
+  ) {
     super(jsc, index, clientConfig, timelineService);
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.rollbackPending = rollbackPending;
@@ -248,8 +253,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * into hoodie.
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
-  public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String instantTime,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+  public JavaRDD<WriteStatus> bulkInsert(
+      final JavaRDD<HoodieRecord<T>> records,
+      final String instantTime,
+      final Option<UserDefinedBulkInsertPartitioner<T>> bulkInsertPartitioner) {
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT);
@@ -274,7 +281,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String instantTime,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      Option<UserDefinedBulkInsertPartitioner<T>> bulkInsertPartitioner) {
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT_PREPPED);

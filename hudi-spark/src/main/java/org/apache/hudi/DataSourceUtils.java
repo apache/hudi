@@ -161,13 +161,14 @@ public class DataSourceUtils {
    * if the class name of UserDefinedBulkInsertPartitioner is configured through the HoodieWriteConfig.
    * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
    */
-  private static Option<UserDefinedBulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
-          throws HoodieException {
+  private static <T extends HoodieRecordPayload<T>> Option<UserDefinedBulkInsertPartitioner<T>> createUserDefinedBulkInsertPartitioner(
+      HoodieWriteConfig config
+  ) throws HoodieException {
     String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
     try {
       return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
               ? Option.empty() :
-              Option.of((UserDefinedBulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
+              Option.of(ReflectionUtils.loadClass(bulkInsertPartitionerClass));
     } catch (Throwable e) {
       throw new HoodieException("Could not create UserDefinedBulkInsertPartitioner class " + bulkInsertPartitionerClass, e);
     }
@@ -176,11 +177,11 @@ public class DataSourceUtils {
   /**
    * Create a payload class via reflection, passing in an ordering/precombine value.
    */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
+  @SuppressWarnings("unchecked")
+  public static <T extends HoodieRecordPayload<T>> T createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
       throws IOException {
     try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
+      return (T) ReflectionUtils.loadClass(payloadClass, new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
@@ -194,8 +195,13 @@ public class DataSourceUtils {
     });
   }
 
-  public static HoodieWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
-                                                     String tblName, Map<String, String> parameters) {
+  public static <T extends HoodieRecordPayload<T>> HoodieWriteClient<T> createHoodieClient(
+      JavaSparkContext jssc,
+      String schemaStr,
+      String basePath,
+      String tblName,
+      Map<String, String> parameters
+  ) {
 
     // inline compaction is on by default for MOR
     boolean inlineCompact = parameters.get(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY())
@@ -216,10 +222,14 @@ public class DataSourceUtils {
     return new HoodieWriteClient<>(jssc, writeConfig, true);
   }
 
-  public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-                                                      String instantTime, String operation) throws HoodieException {
+  public static <T extends HoodieRecordPayload<T>> JavaRDD<WriteStatus> doWriteOperation(
+      HoodieWriteClient<T> client,
+      JavaRDD<HoodieRecord<T>> hoodieRecords,
+      String instantTime,
+      String operation
+  ) throws HoodieException {
     if (operation.equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL())) {
-      Option<UserDefinedBulkInsertPartitioner> userDefinedBulkInsertPartitioner =
+      Option<UserDefinedBulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner =
           createUserDefinedBulkInsertPartitioner(client.getConfig());
       return client.bulkInsert(hoodieRecords, instantTime, userDefinedBulkInsertPartitioner);
     } else if (operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())) {
@@ -230,24 +240,34 @@ public class DataSourceUtils {
     }
   }
 
-  public static JavaRDD<WriteStatus> doDeleteOperation(HoodieWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
-                                                       String instantTime) {
+  public static <T extends HoodieRecordPayload<T>> JavaRDD<WriteStatus> doDeleteOperation(
+      HoodieWriteClient<T> client,
+      JavaRDD<HoodieKey> hoodieKeys,
+      String instantTime
+  ) {
     return client.delete(hoodieKeys, instantTime);
   }
 
-  public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
-                                                String payloadClass) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
+  public static <T extends HoodieRecordPayload<T>> HoodieRecord<T> createHoodieRecord(
+      GenericRecord gr,
+      Comparable orderingVal,
+      HoodieKey hKey,
+      String payloadClass
+  ) throws IOException {
+    T payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
     return new HoodieRecord<>(hKey, payload);
   }
 
-  @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
-                                                     HoodieWriteConfig writeConfig) {
+  public static <T extends HoodieRecordPayload<T>> JavaRDD<HoodieRecord<T>> dropDuplicates(
+      JavaSparkContext jssc,
+      JavaRDD<HoodieRecord<T>> incomingHoodieRecords,
+      HoodieWriteConfig writeConfig
+  ) {
     try {
-      HoodieReadClient client = new HoodieReadClient<>(jssc, writeConfig);
-      return client.tagLocation(incomingHoodieRecords)
-          .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
+      HoodieReadClient<T> client = new HoodieReadClient<>(jssc, writeConfig);
+      return client
+          .tagLocation(incomingHoodieRecords)
+          .filter(r -> !r.isCurrentLocationKnown());
     } catch (TableNotFoundException e) {
       // this will be executed when there is no hoodie table yet
       // so no dups to drop
@@ -255,9 +275,11 @@ public class DataSourceUtils {
     }
   }
 
-  @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
-                                                     Map<String, String> parameters) {
+  public static <T extends HoodieRecordPayload<T>> JavaRDD<HoodieRecord<T>> dropDuplicates(
+      JavaSparkContext jssc,
+      JavaRDD<HoodieRecord<T>> incomingHoodieRecords,
+      Map<String, String> parameters
+  ) {
     HoodieWriteConfig writeConfig =
         HoodieWriteConfig.newBuilder().withPath(parameters.get("path")).withProps(parameters).build();
     return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);

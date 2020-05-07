@@ -65,12 +65,12 @@ public class SchemaTestUtil {
       throws IOException, URISyntaxException {
     GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     // Required to register the necessary JAR:// file system
-    URI resource = SchemaTestUtil.class.getClass().getResource("/sample.data").toURI();
+    URI resource = SchemaTestUtil.class.getResource("/sample.data").toURI();
     Path dataPath;
     if (resource.toString().contains("!")) {
       dataPath = uriToPath(resource);
     } else {
-      dataPath = Paths.get(SchemaTestUtil.class.getClass().getResource("/sample.data").toURI());
+      dataPath = Paths.get(SchemaTestUtil.class.getResource("/sample.data").toURI());
     }
 
     try (Stream<String> stream = Files.lines(dataPath)) {
@@ -112,14 +112,16 @@ public class SchemaTestUtil {
 
   }
 
-  public static List<HoodieRecord> generateHoodieTestRecords(int from, int limit, Schema schema)
+  public static List<HoodieRecord<HoodieAvroPayload>> generateHoodieTestRecords(int from, int limit, Schema schema)
       throws IOException, URISyntaxException {
     List<IndexedRecord> records = generateTestRecords(from, limit);
-    return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema))
-        .map(p -> convertToHoodieRecords(p, UUID.randomUUID().toString(), "000/00/00")).collect(Collectors.toList());
+    return records.stream()
+        .map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema))
+        .map(p -> convertToHoodieRecords(p, UUID.randomUUID().toString(), "000/00/00"))
+        .collect(Collectors.toList());
   }
 
-  private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
+  private static HoodieRecord<HoodieAvroPayload> convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
     return new HoodieRecord<>(new HoodieKey(key, partitionPath),
         new HoodieAvroPayload(Option.of((GenericRecord) iRecord)));
   }
@@ -136,7 +138,7 @@ public class SchemaTestUtil {
 
   }
 
-  public static List<HoodieRecord> generateHoodieTestRecordsWithoutHoodieMetadata(int from, int limit)
+  public static List<HoodieRecord<HoodieAvroPayload>> generateHoodieTestRecordsWithoutHoodieMetadata(int from, int limit)
       throws IOException, URISyntaxException {
 
     List<IndexedRecord> iRecords = generateTestRecords(from, limit);
@@ -144,8 +146,12 @@ public class SchemaTestUtil {
         new HoodieAvroPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
   }
 
-  public static List<HoodieRecord> updateHoodieTestRecordsWithoutHoodieMetadata(List<HoodieRecord> oldRecords,
-      Schema schema, String fieldNameToUpdate, String newValue) {
+  public static List<HoodieRecord<HoodieAvroPayload>> updateHoodieTestRecordsWithoutHoodieMetadata(
+      List<HoodieRecord<HoodieAvroPayload>> oldRecords,
+      Schema schema,
+      String fieldNameToUpdate,
+      String newValue
+  ) {
     return oldRecords.stream().map(r -> {
       try {
         GenericRecord rec = (GenericRecord) r.getData().getInsertValue(schema).get();

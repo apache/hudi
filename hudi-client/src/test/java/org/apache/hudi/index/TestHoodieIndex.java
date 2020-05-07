@@ -106,7 +106,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     assertTrue(thrown2.getMessage().contains("Unable to instantiate class"));
   }
 
-  public static class DummyHoodieIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
+  public static class DummyHoodieIndex<T extends HoodieRecordPayload<T>> extends HoodieIndex<T> {
 
     public DummyHoodieIndex(HoodieWriteConfig config) {
       super(config);

@@ -34,9 +34,13 @@ public class DeleteDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
 
   private final JavaRDD<HoodieKey> keys;
 
-  public DeleteDeltaCommitActionExecutor(JavaSparkContext jsc,
-      HoodieWriteConfig config, HoodieTable table,
-      String instantTime, JavaRDD<HoodieKey> keys) {
+  public DeleteDeltaCommitActionExecutor(
+      JavaSparkContext jsc,
+      HoodieWriteConfig config,
+      HoodieTable<T> table,
+      String instantTime,
+      JavaRDD<HoodieKey> keys
+  ) {
     super(jsc, config, table, instantTime, WriteOperationType.DELETE);
     this.keys = keys;
   }

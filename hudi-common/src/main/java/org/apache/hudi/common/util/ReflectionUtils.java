@@ -70,7 +70,7 @@ public class ReflectionUtils {
   /**
    * Instantiate a given class with a generic record payload.
    */
-  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, Object[] payloadArgs,
+  public static <T extends HoodieRecordPayload<T>> T loadPayload(String recordPayloadClass, Object[] payloadArgs,
       Class<?>... constructorArgTypes) {
     try {
       return (T) getClass(recordPayloadClass).getConstructor(constructorArgTypes).newInstance(payloadArgs);

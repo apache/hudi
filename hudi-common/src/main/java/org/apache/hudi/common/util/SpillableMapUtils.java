@@ -21,7 +21,6 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.DiskBasedMap.FileEntry;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 
@@ -109,10 +108,12 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
+  @SuppressWarnings("unchecked")
   public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz) {
     String recKey = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
     String partitionPath = rec.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
+    HoodieRecord<?> hoodieRecord = new HoodieRecord<>(
+        new HoodieKey(recKey, partitionPath),
         ReflectionUtils.loadPayload(payloadClazz, new Object[] {Option.of(rec)}, Option.class));
     return (R) hoodieRecord;
   }
@@ -120,8 +121,10 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
+  @SuppressWarnings("unchecked")
   public static <R> R generateEmptyPayload(String recKey, String partitionPath, String payloadClazz) {
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
+    HoodieRecord<?> hoodieRecord = new HoodieRecord<>(
+        new HoodieKey(recKey, partitionPath),
         ReflectionUtils.loadPayload(payloadClazz, new Object[] {Option.empty()}, Option.class));
     return (R) hoodieRecord;
   }

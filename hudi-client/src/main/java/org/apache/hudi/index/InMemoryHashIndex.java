@@ -31,7 +31,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 
 import java.util.ArrayList;
@@ -45,7 +44,7 @@ import java.util.concurrent.ConcurrentMap;
  * <p>
  * ONLY USE FOR LOCAL TESTING
  */
-public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
+public class InMemoryHashIndex<T extends HoodieRecordPayload<T>> extends HoodieIndex<T> {
 
   private static ConcurrentMap<HoodieKey, HoodieRecordLocation> recordLocationMap;
 
@@ -73,23 +72,20 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
   @Override
   public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc,
       HoodieTable<T> hoodieTable) {
-    return writeStatusRDD.map(new Function<WriteStatus, WriteStatus>() {
-      @Override
-      public WriteStatus call(WriteStatus writeStatus) {
-        for (HoodieRecord record : writeStatus.getWrittenRecords()) {
-          if (!writeStatus.isErrored(record.getKey())) {
-            HoodieKey key = record.getKey();
-            Option<HoodieRecordLocation> newLocation = record.getNewLocation();
-            if (newLocation.isPresent()) {
-              recordLocationMap.put(key, newLocation.get());
-            } else {
-              // Delete existing index for a deleted record
-              recordLocationMap.remove(key);
-            }
+    return writeStatusRDD.map(writeStatus -> {
+      for (HoodieRecord<?> record : writeStatus.getWrittenRecords()) {
+        if (!writeStatus.isErrored(record.getKey())) {
+          HoodieKey key = record.getKey();
+          Option<HoodieRecordLocation> newLocation = record.getNewLocation();
+          if (newLocation.isPresent()) {
+            recordLocationMap.put(key, newLocation.get());
+          } else {
+            // Delete existing index for a deleted record
+            recordLocationMap.remove(key);
           }
         }
-        return writeStatus;
       }
+      return writeStatus;
     });
   }
 

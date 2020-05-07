@@ -348,7 +348,7 @@ public class HoodieTestDataGenerator {
     }
   }
 
-  public List<HoodieRecord> generateInsertsAsPerSchema(String commitTime, Integer n, String schemaStr) {
+  public List<HoodieRecord<TestRawTripPayload>> generateInsertsAsPerSchema(String commitTime, Integer n, String schemaStr) {
     return generateInsertsStream(commitTime, n, schemaStr).collect(Collectors.toList());
   }
 
@@ -356,7 +356,7 @@ public class HoodieTestDataGenerator {
    * Generates new inserts with nested schema, uniformly across the partition paths above.
    * It also updates the list of existing keys.
    */
-  public List<HoodieRecord> generateInserts(String instantTime, Integer n) {
+  public List<HoodieRecord<TestRawTripPayload>> generateInserts(String instantTime, Integer n) {
     return generateInserts(instantTime, n, false);
   }
 
@@ -369,21 +369,21 @@ public class HoodieTestDataGenerator {
    * @param isFlattened  whether the schema of the generated record is flattened
    * @return  List of {@link HoodieRecord}s
    */
-  public List<HoodieRecord> generateInserts(String instantTime, Integer n, boolean isFlattened) {
+  public List<HoodieRecord<TestRawTripPayload>> generateInserts(String instantTime, Integer n, boolean isFlattened) {
     return generateInsertsStream(instantTime, n, isFlattened, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
   }
 
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
-  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, String schemaStr) {
+  public Stream<HoodieRecord<TestRawTripPayload>> generateInsertsStream(String commitTime, Integer n, String schemaStr) {
     return generateInsertsStream(commitTime, n, false, schemaStr);
   }
 
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
-  public Stream<HoodieRecord> generateInsertsStream(
+  public Stream<HoodieRecord<TestRawTripPayload>> generateInsertsStream(
       String instantTime, Integer n, boolean isFlattened, String schemaStr) {
     int currSize = getNumExistingKeys(schemaStr);
 
@@ -396,7 +396,7 @@ public class HoodieTestDataGenerator {
       populateKeysBySchema(schemaStr, currSize + i, kp);
       incrementNumExistingKeysBySchema(schemaStr);
       try {
-        return new HoodieRecord(key, generateRandomValueAsPerSchema(schemaStr, key, instantTime, isFlattened));
+        return new HoodieRecord<>(key, generateRandomValueAsPerSchema(schemaStr, key, instantTime, isFlattened));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -423,23 +423,26 @@ public class HoodieTestDataGenerator {
     }
   }
 
-  public List<HoodieRecord> generateSameKeyInserts(String instantTime, List<HoodieRecord> origin) throws IOException {
-    List<HoodieRecord> copy = new ArrayList<>();
-    for (HoodieRecord r : origin) {
+  public List<HoodieRecord<TestRawTripPayload>> generateSameKeyInserts(
+      String instantTime,
+      List<HoodieRecord<TestRawTripPayload>> origin
+  ) throws IOException {
+    List<HoodieRecord<TestRawTripPayload>> copy = new ArrayList<>();
+    for (HoodieRecord<TestRawTripPayload> r : origin) {
       HoodieKey key = r.getKey();
-      HoodieRecord record = new HoodieRecord(key, generateRandomValue(key, instantTime));
+      HoodieRecord<TestRawTripPayload> record = new HoodieRecord<>(key, generateRandomValue(key, instantTime));
       copy.add(record);
     }
     return copy;
   }
 
-  public List<HoodieRecord> generateInsertsWithHoodieAvroPayload(String instantTime, int limit) {
-    List<HoodieRecord> inserts = new ArrayList<>();
+  public List<HoodieRecord<HoodieAvroPayload>> generateInsertsWithHoodieAvroPayload(String instantTime, int limit) {
+    List<HoodieRecord<HoodieAvroPayload>> inserts = new ArrayList<>();
     int currSize = getNumExistingKeys(TRIP_EXAMPLE_SCHEMA);
     for (int i = 0; i < limit; i++) {
       String partitionPath = partitionPaths[RAND.nextInt(partitionPaths.length)];
       HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
-      HoodieRecord record = new HoodieRecord(key, generateAvroPayload(key, instantTime));
+      HoodieRecord<HoodieAvroPayload> record = new HoodieRecord<>(key, generateAvroPayload(key, instantTime));
       inserts.add(record);
 
       KeyPartition kp = new KeyPartition();
@@ -451,66 +454,71 @@ public class HoodieTestDataGenerator {
     return inserts;
   }
 
-  public List<HoodieRecord> generateUpdatesWithHoodieAvroPayload(String instantTime, List<HoodieRecord> baseRecords) {
-    List<HoodieRecord> updates = new ArrayList<>();
-    for (HoodieRecord baseRecord : baseRecords) {
-      HoodieRecord record = new HoodieRecord(baseRecord.getKey(), generateAvroPayload(baseRecord.getKey(), instantTime));
+  public List<HoodieRecord<HoodieAvroPayload>> generateUpdatesWithHoodieAvroPayload(
+      String instantTime,
+      List<HoodieRecord<HoodieAvroPayload>> baseRecords
+  ) {
+    List<HoodieRecord<HoodieAvroPayload>> updates = new ArrayList<>();
+    for (HoodieRecord<HoodieAvroPayload> baseRecord : baseRecords) {
+      HoodieRecord<HoodieAvroPayload> record = new HoodieRecord<>(baseRecord.getKey(), generateAvroPayload(baseRecord.getKey(), instantTime));
       updates.add(record);
     }
     return updates;
   }
 
-  public List<HoodieRecord> generateDeletes(String instantTime, Integer n) throws IOException {
-    List<HoodieRecord> inserts = generateInserts(instantTime, n);
+  public List<HoodieRecord<TestRawTripPayload>> generateDeletes(String instantTime, Integer n) throws IOException {
+    List<HoodieRecord<TestRawTripPayload>> inserts = generateInserts(instantTime, n);
     return generateDeletesFromExistingRecords(inserts);
   }
 
-  public List<HoodieRecord> generateDeletesFromExistingRecords(List<HoodieRecord> existingRecords) throws IOException {
-    List<HoodieRecord> deletes = new ArrayList<>();
-    for (HoodieRecord existingRecord : existingRecords) {
-      HoodieRecord record = generateDeleteRecord(existingRecord);
+  public List<HoodieRecord<TestRawTripPayload>> generateDeletesFromExistingRecords(List<HoodieRecord<TestRawTripPayload>> existingRecords) throws IOException {
+    List<HoodieRecord<TestRawTripPayload>> deletes = new ArrayList<>();
+    for (HoodieRecord<TestRawTripPayload> existingRecord : existingRecords) {
+      HoodieRecord<TestRawTripPayload> record = generateDeleteRecord(existingRecord);
       deletes.add(record);
     }
     return deletes;
   }
 
-  public HoodieRecord generateDeleteRecord(HoodieRecord existingRecord) throws IOException {
+  public HoodieRecord<TestRawTripPayload> generateDeleteRecord(HoodieRecord<TestRawTripPayload> existingRecord) throws IOException {
     HoodieKey key = existingRecord.getKey();
     return generateDeleteRecord(key);
   }
 
-  public HoodieRecord generateDeleteRecord(HoodieKey key) throws IOException {
+  public HoodieRecord<TestRawTripPayload> generateDeleteRecord(HoodieKey key) throws IOException {
     TestRawTripPayload payload =
         new TestRawTripPayload(Option.empty(), key.getRecordKey(), key.getPartitionPath(), null, true);
-    return new HoodieRecord(key, payload);
+    return new HoodieRecord<>(key, payload);
   }
 
-  public HoodieRecord generateUpdateRecord(HoodieKey key, String instantTime) throws IOException {
-    return new HoodieRecord(key, generateRandomValue(key, instantTime));
+  public HoodieRecord<TestRawTripPayload> generateUpdateRecord(HoodieKey key, String instantTime) throws IOException {
+    return new HoodieRecord<>(key, generateRandomValue(key, instantTime));
   }
 
-  public List<HoodieRecord> generateUpdates(String instantTime, List<HoodieRecord> baseRecords) throws IOException {
-    List<HoodieRecord> updates = new ArrayList<>();
-    for (HoodieRecord baseRecord : baseRecords) {
-      HoodieRecord record = generateUpdateRecord(baseRecord.getKey(), instantTime);
+  public List<HoodieRecord<TestRawTripPayload>> generateUpdates(String instantTime, List<HoodieRecord<TestRawTripPayload>> baseRecords) throws IOException {
+    List<HoodieRecord<TestRawTripPayload>> updates = new ArrayList<>();
+    for (HoodieRecord<TestRawTripPayload> baseRecord : baseRecords) {
+      HoodieRecord<TestRawTripPayload> record = generateUpdateRecord(baseRecord.getKey(), instantTime);
       updates.add(record);
     }
     return updates;
   }
 
-  public List<HoodieRecord> generateUpdatesWithDiffPartition(String instantTime, List<HoodieRecord> baseRecords)
-      throws IOException {
-    List<HoodieRecord> updates = new ArrayList<>();
-    for (HoodieRecord baseRecord : baseRecords) {
+  public List<HoodieRecord<TestRawTripPayload>> generateUpdatesWithDiffPartition(
+      String instantTime,
+      List<HoodieRecord<TestRawTripPayload>> baseRecords
+  ) throws IOException {
+    List<HoodieRecord<TestRawTripPayload>> updates = new ArrayList<>();
+    for (HoodieRecord<TestRawTripPayload> baseRecord : baseRecords) {
       String partition = baseRecord.getPartitionPath();
-      String newPartition = "";
+      String newPartition;
       if (partitionPaths[0].equalsIgnoreCase(partition)) {
         newPartition = partitionPaths[1];
       } else {
         newPartition = partitionPaths[0];
       }
       HoodieKey key = new HoodieKey(baseRecord.getRecordKey(), newPartition);
-      HoodieRecord record = generateUpdateRecord(key, instantTime);
+      HoodieRecord<TestRawTripPayload> record = generateUpdateRecord(key, instantTime);
       updates.add(record);
     }
     return updates;
@@ -524,19 +532,19 @@ public class HoodieTestDataGenerator {
    * @param n          Number of updates (including dups)
    * @return list of hoodie record updates
    */
-  public List<HoodieRecord> generateUpdates(String instantTime, Integer n) throws IOException {
-    List<HoodieRecord> updates = new ArrayList<>();
+  public List<HoodieRecord<TestRawTripPayload>> generateUpdates(String instantTime, Integer n) throws IOException {
+    List<HoodieRecord<TestRawTripPayload>> updates = new ArrayList<>();
     for (int i = 0; i < n; i++) {
       Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
       Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
       KeyPartition kp = existingKeys.get(RAND.nextInt(numExistingKeys - 1));
-      HoodieRecord record = generateUpdateRecord(kp.key, instantTime);
+      HoodieRecord<TestRawTripPayload> record = generateUpdateRecord(kp.key, instantTime);
       updates.add(record);
     }
     return updates;
   }
 
-  public List<HoodieRecord> generateUpdatesAsPerSchema(String commitTime, Integer n, String schemaStr) {
+  public List<HoodieRecord<TestRawTripPayload>> generateUpdatesAsPerSchema(String commitTime, Integer n, String schemaStr) {
     return generateUniqueUpdatesStream(commitTime, n, schemaStr).collect(Collectors.toList());
   }
 
@@ -547,7 +555,7 @@ public class HoodieTestDataGenerator {
    * @param n          Number of unique records
    * @return list of hoodie record updates
    */
-  public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n) {
+  public List<HoodieRecord<TestRawTripPayload>> generateUniqueUpdates(String instantTime, Integer n) {
     return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
   }
 
@@ -568,7 +576,7 @@ public class HoodieTestDataGenerator {
    * @param n          Number of unique records
    * @return stream of hoodie record updates
    */
-  public Stream<HoodieRecord> generateUniqueUpdatesStream(String instantTime, Integer n, String schemaStr) {
+  public Stream<HoodieRecord<TestRawTripPayload>> generateUniqueUpdatesStream(String instantTime, Integer n, String schemaStr) {
     final Set<KeyPartition> used = new HashSet<>();
     int numExistingKeys = numKeysBySchema.getOrDefault(schemaStr, 0);
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
@@ -587,7 +595,7 @@ public class HoodieTestDataGenerator {
       logger.debug("key getting updated: " + kp.key.getRecordKey());
       used.add(kp);
       try {
-        return new HoodieRecord(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false));
+        return new HoodieRecord<>(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -632,7 +640,7 @@ public class HoodieTestDataGenerator {
    * @param n          Number of unique records
    * @return stream of hoodie records for delete
    */
-  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n) {
+  public Stream<HoodieRecord<TestRawTripPayload>> generateUniqueDeleteRecordStream(String instantTime, Integer n) {
     final Set<KeyPartition> used = new HashSet<>();
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
     Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
@@ -640,7 +648,7 @@ public class HoodieTestDataGenerator {
       throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
     }
 
-    List<HoodieRecord> result = new ArrayList<>();
+    List<HoodieRecord<TestRawTripPayload>> result = new ArrayList<>();
     for (int i = 0; i < n; i++) {
       int index = RAND.nextInt(numExistingKeys);
       while (!existingKeys.containsKey(index)) {
@@ -653,7 +661,7 @@ public class HoodieTestDataGenerator {
       numExistingKeys--;
       used.add(kp);
       try {
-        result.add(new HoodieRecord(kp.key, generateRandomDeleteValue(kp.key, instantTime)));
+        result.add(new HoodieRecord<>(kp.key, generateRandomDeleteValue(kp.key, instantTime)));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }

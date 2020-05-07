@@ -20,6 +20,7 @@ package org.apache.hudi.execution;
 
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.function.Function;
 
 import scala.Tuple2;
 
@@ -59,17 +61,17 @@ public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
   @Test
   public void testExecutor() {
 
-    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
+    final List<HoodieRecord<TestRawTripPayload>> hoodieRecords = dataGen.generateInserts(instantTime, 100);
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
-    BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord<TestRawTripPayload>>, Integer> consumer =
+        new BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord<TestRawTripPayload>>, Integer>() {
 
           private int count = 0;
 
           @Override
-          protected void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> record) {
+          protected void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord<TestRawTripPayload>> record) {
             count++;
           }
 
@@ -83,9 +85,12 @@ public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
           }
         };
 
-    SparkBoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
+    SparkBoundedInMemoryExecutor<HoodieRecord<TestRawTripPayload>, HoodieInsertValueGenResult<HoodieRecord<TestRawTripPayload>>, Integer> executor = null;
     try {
-      executor = new SparkBoundedInMemoryExecutor(hoodieWriteConfig, hoodieRecords.iterator(), consumer,
+      executor = new SparkBoundedInMemoryExecutor<>(
+          hoodieWriteConfig,
+          hoodieRecords.iterator(),
+          consumer,
           getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA));
       int result = executor.execute();
       // It should buffer and write 100 records

@@ -19,6 +19,7 @@
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -55,10 +56,10 @@ import static org.mockito.Mockito.when;
 public class DataSourceUtilsTest {
 
   @Mock
-  private HoodieWriteClient hoodieWriteClient;
+  private HoodieWriteClient<TestRawTripPayload> hoodieWriteClient;
 
   @Mock
-  private JavaRDD<HoodieRecord> hoodieRecords;
+  private JavaRDD<HoodieRecord<TestRawTripPayload>> hoodieRecords;
 
   @Captor
   private ArgumentCaptor<Option> optionCaptor;

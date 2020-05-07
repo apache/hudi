@@ -53,7 +53,7 @@ import java.util.Map;
  *  Reused for regular write operations like upsert/insert/bulk-insert.. as well as bootstrap
  * @param <T> Sub type of HoodieRecordPayload
  */
-public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
+public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload<T>> extends AbstractHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(AbstractHoodieWriteClient.class);
 
@@ -71,8 +71,12 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     return this.operationType;
   }
 
-  protected AbstractHoodieWriteClient(JavaSparkContext jsc, HoodieIndex index, HoodieWriteConfig clientConfig,
-      Option<EmbeddedTimelineService> timelineServer) {
+  protected AbstractHoodieWriteClient(
+      JavaSparkContext jsc,
+      HoodieIndex<T> index,
+      HoodieWriteConfig clientConfig,
+      Option<EmbeddedTimelineService> timelineServer
+  ) {
     super(jsc, clientConfig, timelineServer);
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.index = index;
@@ -225,13 +229,13 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     return index;
   }
 
-  protected HoodieTable getTableAndInitCtx(WriteOperationType operationType) {
+  protected HoodieTable<T> getTableAndInitCtx(WriteOperationType operationType) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     if (operationType == WriteOperationType.DELETE) {
       setWriteSchemaForDeletes(metaClient);
     }
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
+    HoodieTable<T> table = HoodieTable.create(metaClient, config, jsc);
     if (table.getMetaClient().getCommitActionType().equals(HoodieTimeline.COMMIT_ACTION)) {
       writeContext = metrics.getCommitCtx();
     } else {

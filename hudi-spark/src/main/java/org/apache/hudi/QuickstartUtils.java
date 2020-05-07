@@ -125,7 +125,7 @@ public class QuickstartUtils {
     /**
      * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
      */
-    public Stream<HoodieRecord> generateInsertsStream(String randomString, Integer n) {
+    public Stream<HoodieRecord<OverwriteWithLatestAvroPayload>> generateInsertsStream(String randomString, Integer n) {
       int currSize = getNumExistingKeys();
 
       return IntStream.range(0, n).boxed().map(i -> {
@@ -134,7 +134,7 @@ public class QuickstartUtils {
         existingKeys.put(currSize + i, key);
         numExistingKeys++;
         try {
-          return new HoodieRecord(key, generateRandomValue(key, randomString));
+          return new HoodieRecord<>(key, generateRandomValue(key, randomString));
         } catch (IOException e) {
           throw new HoodieIOException(e.getMessage(), e);
         }
@@ -144,13 +144,13 @@ public class QuickstartUtils {
     /**
      * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
      */
-    public List<HoodieRecord> generateInserts(Integer n) throws IOException {
+    public List<HoodieRecord<OverwriteWithLatestAvroPayload>> generateInserts(Integer n) throws IOException {
       String randomString = generateRandomString();
       return generateInsertsStream(randomString, n).collect(Collectors.toList());
     }
 
-    public HoodieRecord generateUpdateRecord(HoodieKey key, String randomString) throws IOException {
-      return new HoodieRecord(key, generateRandomValue(key, randomString));
+    public HoodieRecord<OverwriteWithLatestAvroPayload> generateUpdateRecord(HoodieKey key, String randomString) throws IOException {
+      return new HoodieRecord<>(key, generateRandomValue(key, randomString));
     }
 
     /**
@@ -160,12 +160,12 @@ public class QuickstartUtils {
      * @param n Number of updates (including dups)
      * @return list of hoodie record updates
      */
-    public List<HoodieRecord> generateUpdates(Integer n) throws IOException {
+    public List<HoodieRecord<OverwriteWithLatestAvroPayload>> generateUpdates(Integer n) throws IOException {
       String randomString = generateRandomString();
-      List<HoodieRecord> updates = new ArrayList<>();
+      List<HoodieRecord<OverwriteWithLatestAvroPayload>> updates = new ArrayList<>();
       for (int i = 0; i < n; i++) {
         HoodieKey key = existingKeys.get(rand.nextInt(numExistingKeys));
-        HoodieRecord record = generateUpdateRecord(key, randomString);
+        HoodieRecord<OverwriteWithLatestAvroPayload> record = generateUpdateRecord(key, randomString);
         updates.add(record);
       }
       return updates;
@@ -178,8 +178,10 @@ public class QuickstartUtils {
      * @return list of hoodie records to delete
      */
     public List<String> generateDeletes(List<Row> rows) {
-      return rows.stream().map(row ->
-          convertToString(row.getAs("uuid"), row.getAs("partitionPath"))).filter(os -> os.isPresent()).map(os -> os.get())
+      return rows.stream()
+          .map(row -> convertToString(row.getAs("uuid"), row.getAs("partitionPath")))
+          .filter(Option::isPresent)
+          .map(Option::get)
           .collect(Collectors.toList());
     }
 
@@ -188,7 +190,7 @@ public class QuickstartUtils {
     }
   }
 
-  private static Option<String> convertToString(HoodieRecord record) {
+  private static Option<String> convertToString(HoodieRecord<?> record) {
     try {
       String str = HoodieAvroUtils
           .bytesToAvro(((OverwriteWithLatestAvroPayload) record.getData()).recordBytes, DataGenerator.avroSchema)
@@ -210,8 +212,11 @@ public class QuickstartUtils {
     return Option.of(stringBuffer.toString());
   }
 
-  public static List<String> convertToStringList(List<HoodieRecord> records) {
-    return records.stream().map(hr -> convertToString(hr)).filter(os -> os.isPresent()).map(os -> os.get())
+  public static List<String> convertToStringList(List<HoodieRecord<?>> records) {
+    return records.stream()
+        .map(QuickstartUtils::convertToString)
+        .filter(Option::isPresent)
+        .map(Option::get)
         .collect(Collectors.toList());
   }
 

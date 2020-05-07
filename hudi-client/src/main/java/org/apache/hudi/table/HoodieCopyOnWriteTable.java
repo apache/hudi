@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -46,8 +44,8 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.commit.BulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.BulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.DeleteCommitActionExecutor;
@@ -58,6 +56,8 @@ import org.apache.hudi.table.action.commit.UpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -72,6 +72,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Implementation of a very heavily read-optimized Hoodie Table where, all data is stored in base files, with
@@ -82,7 +83,7 @@ import java.util.Map;
  * <p>
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
-public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieTable<T> {
+public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload<T>> extends HoodieTable<T> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieCopyOnWriteTable.class);
 
@@ -101,10 +102,19 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public HoodieWriteMetadata bulkInsert(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieRecord<T>> records,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    return new BulkInsertCommitActionExecutor<>(jsc, config,
-        this, instantTime, records, bulkInsertPartitioner).execute();
+  public HoodieWriteMetadata bulkInsert(
+      JavaSparkContext jsc,
+      String instantTime,
+      JavaRDD<HoodieRecord<T>> records,
+      Option<UserDefinedBulkInsertPartitioner<T>> bulkInsertPartitioner
+  ) {
+    return new BulkInsertCommitActionExecutor<>(
+        jsc,
+        config,
+        this,
+        instantTime,
+        records,
+        bulkInsertPartitioner).execute();
   }
 
   @Override
@@ -125,10 +135,13 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public HoodieWriteMetadata bulkInsertPrepped(JavaSparkContext jsc, String instantTime,
-      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    return new BulkInsertPreppedCommitActionExecutor<>(jsc, config,
-        this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
+  public HoodieWriteMetadata bulkInsertPrepped(
+      JavaSparkContext jsc,
+      String instantTime,
+      JavaRDD<HoodieRecord<T>> preppedRecords,
+      Option<UserDefinedBulkInsertPartitioner<T>> bulkInsertPartitioner
+  ) {
+    return new BulkInsertPreppedCommitActionExecutor<>(jsc, config, this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
   }
 
   @Override
@@ -141,25 +154,36 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
 
-  public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
+  public Iterator<List<WriteStatus>> handleUpdate(
+      String instantTime,
+      String partitionPath,
+      String fileId,
+      Map<String, HoodieRecord<T>> keyToNewRecords,
+      HoodieBaseFile oldDataFile
+  ) throws IOException {
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
+    HoodieMergeHandle<T> upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
     return handleUpdateInternal(upsertHandle, instantTime, fileId);
   }
 
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle upsertHandle, String instantTime,
-      String fileId) throws IOException {
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(
+      HoodieMergeHandle<T> upsertHandle,
+      String instantTime,
+      String fileId
+  ) {
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
       AvroReadSupport.setAvroReadSchema(getHadoopConf(), upsertHandle.getWriterSchema());
       BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-      try (ParquetReader<IndexedRecord> reader =
-          AvroParquetReader.<IndexedRecord>builder(upsertHandle.getOldFilePath()).withConf(getHadoopConf()).build()) {
-        wrapper = new SparkBoundedInMemoryExecutor(config, new ParquetReaderIterator(reader),
-            new UpdateHandler(upsertHandle), x -> x);
+      try (ParquetReader<GenericRecord> reader =
+          AvroParquetReader.<GenericRecord>builder(upsertHandle.getOldFilePath()).withConf(getHadoopConf()).build()) {
+        wrapper = new SparkBoundedInMemoryExecutor<>(
+            config,
+            new ParquetReaderIterator<>(reader),
+            new UpdateHandler(upsertHandle),
+            Function.identity());
         wrapper.execute();
       } catch (Exception e) {
         throw new HoodieException(e);
@@ -179,16 +203,32 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     return Collections.singletonList(Collections.singletonList(upsertHandle.getWriteStatus())).iterator();
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
-    return new HoodieMergeHandle<>(config, instantTime, this, keyToNewRecords,
-            partitionPath, fileId, dataFileToBeMerged, sparkTaskContextSupplier);
+  protected HoodieMergeHandle<T> getUpdateHandle(
+      String instantTime,
+      String partitionPath,
+      String fileId,
+      Map<String, HoodieRecord<T>> keyToNewRecords,
+      HoodieBaseFile dataFileToBeMerged
+  ) {
+    return new HoodieMergeHandle<>(
+        config,
+        instantTime,
+        this,
+        keyToNewRecords,
+        partitionPath,
+        fileId,
+        dataFileToBeMerged,
+        sparkTaskContextSupplier);
   }
 
-  public Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
-      Iterator<HoodieRecord<T>> recordItr) {
-    HoodieCreateHandle createHandle =
-        new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordItr, sparkTaskContextSupplier);
+  public Iterator<List<WriteStatus>> handleInsert(
+      String instantTime,
+      String partitionPath,
+      String fileId,
+      Iterator<HoodieRecord<T>> recordItr
+  ) {
+    HoodieCreateHandle<T> createHandle =
+        new HoodieCreateHandle<>(config, instantTime, this, partitionPath, fileId, recordItr, sparkTaskContextSupplier);
     createHandle.write();
     return Collections.singletonList(Collections.singletonList(createHandle.close())).iterator();
   }
@@ -219,11 +259,11 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   /**
    * Consumer that dequeues records from queue and sends to Merge Handle.
    */
-  private static class UpdateHandler extends BoundedInMemoryQueueConsumer<GenericRecord, Void> {
+  private class UpdateHandler extends BoundedInMemoryQueueConsumer<GenericRecord, Void> {
 
-    private final HoodieMergeHandle upsertHandle;
+    private final HoodieMergeHandle<T> upsertHandle;
 
-    private UpdateHandler(HoodieMergeHandle upsertHandle) {
+    private UpdateHandler(HoodieMergeHandle<T> upsertHandle) {
       this.upsertHandle = upsertHandle;
     }
 

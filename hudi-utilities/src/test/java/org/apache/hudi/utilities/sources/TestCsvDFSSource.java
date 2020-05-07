@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.utilities.UtilitiesTestBase;
@@ -54,7 +55,7 @@ public class TestCsvDFSSource extends AbstractDFSSourceTestBase {
   }
 
   @Override
-  void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
+  void writeNewDataToFile(List<HoodieRecord<TestRawTripPayload>> records, Path path) throws IOException {
     UtilitiesTestBase.Helpers.saveCsvToDFS(
         true, '\t', Helpers.jsonifyRecords(records), dfs, path.toString());
   }

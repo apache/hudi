@@ -21,6 +21,7 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -89,10 +90,10 @@ public class TestHoodieSnapshotExporter extends HoodieClientTestHarness {
 
     // Prepare data as source Hudi dataset
     HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);
-    HoodieWriteClient hdfsWriteClient = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient<TestRawTripPayload> hdfsWriteClient = new HoodieWriteClient<>(jsc, cfg);
     hdfsWriteClient.startCommitWithTime(COMMIT_TIME);
-    List<HoodieRecord> records = dataGen.generateInserts(COMMIT_TIME, NUM_RECORDS);
-    JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+    List<HoodieRecord<TestRawTripPayload>> records = dataGen.generateInserts(COMMIT_TIME, NUM_RECORDS);
+    JavaRDD<HoodieRecord<TestRawTripPayload>> recordsRDD = jsc.parallelize(records, 1);
     hdfsWriteClient.bulkInsert(recordsRDD, COMMIT_TIME);
     hdfsWriteClient.close();
 

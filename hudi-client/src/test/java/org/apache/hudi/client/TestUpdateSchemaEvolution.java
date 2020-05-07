@@ -67,7 +67,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
   public void testSchemaEvolutionOnUpdate() throws Exception {
     // Create a bunch of records with a old version of schema
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
-    final HoodieTable<?> table = HoodieTable.create(config, jsc);
+    final HoodieTable<TestRawTripPayload> table = HoodieTable.create(config, jsc);
 
     final List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -76,19 +76,19 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
           + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
       String recordStr3 = "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
           + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-      List<HoodieRecord> insertRecords = new ArrayList<>();
+      List<HoodieRecord<TestRawTripPayload>> insertRecords = new ArrayList<>();
       TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
       insertRecords
-          .add(new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
+          .add(new HoodieRecord<>(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
       TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
       insertRecords
-          .add(new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
+          .add(new HoodieRecord<>(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
       TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
       insertRecords
-          .add(new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
+          .add(new HoodieRecord<>(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
-      HoodieCreateHandle createHandle =
-          new HoodieCreateHandle(config, "100", table, rowChange1.getPartitionPath(), "f1-0", insertRecords.iterator(), supplier);
+      HoodieCreateHandle<TestRawTripPayload> createHandle =
+          new HoodieCreateHandle<>(config, "100", table, rowChange1.getPartitionPath(), "f1-0", insertRecords.iterator(), supplier);
       createHandle.write();
       return createHandle.close();
     }).collect();
@@ -102,22 +102,22 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     final WriteStatus insertResult = statuses.get(0);
     String fileId = insertResult.getFileId();
 
-    final HoodieTable table2 = HoodieTable.create(config2, jsc);
+    final HoodieTable<TestRawTripPayload> table2 = HoodieTable.create(config2, jsc);
     assertEquals(1, jsc.parallelize(Arrays.asList(1)).map(x -> {
       // New content with values for the newly added field
       String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
           + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
-      List<HoodieRecord> updateRecords = new ArrayList<>();
+      List<HoodieRecord<TestRawTripPayload>> updateRecords = new ArrayList<>();
       TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
-      HoodieRecord record1 =
-          new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+      HoodieRecord<TestRawTripPayload> record1 =
+          new HoodieRecord<>(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
       record1.unseal();
       record1.setCurrentLocation(new HoodieRecordLocation("100", fileId));
       record1.seal();
       updateRecords.add(record1);
 
       assertDoesNotThrow(() -> {
-        HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config2, "101", table2,
+        HoodieMergeHandle<TestRawTripPayload> mergeHandle = new HoodieMergeHandle<>(config2, "101", table2,
             updateRecords.iterator(), record1.getPartitionPath(), fileId, supplier);
         Configuration conf = new Configuration();
         AvroReadSupport.setAvroReadSchema(conf, mergeHandle.getWriterSchema());

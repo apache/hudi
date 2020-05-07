@@ -24,7 +24,6 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -200,7 +199,7 @@ public class HoodieLogFileCommand implements CommandMarker {
                   Boolean.parseBoolean(HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED),
                   HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE,
                   HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
-      for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : scanner) {
+      for (HoodieRecord<?> hoodieRecord : scanner) {
         Option<IndexedRecord> record = hoodieRecord.getData().getInsertValue(readerSchema);
         if (allRecords.size() < limit) {
           allRecords.add(record.get());

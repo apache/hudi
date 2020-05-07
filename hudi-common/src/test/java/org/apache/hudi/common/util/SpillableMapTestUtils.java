@@ -39,14 +39,16 @@ public class SpillableMapTestUtils {
   public static final String DUMMY_COMMIT_TIME = "DUMMY_COMMIT_TIME";
   public static final String DUMMY_FILE_ID = "DUMMY_FILE_ID";
 
-  public static List<String> upsertRecords(List<IndexedRecord> iRecords,
-      Map<String, HoodieRecord<? extends HoodieRecordPayload>> records) {
+  public static List<String> upsertRecords(
+      List<IndexedRecord> iRecords,
+      Map<String, HoodieRecord<HoodieAvroPayload>> records
+  ) {
     List<String> recordKeys = new ArrayList<>();
     iRecords.forEach(r -> {
       String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
       recordKeys.add(key);
-      HoodieRecord record =
+      HoodieRecord<HoodieAvroPayload> record =
           new HoodieRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
       record.unseal();
       record.setCurrentLocation(new HoodieRecordLocation("DUMMY_COMMIT_TIME", "DUMMY_FILE_ID"));

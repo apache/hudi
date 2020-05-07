@@ -29,6 +29,7 @@ import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -88,10 +89,10 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     String fileName1 = "1_0_20160401010101.parquet";
     String fileName2 = "2_0_20160401010101.parquet";
 
-    List<HoodieRecord> hoodieRecords1 = SchemaTestUtil.generateHoodieTestRecords(0, 100, schema);
+    List<HoodieRecord<HoodieAvroPayload>> hoodieRecords1 = SchemaTestUtil.generateHoodieTestRecords(0, 100, schema);
     HoodieClientTestUtils.writeParquetFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
         fileName1, hoodieRecords1, schema, null, false);
-    List<HoodieRecord> hoodieRecords2 = SchemaTestUtil.generateHoodieTestRecords(100, 100, schema);
+    List<HoodieRecord<HoodieAvroPayload>> hoodieRecords2 = SchemaTestUtil.generateHoodieTestRecords(100, 100, schema);
     HoodieClientTestUtils.writeParquetFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
         fileName2, hoodieRecords2, schema, null, false);
 

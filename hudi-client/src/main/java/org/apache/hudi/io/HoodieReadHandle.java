@@ -29,7 +29,7 @@ import org.apache.hadoop.fs.FileSystem;
 /**
  * Base class for read operations done logically on the file group.
  */
-public abstract class HoodieReadHandle<T extends HoodieRecordPayload> extends HoodieIOHandle {
+public abstract class HoodieReadHandle<T extends HoodieRecordPayload<T>> extends HoodieIOHandle<T> {
 
   protected final Pair<String, String> partitionPathFilePair;
 

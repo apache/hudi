@@ -22,6 +22,7 @@ import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.fs.inline.FileSystemTestUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.fs.inline.InMemoryFileSystem;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.avro.generic.GenericRecord;
@@ -143,9 +144,9 @@ public class TestParquetInLining {
   static List<GenericRecord> getParquetHoodieRecords() throws IOException {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     String commitTime = "001";
-    List<HoodieRecord> hoodieRecords = dataGenerator.generateInsertsWithHoodieAvroPayload(commitTime, 10);
+    List<HoodieRecord<HoodieAvroPayload>> hoodieRecords = dataGenerator.generateInsertsWithHoodieAvroPayload(commitTime, 10);
     List<GenericRecord> toReturn = new ArrayList<>();
-    for (HoodieRecord record : hoodieRecords) {
+    for (HoodieRecord<HoodieAvroPayload> record : hoodieRecords) {
       toReturn.add((GenericRecord) record.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get());
     }
     return toReturn;
