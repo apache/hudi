@@ -535,7 +535,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     try {
       TableSchemaResolver schemaUtil = new TableSchemaResolver(getMetaClient());
       writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
-      tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaUtil.getTableSchemaFromCommitMetadata());
+      tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaUtil.getTableAvroSchemaWithoutMetadataFields());
       isValid = TableSchemaResolver.isSchemaCompatible(tableSchema, writerSchema);
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
