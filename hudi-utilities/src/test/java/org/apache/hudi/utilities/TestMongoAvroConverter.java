@@ -2,7 +2,7 @@ package org.apache.hudi.utilities;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.utilities.transform.MongoAvroConverter;
+import org.apache.hudi.utilities.sources.helpers.MongoAvroConverter;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -51,10 +51,10 @@ public class TestMongoAvroConverter {
     Long updateSampleTsMs = 1587506573735L;
     String updateSamplePatch = "{\"$v\": 1,\"$set\": {\"e\": false,\"l\": {\"$date\":1587409165984}}}";
 
-    assertEquals(updateSampleId, resultUpdate.get("id"));
-    assertEquals(updateSampleOp, resultUpdate.get("op"));
-    assertEquals(updateSampleTsMs, resultUpdate.get("ts_ms"));
-    assertEquals(updateSamplePatch, resultUpdate.get("patch"));
+    assertEquals(updateSampleId, resultUpdate.get("_id"));
+    assertEquals(updateSampleOp, resultUpdate.get("oplog_op"));
+    assertEquals(updateSampleTsMs, resultUpdate.get("oplog_ts_ms"));
+    assertEquals(updateSamplePatch, resultUpdate.get("oplog_patch"));
 
     String createSampleId = "55555505d648da1824d45a1d";
     String createSampleOp = "c";
@@ -68,16 +68,16 @@ public class TestMongoAvroConverter {
     Long createSampleQ = 1L;
     List<Long> createSampleTestField = Arrays.asList(1L, 2L, 3L, 4L);
 
-    assertEquals(createSampleId, resultCreate.get("id"));
-    assertEquals(createSampleOp, resultCreate.get("op"));
-    assertEquals(createSampleTsMs, resultCreate.get("ts_ms"));
-    assertEquals(createSamplePatch, resultCreate.get("patch"));
-    assertEquals(createSampleIpc, resultCreate.get("ipc"));
-    assertEquals(createSampleLfd, resultCreate.get("lfd"));
-    assertEquals(createSampleCb, resultCreate.get("cb"));
-    assertEquals(createSampleIfc, resultCreate.get("ifc"));
-    assertEquals(createSampleCs, resultCreate.get("cs"));
-    assertEquals(createSampleQ, resultCreate.get("q"));
+    assertEquals(createSampleId, resultCreate.get("_id"));
+    assertEquals(createSampleOp, resultCreate.get("oplog_op"));
+    assertEquals(createSampleTsMs, resultCreate.get("oplog_ts_ms"));
+    assertEquals(createSamplePatch, resultCreate.get("oplog_patch"));
+    assertEquals(createSampleIpc, resultCreate.get("incentive_payment_currency"));
+    assertEquals(createSampleLfd, resultCreate.get("logistic_fee_deducted"));
+    assertEquals(createSampleCb, resultCreate.get("chargeback"));
+    assertEquals(createSampleIfc, resultCreate.get("incentive_fine_currency"));
+    assertEquals(createSampleCs, resultCreate.get("_internal_merchant_cost"));
+    assertEquals(createSampleQ, resultCreate.get("quantity"));
     assertEquals(createSampleTestField, resultCreate.get("testfield"));
   }
 

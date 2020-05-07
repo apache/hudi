@@ -1,4 +1,4 @@
-package org.apache.hudi.utilities.transform;
+package org.apache.hudi.utilities.sources.helpers;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -8,7 +8,6 @@ import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.utilities.mongo.Operation;
-import org.apache.hudi.utilities.sources.helpers.KafkaAvroConverter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -23,10 +22,10 @@ public class MongoAvroConverter extends KafkaAvroConverter {
   private static final String PATCH_OPLOGFIELD = "patch";
   private static final String ID_OPLOGFIELD = "id";
   private static final String PAYLOAD_OPLOGFIELD = "payload";
-  private static final String OP_FIELD = "op";
-  private static final String TS_MS_FIELD = "ts_ms";
-  private static final String PATCH_FIELD = "patch";
-  private static final String ID_FIELD = "id";
+  private static final String OP_FIELD = "oplog_op";
+  private static final String TS_MS_FIELD = "oplog_ts_ms";
+  private static final String PATCH_FIELD = "oplog_patch";
+  private static final String ID_FIELD = "_id";
 
   public MongoAvroConverter(Schema avroSchema) {
     super(avroSchema);
@@ -47,15 +46,16 @@ public class MongoAvroConverter extends KafkaAvroConverter {
       JSONObject after = new JSONObject(payload.getString(AFTER_OPLOGFIELD));
       for (Schema.Field field : this.getSchema().getFields()) {
         String fieldName = field.name();
-        if (after.has(fieldName)) {
+        String matchedFieldName = matchField(field, after);
+        if (matchedFieldName != null) {
           try {
             Schema fieldSchema = field.schema();
-            Object fieldValue = after.get(fieldName);
+            Object fieldValue = after.get(matchedFieldName);
             Object targetValue = typeTransform(fieldValue, fieldSchema);
             genericRecord.put(fieldName, targetValue);
           } catch (Exception e) {
             LOG.info("Conversion error: " + fieldName
-                    + "value: " + after.get(fieldName).toString());
+                    + " value: " + after.get(matchedFieldName).toString());
           }
         }
       }
@@ -132,5 +132,18 @@ public class MongoAvroConverter extends KafkaAvroConverter {
     JSONObject idJson = new JSONObject(keyJson.getJSONObject(PAYLOAD_OPLOGFIELD).getString(ID_OPLOGFIELD));
     String id = idJson.getString("$oid");
     return id;
+  }
+
+  public static String matchField(Schema.Field field, JSONObject after) {
+    String matchedAliasName = null;
+    for (String aliasName: field.aliases()) {
+      if (after.has(aliasName)) {
+        matchedAliasName = aliasName;
+      }
+    }
+    if (matchedAliasName == null && after.has(field.name())) {
+      matchedAliasName = field.name();
+    }
+    return matchedAliasName;
   }
 }
