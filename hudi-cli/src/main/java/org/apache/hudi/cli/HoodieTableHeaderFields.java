@@ -72,4 +72,13 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_DELTA_BASE_UNSCHEDULED = "Delta To Base Ratio" + COMPACTION_UNSCHEDULED_SUFFIX;
   public static final String HEADER_DELTA_FILES_SCHEDULED = "Delta Files" + COMPACTION_SCHEDULED_SUFFIX;
   public static final String HEADER_DELTA_FILES_UNSCHEDULED = "Delta Files" + COMPACTION_UNSCHEDULED_SUFFIX;
+
+  /**
+   * Fields of Repair.
+   */
+  public static final String HEADER_METADATA_PRESENT = "Metadata Present?";
+  public static final String HEADER_REPAIR_ACTION = "Action";
+  public static final String HEADER_HOODIE_PROPERTY = "Property";
+  public static final String HEADER_OLD_VALUE = "Old Value";
+  public static final String HEADER_NEW_VALUE = "New Value";
 }

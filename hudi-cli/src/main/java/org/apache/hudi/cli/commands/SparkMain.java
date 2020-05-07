@@ -73,8 +73,8 @@ public class SparkMain {
         returnCode = rollback(jsc, args[1], args[2]);
         break;
       case DEDUPLICATE:
-        assert (args.length == 4);
-        returnCode = deduplicatePartitionPath(jsc, args[1], args[2], args[3]);
+        assert (args.length == 7);
+        returnCode = deduplicatePartitionPath(jsc, args[3], args[4], args[5], args[6]);
         break;
       case ROLLBACK_TO_SAVEPOINT:
         assert (args.length == 3);
@@ -162,7 +162,8 @@ public class SparkMain {
 
   private static boolean sparkMasterContained(SparkCommand command) {
     List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
-        SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN);
+        SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN,
+        SparkCommand.DEDUPLICATE);
     return masterContained.contains(command);
   }
 
@@ -263,10 +264,10 @@ public class SparkMain {
   }
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
-      String repairedOutputPath, String basePath) {
+      String repairedOutputPath, String basePath, String dryRun) {
     DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath, new SQLContext(jsc),
         FSUtils.getFs(basePath, jsc.hadoopConfiguration()));
-    job.fixDuplicates(true);
+    job.fixDuplicates(Boolean.parseBoolean(dryRun));
     return 0;
   }
 
