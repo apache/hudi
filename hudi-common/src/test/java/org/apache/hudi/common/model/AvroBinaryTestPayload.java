@@ -31,7 +31,7 @@ import java.io.IOException;
 /**
  * The implementation of {@link HoodieRecordPayload} base on avro for testing.
  */
-public class AvroBinaryTestPayload implements HoodieRecordPayload {
+public class AvroBinaryTestPayload implements HoodieRecordPayload<AvroBinaryTestPayload> {
 
   private final byte[] recordBytes;
 
@@ -49,7 +49,7 @@ public class AvroBinaryTestPayload implements HoodieRecordPayload {
   }
 
   @Override
-  public HoodieRecordPayload preCombine(HoodieRecordPayload another) {
+  public AvroBinaryTestPayload preCombine(AvroBinaryTestPayload another) {
     return this;
   }
 

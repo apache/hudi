@@ -31,7 +31,7 @@ import java.util.Map;
  * Every Hoodie table has an implementation of the <code>HoodieRecordPayload</code> This abstracts out callbacks which
  * depend on record specific logic.
  */
-public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Serializable {
+public interface HoodieRecordPayload<T extends HoodieRecordPayload<T>> extends Serializable {
 
   /**
    * When more than one HoodieRecord have the same HoodieKey, this function combines them before attempting to
