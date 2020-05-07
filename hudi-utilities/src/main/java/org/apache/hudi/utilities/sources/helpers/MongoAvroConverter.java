@@ -22,9 +22,9 @@ public class MongoAvroConverter extends KafkaAvroConverter {
   private static final String PATCH_OPLOGFIELD = "patch";
   private static final String ID_OPLOGFIELD = "id";
   private static final String PAYLOAD_OPLOGFIELD = "payload";
-  private static final String OP_FIELD = "oplog_op";
-  private static final String TS_MS_FIELD = "oplog_ts_ms";
-  private static final String PATCH_FIELD = "oplog_patch";
+  private static final String OP_FIELD = "_op";
+  private static final String TS_MS_FIELD = "_ts_ms";
+  private static final String PATCH_FIELD = "_patch";
   private static final String ID_FIELD = "_id";
 
   public MongoAvroConverter(Schema avroSchema) {

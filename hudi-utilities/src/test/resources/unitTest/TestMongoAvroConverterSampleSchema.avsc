@@ -3,11 +3,11 @@
   "name":"MongoOplog",
   "fields":[
     {
-      "name":"oplog_op",
+      "name":"_op",
       "type":"string"
     },
     {
-      "name":"oplog_ts_ms",
+      "name":"_ts_ms",
       "type":[
         "null",
         "long"
@@ -15,7 +15,7 @@
       "default":null
     },
     {
-      "name":"oplog_patch",
+      "name":"_patch",
       "type":[
         "null",
         "string"
