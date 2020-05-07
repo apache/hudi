@@ -25,20 +25,24 @@ import com.amazonaws.services.s3.model.S3Object;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Date;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
+import org.apache.avro.SchemaBuilder;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * A simple schema provider, that reads off files on S3.
+ * This is a mongo  schema provider, that reads off mongo schema files on S3.
  */
-public class S3FilebasedSchemaProvider extends SchemaProvider {
+public class MongoSchemaProvider extends SchemaProvider {
 
   /**
    * Configs supported.
@@ -50,13 +54,55 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
     private static final String SOURCE_SCHEMA_EXPIRED   = "hoodie.deltastreamer.schemaprovider" + ".source.schema.expired";
   }
 
-  private static final Logger LOG = LogManager.getLogger(S3FilebasedSchemaProvider.class);
+  /*
+   * Embedded schema provider that build oplog schemas
+   */
+  private static class OplogSchemaProvider {
+    private Schema baseSchema;
+    private final String[] fieldNames = new String[] {
+      "oplog_op", "oplog_ts_ms", "oplog_patch"
+    };
+
+    private final Type[] fieldTypes = new Type[] {
+      Type.STRING, Type.LONG, Type.STRING
+    };
+
+    //private static final OplogSchemaProvider instance;
+    private Schema buildOplogBaseSchema() {
+      SchemaBuilder.FieldAssembler<Schema> fieldAssembler = SchemaBuilder
+          .record("MongoOplog")
+          .namespace("com.wish.log")
+          .fields();
+
+      Schema nullSchema = Schema.create(Schema.Type.NULL);
+
+      for (int i = 0; i < fieldNames.length; ++i) {
+        Schema schema = Schema.create(fieldTypes[i]);
+        Schema unionSchema = Schema.createUnion(Arrays.asList(nullSchema, schema));
+
+        fieldAssembler.name(fieldNames[i]).type(unionSchema).withDefault(null);
+      }
+
+      return fieldAssembler.endRecord();
+    }
+
+    private OplogSchemaProvider() {
+      baseSchema = buildOplogBaseSchema();
+    }
+
+    public Schema getBaseSchema() {
+      return this.baseSchema;
+    }
+  }
+
+  private static final Logger LOG = LogManager.getLogger(MongoSchemaProvider.class);
 
   private final String s3Bucket;
   private final String s3File;
   private final long schemaExpiredTime;
 
   private Schema sourceSchema;
+  private static final OplogSchemaProvider OPLOG_SCHEMA_PROVIDER = new OplogSchemaProvider();
   private AmazonS3 s3Client;
   private long lastModifiedTS;
   private long schemaCachedTS;
@@ -65,7 +111,7 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
     return date.getTime() / 1000L;
   }
 
-  public S3FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
+  public MongoSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     this.s3Bucket = props.getString(Config.SOURCE_SCHEMA_S3_BUCKET);
     this.s3File = props.getString(Config.SOURCE_SCHEMA_FILENAME);
@@ -128,7 +174,7 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
         if (schemaCache.getType() != Type.RECORD) {
           throw new IllegalArgumentException("Record schema type is expected");
         }
-        sourceSchema = schemaCache;
+        sourceSchema = combineSchemaFromS3(schemaCache);
         lastModifiedTS = fileTS;
         schemaChanged = true;
       }
@@ -138,6 +184,28 @@ public class S3FilebasedSchemaProvider extends SchemaProvider {
       readStream(stream);
       stream.close();
     }
+  }
+
+  /**
+   * Combine Mongo table and oplog schemas.
+   */
+  private Schema combineSchemaFromS3(Schema tableSchema) throws IOException {
+    Schema oplogSchema = OPLOG_SCHEMA_PROVIDER.getBaseSchema();
+
+    List<Schema.Field> fieldList = oplogSchema.getFields().stream()
+        .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
+        .collect(Collectors.toList());
+
+    for (Schema.Field f: tableSchema.getFields()) {
+      Schema.Field ff = new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal());
+
+      for (String alias : f.aliases()) {
+        ff.addAlias(alias);
+      }
+      fieldList.add(ff);
+    }
+
+    return Schema.createRecord(tableSchema.getName(), tableSchema.getDoc(), tableSchema.getNamespace(), tableSchema.isError(), fieldList);
   }
 
   /**
