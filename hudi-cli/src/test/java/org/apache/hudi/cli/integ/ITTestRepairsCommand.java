@@ -133,8 +133,8 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     assertEquals(210, df.count());
 
     String partitionPath = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
-    String cmdStr = "repair deduplicate --duplicatedPartitionPath " + partitionPath
-        + " --repairedOutputPath " + repairedOutputPath + " --sparkMaster local";
+    String cmdStr = String.format("repair deduplicate --duplicatedPartitionPath %s --repairedOutputPath %s --sparkMaster %s",
+        partitionPath, repairedOutputPath, "local");
     CommandResult cr = getShell().executeCommand(cmdStr);
     assertTrue(cr.isSuccess());
     assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + repairedOutputPath, cr.getResult().toString());
@@ -164,8 +164,8 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     assertEquals(210, df.count());
 
     String partitionPath = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
-    String cmdStr = "repair deduplicate --duplicatedPartitionPath " + partitionPath
-        + " --repairedOutputPath " + repairedOutputPath + " --sparkMaster local --dryrun false";
+    String cmdStr = String.format("repair deduplicate --duplicatedPartitionPath %s --repairedOutputPath %s"
+        + " --sparkMaster %s --dryrun %s", partitionPath, repairedOutputPath, "local", false);
     CommandResult cr = getShell().executeCommand(cmdStr);
     assertTrue(cr.isSuccess());
     assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + partitionPath, cr.getResult().toString());
