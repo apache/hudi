@@ -35,5 +35,5 @@ public abstract class KafkaAvroConverter {
     }
   }
 
-  abstract GenericRecord transform(String key, String value);
+  protected abstract GenericRecord transform(String key, String value);
 }
