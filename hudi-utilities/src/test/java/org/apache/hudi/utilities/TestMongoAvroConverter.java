@@ -52,9 +52,9 @@ public class TestMongoAvroConverter {
     String updateSamplePatch = "{\"$v\": 1,\"$set\": {\"e\": false,\"l\": {\"$date\":1587409165984}}}";
 
     assertEquals(updateSampleId, resultUpdate.get("_id"));
-    assertEquals(updateSampleOp, resultUpdate.get("oplog_op"));
-    assertEquals(updateSampleTsMs, resultUpdate.get("oplog_ts_ms"));
-    assertEquals(updateSamplePatch, resultUpdate.get("oplog_patch"));
+    assertEquals(updateSampleOp, resultUpdate.get("_op"));
+    assertEquals(updateSampleTsMs, resultUpdate.get("_ts_ms"));
+    assertEquals(updateSamplePatch, resultUpdate.get("_patch"));
 
     String createSampleId = "55555505d648da1824d45a1d";
     String createSampleOp = "c";
@@ -69,9 +69,9 @@ public class TestMongoAvroConverter {
     List<Long> createSampleTestField = Arrays.asList(1L, 2L, 3L, 4L);
 
     assertEquals(createSampleId, resultCreate.get("_id"));
-    assertEquals(createSampleOp, resultCreate.get("oplog_op"));
-    assertEquals(createSampleTsMs, resultCreate.get("oplog_ts_ms"));
-    assertEquals(createSamplePatch, resultCreate.get("oplog_patch"));
+    assertEquals(createSampleOp, resultCreate.get("_op"));
+    assertEquals(createSampleTsMs, resultCreate.get("_ts_ms"));
+    assertEquals(createSamplePatch, resultCreate.get("_patch"));
     assertEquals(createSampleIpc, resultCreate.get("incentive_payment_currency"));
     assertEquals(createSampleLfd, resultCreate.get("logistic_fee_deducted"));
     assertEquals(createSampleCb, resultCreate.get("chargeback"));
