@@ -22,15 +22,13 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.UtilitiesTestBase;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
-import org.apache.hudi.utilities.schema.MongoSchemaProvider;
+import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.Schema;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.api.java.JavaRDD;
@@ -46,7 +44,6 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
@@ -58,7 +55,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
   private static String TEST_TOPIC_NAME = "hoodie_test";
 
-  private MongoSchemaProvider schemaProvider;
+  private FilebasedSchemaProvider schemaProvider;
   private KafkaTestUtils testUtils;
 
   @BeforeClass
@@ -74,7 +71,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
   @Before
   public void setup() throws Exception {
     super.setup();
-    schemaProvider = new MongoSchemaProvider(Helpers.setupSchemaOnS3(), jsc);
+    schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
@@ -143,35 +140,6 @@ public class TestKafkaSource extends UtilitiesTestBase {
     InputBatch<Dataset<Row>> fetch4AsRows =
         kafkaSource.fetchNewDataInRowFormat(Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(Option.empty(), fetch4AsRows.getBatch());
-  }
-
-  @Test
-  public void testCombineSchemaFromS3() throws IOException {
-    Pair<Schema, Boolean> schemaPair = schemaProvider.getLatestSourceSchema();
-    Schema sourceSchema = schemaPair.getKey();
-
-    HashMap<String, String> fieldNames = new HashMap<String, String>();
-    fieldNames.put("oplog_op", "string");
-    fieldNames.put("oplog_ts_ms", "long");
-    fieldNames.put("oplog_patch", "string");
-    
-    for (Schema.Field f: sourceSchema.getFields()) {
-      if (fieldNames.containsKey(f.name())) {
-        Schema oplogFieldSchema = f.schema();
-        assertEquals(oplogFieldSchema.getType().toString().equals("UNION"), true);
-
-        List<Schema> list = oplogFieldSchema.getTypes();
-        for (Schema ff : list) {
-          if (!ff.getName().equals("null")) {
-            assertEquals(ff.getName().equals(fieldNames.get(f.name())), true);
-          }
-        }
-
-        fieldNames.remove(f.name());
-      }
-    }
-
-    assertEquals(fieldNames.isEmpty(), true);
   }
 
   @Test

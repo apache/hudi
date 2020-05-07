@@ -59,15 +59,14 @@ public class MongoSchemaProvider extends SchemaProvider {
    */
   private static class OplogSchemaProvider {
     private Schema baseSchema;
-    private final String[] fieldNames = new String[] {
-      "oplog_op", "oplog_ts_ms", "oplog_patch"
+    private final String[] fieldNames = new String[]{
+        "_id", "_op", "_ts_ms", "_patch"
     };
 
-    private final Type[] fieldTypes = new Type[] {
-      Type.STRING, Type.LONG, Type.STRING
+    private final Type[] fieldTypes = new Type[]{
+        Type.STRING, Type.STRING, Type.LONG, Type.STRING
     };
 
-    //private static final OplogSchemaProvider instance;
     private Schema buildOplogBaseSchema() {
       SchemaBuilder.FieldAssembler<Schema> fieldAssembler = SchemaBuilder
           .record("MongoOplog")
@@ -121,7 +120,8 @@ public class MongoSchemaProvider extends SchemaProvider {
     this.schemaExpiredTime = Long.parseLong(props.getString(Config.SOURCE_SCHEMA_EXPIRED));
 
     try {
-      s3Client = AmazonS3ClientBuilder.standard().withRegion(props.getString(Config.SOURCE_SCHEMA_REGION)).build();
+      s3Client = AmazonS3ClientBuilder.standard()
+          .withRegion(props.getString(Config.SOURCE_SCHEMA_REGION)).build();
       fetchSchemaFromS3();
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading schema From S3", ioe);
@@ -192,20 +192,21 @@ public class MongoSchemaProvider extends SchemaProvider {
   private Schema combineSchemaFromS3(Schema tableSchema) throws IOException {
     Schema oplogSchema = OPLOG_SCHEMA_PROVIDER.getBaseSchema();
 
-    List<Schema.Field> fieldList = oplogSchema.getFields().stream()
-        .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
+    List<Schema.Field> fieldList = oplogSchema.getFields().stream().map(
+        field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
         .collect(Collectors.toList());
 
-    for (Schema.Field f: tableSchema.getFields()) {
+    for (Schema.Field f : tableSchema.getFields()) {
       Schema.Field ff = new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal());
-
       for (String alias : f.aliases()) {
         ff.addAlias(alias);
       }
       fieldList.add(ff);
     }
 
-    return Schema.createRecord(tableSchema.getName(), tableSchema.getDoc(), tableSchema.getNamespace(), tableSchema.isError(), fieldList);
+    return Schema.createRecord(
+        tableSchema.getName(), tableSchema.getDoc(),
+        tableSchema.getNamespace(), tableSchema.isError(), fieldList);
   }
 
   /**
