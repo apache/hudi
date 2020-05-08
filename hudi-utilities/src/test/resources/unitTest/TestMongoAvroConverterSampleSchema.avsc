@@ -463,7 +463,10 @@
       "default":null,
       "type":[
         "null",
-        "string"
+        {
+            "type": "array",
+            "items": "string"
+        }
       ],
       "name":"escrow_payment_ids",
       "aliases":[
@@ -474,7 +477,10 @@
       "default":null,
       "type":[
         "null",
-        "string"
+        {
+            "type": "array",
+            "items": "float"
+        }
       ],
       "name":"escrow_payment_amounts",
       "aliases":[
@@ -485,7 +491,10 @@
       "default":null,
       "type":[
         "null",
-        "string"
+        {
+            "type": "array",
+            "items": "float"
+        }
       ],
       "name":"escrow_payment_tax_amounts",
       "aliases":[
@@ -496,7 +505,10 @@
       "default":null,
       "type":[
         "null",
-        "string"
+        {
+            "type": "array",
+            "items": "long"
+        }
       ],
       "name":"escrow_payment_time",
       "aliases":[
@@ -870,7 +882,10 @@
       "default":null,
       "type":[
         "null",
-        "string"
+        {
+            "type": "array",
+            "items": "string"
+        }
       ],
       "name":"refund_items",
       "aliases":[
@@ -1310,7 +1325,10 @@
       "default":null,
       "type":[
         "null",
-        "string"
+        {
+          "type":"array",
+          "items":"string"
+        }
       ],
       "name":"policy_fine_ids",
       "aliases":[
@@ -1640,7 +1658,10 @@
       "default":null,
       "type":[
         "null",
-        "string"
+        {
+          "type":"array",
+          "items":"string"
+        }
       ],
       "name":"lot_info",
       "aliases":[
@@ -1651,7 +1672,10 @@
       "default":null,
       "type":[
         "null",
-        "string"
+        {
+          "type":"array",
+          "items":"string"
+        }
       ],
       "name":"rebates",
       "aliases":[

@@ -31,6 +31,8 @@ public abstract class KafkaAvroConverter {
     } else {
       return StreamSupport
           .stream(Spliterators.spliteratorUnknownSize(records, Spliterator.ORDERED), false)
+          // Ignore tombstone record
+          .filter((r) -> r.value() != null)
           .map((r) -> transform((String)r.key(), (String)r.value())).iterator();
     }
   }

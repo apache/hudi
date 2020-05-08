@@ -139,6 +139,13 @@
       <artifactId>log4j</artifactId>
     </dependency>
 
+    <!-- MongoDB -->
+    <dependency>
+      <groupId>org.mongodb</groupId>
+      <artifactId>bson</artifactId>
+      <version>3.12.1</version>
+    </dependency>
+
     <!-- Fasterxml -->
     <dependency>
       <groupId>com.fasterxml.jackson.module</groupId>

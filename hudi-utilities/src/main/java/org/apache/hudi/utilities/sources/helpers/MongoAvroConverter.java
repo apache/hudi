@@ -1,8 +1,6 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData.Record;
@@ -10,22 +8,37 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.utilities.mongo.Operation;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
-import org.json.JSONArray;
+import org.bson.BsonArray;
+import org.bson.BsonDocument;
+import org.bson.BsonNull;
+import org.bson.BsonObjectId;
+import org.bson.BsonValue;
+import org.bson.codecs.BsonObjectIdCodec;
+import org.bson.codecs.DecoderContext;
+import org.bson.json.JsonMode;
+import org.bson.json.JsonReader;
+import org.bson.json.JsonWriterSettings;
 import org.json.JSONObject;
 
 public class MongoAvroConverter extends KafkaAvroConverter {
+
   private static final Logger LOG = LogManager.getLogger(MongoAvroConverter.class);
+  @SuppressWarnings("deprecation") // Backward compatible with libraries
+  private static final JsonWriterSettings STRICT_JSON = JsonWriterSettings.builder()
+      .outputMode(JsonMode.STRICT).build();
+  // Oplog fields
   private static final String AFTER_OPLOGFIELD = "after";
   private static final String OP_OPLOGFIELD = "op";
   private static final String TS_MS_OPLOGFIELD = "ts_ms";
   private static final String PATCH_OPLOGFIELD = "patch";
   private static final String ID_OPLOGFIELD = "id";
   private static final String PAYLOAD_OPLOGFIELD = "payload";
+  private static final String SOURCE_OPLOGFIELD = "source";
+  // Avro schema field names
+  private static final String ID_FIELD = "_id";
   private static final String OP_FIELD = "_op";
   private static final String TS_MS_FIELD = "_ts_ms";
   private static final String PATCH_FIELD = "_patch";
-  private static final String ID_FIELD = "_id";
 
   public MongoAvroConverter(Schema avroSchema) {
     super(avroSchema);
@@ -33,117 +46,165 @@ public class MongoAvroConverter extends KafkaAvroConverter {
 
   @Override
   public GenericRecord transform(String key, String value) {
-    JSONObject valueJson = new JSONObject(value);
     GenericRecord genericRecord = new Record(this.getSchema());
+    genericRecord.put(ID_FIELD, getDocumentId(key));
 
-    JSONObject payload = valueJson.getJSONObject(PAYLOAD_OPLOGFIELD);
+    // Payload field may be absent when value.converter.schemas.enable=false
+    JSONObject valueJson = new JSONObject(value);
+    if (valueJson.has(PAYLOAD_OPLOGFIELD)) {
+      valueJson = valueJson.getJSONObject(PAYLOAD_OPLOGFIELD);
+    }
 
-    Operation op = Operation.forCode(payload.getString(OP_OPLOGFIELD));
+    // Op field is mandatory
+    Operation op = Operation.forCode(valueJson.getString(OP_OPLOGFIELD));
     genericRecord.put(OP_FIELD, op.code());
 
-    if (payload.has(AFTER_OPLOGFIELD)
-            && (op.equals(Operation.CREATE) || op.equals(Operation.READ))) {
-      JSONObject after = new JSONObject(payload.getString(AFTER_OPLOGFIELD));
-      for (Schema.Field field : this.getSchema().getFields()) {
-        String fieldName = field.name();
-        String matchedFieldName = matchField(field, after);
-        if (matchedFieldName != null) {
+    // Read timestamp from source field
+    genericRecord.put(TS_MS_FIELD, getTimeMs(valueJson));
+
+    // Insert/Read operation has after field
+    if (op.equals(Operation.CREATE) || op.equals(Operation.READ)) {
+      BsonDocument after = BsonDocument.parse(valueJson.getString(AFTER_OPLOGFIELD));
+      for (Schema.Field field : getSchema().getFields()) {
+        if (field.name().equals(ID_FIELD)) {
+          continue;
+        }
+
+        BsonValue fieldValue = getFieldValue(field, after);
+        if (!fieldValue.isNull()) {
+          Schema schema = getNonNull(field.schema());
           try {
-            Schema fieldSchema = field.schema();
-            Object fieldValue = after.get(matchedFieldName);
-            Object targetValue = typeTransform(fieldValue, fieldSchema);
-            genericRecord.put(fieldName, targetValue);
+            Object targetValue = typeTransform(field.name(), fieldValue, schema);
+            genericRecord.put(field.name(), targetValue);
           } catch (Exception e) {
-            LOG.info("Conversion error: " + fieldName
-                    + " value: " + after.get(matchedFieldName).toString());
+            logFieldTypeError(field.name(),  schema.getType().getName(), fieldValue);
           }
         }
       }
     }
-    if (payload.has(PATCH_OPLOGFIELD)) {
-      String patch = payload.getString(PATCH_OPLOGFIELD);
-      genericRecord.put(PATCH_FIELD, patch);
+
+    // Update operation has patch field
+    if (op.equals(Operation.UPDATE)) {
+      genericRecord.put(PATCH_FIELD, valueJson.optString(PATCH_OPLOGFIELD));
     }
-
-    long timeMs = Long.parseLong(payload.getString(TS_MS_OPLOGFIELD));
-    genericRecord.put(TS_MS_FIELD, timeMs);
-
-    genericRecord.put(ID_FIELD, readKey(key));
 
     return genericRecord;
   }
 
-  public Object typeTransform(Object valueJson, Schema schema) throws Exception {
-    if (isOptional(schema)) {
-      if (valueJson == null || valueJson.toString().equals("null")) {
-        return null;
+  public Object typeTransform(String fieldName, BsonValue valueBson, Schema schema) {
+    if (valueBson.isNull()) {
+      return null;
+    }
+
+    Type targetType = schema.getType();
+    Object value = null;
+    boolean nullOk = false;
+    if (targetType.equals(Type.LONG)) {
+      if (valueBson.isNumber()) {
+        value = Long.valueOf(valueBson.asNumber().longValue());
+      } else if (valueBson.isDateTime()) {
+        value = Long.valueOf(valueBson.asDateTime().getValue());
+      } else if (valueBson.isTimestamp()) {
+        value = Long.valueOf(1000L * valueBson.asTimestamp().getTime());
+      } else if (valueBson.isString()) {
+        value = Long.parseLong(valueBson.asString().getValue());
+      }
+    } else if (targetType.equals(Type.INT)) {
+      if (valueBson.isNumber()) {
+        value = Integer.valueOf(valueBson.asNumber().intValue());
+      } else if (valueBson.isString()) {
+        value = Integer.parseInt(valueBson.asString().getValue());
+      }
+    } else if (targetType.equals(Type.FLOAT)) {
+      if (valueBson.isNumber()) {
+        value = Float.valueOf((float) valueBson.asNumber().doubleValue());
+      } else if (valueBson.isString()) {
+        value = Float.parseFloat(valueBson.asString().getValue());
+      }
+    } else if (targetType.equals(Type.DOUBLE)) {
+      if (valueBson.isNumber()) {
+        value = Double.valueOf(valueBson.asNumber().doubleValue());
+      } else if (valueBson.isString()) {
+        value = Double.parseDouble(valueBson.asString().getValue());
+      }
+    } else if (targetType.equals(Type.BOOLEAN)) {
+      if (valueBson.isBoolean()) {
+        value = Boolean.valueOf(valueBson.asBoolean().getValue());
+      } else if (valueBson.isString()) {
+        value = Boolean.parseBoolean(valueBson.asString().getValue());
+      }
+    } else if (targetType.equals(Type.ARRAY) && valueBson.isArray()) {
+      BsonArray array = valueBson.asArray();
+      if (array.isEmpty()) {
+        nullOk = true;
       } else {
-        schema = getNonNull(schema);
+        ArrayList<Object> list = new ArrayList<>(array.size());
+        for (BsonValue element : array.getValues()) {
+          list.add(typeTransform(fieldName, element, schema.getElementType()));
+        }
+        value = list;
+      }
+    } else if (targetType.equals(Type.STRING)) {
+      if (valueBson.isString()) {
+        value = valueBson.asString().getValue();
+      } else if (valueBson.isObjectId()) {
+        value = valueBson.asObjectId().getValue().toString();
+      } else if (valueBson.isDocument()) {
+        value = valueBson.asDocument().toJson(STRICT_JSON);
       }
     }
-    Type targetType = schema.getType();
-    Object value;
-    if (targetType.equals(Type.LONG)) {
-      value = Long.parseLong(valueJson.toString());
-    } else if (targetType.equals(Type.INT)) {
-      value = Integer.parseInt(valueJson.toString());
-    } else if (targetType.equals(Type.FLOAT)) {
-      value = Float.parseFloat(valueJson.toString());
-    } else if (targetType.equals(Type.DOUBLE)) {
-      value = Double.parseDouble(valueJson.toString());
-    } else if (targetType.equals(Type.BOOLEAN)) {
-      value = Boolean.parseBoolean(valueJson.toString());
-    } else if (targetType.equals(Type.ARRAY) && valueJson instanceof JSONArray) {
-      Schema elementSchema = schema.getElementType();
-      List<Object> listRes = new ArrayList<>();
-      JSONArray valueJsonArray = (JSONArray) valueJson;
-      for (int i = 0; i < valueJsonArray.length(); i++) {
-        listRes.add(typeTransform(valueJsonArray.get(i), elementSchema));
-      }
-      value = listRes;
-    } else if (targetType.equals(Type.STRING)) {
-      value = valueJson.toString();
-      // TODO: Handle ObjectId
-    } else {
-      throw new Exception("invalid format");
+    if (value == null && !nullOk) {
+      logFieldTypeError(fieldName, targetType.getName(), valueBson);
     }
     return value;
   }
 
-  private static boolean isOptional(Schema schema) {
-    return (schema.getType().equals(Type.UNION)
-            && schema.getTypes().size() == 2
-            && (schema.getTypes().get(0).getType().equals(Type.NULL)
-            || schema.getTypes().get(1).getType().equals(Type.NULL)));
-  }
-
   private static Schema getNonNull(Schema schema) {
-    Schema nonNullSchema;
-    if (schema.getTypes().get(0).getType().equals(Type.NULL)) {
-      nonNullSchema = schema.getTypes().get(1);
-    } else {
-      nonNullSchema = schema.getTypes().get(0);
-    }
-    return nonNullSchema;
-  }
-
-  public static String readKey(String key) {
-    JSONObject keyJson = new JSONObject(key);
-    JSONObject idJson = new JSONObject(keyJson.getJSONObject(PAYLOAD_OPLOGFIELD).getString(ID_OPLOGFIELD));
-    String id = idJson.getString("$oid");
-    return id;
-  }
-
-  public static String matchField(Schema.Field field, JSONObject after) {
-    String matchedAliasName = null;
-    for (String aliasName: field.aliases()) {
-      if (after.has(aliasName)) {
-        return aliasName;
+    if (schema.getType().equals(Type.UNION)) {
+      for (Schema element : schema.getTypes()) {
+        if (!element.getType().equals(Type.NULL)) {
+          return element;
+        }
       }
     }
-    if (after.has(field.name())) {
-      matchedAliasName = field.name();
+    return schema;
+  }
+
+  private static long getTimeMs(JSONObject valueJson) {
+    // Source field is mandatory
+    JSONObject source = valueJson.getJSONObject(SOURCE_OPLOGFIELD);
+    long timeMs = source.optLong(TS_MS_OPLOGFIELD);
+    if (timeMs != 0) {
+      return timeMs;
     }
-    return matchedAliasName;
+    return valueJson.optLong(TS_MS_OPLOGFIELD);
+  }
+
+  private static BsonObjectId getObjectId(String idJson) {
+    return new BsonObjectIdCodec().decode(new JsonReader(idJson), DecoderContext.builder().build());
+  }
+
+  public static String getDocumentId(String key) {
+    // Payload field may be absent when key.converter.schemas.enable=false
+    JSONObject keyJson = new JSONObject(key);
+    if (keyJson.has(PAYLOAD_OPLOGFIELD)) {
+      keyJson = keyJson.getJSONObject(PAYLOAD_OPLOGFIELD);
+    }
+    return getObjectId(keyJson.getString(ID_OPLOGFIELD)).getValue().toString();
+  }
+
+  private static BsonValue getFieldValue(Schema.Field field, BsonDocument after) {
+    for (String aliasName : field.aliases()) {
+      BsonValue value = after.get(aliasName, BsonNull.VALUE);
+      if (!value.isNull()) {
+        return value;
+      }
+    }
+    return after.get(field.name(), BsonNull.VALUE);
+  }
+
+  private void logFieldTypeError(String fieldName, String typeName, BsonValue fieldValue) {
+    LOG.error(String.format("Field (%s) value cannot be cast to %s: %s", fieldName, typeName,
+        fieldValue.toString()));
   }
 }

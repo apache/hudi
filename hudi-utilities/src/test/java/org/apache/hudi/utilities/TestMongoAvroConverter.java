@@ -13,11 +13,12 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class TestMongoAvroConverter {
 
   @Test
-  public void testReadKey() throws IOException {
+  public void testDocumentId() throws IOException {
     Schema.Parser parser = new Schema.Parser();
     Path sampleSchemaPath = Paths.get("src/test/resources/unitTest/TestMongoAvroConverterSampleSchema.avsc");
     String sampleSchemaStr = new String(Files.readAllBytes(sampleSchemaPath));
@@ -26,7 +27,7 @@ public class TestMongoAvroConverter {
     Schema schema = parser.parse(sampleSchemaStr);
     MongoAvroConverter transformer = new MongoAvroConverter(schema);
     String createSampleId = "55555505d648da1824d45a1d";
-    assertEquals(createSampleId, transformer.readKey(sampleKeyStr));
+    assertEquals(createSampleId, transformer.getDocumentId(sampleKeyStr));
   }
 
   @Test
@@ -48,7 +49,7 @@ public class TestMongoAvroConverter {
 
     String updateSampleId = "55555505d648da1824d45a1d";
     String updateSampleOp = "u";
-    Long updateSampleTsMs = 1587506573735L;
+    Long updateSampleTsMs = 1587409166000L;
     String updateSamplePatch = "{\"$v\": 1,\"$set\": {\"e\": false,\"l\": {\"$date\":1587409165984}}}";
 
     assertEquals(updateSampleId, resultUpdate.get("_id"));
@@ -58,8 +59,7 @@ public class TestMongoAvroConverter {
 
     String createSampleId = "55555505d648da1824d45a1d";
     String createSampleOp = "c";
-    Long createSampleTsMs = 1587506600617L;
-    String createSamplePatch = "null";
+    Long createSampleTsMs = 1587403470000L;
     String createSampleIpc = "USD";
     Boolean createSampleLfd = false;
     Boolean createSampleCb = false;
@@ -71,7 +71,7 @@ public class TestMongoAvroConverter {
     assertEquals(createSampleId, resultCreate.get("_id"));
     assertEquals(createSampleOp, resultCreate.get("_op"));
     assertEquals(createSampleTsMs, resultCreate.get("_ts_ms"));
-    assertEquals(createSamplePatch, resultCreate.get("_patch"));
+    assertNull(resultCreate.get("_patch"));
     assertEquals(createSampleIpc, resultCreate.get("incentive_payment_currency"));
     assertEquals(createSampleLfd, resultCreate.get("logistic_fee_deducted"));
     assertEquals(createSampleCb, resultCreate.get("chargeback"));
