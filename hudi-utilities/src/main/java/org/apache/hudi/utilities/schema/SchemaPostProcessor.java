@@ -23,37 +23,36 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import java.io.Serializable;
+
 /**
- * SchemaProvider which uses separate Schema Providers for source and target.
+ * Used in {@link SchemaProvider} to modify schema before it is passed to the caller. Can be used to
+ * add marker fields in records with no fields, make everything optional, ...
  */
-public class DelegatingSchemaProvider extends SchemaProvider {
+public abstract class SchemaPostProcessor implements Serializable {
 
-  private final SchemaProvider sourceSchemaProvider;
-  private final SchemaProvider targetSchemaProvider;
-
-  public DelegatingSchemaProvider(TypedProperties props,
-      JavaSparkContext jssc,
-      SchemaProvider sourceSchemaProvider, SchemaProvider targetSchemaProvider) {
-    super(props, jssc);
-    this.sourceSchemaProvider = sourceSchemaProvider;
-    this.targetSchemaProvider = targetSchemaProvider;
+  /** Configs supported. */
+  public static class Config {
+    public static final String SCHEMA_POST_PROCESSOR_PROP =
+        "hoodie.deltastreamer.schemaprovider.schema_post_processor";
   }
 
-  @Override
-  public Schema getSourceSchema() {
-    return sourceSchemaProvider.getSourceSchema();
+  private static final long serialVersionUID = 1L;
+
+  protected TypedProperties config;
+
+  protected JavaSparkContext jssc;
+
+  protected SchemaPostProcessor(TypedProperties props, JavaSparkContext jssc) {
+    this.config = props;
+    this.jssc = jssc;
   }
 
-  @Override
-  public Schema getTargetSchema() {
-    return targetSchemaProvider.getTargetSchema();
-  }
-
-  public SchemaProvider getSourceSchemaProvider() {
-    return sourceSchemaProvider;
-  }
-
-  public SchemaProvider getTargetSchemaProvider() {
-    return targetSchemaProvider;
-  }
+  /**
+   * Rewrites schema.
+   *
+   * @param schema input schema.
+   * @return modified schema.
+   */
+  public abstract Schema processSchema(Schema schema);
 }

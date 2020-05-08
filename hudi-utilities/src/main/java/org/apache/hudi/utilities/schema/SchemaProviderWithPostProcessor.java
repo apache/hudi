@@ -18,42 +18,37 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.hudi.common.config.TypedProperties;
-
 import org.apache.avro.Schema;
-import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.hudi.common.util.Option;
 
 /**
- * SchemaProvider which uses separate Schema Providers for source and target.
+ * A schema provider which applies schema post process hook on schema.
  */
-public class DelegatingSchemaProvider extends SchemaProvider {
+public class SchemaProviderWithPostProcessor extends SchemaProvider {
 
-  private final SchemaProvider sourceSchemaProvider;
-  private final SchemaProvider targetSchemaProvider;
+  private final SchemaProvider schemaProvider;
+  private final Option<SchemaPostProcessor> schemaPostProcessor;
 
-  public DelegatingSchemaProvider(TypedProperties props,
-      JavaSparkContext jssc,
-      SchemaProvider sourceSchemaProvider, SchemaProvider targetSchemaProvider) {
-    super(props, jssc);
-    this.sourceSchemaProvider = sourceSchemaProvider;
-    this.targetSchemaProvider = targetSchemaProvider;
+  public SchemaProviderWithPostProcessor(SchemaProvider schemaProvider,
+      Option<SchemaPostProcessor> schemaPostProcessor) {
+    super(null, null);
+    this.schemaProvider = schemaProvider;
+    this.schemaPostProcessor = schemaPostProcessor;
   }
 
   @Override
   public Schema getSourceSchema() {
-    return sourceSchemaProvider.getSourceSchema();
+    return schemaPostProcessor.map(processor -> processor.processSchema(schemaProvider.getSourceSchema()))
+        .orElse(schemaProvider.getSourceSchema());
   }
 
   @Override
   public Schema getTargetSchema() {
-    return targetSchemaProvider.getTargetSchema();
+    return schemaPostProcessor.map(processor -> processor.processSchema(schemaProvider.getTargetSchema()))
+        .orElse(schemaProvider.getTargetSchema());
   }
 
-  public SchemaProvider getSourceSchemaProvider() {
-    return sourceSchemaProvider;
-  }
-
-  public SchemaProvider getTargetSchemaProvider() {
-    return targetSchemaProvider;
+  public SchemaProvider getOriginalSchemaProvider() {
+    return schemaProvider;
   }
 }
