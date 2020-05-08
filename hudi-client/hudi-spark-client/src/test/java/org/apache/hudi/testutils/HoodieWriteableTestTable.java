@@ -131,7 +131,7 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
     String fileName = baseFileName(currentInstantTime, fileId);
 
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-        new AvroSchemaConverter().convert(schema), schema, filter);
+        new AvroSchemaConverter().convert(schema), schema, filter, false);
     HoodieAvroParquetConfig config = new HoodieAvroParquetConfig(writeSupport, CompressionCodecName.GZIP,
         ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
         new Configuration(), Double.parseDouble(HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO));

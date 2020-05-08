@@ -52,7 +52,7 @@ public class TestHoodieAvroWriteSupport {
         1000, 0.0001, 10000,
         BloomFilterTypeCode.SIMPLE.name());
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-        new AvroSchemaConverter().convert(schema), schema, filter);
+        new AvroSchemaConverter().convert(schema), schema, filter, false);
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
         120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE);
     for (String rowKey : rowKeys) {
