@@ -24,6 +24,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.keygen.MultiFormatTimestampBasedKeyGenerator;
 import org.junit.Before;
 import org.junit.Test;
@@ -175,7 +176,7 @@ public class TestMultiFormatTimestampBasedKeyGenerator {
     assertEquals("2020040109", hk1.getPartitionPath());
   }
 
-  @Test(expected = Exception.class)
+  @Test(expected = HoodieDeltaStreamerException.class)
   public void test_Throws_MultipleInputFormats_InputDateNotMatchingFormats() {
     baseRecord.put("createTime", "2020-04-01 13:01:33.123-05:00");
     properties = this.getBaseKeyConfig(

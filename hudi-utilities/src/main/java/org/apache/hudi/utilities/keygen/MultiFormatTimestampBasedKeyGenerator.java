@@ -67,7 +67,7 @@ public class MultiFormatTimestampBasedKeyGenerator extends SimpleKeyGenerator {
     private static final String TIMESTAMP_TYPE_FIELD_PROP                             = "hoodie.deltastreamer.keygen.timebased.timestamp.type";
 
     private static final String TIMESTAMP_INPUT_DATE_FORMAT_LIST_PROP                 = "hoodie.deltastreamer.keygen.timebased.input.dateformatlist";
-    private static final String TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMETER_REGEX_PROP = "hoodie.deltastreamer.keygen.timebased.input.dateformatlistdelimiterregex";
+    private static final String TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP = "hoodie.deltastreamer.keygen.timebased.input.dateformatlistdelimiterregex";
     private static final String TIMESTAMP_INPUT_TIMEZONE_FORMAT_PROP                  = "hoodie.deltastreamer.keygen.timebased.input.timezone";
 
     private static final String TIMESTAMP_OUTPUT_DATE_FORMAT_PROP                     = "hoodie.deltastreamer.keygen.timebased.output.dateformat";
@@ -86,11 +86,11 @@ public class MultiFormatTimestampBasedKeyGenerator extends SimpleKeyGenerator {
     this.outputDateFormat = config.getString(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP);
     this.configInputDateFormatList = config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_PROP, "");
 
-    String inputDateFormatDelimiter = this.config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMETER_REGEX_PROP, ",").trim();
+    String inputDateFormatDelimiter = this.config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP, ",").trim();
     inputDateFormatDelimiter = inputDateFormatDelimiter.isEmpty() ? "," : inputDateFormatDelimiter;
     this.configInputDateFormatDelimiter = inputDateFormatDelimiter;
 
-    if (inputTimeZone != null && !inputTimeZone.trim().isEmpty()) {
+    if (!inputTimeZone.trim().isEmpty()) {
       this.inputDateTimeZone = DateTimeZone.forTimeZone(TimeZone.getTimeZone(config.getString(Config.TIMESTAMP_INPUT_TIMEZONE_FORMAT_PROP, "")));
     } else {
       this.inputDateTimeZone = null;
@@ -115,9 +115,8 @@ public class MultiFormatTimestampBasedKeyGenerator extends SimpleKeyGenerator {
     DateTimeFormatter formatter = new DateTimeFormatterBuilder()
             .append(
                     null,
-                    Arrays.asList(
+                    Arrays.stream(
                             this.configInputDateFormatList.split(this.configInputDateFormatDelimiter))
-                            .stream()
                             .map(String::trim)
                             .map(DateTimeFormat::forPattern)
                             .map(DateTimeFormatter::getParser)
