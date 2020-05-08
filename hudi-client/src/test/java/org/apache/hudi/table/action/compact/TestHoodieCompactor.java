@@ -104,7 +104,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   @Test
   public void testCompactionOnCopyOnWriteFail() throws Exception {
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
-    HoodieTable<?> table = HoodieTable.create(metaClient, getConfig(), jsc);
+    HoodieTable<?> table = HoodieTable.create(metaClient, getConfig(), hadoopConf);
     String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
     assertThrows(HoodieNotSupportedException.class, () -> {
       table.scheduleCompaction(jsc, compactionInstantTime, Option.empty());
@@ -116,7 +116,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   public void testCompactionEmpty() throws Exception {
     HoodieWriteConfig config = getConfig();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
     try (HoodieWriteClient writeClient = getWriteClient(config);) {
 
       String newCommitTime = writeClient.startCommit();
@@ -143,7 +143,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       writeClient.insert(recordsRDD, newCommitTime).collect();
 
       // Update all the 100 records
-      HoodieTable table = HoodieTable.create(config, jsc);
+      HoodieTable table = HoodieTable.create(config, hadoopConf);
       newCommitTime = "101";
       writeClient.startCommitWithTime(newCommitTime);
 
@@ -157,7 +157,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
           HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, updatedRecords);
 
       // Verify that all data file has one log file
-      table = HoodieTable.create(config, jsc);
+      table = HoodieTable.create(config, hadoopConf);
       for (String partitionPath : dataGen.getPartitionPaths()) {
         List<FileSlice> groupedLogFiles =
             table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
@@ -168,7 +168,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       HoodieTestUtils.createDeltaCommitFiles(basePath, newCommitTime);
 
       // Do a compaction
-      table = HoodieTable.create(config, jsc);
+      table = HoodieTable.create(config, hadoopConf);
       String compactionInstantTime = "102";
       table.scheduleCompaction(jsc, compactionInstantTime, Option.empty());
       table.getMetaClient().reloadActiveTimeline();

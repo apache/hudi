@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieClientTestUtils;
@@ -79,15 +80,16 @@ public class HoodieClientExample {
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
     sparkConf.set("spark.kryoserializer.buffer.max", "512m");
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    Configuration hadoopConf = jsc.hadoopConfiguration();
 
     // Generator of some records to be loaded in.
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
     // initialize the table, if not done already
     Path path = new Path(tablePath);
-    FileSystem fs = FSUtils.getFs(tablePath, jsc.hadoopConfiguration());
+    FileSystem fs = FSUtils.getFs(tablePath, hadoopConf);
     if (!fs.exists(path)) {
-      HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType),
+      HoodieTableMetaClient.initTableType(hadoopConf, tablePath, HoodieTableType.valueOf(tableType),
           tableName, HoodieAvroPayload.class.getName());
     }
 

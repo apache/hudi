@@ -19,6 +19,8 @@
 package org.apache.hudi.table.action;
 
 import java.io.Serializable;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -26,6 +28,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 public abstract class BaseActionExecutor<R> implements Serializable {
 
   protected final transient JavaSparkContext jsc;
+
+  protected final transient Configuration hadoopConf;
 
   protected final HoodieWriteConfig config;
 
@@ -35,6 +39,7 @@ public abstract class BaseActionExecutor<R> implements Serializable {
 
   public BaseActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable<?> table, String instantTime) {
     this.jsc = jsc;
+    this.hadoopConf = jsc.hadoopConfiguration();
     this.config = config;
     this.table = table;
     this.instantTime = instantTime;

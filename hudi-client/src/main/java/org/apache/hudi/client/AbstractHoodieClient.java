@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.fs.FSUtils;
@@ -43,6 +44,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
 
   protected final transient FileSystem fs;
   protected final transient JavaSparkContext jsc;
+  protected final transient Configuration hadoopConf;
   protected final HoodieWriteConfig config;
   protected final String basePath;
 
@@ -60,8 +62,9 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
 
   protected AbstractHoodieClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineServer) {
-    this.fs = FSUtils.getFs(clientConfig.getBasePath(), jsc.hadoopConfiguration());
     this.jsc = jsc;
+    this.hadoopConf = jsc.hadoopConfiguration();
+    this.fs = FSUtils.getFs(clientConfig.getBasePath(), hadoopConf);
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;
     this.timelineServer = timelineServer;
@@ -96,7 +99,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
       if (!timelineServer.isPresent()) {
         // Run Embedded Timeline Server
         LOG.info("Starting Timeline service !!");
-        timelineServer = Option.of(new EmbeddedTimelineService(jsc.hadoopConfiguration(), jsc.getConf(),
+        timelineServer = Option.of(new EmbeddedTimelineService(hadoopConf, jsc.getConf(),
             config.getClientSpecifiedViewStorageConfig()));
         try {
           timelineServer.get().startServer();
@@ -119,6 +122,6 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   }
 
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
-    return ClientUtils.createMetaClient(jsc, config, loadActiveTimelineOnLoad);
+    return ClientUtils.createMetaClient(hadoopConf, config, loadActiveTimelineOnLoad);
   }
 }

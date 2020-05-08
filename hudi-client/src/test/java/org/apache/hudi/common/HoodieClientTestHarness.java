@@ -50,6 +50,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestHarness.class);
 
   protected transient JavaSparkContext jsc = null;
+  protected transient Configuration hadoopConf = null;
   protected transient SQLContext sqlContext;
   protected transient FileSystem fs;
   protected transient HoodieTestDataGenerator dataGen = null;
@@ -102,6 +103,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected void initSparkContexts(String appName) {
     // Initialize a local spark env
     jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName));
+    hadoopConf = jsc.hadoopConfiguration();
     jsc.setLogLevel("ERROR");
 
     // SQLContext stuff
@@ -142,7 +144,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       throw new IllegalStateException("The Spark context has not been initialized.");
     }
 
-    initFileSystemWithConfiguration(jsc.hadoopConfiguration());
+    initFileSystemWithConfiguration(hadoopConf);
   }
 
   /**
@@ -179,7 +181,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       throw new IllegalStateException("The Spark context has not been initialized.");
     }
 
-    metaClient = HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, getTableType());
+    metaClient = HoodieTestUtils.init(hadoopConf, basePath, getTableType());
   }
 
   /**
