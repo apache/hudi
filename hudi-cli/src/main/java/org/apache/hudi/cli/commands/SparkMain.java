@@ -82,17 +82,17 @@ public class SparkMain {
         break;
       case IMPORT:
       case UPSERT:
-        assert (args.length >= 12);
+        assert (args.length >= 13);
         String propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[11])) {
-          propsFilePath = args[11];
+        if (!StringUtils.isNullOrEmpty(args[12])) {
+          propsFilePath = args[12];
         }
         List<String> configs = new ArrayList<>();
-        if (args.length > 12) {
-          configs.addAll(Arrays.asList(args).subList(12, args.length));
+        if (args.length > 13) {
+          configs.addAll(Arrays.asList(args).subList(13, args.length));
         }
-        returnCode = dataLoad(jsc, command, args[1], args[2], args[3], args[4], args[5], args[6],
-            Integer.parseInt(args[7]), args[8], args[9], Integer.parseInt(args[10]), propsFilePath, configs);
+        returnCode = dataLoad(jsc, command, args[3], args[4], args[5], args[6], args[7], args[8],
+            Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
         break;
       case COMPACT_RUN:
         assert (args.length >= 9);
@@ -163,7 +163,7 @@ public class SparkMain {
   private static boolean sparkMasterContained(SparkCommand command) {
     List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
         SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN,
-        SparkCommand.DEDUPLICATE);
+        SparkCommand.IMPORT, SparkCommand.UPSERT, SparkCommand.DEDUPLICATE);
     return masterContained.contains(command);
   }
 
@@ -177,7 +177,7 @@ public class SparkMain {
   }
 
   private static int dataLoad(JavaSparkContext jsc, String command, String srcPath, String targetPath, String tableName,
-      String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile, String sparkMemory,
+      String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile,
       int retry, String propsFilePath, List<String> configs) {
     Config cfg = new Config();
     cfg.command = command;
@@ -191,7 +191,6 @@ public class SparkMain {
     cfg.schemaFile = schemaFile;
     cfg.propsFilePath = propsFilePath;
     cfg.configs = configs;
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
     return new HDFSParquetImporter(cfg).dataImport(jsc, retry);
   }
 
