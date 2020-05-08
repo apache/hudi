@@ -396,17 +396,17 @@ Property: `hoodie.compaction.daybased.target` <br/>
 Property: `hoodie.compaction.payload.class` <br/>
 <span style="color:grey">This needs to be same as class used during insert/upserts. Just like writing, compaction also uses the record payload class to merge records in the log against each other, merge again with the base file and produce the final record to be written after compaction.</span>
 
-
 ### Metrics configs
+
 Enables reporting on Hudi metrics.
 [withMetricsConfig](#withMetricsConfig) (HoodieMetricsConfig) <br/>
-<span style="color:grey">Hudi publishes metrics on every commit, clean, rollback etc.The following sections list the supported reporters.</span>
+<span style="color:grey">Hudi publishes metrics on every commit, clean, rollback etc. The following sections list the supported reporters.</span>
 
 #### GRAPHITE
 
-##### on(metricsOn = true) {#on}
+##### on(metricsOn = false) {#on}
 `hoodie.metrics.on` <br/>
-<span style="color:grey">Turn sending metrics on/off. on by default.</span>
+<span style="color:grey">Turn on/off metrics reporting. off by default.</span>
 
 ##### withReporterType(reporterType = GRAPHITE) {#withReporterType}
 Property: `hoodie.metrics.reporter.type` <br/>
@@ -426,9 +426,9 @@ Property: `hoodie.metrics.graphite.metric.prefix` <br/>
 
 #### JMX
 
-##### on(metricsOn = true) {#on}
+##### on(metricsOn = false) {#on}
 `hoodie.metrics.on` <br/>
-<span style="color:grey">Turn sending metrics on/off. on by default.</span>
+<span style="color:grey">Turn on/off metrics reporting. off by default.</span>
 
 ##### withReporterType(reporterType = JMX) {#withReporterType}
 Property: `hoodie.metrics.reporter.type` <br/>
@@ -442,10 +442,52 @@ Property: `hoodie.metrics.jmx.host` <br/>
 Property: `hoodie.metrics.jmx.port` <br/>
 <span style="color:grey">Jmx port to connect to</span>
 
-##### usePrefix(prefix = "") {#usePrefix}
-Property: `hoodie.metrics.jmx.metric.prefix` <br/>
-<span style="color:grey">Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g</span>
-    
+#### DATADOG
+
+##### on(metricsOn = false) {#on}
+`hoodie.metrics.on` <br/>
+<span style="color:grey">Turn on/off metrics reporting. off by default.</span>
+
+##### withReporterType(reporterType = DATADOG) {#withReporterType}
+Property: `hoodie.metrics.reporter.type` <br/>
+<span style="color:grey">Type of metrics reporter.</span>
+
+##### withDatadogReportPeriodSeconds(period = 30) {#withDatadogReportPeriodSeconds}
+Property: `hoodie.metrics.datadog.report.period.seconds` <br/>
+<span style="color:grey">Datadog report period in seconds. Default to 30.</span>
+
+##### withDatadogApiSite(apiSite) {#withDatadogApiSite}
+Property: `hoodie.metrics.datadog.api.site` <br/>
+<span style="color:grey">Datadog API site: EU or US</span>
+
+##### withDatadogApiKey(apiKey) {#withDatadogApiKey}
+Property: `hoodie.metrics.datadog.api.key` <br/>
+<span style="color:grey">Datadog API key</span>
+
+##### withDatadogApiKeySkipValidation(skip = false) {#withDatadogApiKeySkipValidation}
+Property: `hoodie.metrics.datadog.api.key.skip.validation` <br/>
+<span style="color:grey">Before sending metrics via Datadog API, whether to skip validating Datadog API key or not. Default to false.</span>
+
+##### withDatadogApiKeySupplier(apiKeySupplier) {#withDatadogApiKeySupplier}
+Property: `hoodie.metrics.datadog.api.key.supplier` <br/>
+<span style="color:grey">Datadog API key supplier to supply the API key at runtime. This will take effect if `hoodie.metrics.datadog.api.key` is not set.</span>
+
+##### withDatadogApiTimeoutSeconds(timeout = 3) {#withDatadogApiTimeoutSeconds}
+Property: `hoodie.metrics.datadog.metric.prefix` <br/>
+<span style="color:grey">Datadog API timeout in seconds. Default to 3.</span>
+
+##### withDatadogPrefix(prefix) {#withDatadogPrefix}
+Property: `hoodie.metrics.datadog.metric.prefix` <br/>
+<span style="color:grey">Datadog metric prefix to be prepended to each metric name with a dot as delimiter. For example, if it is set to `foo`, `foo.` will be prepended.</span>
+
+##### withDatadogHost(host) {#withDatadogHost}
+Property: `hoodie.metrics.datadog.metric.host` <br/>
+<span style="color:grey">Datadog metric host to be sent along with metrics data.</span>
+
+##### withDatadogTags(tags) {#withDatadogTags}
+Property: `hoodie.metrics.datadog.metric.tags` <br/>
+<span style="color:grey">Datadog metric tags (comma-delimited) to be sent along with metrics data.</span>
+
 ### Memory configs
 Controls memory usage for compaction and merges, performed internally by Hudi
 [withMemoryConfig](#withMemoryConfig) (HoodieMemoryConfig) <br/>

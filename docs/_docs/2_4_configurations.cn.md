@@ -439,9 +439,9 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 
 #### GRAPHITE
 
-##### on(metricsOn = true) {#on}
+##### on(metricsOn = false) {#on}
 属性：`hoodie.metrics.on` <br/>
-<span style="color:grey">打开或关闭发送指标。默认情况下处于启用状态。</span>
+<span style="color:grey">打开或关闭发送指标。默认情况下处于关闭状态。</span>
 
 ##### withReporterType(reporterType = GRAPHITE) {#withReporterType}
 属性：`hoodie.metrics.reporter.type` <br/>
@@ -461,9 +461,9 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 
 #### JMX
 
-##### on(metricsOn = true) {#on}
+##### on(metricsOn = false) {#on}
 属性：`hoodie.metrics.on` <br/>
-<span style="color:grey">打开或关闭发送指标。默认情况下处于启用状态。</span>
+<span style="color:grey">打开或关闭发送指标。默认情况下处于关闭状态。</span>
 
 ##### withReporterType(reporterType = JMX) {#withReporterType}
 属性：`hoodie.metrics.reporter.type` <br/>
@@ -477,10 +477,52 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 属性：`hoodie.metrics.graphite.port` <br/>
 <span style="color:grey">要连接的Jmx端口</span>
 
-##### usePrefix(prefix = "") {#usePrefix}
-属性：`hoodie.metrics.jmx.metric.prefix` <br/>
-<span style="color:grey">适用于所有指标的标准前缀。这有助于添加如数据中心、环境等信息</span>
-    
+#### DATADOG
+
+##### on(metricsOn = false) {#on}
+属性：`hoodie.metrics.on` <br/>
+<span style="color:grey">打开或关闭发送指标。默认情况下处于关闭状态。</span>
+
+##### withReporterType(reporterType = DATADOG) {#withReporterType}
+属性： `hoodie.metrics.reporter.type` <br/>
+<span style="color:grey">指标报告者的类型。</span>
+
+##### withDatadogReportPeriodSeconds(period = 30) {#withDatadogReportPeriodSeconds}
+属性： `hoodie.metrics.datadog.report.period.seconds` <br/>
+<span style="color:grey">Datadog报告周期，单位为秒，默认30秒。</span>
+
+##### withDatadogApiSite(apiSite) {#withDatadogApiSite}
+属性： `hoodie.metrics.datadog.api.site` <br/>
+<span style="color:grey">Datadog API站点：EU 或者 US</span>
+
+##### withDatadogApiKey(apiKey) {#withDatadogApiKey}
+属性： `hoodie.metrics.datadog.api.key` <br/>
+<span style="color:grey">Datadog API密匙</span>
+
+##### withDatadogApiKeySkipValidation(skip = false) {#withDatadogApiKeySkipValidation}
+属性： `hoodie.metrics.datadog.api.key.skip.validation` <br/>
+<span style="color:grey">在通过Datadog API发送指标前，选择是否跳过验证API密匙。默认不跳过。</span>
+
+##### withDatadogApiKeySupplier(apiKeySupplier) {#withDatadogApiKeySupplier}
+属性： `hoodie.metrics.datadog.api.key.supplier` <br/>
+<span style="color:grey">Datadog API 密匙提供者，用来在运行时提供密匙。只有当`hoodie.metrics.datadog.api.key`未设定的情况下才有效。</span>
+
+##### withDatadogApiTimeoutSeconds(timeout = 3) {#withDatadogApiTimeoutSeconds}
+属性： `hoodie.metrics.datadog.metric.prefix` <br/>
+<span style="color:grey">Datadog API超时时长，单位为秒，默认3秒。</span>
+
+##### withDatadogPrefix(prefix) {#withDatadogPrefix}
+属性： `hoodie.metrics.datadog.metric.prefix` <br/>
+<span style="color:grey">Datadog指标前缀。将被加在所有指标名称前，以点间隔。例如：如果设成`foo`，`foo.`将被用作实际前缀。</span>
+
+##### withDatadogHost(host) {#withDatadogHost}
+属性： `hoodie.metrics.datadog.metric.host` <br/>
+<span style="color:grey">Datadog指标主机，将和指标数据一并发送。</span>
+
+##### withDatadogTags(tags) {#withDatadogTags}
+属性： `hoodie.metrics.datadog.metric.tags` <br/>
+<span style="color:grey">Datadog指标标签（逗号分隔），将和指标数据一并发送。</span>
+
 ### 内存配置
 控制由Hudi内部执行的压缩和合并的内存使用情况
 [withMemoryConfig](#withMemoryConfig) (HoodieMemoryConfig) <br/>
