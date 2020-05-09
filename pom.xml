@@ -570,6 +570,20 @@
         <version>4.3.6</version>
       </dependency>
 
+
+      <!-- alluxio -->
+      <dependency>
+        <groupId>org.alluxio</groupId>
+        <artifactId>alluxio-core-client-hdfs</artifactId>
+        <version>2.2.0</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-api</artifactId>
+        <version>1.27.0</version>
+      </dependency>
+
       <!-- Jackson -->
       <dependency>
         <groupId>org.codehaus.jackson</groupId>

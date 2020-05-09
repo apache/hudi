@@ -76,6 +76,7 @@ public class FSUtils {
   public static Configuration prepareHadoopConf(Configuration conf) {
     conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
     conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
+    conf.set("fs.alluxio.impl", alluxio.hadoop.FileSystem.class.getName());
 
     // look for all properties, prefixed to be picked up
     for (Entry<String, String> prop : System.getenv().entrySet()) {
