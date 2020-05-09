@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive;
+package org.apache.hudi.hive.testutils;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -41,7 +41,9 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.SchemaTestUtil;
-import org.apache.hudi.hive.util.HiveTestService;
+import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.hive.HoodieHiveClient;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -85,9 +87,9 @@ public class TestUtil {
   private static HiveServer2 hiveServer;
   private static HiveTestService hiveTestService;
   private static Configuration configuration;
-  static HiveSyncConfig hiveSyncConfig;
+  public static HiveSyncConfig hiveSyncConfig;
   private static DateTimeFormatter dtfOut;
-  static FileSystem fileSystem;
+  public static FileSystem fileSystem;
   private static Set<String> createdTablesSet = new HashSet<>();
 
   public static void setUp() throws IOException, InterruptedException {
@@ -122,7 +124,7 @@ public class TestUtil {
     clear();
   }
 
-  static void clear() throws IOException {
+  public static void clear() throws IOException {
     fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
     HoodieTableMetaClient.initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
         hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
@@ -136,7 +138,7 @@ public class TestUtil {
     client.updateHiveSQL("create database " + hiveSyncConfig.databaseName);
   }
 
-  static HiveConf getHiveConf() {
+  public static HiveConf getHiveConf() {
     return hiveServer.getHiveConf();
   }
 
@@ -155,7 +157,7 @@ public class TestUtil {
     }
   }
 
-  static void createCOWTable(String instantTime, int numberOfPartitions, boolean useSchemaFromCommitMetadata)
+  public static void createCOWTable(String instantTime, int numberOfPartitions, boolean useSchemaFromCommitMetadata)
       throws IOException, URISyntaxException {
     Path path = new Path(hiveSyncConfig.basePath);
     FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
@@ -170,7 +172,7 @@ public class TestUtil {
     createCommitFile(commitMetadata, instantTime);
   }
 
-  static void createMORTable(String commitTime, String deltaCommitTime, int numberOfPartitions,
+  public static void createMORTable(String commitTime, String deltaCommitTime, int numberOfPartitions,
       boolean createDeltaCommit, boolean useSchemaFromCommitMetadata)
       throws IOException, URISyntaxException, InterruptedException {
     Path path = new Path(hiveSyncConfig.basePath);
@@ -200,7 +202,7 @@ public class TestUtil {
     }
   }
 
-  static void addCOWPartitions(int numberOfPartitions, boolean isParquetSchemaSimple,
+  public static void addCOWPartitions(int numberOfPartitions, boolean isParquetSchemaSimple,
       boolean useSchemaFromCommitMetadata, DateTime startFrom, String instantTime) throws IOException, URISyntaxException {
     HoodieCommitMetadata commitMetadata =
         createPartitions(numberOfPartitions, isParquetSchemaSimple, useSchemaFromCommitMetadata, startFrom, instantTime);
@@ -208,7 +210,7 @@ public class TestUtil {
     createCommitFile(commitMetadata, instantTime);
   }
 
-  static void addMORPartitions(int numberOfPartitions, boolean isParquetSchemaSimple, boolean isLogSchemaSimple,
+  public static void addMORPartitions(int numberOfPartitions, boolean isParquetSchemaSimple, boolean isLogSchemaSimple,
       boolean useSchemaFromCommitMetadata, DateTime startFrom, String instantTime, String deltaCommitTime)
       throws IOException, URISyntaxException, InterruptedException {
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions, isParquetSchemaSimple,

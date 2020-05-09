@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.util;
+package org.apache.hudi.hive.testutils;
 
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;

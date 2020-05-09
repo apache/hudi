@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveClient;
-import org.apache.hudi.hive.util.HiveTestService;
+import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
 
