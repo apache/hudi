@@ -73,20 +73,20 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
         .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.HBASE)
             .withHBaseIndexConfig(new HoodieHBaseIndexConfig.Builder().build()).build())
         .build();
-    assertTrue(HoodieIndex.createIndex(config, jsc) instanceof HBaseIndex);
+    assertTrue(HoodieIndex.createIndex(config) instanceof HBaseIndex);
     config = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
-    assertTrue(HoodieIndex.createIndex(config, jsc) instanceof InMemoryHashIndex);
+    assertTrue(HoodieIndex.createIndex(config) instanceof InMemoryHashIndex);
     config = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
-    assertTrue(HoodieIndex.createIndex(config, jsc) instanceof HoodieBloomIndex);
+    assertTrue(HoodieIndex.createIndex(config) instanceof HoodieBloomIndex);
     config = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.GLOBAL_BLOOM).build()).build();
-    assertTrue(HoodieIndex.createIndex(config, jsc) instanceof HoodieGlobalBloomIndex);
+    assertTrue(HoodieIndex.createIndex(config) instanceof HoodieGlobalBloomIndex);
 
     config = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexClass(DummyHoodieIndex.class.getName()).build()).build();
-    assertTrue(HoodieIndex.createIndex(config, jsc) instanceof DummyHoodieIndex);
+    assertTrue(HoodieIndex.createIndex(config) instanceof DummyHoodieIndex);
   }
 
   @Test
@@ -94,14 +94,14 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     final HoodieWriteConfig config1 = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexClass(IndexWithConstructor.class.getName()).build()).build();
     final Throwable thrown1 = assertThrows(HoodieException.class, () -> {
-      HoodieIndex.createIndex(config1, jsc);
+      HoodieIndex.createIndex(config1);
     }, "exception is expected");
     assertTrue(thrown1.getMessage().contains("is not a subclass of HoodieIndex"));
 
     final HoodieWriteConfig config2 = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexClass(IndexWithoutConstructor.class.getName()).build()).build();
     final Throwable thrown2 = assertThrows(HoodieException.class, () -> {
-      HoodieIndex.createIndex(config2, jsc);
+      HoodieIndex.createIndex(config2);
     }, "exception is expected");
     assertTrue(thrown2.getMessage().contains("Unable to instantiate class"));
   }

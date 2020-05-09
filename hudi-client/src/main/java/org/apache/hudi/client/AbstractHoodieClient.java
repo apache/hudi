@@ -119,6 +119,6 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   }
 
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
-    return ClientUtils.createMetaClient(jsc, config, loadActiveTimelineOnLoad);
+    return ClientUtils.createMetaClient(jsc.hadoopConfiguration(), config, loadActiveTimelineOnLoad);
   }
 }

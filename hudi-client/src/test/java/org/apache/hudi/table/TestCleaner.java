@@ -138,7 +138,7 @@ public class TestCleaner extends TestHoodieClientBase {
           "The clean instant should be the same as the commit instant");
     }
 
-    HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
+    HoodieIndex index = HoodieIndex.createIndex(cfg);
     List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), jsc, table).collect();
     checkTaggedRecords(taggedRecords, newCommitTime);
   }
