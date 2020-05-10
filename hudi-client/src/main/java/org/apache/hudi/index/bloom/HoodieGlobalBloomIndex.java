@@ -86,7 +86,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
 
     IndexFileFilter indexFileFilter =
-        config.getBloomIndexPruneByRanges() ? new IntervalTreeBasedGlobalIndexFileFilter(partitionToFileIndexInfo)
+        config.useBloomIndexTreebasedFilter() ? new IntervalTreeBasedGlobalIndexFileFilter(partitionToFileIndexInfo)
             : new ListBasedGlobalIndexFileFilter(partitionToFileIndexInfo);
 
     return partitionRecordKeyPairRDD.map(partitionRecordKeyPair -> {
