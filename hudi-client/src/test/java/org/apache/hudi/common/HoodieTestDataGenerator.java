@@ -216,12 +216,23 @@ public class HoodieTestDataGenerator {
         });
   }
 
-  public static void createCompactionRequestedFile(String basePath, String commitTime, Configuration configuration)
+  public static void createEmptyCleanRequestedFile(String basePath, String instantTime, Configuration configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeRequestedCompactionFileName(commitTime));
+        + HoodieTimeline.makeRequestedCleanerFileName(instantTime));
+    createEmptyFile(basePath, commitFile, configuration);
+  }
+
+  public static void createCompactionRequestedFile(String basePath, String instantTime, Configuration configuration)
+      throws IOException {
+    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + HoodieTimeline.makeRequestedCompactionFileName(instantTime));
+    createEmptyFile(basePath, commitFile, configuration);
+  }
+
+  private static void createEmptyFile(String basePath, Path filePath, Configuration configuration) throws IOException {
     FileSystem fs = FSUtils.getFs(basePath, configuration);
-    FSDataOutputStream os = fs.create(commitFile, true);
+    FSDataOutputStream os = fs.create(filePath, true);
     os.close();
   }
 

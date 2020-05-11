@@ -25,10 +25,12 @@ import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
@@ -147,14 +149,21 @@ public class RepairsCommand implements CommandMarker {
   public void removeCorruptedPendingCleanAction() {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-
-    activeTimeline.filterInflightsAndRequested().getInstants().forEach(instant -> {
+    HoodieTimeline cleanerTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline().getCleanerTimeline();
+    LOG.info("Inspecting pending clean metadata in timeline for corrupted files");
+    cleanerTimeline.filterInflightsAndRequested().getInstants().forEach(instant -> {
       try {
         CleanerUtils.getCleanerPlan(client, instant);
-      } catch (IOException e) {
-        LOG.warn("try to remove corrupted instant file: " + instant);
+      } catch (AvroRuntimeException e) {
+        LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
         FSUtils.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+      } catch (IOException ioe) {
+        if (ioe.getMessage().contains("Not an Avro data file")) {
+          LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
+          FSUtils.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+        } else {
+          throw new HoodieIOException(ioe.getMessage(), ioe);
+        }
       }
     });
   }
