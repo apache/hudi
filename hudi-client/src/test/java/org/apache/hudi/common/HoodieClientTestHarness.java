@@ -50,6 +50,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestHarness.class);
 
   protected transient JavaSparkContext jsc = null;
+  protected transient Configuration hadoopConf = null;
   protected transient SQLContext sqlContext;
   protected transient FileSystem fs;
   protected transient HoodieTestDataGenerator dataGen = null;
@@ -103,6 +104,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     // Initialize a local spark env
     jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName));
     jsc.setLogLevel("ERROR");
+    hadoopConf = jsc.hadoopConfiguration();
 
     // SQLContext stuff
     sqlContext = new SQLContext(jsc);

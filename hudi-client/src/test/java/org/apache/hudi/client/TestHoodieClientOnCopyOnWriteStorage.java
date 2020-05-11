@@ -809,7 +809,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-      HoodieTable table = HoodieTable.create(metaClient, cfg, jsc);
+      HoodieTable table = HoodieTable.create(metaClient, cfg, hadoopConf);
 
       String instantTime = "000";
       client.startCommitWithTime(instantTime);
