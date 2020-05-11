@@ -56,24 +56,29 @@ public class InLineFsDataInputStream extends FSDataInputStream {
 
   @Override
   public int read(long position, byte[] buffer, int offset, int length) throws IOException {
+    if ((length - offset) > this.length) {
+      throw new IOException("Attempting to read past inline content");
+    }
     return outerStream.read(startOffset + position, buffer, offset, length);
   }
 
   @Override
   public void readFully(long position, byte[] buffer, int offset, int length) throws IOException {
+    if ((length - offset) > this.length) {
+      throw new IOException("Attempting to read past inline content");
+    }
     outerStream.readFully(startOffset + position, buffer, offset, length);
   }
 
   @Override
   public void readFully(long position, byte[] buffer)
       throws IOException {
-    outerStream.readFully(startOffset + position, buffer, 0, buffer.length);
+    readFully(position, buffer, 0, buffer.length);
   }
 
   @Override
   public boolean seekToNewSource(long targetPos) throws IOException {
-    boolean toReturn = outerStream.seekToNewSource(startOffset + targetPos);
-    return toReturn;
+    return outerStream.seekToNewSource(startOffset + targetPos);
   }
 
   @Override
