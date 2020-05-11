@@ -44,7 +44,7 @@ public class TestDatadogMetricsReporter {
   MetricRegistry registry;
 
   @Test
-  public void instantiation_shouldFail_whenNoApiKey() {
+  public void instantiationShouldFailWhenNoApiKey() {
     when(config.getDatadogApiKey()).thenReturn("");
     Throwable t = assertThrows(IllegalStateException.class, () -> {
       new DatadogMetricsReporter(config, registry);
@@ -53,7 +53,7 @@ public class TestDatadogMetricsReporter {
   }
 
   @Test
-  public void instantiation_shouldFail_whenNoMetricPrefix() {
+  public void instantiationShouldFailWhenNoMetricPrefix() {
     when(config.getDatadogApiKey()).thenReturn("foo");
     when(config.getDatadogMetricPrefix()).thenReturn("");
     Throwable t = assertThrows(IllegalStateException.class, () -> {
@@ -63,7 +63,7 @@ public class TestDatadogMetricsReporter {
   }
 
   @Test
-  public void instantiation_shouldSucceed() {
+  public void instantiationShouldSucceed() {
     when(config.getDatadogApiSite()).thenReturn(ApiSite.EU);
     when(config.getDatadogApiKey()).thenReturn("foo");
     when(config.getDatadogApiKeySkipValidation()).thenReturn(true);

@@ -528,35 +528,43 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HoodieMetricsConfig.JMX_PORT);
   }
 
+  public int getDatadogReportPeriodSeconds() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsDatadogConfig.DATADOG_REPORT_PERIOD_SECONDS));
+  }
+
   public ApiSite getDatadogApiSite() {
-    return ApiSite.valueOf(props.getProperty(HoodieMetricsConfig.DATADOG_API_SITE));
+    return ApiSite.valueOf(props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_SITE));
   }
 
   public String getDatadogApiKey() {
-    if (props.containsKey(HoodieMetricsConfig.DATADOG_API_KEY)) {
-      return props.getProperty(HoodieMetricsConfig.DATADOG_API_KEY);
+    if (props.containsKey(HoodieMetricsDatadogConfig.DATADOG_API_KEY)) {
+      return props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_KEY);
     } else {
       Supplier<String> apiKeySupplier = ReflectionUtils.loadClass(
-          props.getProperty(HoodieMetricsConfig.DATADOG_API_KEY_SUPPLIER));
+          props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_KEY_SUPPLIER));
       return apiKeySupplier.get();
     }
   }
 
   public boolean getDatadogApiKeySkipValidation() {
-    return Boolean.parseBoolean(props.getProperty(HoodieMetricsConfig.DATADOG_API_KEY_SKIP_VALIDATION));
+    return Boolean.parseBoolean(props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_KEY_SKIP_VALIDATION));
+  }
+
+  public int getDatadogApiTimeoutSeconds() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_TIMEOUT_SECONDS));
   }
 
   public String getDatadogMetricPrefix() {
-    return props.getProperty(HoodieMetricsConfig.DATADOG_METRIC_PREFIX);
+    return props.getProperty(HoodieMetricsDatadogConfig.DATADOG_METRIC_PREFIX);
   }
 
   public String getDatadogMetricHost() {
-    return props.getProperty(HoodieMetricsConfig.DATADOG_METRIC_HOST);
+    return props.getProperty(HoodieMetricsDatadogConfig.DATADOG_METRIC_HOST);
   }
 
   public List<String> getDatadogMetricTags() {
     return Arrays.stream(props.getProperty(
-        HoodieMetricsConfig.DATADOG_METRIC_TAGS).split("\\s*,\\s*")).collect(Collectors.toList());
+        HoodieMetricsDatadogConfig.DATADOG_METRIC_TAGS).split("\\s*,\\s*")).collect(Collectors.toList());
   }
 
   /**

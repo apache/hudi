@@ -58,7 +58,7 @@ public class TestDatadogReporter {
   DatadogHttpClient client;
 
   @Test
-  public void stop_shouldCloseEnclosedClient() throws IOException {
+  public void stopShouldCloseEnclosedClient() throws IOException {
     new DatadogReporter(registry, client, "foo", Option.empty(), Option.empty(),
         MetricFilter.ALL, TimeUnit.SECONDS, TimeUnit.SECONDS).stop();
 
@@ -66,7 +66,7 @@ public class TestDatadogReporter {
   }
 
   @Test
-  public void stop_shouldLog_whenEnclosedClientFailToClose() throws IOException {
+  public void stopShouldLogWhenEnclosedClientFailToClose() throws IOException {
     Logger.getRootLogger().addAppender(appender);
     doThrow(IOException.class).when(client).close();
 
@@ -79,7 +79,7 @@ public class TestDatadogReporter {
   }
 
   @Test
-  public void prefix_shouldConcatPrefix() {
+  public void prefixShouldPrepend() {
     DatadogReporter reporter = new DatadogReporter(
         registry, client, "foo", Option.empty(), Option.empty(),
         MetricFilter.ALL, TimeUnit.SECONDS, TimeUnit.SECONDS);
@@ -87,7 +87,7 @@ public class TestDatadogReporter {
   }
 
   @Test
-  public void payloadBuilder_shouldBuildExpectedPayloadString() {
+  public void payloadBuilderShouldBuildExpectedPayloadString() {
     String payload = new PayloadBuilder()
         .withType("gauge")
         .addGauge("foo", 0, 0)

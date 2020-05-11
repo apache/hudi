@@ -78,7 +78,7 @@ public class TestDatadogHttpClient {
   }
 
   @Test
-  public void validateApiKey_shouldThrowException_whenRequestFailed() throws IOException {
+  public void validateApiKeyShouldThrowExceptionWhenRequestFailed() throws IOException {
     when(httpClient.execute(any())).thenThrow(IOException.class);
 
     Throwable t = assertThrows(IllegalStateException.class, () -> {
@@ -88,7 +88,7 @@ public class TestDatadogHttpClient {
   }
 
   @Test
-  public void validateApiKey_shouldThrowException_whenResponseNotSuccessful() {
+  public void validateApiKeyShouldThrowExceptionWhenResponseNotSuccessful() {
     mockResponse(500);
 
     Throwable t = assertThrows(IllegalStateException.class, () -> {
@@ -98,7 +98,7 @@ public class TestDatadogHttpClient {
   }
 
   @Test
-  public void sendPayload_shouldLog_whenRequestFailed() throws IOException {
+  public void sendPayloadShouldLogWhenRequestFailed() throws IOException {
     Logger.getRootLogger().addAppender(appender);
     when(httpClient.execute(any())).thenThrow(IOException.class);
 
@@ -111,7 +111,7 @@ public class TestDatadogHttpClient {
   }
 
   @Test
-  public void sendPayload_shouldLogUnsuccessfulSending() {
+  public void sendPayloadShouldLogUnsuccessfulSending() {
     Logger.getRootLogger().addAppender(appender);
     mockResponse(401);
     when(httpResponse.toString()).thenReturn("unauthorized");
@@ -125,7 +125,7 @@ public class TestDatadogHttpClient {
   }
 
   @Test
-  public void sendPayload_shouldLogSuccessfulSending() {
+  public void sendPayloadShouldLogSuccessfulSending() {
     Logger.getRootLogger().addAppender(appender);
     mockResponse(202);
 
@@ -146,7 +146,7 @@ public class TestDatadogHttpClient {
 
   @ParameterizedTest
   @MethodSource("getApiSiteAndDomain")
-  public void testApiSite_returnCorrectDomain(String apiSite, String domain) {
+  public void testApiSiteReturnCorrectDomain(String apiSite, String domain) {
     assertEquals(domain, ApiSite.valueOf(apiSite).getDomain());
   }
 }

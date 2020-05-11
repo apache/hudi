@@ -50,7 +50,6 @@ public class DatadogHttpClient implements Closeable {
   private static final String SERIES_URL_FORMAT = "https://app.datadoghq.%s/api/v1/series";
   private static final String VALIDATE_URL_FORMAT = "https://app.datadoghq.%s/api/v1/validate";
   private static final String HEADER_KEY_API_KEY = "DD-API-KEY";
-  private static final int TIMEOUT_MILLIS = 3000;
 
   private final String apiKey;
   private final String seriesUrl;
@@ -67,12 +66,12 @@ public class DatadogHttpClient implements Closeable {
     }
   }
 
-  public DatadogHttpClient(ApiSite apiSite, String apiKey, boolean skipValidation) {
+  public DatadogHttpClient(ApiSite apiSite, String apiKey, boolean skipValidation, int timeoutSeconds) {
     this(apiSite, apiKey, skipValidation, HttpClientBuilder.create()
         .setDefaultRequestConfig(RequestConfig.custom()
-            .setConnectTimeout(TIMEOUT_MILLIS)
-            .setConnectionRequestTimeout(TIMEOUT_MILLIS)
-            .setSocketTimeout(TIMEOUT_MILLIS).build())
+            .setConnectTimeout(timeoutSeconds * 1000)
+            .setConnectionRequestTimeout(timeoutSeconds * 1000)
+            .setSocketTimeout(timeoutSeconds * 1000).build())
         .build());
   }
 

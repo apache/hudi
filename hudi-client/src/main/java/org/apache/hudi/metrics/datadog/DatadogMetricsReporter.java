@@ -42,13 +42,16 @@ import java.util.concurrent.TimeUnit;
 public class DatadogMetricsReporter extends MetricsReporter {
 
   private final DatadogReporter reporter;
+  private final int reportPeriodSeconds;
 
   public DatadogMetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
+    reportPeriodSeconds = config.getDatadogReportPeriodSeconds();
     ApiSite apiSite = config.getDatadogApiSite();
     String apiKey = config.getDatadogApiKey();
     ValidationUtils.checkState(!StringUtils.isNullOrEmpty(apiKey),
         "Datadog cannot be initialized: API key is null or empty.");
     boolean skipValidation = config.getDatadogApiKeySkipValidation();
+    int timeoutSeconds = config.getDatadogApiTimeoutSeconds();
     String prefix = config.getDatadogMetricPrefix();
     ValidationUtils.checkState(!StringUtils.isNullOrEmpty(prefix),
         "Datadog cannot be initialized: Metric prefix is null or empty.");
@@ -58,7 +61,7 @@ public class DatadogMetricsReporter extends MetricsReporter {
 
     reporter = new DatadogReporter(
         registry,
-        new DatadogHttpClient(apiSite, apiKey, skipValidation),
+        new DatadogHttpClient(apiSite, apiKey, skipValidation, timeoutSeconds),
         prefix,
         host,
         tags,
@@ -70,7 +73,7 @@ public class DatadogMetricsReporter extends MetricsReporter {
 
   @Override
   public void start() {
-    reporter.start(30, TimeUnit.SECONDS);
+    reporter.start(reportPeriodSeconds, TimeUnit.SECONDS);
   }
 
   @Override
