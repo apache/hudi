@@ -98,7 +98,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @param rollbackPending whether need to cleanup pending commits
    */
   public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending) {
-    this(jsc, clientConfig, rollbackPending, HoodieIndex.createIndex(clientConfig, jsc));
+    this(jsc, clientConfig, rollbackPending, HoodieIndex.createIndex(clientConfig));
   }
 
   HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending, HoodieIndex index) {

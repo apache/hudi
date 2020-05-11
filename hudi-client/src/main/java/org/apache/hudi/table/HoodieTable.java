@@ -95,7 +95,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     this.viewManager = FileSystemViewManager.createViewManager(new SerializableConfiguration(jsc.hadoopConfiguration()),
         config.getViewStorageConfig());
     this.metaClient = metaClient;
-    this.index = HoodieIndex.createIndex(config, jsc);
+    this.index = HoodieIndex.createIndex(config);
   }
 
   private synchronized FileSystemViewManager getViewManager() {
