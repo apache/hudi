@@ -98,7 +98,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
     this.hadoopConf = jsc.hadoopConfiguration();
     final String basePath = clientConfig.getBasePath();
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath, true);
     this.hoodieTable = HoodieTable.create(metaClient, clientConfig, hadoopConf);
     this.index = HoodieIndex.createIndex(clientConfig);
     this.sqlContextOpt = Option.empty();
@@ -197,7 +197,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    */
   public List<Pair<String, HoodieCompactionPlan>> getPendingCompactions() {
     HoodieTableMetaClient metaClient =
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), hoodieTable.getMetaClient().getBasePath(), true);
+        new HoodieTableMetaClient(hadoopConf, hoodieTable.getMetaClient().getBasePath(), true);
     return CompactionUtils.getAllPendingCompactionPlans(metaClient).stream()
         .map(
             instantWorkloadPair -> Pair.of(instantWorkloadPair.getKey().getTimestamp(), instantWorkloadPair.getValue()))

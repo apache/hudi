@@ -62,9 +62,9 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
 
   protected AbstractHoodieClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineServer) {
-    this.fs = FSUtils.getFs(clientConfig.getBasePath(), jsc.hadoopConfiguration());
-    this.jsc = jsc;
     this.hadoopConf = jsc.hadoopConfiguration();
+    this.fs = FSUtils.getFs(clientConfig.getBasePath(), hadoopConf);
+    this.jsc = jsc;
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;
     this.timelineServer = timelineServer;
@@ -99,7 +99,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
       if (!timelineServer.isPresent()) {
         // Run Embedded Timeline Server
         LOG.info("Starting Timeline service !!");
-        timelineServer = Option.of(new EmbeddedTimelineService(jsc.hadoopConfiguration(), jsc.getConf(),
+        timelineServer = Option.of(new EmbeddedTimelineService(hadoopConf, jsc.getConf(),
             config.getClientSpecifiedViewStorageConfig()));
         try {
           timelineServer.get().startServer();
@@ -122,6 +122,6 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   }
 
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
-    return ClientUtils.createMetaClient(jsc.hadoopConfiguration(), config, loadActiveTimelineOnLoad);
+    return ClientUtils.createMetaClient(hadoopConf, config, loadActiveTimelineOnLoad);
   }
 }
