@@ -17,13 +17,14 @@
 # limitations under the License.
 
 mode=$1
+modules=$2
 sparkVersion=2.4.4
 hadoopVersion=2.7
 
 if [ "$mode" = "unit" ];
 then
   echo "Running Unit Tests"
-  mvn test -DskipITs=true -B
+  mvn test -DskipITs=true -pl "$modules" -B
 elif [ "$mode" = "integration" ];
 then
   echo "Downloading Apache Spark-${sparkVersion}-bin-hadoop${hadoopVersion}"
