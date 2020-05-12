@@ -47,7 +47,7 @@ public enum StorageSchemes {
   // View FS for federated setups. If federating across cloud stores, then append support is false
   VIEWFS("viewfs", true),
   //ALLUXIO
-  ALLUXIO("alluxio",true);
+  ALLUXIO("alluxio", false);
 
   private String scheme;
   private boolean supportsAppend;
