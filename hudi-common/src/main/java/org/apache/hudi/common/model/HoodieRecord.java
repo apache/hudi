@@ -143,11 +143,11 @@ public class HoodieRecord<T extends HoodieRecordPayload<T>> implements Serializa
 
     final HoodieRecord<?> that = (HoodieRecord<?>) o;
 
-    return sealed == that.sealed &&
-            Objects.equals(key, that.key) &&
-            Objects.equals(data, that.data) &&
-            Objects.equals(currentLocation, that.currentLocation) &&
-            Objects.equals(newLocation, that.newLocation);
+    return sealed == that.sealed
+        && Objects.equals(key, that.key)
+        && Objects.equals(data, that.data)
+        && Objects.equals(currentLocation, that.currentLocation)
+        && Objects.equals(newLocation, that.newLocation);
   }
 
   @Override
