@@ -131,7 +131,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01");
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
     List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, jsc, table);
     // Still 0, as no valid commit
@@ -142,7 +142,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     Files.createFile(hoodieDir.resolve("20160401010101.commit"));
     Files.createFile(hoodieDir.resolve("20150312101010.commit"));
 
-    table = HoodieTable.create(metaClient, config, jsc);
+    table = HoodieTable.create(metaClient, config, hadoopConf);
     filesList = index.loadInvolvedFiles(partitions, jsc, table);
     assertEquals(4, filesList.size());
 
@@ -261,7 +261,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
 
     // Add some commits
     Files.createDirectories(Paths.get(basePath, ".hoodie"));
@@ -346,7 +346,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
         .writeParquetFile(basePath, "2016/01/31", Collections.singletonList(originalRecord), schema, null, false);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
 
     // Add some commits
     Files.createDirectories(Paths.get(basePath, ".hoodie"));

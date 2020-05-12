@@ -125,7 +125,7 @@ public class TestCleaner extends TestHoodieClientBase {
     HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
     assertEquals(1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting a single commit.");
     // Should have 100 records in table (check using Index), all in locations marked at commit
-    HoodieTable table = HoodieTable.create(metaClient, client.getConfig(), jsc);
+    HoodieTable table = HoodieTable.create(metaClient, client.getConfig(), hadoopConf);
 
     assertFalse(table.getCompletedCommitsTimeline().empty());
     if (cleaningPolicy.equals(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)) {
@@ -211,7 +211,7 @@ public class TestCleaner extends TestHoodieClientBase {
 
       Map<HoodieFileGroupId, FileSlice> compactionFileIdToLatestFileSlice = new HashMap<>();
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.create(metaClient, getConfig(), jsc);
+      HoodieTable table = HoodieTable.create(metaClient, getConfig(), hadoopConf);
       for (String partitionPath : dataGen.getPartitionPaths()) {
         TableFileSystemView fsView = table.getFileSystemView();
         Option<Boolean> added = Option.fromJavaOptional(fsView.getAllFileGroups(partitionPath).findFirst().map(fg -> {
@@ -248,7 +248,7 @@ public class TestCleaner extends TestHoodieClientBase {
           assertNoWriteErrors(statuses);
 
           metaClient = HoodieTableMetaClient.reload(metaClient);
-          table = HoodieTable.create(metaClient, getConfig(), jsc);
+          table = HoodieTable.create(metaClient, getConfig(), hadoopConf);
           HoodieTimeline timeline = table.getMetaClient().getCommitsTimeline();
 
           TableFileSystemView fsView = table.getFileSystemView();
@@ -381,7 +381,7 @@ public class TestCleaner extends TestHoodieClientBase {
         assertNoWriteErrors(statuses);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
-        HoodieTable table1 = HoodieTable.create(metaClient, cfg, jsc);
+        HoodieTable table1 = HoodieTable.create(metaClient, cfg, hadoopConf);
         HoodieTimeline activeTimeline = table1.getCompletedCommitsTimeline();
         // NOTE: See CleanPlanner#getFilesToCleanKeepingLatestCommits. We explicitly keep one commit before earliest
         // commit
@@ -894,7 +894,7 @@ public class TestCleaner extends TestHoodieClientBase {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
     table.getActiveTimeline().createNewInstant(new HoodieInstant(State.REQUESTED,
         HoodieTimeline.COMMIT_ACTION, "000"));
     table.getActiveTimeline().transitionRequestedToInflight(
@@ -1040,7 +1040,7 @@ public class TestCleaner extends TestHoodieClientBase {
         if (j == i && j <= maxNumFileIdsForCompaction) {
           expFileIdToPendingCompaction.put(fileId, compactionInstants[j]);
           metaClient = HoodieTableMetaClient.reload(metaClient);
-          HoodieTable table = HoodieTable.create(metaClient, config, jsc);
+          HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
           FileSlice slice =
               table.getSliceView().getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
                   .filter(fs -> fs.getFileId().equals(fileId)).findFirst().get();
@@ -1082,7 +1082,7 @@ public class TestCleaner extends TestHoodieClientBase {
 
     // Test for safety
     final HoodieTableMetaClient newMetaClient = HoodieTableMetaClient.reload(metaClient);
-    final HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc);
+    final HoodieTable hoodieTable = HoodieTable.create(metaClient, config, hadoopConf);
 
     expFileIdToPendingCompaction.forEach((fileId, value) -> {
       String baseInstantForCompaction = fileIdToLatestInstantBeforeCompaction.get(fileId);
