@@ -51,13 +51,12 @@ This causes Spark SQL to only query Hudi’s pipeline records, not the final mer
 ![](/assets/images/blog/spark_edit_properties.png)
  2. **Method 2**: Edit `zeppelin / conf / interpreter.json` and add**
 
-```
+```json
 "spark.sql.hive.convertMetastoreParquet": {
-          "name": "spark.sql.hive.convertMetastoreParquet",
-          "value": false,
-          "type": "checkbox"
-        },
-
+      "name": "spark.sql.hive.convertMetastoreParquet",
+      "value": false,
+      "type": "checkbox"
+    },
 ```
 ## 4. Hudi incremental view
 

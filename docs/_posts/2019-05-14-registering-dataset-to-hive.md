@@ -8,16 +8,20 @@ Hudi hive sync tool typically handles registration of the dataset into Hive meta
   
 Add in the _packaging/hoodie-hive-bundle/target/hoodie-hive-bundle-0.4.6-SNAPSHOT.jar,_ so that Hive can read the Hudi dataset and answer the query.
 
-    hive> set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
-    hive> set hive.stats.autogather=false;
-    hive> add jar file:///path/to/hoodie-hive-bundle-0.4.6-SNAPSHOT.jar;
-    Added [file:///path/to/hoodie-hive-bundle-0.4.6-SNAPSHOT.jar] to class path
-    Added resources: [file:///path/to/hoodie-hive-bundle-0.4.6-SNAPSHOT.jar]
+```java
+hive> set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
+hive> set hive.stats.autogather=false;
+hive> add jar file:///path/to/hoodie-hive-bundle-0.5.2-SNAPSHOT.jar;
+Added [file:///path/to/hoodie-hive-bundle-0.5.2-SNAPSHOT.jar] to class path
+Added resources: [file:///path/to/hoodie-hive-bundle-0.5.2-SNAPSHOT.jar]
+```
 
-Then, you need to create a *ReadOptimized* Hive table as below (only type supported as of now)and register the sample partitions
 
-    drop table hoodie_test;
-    CREATE EXTERNAL TABLE hoodie_test(`_row_key` string,
+Then, you need to create a *ReadOptimized* Hive table as below and register the sample partitions
+
+```java
+DROP TABLE hoodie_test;
+CREATE EXTERNAL TABLE hoodie_test(`_row_key` string,
     `_hoodie_commit_time` string,
     `_hoodie_commit_seqno` string,
     rider string,
@@ -37,16 +41,18 @@ Then, you need to create a *ReadOptimized* Hive table as below (only type suppor
     LOCATION
     'hdfs:///tmp/hoodie/sample-table';
      
-    ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2016-03-15') LOCATION 'hdfs:///tmp/hoodie/sample-table/2016/03/15';
-    ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2015-03-16') LOCATION 'hdfs:///tmp/hoodie/sample-table/2015/03/16';
-    ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2015-03-17') LOCATION 'hdfs:///tmp/hoodie/sample-table/2015/03/17';
+ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2016-03-15') LOCATION 'hdfs:///tmp/hoodie/sample-table/2016/03/15';
+ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2015-03-16') LOCATION 'hdfs:///tmp/hoodie/sample-table/2015/03/16';
+ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2015-03-17') LOCATION 'hdfs:///tmp/hoodie/sample-table/2015/03/17';
      
-    set mapreduce.framework.name=yarn;
-    
+set mapreduce.framework.name=yarn;
+```
+
 And you can add a *Realtime* Hive table, as below
 
-    DROP TABLE hoodie_rt;
-    CREATE EXTERNAL TABLE hoodie_rt(
+```java
+DROP TABLE hoodie_rt;
+CREATE EXTERNAL TABLE hoodie_rt(
     `_hoodie_commit_time` string,
     `_hoodie_commit_seqno` string,
     `_hoodie_record_key` string,
@@ -71,7 +77,8 @@ And you can add a *Realtime* Hive table, as below
     LOCATION
     'file:///tmp/hoodie/sample-table';
      
-    ALTER TABLE `hoodie_rt` ADD IF NOT EXISTS PARTITION (datestr='2016-03-15') LOCATION 'file:///tmp/hoodie/sample-table/2016/03/15';
-    ALTER TABLE `hoodie_rt` ADD IF NOT EXISTS PARTITION (datestr='2015-03-16') LOCATION 'file:///tmp/hoodie/sample-table/2015/03/16';
-    ALTER TABLE `hoodie_rt` ADD IF NOT EXISTS PARTITION (datestr='2015-03-17') LOCATION 'file:///tmp/hoodie/sample-table/2015/03/17';
+ALTER TABLE `hoodie_rt` ADD IF NOT EXISTS PARTITION (datestr='2016-03-15') LOCATION 'file:///tmp/hoodie/sample-table/2016/03/15';
+ALTER TABLE `hoodie_rt` ADD IF NOT EXISTS PARTITION (datestr='2015-03-16') LOCATION 'file:///tmp/hoodie/sample-table/2015/03/16';
+ALTER TABLE `hoodie_rt` ADD IF NOT EXISTS PARTITION (datestr='2015-03-17') LOCATION 'file:///tmp/hoodie/sample-table/2015/03/17';
+```
 

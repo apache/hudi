@@ -22,20 +22,22 @@ The actual end-end architecture looks something like this.
 
 Let's now illustrate how one can accomplish this using a simple _orders_ table, stored in MySQL (these instructions should broadly apply to other database engines like Postgres, or Aurora as well, though SQL/Syntax may change)
 
-    CREATE DATABASE hudi_dms;
-    USE hudi_dms;
+```java
+CREATE DATABASE hudi_dms;
+USE hudi_dms;
      
-    CREATE TABLE orders(
-       order_id INTEGER,
-       order_qty INTEGER,
-       customer_name VARCHAR(100),
-       updated_at TIMESTAMP DEFAULT NOW() ON UPDATE NOW(),
-       created_at TIMESTAMP DEFAULT NOW(),
-       CONSTRAINT orders_pk PRIMARY KEY(order_id)
-    );
-     
-    INSERT INTO orders(order_id, order_qty, customer_name) VALUES(1, 10, 'victor');
-    INSERT INTO orders(order_id, order_qty, customer_name) VALUES(2, 20, 'peter');
+CREATE TABLE orders(
+   order_id INTEGER,
+   order_qty INTEGER,
+   customer_name VARCHAR(100),
+   updated_at TIMESTAMP DEFAULT NOW() ON UPDATE NOW(),
+   created_at TIMESTAMP DEFAULT NOW(),
+   CONSTRAINT orders_pk PRIMARY KEY(order_id)
+);
+ 
+INSERT INTO orders(order_id, order_qty, customer_name) VALUES(1, 10, 'victor');
+INSERT INTO orders(order_id, order_qty, customer_name) VALUES(2, 20, 'peter');
+```
 
 In the table, _order_id_ is the primary key which will be enforced on the Hudi table as well. Since a batch of change records can contain changes to the same primary key, we also include _updated_at_ and _created_at_ fields, which are kept upto date as writes happen to the table.
 
@@ -63,14 +65,17 @@ Starting the DMS task and should result in an initial load, like below.
 
 Simply reading the raw initial load file, shoud give the same values as the upstream table
 
-    scala> spark.read.parquet("s3://hudi-dms-demo/orders/hudi_dms/orders/*").sort("updated_at").show
-     
-    +--------+---------+-------------+-------------------+-------------------+
-    |order_id|order_qty|customer_name|         updated_at|         created_at|
-    +--------+---------+-------------+-------------------+-------------------+
-    |       2|       10|        peter|2020-01-20 20:12:22|2020-01-20 20:12:22|
-    |       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
-    +--------+---------+-------------+-------------------+-------------------+
+```scala
+scala> spark.read.parquet("s3://hudi-dms-demo/orders/hudi_dms/orders/*").sort("updated_at").show
+ 
++--------+---------+-------------+-------------------+-------------------+
+|order_id|order_qty|customer_name|         updated_at|         created_at|
++--------+---------+-------------+-------------------+-------------------+
+|       2|       10|        peter|2020-01-20 20:12:22|2020-01-20 20:12:22|
+|       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
++--------+---------+-------------+-------------------+-------------------+
+
+```
 
 ## Applying Change Logs using Hudi DeltaStreamer
 
@@ -78,17 +83,19 @@ Now, we are ready to start consuming the change logs. Hudi DeltaStreamer runs as
 
 With an initial load already on S3, we then run the following command (deltastreamer command, here on) to ingest the full load first and create a Hudi dataset on S3.
 
-    spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer  \
-      --packages org.apache.spark:spark-avro_2.11:2.4.4 \
-      --master yarn --deploy-mode client \
-      hudi-utilities-bundle_2.11-0.5.1-SNAPSHOT.jar \
-      --table-type COPY_ON_WRITE \
-      --source-ordering-field updated_at \
-      --source-class org.apache.hudi.utilities.sources.ParquetDFSSource \
-      --target-base-path s3://hudi-dms-demo/hudi_orders --target-table hudi_orders \
-      --transformer-class org.apache.hudi.utilities.transform.AWSDmsTransformer \
-      --payload-class org.apache.hudi.payload.AWSDmsAvroPayload \
-      --hoodie-conf hoodie.datasource.write.recordkey.field=order_id,hoodie.datasource.write.partitionpath.field=customer_name,hoodie.deltastreamer.source.dfs.root=s3://hudi-dms-demo/orders/hudi_dms/orders
+```bash
+spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer  \
+  --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+  --master yarn --deploy-mode client \
+  hudi-utilities-bundle_2.11-0.5.1-SNAPSHOT.jar \
+  --table-type COPY_ON_WRITE \
+  --source-ordering-field updated_at \
+  --source-class org.apache.hudi.utilities.sources.ParquetDFSSource \
+  --target-base-path s3://hudi-dms-demo/hudi_orders --target-table hudi_orders \
+  --transformer-class org.apache.hudi.utilities.transform.AWSDmsTransformer \
+  --payload-class org.apache.hudi.payload.AWSDmsAvroPayload \
+  --hoodie-conf hoodie.datasource.write.recordkey.field=order_id,hoodie.datasource.write.partitionpath.field=customer_name,hoodie.deltastreamer.source.dfs.root=s3://hudi-dms-demo/orders/hudi_dms/orders
+```
 
 A few things are going on here
 
@@ -101,49 +108,59 @@ A few things are going on here
 
 Once the command is run, the Hudi table should be created and have same records as the upstream table (with all the _hoodie fields as well).
 
-    scala> spark.read.format("org.apache.hudi").load("s3://hudi-dms-demo/hudi_orders/*/*.parquet").show
-    +-------------------+--------------------+------------------+----------------------+--------------------+--------+---------+-------------+-------------------+-------------------+---+
-    |_hoodie_commit_time|_hoodie_commit_seqno|_hoodie_record_key|_hoodie_partition_path|   _hoodie_file_name|order_id|order_qty|customer_name|         updated_at|         created_at| Op|
-    +-------------------+--------------------+------------------+----------------------+--------------------+--------+---------+-------------+-------------------+-------------------+---+
-    |     20200120205028|  20200120205028_0_1|                 2|                 peter|af9a2525-a486-40e...|       2|       10|        peter|2020-01-20 20:12:22|2020-01-20 20:12:22|   |
-    |     20200120205028|  20200120205028_1_1|                 1|                victor|8e431ece-d51c-4c7...|       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|   |
-    +-------------------+--------------------+------------------+----------------------+--------------------+--------+---------+-------------+-------------------+-------------------+---+
+```scala
+scala> spark.read.format("org.apache.hudi").load("s3://hudi-dms-demo/hudi_orders/*/*.parquet").show
++-------------------+--------------------+------------------+----------------------+--------------------+--------+---------+-------------+-------------------+-------------------+---+
+|_hoodie_commit_time|_hoodie_commit_seqno|_hoodie_record_key|_hoodie_partition_path|   _hoodie_file_name|order_id|order_qty|customer_name|         updated_at|         created_at| Op|
++-------------------+--------------------+------------------+----------------------+--------------------+--------+---------+-------------+-------------------+-------------------+---+
+|     20200120205028|  20200120205028_0_1|                 2|                 peter|af9a2525-a486-40e...|       2|       10|        peter|2020-01-20 20:12:22|2020-01-20 20:12:22|   |
+|     20200120205028|  20200120205028_1_1|                 1|                victor|8e431ece-d51c-4c7...|       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|   |
++-------------------+--------------------+------------------+----------------------+--------------------+--------+---------+-------------+-------------------+-------------------+---+
+```
 
 Now, let's do an insert and an update
 
-    INSERT INTO orders(order_id, order_qty, customer_name) VALUES(3, 30, 'sandy');
-    UPDATE orders set order_qty = 20 where order_id = 2;
+```java
+INSERT INTO orders(order_id, order_qty, customer_name) VALUES(3, 30, 'sandy');
+UPDATE orders set order_qty = 20 where order_id = 2;
+```
 
 This will add a new parquet file to the DMS output folder and when the deltastreamer command is run again, it will go ahead and apply these to the Hudi table.
 
 So, querying the Hudi table now would yield 3 rows and the _hoodie_commit_time_ accurately reflects when these writes happened. You can notice that order_qty for order_id=2, is updated from 10 to 20!
 
-    +-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
-    |_hoodie_commit_time|_hoodie_commit_seqno|_hoodie_record_key|_hoodie_partition_path|   _hoodie_file_name| Op|order_id|order_qty|customer_name|         updated_at|         created_at|
-    +-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
-    |     20200120211526|  20200120211526_0_1|                 2|                 peter|af9a2525-a486-40e...|  U|       2|       20|        peter|2020-01-20 21:11:47|2020-01-20 20:12:22|
-    |     20200120211526|  20200120211526_1_1|                 3|                 sandy|566eb34a-e2c5-44b...|  I|       3|       30|        sandy|2020-01-20 21:11:24|2020-01-20 21:11:24|
-    |     20200120205028|  20200120205028_1_1|                 1|                victor|8e431ece-d51c-4c7...|   |       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
-    +-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+```bash
++-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+|_hoodie_commit_time|_hoodie_commit_seqno|_hoodie_record_key|_hoodie_partition_path|   _hoodie_file_name| Op|order_id|order_qty|customer_name|         updated_at|         created_at|
++-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+|     20200120211526|  20200120211526_0_1|                 2|                 peter|af9a2525-a486-40e...|  U|       2|       20|        peter|2020-01-20 21:11:47|2020-01-20 20:12:22|
+|     20200120211526|  20200120211526_1_1|                 3|                 sandy|566eb34a-e2c5-44b...|  I|       3|       30|        sandy|2020-01-20 21:11:24|2020-01-20 21:11:24|
+|     20200120205028|  20200120205028_1_1|                 1|                victor|8e431ece-d51c-4c7...|   |       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
++-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+```
 
 A nice debugging aid would be read all of the DMS output now and sort it by update_at, which should give us a sequence of changes that happened on the upstream table. As we can see, the Hudi table above is a compacted snapshot of this raw change log.
 
-    +----+--------+---------+-------------+-------------------+-------------------+
-    |  Op|order_id|order_qty|customer_name|         updated_at|         created_at|
-    +----+--------+---------+-------------+-------------------+-------------------+
-    |null|       2|       10|        peter|2020-01-20 20:12:22|2020-01-20 20:12:22|
-    |null|       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
-    |   I|       3|       30|        sandy|2020-01-20 21:11:24|2020-01-20 21:11:24|
-    |   U|       2|       20|        peter|2020-01-20 21:11:47|2020-01-20 20:12:22|
-    +----+--------+---------+-------------+-------------------+-------------------+
+```bash
++----+--------+---------+-------------+-------------------+-------------------+
+|  Op|order_id|order_qty|customer_name|         updated_at|         created_at|
++----+--------+---------+-------------+-------------------+-------------------+
+|null|       2|       10|        peter|2020-01-20 20:12:22|2020-01-20 20:12:22|
+|null|       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
+|   I|       3|       30|        sandy|2020-01-20 21:11:24|2020-01-20 21:11:24|
+|   U|       2|       20|        peter|2020-01-20 21:11:47|2020-01-20 20:12:22|
++----+--------+---------+-------------+-------------------+-------------------+
+```
 
 Initial load with no _Op_ field value , followed by an insert and an update.
 
 Now, lets do deletes an inserts
 
-    DELETE FROM orders WHERE order_id = 2;
-    INSERT INTO orders(order_id, order_qty, customer_name) VALUES(4, 40, 'barry');
-    INSERT INTO orders(order_id, order_qty, customer_name) VALUES(5, 50, 'nathan');
+```java
+DELETE FROM orders WHERE order_id = 2;
+INSERT INTO orders(order_id, order_qty, customer_name) VALUES(4, 40, 'barry');
+INSERT INTO orders(order_id, order_qty, customer_name) VALUES(5, 50, 'nathan');
+```
 
 This should result in more files on S3, written by DMS , which the DeltaStreamer command will continue to process incrementally (i.e only the newly written files are read each time)
 
@@ -151,27 +168,32 @@ This should result in more files on S3, written by DMS , which the DeltaStreamer
 
 Running the deltastreamer command again, would result in the follow state for the Hudi table. You can notice the two new records and that the _order_id=2_ is now gone
 
-    +-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
-    |_hoodie_commit_time|_hoodie_commit_seqno|_hoodie_record_key|_hoodie_partition_path|   _hoodie_file_name| Op|order_id|order_qty|customer_name|         updated_at|         created_at|
-    +-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
-    |     20200120212522|  20200120212522_1_1|                 5|                nathan|3da94b20-c70b-457...|  I|       5|       50|       nathan|2020-01-20 21:23:00|2020-01-20 21:23:00|
-    |     20200120212522|  20200120212522_2_1|                 4|                 barry|8cc46715-8f0f-48a...|  I|       4|       40|        barry|2020-01-20 21:22:49|2020-01-20 21:22:49|
-    |     20200120211526|  20200120211526_1_1|                 3|                 sandy|566eb34a-e2c5-44b...|  I|       3|       30|        sandy|2020-01-20 21:11:24|2020-01-20 21:11:24|
-    |     20200120205028|  20200120205028_1_1|                 1|                victor|8e431ece-d51c-4c7...|   |       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
-    +-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+```bash
++-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+|_hoodie_commit_time|_hoodie_commit_seqno|_hoodie_record_key|_hoodie_partition_path|   _hoodie_file_name| Op|order_id|order_qty|customer_name|         updated_at|         created_at|
++-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+|     20200120212522|  20200120212522_1_1|                 5|                nathan|3da94b20-c70b-457...|  I|       5|       50|       nathan|2020-01-20 21:23:00|2020-01-20 21:23:00|
+|     20200120212522|  20200120212522_2_1|                 4|                 barry|8cc46715-8f0f-48a...|  I|       4|       40|        barry|2020-01-20 21:22:49|2020-01-20 21:22:49|
+|     20200120211526|  20200120211526_1_1|                 3|                 sandy|566eb34a-e2c5-44b...|  I|       3|       30|        sandy|2020-01-20 21:11:24|2020-01-20 21:11:24|
+|     20200120205028|  20200120205028_1_1|                 1|                victor|8e431ece-d51c-4c7...|   |       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
++-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+```
+
 Our little informal change log query yields the following.
 
-    +----+--------+---------+-------------+-------------------+-------------------+
-    |  Op|order_id|order_qty|customer_name|         updated_at|         created_at|
-    +----+--------+---------+-------------+-------------------+-------------------+
-    |null|       2|       10|        peter|2020-01-20 20:12:22|2020-01-20 20:12:22|
-    |null|       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
-    |   I|       3|       30|        sandy|2020-01-20 21:11:24|2020-01-20 21:11:24|
-    |   U|       2|       20|        peter|2020-01-20 21:11:47|2020-01-20 20:12:22|
-    |   D|       2|       20|        peter|2020-01-20 21:11:47|2020-01-20 20:12:22|
-    |   I|       4|       40|        barry|2020-01-20 21:22:49|2020-01-20 21:22:49|
-    |   I|       5|       50|       nathan|2020-01-20 21:23:00|2020-01-20 21:23:00|
-    +----+--------+---------+-------------+-------------------+-------------------+
+```bash
++----+--------+---------+-------------+-------------------+-------------------+
+|  Op|order_id|order_qty|customer_name|         updated_at|         created_at|
++----+--------+---------+-------------+-------------------+-------------------+
+|null|       2|       10|        peter|2020-01-20 20:12:22|2020-01-20 20:12:22|
+|null|       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
+|   I|       3|       30|        sandy|2020-01-20 21:11:24|2020-01-20 21:11:24|
+|   U|       2|       20|        peter|2020-01-20 21:11:47|2020-01-20 20:12:22|
+|   D|       2|       20|        peter|2020-01-20 21:11:47|2020-01-20 20:12:22|
+|   I|       4|       40|        barry|2020-01-20 21:22:49|2020-01-20 21:22:49|
+|   I|       5|       50|       nathan|2020-01-20 21:23:00|2020-01-20 21:23:00|
++----+--------+---------+-------------+-------------------+-------------------+
+```
 
 Note that the delete and update have the same _updated_at,_ value. thus it can very well order differently here.. In short this way of looking at the changelog has its caveats. For a true changelog of the Hudi table itself, you can issue an [incremental query](http://hudi.apache.org/docs/querying_data.html).
 
