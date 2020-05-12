@@ -85,7 +85,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
     // Build a write config with bulkinsertparallelism set
     HoodieWriteConfig cfg = getConfigBuilder().build();
     try (HoodieWriteClient client = getWriteClient(cfg);) {
-      FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
+      FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
 
       /**
        * Write 1 (only inserts) This will do a bulk insert of 44 records of which there are 2 records repeated 21 times
