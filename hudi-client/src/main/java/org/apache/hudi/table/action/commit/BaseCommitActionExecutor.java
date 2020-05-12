@@ -182,7 +182,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
     String actionType = table.getMetaClient().getCommitActionType();
     LOG.info("Committing " + instantTime + ", action Type " + actionType);
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable<T> table = HoodieTable.create(config, jsc.hadoopConfiguration());
+    HoodieTable<T> table = HoodieTable.create(config, hadoopConf);
 
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
