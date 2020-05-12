@@ -144,7 +144,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       throw new IllegalStateException("The Spark context has not been initialized.");
     }
 
-    initFileSystemWithConfiguration(jsc.hadoopConfiguration());
+    initFileSystemWithConfiguration(hadoopConf);
   }
 
   /**
@@ -181,7 +181,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       throw new IllegalStateException("The Spark context has not been initialized.");
     }
 
-    metaClient = HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, getTableType());
+    metaClient = HoodieTestUtils.init(hadoopConf, basePath, getTableType());
   }
 
   /**

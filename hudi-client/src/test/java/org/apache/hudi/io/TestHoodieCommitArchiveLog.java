@@ -62,7 +62,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     initPath();
     initSparkContexts("TestHoodieCommitArchiveLog");
     hadoopConf = dfs.getConf();
-    jsc.hadoopConfiguration().addResource(dfs.getConf());
+    hadoopConf.addResource(dfs.getConf());
     dfs.mkdirs(new Path(basePath));
     metaClient = HoodieTestUtils.init(hadoopConf, basePath);
   }

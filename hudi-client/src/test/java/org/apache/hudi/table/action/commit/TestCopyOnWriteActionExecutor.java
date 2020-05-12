@@ -163,13 +163,13 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
 
     // Read out the bloom filter and make sure filter can answer record exist or not
     Path parquetFilePath = allFiles[0].getPath();
-    BloomFilter filter = ParquetUtils.readBloomFilterFromParquetMetadata(jsc.hadoopConfiguration(), parquetFilePath);
+    BloomFilter filter = ParquetUtils.readBloomFilterFromParquetMetadata(hadoopConf, parquetFilePath);
     for (HoodieRecord record : records) {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
 
     // Read the parquet file, check the record content
-    List<GenericRecord> fileRecords = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), parquetFilePath);
+    List<GenericRecord> fileRecords = ParquetUtils.readAvroRecords(hadoopConf, parquetFilePath);
     GenericRecord newRecord;
     int index = 0;
     for (GenericRecord record : fileRecords) {
@@ -205,7 +205,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     // Check whether the record has been updated
     Path updatedParquetFilePath = allFiles[0].getPath();
     BloomFilter updatedFilter =
-        ParquetUtils.readBloomFilterFromParquetMetadata(jsc.hadoopConfiguration(), updatedParquetFilePath);
+        ParquetUtils.readBloomFilterFromParquetMetadata(hadoopConf, updatedParquetFilePath);
     for (HoodieRecord record : records) {
       // No change to the _row_key
       assertTrue(updatedFilter.mightContain(record.getRecordKey()));
@@ -234,9 +234,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
           throws Exception {
     // initialize parquet input format
     HoodieParquetInputFormat hoodieInputFormat = new HoodieParquetInputFormat();
-    JobConf jobConf = new JobConf(jsc.hadoopConfiguration());
+    JobConf jobConf = new JobConf(hadoopConf);
     hoodieInputFormat.setConf(jobConf);
-    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, HoodieTableType.COPY_ON_WRITE);
+    HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
     setupIncremental(jobConf, startCommitTime, numCommitsToPull);
     FileInputFormat.setInputPaths(jobConf, Paths.get(basePath, partitionPath).toString());
     return hoodieInputFormat.listStatus(jobConf);

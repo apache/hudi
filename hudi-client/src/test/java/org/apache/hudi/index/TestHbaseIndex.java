@@ -112,7 +112,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   public void setUp() throws Exception {
     // Initialize a local spark env
     initSparkContexts("TestHbaseIndex");
-    jsc.hadoopConfiguration().addResource(utility.getConfiguration());
+    hadoopConf.addResource(utility.getConfiguration());
 
     // Create a temp folder as the base path
     initPath();

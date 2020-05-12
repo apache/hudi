@@ -567,7 +567,7 @@ public class TestCleaner extends TestHoodieClientBase {
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
             .build();
 
-    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
 
     // Make 3 files, one base file and 2 log files associated with base file
     String file1P0 =
@@ -1010,7 +1010,7 @@ public class TestCleaner extends TestHoodieClientBase {
   private void testPendingCompactions(HoodieWriteConfig config, int expNumFilesDeleted,
       int expNumFilesUnderCompactionDeleted, boolean retryFailure) throws IOException {
     HoodieTableMetaClient metaClient =
-        HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, HoodieTableType.MERGE_ON_READ);
+        HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
     String[] instants = new String[] {"000", "001", "003", "005", "007", "009", "011", "013"};
     String[] compactionInstants = new String[] {"002", "004", "006", "008", "010"};
     Map<String, String> expFileIdToPendingCompaction = new HashMap<>();

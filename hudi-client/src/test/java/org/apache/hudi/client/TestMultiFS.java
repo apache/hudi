@@ -81,7 +81,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
   @Test
   public void readLocalWriteHDFS() throws Exception {
     // Initialize table and filesystem
-    HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), dfsBasePath, HoodieTableType.valueOf(tableType),
+    HoodieTableMetaClient.initTableType(hadoopConf, dfsBasePath, HoodieTableType.valueOf(tableType),
         tableName, HoodieAvroPayload.class.getName());
 
     // Create write client to write some records in
@@ -106,7 +106,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
       assertEquals(readRecords.count(), records.size(), "Should contain 100 records");
 
       // Write to local
-      HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType),
+      HoodieTableMetaClient.initTableType(hadoopConf, tablePath, HoodieTableType.valueOf(tableType),
           tableName, HoodieAvroPayload.class.getName());
 
       String writeCommitTime = localWriteClient.startCommit();

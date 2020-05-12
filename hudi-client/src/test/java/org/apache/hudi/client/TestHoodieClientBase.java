@@ -249,7 +249,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     return (commit, numRecords) -> {
       final HoodieIndex index = HoodieIndex.createIndex(writeConfig);
       List<HoodieRecord> records = recordGenFunction.apply(commit, numRecords);
-      final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
+      final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath, true);
       HoodieTable table = HoodieTable.create(metaClient, writeConfig, hadoopConf);
       JavaRDD<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), jsc, table);
       return taggedRecords.collect();
@@ -270,7 +270,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     return (numRecords) -> {
       final HoodieIndex index = HoodieIndex.createIndex(writeConfig);
       List<HoodieKey> records = keyGenFunction.apply(numRecords);
-      final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
+      final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath, true);
       HoodieTable table = HoodieTable.create(metaClient, writeConfig, hadoopConf);
       JavaRDD<HoodieRecord> recordsToDelete = jsc.parallelize(records, 1)
           .map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
@@ -467,7 +467,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     assertPartitionMetadataForRecords(records, fs);
 
     // verify that there is a commit
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
     HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
 
     if (assertForCommit) {
@@ -535,7 +535,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     assertPartitionMetadataForKeys(keysToDelete, fs);
 
     // verify that there is a commit
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
     HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
 
     if (assertForCommit) {
