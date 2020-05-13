@@ -2,6 +2,7 @@
 title: "Export Hudi datasets as a copy or as different formats"
 excerpt: "Learn how to copy or export HUDI dataset in various formats."
 author: rxu
+category: blog
 ---
 
 ### Copy to Hudi dataset
@@ -97,6 +98,5 @@ spark-submit \
   --target-output-path "/tmp/exported/json/" \
   --output-format "json" \
   --output-partitioner "com.foo.bar.MyPartitioner"
-
 ```
 

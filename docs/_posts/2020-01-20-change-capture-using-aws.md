@@ -2,6 +2,7 @@
 title: "Change Capture Using AWS Database Migration Service and Hudi"
 excerpt: "In this blog, we will build an end-end solution for capturing changes from a MySQL instance running on AWS RDS to a Hudi table on S3, using capabilities in the Hudi 0.5.1 release."
 author: vinoth
+category: blog
 ---
 
 One of the core use-cases for Apache Hudi is enabling seamless, efficient database ingestion to your data lake. Even though a lot has been talked about and even users already adopting this model, content on how to go about this is sparse.
