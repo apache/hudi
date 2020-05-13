@@ -1,0 +1,91 @@
+jmh is used for benchmarking hudi operations.
+https://openjdk.java.net/projects/code-tools/jmh/
+
+To get benchmark numbers:
+Run BenchmarkRunner.java and you should see the output for all methods annotated with @Benchmark.
+In other words, annotate your method with @Benchmark if you want it to be included as part of BenchmarkRunner execution.
+
+Number of times each method will be executed as part of benchmarking is:
+X * Y * Z
+Z refers to one benchmark invocation of the method.
+Y refers to one benchmark iteration (or an iteration of invocations) and is the 2nd level.
+X refers to trials or an iteration of benchmark iterations and is the top most level. Each trial will have an output entry
+in the report generated.
+
+Y is set using @Measurement(iterations = N) with each method.
+X is set in execution plan using @Param(array of identifiers)
+
+Eg:
+
+@Benchmark
+@Measurement(iterations = 100)
+@BenchmarkMode(Mode.AverageTime)
+   void testMethod() {...}
+
+In execution plan : // more on this later
+  @Param({ "100", "200", "300"})
+  public int iterations;
+
+Sample Benchmark output
+
+Benchmark                                            (iterations)  Mode  Cnt  Score   Error  Units
+o.a.h.benchmark.HoodieWriteBenchmark.testMethod               100  avgt  100  6.922 ±  6.101   s/op
+o.a.h.benchmark.HoodieWriteBenchmark.testMethod               200  avgt  100  6.675 ±  5.686   s/op
+o.a.h.benchmark.HoodieWriteBenchmark.testMethod               300  avgt  100  6.870 ±  4.686   s/op
+
+As mentioned before, each trial will have an entry in the generated output. Each entry is the summary for N invocations
+as defined by @Measurement(iterations = N).
+Score refers to the avg time taken (since we have annotated with @BenchmarkMode(Mode.AverageTime)).
+Error shows the deviation.
+
+Here is what first entry in the output mean:
+For first benchmark iteration, (param value 100 in execution plan), avg time for 100 runs (Cnt) is 6.922 seconds.
+Range of avg time is 6.922 ± 6.101 seconds.
+
+Note: I have set up "/tmp/" as basePath for benchmarks (could be found in execution plan) for all runs. If you
+plan to run for larger size and your "tmp" may not have sufficient swap space, you migth want to change that value
+to some other location that might have sufficient space.
+
+Parameters:
+
+Will walk through the parameters involved.
+org.apache.hudi.benchmark.HoodieWriteBenchmark#benchmarkBulkInsert
+
+What does each annotation mean:
+@Fork(value = 1)
+refers to the number of threads used for benchmarking. 1 means sequential.
+
+Benchmark modes: eg @BenchmarkMode(Mode.AverageTime)
+Could be average time or throughput, sample time etc.
+
+@Warmup(iterations = 1)
+Refers to number of warm up iterations to run before actual runs. In the final report generated, warmup won't be
+reported.
+
+@Measurement(iterations = 10)
+Number of times the method to be benchmarked will run.
+
+@OutputTimeUnit(TimeUnit.SECONDS)
+To specify what time unit to be reported for benchmark report
+
+Here are the execution plan details:
+Each method can take in an execution plan as an argument. These execution plan can have set up methods that will be run
+according to the Levels defined. Also it could have some arguments which the method could access.
+For eg, total number of records to be generated could be set in an execution plan(using @Param) and all N
+(@Measurement(iterations = N)) invocations will be generating same number of records.
+We could have a set up where in records are generated once, and will be inserted N no of times based on
+@Measurement(iterations = N) if annotated with @Setup(Level.Iteration).
+
+Eg: org.apache.hudi.benchmark..WriteBenchmarkExecutionPlan
+
+@Levels annotations are used to have set up methods in the execution plan. Should be annotated as @Setup(Level.X)
+
+Bottommost level is Level.Invocation which refers to a single run of a method  or benchmark invocations.
+Next is Level.Iteration which refers to N iteration of invocations, where N is defined in @Measurement(iterations = N).
+Or called as benchmark iterations.
+Top most level if Level.Trial which refers to a set of benchmark iterations.
+
+Based on the tagging, the respective set up method will be executed accordingly.
+
+@Param
+These can act as arguments to the methods. You could provide different arguments for different benchmark iterations.

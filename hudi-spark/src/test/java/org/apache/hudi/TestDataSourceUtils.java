@@ -106,10 +106,10 @@ public class TestDataSourceUtils {
     when(hoodieWriteClient.getConfig()).thenReturn(config);
 
     DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
-            DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+        DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
 
     verify(hoodieWriteClient, times(1)).bulkInsert(any(hoodieRecords.getClass()), anyString(),
-            optionCaptor.capture());
+        optionCaptor.capture());
     assertThat(optionCaptor.getValue(), is(equalTo(Option.empty())));
   }
 
@@ -119,7 +119,7 @@ public class TestDataSourceUtils {
 
     Exception exception = assertThrows(HoodieException.class, () -> {
       DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
-              DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+          DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
     });
 
     assertThat(exception.getMessage(), containsString("Could not create UserDefinedBulkInsertPartitioner"));
@@ -130,17 +130,17 @@ public class TestDataSourceUtils {
     setAndVerifyHoodieWriteClientWith(DataSourceTestUtils.NoOpBulkInsertPartitioner.class.getName());
 
     DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
-            DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+        DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
 
     verify(hoodieWriteClient, times(1)).bulkInsert(any(hoodieRecords.getClass()), anyString(),
-            optionCaptor.capture());
+        optionCaptor.capture());
     assertThat(optionCaptor.getValue().get(), is(instanceOf(DataSourceTestUtils.NoOpBulkInsertPartitioner.class)));
   }
 
   private void setAndVerifyHoodieWriteClientWith(final String partitionerClassName) {
     config = HoodieWriteConfig.newBuilder().withPath(config.getBasePath())
-            .withUserDefinedBulkInsertPartitionerClass(partitionerClassName)
-            .build();
+        .withUserDefinedBulkInsertPartitionerClass(partitionerClassName)
+        .build();
     when(hoodieWriteClient.getConfig()).thenReturn(config);
 
     assertThat(config.getUserDefinedBulkInsertPartitionerClass(), is(equalTo(partitionerClassName)));
