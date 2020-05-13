@@ -150,12 +150,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   /**
    * Main API to run bootstrap to hudi.
    */
-  public void bootstrap() {
+  public void bootstrap(Option<Map<String, String>> extraMetadata) {
     if (rollbackPending) {
       rollBackPendingBootstrap();
     }
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT);
-    table.bootstrap(jsc);
+    table.bootstrap(jsc, extraMetadata);
   }
 
   /**

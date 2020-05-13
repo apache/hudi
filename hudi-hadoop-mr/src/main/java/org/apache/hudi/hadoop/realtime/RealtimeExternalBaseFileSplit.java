@@ -38,6 +38,10 @@ public class RealtimeExternalBaseFileSplit extends ExternalBaseFileSplit impleme
 
   private String basePath;
 
+  public RealtimeExternalBaseFileSplit() {
+    super();
+  }
+
   public RealtimeExternalBaseFileSplit(FileSplit baseSplit, String basePath, List<String> deltaLogPaths,
       String maxInstantTime, FileSplit externalFileSplit) throws IOException {
     super(baseSplit, externalFileSplit);

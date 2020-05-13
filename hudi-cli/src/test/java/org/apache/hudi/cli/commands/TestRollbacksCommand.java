@@ -64,7 +64,8 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
     String tablePath = basePath + File.separator + tableName;
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
-        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload",
+        "org.apache.hudi.common.bootstrap.index.HFileBasedBootstrapIndex");
 
     //Create some commits files and parquet files
     String commitTime1 = "100";

@@ -75,6 +75,8 @@ import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
 
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
@@ -85,8 +87,6 @@ public class DeltaSync implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
-  public static final String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
-  public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
   /**
    * Delta Sync Config.
@@ -204,14 +204,14 @@ public class DeltaSync implements Serializable {
     } else {
       this.commitTimelineOpt = Option.empty();
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
-          cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName);
+          cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName, cfg.bootstrapIndexClass);
     }
   }
 
   /**
    * Run one round of delta sync and return new compaction instant if one got scheduled.
    */
-  public Option<String> syncOnce() throws Exception {
+  public Option<String> syncOnce() throws IOException {
     Option<String> scheduledCompaction = Option.empty();
     HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(schemaProvider));
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
@@ -245,10 +245,10 @@ public class DeltaSync implements Serializable {
    * @param commitTimelineOpt Timeline with completed commits
    * @return Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> Input data read from upstream source, consists
    * of schemaProvider, checkpointStr and hoodieRecord
-   * @throws Exception in case of any Exception
+   * @throws IOException in case of any Exception
    */
   private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(
-      Option<HoodieTimeline> commitTimelineOpt) throws Exception {
+      Option<HoodieTimeline> commitTimelineOpt) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitTimelineOpt.isPresent()) {
@@ -260,7 +260,8 @@ public class DeltaSync implements Serializable {
           resumeCheckpointStr = Option.of(cfg.checkpoint);
         } else if (commitMetadata.getMetadata(CHECKPOINT_KEY) != null) {
           resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
-        } else {
+        } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
+            HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
           throw new HoodieDeltaStreamerException(
               "Unable to find previous checkpoint. Please double check if this table "
                   + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
@@ -270,7 +271,7 @@ public class DeltaSync implements Serializable {
       }
     } else {
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
-          cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName);
+          cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName, cfg.bootstrapIndexClass);
     }
 
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
@@ -352,7 +353,7 @@ public class DeltaSync implements Serializable {
    * @return Option Compaction instant if one is scheduled
    */
   private Option<String> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
-                                     HoodieDeltaStreamerMetrics metrics, Timer.Context overallTimerContext) throws Exception {
+                                     HoodieDeltaStreamerMetrics metrics, Timer.Context overallTimerContext)  {
 
     Option<String> scheduledCompactionInstant = Option.empty();
     // filter dupes if needed

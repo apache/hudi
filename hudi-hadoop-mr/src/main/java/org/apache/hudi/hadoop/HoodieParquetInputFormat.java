@@ -18,10 +18,10 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -40,6 +40,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
+import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
+import org.apache.hadoop.hive.ql.metadata.VirtualColumn;
+import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.FileSplit;
@@ -62,8 +65,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import static org.apache.hudi.hadoop.HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR;
 
 /**
  * HoodieInputFormat which understands the Hoodie File Structure and filters files based on the Hoodie Mode. If paths
@@ -360,68 +361,42 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
       ExternalBaseFileSplit eSplit = (ExternalBaseFileSplit)split;
       String[] rawColNames = HoodieColumnProjectionUtils.getReadColumnNames(job);
       List<Integer> rawColIds = HoodieColumnProjectionUtils.getReadColumnIDs(job);
-      List<Pair<Integer, String>> colsWithIndex =
+      List<Pair<Integer, String>> projectedColsWithIndex =
           IntStream.range(0, rawColIds.size()).mapToObj(idx -> Pair.of(rawColIds.get(idx), rawColNames[idx]))
               .collect(Collectors.toList());
 
-      List<Pair<Integer, String>> hoodieColsProjected = colsWithIndex.stream()
-          .filter(idxWithName -> idxWithName.getKey() < HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
+      List<Pair<Integer, String>> hoodieColsProjected = projectedColsWithIndex.stream()
+          .filter(idxWithName -> HoodieRecord.HOODIE_META_COLUMNS.contains(idxWithName.getValue()))
           .collect(Collectors.toList());
+      List<Pair<Integer, String>> externalColsProjected = projectedColsWithIndex.stream()
+          .filter(idxWithName -> !HoodieRecord.HOODIE_META_COLUMNS.contains(idxWithName.getValue())
+              && !VirtualColumn.VIRTUAL_COLUMN_NAMES.contains(idxWithName.getValue()))
+          .collect(Collectors.toList());
+
       // This always matches hive table description
       List<Pair<String, String>> colNameWithTypes = HoodieColumnProjectionUtils.getIOColumnNameAndTypes(job);
-      List<Pair<String, String>> hoodieColNamesOnlyWithTypes = colNameWithTypes.stream()
-          .filter(p -> HoodieRecord.HOODIE_META_COLUMNS.contains(p.getKey()))
-          .collect(Collectors.toList());
-      List<Pair<String, String>> colNamesWithTypesForSkeleton = colNameWithTypes.stream()
-          .filter(p -> HoodieRecord.HOODIE_META_COLUMNS.contains(p.getKey())
-              || VirtualColumn.VIRTUAL_COLUMN_NAMES.contains(p.getKey()))
-          .collect(Collectors.toList());
       List<Pair<String, String>> colNamesWithTypesForExternal = colNameWithTypes.stream()
               .filter(p -> !HoodieRecord.HOODIE_META_COLUMNS.contains(p.getKey())).collect(Collectors.toList());
-      LOG.error("colNameWithTypes.size()" + colNameWithTypes.size());
-      LOG.error("colNameWithTypes =" + colNameWithTypes);
+      LOG.info("colNameWithTypes =" + colNameWithTypes + ", Num Entries =" + colNameWithTypes.size());
       if (hoodieColsProjected.isEmpty()) {
-        return new HoodieColumnStichingRecordReader(new NullSkeletonRecordReader(),
-            HoodieRecord.HOODIE_META_COLUMNS.size(),
-            super.getRecordReader(eSplit.getExternalFileSplit(), job, reporter),
-            colNamesWithTypesForExternal.size(),
-            false);
+        return super.getRecordReader(eSplit.getExternalFileSplit(), job, reporter);
       } else if (externalColsProjected.isEmpty()) {
         return super.getRecordReader(split, job, reporter);
       } else {
-        HoodieColumnProjectionUtils.setReadColumns(jobConf1, new ArrayList<>(), new ArrayList<>());
-        HoodieColumnProjectionUtils.setReadColumns(jobConf2, new ArrayList<>(), new ArrayList<>());
-        List<String> hoodieColNames = colsWithIndex.stream()
-            .filter(idxWithName -> idxWithName.getKey() < HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
-            .map(idxWithName -> idxWithName.getValue()).collect(Collectors.toList());
-        List<Integer> hoodieColIds = colsWithIndex.stream()
-            .filter(idxWithName -> idxWithName.getKey() < HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
-            .map(idxWithName -> idxWithName.getKey()).collect(Collectors.toList());
-        List<String> nonHoodieColNames = colsWithIndex.stream()
-            .filter(idxWithName -> idxWithName.getKey() >= HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
-            .map(idxWithName -> idxWithName.getValue()).collect(Collectors.toList());
-        List<Integer> nonHoodieColIdsAdjusted = colsWithIndex.stream()
-            .filter(idxWithName -> idxWithName.getKey() >= HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
-            .map(idxWithName -> idxWithName.getKey() - HoodieAvroUtils.NUM_HUDI_METADATA_COLS)
-            .collect(Collectors.toList());
-        List<String> groupCols = Arrays.asList(job.get(READ_NESTED_COLUMN_PATH_CONF_STR, "").split(","));
-        HoodieColumnProjectionUtils.appendReadColumns(jobConf1, hoodieColIds, hoodieColNames, new ArrayList<>());
-        HoodieColumnProjectionUtils.appendReadColumns(jobConf2, nonHoodieColIdsAdjusted, nonHoodieColNames, groupCols);
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("hoodieColNames=" + hoodieColNames + ", hoodieColIds=" + hoodieColIds
-              + ", SIZES : hoodieColNames=" + hoodieColNames.size() + ", hoodieColIds=" + hoodieColIds.size()
-              + ", nonHoodieColNames=" + nonHoodieColNames + ", nonHoodieColIdsAdjusted=" + nonHoodieColIdsAdjusted
-              + ", nonHoodieColNames=" + nonHoodieColNames.size() + ", nonHoodieColIdsAdjusted="
-              + nonHoodieColIdsAdjusted.size());
-        }
-        FileSystem fs = FileSystem.get(job);
-        //FileSplit rightSplit =
-        //    makeSplit(externalFile, 0, externalFileStatus.getLen(), new String[0], new String[0]);
         FileSplit rightSplit = eSplit.getExternalFileSplit();
+        // Hive PPD works at row-group level and only enabled when hive.optimize.index.filter=true;
+        // The above config is disabled by default. But when enabled, would cause misalignment between
+        // skeleton and external file. We will disable them specifically when query needs external and skeleton
+        // file to be stitched.
+        // This disables row-group filtering
+        JobConf jobConfCopy = new JobConf(job);
+        jobConfCopy.unset(TableScanDesc.FILTER_EXPR_CONF_STR);
+        jobConfCopy.unset(ConvertAstToSearchArg.SARG_PUSHDOWN);
+
         LOG.info("Generating column stitching reader for " + eSplit.getPath() + " and " + rightSplit.getPath());
-        return new HoodieColumnStichingRecordReader(super.getRecordReader(eSplit, job, reporter),
+        return new HoodieColumnStichingRecordReader(super.getRecordReader(eSplit, jobConfCopy, reporter),
             HoodieRecord.HOODIE_META_COLUMNS.size(),
-            super.getRecordReader(rightSplit, job, reporter),
+            super.getRecordReader(rightSplit, jobConfCopy, reporter),
             colNamesWithTypesForExternal.size(),
             true);
       }

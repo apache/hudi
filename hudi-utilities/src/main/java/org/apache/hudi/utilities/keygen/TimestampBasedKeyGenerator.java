@@ -18,6 +18,9 @@
 
 package org.apache.hudi.utilities.keygen;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -61,6 +64,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   // TimeZone detailed settings reference
   // https://docs.oracle.com/javase/8/docs/api/java/util/TimeZone.html
   private final TimeZone timeZone;
+
+  protected final boolean encodePartitionPath;
 
   /**
    * Supported configs.
@@ -108,6 +113,9 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
       default:
         timeUnit = null;
     }
+
+    this.encodePartitionPath = config.getBoolean(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY(),
+        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL()));
   }
 
   @Override

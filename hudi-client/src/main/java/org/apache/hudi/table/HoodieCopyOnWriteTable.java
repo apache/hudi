@@ -42,7 +42,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.table.action.bootstrap.BootstrapActionExecutor;
+import org.apache.hudi.table.action.bootstrap.BootstrapCommitActionExecutor;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -139,8 +139,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public HoodieBootstrapWriteMetadata bootstrap(JavaSparkContext jsc) {
-    return new BootstrapActionExecutor(jsc, config, this).execute();
+  public HoodieBootstrapWriteMetadata bootstrap(JavaSparkContext jsc, Option<Map<String, String>> extraMetadata) {
+    return new BootstrapCommitActionExecutor(jsc, config, this, extraMetadata).execute();
   }
 
   @Override
@@ -162,51 +162,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
       MergeHelper.runMerge(this, upsertHandle);
-      /**
-      HoodieBaseFile baseFile = upsertHandle.getPrevBaseFile();
-      BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-      Configuration configForHudiFile = new Configuration(getHadoopConf());
-      ParquetReader<GenericRecord> reader =
-          AvroParquetReader.<GenericRecord>builder(upsertHandle.getOldFilePath()).withConf(configForHudiFile).build();
-      ParquetReader<GenericRecord> externalFileReader = null;
-      try {
-        final Iterator<GenericRecord> readerIterator;
-        if (baseFile.getExternalBaseFile().isPresent()) {
-          Path externalFilePath = new Path(baseFile.getExternalBaseFile().get().getPath());
-          Configuration configForExternalFile = new Configuration(getHadoopConf());
-          AvroReadSupport.setAvroReadSchema(configForHudiFile, HoodieAvroUtils.METADATA_FIELD_SCHEMA);
-          AvroReadSupport.setAvroReadSchema(configForExternalFile, upsertHandle.getOriginalSchema());
-          externalFileReader =
-              AvroParquetReader.<GenericRecord>builder(externalFilePath).withConf(configForHudiFile).build();
-          readerIterator = new MergingParquetIterator<>(new ParquetReaderIterator<>(externalFileReader),
-              new ParquetReaderIterator<>(reader), (inputRecordPair) -> HoodieAvroUtils.stitchRecords(
-                  inputRecordPair.getLeft(), inputRecordPair.getRight(), upsertHandle.getWriterSchema()));
-        } else {
-          AvroReadSupport.setAvroReadSchema(getHadoopConf(), upsertHandle.getWriterSchema());
-          readerIterator = new ParquetReaderIterator(reader);
-        }
-
-        wrapper = new SparkBoundedInMemoryExecutor(config, readerIterator,
-            new UpdateHandler(upsertHandle), x -> x);
-        wrapper.execute();
-      } catch (Exception e) {
-        throw new HoodieException(e);
-      } finally {
-        upsertHandle.close();
-
-        if (null != wrapper) {
-          wrapper.shutdownNow();
-        }
-
-        if (null != externalFileReader) {
-          externalFileReader.close();
-        }
-
-        if (null != reader) {
-          reader.close();
-        }
-      }
-      **/
     }
 
 

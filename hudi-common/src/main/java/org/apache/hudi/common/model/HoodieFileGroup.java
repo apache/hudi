@@ -32,15 +32,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- *  FileId :- f1
- *     C1 <-  f1_c1.parquet
- *     dc2 <- f1_c1.log.1-1-0-1  (Log Block header has dc2 as commit time) File Slice <- f1_c1.parq + f1_c1.log.1
- *     C3  <- Compaction.requested <-  "f1_c1.parquet + f1_c1.log.1 => f1_c3.parquet" (not created as of this time)
- *                 (Latest File Slice <- f1_c1.parq + f1_c1.log.1)
- *     dc4 <- f1_c3.log.1 Latest File Slice => f1_c1.parq + f1_c1.log.1 + f1_c3.log.1
- */
-
-/**
  * A set of data/base files + set of log files, that make up an unit for all operations.
  */
 public class HoodieFileGroup implements Serializable {

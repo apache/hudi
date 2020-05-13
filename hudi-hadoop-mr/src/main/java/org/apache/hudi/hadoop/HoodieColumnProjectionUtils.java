@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -39,8 +40,8 @@ import java.util.stream.IntStream;
 
 /**
  * Utility funcitons copied from Hive ColumnProjectionUtils.java.
- * Needed to copy as we see NoSuchMethod errors when directly using these APIs with/without Spark. Some of these
- * methods are not available across hive versions.
+ * Needed to copy as we see NoSuchMethod errors when directly using these APIs with/without Spark.
+ * Some of these methods are not available across hive versions.
  */
 public class HoodieColumnProjectionUtils {
   public static final Logger LOG = LoggerFactory.getLogger(ColumnProjectionUtils.class);
@@ -62,6 +63,15 @@ public class HoodieColumnProjectionUtils {
   private static final boolean READ_ALL_COLUMNS_DEFAULT = true;
 
   private static final String COMMA = ",";
+
+  /** Special Column Names added during Parquet Projection. **/
+  public static final String PARQUET_BLOCK_OFFSET_COL_NAME = "BLOCK__OFFSET__INSIDE__FILE";
+  public static final String PARQUET_INPUT_FILE_NAME = "INPUT__FILE__NAME";
+  public static final String PARQUET_ROW_ID = "ROW__ID";
+
+  public static final List<String> PARQUET_SPECIAL_COLUMN_NAMES =  CollectionUtils
+      .createImmutableList(PARQUET_BLOCK_OFFSET_COL_NAME, PARQUET_INPUT_FILE_NAME,
+          PARQUET_ROW_ID);
 
   /**
    * Sets the <em>READ_ALL_COLUMNS</em> flag and removes any previously
@@ -88,6 +98,7 @@ public class HoodieColumnProjectionUtils {
     setReadColumnIDConf(conf, READ_COLUMN_IDS_CONF_STR_DEFAULT);
     setReadColumnNamesConf(conf, READ_COLUMN_NAMES_CONF_STR_DEFAULT);
     appendReadColumns(conf, ids);
+    appendReadColumnNames(conf, names);
   }
 
   /**
@@ -210,7 +221,6 @@ public class HoodieColumnProjectionUtils {
 
   public static List<String> getIOColumnTypes(Configuration conf) {
     String colTypes = conf.get(IOConstants.COLUMNS_TYPES, "");
-    TypeInfoUtils.getTypeInfosFromTypeString(colTypes);
     if (colTypes != null && !colTypes.isEmpty()) {
       return TypeInfoUtils.getTypeInfosFromTypeString(colTypes).stream()
           .map(t -> t.getTypeName()).collect(Collectors.toList());

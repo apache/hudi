@@ -480,7 +480,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     String newDatasetBasePath = dfsBasePath + "/test_dataset_bootstrapped";
     cfg.runBootstrap = true;
     cfg.configs.add(String.format("hoodie.bootstrap.source.base.path=%s", bootstrapSourcePath));
-    cfg.configs.add(String.format("hoodie.bootstrap.recordkey.columns=%s", "_row_key"));
+    cfg.configs.add(String.format("hoodie.bootstrap.keygen.class=%s", SimpleKeyGenerator.class.getName()));
     cfg.configs.add("hoodie.bootstrap.parallelism=5");
     cfg.targetBasePath = newDatasetBasePath;
     new HoodieDeltaStreamer(cfg, jsc).sync();

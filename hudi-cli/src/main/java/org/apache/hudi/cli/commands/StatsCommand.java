@@ -24,6 +24,7 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -124,13 +125,15 @@ public class StatsCommand implements CommandMarker {
     Histogram globalHistogram = new Histogram(new UniformReservoir(MAX_FILES));
     HashMap<String, Histogram> commitHistoMap = new HashMap<>();
     for (FileStatus fileStatus : statuses) {
-      String instantTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
-      long sz = fileStatus.getLen();
-      if (!commitHistoMap.containsKey(instantTime)) {
-        commitHistoMap.put(instantTime, new Histogram(new UniformReservoir(MAX_FILES)));
+      if (!fileStatus.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)) {
+        String instantTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
+        long sz = fileStatus.getLen();
+        if (!commitHistoMap.containsKey(instantTime)) {
+          commitHistoMap.put(instantTime, new Histogram(new UniformReservoir(MAX_FILES)));
+        }
+        commitHistoMap.get(instantTime).update(sz);
+        globalHistogram.update(sz);
       }
-      commitHistoMap.get(instantTime).update(sz);
-      globalHistogram.update(sz);
     }
 
     List<Comparable[]> rows = new ArrayList<>();

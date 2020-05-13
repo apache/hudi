@@ -31,6 +31,9 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.List;
 
+/**
+ * Creates RDD of Hoodie Records given a list of partitions.
+ */
 public abstract class FullBootstrapInputProvider implements Serializable {
 
   protected static final Logger LOG = LogManager.getLogger(FullBootstrapInputProvider.class);

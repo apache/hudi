@@ -34,6 +34,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
  */
 public abstract class BootstrapIndex implements Serializable {
 
+  protected static final long serialVersionUID = 1L;
+
   protected final HoodieTableMetaClient metaClient;
 
   public BootstrapIndex(HoodieTableMetaClient metaClient) {

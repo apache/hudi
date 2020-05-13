@@ -66,7 +66,8 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
     // Create table and connect
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
-        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload",
+        "org.apache.hudi.common.bootstrap.index.HFileBasedBootstrapIndex");
   }
 
   /**
@@ -168,7 +169,7 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
 
     // check result
     List<String> allPropsStr = Arrays.asList("hoodie.table.name", "hoodie.table.type",
-        "hoodie.archivelog.folder", "hoodie.timeline.layout.version");
+        "hoodie.archivelog.folder", "hoodie.bootstrap.index.class", "hoodie.timeline.layout.version");
     String[][] rows = allPropsStr.stream().sorted().map(key -> new String[]{key,
         oldProps.getOrDefault(key, null), result.getOrDefault(key, null)})
         .toArray(String[][]::new);

@@ -18,8 +18,11 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.avro.Schema.Field;
+import org.apache.hadoop.hive.ql.io.IOConstants;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 
@@ -45,6 +48,7 @@ import java.util.stream.Collectors;
  * Utility methods to aid in testing MergeOnRead (workaround for HoodieReadClient for MOR).
  */
 public class HoodieMergeOnReadTestUtils {
+
   public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths, String basePath) {
     return getRecordsUsingInputFormat(inputPaths, basePath, new Configuration());
   }
@@ -56,19 +60,36 @@ public class HoodieMergeOnReadTestUtils {
   }
 
   public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths,
-                                                               String basePath,
-                                                               JobConf jobConf,
-                                                               HoodieParquetInputFormat inputFormat) {
+      String basePath,
+      JobConf jobConf,
+      HoodieParquetInputFormat inputFormat) {
     Schema schema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
     return getRecordsUsingInputFormat(inputPaths, basePath, jobConf, inputFormat, schema,
         HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES);
   }
 
   public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths, String basePath,
-        JobConf jobConf, HoodieParquetInputFormat inputFormat, Schema rawSchema, String rawHiveColumnTypes) {
+      JobConf jobConf, HoodieParquetInputFormat inputFormat, Schema rawSchema, String rawHiveColumnTypes) {
+    return getRecordsUsingInputFormat(inputPaths, basePath, jobConf, inputFormat, rawSchema, rawHiveColumnTypes,
+        false, new ArrayList<>());
+  }
+
+  public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths, String basePath,
+        JobConf jobConf, HoodieParquetInputFormat inputFormat, Schema rawSchema, String rawHiveColumnTypes,
+      boolean projectCols, List<String> projectedColumns) {
     Schema schema = HoodieAvroUtils.addMetadataFields(rawSchema);
     String hiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(rawHiveColumnTypes);
-    setPropsForInputFormat(inputFormat, jobConf, schema, hiveColumnTypes);
+    setPropsForInputFormat(inputFormat, jobConf, schema, hiveColumnTypes, projectCols, projectedColumns);
+    final List<Field> fields;
+    if (projectCols) {
+      fields = schema.getFields().stream().filter(f -> projectedColumns.contains(f.name()))
+          .collect(Collectors.toList());
+    } else {
+      fields = schema.getFields();
+    }
+    final Schema projectedSchema = Schema.createRecord(fields.stream()
+        .map(f -> new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal()))
+        .collect(Collectors.toList()));
     return inputPaths.stream().map(path -> {
       setInputPath(jobConf, path);
       List<GenericRecord> records = new ArrayList<>();
@@ -76,17 +97,19 @@ public class HoodieMergeOnReadTestUtils {
         List<InputSplit> splits = Arrays.asList(inputFormat.getSplits(jobConf, 1));
         for (InputSplit split : splits) {
           RecordReader recordReader = inputFormat.getRecordReader(split, jobConf, null);
-          Void key = (Void) recordReader.createKey();
+          Object key = recordReader.createKey();
           ArrayWritable writable = (ArrayWritable) recordReader.createValue();
           while (recordReader.next(key, writable)) {
-            GenericRecordBuilder newRecord = new GenericRecordBuilder(schema);
+            GenericRecordBuilder newRecord = new GenericRecordBuilder(projectedSchema);
             // writable returns an array with [field1, field2, _hoodie_commit_time,
             // _hoodie_commit_seqno]
             Writable[] values = writable.get();
-            assert schema.getFields().size() <= values.length;
-            schema.getFields().forEach(field -> {
-              newRecord.set(field, values[field.pos()]);
-            });
+            assert projectedSchema.getFields().size() <= values.length;
+            schema.getFields().stream()
+                .filter(f -> !projectCols || projectedColumns.contains(f.name()))
+                .map(f -> Pair.of(projectedSchema.getFields().stream()
+                        .filter(p -> f.name().equals(p.name())).findFirst().get(), f))
+                .forEach(fieldsPair -> newRecord.set(fieldsPair.getKey(), values[fieldsPair.getValue().pos()]));
             records.add(newRecord.build());
           }
         }
@@ -101,16 +124,27 @@ public class HoodieMergeOnReadTestUtils {
   }
 
   private static void setPropsForInputFormat(HoodieParquetInputFormat inputFormat, JobConf jobConf,
-      Schema schema, String hiveColumnTyps) {
+      Schema schema, String hiveColumnTyps, boolean projectCols, List<String> projectedCols) {
     List<Schema.Field> fields = schema.getFields();
-    String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
-    String postions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
-    Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
+    final List<String> projectedColNames;
+    if (!projectCols) {
+      projectedColNames = fields.stream().map(f -> f.name().toString()).collect(Collectors.toList());
+    } else {
+      projectedColNames = projectedCols;
+    }
 
-    String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
+    String names = fields.stream()
+        .filter(f -> projectedColNames.contains(f.name().toString()))
+        .map(f -> f.name().toString()).collect(Collectors.joining(","));
+    String postions = fields.stream()
+        .filter(f -> projectedColNames.contains(f.name().toString()))
+        .map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
+    String hiveColumnNames = fields.stream()
+        .filter(field -> !field.name().equalsIgnoreCase("datestr"))
         .map(Schema.Field::name).collect(Collectors.joining(","));
     hiveColumnNames = hiveColumnNames + ",datestr";
 
+    Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
     String hiveColumnTypes = hiveColumnTyps;
     hiveColumnTypes = hiveColumnTypes + ",string";
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
@@ -123,6 +157,8 @@ public class HoodieMergeOnReadTestUtils {
     conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
     conf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "datestr");
     conf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, hiveColumnTypes);
+    conf.set(IOConstants.COLUMNS, hiveColumnNames);
+    conf.get(IOConstants.COLUMNS_TYPES, hiveColumnTypes);
     inputFormat.setConf(conf);
     jobConf.addResource(conf);
   }

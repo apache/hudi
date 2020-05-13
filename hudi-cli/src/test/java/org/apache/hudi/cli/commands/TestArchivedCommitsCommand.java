@@ -64,7 +64,8 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     tablePath = basePath + File.separator + tableName;
     new TableCommand().createTable(
         tablePath, tableName,
-        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload",
+        "org.apache.hudi.common.bootstrap.index.HFileBasedBootstrapIndex");
 
     metaClient = HoodieCLI.getTableMetaClient();
 

@@ -60,19 +60,21 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>,
 
   private static final Logger LOG = LogManager.getLogger(BaseCommitActionExecutor.class);
 
+  protected final Option<Map<String, String>> extraMetadata;
   private final WriteOperationType operationType;
   protected final SparkTaskContextSupplier sparkTaskContextSupplier = new SparkTaskContextSupplier();
 
   public BaseCommitActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config,
       HoodieTable table, String instantTime, WriteOperationType operationType) {
-    this(jsc, config, table, instantTime, operationType, null);
+    this(jsc, config, table, instantTime, operationType, Option.empty());
   }
 
   public BaseCommitActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config,
       HoodieTable table, String instantTime, WriteOperationType operationType,
-      JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
+      Option<Map<String, String>> extraMetadata) {
     super(jsc, config, table, instantTime);
     this.operationType = operationType;
+    this.extraMetadata = extraMetadata;
   }
 
   public HoodieWriteMetadata execute(JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
@@ -171,7 +173,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>,
   protected void commitOnAutoCommit(HoodieWriteMetadata result) {
     if (config.shouldAutoCommit()) {
       LOG.info("Auto commit enabled: Committing " + instantTime);
-      commit(Option.empty(), result);
+      commit(extraMetadata, result);
     } else {
       LOG.info("Auto commit disabled for " + instantTime);
     }

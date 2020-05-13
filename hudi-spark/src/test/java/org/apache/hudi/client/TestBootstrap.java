@@ -116,6 +116,11 @@ public class TestBootstrap extends TestHoodieClientBase {
     srcPath = tmpFolder.toAbsolutePath().toString() + "/data";
 
     // initialize parquet input format
+    reloadInputFormats();
+  }
+
+  private void reloadInputFormats() {
+    // initialize parquet input format
     roInputFormat = new HoodieParquetInputFormat();
     roJobConf = new JobConf(jsc.hadoopConfiguration());
     roInputFormat.setConf(roJobConf);
@@ -127,7 +132,11 @@ public class TestBootstrap extends TestHoodieClientBase {
 
   @AfterEach
   public void tearDown() throws Exception {
-    cleanupResources();
+    cleanupMetaClient();
+    cleanupTestDataGenerator();
+    cleanupFileSystem();
+    // Do NOT cleanup Spark Context as it is being provided and reused by other tests in hudi-spark.
+    // See HoodieClientTestHarness.initSparkContexts()
   }
 
   public Schema generateNewDataSetAndReturnSchema(double timestamp, int numRecords, List<String> partitionPaths,
@@ -142,8 +151,8 @@ public class TestBootstrap extends TestHoodieClientBase {
       df.write().format("parquet").mode(SaveMode.Overwrite).save(srcPath);
     }
     String filePath = FileStatusUtils.toPath(FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), srcPath,
-        (status) -> true).stream().findAny().map(p -> p.getValue().stream().findAny()).orElse(null)
-        .get().getPath()).toString();
+        (status) -> status.getName().endsWith(".parquet")).stream().findAny().map(p -> p.getValue().stream().findAny())
+        .orElse(null).get().getPath()).toString();
     ParquetFileReader reader = ParquetFileReader.open(metaClient.getHadoopConf(), new Path(filePath));
     MessageType schema = reader.getFooter().getFileMetaData().getSchema();
     return new AvroSchemaConverter().convert(schema);
@@ -151,87 +160,81 @@ public class TestBootstrap extends TestHoodieClientBase {
 
   @Test
   public void testMetadataBootstrapUnpartitionedCOW() throws Exception {
-    /**
-     * Perform metadata bootstrap of source and check the content
-     */
-    int totalRecords = 100;
-    List<String> partitions = Arrays.asList();
-    double timestamp = new Double(Instant.now().toEpochMilli()).longValue();
-    Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, srcPath);
-    HoodieWriteConfig config = getConfigBuilder(schema.toString())
-        .withAutoCommit(true)
-        .withSchema(schema.toString())
-        .withBootstrapConfig(HoodieBootstrapConfig.newBuilder().withBootstrapSourceBasePath(srcPath)
-            .withBootstrapKeyGenClass(NonpartitionedKeyGenerator.class.getCanonicalName())
-            .withBootstrapParallelism(3)
-            .withBootstrapModeSelector(MetadataOnlyBootstrapModeSelector.class.getName()).build())
-        .build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-    checkBootstrapResults(totalRecords, schema, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, true, 1, timestamp,
-        timestamp, false);
-
-    // Rollback Bootstrap
-    FSUtils.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), new HoodieInstant(State.COMPLETED,
-        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS));
-    client.rollBackPendingBootstrap();
-    metaClient.reloadActiveTimeline();
-    assertEquals(0, metaClient.getCommitsTimeline().countInstants());
-    assertEquals(0L, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), basePath,
-        (status) -> status.getName().endsWith(".parquet")).stream().flatMap(f -> f.getValue().stream()).count());
-
-    BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertFalse(index.isIndexAvailable());
-
-    // Run bootstrap again
-    client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-
-    metaClient.reloadActiveTimeline();
-    index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertTrue(index.isIndexAvailable());
-
-    checkBootstrapResults(totalRecords, schema, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, true, 1, timestamp,
-        timestamp, false);
-
-    // Upsert case
-    double updateTimestamp = new Double(Instant.now().toEpochMilli()).longValue();
-    String updateSPath = tmpFolder.toAbsolutePath().toString() + "/data2";
-    generateNewDataSetAndReturnSchema(updateTimestamp, totalRecords, partitions, updateSPath);
-    JavaRDD<HoodieRecord> updateBatch =
-        generateInputBatch(jsc, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), updateSPath,
-            (status) -> status.getName().endsWith("parquet")), schema);
-    String newInstantTs = client.startCommit();
-    client.upsert(updateBatch, newInstantTs);
-    checkBootstrapResults(totalRecords, schema, newInstantTs, true, 2, updateTimestamp,
-        updateTimestamp, false);
+    testBootstrapCommon(false, false, EffectiveMode.METADATA_BOOTSTRAP_MODE);
   }
 
   @Test
   public void testMetadataBootstrapWithUpdatesCOW() throws Exception {
-    /**
-     * Perform metadata bootstrap of source and check the content
-     */
+    testBootstrapCommon(true, false, EffectiveMode.METADATA_BOOTSTRAP_MODE);
+  }
+
+  private enum EffectiveMode {
+    FULL_BOOTSTRAP_MODE,
+    METADATA_BOOTSTRAP_MODE,
+    MIXED_BOOTSTRAP_MODE
+  }
+
+  private void testBootstrapCommon(boolean partitioned, boolean deltaCommit, EffectiveMode mode) throws Exception {
+    if (deltaCommit) {
+      metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
+    }
     int totalRecords = 100;
+    String keyGeneratorClass = partitioned ? SimpleKeyGenerator.class.getCanonicalName()
+        : NonpartitionedKeyGenerator.class.getCanonicalName();
+    final String bootstrapModeSelectorClass;
+    final String bootstrapCommitInstantTs;
+    final boolean checkNumRawFiles;
+    final boolean isBootstrapIndexCreated;
+    final int numInstantsAfterBootstrap;
+    final List<String> bootstrapInstants;
+    switch (mode) {
+      case FULL_BOOTSTRAP_MODE:
+        bootstrapModeSelectorClass = FullBootstrapModeSelector.class.getCanonicalName();
+        bootstrapCommitInstantTs = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
+        checkNumRawFiles = false;
+        isBootstrapIndexCreated = false;
+        numInstantsAfterBootstrap = 1;
+        bootstrapInstants = Arrays.asList(bootstrapCommitInstantTs);
+        break;
+      case METADATA_BOOTSTRAP_MODE:
+        bootstrapModeSelectorClass = MetadataOnlyBootstrapModeSelector.class.getCanonicalName();
+        bootstrapCommitInstantTs = HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS;
+        checkNumRawFiles = true;
+        isBootstrapIndexCreated = true;
+        numInstantsAfterBootstrap = 1;
+        bootstrapInstants = Arrays.asList(bootstrapCommitInstantTs);
+        break;
+      default:
+        bootstrapModeSelectorClass = TestRandomBootstapModeSelector.class.getName();
+        bootstrapCommitInstantTs = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
+        checkNumRawFiles = false;
+        isBootstrapIndexCreated = true;
+        numInstantsAfterBootstrap = 2;
+        bootstrapInstants = Arrays.asList(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
+            HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS);
+        break;
+    }
     List<String> partitions = Arrays.asList("2020/04/01", "2020/04/02", "2020/04/03");
     double timestamp = new Double(Instant.now().toEpochMilli()).longValue();
     Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, srcPath);
     HoodieWriteConfig config = getConfigBuilder(schema.toString())
         .withAutoCommit(true)
         .withSchema(schema.toString())
-        .withBootstrapConfig(HoodieBootstrapConfig.newBuilder().withBootstrapSourceBasePath(srcPath)
-            .withBootstrapKeyGenClass(SimpleKeyGenerator.class.getCanonicalName())
+        .withBootstrapConfig(HoodieBootstrapConfig.newBuilder()
+            .withBootstrapSourceBasePath(srcPath)
+            .withBootstrapKeyGenClass(keyGeneratorClass)
+            .withFullBootstrapInputProvider(FullTestBootstrapInputProvider.class.getName())
             .withBootstrapParallelism(3)
-            .withBootstrapModeSelector(MetadataOnlyBootstrapModeSelector.class.getName()).build())
+            .withBootstrapModeSelector(bootstrapModeSelectorClass).build())
         .build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-    checkBootstrapResults(totalRecords, schema, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, true, 1, timestamp,
-        timestamp, false);
+    client.bootstrap(Option.empty());
+    checkBootstrapResults(totalRecords, schema, bootstrapCommitInstantTs, checkNumRawFiles, numInstantsAfterBootstrap,
+        numInstantsAfterBootstrap, timestamp, timestamp, deltaCommit, bootstrapInstants);
 
     // Rollback Bootstrap
     FSUtils.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), new HoodieInstant(State.COMPLETED,
-        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS));
+        deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION, bootstrapCommitInstantTs));
     client.rollBackPendingBootstrap();
     metaClient.reloadActiveTimeline();
     assertEquals(0, metaClient.getCommitsTimeline().countInstants());
@@ -243,14 +246,18 @@ public class TestBootstrap extends TestHoodieClientBase {
 
     // Run bootstrap again
     client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
+    client.bootstrap(Option.empty());
 
     metaClient.reloadActiveTimeline();
     index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertTrue(index.isIndexAvailable());
+    if (isBootstrapIndexCreated) {
+      assertTrue(index.isIndexAvailable());
+    } else {
+      assertFalse(index.isIndexAvailable());
+    }
 
-    checkBootstrapResults(totalRecords, schema, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, true, 1, timestamp,
-        timestamp, false);
+    checkBootstrapResults(totalRecords, schema, bootstrapCommitInstantTs, checkNumRawFiles, numInstantsAfterBootstrap,
+        numInstantsAfterBootstrap, timestamp, timestamp, deltaCommit, bootstrapInstants);
 
     // Upsert case
     double updateTimestamp = new Double(Instant.now().toEpochMilli()).longValue();
@@ -261,305 +268,42 @@ public class TestBootstrap extends TestHoodieClientBase {
             (status) -> status.getName().endsWith("parquet")), schema);
     String newInstantTs = client.startCommit();
     client.upsert(updateBatch, newInstantTs);
-    checkBootstrapResults(totalRecords, schema, newInstantTs, true, 2, updateTimestamp,
-        updateTimestamp, false);
+    checkBootstrapResults(totalRecords, schema, newInstantTs, false, numInstantsAfterBootstrap + 1,
+        updateTimestamp, deltaCommit ? timestamp : updateTimestamp, deltaCommit);
+
+    if (deltaCommit) {
+      Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
+      assertTrue(compactionInstant.isPresent());
+      client.compact(compactionInstant.get());
+      checkBootstrapResults(totalRecords, schema, compactionInstant.get(), checkNumRawFiles,
+          numInstantsAfterBootstrap + 2, 2, updateTimestamp, updateTimestamp, !deltaCommit,
+          Arrays.asList(compactionInstant.get()));
+    }
   }
 
   @Test
   public void testMetadataBootstrapWithUpdatesMOR() throws Exception {
-    /**
-     * Perform metadata bootstrap of source and check the content
-     */
-    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
-    int totalRecords = 100;
-    List<String> partitions = Arrays.asList("2020/04/01", "2020/04/02", "2020/04/03");
-    double timestamp = new Double(Instant.now().toEpochMilli()).longValue();
-    Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, srcPath);
-    HoodieWriteConfig config = getConfigBuilder(schema.toString())
-        .withAutoCommit(true)
-        .withSchema(schema.toString())
-        .withBootstrapConfig(HoodieBootstrapConfig.newBuilder().withBootstrapSourceBasePath(srcPath)
-            .withBootstrapKeyGenClass(SimpleKeyGenerator.class.getCanonicalName())
-            .withBootstrapParallelism(3)
-            .withBootstrapModeSelector(MetadataOnlyBootstrapModeSelector.class.getName()).build())
-        .build();
-    System.out.println("Config Props :" + config.getProps().getProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()));
-    HoodieWriteClient client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-    checkBootstrapResults(totalRecords, schema, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, true, 1,
-        timestamp, timestamp, false);
-    // Rollback Bootstrap
-    FSUtils.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), new HoodieInstant(State.COMPLETED,
-        HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS));
-    client.rollBackPendingBootstrap();
-    metaClient.reloadActiveTimeline();
-    assertEquals(0, metaClient.getCommitsTimeline().countInstants());
-    assertEquals(0L, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), basePath,
-        (status) -> status.getName().endsWith(".parquet")).stream().flatMap(f -> f.getValue().stream()).count());
-
-    BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertFalse(index.isIndexAvailable());
-
-    // Run bootstrap again
-    client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-
-    metaClient.reloadActiveTimeline();
-    index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertTrue(index.isIndexAvailable());
-
-    // Upsert delta-commit case
-    double updateTimestamp = new Double(Instant.now().toEpochMilli()).longValue();
-    String updateSPath = tmpFolder.toAbsolutePath().toString() + "/data2";
-    generateNewDataSetAndReturnSchema(updateTimestamp, totalRecords, partitions, updateSPath);
-    JavaRDD<HoodieRecord> updateBatch =
-        generateInputBatch(jsc, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), updateSPath,
-            (status) -> status.getName().endsWith("parquet")), schema);
-    String newInstantTs = client.startCommit();
-    client.upsert(updateBatch, newInstantTs);
-    checkBootstrapResults(totalRecords, schema, newInstantTs, false, 2, updateTimestamp,
-        timestamp, true);
-
-    Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
-    assertTrue(compactionInstant.isPresent());
-    client.compact(compactionInstant.get());
-    checkBootstrapResults(totalRecords, schema, compactionInstant.get(), true, 3, 2,
-        updateTimestamp, updateTimestamp, false, Arrays.asList(compactionInstant.get()));
+    testBootstrapCommon(true, true, EffectiveMode.METADATA_BOOTSTRAP_MODE);
   }
 
   @Test
   public void testFullBoostrapOnlyCOW() throws Exception {
-    /**
-     * Perform full bootstrap of source and check the content
-     */
-    int totalRecords = 100;
-    double timestamp = new Double(Instant.now().toEpochMilli()).longValue();
-    List<String> partitions = Arrays.asList("2020/04/01", "2020/04/02", "2020/04/03");
-    Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, srcPath);
-    HoodieWriteConfig config = getConfigBuilder(schema.toString())
-        .withAutoCommit(true)
-        .withSchema(schema.toString())
-        .withBootstrapConfig(HoodieBootstrapConfig.newBuilder().withBootstrapSourceBasePath(srcPath)
-            .withBootstrapKeyGenClass(SimpleKeyGenerator.class.getCanonicalName())
-            .withBootstrapParallelism(3)
-            .withFullBootstrapInputProvider(FullTestBootstrapInputProvider.class.getName())
-            .withBootstrapModeSelector(FullBootstrapModeSelector.class.getName()).build())
-        .build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-    checkBootstrapResults(totalRecords, schema, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS, false, 1, timestamp,
-        timestamp, false);
-    // Rollback Bootstrap
-    FSUtils.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), new HoodieInstant(State.COMPLETED,
-        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS));
-    client.rollBackPendingBootstrap();
-    metaClient.reloadActiveTimeline();
-    assertEquals(0, metaClient.getCommitsTimeline().countInstants());
-    assertEquals(0L, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), basePath,
-        (status) -> status.getName().endsWith(".parquet")).stream().flatMap(f -> f.getValue().stream()).count());
-
-    BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertFalse(index.isIndexAvailable());
-
-    // Run bootstrap again
-    client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-
-    metaClient.reloadActiveTimeline();
-    index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertFalse(index.isIndexAvailable());
-
-    // Upsert case
-    double updateTimestamp = new Double(Instant.now().toEpochMilli()).longValue();
-    String updateSPath = tmpFolder.toAbsolutePath().toString() + "/data2";
-    generateNewDataSetAndReturnSchema(updateTimestamp, totalRecords, partitions, updateSPath);
-    JavaRDD<HoodieRecord> updateBatch =
-        generateInputBatch(jsc, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), updateSPath,
-            (status) -> status.getName().endsWith("parquet")), schema);
-    String newInstantTs = client.startCommit();
-    client.upsert(updateBatch, newInstantTs);
-    checkBootstrapResults(totalRecords, schema, newInstantTs, false, 2, updateTimestamp,
-        updateTimestamp, false);
+    testBootstrapCommon(true, false, EffectiveMode.FULL_BOOTSTRAP_MODE);
   }
 
   @Test
   public void testFullBootstrapWithUpdatesMOR() throws Exception {
-    /**
-     * Perform metadata bootstrap of source and check the content
-     */
-    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
-    int totalRecords = 100;
-    List<String> partitions = Arrays.asList("2020/04/01", "2020/04/02", "2020/04/03");
-    double timestamp = new Double(Instant.now().toEpochMilli()).longValue();
-    Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, srcPath);
-    HoodieWriteConfig config = getConfigBuilder(schema.toString())
-        .withAutoCommit(true)
-        .withSchema(schema.toString())
-        .withBootstrapConfig(HoodieBootstrapConfig.newBuilder().withBootstrapSourceBasePath(srcPath)
-            .withBootstrapKeyGenClass(SimpleKeyGenerator.class.getCanonicalName())
-            .withBootstrapParallelism(3)
-            .withFullBootstrapInputProvider(FullTestBootstrapInputProvider.class.getName())
-            .withBootstrapModeSelector(FullBootstrapModeSelector.class.getName()).build())
-        .build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-    checkBootstrapResults(totalRecords, schema, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS, false, 1, timestamp,
-        timestamp, false);
-    // Rollback Bootstrap
-    FSUtils.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), new HoodieInstant(State.COMPLETED,
-        HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS));
-    client.rollBackPendingBootstrap();
-    metaClient.reloadActiveTimeline();
-    assertEquals(0, metaClient.getCommitsTimeline().countInstants());
-    assertEquals(0L, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), basePath,
-        (status) -> status.getName().endsWith(".parquet")).stream().flatMap(f -> f.getValue().stream()).count());
-
-    BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertFalse(index.isIndexAvailable());
-
-    // Run bootstrap again
-    client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-
-    metaClient.reloadActiveTimeline();
-    index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertFalse(index.isIndexAvailable());
-
-    // Upsert delta-commit case
-    double updateTimestamp = new Double(Instant.now().toEpochMilli()).longValue();
-    String updateSPath = tmpFolder.toAbsolutePath().toString() + "/data2";
-    generateNewDataSetAndReturnSchema(updateTimestamp, totalRecords, partitions, updateSPath);
-    JavaRDD<HoodieRecord> updateBatch =
-        generateInputBatch(jsc, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), updateSPath,
-            (status) -> status.getName().endsWith("parquet")), schema);
-    String newInstantTs = client.startCommit();
-    client.upsert(updateBatch, newInstantTs);
-    checkBootstrapResults(totalRecords, schema, newInstantTs, false, 2, updateTimestamp,
-        timestamp, true);
-
-    Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
-    assertTrue(compactionInstant.isPresent());
-    client.compact(compactionInstant.get());
-    checkBootstrapResults(totalRecords, schema, compactionInstant.get(), false, 3, 2,
-        updateTimestamp, updateTimestamp, false, Arrays.asList(compactionInstant.get()));
+    testBootstrapCommon(true, true, EffectiveMode.FULL_BOOTSTRAP_MODE);
   }
 
   @Test
   public void testMetaAndFullBoostrapCOW() throws Exception {
-    /**
-     * Perform full bootstrap of source and check the content
-     */
-    int totalRecords = 100;
-    double timestamp = new Double(Instant.now().toEpochMilli()).longValue();
-    List<String> partitions = Arrays.asList("2020/04/01", "2020/04/02", "2020/04/03");
-    Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, srcPath);
-    HoodieWriteConfig config = getConfigBuilder(schema.toString())
-        .withAutoCommit(true)
-        .withSchema(schema.toString())
-        .withBootstrapConfig(HoodieBootstrapConfig.newBuilder().withBootstrapSourceBasePath(srcPath)
-            .withBootstrapKeyGenClass(SimpleKeyGenerator.class.getCanonicalName())
-            .withBootstrapParallelism(3)
-            .withFullBootstrapInputProvider(FullTestBootstrapInputProvider.class.getName())
-            .withBootstrapModeSelector(TestRandomBootstapModeSelector.class.getName()).build())
-        .build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-    checkBootstrapResults(totalRecords, schema, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS, false, 2, 2,
-        timestamp, timestamp, false,
-        Arrays.asList(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS));
-    // Rollback Bootstrap
-    FSUtils.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), new HoodieInstant(State.COMPLETED,
-        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS));
-    client.rollBackPendingBootstrap();
-    metaClient.reloadActiveTimeline();
-    assertEquals(0, metaClient.getCommitsTimeline().countInstants());
-    assertEquals(0L, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), basePath,
-        (status) -> status.getName().endsWith(".parquet")).stream().flatMap(f -> f.getValue().stream()).count());
-
-    BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertFalse(index.isIndexAvailable());
-
-    // Run bootstrap again
-    client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-
-    metaClient.reloadActiveTimeline();
-    index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertTrue(index.isIndexAvailable());
-
-    // Upsert case
-    double updateTimestamp = new Double(Instant.now().toEpochMilli()).longValue();
-    String updateSPath = tmpFolder.toAbsolutePath().toString() + "/data2";
-    generateNewDataSetAndReturnSchema(updateTimestamp, totalRecords, partitions, updateSPath);
-    JavaRDD<HoodieRecord> updateBatch =
-        generateInputBatch(jsc, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), updateSPath,
-            (status) -> status.getName().endsWith("parquet")), schema);
-    String newInstantTs = client.startCommit();
-    client.upsert(updateBatch, newInstantTs);
-    checkBootstrapResults(totalRecords, schema, newInstantTs, false, 3, updateTimestamp,
-        updateTimestamp, false);
+    testBootstrapCommon(true, false, EffectiveMode.MIXED_BOOTSTRAP_MODE);
   }
 
   @Test
   public void testMetadataAndFullBootstrapWithUpdatesMOR() throws Exception {
-    /**
-     * Perform metadata bootstrap of source and check the content
-     */
-    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
-    int totalRecords = 100;
-    List<String> partitions = Arrays.asList("2020/04/01", "2020/04/02", "2020/04/03");
-    double timestamp = new Double(Instant.now().toEpochMilli()).longValue();
-    Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, srcPath);
-    HoodieWriteConfig config = getConfigBuilder(schema.toString())
-        .withSchema(schema.toString())
-        .withBootstrapConfig(HoodieBootstrapConfig.newBuilder().withBootstrapSourceBasePath(srcPath)
-            .withBootstrapKeyGenClass(SimpleKeyGenerator.class.getCanonicalName())
-            .withBootstrapParallelism(3)
-            .withFullBootstrapInputProvider(FullTestBootstrapInputProvider.class.getName())
-            .withBootstrapModeSelector(TestRandomBootstapModeSelector.class.getName()).build())
-        .build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-    checkBootstrapResults(totalRecords, schema, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS, false, 2, 2,
-        timestamp, timestamp, false,
-        Arrays.asList(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS));
-    // Rollback Bootstrap
-    FSUtils.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), new HoodieInstant(State.COMPLETED,
-        HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS));
-    client.rollBackPendingBootstrap();
-    metaClient.reloadActiveTimeline();
-    assertEquals(0, metaClient.getCommitsTimeline().countInstants());
-    assertEquals(0L, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), basePath,
-        (status) -> status.getName().endsWith(".parquet")).stream().flatMap(f -> f.getValue().stream()).count());
-
-    BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertFalse(index.isIndexAvailable());
-
-    // Run bootstrap again
-    client = new HoodieWriteClient(jsc, config);
-    client.bootstrap();
-
-    metaClient.reloadActiveTimeline();
-    index = BootstrapIndex.getBootstrapIndex(metaClient);
-    assertTrue(index.isIndexAvailable());
-
-    // Upsert delta-commit case
-    double updateTimestamp = new Double(Instant.now().toEpochMilli()).longValue();
-    String updateSPath = tmpFolder.toAbsolutePath().toString() + "/data2";
-    generateNewDataSetAndReturnSchema(updateTimestamp, totalRecords, partitions, updateSPath);
-    JavaRDD<HoodieRecord> updateBatch =
-        generateInputBatch(jsc, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), updateSPath,
-            (status) -> status.getName().endsWith("parquet")), schema);
-    String newInstantTs = client.startCommit();
-    client.upsert(updateBatch, newInstantTs);
-    checkBootstrapResults(totalRecords, schema, newInstantTs, false, 3, 2, updateTimestamp,
-        timestamp, true, Arrays.asList(newInstantTs));
-
-    Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
-    assertTrue(compactionInstant.isPresent());
-    client.compact(compactionInstant.get());
-    checkBootstrapResults(totalRecords, schema, compactionInstant.get(), false, 4, 2,
-        updateTimestamp, updateTimestamp, false, Arrays.asList(compactionInstant.get()));
+    testBootstrapCommon(true, true, EffectiveMode.MIXED_BOOTSTRAP_MODE);
   }
 
   private void checkBootstrapResults(int totalRecords, Schema schema, String maxInstant, boolean checkNumRawFiles,
@@ -603,6 +347,7 @@ public class TestBootstrap extends TestHoodieClientBase {
     }
 
     // RO Input Format Read
+    reloadInputFormats();
     List<GenericRecord> records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         FSUtils.getAllPartitionPaths(metaClient.getFs(), basePath, false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
@@ -610,7 +355,6 @@ public class TestBootstrap extends TestHoodieClientBase {
     assertEquals(totalRecords, records.size());
     Set<String> seenKeys = new HashSet<>();
     for (GenericRecord r : records) {
-      System.out.println("Record 1 :" + r);
       assertEquals(r.get("_row_key").toString(), r.get("_hoodie_record_key").toString(), "Record :" + r);
       assertEquals(expROTimestamp, ((DoubleWritable)r.get("timestamp")).get(), 0.1, "Record :" + r);
       assertFalse(seenKeys.contains(r.get("_hoodie_record_key").toString()));
@@ -619,6 +363,7 @@ public class TestBootstrap extends TestHoodieClientBase {
     assertEquals(totalRecords, seenKeys.size());
 
     //RT Input Format Read
+    reloadInputFormats();
     seenKeys = new HashSet<>();
     records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         FSUtils.getAllPartitionPaths(metaClient.getFs(), basePath, false).stream()
@@ -626,7 +371,6 @@ public class TestBootstrap extends TestHoodieClientBase {
         basePath, rtJobConf, rtInputFormat, schema,  HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES);
     assertEquals(totalRecords, records.size());
     for (GenericRecord r : records) {
-      System.out.println("Record 2 :" + r);
       assertEquals(r.get("_row_key").toString(), r.get("_hoodie_record_key").toString(), "Realtime Record :" + r);
       assertEquals(expTimestamp, ((DoubleWritable)r.get("timestamp")).get(),0.1, "Realtime Record :" + r);
       assertFalse(seenKeys.contains(r.get("_hoodie_record_key").toString()));
@@ -644,7 +388,6 @@ public class TestBootstrap extends TestHoodieClientBase {
     assertEquals(totalRecords, records.size());
     seenKeys = new HashSet<>();
     for (GenericRecord r : records) {
-      System.out.println("Record 3 :" + r);
       assertFalse(seenKeys.contains(r.get("_hoodie_record_key").toString()));
       seenKeys.add(r.get("_hoodie_record_key").toString());
     }
@@ -660,7 +403,6 @@ public class TestBootstrap extends TestHoodieClientBase {
         HoodieRecord.HOODIE_META_COLUMNS);
     assertEquals(totalRecords, records.size());
     for (GenericRecord r : records) {
-      System.out.println("Record 4 :" + r);
       assertFalse(seenKeys.contains(r.get("_hoodie_record_key").toString()));
       seenKeys.add(r.get("_hoodie_record_key").toString());
     }
@@ -676,7 +418,6 @@ public class TestBootstrap extends TestHoodieClientBase {
     assertEquals(totalRecords, records.size());
     seenKeys = new HashSet<>();
     for (GenericRecord r : records) {
-      System.out.println("Record 5 :" + r);
       assertFalse(seenKeys.contains(r.get("_row_key").toString()));
       seenKeys.add(r.get("_row_key").toString());
     }
@@ -692,7 +433,6 @@ public class TestBootstrap extends TestHoodieClientBase {
         Arrays.asList("_row_key"));
     assertEquals(totalRecords, records.size());
     for (GenericRecord r : records) {
-      System.out.println("Record 6 :" + r);
       assertFalse(seenKeys.contains(r.get("_row_key").toString()));
       seenKeys.add(r.get("_row_key").toString());
     }
@@ -762,10 +502,8 @@ public class TestBootstrap extends TestHoodieClientBase {
       partitions.stream().forEach(p -> {
         final BootstrapMode mode;
         if (currIdx == 0) {
-          System.out.println("METADATA bootstrap selected");
           mode = BootstrapMode.METADATA_ONLY_BOOTSTRAP;
         } else {
-          System.out.println("FULL bootstrap selected");
           mode = BootstrapMode.FULL_BOOTSTRAP;
         }
         currIdx = (currIdx + 1) % 2;
@@ -777,12 +515,11 @@ public class TestBootstrap extends TestHoodieClientBase {
 
   HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
     HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, IndexType.BLOOM)
-        .withExternalSchemaTrasformation(true);
+        .withExternalSchemaTrasformation(false);
     TypedProperties properties = new TypedProperties();
     properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key");
     properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "datestr");
     builder = builder.withProps(properties);
-    System.out.println("Builder Props :" + builder.build().getProps().getProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()));
     return builder;
   }
 }

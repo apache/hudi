@@ -22,6 +22,9 @@ import java.io.Serializable;
 import java.util.Objects;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 
+/**
+ * Payload returned by Bootstrap Index.
+ */
 public class BootstrapSourceFileMapping implements Serializable, Comparable<BootstrapSourceFileMapping> {
 
   private final String sourceBasePath;

@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.LazyInsertIterable;
@@ -50,7 +51,13 @@ public abstract class CommitActionExecutor<T extends HoodieRecordPayload<T>>
   public CommitActionExecutor(JavaSparkContext jsc,
       HoodieWriteConfig config, HoodieTable table,
       String instantTime, WriteOperationType operationType) {
-    super(jsc, config, table, instantTime, operationType);
+    this(jsc, config, table, instantTime, operationType, Option.empty());
+  }
+
+  public CommitActionExecutor(JavaSparkContext jsc,
+      HoodieWriteConfig config, HoodieTable table,
+      String instantTime, WriteOperationType operationType, Option<Map<String, String>> extraMetadata) {
+    super(jsc, config, table, instantTime, operationType, extraMetadata);
   }
 
   @Override

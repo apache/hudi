@@ -56,6 +56,13 @@ import java.util.Iterator;
  */
 public class MergeHelper {
 
+  /**
+   * Read records from previous version of base file and merge.
+   * @param table Hoodie Table
+   * @param upsertHandle Merge Handle
+   * @param <T>
+   * @throws IOException in case of error
+   */
   public static <T extends HoodieRecordPayload<T>> void runMerge(HoodieTable<T> table,
       HoodieMergeHandle<T> upsertHandle) throws IOException {
     final boolean externalchemaTransformation = table.getConfig().shouldUseExternalSchemaTransformation();
@@ -83,19 +90,8 @@ public class MergeHelper {
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getExternalBaseFile().isPresent()) {
-        Path externalFilePath = new Path(baseFile.getExternalBaseFile().get().getPath());
-        Configuration configForExternalFile = new Configuration(table.getHadoopConf());
-        if (externalchemaTransformation) {
-          MessageType usedExtParquetSchema =  ParquetUtils.readSchema(configForExternalFile, externalFilePath);
-          Schema lastExtWrittenSchema = new AvroSchemaConverter().convert(usedExtParquetSchema);
-          AvroReadSupport.setAvroReadSchema(configForExternalFile, lastExtWrittenSchema);
-        } else {
-          AvroReadSupport.setAvroReadSchema(configForExternalFile, upsertHandle.getOriginalSchema());
-        }
-        externalFileReader = AvroParquetReader.<GenericRecord>builder(externalFilePath).withConf(configForExternalFile).build();
-        readerIterator = new MergingParquetIterator<>(new ParquetReaderIterator<>(reader),
-            new ParquetReaderIterator<>(externalFileReader), (inputRecordPair) -> HoodieAvroUtils.stitchRecords(
-            inputRecordPair.getLeft(), inputRecordPair.getRight(), upsertHandle.getWriterSchema()));
+        readerIterator = getStitchedParquetIterator(table, upsertHandle, baseFile, reader,
+            externalchemaTransformation);
       } else {
         readerIterator = new ParquetReaderIterator(reader);
       }
@@ -107,27 +103,9 @@ public class MergeHelper {
         if (!externalchemaTransformation) {
           return record;
         }
-        ByteArrayOutputStream inStream = null;
-        try {
-          GenericRecord gRec = (GenericRecord) record;
-          inStream = new ByteArrayOutputStream();
-          BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(inStream, encoderCache.get());
-          encoderCache.set(encoder);
-          gWriter.write(gRec, encoder);
-          encoder.flush();
-          BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(inStream.toByteArray(), decoderCache.get());
-          decoderCache.set(decoder);
-          GenericRecord transformedRec = gReader.read(null, decoder);
-          return transformedRec;
-        } catch (IOException e) {
-          throw new HoodieException(e);
-        } finally {
-          try {
-            inStream.close();
-          } catch (IOException ioe) {
-            throw new HoodieException(ioe.getMessage(), ioe);
-          }
-        }
+        return transformRecordBasedOnNewSchema(gReader, gWriter, encoderCache, decoderCache,
+            (GenericRecord)record);
+
       });
       wrapper.execute();
     } catch (Exception e) {
@@ -141,6 +119,62 @@ public class MergeHelper {
         wrapper.shutdownNow();
       }
     }
+  }
+
+  private static GenericRecord transformRecordBasedOnNewSchema(
+      GenericDatumReader<GenericRecord> gReader, GenericDatumWriter<GenericRecord> gWriter,
+      ThreadLocal<BinaryEncoder> encoderCache, ThreadLocal<BinaryDecoder> decoderCache,
+      GenericRecord gRec) {
+    ByteArrayOutputStream inStream = null;
+    try {
+      inStream = new ByteArrayOutputStream();
+      BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(inStream, encoderCache.get());
+      encoderCache.set(encoder);
+      gWriter.write(gRec, encoder);
+      encoder.flush();
+      BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(inStream.toByteArray(), decoderCache.get());
+      decoderCache.set(decoder);
+      GenericRecord transformedRec = gReader.read(null, decoder);
+      return transformedRec;
+    } catch (IOException e) {
+      throw new HoodieException(e);
+    } finally {
+      try {
+        inStream.close();
+      } catch (IOException ioe) {
+        throw new HoodieException(ioe.getMessage(), ioe);
+      }
+    }
+  }
+
+
+  /**
+   * Create Parquet record iterator that provides a stitched view of record read from skeleton and external file.
+   * @param table  Hoodie Table
+   * @param upsertHandle Merge Handle
+   * @param baseFile Base File
+   * @param reader  Record Reader corresponding to skeleton file
+   * @param externalchemaTransformation Disable Parquet managed avro schema evolution
+   * @param <T>
+   * @return
+   * @throws IOException in case of error reading files
+   */
+  private static <T extends HoodieRecordPayload<T>> Iterator<GenericRecord> getStitchedParquetIterator(
+      HoodieTable<T> table, HoodieMergeHandle<T> upsertHandle, HoodieBaseFile baseFile,
+      ParquetReader<GenericRecord> reader,  boolean externalchemaTransformation) throws IOException {
+    Path externalFilePath = new Path(baseFile.getExternalBaseFile().get().getPath());
+    Configuration configForExternalFile = new Configuration(table.getHadoopConf());
+    if (externalchemaTransformation) {
+      MessageType usedExtParquetSchema =  ParquetUtils.readSchema(configForExternalFile, externalFilePath);
+      Schema lastExtWrittenSchema = new AvroSchemaConverter().convert(usedExtParquetSchema);
+      AvroReadSupport.setAvroReadSchema(configForExternalFile, lastExtWrittenSchema);
+    } else {
+      AvroReadSupport.setAvroReadSchema(configForExternalFile, upsertHandle.getOriginalSchema());
+    }
+    ParquetReader<GenericRecord> externalFileReader = AvroParquetReader.<GenericRecord>builder(externalFilePath).withConf(configForExternalFile).build();
+    return new MergingParquetIterator<>(new ParquetReaderIterator<>(reader),
+        new ParquetReaderIterator<>(externalFileReader), (inputRecordPair) -> HoodieAvroUtils.stitchRecords(
+        inputRecordPair.getLeft(), inputRecordPair.getRight(), upsertHandle.getWriterSchema()));
   }
 
   /**

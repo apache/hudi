@@ -77,6 +77,7 @@ public class KeyGenUtils {
       }
       partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
     }
+    partitionPath.deleteCharAt(partitionPath.length() - 1);
     return partitionPath.toString();
   }
 

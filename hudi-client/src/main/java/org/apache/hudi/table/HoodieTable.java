@@ -333,9 +333,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   /**
    * Perform metadata/full bootstrap of a Hudi table.
    * @param jsc JavaSparkContext
+   * @param extraMetadata Additional Metadata for storing in commit file.
    * @return HoodieBootstrapWriteMetadata
    */
-  public abstract HoodieBootstrapWriteMetadata bootstrap(JavaSparkContext jsc);
+  public abstract HoodieBootstrapWriteMetadata bootstrap(JavaSparkContext jsc,
+      Option<Map<String, String>> extraMetadata);
 
   /**
    * Perform rollback of bootstrap of a Hudi table.

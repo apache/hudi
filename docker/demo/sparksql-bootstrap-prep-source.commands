@@ -15,30 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import org.apache.spark.sql.functions.col
 
-package org.apache.hudi.table.action.bootstrap;
-
-import org.apache.hudi.table.action.HoodieWriteMetadata;
-
-/**
- * Write Result for a bootstrap operation.
- */
-public class HoodieBootstrapWriteMetadata {
-
-  private final HoodieWriteMetadata metadataBootstrapResult;
-  private final HoodieWriteMetadata fullBootstrapResult;
-
-  public HoodieBootstrapWriteMetadata(HoodieWriteMetadata metadataBootstrapResult,
-      HoodieWriteMetadata fullBootstrapResult) {
-    this.metadataBootstrapResult = metadataBootstrapResult;
-    this.fullBootstrapResult = fullBootstrapResult;
-  }
-
-  public HoodieWriteMetadata getMetadataBootstrapResult() {
-    return metadataBootstrapResult;
-  }
-
-  public HoodieWriteMetadata getFullBootstrapResult() {
-    return fullBootstrapResult;
-  }
-}
+val df = spark.read.format("org.apache.hudi").load("/user/hive/warehouse/stock_ticks_cow/*/*/*").drop("_hoodie_commit_time", "_hoodie_record_key", "_hoodie_file_name", "_hoodie_commit_seqno", "_hoodie_partition_path")
+df.write.format("parquet").save("/user/hive/warehouse/stock_ticks_cow_bs_src/2018/08/31/")
+System.exit(0)

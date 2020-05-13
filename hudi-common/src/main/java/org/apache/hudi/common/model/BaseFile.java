@@ -25,7 +25,8 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * Represents metadata about any file.
+ * Represents common metadata about base-file.
+ * A base file can be Hudi base file or even an external (non-hudi) base file too.
  */
 public class BaseFile implements Serializable {
 

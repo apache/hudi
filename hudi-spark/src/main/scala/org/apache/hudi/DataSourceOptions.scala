@@ -207,7 +207,8 @@ object DataSourceWriteOptions {
     */
   val HIVE_STYLE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.hive_style_partitioning"
   val DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = "false"
-
+  val URL_ENCODE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.partitionpath.urlencode"
+  val DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL = "false"
   /**
     * Key generator class, that implements will extract the key out of incoming record
     *

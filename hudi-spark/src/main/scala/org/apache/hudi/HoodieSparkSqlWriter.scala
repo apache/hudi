@@ -129,8 +129,9 @@ private[hudi] object HoodieSparkSqlWriter {
 
       // Create the table if not present
       if (!exists) {
+        //TODO: bootstrapIndexClass needs to be set when bootstrap index class is integrated.
         HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get, tableType,
-          tblName.get, "archived", parameters(PAYLOAD_CLASS_OPT_KEY))
+          tblName.get, "archived", parameters(PAYLOAD_CLASS_OPT_KEY), null)
       }
 
       // Create a HoodieWriteClient & issue the write.

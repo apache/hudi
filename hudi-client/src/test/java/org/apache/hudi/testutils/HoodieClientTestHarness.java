@@ -34,6 +34,7 @@ import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.slf4j.Logger;
@@ -102,7 +103,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    */
   protected void initSparkContexts(String appName) {
     // Initialize a local spark env
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName));
+    jsc = new JavaSparkContext(SparkContext.getOrCreate(HoodieClientTestUtils.getSparkConfForTest(appName)));
     jsc.setLogLevel("ERROR");
     hadoopConf = jsc.hadoopConfiguration();
 

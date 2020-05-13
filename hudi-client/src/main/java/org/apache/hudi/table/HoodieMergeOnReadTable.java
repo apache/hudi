@@ -34,6 +34,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.bootstrap.BootstrapDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.deltacommit.BulkInsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.BulkInsertPreppedDeltaCommitActionExecutor;
@@ -129,6 +131,11 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   public HoodieWriteMetadata compact(JavaSparkContext jsc, String compactionInstantTime) {
     RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(jsc, config, this, compactionInstantTime);
     return compactionExecutor.execute();
+  }
+
+  @Override
+  public HoodieBootstrapWriteMetadata bootstrap(JavaSparkContext jsc, Option<Map<String, String>> extraMetadata) {
+    return new BootstrapDeltaCommitActionExecutor(jsc, config, this, extraMetadata).execute();
   }
 
   @Override

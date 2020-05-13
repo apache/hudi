@@ -31,7 +31,7 @@ import org.apache.hadoop.fs.Path;
 import java.util.List;
 
 /**
- * Default Bootstrap Schema Provider.
+ * Bootstrap Schema Provider. Schema provided in config is used. If not available, use schema from Parquet
  */
 public class BootstrapSourceSchemaProvider {
 

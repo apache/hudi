@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.ExternalBaseFileSplit;
+import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 
@@ -212,10 +213,15 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   }
 
   private static void addRequiredProjectionFields(Configuration configuration) {
-    // Need this to do merge records in HoodieRealtimeRecordReader
-    addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HOODIE_RECORD_KEY_COL_POS);
-    addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HOODIE_COMMIT_TIME_COL_POS);
-    addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HOODIE_PARTITION_PATH_COL_POS);
+    List<Integer> projectedIds = new ArrayList<>(HoodieColumnProjectionUtils.getReadColumnIDs(configuration));
+    List<String> projectedNames = new ArrayList<>(
+        Arrays.asList(HoodieColumnProjectionUtils.getReadColumnNames(configuration)));
+    projectedIds.addAll(Arrays.asList(HOODIE_RECORD_KEY_COL_POS, HOODIE_COMMIT_TIME_COL_POS,
+        HOODIE_PARTITION_PATH_COL_POS));
+    projectedNames.addAll(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+        HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+
+    HoodieColumnProjectionUtils.setReadColumns(configuration, projectedIds, projectedNames);
   }
 
   /**

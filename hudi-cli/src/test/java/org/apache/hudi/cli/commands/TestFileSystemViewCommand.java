@@ -69,7 +69,8 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
     String tablePath = Paths.get(basePath, tableName).toString();
     new TableCommand().createTable(
         tablePath, tableName,
-        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload",
+        "org.apache.hudi.common.bootstrap.index.HFileBasedBootstrapIndex");
 
     metaClient = HoodieCLI.getTableMetaClient();
 

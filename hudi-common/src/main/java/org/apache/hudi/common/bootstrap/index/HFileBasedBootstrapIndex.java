@@ -132,8 +132,8 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
   private static HFile.Reader createReader(String hFilePath, Configuration conf, FileSystem fileSystem) {
     try {
       LOG.info("Opening HFile for reading :" + hFilePath);
-      HFile.Reader reader = HFile.createReader(fileSystem, new HFilePathForReader(hFilePath), new CacheConfig(conf),
-          conf);
+      HFile.Reader reader = HFile.createReader(fileSystem, new HFilePathForReader(hFilePath),
+          new CacheConfig(conf), conf);
       return reader;
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
