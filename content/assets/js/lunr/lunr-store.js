@@ -670,12 +670,47 @@ var store = [{
         "url": "https://hudi.apache.org/docs/docs-versions.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Connect with us at Strata San Jose March 2017",
-        "excerpt":"We will be presenting Hudi &amp; general concepts around how incremental processing works at Uber. Catch our talk “Incremental Processing on Hadoop At Uber”   ","categories": [],
+        "excerpt":"We will be presenting Hudi &amp; general concepts around how incremental processing works at Uber. Catch our talk “Incremental Processing on Hadoop At Uber”   ","categories": ["blog"],
         "tags": [],
-        "url": "https://hudi.apache.org/strata.html",
+        "url": "https://hudi.apache.org/blog/strata-talk-2017/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Hudi entered Apache Incubator",
-        "excerpt":"In the coming weeks, we will be moving in our new home on the Apache Incubator.   ","categories": [],
+        "excerpt":"In the coming weeks, we will be moving in our new home on the Apache Incubator.   ","categories": ["blog"],
         "tags": [],
-        "url": "https://hudi.apache.org/asf.html",
+        "url": "https://hudi.apache.org/blog/asf-incubation/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Big Batch vs Incremental Processing",
+        "excerpt":"   ","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/batch-vs-incremental/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Registering sample dataset to Hive via beeline",
+        "excerpt":"Hudi hive sync tool typically handles registration of the dataset into Hive metastore. In case, there are issues with quickstart around this, following page shows commands that can be used to do this manually via beeline. Add in the packaging/hoodie-hive-bundle/target/hoodie-hive-bundle-0.4.6-SNAPSHOT.jar, so that Hive can read the Hudi dataset and answer...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/registering-dataset-to-hive/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Ingesting Database changes via Sqoop/Hudi",
+        "excerpt":"Very simple in just 2 steps. Step 1: Extract new changes to users table in MySQL, as avro data files on DFS // Command to extract incrementals using sqoop bin/sqoop import \\ -Dmapreduce.job.user.classpath.first=true \\ --connect jdbc:mysql://localhost/users \\ --username root \\ --password ******* \\ --table users \\ --as-avrodatafile \\ --target-dir \\...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/ingesting-database-changes/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Delete support in Hudi",
+        "excerpt":"Deletes are supported at a record level in Hudi with 0.5.1 release. This blog is a “how to” blog on how to delete records in hudi. Deletes can be done with 3 flavors: Hudi RDD APIs, with Spark data source and with DeltaStreamer. Delete using RDD Level APIs If you...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/delete-support-in-hudi/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Change Capture Using AWS Database Migration Service and Hudi",
+        "excerpt":"One of the core use-cases for Apache Hudi is enabling seamless, efficient database ingestion to your data lake. Even though a lot has been talked about and even users already adopting this model, content on how to go about this is sparse. In this blog, we will build an end-end...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/change-capture-using-aws/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Export Hudi datasets as a copy or as different formats",
+        "excerpt":"Copy to Hudi dataset Similar to the existing HoodieSnapshotCopier, the Exporter scans the source dataset and then makes a copy of it to the target output path. spark-submit \\ --jars \"packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-0.6.0-SNAPSHOT.jar\" \\ --deploy-mode \"client\" \\ --class \"org.apache.hudi.utilities.HoodieSnapshotExporter\" \\ packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.6.0-SNAPSHOT.jar \\ --source-base-path \"/tmp/\" \\ --target-output-path \"/tmp/exported/hudi/\" \\ --output-format \"hudi\" Export to...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/exporting-hudi-datasets/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Apache Hudi (Incubating) Support on Apache Zeppelin",
+        "excerpt":"1. Introduction Apache Zeppelin is a web-based notebook that provides interactive data analysis. It is convenient for you to make beautiful documents that can be data-driven, interactive, and collaborative, and supports multiple languages, including Scala (using Apache Spark), Python (Apache Spark), SparkSQL, Hive, Markdown, Shell, and so on. Hive and...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/apache-hudi-apache-zepplin/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]
