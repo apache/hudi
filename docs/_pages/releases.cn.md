@@ -10,7 +10,7 @@ language: cn
 ## [Release 0.5.2-incubating](https://github.com/apache/incubator-hudi/releases/tag/release-0.5.2-incubating) ([docs](/docs/0.5.2-quick-start-guide.html))
 
 ### Download Information
- * Source Release : [Apache Hudi(incubating) 0.5.2-incubating Source Release](https://www.apache.org/dist/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz) ([asc](https://www.apache.org/dist/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc), [sha512](https://www.apache.org/dist/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512))
+ * Source Release : [Apache Hudi(incubating) 0.5.2-incubating Source Release](https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz) ([asc](https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512))
  * Apache Hudi (incubating) jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
 
 ### Migration Guide for this release
@@ -36,7 +36,7 @@ temp_query --sql "select Instant, NumInserts, NumWrites from satishkotha_debug w
 ## [Release 0.5.1-incubating](https://github.com/apache/incubator-hudi/releases/tag/release-0.5.1-incubating) ([docs](/docs/0.5.1-quick-start-guide.html))
 
 ### Download Information
- * Source Release : [Apache Hudi(incubating) 0.5.1-incubating Source Release](https://www.apache.org/dist/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz) ([asc](https://www.apache.org/dist/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc), [sha512](https://www.apache.org/dist/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512))
+ * Source Release : [Apache Hudi(incubating) 0.5.1-incubating Source Release](https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz) ([asc](https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512))
  * Apache Hudi (incubating) jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
 
 ### Migration Guide for this release
