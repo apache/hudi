@@ -20,8 +20,9 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.utilities.UtilitiesTestBase;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+import org.apache.hudi.utilities.testutils.sources.AbstractDFSSourceTestBase;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +46,7 @@ public class TestCsvDFSSource extends AbstractDFSSourceTestBase {
   }
 
   @Override
-  Source prepareDFSSource() {
+  public Source prepareDFSSource() {
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsRoot);
     props.setProperty("hoodie.deltastreamer.csv.header", Boolean.toString(true));
@@ -54,7 +55,7 @@ public class TestCsvDFSSource extends AbstractDFSSourceTestBase {
   }
 
   @Override
-  void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
+  public void writeNewDataToFile(List<HoodieRecord> records, Path path) throws IOException {
     UtilitiesTestBase.Helpers.saveCsvToDFS(
         true, '\t', Helpers.jsonifyRecords(records), dfs, path.toString());
   }

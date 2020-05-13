@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent;
 import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent.PartitionEventType;
+import org.apache.hudi.hive.testutils.TestUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 
 import org.apache.hadoop.hive.metastore.api.Partition;
