@@ -51,7 +51,7 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
   }
 
   @Override
-  public HoodieAvroPayload preCombine(HoodieAvroPayload another) {
+  public HoodieAvroPayload preCombine(HoodieAvroPayload another, Schema schema) {
     return this;
   }
 

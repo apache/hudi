@@ -298,12 +298,12 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
     val overWritePayload2 = new OverwriteWithLatestAvroPayload(laterRecord, 2)
 
     // it will provide the record with greatest combine value
-    val combinedPayload12 = overWritePayload1.preCombine(overWritePayload2)
+    val combinedPayload12 = overWritePayload1.preCombine(overWritePayload2, schema)
     val combinedGR12 = combinedPayload12.getInsertValue(schema).get().asInstanceOf[GenericRecord]
     assertEquals("field2", combinedGR12.get("field1").toString)
 
     // and it will be deterministic, to order of processing.
-    val combinedPayload21 = overWritePayload2.preCombine(overWritePayload1)
+    val combinedPayload21 = overWritePayload2.preCombine(overWritePayload1, schema)
     val combinedGR21 = combinedPayload21.getInsertValue(schema).get().asInstanceOf[GenericRecord]
     assertEquals("field2", combinedGR21.get("field1").toString)
   }
@@ -315,7 +315,7 @@ class TestDataSourceDefaults extends AssertionsForJUnit {
     val emptyPayload2 = new EmptyHoodieRecordPayload(laterRecord, 2)
 
     // it will provide an empty record
-    val combinedPayload12 = emptyPayload1.preCombine(emptyPayload2)
+    val combinedPayload12 = emptyPayload1.preCombine(emptyPayload2, schema)
     val combined12 = combinedPayload12.getInsertValue(schema)
     assertEquals(Option.empty(), combined12)
   }

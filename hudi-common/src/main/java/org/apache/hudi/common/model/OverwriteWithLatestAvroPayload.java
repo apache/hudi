@@ -48,7 +48,8 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   }
 
   @Override
-  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload another) {
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload another,
+      Schema schema) {
     // pick the payload with greatest ordering value
     if (another.orderingVal.compareTo(orderingVal) > 0) {
       return another;

@@ -36,7 +36,7 @@ public class EmptyHoodieRecordPayload implements HoodieRecordPayload<EmptyHoodie
   }
 
   @Override
-  public EmptyHoodieRecordPayload preCombine(EmptyHoodieRecordPayload another) {
+  public EmptyHoodieRecordPayload preCombine(EmptyHoodieRecordPayload another, Schema schema) {
     return another;
   }
 

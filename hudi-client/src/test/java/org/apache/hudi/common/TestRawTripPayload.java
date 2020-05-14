@@ -82,7 +82,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
   }
 
   @Override
-  public TestRawTripPayload preCombine(TestRawTripPayload another) {
+  public TestRawTripPayload preCombine(TestRawTripPayload another, Schema schema) {
     return another;
   }
 

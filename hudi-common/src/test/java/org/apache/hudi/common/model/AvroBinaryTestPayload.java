@@ -49,7 +49,7 @@ public class AvroBinaryTestPayload implements HoodieRecordPayload {
   }
 
   @Override
-  public HoodieRecordPayload preCombine(HoodieRecordPayload another) {
+  public HoodieRecordPayload preCombine(HoodieRecordPayload another, Schema schema) {
     return this;
   }
 

@@ -37,7 +37,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    * When more than one HoodieRecord have the same HoodieKey, this function combines them before attempting to
    * insert/upsert (if combining turned on in HoodieClientConfig).
    */
-  T preCombine(T another);
+  T preCombine(T another, Schema schema);
 
   /**
    * This methods lets you write custom merging/combining logic to produce new values as a function of current value on

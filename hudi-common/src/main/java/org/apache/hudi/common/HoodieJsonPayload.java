@@ -50,7 +50,7 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
   }
 
   @Override
-  public HoodieJsonPayload preCombine(HoodieJsonPayload another) {
+  public HoodieJsonPayload preCombine(HoodieJsonPayload another, Schema schema) {
     return this;
   }
 
