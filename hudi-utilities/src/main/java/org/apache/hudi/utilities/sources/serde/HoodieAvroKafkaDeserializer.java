@@ -63,10 +63,6 @@ public class HoodieAvroKafkaDeserializer extends AbstractKafkaAvroDeserializer i
 
   @Override
   protected Object deserialize(boolean includeSchemaAndVersion, String topic, Boolean isKey, byte[] payload, Schema readerSchema) throws SerializationException {
-    if (readerSchema != null) {
-      return super.deserialize(includeSchemaAndVersion, topic, isKey, payload, readerSchema);
-    }
-
     return super.deserialize(includeSchemaAndVersion, topic, isKey, payload, sourceSchema);
   }
 
