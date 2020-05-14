@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.testutils.sources.AbstractBaseTestSource;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.log4j.LogManager;

@@ -260,9 +260,9 @@ public class FileSystemViewCommand implements CommandMarker {
     if (!maxInstant.isEmpty()) {
       final BiPredicate<String, String> predicate;
       if (includeMaxInstant) {
-        predicate = HoodieTimeline.GREATER_OR_EQUAL;
+        predicate = HoodieTimeline.GREATER_THAN_OR_EQUALS;
       } else {
-        predicate = HoodieTimeline.GREATER;
+        predicate = HoodieTimeline.GREATER_THAN;
       }
       instantsStream = instantsStream.filter(is -> predicate.test(maxInstant, is.getTimestamp()));
     }

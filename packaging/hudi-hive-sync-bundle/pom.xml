@@ -69,12 +69,19 @@
                   <include>org.apache.hudi:hudi-hive-sync</include>
 
                   <include>com.beust:jcommander</include>
+                  <include>org.apache.avro:avro</include>
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
                 </includes>
               </artifactSet>
+              <relocations>
+                <relocation>
+                  <pattern>org.apache.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
+                </relocation>
+              </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <filters>
                 <filter>
@@ -119,6 +126,18 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hive-sync</artifactId>
       <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <scope>compile</scope>
     </dependency>
   </dependencies>
 </project>

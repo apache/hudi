@@ -24,8 +24,9 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.execution.MergeOnReadLazyInsertIterable;
+import org.apache.hudi.execution.LazyInsertIterable;
 import org.apache.hudi.io.HoodieAppendHandle;
+import org.apache.hudi.io.AppendHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 
@@ -84,8 +85,8 @@ public abstract class DeltaCommitActionExecutor<T extends HoodieRecordPayload<T>
       throws Exception {
     // If canIndexLogFiles, write inserts to log files else write inserts to parquet files
     if (table.getIndex().canIndexLogFiles()) {
-      return new MergeOnReadLazyInsertIterable<>(recordItr, config, instantTime, (HoodieTable<T>)table, idPfx,
-          sparkTaskContextSupplier);
+      return new LazyInsertIterable<>(recordItr, config, instantTime, (HoodieTable<T>)table, idPfx,
+          sparkTaskContextSupplier, new AppendHandleFactory<>());
     } else {
       return super.handleInsert(idPfx, recordItr);
     }

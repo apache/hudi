@@ -118,7 +118,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
         config.shouldAssumeDatePartitioning());
     int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
     return jsc.parallelize(partitions, Math.min(partitions.size(), sparkPartitions)).flatMap(partitionPath -> {
-      HoodieActiveTimeline activeTimeline = table.getActiveTimeline().reload();
+      HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
       List<RollbackRequest> partitionRollbackRequests = new ArrayList<>();
       switch (instantToRollback.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:
@@ -225,13 +225,13 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
         // For sanity, log instant time can never be less than base-commit on which we are rolling back
         ValidationUtils
             .checkArgument(HoodieTimeline.compareTimestamps(fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId()),
-                rollbackInstant.getTimestamp(), HoodieTimeline.LESSER_OR_EQUAL));
+                HoodieTimeline.LESSER_THAN_OR_EQUALS, rollbackInstant.getTimestamp()));
       }
 
       return validForRollback && HoodieTimeline.compareTimestamps(fileIdToBaseCommitTimeForLogMap.get(
           // Base Ts should be strictly less. If equal (for inserts-to-logs), the caller employs another option
           // to delete and we should not step on it
-          wStat.getFileId()), rollbackInstant.getTimestamp(), HoodieTimeline.LESSER);
+          wStat.getFileId()), HoodieTimeline.LESSER_THAN, rollbackInstant.getTimestamp());
     }).map(wStat -> {
       String baseCommitTime = fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId());
       return RollbackRequest.createRollbackRequestWithAppendRollbackBlockAction(partitionPath, wStat.getFileId(),

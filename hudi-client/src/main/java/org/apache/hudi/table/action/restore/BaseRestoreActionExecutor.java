@@ -64,7 +64,7 @@ public abstract class BaseRestoreActionExecutor extends BaseActionExecutor<Hoodi
     // Get all the commits on the timeline after the provided commit time
     List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getCommitsAndCompactionTimeline()
         .getReverseOrderedInstants()
-        .filter(instant -> HoodieActiveTimeline.GREATER.test(instant.getTimestamp(), restoreInstantTime))
+        .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), restoreInstantTime))
         .collect(Collectors.toList());
 
     Map<String, List<HoodieRollbackMetadata>> instantToMetadata = new HashMap<>();

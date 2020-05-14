@@ -18,16 +18,17 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.SparkTaskContextSupplier;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
@@ -38,10 +39,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -54,9 +55,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieSavepointException;
+import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.table.action.commit.HoodieWriteMetadata;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -87,13 +89,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   protected final SparkTaskContextSupplier sparkTaskContextSupplier = new SparkTaskContextSupplier();
 
-  protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc, HoodieTableMetaClient metaClient) {
+  protected HoodieTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
     this.config = config;
-    this.hadoopConfiguration = new SerializableConfiguration(jsc.hadoopConfiguration());
-    this.viewManager = FileSystemViewManager.createViewManager(new SerializableConfiguration(jsc.hadoopConfiguration()),
+    this.hadoopConfiguration = new SerializableConfiguration(hadoopConf);
+    this.viewManager = FileSystemViewManager.createViewManager(new SerializableConfiguration(hadoopConf),
         config.getViewStorageConfig());
     this.metaClient = metaClient;
-    this.index = HoodieIndex.createIndex(config, jsc);
+    this.index = HoodieIndex.createIndex(config);
   }
 
   private synchronized FileSystemViewManager getViewManager() {
@@ -103,25 +105,25 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     return viewManager;
   }
 
-  public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieWriteConfig config, JavaSparkContext jsc) {
+  public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieWriteConfig config, Configuration hadoopConf) {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(
-        jsc.hadoopConfiguration(),
+        hadoopConf,
         config.getBasePath(),
         true,
         config.getConsistencyGuardConfig(),
         Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))
     );
-    return HoodieTable.create(metaClient, config, jsc);
+    return HoodieTable.create(metaClient, config, hadoopConf);
   }
 
   public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieTableMetaClient metaClient,
                                                                       HoodieWriteConfig config,
-                                                                      JavaSparkContext jsc) {
+                                                                      Configuration hadoopConf) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        return new HoodieCopyOnWriteTable<>(config, jsc, metaClient);
+        return new HoodieCopyOnWriteTable<>(config, hadoopConf, metaClient);
       case MERGE_ON_READ:
-        return new HoodieMergeOnReadTable<>(config, jsc, metaClient);
+        return new HoodieMergeOnReadTable<>(config, hadoopConf, metaClient);
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
@@ -295,24 +297,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
   }
 
-  /**
-   * Get the list of data file names savepointed.
-   */
-  public Stream<String> getSavepointedDataFiles(String savepointTime) {
-    if (!getSavepoints().contains(savepointTime)) {
-      throw new HoodieSavepointException(
-          "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
-    }
-    HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
-    HoodieSavepointMetadata metadata;
-    try {
-      metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(getActiveTimeline().getInstantDetails(instant).get());
-    } catch (IOException e) {
-      throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTime, e);
-    }
-    return metadata.getPartitionMetadata().values().stream().flatMap(s -> s.getSavepointDataFile().stream());
-  }
-
   public HoodieActiveTimeline getActiveTimeline() {
     return metaClient.getActiveTimeline();
   }
@@ -329,19 +313,21 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * 
    * @param jsc Spark Context
    * @param instantTime Instant Time for scheduling compaction
+   * @param extraMetadata additional metadata to write into plan
    * @return
    */
-  public abstract HoodieCompactionPlan scheduleCompaction(JavaSparkContext jsc, String instantTime);
+  public abstract Option<HoodieCompactionPlan> scheduleCompaction(JavaSparkContext jsc,
+                                                                  String instantTime,
+                                                                  Option<Map<String, String>> extraMetadata);
 
   /**
    * Run Compaction on the table. Compaction arranges the data so that it is optimized for data access.
    *
    * @param jsc Spark Context
    * @param compactionInstantTime Instant Time
-   * @param compactionPlan Compaction Plan
    */
-  public abstract JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String compactionInstantTime,
-      HoodieCompactionPlan compactionPlan);
+  public abstract HoodieWriteMetadata compact(JavaSparkContext jsc,
+                                              String compactionInstantTime);
 
   /**
    * Executes a new clean action.
@@ -364,6 +350,15 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
                                                   String rollbackInstantTime,
                                                   HoodieInstant commitInstant,
                                                   boolean deleteInstants);
+
+  /**
+   * Create a savepoint at the specified instant, so that the table can be restored
+   * to this point-in-timeline later if needed.
+   */
+  public abstract HoodieSavepointMetadata savepoint(JavaSparkContext jsc,
+                                                    String instantToSavepoint,
+                                                    String user,
+                                                    String comment);
 
   /**
    * Restore the table to the given instant. Note that this is a admin table recovery operation
@@ -518,5 +513,53 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   public SparkTaskContextSupplier getSparkTaskContextSupplier() {
     return sparkTaskContextSupplier;
+  }
+
+  /**
+   * Ensure that the current writerSchema is compatible with the latest schema of this dataset.
+   *
+   * When inserting/updating data, we read records using the last used schema and convert them to the
+   * GenericRecords with writerSchema. Hence, we need to ensure that this conversion can take place without errors.
+   *
+   */
+  private void validateSchema() throws HoodieUpsertException, HoodieInsertException {
+
+    if (!config.getAvroSchemaValidate() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
+      // Check not required
+      return;
+    }
+
+    Schema tableSchema;
+    Schema writerSchema;
+    boolean isValid;
+    try {
+      TableSchemaResolver schemaUtil = new TableSchemaResolver(getMetaClient());
+      writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
+      tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaUtil.getTableAvroSchemaWithoutMetadataFields());
+      isValid = TableSchemaResolver.isSchemaCompatible(tableSchema, writerSchema);
+    } catch (Exception e) {
+      throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
+    }
+
+    if (!isValid) {
+      throw new HoodieException("Failed schema compatibility check for writerSchema :" + writerSchema
+          + ", table schema :" + tableSchema + ", base path :" + metaClient.getBasePath());
+    }
+  }
+
+  public void validateUpsertSchema() throws HoodieUpsertException {
+    try {
+      validateSchema();
+    } catch (HoodieException e) {
+      throw new HoodieUpsertException("Failed upsert schema compatibility check.", e);
+    }
+  }
+
+  public void validateInsertSchema() throws HoodieInsertException {
+    try {
+      validateSchema();
+    } catch (HoodieException e) {
+      throw new HoodieInsertException("Failed insert schema compability check.", e);
+    }
   }
 }

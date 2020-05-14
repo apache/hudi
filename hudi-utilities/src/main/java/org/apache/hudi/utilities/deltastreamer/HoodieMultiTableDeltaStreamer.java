@@ -226,7 +226,7 @@ public class HoodieMultiTableDeltaStreamer {
         "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-        + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
+        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter")
     public List<String> configs = new ArrayList<>();
 
     @Parameter(names = {"--source-class"},
@@ -256,8 +256,7 @@ public class HoodieMultiTableDeltaStreamer {
         + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
         + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
         + "allows a SQL query templated to be passed as a transformation function). "
-        + "Pass a comma-separated list of subclass names to chain the transformations.",
-        converter = HoodieDeltaStreamer.TransformersConverter.class)
+        + "Pass a comma-separated list of subclass names to chain the transformations.")
     public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "

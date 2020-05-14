@@ -55,7 +55,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
   }
   // TODO : Figure out a valid HoodieWriteConfig
   private val hoodieTable = HoodieTable.create(metaClient, HoodieWriteConfig.newBuilder().withPath(basePath).build(),
-    sqlContext.sparkContext)
+    sqlContext.sparkContext.hadoopConfiguration)
   val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")

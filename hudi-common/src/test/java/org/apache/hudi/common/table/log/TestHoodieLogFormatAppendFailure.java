@@ -36,10 +36,10 @@ import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
 import java.io.IOException;
@@ -51,6 +51,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
 import static org.apache.hudi.common.util.SchemaTestUtil.getSimpleSchema;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * This class is intentionally using a different way of setting up the MiniDFSCluster and not relying on
@@ -62,7 +63,7 @@ public class TestHoodieLogFormatAppendFailure {
   private static File baseDir;
   private static MiniDFSCluster cluster;
 
-  @BeforeClass
+  @BeforeAll
   public static void setUpClass() throws IOException {
     // NOTE : The MiniClusterDFS leaves behind the directory under which the cluster was created
     baseDir = new File("/tmp/" + UUID.randomUUID().toString());
@@ -77,14 +78,15 @@ public class TestHoodieLogFormatAppendFailure {
     cluster = new MiniDFSCluster.Builder(conf).checkExitOnShutdown(true).numDataNodes(4).build();
   }
 
-  @AfterClass
+  @AfterAll
   public static void tearDownClass() {
     cluster.shutdown(true);
     // Force clean up the directory under which the cluster was created
     FileUtil.fullyDelete(baseDir);
   }
 
-  @Test(timeout = 60000)
+  @Test
+  @Timeout(60)
   public void testFailedToGetAppendStreamFromHDFSNameNode()
       throws IOException, URISyntaxException, InterruptedException, TimeoutException {
 
@@ -137,7 +139,7 @@ public class TestHoodieLogFormatAppendFailure {
         .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive")
         .overBaseCommit("").withFs(fs).build();
     // The log version should be different for this new writer
-    Assert.assertNotEquals(writer.getLogFile().getLogVersion(), logFileVersion);
+    assertNotEquals(writer.getLogFile().getLogVersion(), logFileVersion);
   }
 
 }

@@ -30,6 +30,8 @@ import static org.apache.hudi.config.HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_S
 import static org.apache.hudi.config.HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FRACTION_FOR_COMPACTION;
 import static org.apache.hudi.config.HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FRACTION_FOR_MERGE;
 import static org.apache.hudi.config.HoodieMemoryConfig.DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
+import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION_PROP;
+import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE_PROP;
 import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP;
 import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE_PROP;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL;
@@ -83,11 +85,17 @@ public class SparkConfigUtils {
   }
 
   public static long getMaxMemoryPerPartitionMerge(Properties properties) {
+    if (properties.containsKey(MAX_MEMORY_FOR_MERGE_PROP)) {
+      return Long.parseLong(properties.getProperty(MAX_MEMORY_FOR_MERGE_PROP));
+    }
     String fraction = properties.getProperty(MAX_MEMORY_FRACTION_FOR_MERGE_PROP, DEFAULT_MAX_MEMORY_FRACTION_FOR_MERGE);
     return getMaxMemoryAllowedForMerge(fraction);
   }
 
-  public static Long getMaxMemoryPerCompaction(Properties properties) {
+  public static long getMaxMemoryPerCompaction(Properties properties) {
+    if (properties.containsKey(MAX_MEMORY_FOR_COMPACTION_PROP)) {
+      return Long.parseLong(properties.getProperty(MAX_MEMORY_FOR_COMPACTION_PROP));
+    }
     String fraction = properties.getProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP, DEFAULT_MAX_MEMORY_FRACTION_FOR_COMPACTION);
     return getMaxMemoryAllowedForMerge(fraction);
   }

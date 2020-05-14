@@ -33,12 +33,13 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -48,23 +49,24 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test class for {@link FileSystemViewCommand}.
  */
 public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
+
   private String partitionPath;
   private SyncableFileSystemView fsView;
 
-  @Before
+  @BeforeEach
   public void init() throws IOException {
     HoodieCLI.conf = jsc.hadoopConfiguration();
 
     // Create table and connect
     String tableName = "test_table";
-    String tablePath = basePath + File.separator + tableName;
+    String tablePath = Paths.get(basePath, tableName).toString();
     new TableCommand().createTable(
         tablePath, tableName,
         "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
@@ -72,8 +74,8 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
     metaClient = HoodieCLI.getTableMetaClient();
 
     partitionPath = HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH;
-    String fullPartitionPath = tablePath + "/" + partitionPath;
-    new File(fullPartitionPath).mkdirs();
+    String fullPartitionPath = Paths.get(tablePath, partitionPath).toString();
+    Files.createDirectories(Paths.get(fullPartitionPath));
 
     // Generate 2 commits
     String commitTime1 = "1";
@@ -83,20 +85,18 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
 
     // Write date files and log file
     String testWriteToken = "1-0-1";
-    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime1, testWriteToken, fileId1))
-        .createNewFile();
-    new File(fullPartitionPath + "/"
-        + FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken))
-        .createNewFile();
-    new File(fullPartitionPath + "/" + FSUtils.makeDataFileName(commitTime2, testWriteToken, fileId1))
-        .createNewFile();
-    new File(fullPartitionPath + "/"
-        + FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken))
-        .createNewFile();
+    Files.createFile(Paths.get(fullPartitionPath, FSUtils
+        .makeDataFileName(commitTime1, testWriteToken, fileId1)));
+    Files.createFile(Paths.get(fullPartitionPath, FSUtils
+        .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken)));
+    Files.createFile(Paths.get(fullPartitionPath, FSUtils
+        .makeDataFileName(commitTime2, testWriteToken, fileId1)));
+    Files.createFile(Paths.get(fullPartitionPath, FSUtils
+        .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 
     // Write commit files
-    new File(tablePath + "/.hoodie/" + commitTime1 + ".commit").createNewFile();
-    new File(tablePath + "/.hoodie/" + commitTime2 + ".commit").createNewFile();
+    Files.createFile(Paths.get(tablePath, ".hoodie", commitTime1 + ".commit"));
+    Files.createFile(Paths.get(tablePath, ".hoodie", commitTime2 + ".commit"));
 
     // Reload meta client and create fsView
     metaClient = HoodieTableMetaClient.reload(metaClient);

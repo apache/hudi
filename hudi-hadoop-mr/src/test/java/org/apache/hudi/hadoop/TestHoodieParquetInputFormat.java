@@ -23,6 +23,12 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileStatus;
@@ -33,15 +39,9 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -50,24 +50,35 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieParquetInputFormat {
 
   private HoodieParquetInputFormat inputFormat;
   private JobConf jobConf;
 
-  @Before
+  public static void ensureFilesInCommit(String msg, FileStatus[] files, String commit, int expected) {
+    int count = 0;
+    for (FileStatus file : files) {
+      String commitTs = FSUtils.getCommitTime(file.getPath().getName());
+      if (commit.equals(commitTs)) {
+        count++;
+      }
+    }
+    assertEquals(expected, count, msg);
+  }
+
+  @BeforeEach
   public void setUp() {
     inputFormat = new HoodieParquetInputFormat();
     jobConf = new JobConf();
     inputFormat.setConf(jobConf);
   }
 
-  @Rule
-  public TemporaryFolder basePath = new TemporaryFolder();
+  @TempDir
+  public java.nio.file.Path basePath;
 
   // Verify that HoodieParquetInputFormat does not return instants after pending compaction
   @Test
@@ -87,7 +98,7 @@ public class TestHoodieParquetInputFormat {
     instants.add(t4);
     instants.add(t5);
     instants.add(t6);
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.getRoot().getAbsolutePath().toString());
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toString());
     HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
     timeline.setInstants(instants);
 
@@ -185,16 +196,16 @@ public class TestHoodieParquetInputFormat {
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
-    assertEquals("We should exclude commit 100 when returning incremental pull with start commit time as 100", 0,
-        files.length);
+    assertEquals(0, files.length,
+        "We should exclude commit 100 when returning incremental pull with start commit time as 100");
   }
 
-  private void createCommitFile(TemporaryFolder basePath, String commitNumber, String partitionPath)
+  private void createCommitFile(java.nio.file.Path basePath, String commitNumber, String partitionPath)
       throws IOException {
     List<HoodieWriteStat> writeStats = HoodieTestUtils.generateFakeHoodieWriteStat(1);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     writeStats.forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
-    File file = new File(basePath.getRoot().toString() + "/.hoodie/", commitNumber + ".commit");
+    File file = basePath.resolve(".hoodie").resolve(commitNumber + ".commit").toFile();
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
     fileOutputStream.write(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
@@ -202,10 +213,10 @@ public class TestHoodieParquetInputFormat {
     fileOutputStream.close();
   }
 
-  private File createCompactionFile(TemporaryFolder basePath, String commitTime)
-          throws IOException {
-    File file = new File(basePath.getRoot().toString() + "/.hoodie/",
-            HoodieTimeline.makeRequestedCompactionFileName(commitTime));
+  private File createCompactionFile(java.nio.file.Path basePath, String commitTime)
+      throws IOException {
+    File file = basePath.resolve(".hoodie")
+        .resolve(HoodieTimeline.makeRequestedCompactionFileName(commitTime)).toFile();
     assertTrue(file.createNewFile());
     FileOutputStream os = new FileOutputStream(file);
     try {
@@ -244,14 +255,14 @@ public class TestHoodieParquetInputFormat {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
     FileStatus[] files = inputFormat.listStatus(jobConf);
-    assertEquals("Pulling 1 commit from 100, should get us the 5 files committed at 200", 5, files.length);
+    assertEquals(5, files.length, "Pulling 1 commit from 100, should get us the 5 files committed at 200");
     ensureFilesInCommit("Pulling 1 commit from 100, should get us the 5 files committed at 200", files, "200", 5);
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 3);
     files = inputFormat.listStatus(jobConf);
 
-    assertEquals("Pulling 3 commits from 100, should get us the 3 files from 400 commit, 1 file from 300 "
-        + "commit and 1 file from 200 commit", 5, files.length);
+    assertEquals(5, files.length, "Pulling 3 commits from 100, should get us the 3 files from 400 commit, 1 file from 300 "
+        + "commit and 1 file from 200 commit");
     ensureFilesInCommit("Pulling 3 commits from 100, should get us the 3 files from 400 commit", files, "400", 3);
     ensureFilesInCommit("Pulling 3 commits from 100, should get us the 1 files from 300 commit", files, "300", 1);
     ensureFilesInCommit("Pulling 3 commits from 100, should get us the 1 files from 200 commit", files, "200", 1);
@@ -259,8 +270,8 @@ public class TestHoodieParquetInputFormat {
     InputFormatTestUtil.setupIncremental(jobConf, "100", HoodieHiveUtil.MAX_COMMIT_ALL);
     files = inputFormat.listStatus(jobConf);
 
-    assertEquals("Pulling all commits from 100, should get us the 1 file from each of 200,300,400,500,400 commits",
-        5, files.length);
+    assertEquals(5, files.length,
+        "Pulling all commits from 100, should get us the 1 file from each of 200,300,400,500,400 commits");
     ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 600 commit", files, "600", 1);
     ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 500 commit", files, "500", 1);
     ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 400 commit", files, "400", 1);
@@ -324,29 +335,29 @@ public class TestHoodieParquetInputFormat {
     File compactionFile = createCompactionFile(basePath, "300");
 
     // write inserts into new bucket
-    InputFormatTestUtil.simulateInserts(partitionDir, "fileId2", 10,  "400");
+    InputFormatTestUtil.simulateInserts(partitionDir, "fileId2", 10, "400");
     createCommitFile(basePath, "400", "2016/05/01");
 
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
     InputFormatTestUtil.setupIncremental(jobConf, "0", -1);
     FileStatus[] files = inputFormat.listStatus(jobConf);
-    assertEquals("Pulling all commit from beginning, should not return instants after begin compaction",
-            10, files.length);
+    assertEquals(10, files.length,
+        "Pulling all commit from beginning, should not return instants after begin compaction");
     ensureFilesInCommit("Pulling all commit from beginning, should not return instants after begin compaction",
-            files, "100", 10);
+        files, "100", 10);
 
     // delete compaction and verify inserts show up
     compactionFile.delete();
     InputFormatTestUtil.setupIncremental(jobConf, "0", -1);
     files = inputFormat.listStatus(jobConf);
-    assertEquals("after deleting compaction, should get all inserted files",
-            20, files.length);
+    assertEquals(20, files.length,
+        "after deleting compaction, should get all inserted files");
 
     ensureFilesInCommit("Pulling all commit from beginning, should return instants before requested compaction",
-            files, "100", 10);
+        files, "100", 10);
     ensureFilesInCommit("Pulling all commit from beginning, should return instants after requested compaction",
-            files, "400", 10);
+        files, "400", 10);
 
   }
 
@@ -370,18 +381,7 @@ public class TestHoodieParquetInputFormat {
         totalCount++;
       }
     }
-    assertEquals(msg, expectedNumberOfRecordsInCommit, actualCount);
-    assertEquals(msg, totalExpected, totalCount);
-  }
-
-  public static void ensureFilesInCommit(String msg, FileStatus[] files, String commit, int expected) {
-    int count = 0;
-    for (FileStatus file : files) {
-      String commitTs = FSUtils.getCommitTime(file.getPath().getName());
-      if (commit.equals(commitTs)) {
-        count++;
-      }
-    }
-    assertEquals(msg, expected, count);
+    assertEquals(expectedNumberOfRecordsInCommit, actualCount, msg);
+    assertEquals(totalExpected, totalCount, msg);
   }
 }

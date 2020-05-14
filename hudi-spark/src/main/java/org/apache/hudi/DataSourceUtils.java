@@ -25,7 +25,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -36,6 +38,7 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -153,6 +156,24 @@ public class DataSourceUtils {
   }
 
   /**
+   * Create a UserDefinedBulkInsertPartitioner class via reflection,
+   * <br>
+   * if the class name of UserDefinedBulkInsertPartitioner is configured through the HoodieWriteConfig.
+   * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
+   */
+  private static Option<UserDefinedBulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
+          throws HoodieException {
+    String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
+    try {
+      return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
+              ? Option.empty() :
+              Option.of((UserDefinedBulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
+    } catch (Throwable e) {
+      throw new HoodieException("Could not create UserDefinedBulkInsertPartitioner class " + bulkInsertPartitionerClass, e);
+    }
+  }
+
+  /**
    * Create a payload class via reflection, passing in an ordering/precombine value.
    */
   public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
@@ -196,9 +217,11 @@ public class DataSourceUtils {
   }
 
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-                                                      String instantTime, String operation) {
+                                                      String instantTime, String operation) throws HoodieException {
     if (operation.equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL())) {
-      return client.bulkInsert(hoodieRecords, instantTime);
+      Option<UserDefinedBulkInsertPartitioner> userDefinedBulkInsertPartitioner =
+          createUserDefinedBulkInsertPartitioner(client.getConfig());
+      return client.bulkInsert(hoodieRecords, instantTime, userDefinedBulkInsertPartitioner);
     } else if (operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())) {
       return client.insert(hoodieRecords, instantTime);
     } else {
@@ -261,6 +284,8 @@ public class DataSourceUtils {
     hiveSyncConfig.partitionValueExtractorClass =
         props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
             SlashEncodedDayPartitionValueExtractor.class.getName());
+    hiveSyncConfig.useJdbc = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_USE_JDBC_OPT_KEY(),
+            DataSourceWriteOptions.DEFAULT_HIVE_USE_JDBC_OPT_VAL()));
     return hiveSyncConfig;
   }
 }

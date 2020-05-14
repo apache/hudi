@@ -19,12 +19,12 @@
 package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
@@ -34,10 +34,10 @@ import org.apache.hudi.common.util.SpillableMapTestUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.junit.Before;
-import org.junit.FixMethodOrder;
-import org.junit.Test;
-import org.junit.runners.MethodSorters;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer.Alphanumeric;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -46,19 +46,20 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests external spillable map {@link ExternalSpillableMap}.
  */
-@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+@TestMethodOrder(Alphanumeric.class)
 public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
   private static String failureOutputPath;
 
-  @Before
+  @BeforeEach
   public void setUp() {
     initPath();
     failureOutputPath = basePath + "/test_fail";
@@ -175,7 +176,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     assertTrue(records.size() == 0);
   }
 
-  @Test(expected = IOException.class)
+  @Test
   public void simpleTestWithException() throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
@@ -186,9 +187,11 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
-    while (itr.hasNext()) {
-      throw new IOException("Testing failures...");
-    }
+    assertThrows(IOException.class, () -> {
+      while (itr.hasNext()) {
+        throw new IOException("Testing failures...");
+      }
+    });
   }
 
   @Test

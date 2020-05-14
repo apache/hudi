@@ -18,6 +18,7 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.SchemaCompatabilityException;
 
 import org.apache.avro.Schema;
@@ -106,9 +107,11 @@ public class TestHoodieAvroUtils {
     rec.put("non_pii_col", "val1");
     rec.put("pii_col", "val2");
     rec.put("timestamp", 3.5);
-    GenericRecord rec1 = HoodieAvroUtils.rewriteRecord(rec, new Schema.Parser().parse(EVOLVED_SCHEMA));
+    Schema schemaWithMetadata = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EVOLVED_SCHEMA));
+    GenericRecord rec1 = HoodieAvroUtils.rewriteRecord(rec, schemaWithMetadata);
     assertEquals(rec1.get("new_col1"), "dummy_val");
     assertNull(rec1.get("new_col2"));
+    assertNull(rec1.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
   }
 
   @Test

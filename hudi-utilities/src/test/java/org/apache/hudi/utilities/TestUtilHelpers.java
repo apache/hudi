@@ -27,44 +27,39 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.runners.Enclosed;
-import org.junit.rules.ExpectedException;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(Enclosed.class)
 public class TestUtilHelpers {
 
-  public static class TestCreateTransformer {
+  public static class TransformerFoo implements Transformer {
 
-    public static class TransformerFoo implements Transformer {
-
-      @Override
-      public Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties) {
-        return null;
-      }
+    @Override
+    public Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties) {
+      return null;
     }
+  }
 
-    public static class TransformerBar implements Transformer {
+  public static class TransformerBar implements Transformer {
 
-      @Override
-      public Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties) {
-        return null;
-      }
+    @Override
+    public Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties) {
+      return null;
     }
+  }
 
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
+  @Nested
+  public class TestCreateTransformer {
 
     @Test
     public void testCreateTransformerNotPresent() throws IOException {
@@ -93,9 +88,10 @@ public class TestUtilHelpers {
 
     @Test
     public void testCreateTransformerThrowsException() throws IOException {
-      exceptionRule.expect(IOException.class);
-      exceptionRule.expectMessage("Could not load transformer class(es) [foo, bar]");
-      UtilHelpers.createTransformer(Arrays.asList("foo", "bar"));
+      Exception e = assertThrows(IOException.class, () -> {
+        UtilHelpers.createTransformer(Arrays.asList("foo", "bar"));
+      });
+      assertEquals("Could not load transformer class(es) [foo, bar]", e.getMessage());
     }
   }
 }

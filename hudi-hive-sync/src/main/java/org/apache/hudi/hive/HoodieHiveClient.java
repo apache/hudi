@@ -328,14 +328,15 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Gets the schema for a hoodie table. Depending on the type of table, read from any file written in the latest
-   * commit. We will assume that the schema has not changed within a single atomic write.
+   * Gets the schema for a hoodie table. Depending on the type of table, try to read schema from commit metadata if
+   * present, else fallback to reading from any file written in the latest commit. We will assume that the schema has
+   * not changed within a single atomic write.
    *
    * @return Parquet schema for this table
    */
   public MessageType getDataSchema() {
     try {
-      return new TableSchemaResolver(metaClient).getDataSchema();
+      return new TableSchemaResolver(metaClient).getTableParquetSchema();
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to read data schema", e);
     }
