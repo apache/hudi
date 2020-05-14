@@ -53,7 +53,7 @@ public class TestTimestampBasedKeyGenerator {
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.timezone", timezone);
 
     if (scalarType != null) {
-      properties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time_unit", scalarType);
+      properties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit", scalarType);
     }
 
     return properties;

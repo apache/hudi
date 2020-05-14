@@ -69,7 +69,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     // One value from TimestampType above
     private static final String TIMESTAMP_TYPE_FIELD_PROP = "hoodie.deltastreamer.keygen.timebased.timestamp.type";
     private static final String INPUT_TIME_UNIT =
-        "hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time_unit";
+        "hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit";
     private static final String TIMESTAMP_INPUT_DATE_FORMAT_PROP =
         "hoodie.deltastreamer.keygen.timebased.input.dateformat";
     private static final String TIMESTAMP_OUTPUT_DATE_FORMAT_PROP =
@@ -133,7 +133,6 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
           "Unexpected type for partition field: " + partitionVal.getClass().getName());
       }
       Date timestamp = new Date(timeMs);
-
       String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
       if (recordKey == null || recordKey.isEmpty()) {
         throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
