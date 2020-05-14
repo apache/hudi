@@ -127,9 +127,21 @@ public class TestInLineFileSystem {
     final FSDataInputStream fsDataInputStream = inlineFileSystem.open(inlinePath);
     byte[] actualBytes = new byte[outerPathInfo.expectedBytes.length];
     // verify pos
-    assertEquals(0 - outerPathInfo.startOffset, fsDataInputStream.getPos());
+    assertEquals(0, fsDataInputStream.getPos());
     fsDataInputStream.readFully(0, actualBytes);
     assertArrayEquals(outerPathInfo.expectedBytes, actualBytes);
+
+    // test seek
+    int[] validPositions = {1, 100, 290, 520, 990, 999, 1000};
+    for (int pos : validPositions) {
+      fsDataInputStream.seek(pos);
+    }
+    int[] invalidPositions = {1001, 1100, 10000};
+    for (int pos : invalidPositions) {
+      assertThrows(IOException.class, () -> {
+        fsDataInputStream.seek(pos);
+      }, "Should have thrown IOException");
+    }
 
     // read partial data
     // test read(long position, byte[] buffer, int offset, int length)
@@ -143,6 +155,9 @@ public class TestInLineFileSystem {
     assertThrows(IOException.class, () -> {
       fsDataInputStream.read(0, new byte[1100], 0, 1101);
     }, "Should have thrown IOException");
+    assertThrows(IOException.class, () -> {
+      fsDataInputStream.read(0, new byte[10], 991, 10);
+    }, "Should have thrown IOException");
 
     // test readFully(long position, byte[] buffer, int offset, int length)
     actualBytes = new byte[100];
@@ -154,6 +169,9 @@ public class TestInLineFileSystem {
     // give length to read > than actual inline content
     assertThrows(IOException.class, () -> {
       fsDataInputStream.readFully(0, new byte[1100], 0, 1101);
+    }, "Should have thrown IOException");
+    assertThrows(IOException.class, () -> {
+      fsDataInputStream.readFully(0, new byte[100], 910, 100);
     }, "Should have thrown IOException");
 
     // test readFully(long position, byte[] buffer)
@@ -168,15 +186,6 @@ public class TestInLineFileSystem {
       fsDataInputStream.readFully(0, new byte[1100]);
     }, "Should have thrown IOException");
 
-    // TODO. seek does not move the position. need to investigate.
-    // test seekToNewSource(long targetPos)
-    /* fsDataInputStream.seekToNewSource(75);
-    Assert.assertEquals(outerPathInfo.startOffset + 75, fsDataInputStream.getPos());
-    fsDataInputStream.seekToNewSource(180);
-    Assert.assertEquals(outerPathInfo.startOffset + 180, fsDataInputStream.getPos());
-    fsDataInputStream.seekToNewSource(910);
-    Assert.assertEquals(outerPathInfo.startOffset + 910, fsDataInputStream.getPos());
-    */
     // test read(ByteBuffer buf)
     ByteBuffer actualByteBuffer = ByteBuffer.allocate(100);
     assertThrows(UnsupportedOperationException.class, () -> {
@@ -193,11 +202,6 @@ public class TestInLineFileSystem {
     assertThrows(UnsupportedOperationException.class, () -> {
       fsDataInputStream.setDropBehind(true);
     }, "Should have thrown exception");
-
-    // yet to test
-    // read(ByteBufferPool bufferPool, int maxLength, EnumSet<ReadOption> opts)
-    // releaseBuffer(ByteBuffer buffer)
-    // unbuffer()
 
     fsDataInputStream.close();
   }

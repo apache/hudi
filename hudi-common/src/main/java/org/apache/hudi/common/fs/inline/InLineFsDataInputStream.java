@@ -37,15 +37,19 @@ public class InLineFsDataInputStream extends FSDataInputStream {
   private final FSDataInputStream outerStream;
   private final int length;
 
-  public InLineFsDataInputStream(int startOffset, FSDataInputStream outerStream, int length) {
+  public InLineFsDataInputStream(int startOffset, FSDataInputStream outerStream, int length) throws IOException {
     super(outerStream.getWrappedStream());
     this.startOffset = startOffset;
     this.outerStream = outerStream;
     this.length = length;
+    outerStream.seek(startOffset);
   }
 
   @Override
   public void seek(long desired) throws IOException {
+    if (desired > length) {
+      throw new IOException("Attempting to seek past inline content");
+    }
     outerStream.seek(startOffset + desired);
   }
 
@@ -56,7 +60,7 @@ public class InLineFsDataInputStream extends FSDataInputStream {
 
   @Override
   public int read(long position, byte[] buffer, int offset, int length) throws IOException {
-    if ((length - offset) > this.length) {
+    if ((length + offset) > this.length) {
       throw new IOException("Attempting to read past inline content");
     }
     return outerStream.read(startOffset + position, buffer, offset, length);
@@ -64,7 +68,7 @@ public class InLineFsDataInputStream extends FSDataInputStream {
 
   @Override
   public void readFully(long position, byte[] buffer, int offset, int length) throws IOException {
-    if ((length - offset) > this.length) {
+    if ((length + offset) > this.length) {
       throw new IOException("Attempting to read past inline content");
     }
     outerStream.readFully(startOffset + position, buffer, offset, length);
@@ -78,6 +82,9 @@ public class InLineFsDataInputStream extends FSDataInputStream {
 
   @Override
   public boolean seekToNewSource(long targetPos) throws IOException {
+    if (targetPos > this.length) {
+      throw new IOException("Attempting to seek past inline content");
+    }
     return outerStream.seekToNewSource(startOffset + targetPos);
   }
 
@@ -93,6 +100,9 @@ public class InLineFsDataInputStream extends FSDataInputStream {
 
   @Override
   public void setReadahead(Long readahead) throws IOException, UnsupportedOperationException {
+    if (readahead > this.length) {
+      throw new IOException("Attempting to set read ahead past inline content");
+    }
     outerStream.setReadahead(readahead);
   }
 
@@ -104,6 +114,9 @@ public class InLineFsDataInputStream extends FSDataInputStream {
   @Override
   public ByteBuffer read(ByteBufferPool bufferPool, int maxLength, EnumSet<ReadOption> opts)
       throws IOException, UnsupportedOperationException {
+    if (maxLength > this.length) {
+      throw new IOException("Attempting to read max length beyond inline content");
+    }
     return outerStream.read(bufferPool, maxLength, opts);
   }
 
