@@ -70,7 +70,9 @@ import java.util.stream.Stream;
 public class HoodieTestDataGenerator {
 
   // based on examination of sample file, the schema produces the following per record size
-  public static final int SIZE_PER_RECORD = 50 * 1024;
+  public static final int BYTES_PER_RECORD = (int) (1.2 * 1024);
+  // with default bloom filter with 60,000 entries and 0.000000001 FPRate
+  public static final int BLOOM_FILTER_BYTES = 323495;
   private static Logger logger = LogManager.getLogger(HoodieTestDataGenerator.class);
   public static final String DEFAULT_FIRST_PARTITION_PATH = "2016/03/15";
   public static final String DEFAULT_SECOND_PARTITION_PATH = "2015/03/16";
@@ -142,6 +144,10 @@ public class HoodieTestDataGenerator {
     for (String partitionPath : partitionPaths) {
       new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath)).trySave(0);
     }
+  }
+
+  public int getEstimatedFileSizeInBytes(int numOfRecords) {
+    return numOfRecords * BYTES_PER_RECORD + BLOOM_FILTER_BYTES;
   }
 
   public TestRawTripPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
