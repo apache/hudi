@@ -18,6 +18,7 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.HoodieWriteClient;
@@ -38,6 +39,7 @@ import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
+import scala.Enumeration;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -74,7 +76,7 @@ public class SparkMain {
         break;
       case DEDUPLICATE:
         assert (args.length == 6);
-        returnCode = deduplicatePartitionPath(jsc, args[1], args[2], args[3], Boolean.parseBoolean(args[4]), Boolean.parseBoolean(args[5]));
+        returnCode = deduplicatePartitionPath(jsc, args[1], args[2], args[3], Boolean.parseBoolean(args[5]), args[4]);
         break;
       case ROLLBACK_TO_SAVEPOINT:
         assert (args.length == 3);
@@ -263,11 +265,24 @@ public class SparkMain {
   }
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
-      String repairedOutputPath, String basePath, boolean useCommitTimeForDedupe, boolean druRun) {
+      String repairedOutputPath, String basePath, boolean dryRun, String dedupeType) {
     DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath, new SQLContext(jsc),
-        FSUtils.getFs(basePath, jsc.hadoopConfiguration()), useCommitTimeForDedupe);
-    job.fixDuplicates(druRun);
+        FSUtils.getFs(basePath, jsc.hadoopConfiguration()), getDedupeType(dedupeType));
+    job.fixDuplicates(dryRun);
     return 0;
+  }
+
+  private static Enumeration.Value getDedupeType(String type) {
+    switch (type) {
+      case "insertType":
+        return DeDupeType.insertType();
+      case "updateType":
+        return DeDupeType.updateType();
+      case "upsertType":
+        return DeDupeType.upsertType();
+      default:
+        throw new IllegalArgumentException("Please provide valid dedupe type!");
+    }
   }
 
   private static int rollback(JavaSparkContext jsc, String instantTime, String basePath) throws Exception {
