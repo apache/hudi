@@ -44,6 +44,7 @@ import org.springframework.shell.core.CommandResult;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Stream;
@@ -76,20 +77,12 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
     // one .inflight commit file
     HoodieTestUtils.createInflightCommitFiles(tablePath, commitTime3);
 
-    // generate commit1 files
-    HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, commitTime1, "file-1-1");
-    HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime1, "file-1-2");
-    HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, commitTime1, "file-1-3");
-
-    // generate commit2 files
-    HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, commitTime2, "file-2-1");
-    HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime2, "file-2-2");
-    HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, commitTime2, "file-2-3");
-
-    // generate commit3 files
-    HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, commitTime3, "file-3-1");
-    HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime3, "file-3-2");
-    HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, commitTime3, "file-3-3");
+    // generate commit files for commits
+    for (String commitTime : Arrays.asList(commitTime1, commitTime2, commitTime3)) {
+      HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, commitTime, "file-1");
+      HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime, "file-2");
+      HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, commitTime, "file-3");
+    }
 
     // generate two rollback
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)
