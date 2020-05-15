@@ -97,6 +97,10 @@ public class HoodieAvroUtils {
         || HoodieRecord.FILENAME_METADATA_FIELD.equals(fieldName);
   }
 
+  public static Schema createHoodieWriteSchema(Schema originalSchema) {
+    return HoodieAvroUtils.addMetadataFields(originalSchema);
+  }
+
   /**
    * Adds the Hoodie metadata fields to the given schema.
    */
@@ -175,6 +179,16 @@ public class HoodieAvroUtils {
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
     newSchema.setFields(newFields);
     return newSchema;
+  }
+
+  public static Schema removeMetadataFields(Schema schema) {
+    List<Schema.Field> filteredFields = schema.getFields()
+        .stream()
+        .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name()))
+        .collect(Collectors.toList());
+    Schema filteredSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
+    filteredSchema.setFields(filteredFields);
+    return filteredSchema;
   }
 
   /**
