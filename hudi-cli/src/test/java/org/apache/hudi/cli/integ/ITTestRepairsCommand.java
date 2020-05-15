@@ -23,6 +23,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.cli.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.RepairsCommand;
 import org.apache.hudi.cli.commands.TableCommand;
@@ -67,12 +68,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
 
   private String duplicatedPartitionPath;
+  private String duplicatedPartitionPathWithUpdates;
+  private String duplicatedPartitionPathWithUpserts;
   private String repairedOutputPath;
 
   @BeforeEach
   public void init() throws IOException, URISyntaxException {
     String tablePath = basePath + File.separator + "test_table";
     duplicatedPartitionPath = tablePath + File.separator + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+    duplicatedPartitionPathWithUpdates = tablePath + File.separator + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+    duplicatedPartitionPathWithUpserts = tablePath + File.separator + HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
     repairedOutputPath = basePath + File.separator + "tmp";
 
     HoodieCLI.conf = jsc.hadoopConfiguration();
@@ -87,10 +92,19 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
 
     String fileName1 = "1_0_20160401010101.parquet";
     String fileName2 = "2_0_20160401010101.parquet";
+    String secondPartitionFileName1 = "1_1_20160401010101.parquet";
+    String secondPartitionFileName2 = "2_1_20160401010101.parquet";
+    String thirdPartitionFileName1 = "1_2_20160401010101.parquet";
+    String thirdPartitionFileName2 = "2_2_20160401010202.parquet";
+    String thirdPartitionFileName3 = "3_2_20160401010202.parquet";
 
     List<HoodieRecord> hoodieRecords1 = SchemaTestUtil.generateHoodieTestRecords(0, 100, schema);
     HoodieClientTestUtils.writeParquetFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
         fileName1, hoodieRecords1, schema, null, false);
+    HoodieClientTestUtils.writeParquetFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
+        secondPartitionFileName1, hoodieRecords1, schema, null, false);
+    HoodieClientTestUtils.writeParquetFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH,
+        thirdPartitionFileName1, hoodieRecords1, schema, null, false);
     List<HoodieRecord> hoodieRecords2 = SchemaTestUtil.generateHoodieTestRecords(100, 100, schema);
     HoodieClientTestUtils.writeParquetFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
         fileName2, hoodieRecords2, schema, null, false);
@@ -105,6 +119,13 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
 
     // read records and get 10 to generate duplicates
     Dataset df = sqlContext.read().parquet(duplicatedPartitionPath);
+    Dataset secondPartitionDf = sqlContext.read().parquet(duplicatedPartitionPathWithUpdates);
+    secondPartitionDf.limit(10).withColumn("_hoodie_commit_time", lit("20160401010101"))
+      .write().parquet(duplicatedPartitionPathWithUpdates + File.separator + secondPartitionFileName2);
+    secondPartitionDf.limit(10).withColumn("_hoodie_commit_time", lit("20160401010202"))
+      .write().parquet(duplicatedPartitionPathWithUpserts + File.separator + thirdPartitionFileName2);
+    secondPartitionDf.limit(10).withColumn("_hoodie_commit_time", lit("20160401010202"))
+      .write().parquet(duplicatedPartitionPathWithUpserts + File.separator + thirdPartitionFileName3);
 
     String fileName3 = "3_0_20160401010202.parquet";
     commitTime = FSUtils.getCommitTime(fileName3);
@@ -144,6 +165,60 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
     Dataset result = sqlContext.read().parquet(files);
     assertEquals(200, result.count());
+  }
+
+  @Test
+  public void testDeduplicateWithUpdates() throws IOException {
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+        metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants(),
+        fs.listStatus(new Path(duplicatedPartitionPathWithUpdates)));
+    List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
+    assertEquals(2, filteredStatuses.size(), "There should be 2 files.");
+
+    // Before deduplicate, all files contain 110 records
+    String[] files = filteredStatuses.toArray(new String[0]);
+    Dataset df = sqlContext.read().parquet(files);
+    assertEquals(110, df.count());
+
+    String partitionPath = HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+    String cmdStr = String.format("repair deduplicate --duplicatedPartitionPath %s --repairedOutputPath %s --sparkMaster %s --dedupeType %s",
+        partitionPath, repairedOutputPath, "local", DeDupeType.updateType().toString());
+    CommandResult cr = getShell().executeCommand(cmdStr);
+    assertTrue(cr.isSuccess());
+    assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + repairedOutputPath, cr.getResult().toString());
+
+    // After deduplicate, there are 100 records
+    FileStatus[] fileStatus = fs.listStatus(new Path(repairedOutputPath));
+    files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
+    Dataset result = sqlContext.read().parquet(files);
+    assertEquals(100, result.count());
+  }
+
+  @Test
+  public void testDeduplicateWithUpserts() throws IOException {
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+        metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants(),
+        fs.listStatus(new Path(duplicatedPartitionPathWithUpserts)));
+    List<String> filteredStatuses = fsView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
+    assertEquals(3, filteredStatuses.size(), "There should be 3 files.");
+
+    // Before deduplicate, all files contain 110 records
+    String[] files = filteredStatuses.toArray(new String[0]);
+    Dataset df = sqlContext.read().parquet(files);
+    assertEquals(120, df.count());
+
+    String partitionPath = HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
+    String cmdStr = String.format("repair deduplicate --duplicatedPartitionPath %s --repairedOutputPath %s --sparkMaster %s --dedupeType %s",
+        partitionPath, repairedOutputPath, "local", DeDupeType.upsertType().toString());
+    CommandResult cr = getShell().executeCommand(cmdStr);
+    assertTrue(cr.isSuccess());
+    assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + repairedOutputPath, cr.getResult().toString());
+
+    // After deduplicate, there are 100 records
+    FileStatus[] fileStatus = fs.listStatus(new Path(repairedOutputPath));
+    files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
+    Dataset result = sqlContext.read().parquet(files);
+    assertEquals(100, result.count());
   }
 
   /**
