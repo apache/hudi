@@ -18,6 +18,7 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.avro.JsonProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.SchemaCompatabilityException;
 
@@ -164,9 +165,9 @@ public class TestHoodieAvroUtils {
   public void testJsonNodeNullWithDefaultValues() {
     List<Schema.Field> fields = new ArrayList<>();
     Schema initialSchema = Schema.createRecord("test_record", "test record", "org.test.namespace", false);
-    Schema.Field field1 = new Schema.Field("key", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", (Object) null);
-    Schema.Field field2 = new Schema.Field("key1", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", (Object) null);
-    Schema.Field field3 = new Schema.Field("key2", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", (Object) null);
+    Schema.Field field1 = new Schema.Field("key", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    Schema.Field field2 = new Schema.Field("key1", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    Schema.Field field3 = new Schema.Field("key2", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
     fields.add(field1);
     fields.add(field2);
     fields.add(field3);
@@ -178,11 +179,11 @@ public class TestHoodieAvroUtils {
 
     List<Schema.Field> evolvedFields = new ArrayList<>();
     Schema evolvedSchema = Schema.createRecord("evolved_record", "evolved record", "org.evolved.namespace", false);
-    Schema.Field evolvedField1 = new Schema.Field("key", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", (Object) null);
-    Schema.Field evolvedField2 = new Schema.Field("key1", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", (Object) null);
-    Schema.Field evolvedField3 = new Schema.Field("key2", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", (Object) null);
+    Schema.Field evolvedField1 = new Schema.Field("key", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    Schema.Field evolvedField2 = new Schema.Field("key1", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    Schema.Field evolvedField3 = new Schema.Field("key2", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
     Schema.Field evolvedField4 = new Schema.Field("evolved_field", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
-    Schema.Field evolvedField5 = new Schema.Field("evolved_field1", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", (Object) null);
+    Schema.Field evolvedField5 = new Schema.Field("evolved_field1", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
     evolvedFields.add(evolvedField1);
     evolvedFields.add(evolvedField2);
     evolvedFields.add(evolvedField3);
