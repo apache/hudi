@@ -242,7 +242,7 @@ public class DataSourceUtils {
   }
 
   /**
-   * Drop duplicate records from incoming records.
+   * Drop records already present in the dataset.
    *
    * @param jssc                  JavaSparkContext
    * @param incomingHoodieRecords HoodieRecords to deduplicate
