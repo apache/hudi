@@ -30,14 +30,12 @@ import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -46,6 +44,9 @@ import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.FILE_SCHEME;
 import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getPhantomFile;
 import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * Tests {@link InLineFileSystem} to inline HFile.
@@ -66,7 +67,7 @@ public class TestHFileInLining {
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
   }
 
-  @After
+  @AfterEach
   public void teardown() throws IOException {
     if (generatedPath != null) {
       File filePath = new File(generatedPath.toString().substring(generatedPath.toString().indexOf(':') + 1));
@@ -117,23 +118,22 @@ public class TestHFileInLining {
 
     Set<Integer> rowIdsToSearch = getRandomValidRowIds(10);
     for (int rowId : rowIdsToSearch) {
-      Assert.assertTrue("location lookup failed",
-          scanner.seekTo(KeyValue.createKeyValueFromKey(getSomeKey(rowId))) == 0);
+      assertEquals(0, scanner.seekTo(KeyValue.createKeyValueFromKey(getSomeKey(rowId))),
+          "location lookup failed");
       // read the key and see if it matches
       ByteBuffer readKey = scanner.getKey();
-      Assert.assertTrue("seeked key does not match", Arrays.equals(getSomeKey(rowId),
-          Bytes.toBytes(readKey)));
+      assertArrayEquals(getSomeKey(rowId), Bytes.toBytes(readKey), "seeked key does not match");
       scanner.seekTo(KeyValue.createKeyValueFromKey(getSomeKey(rowId)));
       ByteBuffer val1 = scanner.getValue();
       scanner.seekTo(KeyValue.createKeyValueFromKey(getSomeKey(rowId)));
       ByteBuffer val2 = scanner.getValue();
-      Assert.assertTrue(Arrays.equals(Bytes.toBytes(val1), Bytes.toBytes(val2)));
+      assertArrayEquals(Bytes.toBytes(val1), Bytes.toBytes(val2));
     }
 
     int[] invalidRowIds = {-4, maxRows, maxRows + 1, maxRows + 120, maxRows + 160, maxRows + 1000};
     for (int rowId : invalidRowIds) {
-      Assert.assertFalse("location lookup should have failed",
-          scanner.seekTo(KeyValue.createKeyValueFromKey(getSomeKey(rowId))) == 0);
+      assertNotEquals(0, scanner.seekTo(KeyValue.createKeyValueFromKey(getSomeKey(rowId))),
+          "location lookup should have failed");
     }
     reader.close();
     fin.close();
@@ -197,16 +197,16 @@ public class TestHFileInLining {
           Bytes.toBytes("qual"), Bytes.toBytes(valStr));
       byte[] keyBytes = new KeyValue.KeyOnlyKeyValue(Bytes.toBytes(key), 0,
           Bytes.toBytes(key).length).getKey();
-      Assert.assertTrue("bytes for keys do not match " + keyStr + " "
-          + Bytes.toString(Bytes.toBytes(key)), Arrays.equals(kv.getKey(), keyBytes));
+      assertArrayEquals(kv.getKey(), keyBytes,
+          "bytes for keys do not match " + keyStr + " " + Bytes.toString(Bytes.toBytes(key)));
       byte[] valBytes = Bytes.toBytes(val);
-      Assert.assertTrue("bytes for vals do not match " + valStr + " "
-          + Bytes.toString(valBytes), Arrays.equals(Bytes.toBytes(valStr), valBytes));
+      assertArrayEquals(Bytes.toBytes(valStr), valBytes,
+          "bytes for vals do not match " + valStr + " " + Bytes.toString(valBytes));
       if (!scanner.next()) {
         break;
       }
     }
-    Assert.assertEquals(i, start + n - 1);
+    assertEquals(i, start + n - 1);
     return (start + n);
   }
 

@@ -21,14 +21,17 @@ package org.apache.hudi.common.fs.inline;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.URI;
 
 import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit tests {@link InMemoryFileSystem}.
@@ -53,93 +56,75 @@ public class TestInMemoryFileSystem {
     out.close();
     InMemoryFileSystem inMemoryFileSystem = (InMemoryFileSystem) outerInMemFSPath.getFileSystem(conf);
     byte[] bytesRead = inMemoryFileSystem.getFileAsBytes();
-    Assert.assertArrayEquals(randomBytes, bytesRead);
-    Assert.assertEquals(InMemoryFileSystem.SCHEME, inMemoryFileSystem.getScheme());
-    Assert.assertEquals(URI.create(outerInMemFSPath.toString()), inMemoryFileSystem.getUri());
+    assertArrayEquals(randomBytes, bytesRead);
+    assertEquals(InMemoryFileSystem.SCHEME, inMemoryFileSystem.getScheme());
+    assertEquals(URI.create(outerInMemFSPath.toString()), inMemoryFileSystem.getUri());
   }
 
   @Test
   public void testOpen() throws IOException {
     Path outerInMemFSPath = getRandomOuterInMemPath();
-    Assert.assertNull(outerInMemFSPath.getFileSystem(conf).open(outerInMemFSPath));
+    assertNull(outerInMemFSPath.getFileSystem(conf).open(outerInMemFSPath));
   }
 
   @Test
   public void testAppend() throws IOException {
     Path outerInMemFSPath = getRandomOuterInMemPath();
-    Assert.assertNull(outerInMemFSPath.getFileSystem(conf).append(outerInMemFSPath));
+    assertNull(outerInMemFSPath.getFileSystem(conf).append(outerInMemFSPath));
   }
 
   @Test
   public void testRename() throws IOException {
     Path outerInMemFSPath = getRandomOuterInMemPath();
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       outerInMemFSPath.getFileSystem(conf).rename(outerInMemFSPath, outerInMemFSPath);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
   @Test
   public void testDelete() throws IOException {
     Path outerInMemFSPath = getRandomOuterInMemPath();
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       outerInMemFSPath.getFileSystem(conf).delete(outerInMemFSPath, true);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
   @Test
   public void testgetWorkingDir() throws IOException {
     Path outerInMemFSPath = getRandomOuterInMemPath();
-    Assert.assertNull(outerInMemFSPath.getFileSystem(conf).getWorkingDirectory());
+    assertNull(outerInMemFSPath.getFileSystem(conf).getWorkingDirectory());
   }
 
   @Test
   public void testsetWorkingDirectory() throws IOException {
     Path outerInMemFSPath = getRandomOuterInMemPath();
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       outerInMemFSPath.getFileSystem(conf).setWorkingDirectory(outerInMemFSPath);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
   @Test
   public void testExists() throws IOException {
     Path outerInMemFSPath = getRandomOuterInMemPath();
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       outerInMemFSPath.getFileSystem(conf).exists(outerInMemFSPath);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
   @Test
   public void testFileStatus() throws IOException {
     Path outerInMemFSPath = getRandomOuterInMemPath();
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       outerInMemFSPath.getFileSystem(conf).getFileStatus(outerInMemFSPath);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
   @Test
   public void testListStatus() throws IOException {
     Path outerInMemFSPath = getRandomOuterInMemPath();
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       outerInMemFSPath.getFileSystem(conf).listStatus(outerInMemFSPath);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
 }

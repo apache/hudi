@@ -228,13 +228,13 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Helper methods to compare instants.
    **/
-  BiPredicate<String, String> EQUAL = (commit1, commit2) -> commit1.compareTo(commit2) == 0;
-  BiPredicate<String, String> GREATER_OR_EQUAL = (commit1, commit2) -> commit1.compareTo(commit2) >= 0;
-  BiPredicate<String, String> GREATER = (commit1, commit2) -> commit1.compareTo(commit2) > 0;
-  BiPredicate<String, String> LESSER_OR_EQUAL = (commit1, commit2) -> commit1.compareTo(commit2) <= 0;
-  BiPredicate<String, String> LESSER = (commit1, commit2) -> commit1.compareTo(commit2) < 0;
+  BiPredicate<String, String> EQUALS = (commit1, commit2) -> commit1.compareTo(commit2) == 0;
+  BiPredicate<String, String> GREATER_THAN_OR_EQUALS = (commit1, commit2) -> commit1.compareTo(commit2) >= 0;
+  BiPredicate<String, String> GREATER_THAN = (commit1, commit2) -> commit1.compareTo(commit2) > 0;
+  BiPredicate<String, String> LESSER_THAN_OR_EQUALS = (commit1, commit2) -> commit1.compareTo(commit2) <= 0;
+  BiPredicate<String, String> LESSER_THAN = (commit1, commit2) -> commit1.compareTo(commit2) < 0;
 
-  static boolean compareTimestamps(String commit1, String commit2, BiPredicate<String, String> predicateToApply) {
+  static boolean compareTimestamps(String commit1, BiPredicate<String, String> predicateToApply, String commit2) {
     return predicateToApply.test(commit1, commit2);
   }
 
@@ -242,8 +242,8 @@ public interface HoodieTimeline extends Serializable {
    * Return true if specified timestamp is in range (startTs, endTs].
    */
   static boolean isInRange(String timestamp, String startTs, String endTs) {
-    return HoodieTimeline.compareTimestamps(timestamp, startTs, GREATER)
-            && HoodieTimeline.compareTimestamps(timestamp, endTs, LESSER_OR_EQUAL);
+    return HoodieTimeline.compareTimestamps(timestamp, GREATER_THAN, startTs)
+            && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN_OR_EQUALS, endTs);
   }
 
   static HoodieInstant getCompletedInstant(final HoodieInstant instant) {

@@ -289,8 +289,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         .map(Pair::getValue).reduce(null,
             (x, y) -> ((x == null) ? y
                 : (y == null) ? null
-                    : HoodieTimeline.compareTimestamps(x.getBaseInstantTime(), y.getBaseInstantTime(),
-                        HoodieTimeline.GREATER) ? x : y)));
+                    : HoodieTimeline.compareTimestamps(x.getBaseInstantTime(), HoodieTimeline.GREATER_THAN, y.getBaseInstantTime()
+            ) ? x : y)));
   }
 
   @Override
@@ -303,7 +303,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
             .map(Pair::getValue).reduce(null,
                 (x, y) -> ((x == null) ? y
                     : (y == null) ? null
-                        : HoodieTimeline.compareTimestamps(x.getCommitTime(), y.getCommitTime(), HoodieTimeline.GREATER)
+                        : HoodieTimeline.compareTimestamps(x.getCommitTime(), HoodieTimeline.GREATER_THAN, y.getCommitTime())
                             ? x
                             : y)));
   }

@@ -31,13 +31,13 @@ import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.execution.CopyOnWriteLazyInsertIterable.HoodieInsertValueGenResult;
+import org.apache.hudi.execution.LazyInsertIterable.HoodieInsertValueGenResult;
 
 import org.apache.avro.generic.IndexedRecord;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -53,7 +53,10 @@ import java.util.stream.IntStream;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.execution.CopyOnWriteLazyInsertIterable.getTransformFunction;
+import static org.apache.hudi.execution.LazyInsertIterable.getTransformFunction;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -61,13 +64,13 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
 
   private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initTestDataGenerator();
     initExecutorServiceWithFixedThreadPool(2);
   }
 
-  @After
+  @AfterEach
   public void tearDown() throws Exception {
     cleanupTestDataGenerator();
     cleanupExecutorService();
@@ -76,7 +79,8 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
   // Test to ensure that we are reading all records from queue iterator in the same order
   // without any exceptions.
   @SuppressWarnings("unchecked")
-  @Test(timeout = 60000)
+  @Test
+  @Timeout(value = 60)
   public void testRecordReading() throws Exception {
     final int numRecords = 128;
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, numRecords);
@@ -96,15 +100,15 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
           originalRecord.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA);
       final HoodieInsertValueGenResult<HoodieRecord> payload = queue.iterator().next();
       // Ensure that record ordering is guaranteed.
-      Assert.assertEquals(originalRecord, payload.record);
+      assertEquals(originalRecord, payload.record);
       // cached insert value matches the expected insert value.
-      Assert.assertEquals(originalInsertValue,
+      assertEquals(originalInsertValue,
           payload.record.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA));
       recordsRead++;
     }
-    Assert.assertFalse(queue.iterator().hasNext() || originalRecordIterator.hasNext());
+    assertFalse(queue.iterator().hasNext() || originalRecordIterator.hasNext());
     // all the records should be read successfully.
-    Assert.assertEquals(numRecords, recordsRead);
+    assertEquals(numRecords, recordsRead);
     // should not throw any exceptions.
     resFuture.get();
   }
@@ -113,7 +117,8 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
    * Test to ensure that we are reading all records from queue iterator when we have multiple producers.
    */
   @SuppressWarnings("unchecked")
-  @Test(timeout = 60000)
+  @Test
+  @Timeout(value = 60)
   public void testCompositeProducerRecordReading() throws Exception {
     final int numRecords = 1000;
     final int numProducers = 40;
@@ -129,7 +134,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
       List<HoodieRecord> pRecs = dataGen.generateInserts(instantTime, numRecords);
       int j = 0;
       for (HoodieRecord r : pRecs) {
-        Assert.assertTrue(!keyToProducerAndIndexMap.containsKey(r.getRecordKey()));
+        assertFalse(keyToProducerAndIndexMap.containsKey(r.getRecordKey()));
         keyToProducerAndIndexMap.put(r.getRecordKey(), new Tuple2<>(i, j));
         j++;
       }
@@ -192,12 +197,12 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
       countMap.put(producerPos._1(), countMap.get(producerPos._1()) + 1);
       lastSeenMap.put(producerPos._1(), lastSeenPos + 1);
       // Ensure we are seeing the next record generated
-      Assert.assertEquals(lastSeenPos + 1, producerPos._2().intValue());
+      assertEquals(lastSeenPos + 1, producerPos._2().intValue());
     }
 
     for (int i = 0; i < numProducers; i++) {
       // Ensure we have seen all the records for each producers
-      Assert.assertEquals(Integer.valueOf(numRecords), countMap.get(i));
+      assertEquals(Integer.valueOf(numRecords), countMap.get(i));
     }
 
     // Ensure Close future is done
@@ -206,7 +211,8 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
 
   // Test to ensure that record queueing is throttled when we hit memory limit.
   @SuppressWarnings("unchecked")
-  @Test(timeout = 60000)
+  @Test
+  @Timeout(value = 60)
   public void testMemoryLimitForBuffering() throws Exception {
     final int numRecords = 128;
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, numRecords);
@@ -229,14 +235,14 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
     while (!isQueueFull(queue.rateLimiter)) {
       Thread.sleep(10);
     }
-    Assert.assertEquals(0, queue.rateLimiter.availablePermits());
-    Assert.assertEquals(recordLimit, queue.currentRateLimit);
-    Assert.assertEquals(recordLimit, queue.size());
-    Assert.assertEquals(recordLimit - 1, queue.samplingRecordCounter.get());
+    assertEquals(0, queue.rateLimiter.availablePermits());
+    assertEquals(recordLimit, queue.currentRateLimit);
+    assertEquals(recordLimit, queue.size());
+    assertEquals(recordLimit - 1, queue.samplingRecordCounter.get());
 
     // try to read 2 records.
-    Assert.assertEquals(hoodieRecords.get(0), queue.iterator().next().record);
-    Assert.assertEquals(hoodieRecords.get(1), queue.iterator().next().record);
+    assertEquals(hoodieRecords.get(0), queue.iterator().next().record);
+    assertEquals(hoodieRecords.get(1), queue.iterator().next().record);
 
     // waiting for permits to expire.
     while (!isQueueFull(queue.rateLimiter)) {
@@ -245,17 +251,18 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
     // No change is expected in rate limit or number of queued records. We only expect
     // queueing thread to read
     // 2 more records into the queue.
-    Assert.assertEquals(0, queue.rateLimiter.availablePermits());
-    Assert.assertEquals(recordLimit, queue.currentRateLimit);
-    Assert.assertEquals(recordLimit, queue.size());
-    Assert.assertEquals(recordLimit - 1 + 2, queue.samplingRecordCounter.get());
+    assertEquals(0, queue.rateLimiter.availablePermits());
+    assertEquals(recordLimit, queue.currentRateLimit);
+    assertEquals(recordLimit, queue.size());
+    assertEquals(recordLimit - 1 + 2, queue.samplingRecordCounter.get());
   }
 
   // Test to ensure that exception in either queueing thread or BufferedIterator-reader thread
   // is propagated to
   // another thread.
   @SuppressWarnings("unchecked")
-  @Test(timeout = 60000)
+  @Test
+  @Timeout(value = 60)
   public void testException() throws Exception {
     final int numRecords = 256;
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, numRecords);
@@ -285,13 +292,10 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
     // notify queueing thread of an exception and ensure that it exits.
     final Exception e = new Exception("Failing it :)");
     queue1.markAsFailed(e);
-    try {
-      resFuture.get();
-      Assert.fail("exception is expected");
-    } catch (ExecutionException e1) {
-      Assert.assertEquals(HoodieException.class, e1.getCause().getClass());
-      Assert.assertEquals(e, e1.getCause().getCause());
-    }
+    final Throwable thrown1 = assertThrows(ExecutionException.class, resFuture::get,
+        "exception is expected");
+    assertEquals(HoodieException.class, thrown1.getCause().getClass());
+    assertEquals(e, thrown1.getCause().getCause());
 
     // second let us raise an exception while doing record queueing. this exception should get
     // propagated to
@@ -314,19 +318,14 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
       return true;
     });
 
-    try {
+    final Throwable thrown2 = assertThrows(Exception.class, () -> {
       queue2.iterator().hasNext();
-      Assert.fail("exception is expected");
-    } catch (Exception e1) {
-      Assert.assertEquals(expectedException, e1.getCause());
-    }
+    }, "exception is expected");
+    assertEquals(expectedException, thrown2.getCause());
     // queueing thread should also have exited. make sure that it is not running.
-    try {
-      res.get();
-      Assert.fail("exception is expected");
-    } catch (ExecutionException e2) {
-      Assert.assertEquals(expectedException, e2.getCause());
-    }
+    final Throwable thrown3 = assertThrows(ExecutionException.class, res::get,
+        "exception is expected");
+    assertEquals(expectedException, thrown3.getCause());
   }
 
   private boolean isQueueFull(Semaphore rateLimiter) {

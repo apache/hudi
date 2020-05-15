@@ -25,19 +25,20 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.execution.CopyOnWriteLazyInsertIterable.HoodieInsertValueGenResult;
+import org.apache.hudi.execution.LazyInsertIterable.HoodieInsertValueGenResult;
 
 import org.apache.avro.generic.IndexedRecord;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.execution.CopyOnWriteLazyInsertIterable.getTransformFunction;
+import static org.apache.hudi.execution.LazyInsertIterable.getTransformFunction;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -45,12 +46,12 @@ public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
 
   private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initTestDataGenerator();
   }
 
-  @After
+  @AfterEach
   public void tearDown() throws Exception {
     cleanupTestDataGenerator();
   }
@@ -73,7 +74,8 @@ public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
           }
 
           @Override
-          protected void finish() {}
+          protected void finish() {
+          }
 
           @Override
           protected Integer getResult() {
@@ -87,9 +89,9 @@ public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
           getTransformFunction(HoodieTestDataGenerator.AVRO_SCHEMA));
       int result = executor.execute();
       // It should buffer and write 100 records
-      Assert.assertEquals(result, 100);
+      assertEquals(100, result);
       // There should be no remaining records in the buffer
-      Assert.assertFalse(executor.isRemaining());
+      assertFalse(executor.isRemaining());
     } finally {
       if (executor != null) {
         executor.shutdownNow();

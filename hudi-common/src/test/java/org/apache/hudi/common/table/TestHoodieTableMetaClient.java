@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarnessJunit5;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests hoodie table meta client {@link HoodieTableMetaClient}.
  */
-public class TestHoodieTableMetaClient extends HoodieCommonTestHarnessJunit5 {
+public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void init() throws IOException {
@@ -50,9 +50,11 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarnessJunit5 {
 
   @Test
   public void checkMetadata() {
-    assertEquals(HoodieTestUtils.RAW_TRIPS_TEST_NAME, metaClient.getTableConfig().getTableName(), "Table name should be raw_trips");
+    assertEquals(HoodieTestUtils.RAW_TRIPS_TEST_NAME, metaClient.getTableConfig().getTableName(),
+        "Table name should be raw_trips");
     assertEquals(basePath, metaClient.getBasePath(), "Basepath should be the one assigned");
-    assertEquals(basePath + "/.hoodie", metaClient.getMetaPath(), "Metapath should be ${basepath}/.hoodie");
+    assertEquals(basePath + "/.hoodie", metaClient.getMetaPath(),
+        "Metapath should be ${basepath}/.hoodie");
   }
 
   @Test
@@ -67,8 +69,10 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarnessJunit5 {
     commitTimeline.saveAsComplete(instant, Option.of("test-detail".getBytes()));
     commitTimeline = commitTimeline.reload();
     HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
-    assertEquals(completedInstant, commitTimeline.getInstants().findFirst().get(), "Commit should be 1 and completed");
-    assertArrayEquals("test-detail".getBytes(), commitTimeline.getInstantDetails(completedInstant).get(), "Commit value should be \"test-detail\"");
+    assertEquals(completedInstant, commitTimeline.getInstants().findFirst().get(),
+        "Commit should be 1 and completed");
+    assertArrayEquals("test-detail".getBytes(), commitTimeline.getInstantDetails(completedInstant).get(),
+        "Commit value should be \"test-detail\"");
   }
 
   @Test
@@ -90,8 +94,10 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarnessJunit5 {
     activeTimeline = activeTimeline.reload();
     activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertFalse(activeCommitTimeline.empty(), "Should be the 1 commit we made");
-    assertEquals(completedInstant, activeCommitTimeline.getInstants().findFirst().get(), "Commit should be 1");
-    assertArrayEquals("test-detail".getBytes(), activeCommitTimeline.getInstantDetails(completedInstant).get(), "Commit value should be \"test-detail\"");
+    assertEquals(completedInstant, activeCommitTimeline.getInstants().findFirst().get(),
+        "Commit should be 1");
+    assertArrayEquals("test-detail".getBytes(), activeCommitTimeline.getInstantDetails(completedInstant).get(),
+        "Commit value should be \"test-detail\"");
   }
 
   @Test

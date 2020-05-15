@@ -20,11 +20,11 @@ package org.apache.hudi.common.storage;
 
 import org.apache.hudi.common.fs.StorageSchemes;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link StorageSchemes}.
@@ -42,11 +42,9 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAppendSupported("abfs"));
     assertFalse(StorageSchemes.isAppendSupported("oss"));
     assertTrue(StorageSchemes.isAppendSupported("viewfs"));
-    try {
+    assertFalse(StorageSchemes.isAppendSupported("alluxio"));
+    assertThrows(IllegalArgumentException.class, () -> {
       StorageSchemes.isAppendSupported("s2");
-      fail("Should throw exception for unsupported schemes");
-    } catch (IllegalArgumentException ignore) {
-      // expected.
-    }
+    }, "Should throw exception for unsupported schemes");
   }
 }

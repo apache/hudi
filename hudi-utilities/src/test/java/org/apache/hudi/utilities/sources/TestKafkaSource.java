@@ -22,11 +22,11 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.UtilitiesTestBase;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
+import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -36,16 +36,16 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.apache.spark.streaming.kafka010.OffsetRange;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.UUID;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests against {@link AvroKafkaSource}.
@@ -57,17 +57,17 @@ public class TestKafkaSource extends UtilitiesTestBase {
   private FilebasedSchemaProvider schemaProvider;
   private KafkaTestUtils testUtils;
 
-  @BeforeClass
+  @BeforeAll
   public static void initClass() throws Exception {
     UtilitiesTestBase.initClass();
   }
 
-  @AfterClass
+  @AfterAll
   public static void cleanupClass() {
     UtilitiesTestBase.cleanupClass();
   }
 
-  @Before
+  @BeforeEach
   public void setup() throws Exception {
     super.setup();
     schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
@@ -75,7 +75,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     testUtils.setup();
   }
 
-  @After
+  @AfterEach
   public void teardown() throws Exception {
     super.teardown();
     testUtils.teardown();

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.jupiter.api.Test;
@@ -39,7 +40,7 @@ public class TestHoodieJmxMetrics {
     when(config.isMetricsOn()).thenReturn(true);
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
     when(config.getJmxHost()).thenReturn("localhost");
-    when(config.getJmxPort()).thenReturn("9889");
+    when(config.getJmxPort()).thenReturn(String.valueOf(NetworkTestUtils.nextFreePort()));
     new HoodieMetrics(config, "raw_table");
     registerGauge("jmx_metric1", 123L);
     assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
@@ -51,7 +52,7 @@ public class TestHoodieJmxMetrics {
     when(config.isMetricsOn()).thenReturn(true);
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
     when(config.getJmxHost()).thenReturn("localhost");
-    when(config.getJmxPort()).thenReturn("1000-5000");
+    when(config.getJmxPort()).thenReturn(String.valueOf(NetworkTestUtils.nextFreePort()));
     new HoodieMetrics(config, "raw_table");
     registerGauge("jmx_metric2", 123L);
     assertEquals("123", Metrics.getInstance().getRegistry().getGauges()

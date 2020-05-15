@@ -22,8 +22,8 @@ import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.table.compact.strategy.CompactionStrategy;
-import org.apache.hudi.table.compact.strategy.LogFileSizeBasedCompactionStrategy;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
 import javax.annotation.concurrent.Immutable;
 

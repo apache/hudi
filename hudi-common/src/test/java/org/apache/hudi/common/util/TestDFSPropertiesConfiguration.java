@@ -25,17 +25,17 @@ import org.apache.hudi.common.minicluster.HdfsTestService;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.PrintStream;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests basic functionality of {@link DFSPropertiesConfiguration}.
@@ -47,7 +47,7 @@ public class TestDFSPropertiesConfiguration {
   private static MiniDFSCluster dfsCluster;
   private static DistributedFileSystem dfs;
 
-  @BeforeClass
+  @BeforeAll
   public static void initClass() throws Exception {
     hdfsTestService = new HdfsTestService();
     dfsCluster = hdfsTestService.start(true);
@@ -72,7 +72,7 @@ public class TestDFSPropertiesConfiguration {
     writePropertiesFile(filePath, new String[] {"double.prop=838.3", "include = t4.props"});
   }
 
-  @AfterClass
+  @AfterAll
   public static void cleanupClass() throws Exception {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
@@ -93,12 +93,9 @@ public class TestDFSPropertiesConfiguration {
     DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/t1.props"));
     TypedProperties props = cfg.getConfig();
     assertEquals(5, props.size());
-    try {
+    assertThrows(IllegalArgumentException.class, () -> {
       props.getString("invalid.key");
-      fail("Should error out here.");
-    } catch (IllegalArgumentException iae) {
-      // ignore
-    }
+    }, "Should error out here.");
 
     assertEquals(123, props.getInteger("int.prop"));
     assertEquals(113.4, props.getDouble("double.prop"), 0.001);
@@ -129,12 +126,8 @@ public class TestDFSPropertiesConfiguration {
     assertTrue(props.getBoolean("boolean.prop"));
     assertEquals("t3.value", props.getString("string.prop"));
     assertEquals(1354354354, props.getLong("long.prop"));
-
-    try {
+    assertThrows(IllegalStateException.class, () -> {
       new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/t4.props"));
-      fail("Should error out on a self-included file.");
-    } catch (IllegalStateException ise) {
-      // ignore
-    }
+    }, "Should error out on a self-included file.");
   }
 }

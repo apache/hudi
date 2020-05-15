@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -58,8 +59,8 @@ public class DeleteHelper<T extends HoodieRecordPayload<T>> {
   }
 
   public static <T extends HoodieRecordPayload<T>> HoodieWriteMetadata execute(String instantTime,
-      JavaRDD<HoodieKey> keys, JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable<T> table,
-      CommitActionExecutor<T> deleteExecutor) {
+                                                                               JavaRDD<HoodieKey> keys, JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable<T> table,
+                                                                               CommitActionExecutor<T> deleteExecutor) {
     try {
       HoodieWriteMetadata result = null;
       // De-dupe/merge if needed

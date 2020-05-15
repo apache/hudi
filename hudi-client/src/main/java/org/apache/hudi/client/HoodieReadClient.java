@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -68,6 +69,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
   private HoodieTable hoodieTable;
   private transient Option<SQLContext> sqlContextOpt;
   private final transient JavaSparkContext jsc;
+  private final transient Configuration hadoopConf;
 
   /**
    * @param basePath path to Hoodie table
@@ -93,11 +95,12 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    */
   public HoodieReadClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig) {
     this.jsc = jsc;
+    this.hadoopConf = jsc.hadoopConfiguration();
     final String basePath = clientConfig.getBasePath();
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
-    this.hoodieTable = HoodieTable.create(metaClient, clientConfig, jsc);
-    this.index = HoodieIndex.createIndex(clientConfig, jsc);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath, true);
+    this.hoodieTable = HoodieTable.create(metaClient, clientConfig, hadoopConf);
+    this.index = HoodieIndex.createIndex(clientConfig);
     this.sqlContextOpt = Option.empty();
   }
 
@@ -194,7 +197,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    */
   public List<Pair<String, HoodieCompactionPlan>> getPendingCompactions() {
     HoodieTableMetaClient metaClient =
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), hoodieTable.getMetaClient().getBasePath(), true);
+        new HoodieTableMetaClient(hadoopConf, hoodieTable.getMetaClient().getBasePath(), true);
     return CompactionUtils.getAllPendingCompactionPlans(metaClient).stream()
         .map(
             instantWorkloadPair -> Pair.of(instantWorkloadPair.getKey().getTimestamp(), instantWorkloadPair.getValue()))

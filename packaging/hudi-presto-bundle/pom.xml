@@ -68,6 +68,7 @@
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
 
                   <include>org.apache.parquet:parquet-avro</include>
+                  <include>org.apache.avro:avro</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
@@ -75,6 +76,10 @@
               </artifactSet>
               <relocations>
 
+                <relocation>
+                  <pattern>org.apache.avro.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>com.esotericsoftware.kryo.</pattern>
                   <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
@@ -127,6 +132,19 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hadoop-mr-bundle</artifactId>
       <version>${project.version}</version>
+    </dependency>
+
+    <!-- Parquet -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <scope>compile</scope>
     </dependency>
   </dependencies>
 </project>

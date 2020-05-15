@@ -59,7 +59,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   private final FSDataInputStream inputStream;
   private final HoodieLogFile logFile;
-  private static final byte[] MAGIC_BUFFER = new byte[6];
+  private final byte[] magicBuffer = new byte[6];
   private final Schema readerSchema;
   private boolean readBlockLazily;
   private long reverseLogFilePosition;
@@ -245,7 +245,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
     inputStream.seek(inputStream.getPos() - Long.BYTES);
     // Block size in the footer includes the magic header, which the header does not include.
     // So we have to shorten the footer block size by the size of magic hash
-    long blockSizeFromFooter = inputStream.readLong() - MAGIC_BUFFER.length;
+    long blockSizeFromFooter = inputStream.readLong() - magicBuffer.length;
     if (blocksize != blockSizeFromFooter) {
       LOG.info("Found corrupted block in file " + logFile + ". Header block size(" + blocksize
               + ") did not match the footer block size(" + blockSizeFromFooter + ")");
@@ -325,8 +325,8 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   private boolean hasNextMagic() throws IOException {
     // 1. Read magic header from the start of the block
-    inputStream.readFully(MAGIC_BUFFER, 0, 6);
-    return Arrays.equals(MAGIC_BUFFER, HoodieLogFormat.MAGIC);
+    inputStream.readFully(magicBuffer, 0, 6);
+    return Arrays.equals(magicBuffer, HoodieLogFormat.MAGIC);
   }
 
   @Override

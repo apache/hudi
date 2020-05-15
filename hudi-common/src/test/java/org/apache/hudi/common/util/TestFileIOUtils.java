@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.testutils.HoodieCommonTestHarnessJunit5;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 
 import org.junit.jupiter.api.Test;
 
@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * Tests file I/O utils.
  */
-public class TestFileIOUtils extends HoodieCommonTestHarnessJunit5 {
+public class TestFileIOUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testMkdirAndDelete() throws IOException {

@@ -352,8 +352,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       ensurePartitionLoadedCorrectly(partitionPath);
       return fetchAllStoredFileGroups(partitionPath)
           .map(fileGroup -> Option.fromJavaOptional(fileGroup.getAllBaseFiles()
-              .filter(baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), maxCommitTime,
-                  HoodieTimeline.LESSER_OR_EQUAL))
+              .filter(baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, maxCommitTime
+              ))
               .filter(df -> !isBaseFileDueToPendingCompaction(df)).findFirst()))
           .filter(Option::isPresent).map(Option::get);
     } finally {
@@ -369,7 +369,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       ensurePartitionLoadedCorrectly(partitionPath);
       return fetchHoodieFileGroup(partitionPath, fileId).map(fileGroup -> fileGroup.getAllBaseFiles()
           .filter(
-              baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), instantTime, HoodieTimeline.EQUAL))
+              baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), HoodieTimeline.EQUALS, instantTime))
           .filter(df -> !isBaseFileDueToPendingCompaction(df)).findFirst().orElse(null));
     } finally {
       readLock.unlock();

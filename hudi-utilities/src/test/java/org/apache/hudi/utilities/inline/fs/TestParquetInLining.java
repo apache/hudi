@@ -33,9 +33,8 @@ import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -46,6 +45,7 @@ import java.util.UUID;
 import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.FILE_SCHEME;
 import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getPhantomFile;
 import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 /**
  * Tests {@link InLineFileSystem} with Parquet writer and reader. hudi-common can't access HoodieTestDataGenerator.
@@ -64,7 +64,7 @@ public class TestParquetInLining {
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
   }
 
-  @After
+  @AfterEach
   public void teardown() throws IOException {
     if (generatedPath != null) {
       File filePath = new File(generatedPath.toString().substring(generatedPath.toString().indexOf(':') + 1));
@@ -98,7 +98,7 @@ public class TestParquetInLining {
     // instantiate Parquet reader
     ParquetReader inLineReader = AvroParquetReader.builder(inlinePath).withConf(inlineConf).build();
     List<GenericRecord> records = readParquetGenericRecords(inLineReader);
-    Assert.assertArrayEquals(recordsToWrite.toArray(), records.toArray());
+    assertArrayEquals(recordsToWrite.toArray(), records.toArray());
     inLineReader.close();
   }
 

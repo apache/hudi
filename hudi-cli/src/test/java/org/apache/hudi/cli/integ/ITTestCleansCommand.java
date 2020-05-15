@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.integ;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.cli.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
@@ -29,23 +28,27 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.apache.hadoop.conf.Configuration;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ITTestCleansCommand extends AbstractShellIntegrationTest {
+
   private String tablePath;
   private URL propsFilePath;
 
-  @Before
+  @BeforeEach
   public void init() throws IOException {
     HoodieCLI.conf = jsc.hadoopConfiguration();
 
@@ -83,19 +86,21 @@ public class ITTestCleansCommand extends AbstractShellIntegrationTest {
     assertEquals(0, metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count());
 
     // Check properties file exists.
-    assertNotNull("Not found properties file", propsFilePath);
+    assertNotNull(propsFilePath, "Not found properties file");
 
     // Create partition metadata
-    new File(tablePath + File.separator + HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH
-        + File.separator + HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE).createNewFile();
-    new File(tablePath + File.separator + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH
-        + File.separator + HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE).createNewFile();
+    Files.createFile(Paths.get(tablePath,
+        HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH,
+        HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
+    Files.createFile(Paths.get(tablePath,
+        HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH,
+        HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
 
     CommandResult cr = getShell().executeCommand("cleans run --sparkMaster local --propsFilePath " + propsFilePath.toString());
     assertTrue(cr.isSuccess());
 
     // After run clean, there should have 1 clean instant
-    assertEquals("Loaded 1 clean and the count should match", 1,
-        metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count());
+    assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count(),
+        "Loaded 1 clean and the count should match");
   }
 }

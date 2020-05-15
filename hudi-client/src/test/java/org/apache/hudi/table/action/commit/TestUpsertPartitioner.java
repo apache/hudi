@@ -18,10 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import static org.junit.Assert.assertEquals;
-
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
@@ -36,18 +32,25 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
 import scala.Tuple2;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestUpsertPartitioner extends HoodieClientTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(TestUpsertPartitioner.class);
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initSparkContexts("TestUpsertPartitioner");
     initPath();
@@ -56,7 +59,7 @@ public class TestUpsertPartitioner extends HoodieClientTestHarness {
     initFileSystem();
   }
 
-  @After
+  @AfterEach
   public void tearDown() throws Exception {
     cleanupSparkContexts();
     cleanupMetaClient();
@@ -74,7 +77,7 @@ public class TestUpsertPartitioner extends HoodieClientTestHarness {
     HoodieClientTestUtils.fakeCommitFile(basePath, "001");
     HoodieClientTestUtils.fakeDataFile(basePath, testPartitionPath, "001", "file1", fileSize);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
+    HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, hadoopConf);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     List<HoodieRecord> insertRecords = dataGenerator.generateInserts("001", numInserts);
@@ -89,8 +92,9 @@ public class TestUpsertPartitioner extends HoodieClientTestHarness {
     records.addAll(updateRecords);
     WorkloadProfile profile = new WorkloadProfile(jsc.parallelize(records));
     UpsertPartitioner partitioner = new UpsertPartitioner(profile, jsc, table, config);
-    assertEquals("Update record should have gone to the 1 update partition", 0, partitioner.getPartition(
-        new Tuple2<>(updateRecords.get(0).getKey(), Option.ofNullable(updateRecords.get(0).getCurrentLocation()))));
+    assertEquals(0, partitioner.getPartition(
+        new Tuple2<>(updateRecords.get(0).getKey(), Option.ofNullable(updateRecords.get(0).getCurrentLocation()))),
+        "Update record should have gone to the 1 update partition");
     return partitioner;
   }
 
@@ -100,7 +104,7 @@ public class TestUpsertPartitioner extends HoodieClientTestHarness {
     // Inserts + Updates... Check all updates go together & inserts subsplit
     UpsertPartitioner partitioner = getUpsertPartitioner(0, 200, 100, 1024, testPartitionPath, false);
     List<InsertBucket> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
-    assertEquals("Total of 2 insert buckets", 2, insertBuckets.size());
+    assertEquals(2, insertBuckets.size(), "Total of 2 insert buckets");
   }
 
   @Test
@@ -111,33 +115,33 @@ public class TestUpsertPartitioner extends HoodieClientTestHarness {
     UpsertPartitioner partitioner = getUpsertPartitioner(1000 * 1024, 400, 100, 800 * 1024, testPartitionPath, false);
     List<InsertBucket> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
 
-    assertEquals("Should have 3 partitions", 3, partitioner.numPartitions());
-    assertEquals("Bucket 0 is UPDATE", BucketType.UPDATE,
-        partitioner.getBucketInfo(0).bucketType);
-    assertEquals("Bucket 1 is INSERT", BucketType.INSERT,
-        partitioner.getBucketInfo(1).bucketType);
-    assertEquals("Bucket 2 is INSERT", BucketType.INSERT,
-        partitioner.getBucketInfo(2).bucketType);
-    assertEquals("Total of 3 insert buckets", 3, insertBuckets.size());
-    assertEquals("First insert bucket must be same as update bucket", 0, insertBuckets.get(0).bucketNumber);
-    assertEquals("First insert bucket should have weight 0.5", 0.5, insertBuckets.get(0).weight, 0.01);
+    assertEquals(3, partitioner.numPartitions(), "Should have 3 partitions");
+    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+        "Bucket 0 is UPDATE");
+    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(1).bucketType,
+        "Bucket 1 is INSERT");
+    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(2).bucketType,
+        "Bucket 2 is INSERT");
+    assertEquals(3, insertBuckets.size(), "Total of 3 insert buckets");
+    assertEquals(0, insertBuckets.get(0).bucketNumber, "First insert bucket must be same as update bucket");
+    assertEquals(0.5, insertBuckets.get(0).weight, 0.01, "First insert bucket should have weight 0.5");
 
     // Now with insert split size auto tuned
     partitioner = getUpsertPartitioner(1000 * 1024, 2400, 100, 800 * 1024, testPartitionPath, true);
     insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
 
-    assertEquals("Should have 4 partitions", 4, partitioner.numPartitions());
-    assertEquals("Bucket 0 is UPDATE", BucketType.UPDATE,
-        partitioner.getBucketInfo(0).bucketType);
-    assertEquals("Bucket 1 is INSERT", BucketType.INSERT,
-        partitioner.getBucketInfo(1).bucketType);
-    assertEquals("Bucket 2 is INSERT", BucketType.INSERT,
-        partitioner.getBucketInfo(2).bucketType);
-    assertEquals("Bucket 3 is INSERT", BucketType.INSERT,
-        partitioner.getBucketInfo(3).bucketType);
-    assertEquals("Total of 4 insert buckets", 4, insertBuckets.size());
-    assertEquals("First insert bucket must be same as update bucket", 0, insertBuckets.get(0).bucketNumber);
-    assertEquals("First insert bucket should have weight 0.5", 200.0 / 2400, insertBuckets.get(0).weight, 0.01);
+    assertEquals(4, partitioner.numPartitions(), "Should have 4 partitions");
+    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+        "Bucket 0 is UPDATE");
+    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(1).bucketType,
+        "Bucket 1 is INSERT");
+    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(2).bucketType,
+        "Bucket 2 is INSERT");
+    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(3).bucketType,
+        "Bucket 3 is INSERT");
+    assertEquals(4, insertBuckets.size(), "Total of 4 insert buckets");
+    assertEquals(0, insertBuckets.get(0).bucketNumber, "First insert bucket must be same as update bucket");
+    assertEquals(200.0 / 2400, insertBuckets.get(0).weight, 0.01, "First insert bucket should have weight 0.5");
   }
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() throws Exception {

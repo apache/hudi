@@ -128,14 +128,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieDefaultTimeline findInstantsAfter(String instantTime, int numCommits) {
     return new HoodieDefaultTimeline(instants.stream()
-        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), instantTime, GREATER)).limit(numCommits),
+        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, instantTime)).limit(numCommits),
         details);
   }
 
   @Override
   public HoodieDefaultTimeline findInstantsBefore(String instantTime) {
     return new HoodieDefaultTimeline(instants.stream()
-            .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), instantTime, LESSER)),
+            .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantTime)),
             details);
   }
 
@@ -288,7 +288,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   public boolean isBeforeTimelineStarts(String instant) {
     Option<HoodieInstant> firstCommit = firstInstant();
     return firstCommit.isPresent()
-        && HoodieTimeline.compareTimestamps(instant, firstCommit.get().getTimestamp(), LESSER);
+        && HoodieTimeline.compareTimestamps(instant, LESSER_THAN, firstCommit.get().getTimestamp());
   }
 
   @Override

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
@@ -57,6 +56,7 @@ public class HDFSParquetImportCommand implements CommandMarker {
       @CliOption(key = "schemaFilePath", mandatory = true,
           help = "Path for Avro schema file") final String schemaFilePath,
       @CliOption(key = "format", mandatory = true, help = "Format for the input data") final String format,
+      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
       @CliOption(key = "sparkMemory", mandatory = true, help = "Spark executor memory") final String sparkMemory,
       @CliOption(key = "retry", mandatory = true, help = "Number of retries") final String retry,
       @CliOption(key = "propsFilePath", help = "path to properties file on localfs or dfs with configurations for hoodie client for importing",
@@ -66,8 +66,6 @@ public class HDFSParquetImportCommand implements CommandMarker {
 
     (new FormatValidator()).validate("format", format);
 
-    boolean initialized = HoodieCLI.initConf();
-    HoodieCLI.initFS(initialized);
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
 
@@ -78,8 +76,8 @@ public class HDFSParquetImportCommand implements CommandMarker {
       cmd = SparkCommand.UPSERT.toString();
     }
 
-    sparkLauncher.addAppArgs(cmd, srcPath, targetPath, tableName, tableType, rowKeyField, partitionPathField,
-        parallelism, schemaFilePath, sparkMemory, retry, propsFilePath);
+    sparkLauncher.addAppArgs(cmd, master, sparkMemory, srcPath, targetPath, tableName, tableType, rowKeyField,
+        partitionPathField, parallelism, schemaFilePath, retry, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
