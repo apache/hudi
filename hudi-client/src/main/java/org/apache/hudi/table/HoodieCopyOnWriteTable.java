@@ -29,14 +29,12 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ParquetReaderIterator;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
@@ -298,34 +296,5 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       sb.append('}');
       return sb.toString();
     }
-  }
-
-  /**
-   * Obtains the average record size based on records written during previous commits. Used for estimating how many
-   * records pack into one file.
-   */
-  protected static long averageBytesPerRecord(HoodieTimeline commitTimeline, int defaultRecordSizeEstimate) {
-    long avgSize = defaultRecordSizeEstimate;
-    try {
-      if (!commitTimeline.empty()) {
-        // Go over the reverse ordered commits to get a more recent estimate of average record size.
-        Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
-        while (instants.hasNext()) {
-          HoodieInstant instant = instants.next();
-          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-              .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-          long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
-          long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
-          if (totalBytesWritten > 0 && totalRecordsWritten > 0) {
-            avgSize = (long) Math.ceil((1.0 * totalBytesWritten) / totalRecordsWritten);
-            break;
-          }
-        }
-      }
-    } catch (Throwable t) {
-      // make this fail safe.
-      LOG.error("Error trying to compute average bytes/record ", t);
-    }
-    return avgSize;
   }
 }
