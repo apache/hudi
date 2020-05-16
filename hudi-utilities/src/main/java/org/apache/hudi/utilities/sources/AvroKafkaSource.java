@@ -46,12 +46,12 @@ public class AvroKafkaSource extends AvroSource {
 
   private final KafkaOffsetGen offsetGen;
 
-  private final String useCustomDeserializerProp = "hoodie.deltastreamer.kafka.custom.avro.deserializer";
+  private static final String USE_CUSTOM_DESERIALIZER_PROP = "hoodie.deltastreamer.kafka.custom.avro.deserializer";
 
   public AvroKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    boolean useCustomDeserializer = props.getBoolean(useCustomDeserializerProp, false);
+    boolean useCustomDeserializer = props.getBoolean(USE_CUSTOM_DESERIALIZER_PROP, false);
     props.put("key.deserializer", StringDeserializer.class);
     props.put("value.deserializer", useCustomDeserializer ? HoodieAvroKafkaDeserializer.class : KafkaAvroDeserializer.class);
     offsetGen = new KafkaOffsetGen(props);

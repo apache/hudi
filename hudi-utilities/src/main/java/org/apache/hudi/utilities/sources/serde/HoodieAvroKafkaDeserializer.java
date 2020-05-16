@@ -18,13 +18,13 @@
 
 package org.apache.hudi.utilities.sources.serde;
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.serializers.KafkaAvroDecoder;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
-import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
-import kafka.serializer.Decoder;
 import kafka.utils.VerifiableProperties;
 import org.apache.avro.Schema;
 import org.apache.kafka.common.errors.SerializationException;
@@ -38,27 +38,36 @@ import java.util.Properties;
  * This is a custom implementation of kafka.serializer.Decoder<T> which aims at deserializing all the incoming messages
  * with same schema (which is latest).
  */
-public class HoodieAvroKafkaDeserializer extends AbstractKafkaAvroDeserializer implements Decoder<Object> {
+public class HoodieAvroKafkaDeserializer extends KafkaAvroDecoder {
 
   private final Schema sourceSchema;
-  private static final String SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class";
+  public static final String SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class";
+
+  public HoodieAvroKafkaDeserializer(SchemaRegistryClient client, VerifiableProperties properties) {
+    super(client);
+    TypedProperties typedProperties = new TypedProperties();
+    copyProperties(typedProperties, properties.props());
+    try {
+      SchemaProvider schemaProvider = UtilHelpers.createSchemaProvider(
+          typedProperties.getString(SCHEMA_PROVIDER_CLASS_PROP), typedProperties);
+      this.sourceSchema = Objects.requireNonNull(schemaProvider).getSourceSchema();
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
 
   public HoodieAvroKafkaDeserializer(VerifiableProperties properties) {
+    super(properties);
     this.configure(new KafkaAvroDeserializerConfig(properties.props()));
     TypedProperties typedProperties = new TypedProperties();
     copyProperties(typedProperties, properties.props());
     try {
       SchemaProvider schemaProvider = UtilHelpers.createSchemaProvider(
           typedProperties.getString(SCHEMA_PROVIDER_CLASS_PROP), typedProperties);
-      sourceSchema = Objects.requireNonNull(schemaProvider).getSourceSchema();
+      this.sourceSchema = Objects.requireNonNull(schemaProvider).getSourceSchema();
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-  }
-
-  @Override
-  public Object fromBytes(byte[] bytes) {
-    return deserialize(bytes);
   }
 
   @Override

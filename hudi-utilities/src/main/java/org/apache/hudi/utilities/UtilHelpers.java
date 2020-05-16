@@ -112,7 +112,7 @@ public class UtilHelpers {
       return schemaProviderClass == null ? null :
         (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg);
     } catch (Throwable e) {
-      throw new IOException("Could not load schema provider class " + schemaProviderClass, e);
+      throw new HoodieException("Could not load schema provider class " + schemaProviderClass, e);
     }
   }
 
