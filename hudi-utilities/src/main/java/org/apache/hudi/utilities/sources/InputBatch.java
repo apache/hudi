@@ -18,9 +18,13 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+
+import org.apache.avro.Schema;
+import org.apache.spark.api.java.JavaSparkContext;
 
 public class InputBatch<T> {
 
@@ -49,9 +53,25 @@ public class InputBatch<T> {
   }
 
   public SchemaProvider getSchemaProvider() {
-    if (schemaProvider == null) {
+    if (batch.isPresent() && schemaProvider == null) {
       throw new HoodieException("Please provide a valid schema provider class!");
     }
-    return schemaProvider;
+    return Option.ofNullable(schemaProvider).orElse(new NullSchemaProvider());
+  }
+
+  public static class NullSchemaProvider extends SchemaProvider {
+
+    public NullSchemaProvider() {
+      this(null, null);
+    }
+
+    public NullSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
+      super(props, jssc);
+    }
+
+    @Override
+    public Schema getSourceSchema() {
+      return Schema.create(Schema.Type.NULL);
+    }
   }
 }
