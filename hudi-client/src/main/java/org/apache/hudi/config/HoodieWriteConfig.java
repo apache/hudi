@@ -82,7 +82,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = DEFAULT_PARALLELISM;
 
   private static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";
-  private static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "false";
+  private static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "true";
 
   private static final String FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP = "hoodie.fail.on.timeline.archiving";
   private static final String DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED = "true";

@@ -102,7 +102,7 @@
     <scalatest.version>3.0.1</scalatest.version>
     <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
-    <jetty.version>7.6.0.v20120127</jetty.version>
+    <jetty.version>9.4.15.v20190215</jetty.version>
     <hbase.version>1.2.3</hbase.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
     <h2.version>1.4.199</h2.version>
@@ -460,13 +460,6 @@
         <groupId>org.glassfish.jersey.containers</groupId>
         <artifactId>jersey-container-servlet-core</artifactId>
         <version>${glassfish.version}</version>
-      </dependency>
-      <!-- Needed for running HiveServer for Tests -->
-      <dependency>
-        <groupId>org.eclipse.jetty.aggregate</groupId>
-        <artifactId>jetty-all</artifactId>
-        <scope>test</scope>
-        <version>${jetty.version}</version>
       </dependency>
 
       <!-- Avro -->

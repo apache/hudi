@@ -171,12 +171,6 @@
       <scope>test</scope>
     </dependency>
 
-    <dependency>
-      <groupId>org.eclipse.jetty.aggregate</groupId>
-      <artifactId>jetty-all</artifactId>
-      <scope>test</scope>
-    </dependency>
-
     <!-- Hadoop - Test -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
