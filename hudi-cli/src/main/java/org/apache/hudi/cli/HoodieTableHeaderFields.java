@@ -81,4 +81,9 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_HOODIE_PROPERTY = "Property";
   public static final String HEADER_OLD_VALUE = "Old Value";
   public static final String HEADER_NEW_VALUE = "New Value";
+
+  /**
+   * Fields of Savepoints.
+   */
+  public static final String HEADER_SAVEPOINT_TIME = "SavepointTime";
 }

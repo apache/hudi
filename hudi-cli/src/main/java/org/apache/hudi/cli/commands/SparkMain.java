@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.utilities.HDFSParquetImporter;
@@ -54,7 +55,8 @@ public class SparkMain {
    * Commands.
    */
   enum SparkCommand {
-    ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN, COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLEAN
+    ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN,
+    COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLEAN, DELETE_SAVEPOINT
   }
 
   public static void main(String[] args) throws Exception {
@@ -77,8 +79,8 @@ public class SparkMain {
         returnCode = deduplicatePartitionPath(jsc, args[3], args[4], args[5], args[6]);
         break;
       case ROLLBACK_TO_SAVEPOINT:
-        assert (args.length == 3);
-        returnCode = rollbackToSavepoint(jsc, args[1], args[2]);
+        assert (args.length == 5);
+        returnCode = rollbackToSavepoint(jsc, args[3], args[4]);
         break;
       case IMPORT:
       case UPSERT:
@@ -154,6 +156,14 @@ public class SparkMain {
         }
         clean(jsc, args[3], propsFilePath, configs);
         break;
+      case SAVEPOINT:
+        assert (args.length == 7);
+        returnCode = createSavepoint(jsc, args[3], args[4], args[5], args[6]);
+        break;
+      case DELETE_SAVEPOINT:
+        assert (args.length == 5);
+        returnCode = deleteSavepoint(jsc, args[3], args[4]);
+        break;
       default:
         break;
     }
@@ -163,7 +173,8 @@ public class SparkMain {
   private static boolean sparkMasterContained(SparkCommand command) {
     List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
         SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN,
-        SparkCommand.IMPORT, SparkCommand.UPSERT, SparkCommand.DEDUPLICATE);
+        SparkCommand.IMPORT, SparkCommand.UPSERT, SparkCommand.DEDUPLICATE, SparkCommand.SAVEPOINT,
+        SparkCommand.DELETE_SAVEPOINT, SparkCommand.ROLLBACK_TO_SAVEPOINT);
     return masterContained.contains(command);
   }
 
@@ -281,6 +292,19 @@ public class SparkMain {
     }
   }
 
+  private static int createSavepoint(JavaSparkContext jsc, String commitTime, String user,
+      String comments, String basePath) throws Exception {
+    HoodieWriteClient client = createHoodieClient(jsc, basePath);
+    try {
+      client.savepoint(commitTime, user, comments);
+      LOG.info(String.format("The commit \"%s\" has been savepointed.", commitTime));
+      return 0;
+    } catch (HoodieSavepointException se) {
+      LOG.info(String.format("Failed: Could not create savepoint \"%s\".", commitTime));
+      return -1;
+    }
+  }
+
   private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
     HoodieWriteClient client = createHoodieClient(jsc, basePath);
     try {
@@ -289,6 +313,18 @@ public class SparkMain {
       return 0;
     } catch (Exception e) {
       LOG.info(String.format("The commit \"%s\" failed to roll back.", savepointTime));
+      return -1;
+    }
+  }
+
+  private static int deleteSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
+    HoodieWriteClient client = createHoodieClient(jsc, basePath);
+    try {
+      client.deleteSavepoint(savepointTime);
+      LOG.info(String.format("Savepoint \"%s\" deleted.", savepointTime));
+      return 0;
+    } catch (Exception e) {
+      LOG.info(String.format("Failed: Could not delete savepoint \"%s\".", savepointTime));
       return -1;
     }
   }
