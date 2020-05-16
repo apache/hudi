@@ -29,9 +29,7 @@ import org.apache.log4j.Logger
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
 import scala.collection.JavaConversions._
-import scala.collection.mutable.HashMap
-import scala.collection.mutable.Buffer
-import scala.collection.mutable.HashSet
+import scala.collection.mutable.{Buffer, HashMap, HashSet, ListBuffer}
 
 /**
   * Spark job to de-duplicate data present in a partition path
@@ -154,6 +152,7 @@ class DedupeSparkJob(basePath: String,
             if (c > maxCommit)
               maxCommit = c
           })
+          val rowsWithMaxCommit = new ListBuffer[Row]()
           rows.foreach(r => {
             val c = r(3).asInstanceOf[String].toLong
             if (c != maxCommit) {
@@ -162,10 +161,12 @@ class DedupeSparkJob(basePath: String,
                 fileToDeleteKeyMap(f) = HashSet[String]()
               }
               fileToDeleteKeyMap(f).add(key)
+            } else {
+              rowsWithMaxCommit += r
             }
           })
 
-          rows.init.foreach(r => {
+          rowsWithMaxCommit.toList.init.foreach(r => {
             val f = r(2).asInstanceOf[String].split("_")(0)
             if (!fileToDeleteKeyMap.contains(f)) {
               fileToDeleteKeyMap(f) = HashSet[String]()
