@@ -70,6 +70,7 @@ import org.apache.log4j.Logger;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -137,7 +138,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     Set<Path> poolSet = new HashSet<>();
 
     for (Path path : paths) {
-      PartitionDesc part = HiveFileFormatUtils.getPartitionDescFromPathRecursively(pathToPartitionInfo, path,
+      PartitionDesc part = getPartitionFromPath(pathToPartitionInfo, path,
           IOPrepareCache.get().allocatePartitionDescMap());
       TableDesc tableDesc = part.getTableDesc();
       if ((tableDesc != null) && tableDesc.isNonNative()) {
@@ -376,6 +377,34 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
   }
 
   /**
+   * HiveFileFormatUtils.getPartitionDescFromPathRecursively is no longer available since Hive 3.
+   * This method is to make it compatible with both Hive 2 and Hive 3.
+   * @param pathToPartitionInfo
+   * @param dir
+   * @param cacheMap
+   * @return
+   * @throws IOException
+   */
+  private static PartitionDesc getPartitionFromPath(Map<Path, PartitionDesc> pathToPartitionInfo, Path dir,
+      Map<Map<Path, PartitionDesc>, Map<Path, PartitionDesc>> cacheMap)
+      throws IOException {
+    Method method;
+    try {
+      Class<?> hiveUtilsClass = Class.forName("org.apache.hadoop.hive.ql.io.HiveFileFormatUtils");
+      try {
+        // HiveFileFormatUtils.getPartitionDescFromPathRecursively method only available in Hive 2.x
+        method = hiveUtilsClass.getMethod("getPartitionDescFromPathRecursively", Map.class, Path.class, Map.class);
+      } catch (NoSuchMethodException e) {
+        // HiveFileFormatUtils.getFromPathRecursively method only available in Hive 3.x
+        method = hiveUtilsClass.getMethod("getFromPathRecursively", Map.class, Path.class, Map.class);
+      }
+      return (PartitionDesc) method.invoke(null, pathToPartitionInfo, dir, cacheMap);
+    } catch (ReflectiveOperationException e) {
+      throw new IOException(e);
+    }
+  }
+
+  /**
    * MOD - Just added this for visibility.
    */
   Path[] getInputPaths(JobConf job) throws IOException {
@@ -568,8 +597,8 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         // CombinedSplit.
         Path[] ipaths = inputSplitShim.getPaths();
         if (ipaths.length > 0) {
-          PartitionDesc part = HiveFileFormatUtils.getPartitionDescFromPathRecursively(this.pathToPartitionInfo,
-              ipaths[0], IOPrepareCache.get().getPartitionDescMap());
+          PartitionDesc part = getPartitionFromPath(this.pathToPartitionInfo, ipaths[0],
+              IOPrepareCache.get().getPartitionDescMap());
           inputFormatClassName = part.getInputFileFormatClass().getName();
         }
       }
@@ -703,8 +732,8 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
 
         // extract all the inputFormatClass names for each chunk in the
         // CombinedSplit.
-        PartitionDesc part = HiveFileFormatUtils.getPartitionDescFromPathRecursively(pathToPartitionInfo,
-            inputSplitShim.getPath(0), IOPrepareCache.get().getPartitionDescMap());
+        PartitionDesc part = getPartitionFromPath(pathToPartitionInfo, inputSplitShim.getPath(0),
+            IOPrepareCache.get().getPartitionDescMap());
 
         // create a new InputFormat instance if this is the first time to see
         // this class
@@ -957,8 +986,8 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     public Set<Integer> call() throws Exception {
       Set<Integer> nonCombinablePathIndices = new HashSet<Integer>();
       for (int i = 0; i < length; i++) {
-        PartitionDesc part = HiveFileFormatUtils.getPartitionDescFromPathRecursively(pathToPartitionInfo,
-            paths[i + start], IOPrepareCache.get().allocatePartitionDescMap());
+        PartitionDesc part = getPartitionFromPath(pathToPartitionInfo, paths[i + start],
+            IOPrepareCache.get().allocatePartitionDescMap());
         // Use HiveInputFormat if any of the paths is not splittable
         Class<? extends InputFormat> inputFormatClass = part.getInputFileFormatClass();
         InputFormat<WritableComparable, Writable> inputFormat = getInputFormatFromCache(inputFormatClass, conf);
