@@ -192,9 +192,9 @@ public class TestHoodieAvroUtils {
     evolvedSchema.setFields(evolvedFields);
 
     GenericRecord rec1 = HoodieAvroUtils.rewriteRecord(rec, evolvedSchema);
-    //evolvedField4.defaultVal() returns a JsonProperties.Null instance
+    //evolvedField4.defaultVal() returns a JsonProperties.Null instance.
     assertNull(rec1.get("evolved_field"));
-    //evolvedField5.defaultVal() returns null
+    //evolvedField5.defaultVal() returns null.
     assertNull(rec1.get("evolved_field1"));
   }
 }
