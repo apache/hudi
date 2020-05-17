@@ -23,12 +23,15 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.RecordReader;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestRecordReaderValueIterator {
 
@@ -40,11 +43,11 @@ public class TestRecordReaderValueIterator {
     TestRecordReader reader = new TestRecordReader(entries);
     RecordReaderValueIterator<IntWritable, Text> itr = new RecordReaderValueIterator<IntWritable, Text>(reader);
     for (int i = 0; i < values.length; i++) {
-      Assert.assertTrue(itr.hasNext());
+      assertTrue(itr.hasNext());
       Text val = itr.next();
-      Assert.assertEquals(values[i], val.toString());
+      assertEquals(values[i], val.toString());
     }
-    Assert.assertFalse(itr.hasNext());
+    assertFalse(itr.hasNext());
   }
 
   /**

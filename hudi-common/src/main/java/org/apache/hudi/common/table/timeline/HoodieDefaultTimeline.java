@@ -24,9 +24,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -42,14 +39,13 @@ import static java.util.Collections.reverse;
 
 /**
  * HoodieDefaultTimeline is a default implementation of the HoodieTimeline. It provides methods to inspect a
- * List[HoodieInstant]. Function to get the details of the instant is passed in as a lamdba.
+ * List[HoodieInstant]. Function to get the details of the instant is passed in as a lambda.
  *
  * @see HoodieTimeline
  */
 public class HoodieDefaultTimeline implements HoodieTimeline {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(HoodieDefaultTimeline.class);
 
   private static final String HASHING_ALGORITHM = "SHA-256";
 
@@ -132,14 +128,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieDefaultTimeline findInstantsAfter(String instantTime, int numCommits) {
     return new HoodieDefaultTimeline(instants.stream()
-        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), instantTime, GREATER)).limit(numCommits),
+        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, instantTime)).limit(numCommits),
         details);
   }
 
   @Override
   public HoodieDefaultTimeline findInstantsBefore(String instantTime) {
     return new HoodieDefaultTimeline(instants.stream()
-            .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), instantTime, LESSER)),
+            .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantTime)),
             details);
   }
 
@@ -292,7 +288,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   public boolean isBeforeTimelineStarts(String instant) {
     Option<HoodieInstant> firstCommit = firstInstant();
     return firstCommit.isPresent()
-        && HoodieTimeline.compareTimestamps(instant, firstCommit.get().getTimestamp(), LESSER);
+        && HoodieTimeline.compareTimestamps(instant, LESSER_THAN, firstCommit.get().getTimestamp());
   }
 
   @Override

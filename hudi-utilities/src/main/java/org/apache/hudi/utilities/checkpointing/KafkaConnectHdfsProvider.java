@@ -18,8 +18,10 @@
 
 package org.apache.hudi.utilities.checkpointing;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -35,15 +37,20 @@ import java.util.regex.Pattern;
  * Generate checkpoint from Kafka-Connect-HDFS managed data set.
  * Documentation: https://docs.confluent.io/current/connect/kafka-connect-hdfs/index.html
  */
-public class KafkaConnectHdfsProvider implements InitialCheckPointProvider {
-  private final Path path;
-  private final FileSystem fs;
+public class KafkaConnectHdfsProvider extends InitialCheckPointProvider {
+  private static String FILENAME_SEPARATOR = "[\\+\\.]";
 
-  private static final String FILENAME_SEPARATOR = "[\\+\\.]";
+  public KafkaConnectHdfsProvider(TypedProperties props) {
+    super(props);
+  }
 
-  public KafkaConnectHdfsProvider(final Path basePath, final FileSystem fileSystem) {
-    this.path = basePath;
-    this.fs = fileSystem;
+  @Override
+  public void init(Configuration config) throws HoodieException {
+    try {
+      this.fs = FileSystem.get(config);
+    } catch (IOException e) {
+      throw new HoodieException("KafkaConnectHdfsProvider initialization failed");
+    }
   }
 
   /**
@@ -72,7 +79,8 @@ public class KafkaConnectHdfsProvider implements InitialCheckPointProvider {
 
   /**
    * Convert map contains max offset of each partition to string.
-   * @param topic Topic name
+   *
+   * @param topic      Topic name
    * @param checkpoint Map with partition as key and max offset as value
    * @return Checkpoint string
    */
@@ -88,8 +96,9 @@ public class KafkaConnectHdfsProvider implements InitialCheckPointProvider {
 
   /**
    * List file status recursively.
+   *
    * @param curPath Current Path
-   * @param filter PathFilter
+   * @param filter  PathFilter
    * @return All file status match kafka connect naming convention
    * @throws IOException
    */

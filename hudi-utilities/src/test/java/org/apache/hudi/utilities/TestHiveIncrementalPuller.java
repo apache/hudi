@@ -18,15 +18,16 @@
 
 package org.apache.hudi.utilities;
 
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class TestHiveIncrementalPuller {
 
   private HiveIncrementalPuller.Config config;
 
-  @Before
+  @BeforeEach
   public void setup() {
     config = new HiveIncrementalPuller.Config();
   }
@@ -34,11 +35,9 @@ public class TestHiveIncrementalPuller {
   @Test
   public void testInitHiveIncrementalPuller() {
 
-    try {
+    assertDoesNotThrow(() -> {
       new HiveIncrementalPuller(config);
-    } catch (Exception e) {
-      Assert.fail("Unexpected exception while initing HiveIncrementalPuller, msg: " + e.getMessage());
-    }
+    }, "Unexpected exception while initing HiveIncrementalPuller.");
 
   }
 

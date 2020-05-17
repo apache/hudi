@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
 
 import org.apache.hudi.utilities.HoodieRollback;
@@ -79,12 +80,13 @@ public class SavepointsCommand implements CommandMarker {
     String result;
     try (JavaSparkContext jsc = SparkUtil.initJavaSparkConf("Create Savepoint")) {
       HoodieWriteClient client = createHoodieClient(jsc, metaClient.getBasePath());
-      if (client.savepoint(commitTime, user, comments)) {
+      try {
+        client.savepoint(commitTime, user, comments);
         // Refresh the current
         refreshMetaClient();
         result = String.format("The commit \"%s\" has been savepointed.", commitTime);
-      } else {
-        result = String.format("Failed: Could not savepoint commit \"%s\".", commitTime);
+      } catch (HoodieSavepointException se) {
+        result = String.format("Failed: Could not create savepoint \"%s\".", commitTime);
       }
     }
     return result;

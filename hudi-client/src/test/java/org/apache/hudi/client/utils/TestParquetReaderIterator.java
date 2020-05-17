@@ -21,11 +21,14 @@ package org.apache.hudi.client.utils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.parquet.hadoop.ParquetReader;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -40,7 +43,7 @@ public class TestParquetReaderIterator {
     int idempotencyCheckCounter = 0;
     // call hasNext() 3 times
     while (idempotencyCheckCounter < 3) {
-      Assert.assertTrue(iterator.hasNext());
+      assertTrue(iterator.hasNext());
       idempotencyCheckCounter++;
     }
   }
@@ -53,13 +56,9 @@ public class TestParquetReaderIterator {
     when(reader.read()).thenReturn(1).thenReturn(null);
     ParquetReaderIterator<Integer> iterator = new ParquetReaderIterator<>(reader);
     // should return value even though hasNext() hasn't been called
-    Assert.assertTrue(iterator.next() == 1);
+    assertEquals(1, iterator.next());
     // no more entries to iterate on
-    Assert.assertFalse(iterator.hasNext());
-    try {
-      iterator.next();
-    } catch (HoodieIOException e) {
-      // should throw an exception since there is only 1 record
-    }
+    assertFalse(iterator.hasNext());
+    assertThrows(HoodieIOException.class, iterator::next, "should throw an exception since there is only 1 record");
   }
 }

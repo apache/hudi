@@ -51,8 +51,8 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
     this.config = config;
   }
 
-  public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(HoodieWriteConfig config,
-      JavaSparkContext jsc) throws HoodieIndexException {
+  public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(
+      HoodieWriteConfig config) throws HoodieIndexException {
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
       Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);

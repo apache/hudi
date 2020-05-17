@@ -56,10 +56,11 @@ public class HoodieRollback {
 
   public int rollbackToSavepoint(JavaSparkContext jsc) throws Exception {
     HoodieWriteClient client = createHoodieClient(jsc, cfg.basePath);
-    if (client.rollbackToSavepoint(cfg.savepointTime)) {
+    try {
+      client.restoreToSavepoint(cfg.savepointTime);
       LOG.info(String.format("The commit \"%s\" rolled back.", cfg.savepointTime));
       return 0;
-    } else {
+    } catch (Exception e) {
       LOG.info(String.format("The commit \"%s\" failed to roll back.", cfg.savepointTime));
       return -1;
     }

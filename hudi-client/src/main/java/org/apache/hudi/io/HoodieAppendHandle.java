@@ -191,8 +191,6 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
     return Option.empty();
   }
 
-  // TODO (NA) - Perform a writerSchema check of current input record with the last writerSchema on log file
-  // to make sure we don't append records with older (shorter) writerSchema than already appended
   public void doAppend() {
     while (recordItr.hasNext()) {
       HoodieRecord record = recordItr.next();

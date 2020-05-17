@@ -35,16 +35,16 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test Cases for rollback of snapshots and commits.
@@ -58,7 +58,7 @@ public class TestClientRollback extends TestHoodieClientBase {
   public void testSavepointAndRollback() throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(HoodieCompactionConfig.newBuilder()
         .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build()).build();
-    try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg)) {
       HoodieTestDataGenerator.writePartitionMetadata(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
       /**
@@ -99,18 +99,18 @@ public class TestClientRollback extends TestHoodieClientBase {
       List<String> partitionPaths =
           FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), getConfig().shouldAssumeDatePartitioning());
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.create(metaClient, getConfig(), jsc);
+      HoodieTable table = HoodieTable.create(metaClient, getConfig(), hadoopConf);
       final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
 
       List<HoodieBaseFile> dataFiles = partitionPaths.stream().flatMap(s -> {
         return view1.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"));
       }).collect(Collectors.toList());
-      assertEquals("The data files for commit 003 should be present", 3, dataFiles.size());
+      assertEquals(3, dataFiles.size(), "The data files for commit 003 should be present");
 
       dataFiles = partitionPaths.stream().flatMap(s -> {
         return view1.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"));
       }).collect(Collectors.toList());
-      assertEquals("The data files for commit 002 should be present", 3, dataFiles.size());
+      assertEquals(3, dataFiles.size(), "The data files for commit 002 should be present");
 
       /**
        * Write 4 (updates)
@@ -124,41 +124,32 @@ public class TestClientRollback extends TestHoodieClientBase {
       assertNoWriteErrors(statuses);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieTable.create(metaClient, getConfig(), jsc);
+      table = HoodieTable.create(metaClient, getConfig(), hadoopConf);
       final BaseFileOnlyView view2 = table.getBaseFileOnlyView();
 
       dataFiles = partitionPaths.stream().flatMap(s -> view2.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
-      assertEquals("The data files for commit 004 should be present", 3, dataFiles.size());
+      assertEquals(3, dataFiles.size(), "The data files for commit 004 should be present");
 
       // rolling back to a non existent savepoint must not succeed
-      try {
-        client.rollbackToSavepoint("001");
-        fail("Rolling back to non-existent savepoint should not be allowed");
-      } catch (HoodieRollbackException e) {
-        // this is good
-      }
+      assertThrows(HoodieRollbackException.class, () -> {
+        client.restoreToSavepoint("001");
+      }, "Rolling back to non-existent savepoint should not be allowed");
 
       // rollback to savepoint 002
       HoodieInstant savepoint = table.getCompletedSavepointTimeline().getInstants().findFirst().get();
-      client.rollbackToSavepoint(savepoint.getTimestamp());
+      client.restoreToSavepoint(savepoint.getTimestamp());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      table = HoodieTable.create(metaClient, getConfig(), jsc);
+      table = HoodieTable.create(metaClient, getConfig(), hadoopConf);
       final BaseFileOnlyView view3 = table.getBaseFileOnlyView();
-      dataFiles = partitionPaths.stream().flatMap(s -> {
-        return view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"));
-      }).collect(Collectors.toList());
-      assertEquals("The data files for commit 002 be available", 3, dataFiles.size());
+      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("002"))).collect(Collectors.toList());
+      assertEquals(3, dataFiles.size(), "The data files for commit 002 be available");
 
-      dataFiles = partitionPaths.stream().flatMap(s -> {
-        return view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"));
-      }).collect(Collectors.toList());
-      assertEquals("The data files for commit 003 should be rolled back", 0, dataFiles.size());
+      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("003"))).collect(Collectors.toList());
+      assertEquals(0, dataFiles.size(), "The data files for commit 003 should be rolled back");
 
-      dataFiles = partitionPaths.stream().flatMap(s -> {
-        return view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"));
-      }).collect(Collectors.toList());
-      assertEquals("The data files for commit 004 should be rolled back", 0, dataFiles.size());
+      dataFiles = partitionPaths.stream().flatMap(s -> view3.getAllBaseFiles(s).filter(f -> f.getCommitTime().equals("004"))).collect(Collectors.toList());
+      assertEquals(0, dataFiles.size(), "The data files for commit 004 should be rolled back");
     }
   }
 
@@ -201,12 +192,9 @@ public class TestClientRollback extends TestHoodieClientBase {
     try (HoodieWriteClient client = getHoodieWriteClient(config, false);) {
 
       // Rollback commit 1 (this should fail, since commit2 is still around)
-      try {
+      assertThrows(HoodieRollbackException.class, () -> {
         client.rollback(commitTime1);
-        fail("Should have thrown an exception ");
-      } catch (HoodieRollbackException hrbe) {
-        // should get here
-      }
+      }, "Should have thrown an exception ");
 
       // Rollback commit3
       client.rollback(commitTime3);

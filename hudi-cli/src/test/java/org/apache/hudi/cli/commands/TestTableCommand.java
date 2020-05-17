@@ -24,30 +24,30 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
 import java.io.File;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test Cases for {@link TableCommand}.
  */
 public class TestTableCommand extends AbstractShellIntegrationTest {
 
-  private String tableName = "test_table";
+  private final String tableName = "test_table";
   private String tablePath;
   private String metaPath;
 
   /**
    * Init path after Mini hdfs init.
    */
-  @Before
+  @BeforeEach
   public void init() {
     HoodieCLI.conf = jsc.hadoopConfiguration();
     tablePath = basePath + File.separator + tableName;
@@ -74,7 +74,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     // Test connect with specified values
     CommandResult cr = getShell().executeCommand(
         "connect --path " + tablePath + " --initialCheckIntervalMs 3000 "
-          + "--maxWaitIntervalMs 40000 --maxCheckIntervalMs 8");
+            + "--maxWaitIntervalMs 40000 --maxCheckIntervalMs 8");
     assertTrue(cr.isSuccess());
 
     // Check specified values
@@ -113,7 +113,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     // Test create with specified values
     CommandResult cr = getShell().executeCommand(
         "create --path " + tablePath + " --tableName " + tableName
-          + " --tableType MERGE_ON_READ --archiveLogFolder archive");
+            + " --tableType MERGE_ON_READ --archiveLogFolder archive");
     assertTrue(cr.isSuccess());
     assertEquals("Metadata for table " + tableName + " loaded", cr.getResult().toString());
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();

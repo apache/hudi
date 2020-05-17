@@ -22,6 +22,7 @@ import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.TestRawTripPayload.MetadataMergeWriteStatus;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -50,9 +51,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.SQLContext;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -63,9 +63,9 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests.
@@ -74,12 +74,12 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(TestHoodieClientBase.class);
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initResources();
   }
 
-  @After
+  @AfterEach
   public void tearDown() throws Exception {
     cleanupResources();
   }
@@ -89,7 +89,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit) {
-    return getHoodieWriteClient(cfg, rollbackInflightCommit, HoodieIndex.createIndex(cfg, jsc));
+    return getHoodieWriteClient(cfg, rollbackInflightCommit, HoodieIndex.createIndex(cfg));
   }
 
   protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit,
@@ -156,7 +156,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   protected HoodieTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
-    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
     ((SyncableFileSystemView) (table.getSliceView())).reset();
     return table;
   }
@@ -169,7 +169,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   public static void assertNoWriteErrors(List<WriteStatus> statuses) {
     // Verify there are no errors
     for (WriteStatus status : statuses) {
-      assertFalse("Errors found in write of " + status.getFileId(), status.hasErrors());
+      assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId());
     }
   }
 
@@ -199,7 +199,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
       assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(fs, new Path(basePath, partitionPath)));
       HoodiePartitionMetadata pmeta = new HoodiePartitionMetadata(fs, new Path(basePath, partitionPath));
       pmeta.readFromFS();
-      Assert.assertEquals(HoodieTestDataGenerator.DEFAULT_PARTITION_DEPTH, pmeta.getPartitionDepth());
+      assertEquals(HoodieTestDataGenerator.DEFAULT_PARTITION_DEPTH, pmeta.getPartitionDepth());
     }
   }
 
@@ -211,9 +211,9 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    */
   protected void checkTaggedRecords(List<HoodieRecord> taggedRecords, String instantTime) {
     for (HoodieRecord rec : taggedRecords) {
-      assertTrue("Record " + rec + " found with no location.", rec.isCurrentLocationKnown());
-      assertEquals("All records should have commit time " + instantTime + ", since updates were made",
-          rec.getCurrentLocation().getInstantTime(), instantTime);
+      assertTrue(rec.isCurrentLocationKnown(), "Record " + rec + " found with no location.");
+      assertEquals(rec.getCurrentLocation().getInstantTime(), instantTime,
+          "All records should have commit time " + instantTime + ", since updates were made");
     }
   }
 
@@ -222,7 +222,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    *
    * @param records List of Hoodie records
    */
-  void assertNodupesWithinPartition(List<HoodieRecord> records) {
+  void assertNodupesWithinPartition(List<HoodieRecord<TestRawTripPayload>> records) {
     Map<String, Set<String>> partitionToKeys = new HashMap<>();
     for (HoodieRecord r : records) {
       String key = r.getRecordKey();
@@ -230,7 +230,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
       if (!partitionToKeys.containsKey(partitionPath)) {
         partitionToKeys.put(partitionPath, new HashSet<>());
       }
-      assertFalse("key " + key + " is duplicate within partition " + partitionPath, partitionToKeys.get(partitionPath).contains(key));
+      assertFalse(partitionToKeys.get(partitionPath).contains(key), "key " + key + " is duplicate within partition " + partitionPath);
       partitionToKeys.get(partitionPath).add(key);
     }
   }
@@ -247,10 +247,10 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   private Function2<List<HoodieRecord>, String, Integer> wrapRecordsGenFunctionForPreppedCalls(
       final HoodieWriteConfig writeConfig, final Function2<List<HoodieRecord>, String, Integer> recordGenFunction) {
     return (commit, numRecords) -> {
-      final HoodieIndex index = HoodieIndex.createIndex(writeConfig, jsc);
+      final HoodieIndex index = HoodieIndex.createIndex(writeConfig);
       List<HoodieRecord> records = recordGenFunction.apply(commit, numRecords);
-      final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
-      HoodieTable table = HoodieTable.create(metaClient, writeConfig, jsc);
+      final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath, true);
+      HoodieTable table = HoodieTable.create(metaClient, writeConfig, hadoopConf);
       JavaRDD<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), jsc, table);
       return taggedRecords.collect();
     };
@@ -268,10 +268,10 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   private Function<Integer, List<HoodieKey>> wrapDeleteKeysGenFunctionForPreppedCalls(
       final HoodieWriteConfig writeConfig, final Function<Integer, List<HoodieKey>> keyGenFunction) {
     return (numRecords) -> {
-      final HoodieIndex index = HoodieIndex.createIndex(writeConfig, jsc);
+      final HoodieIndex index = HoodieIndex.createIndex(writeConfig);
       List<HoodieKey> records = keyGenFunction.apply(numRecords);
-      final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
-      HoodieTable table = HoodieTable.create(metaClient, writeConfig, jsc);
+      final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath, true);
+      HoodieTable table = HoodieTable.create(metaClient, writeConfig, hadoopConf);
       JavaRDD<HoodieRecord> recordsToDelete = jsc.parallelize(records, 1)
           .map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
       JavaRDD<HoodieRecord> taggedRecords = index.tagLocation(recordsToDelete, jsc, table);
@@ -338,6 +338,34 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
 
     return writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime, numRecordsInThisCommit,
         recordGenFunction, writeFn, assertForCommit, expRecordsInThisCommit, expRecordsInThisCommit, 1);
+  }
+
+  /**
+   * Helper to insert another batch of records and do regular assertions on the state after successful completion.
+   *
+   * @param writeConfig            Hoodie Write Config
+   * @param client                 Hoodie Write Client
+   * @param newCommitTime          New Commit Timestamp to be used
+   * @param initCommitTime         Begin Timestamp (usually "000")
+   * @param numRecordsInThisCommit Number of records to be added in the new commit
+   * @param writeFn                Write Function to be used for insertion
+   * @param isPreppedAPI           Boolean flag to indicate writeFn expects prepped records
+   * @param assertForCommit        Enable Assertion of Writes
+   * @param expRecordsInThisCommit Expected number of records in this commit
+   * @param expTotalRecords        Expected number of records when scanned
+   * @param expTotalCommits        Expected number of commits (including this commit)
+   * @return RDD of write-status
+   * @throws Exception in case of error
+   */
+  JavaRDD<WriteStatus> insertBatch(HoodieWriteConfig writeConfig, HoodieWriteClient client, String newCommitTime,
+                                   String initCommitTime, int numRecordsInThisCommit,
+                                   Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
+                                   boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits) throws Exception {
+    final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
+        generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateInserts);
+
+    return writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime, numRecordsInThisCommit,
+        recordGenFunction, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits);
   }
 
   /**
@@ -439,34 +467,34 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     assertPartitionMetadataForRecords(records, fs);
 
     // verify that there is a commit
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
     HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
 
     if (assertForCommit) {
-      assertEquals("Expecting " + expTotalCommits + " commits.", expTotalCommits,
-          timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants());
-      Assert.assertEquals("Latest commit should be " + newCommitTime, newCommitTime,
-          timeline.lastInstant().get().getTimestamp());
-      assertEquals("Must contain " + expRecordsInThisCommit + " records", expRecordsInThisCommit,
-          HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count());
+      assertEquals(expTotalCommits, timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants(),
+          "Expecting " + expTotalCommits + " commits.");
+      assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(),
+          "Latest commit should be " + newCommitTime);
+      assertEquals(expRecordsInThisCommit, HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+          "Must contain " + expRecordsInThisCommit + " records");
 
       // Check the entire dataset has all records still
       String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
       for (int i = 0; i < fullPartitionPaths.length; i++) {
         fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
       }
-      assertEquals("Must contain " + expTotalRecords + " records", expTotalRecords,
-          HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+      assertEquals(expTotalRecords, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+          "Must contain " + expTotalRecords + " records");
 
       // Check that the incremental consumption from prevCommitTime
-      assertEquals("Incremental consumption from " + prevCommitTime + " should give all records in latest commit",
-          HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-          HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, prevCommitTime).count());
+      assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+          HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, prevCommitTime).count(),
+          "Incremental consumption from " + prevCommitTime + " should give all records in latest commit");
       if (commitTimesBetweenPrevAndNew.isPresent()) {
         commitTimesBetweenPrevAndNew.get().forEach(ct -> {
-          assertEquals("Incremental consumption from " + ct + " should give all records in latest commit",
-              HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-              HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, ct).count());
+          assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+              HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, ct).count(),
+              "Incremental consumption from " + ct + " should give all records in latest commit");
         });
       }
     }
@@ -507,30 +535,30 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     assertPartitionMetadataForKeys(keysToDelete, fs);
 
     // verify that there is a commit
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
     HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
 
     if (assertForCommit) {
-      assertEquals("Expecting 3 commits.", 3,
-          timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants());
-      Assert.assertEquals("Latest commit should be " + newCommitTime, newCommitTime,
-          timeline.lastInstant().get().getTimestamp());
-      assertEquals("Must contain " + expRecordsInThisCommit + " records", expRecordsInThisCommit,
-          HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count());
+      assertEquals(3, timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants(),
+          "Expecting 3 commits.");
+      assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(),
+          "Latest commit should be " + newCommitTime);
+      assertEquals(expRecordsInThisCommit, HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+          "Must contain " + expRecordsInThisCommit + " records");
 
       // Check the entire dataset has all records still
       String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
       for (int i = 0; i < fullPartitionPaths.length; i++) {
         fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
       }
-      assertEquals("Must contain " + expTotalRecords + " records", expTotalRecords,
-          HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+      assertEquals(expTotalRecords, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+          "Must contain " + expTotalRecords + " records");
 
       // Check that the incremental consumption from prevCommitTime
-      assertEquals("Incremental consumption from " + prevCommitTime + " should give no records in latest commit,"
-              + " since it is a delete operation",
-          HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-          HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, prevCommitTime).count());
+      assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+          HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, prevCommitTime).count(),
+          "Incremental consumption from " + prevCommitTime + " should give no records in latest commit,"
+              + " since it is a delete operation");
     }
     return result;
   }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.avro.JsonProperties.Null;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatabilityException;
@@ -30,9 +31,11 @@ import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
-import org.codehaus.jackson.JsonNode;
+import org.apache.avro.io.JsonDecoder;
+import org.apache.avro.io.JsonEncoder;
 import org.codehaus.jackson.node.NullNode;
 
 import java.io.ByteArrayInputStream;
@@ -44,6 +47,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -80,6 +84,22 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Convert a given avro record to json and return the encoded bytes.
+   *
+   * @param record The GenericRecord to convert
+   * @param pretty Whether to pretty-print the json output
+   */
+  public static byte[] avroToJson(GenericRecord record, boolean pretty) throws IOException {
+    DatumWriter<Object> writer = new GenericDatumWriter<>(record.getSchema());
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    JsonEncoder jsonEncoder = EncoderFactory.get().jsonEncoder(record.getSchema(), out, pretty);
+    writer.write(record, jsonEncoder);
+    jsonEncoder.flush();
+    return out.toByteArray();
+    //metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+  }
+
+  /**
    * Convert serialized bytes back into avro record.
    */
   public static GenericRecord bytesToAvro(byte[] bytes, Schema schema) throws IOException {
@@ -89,12 +109,30 @@ public class HoodieAvroUtils {
     return reader.read(null, decoder);
   }
 
+  /**
+   * Convert json bytes back into avro record.
+   */
+  public static GenericRecord jsonBytesToAvro(byte[] bytes, Schema schema) throws IOException {
+    ByteArrayInputStream bio = new ByteArrayInputStream(bytes);
+    JsonDecoder jsonDecoder = DecoderFactory.get().jsonDecoder(schema, bio);
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
+    return reader.read(null, jsonDecoder);
+  }
+
   public static boolean isMetadataField(String fieldName) {
     return HoodieRecord.COMMIT_TIME_METADATA_FIELD.equals(fieldName)
         || HoodieRecord.COMMIT_SEQNO_METADATA_FIELD.equals(fieldName)
         || HoodieRecord.RECORD_KEY_METADATA_FIELD.equals(fieldName)
         || HoodieRecord.PARTITION_PATH_METADATA_FIELD.equals(fieldName)
         || HoodieRecord.FILENAME_METADATA_FIELD.equals(fieldName);
+  }
+
+  public static Schema createHoodieWriteSchema(Schema originalSchema) {
+    return HoodieAvroUtils.addMetadataFields(originalSchema);
+  }
+
+  public static Schema createHoodieWriteSchema(String originalSchema) {
+    return createHoodieWriteSchema(new Schema.Parser().parse(originalSchema));
   }
 
   /**
@@ -121,8 +159,8 @@ public class HoodieAvroUtils {
     parentFields.add(fileNameField);
     for (Schema.Field field : schema.getFields()) {
       if (!isMetadataField(field.name())) {
-        Schema.Field newField = new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue());
-        for (Map.Entry<String, JsonNode> prop : field.getJsonProps().entrySet()) {
+        Schema.Field newField = new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal());
+        for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
           newField.addProp(prop.getKey(), prop.getValue());
         }
         parentFields.add(newField);
@@ -132,6 +170,16 @@ public class HoodieAvroUtils {
     Schema mergedSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
     mergedSchema.setFields(parentFields);
     return mergedSchema;
+  }
+
+  public static Schema removeMetadataFields(Schema schema) {
+    List<Schema.Field> filteredFields = schema.getFields()
+                                              .stream()
+                                              .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name()))
+                                              .collect(Collectors.toList());
+    Schema filteredSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
+    filteredSchema.setFields(filteredFields);
+    return filteredSchema;
   }
 
   public static String addMetadataColumnTypes(String hiveColumnTypes) {
@@ -191,7 +239,7 @@ public class HoodieAvroUtils {
    * schema.
    */
   public static GenericRecord rewriteRecord(GenericRecord record, Schema newSchema) {
-    return rewrite(record, record.getSchema(), newSchema);
+    return rewrite(record, getCombinedFieldsToWrite(record.getSchema(), newSchema), newSchema);
   }
 
   /**
@@ -199,19 +247,40 @@ public class HoodieAvroUtils {
    * schema.
    */
   public static GenericRecord rewriteRecordWithOnlyNewSchemaFields(GenericRecord record, Schema newSchema) {
-    return rewrite(record, newSchema, newSchema);
+    return rewrite(record, new LinkedHashSet<>(newSchema.getFields()), newSchema);
   }
 
-  private static GenericRecord rewrite(GenericRecord record, Schema schemaWithFields, Schema newSchema) {
+  private static GenericRecord rewrite(GenericRecord record, LinkedHashSet<Field> fieldsToWrite, Schema newSchema) {
     GenericRecord newRecord = new GenericData.Record(newSchema);
-    for (Schema.Field f : schemaWithFields.getFields()) {
-      newRecord.put(f.name(), record.get(f.name()));
+    for (Schema.Field f : fieldsToWrite) {
+      if (record.get(f.name()) == null) {
+        if (f.defaultVal() instanceof Null) {
+          newRecord.put(f.name(), null);
+        } else {
+          newRecord.put(f.name(), f.defaultVal());
+        }
+      } else {
+        newRecord.put(f.name(), record.get(f.name()));
+      }
     }
     if (!GenericData.get().validate(newSchema, newRecord)) {
       throw new SchemaCompatabilityException(
           "Unable to validate the rewritten record " + record + " against schema " + newSchema);
     }
     return newRecord;
+  }
+
+  /**
+   * Generates a super set of fields from both old and new schema.
+   */
+  private static LinkedHashSet<Field> getCombinedFieldsToWrite(Schema oldSchema, Schema newSchema) {
+    LinkedHashSet<Field> allFields = new LinkedHashSet<>(oldSchema.getFields());
+    for (Schema.Field f : newSchema.getFields()) {
+      if (!allFields.contains(f) && !isMetadataField(f.name())) {
+        allFields.add(f);
+      }
+    }
+    return allFields;
   }
 
   public static byte[] compress(String text) {

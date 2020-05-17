@@ -112,7 +112,7 @@ public class HoodieMultiTableDeltaStreamer {
       String configFilePath = properties.getString(configProp, Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
       checkIfTableConfigFileExists(configFolder, fs, configFilePath);
       TypedProperties tableProperties = UtilHelpers.readConfig(fs, new Path(configFilePath), new ArrayList<>()).getConfig();
-      properties.forEach((k,v) -> {
+      properties.forEach((k, v) -> {
         tableProperties.setProperty(k.toString(), v.toString());
       });
       final HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
@@ -155,7 +155,7 @@ public class HoodieMultiTableDeltaStreamer {
   public static class Helpers {
 
     static String getDefaultConfigFilePath(String configFolder, String database, String currentTable) {
-      return configFolder + Constants.FILEDELIMITER + database + Constants.UNDERSCORE + currentTable + Constants.DEFAULT_CONFIG_FILE_NAME_SUFFIX;
+      return configFolder + Constants.FILE_DELIMITER + database + Constants.UNDERSCORE + currentTable + Constants.DEFAULT_CONFIG_FILE_NAME_SUFFIX;
     }
 
     static String getTableWithDatabase(TableExecutionContext context) {
@@ -209,7 +209,7 @@ public class HoodieMultiTableDeltaStreamer {
         description = "base path prefix for multi table support via HoodieMultiTableDeltaStreamer class")
     public String basePathPrefix;
 
-    @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
+    @Parameter(names = {"--target-table"}, description = "name of the target table", required = true)
     public String targetTableName;
 
     @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
@@ -226,7 +226,7 @@ public class HoodieMultiTableDeltaStreamer {
         "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-        + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
+        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter")
     public List<String> configs = new ArrayList<>();
 
     @Parameter(names = {"--source-class"},
@@ -256,8 +256,7 @@ public class HoodieMultiTableDeltaStreamer {
         + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
         + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
         + "allows a SQL query templated to be passed as a transformation function). "
-        + "Pass a comma-separated list of subclass names to chain the transformations.",
-        converter = HoodieDeltaStreamer.TransformersConverter.class)
+        + "Pass a comma-separated list of subclass names to chain the transformations.")
     public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
@@ -265,7 +264,7 @@ public class HoodieMultiTableDeltaStreamer {
     public long sourceLimit = Long.MAX_VALUE;
 
     @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
-        + "is purely new data/inserts to gain speed)", converter = HoodieDeltaStreamer.OperationConvertor.class)
+        + "is purely new data/inserts to gain speed)", converter = HoodieDeltaStreamer.OperationConverter.class)
     public HoodieDeltaStreamer.Operation operation = HoodieDeltaStreamer.Operation.UPSERT;
 
     @Parameter(names = {"--filter-dupes"},
@@ -330,6 +329,7 @@ public class HoodieMultiTableDeltaStreamer {
 
   /**
    * Resets target table name and target path using base-path-prefix.
+   *
    * @param configuration
    * @param database
    * @param tableName
@@ -338,13 +338,13 @@ public class HoodieMultiTableDeltaStreamer {
   private static String resetTarget(Config configuration, String database, String tableName) {
     String basePathPrefix = configuration.basePathPrefix;
     basePathPrefix = basePathPrefix.charAt(basePathPrefix.length() - 1) == '/' ? basePathPrefix.substring(0, basePathPrefix.length() - 1) : basePathPrefix;
-    String targetBasePath = basePathPrefix + Constants.FILEDELIMITER + database + Constants.FILEDELIMITER + tableName;
+    String targetBasePath = basePathPrefix + Constants.FILE_DELIMITER + database + Constants.FILE_DELIMITER + tableName;
     configuration.targetTableName = database + Constants.DELIMITER + tableName;
     return targetBasePath;
   }
 
-  /*
-  Creates actual HoodieDeltaStreamer objects for every table/topic and does incremental sync
+  /**
+   * Creates actual HoodieDeltaStreamer objects for every table/topic and does incremental sync.
    */
   public void sync() {
     for (TableExecutionContext context : tableExecutionContexts) {
@@ -376,7 +376,7 @@ public class HoodieMultiTableDeltaStreamer {
     private static final String DEFAULT_CONFIG_FILE_NAME_SUFFIX = "_config.properties";
     private static final String TARGET_BASE_PATH_PROP = "hoodie.deltastreamer.ingestion.targetBasePath";
     private static final String LOCAL_SPARK_MASTER = "local[2]";
-    private static final String FILEDELIMITER = "/";
+    private static final String FILE_DELIMITER = "/";
     private static final String DELIMITER = ".";
     private static final String UNDERSCORE = "_";
     private static final String COMMA_SEPARATOR = ",";

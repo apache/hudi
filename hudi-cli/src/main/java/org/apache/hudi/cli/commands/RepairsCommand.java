@@ -21,22 +21,28 @@ package org.apache.hudi.cli.commands;
 import org.apache.hudi.cli.DedupeConfig;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
+import org.apache.spark.util.Utils;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
+import scala.collection.JavaConverters;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -56,6 +62,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 public class RepairsCommand implements CommandMarker {
 
   private static final Logger LOG = Logger.getLogger(RepairsCommand.class);
+  public static final String DEDUPLICATE_RETURN_PREFIX = "Deduplicated files placed in:  ";
 
   @CliCommand(value = "repair deduplicate",
       help = "De-duplicate a partition path contains duplicates & produce repaired files to replace with")
@@ -65,13 +72,27 @@ public class RepairsCommand implements CommandMarker {
       @CliOption(key = {"repairedOutputPath"}, help = "Location to place the repaired files",
           mandatory = true) final String repairedOutputPath,
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path",
-          mandatory = true) final String sparkPropertiesPath)
+          unspecifiedDefaultValue = "") String sparkPropertiesPath,
+      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+          help = "Spark executor memory") final String sparkMemory,
+      @CliOption(key = {"dryrun"},
+          help = "Should we actually remove duplicates or just run and store result to repairedOutputPath",
+          unspecifiedDefaultValue = "true") final boolean dryRun)
       throws Exception {
+    if (StringUtils.isNullOrEmpty(sparkPropertiesPath)) {
+      sparkPropertiesPath =
+          Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
+    }
+
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     DedupeConfig config = new DedupeConfig();
     config.basePath_$eq(HoodieCLI.getTableMetaClient().getBasePath());
     config.duplicatedPartitionPath_$eq(duplicatedPartitionPath);
     config.repairOutputPath_$eq(repairedOutputPath);
+    config.sparkMaster_$eq(master);
+    config.sparkMemory_$eq(sparkMemory);
+    config.dryRun_$eq(dryRun);
     String[] commandConfig = config.getCommandConfigsAsStringArray(SparkMain.SparkCommand.DEDUPLICATE.name());
 
     sparkLauncher.addAppArgs(commandConfig);
@@ -80,9 +101,13 @@ public class RepairsCommand implements CommandMarker {
     int exitCode = process.waitFor();
 
     if (exitCode != 0) {
-      return "Deduplicated files placed in:  " + repairedOutputPath;
+      return "Deduplication failed!";
     }
-    return "Deduplication failed ";
+    if (dryRun) {
+      return DEDUPLICATE_RETURN_PREFIX + repairedOutputPath;
+    } else {
+      return DEDUPLICATE_RETURN_PREFIX + duplicatedPartitionPath;
+    }
   }
 
   @CliCommand(value = "repair addpartitionmeta", help = "Add partition metadata to a table, if not present")
@@ -112,12 +137,14 @@ public class RepairsCommand implements CommandMarker {
           HoodiePartitionMetadata partitionMetadata =
               new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath, partitionPath);
           partitionMetadata.trySave(0);
+          row[2] = "Repaired";
         }
       }
       rows[ind++] = row;
     }
 
-    return HoodiePrintHelper.print(new String[] {"Partition Path", "Metadata Present?", "Action"}, rows);
+    return HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_PARTITION_PATH,
+        HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_REPAIR_ACTION}, rows);
   }
 
   @CliCommand(value = "repair overwrite-hoodie-props", help = "Overwrite hoodie.properties with provided file. Risky operation. Proceed with caution!")
@@ -146,21 +173,29 @@ public class RepairsCommand implements CommandMarker {
       };
       rows[ind++] = row;
     }
-    return HoodiePrintHelper.print(new String[] {"Property", "Old Value", "New Value"}, rows);
+    return HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY,
+        HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);
   }
 
   @CliCommand(value = "repair corrupted clean files", help = "repair corrupted clean files")
   public void removeCorruptedPendingCleanAction() {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-
-    activeTimeline.filterInflightsAndRequested().getInstants().forEach(instant -> {
+    HoodieTimeline cleanerTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline().getCleanerTimeline();
+    LOG.info("Inspecting pending clean metadata in timeline for corrupted files");
+    cleanerTimeline.filterInflightsAndRequested().getInstants().forEach(instant -> {
       try {
         CleanerUtils.getCleanerPlan(client, instant);
-      } catch (IOException e) {
-        LOG.warn("try to remove corrupted instant file: " + instant);
+      } catch (AvroRuntimeException e) {
+        LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
         FSUtils.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+      } catch (IOException ioe) {
+        if (ioe.getMessage().contains("Not an Avro data file")) {
+          LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
+          FSUtils.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+        } else {
+          throw new HoodieIOException(ioe.getMessage(), ioe);
+        }
       }
     });
   }

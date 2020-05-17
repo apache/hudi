@@ -193,7 +193,7 @@ public class KafkaOffsetGen {
             fromOffsets = consumer.endOffsets(topicPartitions);
             break;
           default:
-            throw new HoodieNotSupportedException("Auto reset value must be one of 'smallest' or 'largest' ");
+            throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' ");
         }
       }
 

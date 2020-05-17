@@ -315,12 +315,23 @@ public class HoodieTestDataGenerator {
         });
   }
 
+  public static void createEmptyCleanRequestedFile(String basePath, String instantTime, Configuration configuration)
+      throws IOException {
+    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + HoodieTimeline.makeRequestedCleanerFileName(instantTime));
+    createEmptyFile(basePath, commitFile, configuration);
+  }
+
   public static void createCompactionRequestedFile(String basePath, String instantTime, Configuration configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + HoodieTimeline.makeRequestedCompactionFileName(instantTime));
+    createEmptyFile(basePath, commitFile, configuration);
+  }
+
+  private static void createEmptyFile(String basePath, Path filePath, Configuration configuration) throws IOException {
     FileSystem fs = FSUtils.getFs(basePath, configuration);
-    FSDataOutputStream os = fs.create(commitFile, true);
+    FSDataOutputStream os = fs.create(filePath, true);
     os.close();
   }
 
@@ -660,6 +671,23 @@ public class HoodieTestDataGenerator {
     }
     numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
     return result.stream();
+  }
+
+  public boolean deleteExistingKeyIfPresent(HoodieKey key) {
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    for (Map.Entry<Integer, KeyPartition> entry: existingKeys.entrySet()) {
+      if (entry.getValue().key.equals(key)) {
+        int index = entry.getKey();
+        existingKeys.put(index, existingKeys.get(numExistingKeys - 1));
+        existingKeys.remove(numExistingKeys - 1);
+        numExistingKeys--;
+        numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
+        return true;
+      }
+    }
+
+    return false;
   }
 
   public String[] getPartitionPaths() {

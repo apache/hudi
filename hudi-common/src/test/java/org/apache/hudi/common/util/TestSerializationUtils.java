@@ -19,13 +19,17 @@
 package org.apache.hudi.common.util;
 
 import org.apache.avro.util.Utf8;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Objects;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests serialization utils.
@@ -50,13 +54,14 @@ public class TestSerializationUtils {
 
   private <T> void verifyObject(T expectedValue) throws IOException {
     byte[] serializedObject = SerializationUtils.serialize(expectedValue);
-    Assert.assertTrue(serializedObject != null && serializedObject.length > 0);
+    assertNotNull(serializedObject);
+    assertTrue(serializedObject.length > 0);
 
     final T deserializedValue = SerializationUtils.<T>deserialize(serializedObject);
     if (expectedValue == null) {
-      Assert.assertNull(deserializedValue);
+      assertNull(deserializedValue);
     } else {
-      Assert.assertTrue(expectedValue.equals(deserializedValue));
+      assertEquals(expectedValue, deserializedValue);
     }
   }
 

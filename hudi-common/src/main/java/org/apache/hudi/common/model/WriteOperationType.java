@@ -69,4 +69,8 @@ public enum WriteOperationType {
         throw new HoodieException("Invalid value of Type.");
     }
   }
+
+  public static boolean isChangingRecords(WriteOperationType operationType) {
+    return operationType == UPSERT || operationType == UPSERT_PREPPED || operationType == DELETE;
+  }
 }

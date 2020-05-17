@@ -138,8 +138,8 @@ public abstract class AbstractHoodieLogRecordScanner {
         HoodieLogBlock r = logFormatReaderWrapper.next();
         totalLogBlocks.incrementAndGet();
         if (r.getBlockType() != CORRUPT_BLOCK
-            && !HoodieTimeline.compareTimestamps(r.getLogBlockHeader().get(INSTANT_TIME), this.latestInstantTime,
-                HoodieTimeline.LESSER_OR_EQUAL)) {
+            && !HoodieTimeline.compareTimestamps(r.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
+        )) {
           // hit a block with instant time greater than should be processed, stop processing further
           break;
         }

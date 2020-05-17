@@ -82,8 +82,8 @@ public class HoodieSnapshotExporter {
 
   public static class OutputFormatValidator implements IValueValidator<String> {
 
-    static final String HUDI = "hudi";
-    static final List<String> FORMATS = CollectionUtils.createImmutableList("json", "parquet", HUDI);
+    public static final String HUDI = "hudi";
+    public static final List<String> FORMATS = CollectionUtils.createImmutableList("json", "parquet", HUDI);
 
     @Override
     public void validate(String name, String value) {
@@ -97,20 +97,20 @@ public class HoodieSnapshotExporter {
   public static class Config implements Serializable {
 
     @Parameter(names = {"--source-base-path"}, description = "Base path for the source Hudi dataset to be snapshotted", required = true)
-    String sourceBasePath;
+    public String sourceBasePath;
 
     @Parameter(names = {"--target-output-path"}, description = "Base path for the target output files (snapshots)", required = true)
-    String targetOutputPath;
+    public String targetOutputPath;
 
     @Parameter(names = {"--output-format"}, description = "Output format for the exported dataset; accept these values: json|parquet|hudi", required = true,
         validateValueWith = OutputFormatValidator.class)
-    String outputFormat;
+    public String outputFormat;
 
     @Parameter(names = {"--output-partition-field"}, description = "A field to be used by Spark repartitioning")
-    String outputPartitionField = null;
+    public String outputPartitionField = null;
 
     @Parameter(names = {"--output-partitioner"}, description = "A class to facilitate custom repartitioning")
-    String outputPartitioner = null;
+    public String outputPartitioner = null;
   }
 
   public void export(JavaSparkContext jsc, Config cfg) throws IOException {
@@ -229,8 +229,8 @@ public class HoodieSnapshotExporter {
             return true;
           } else {
             String instantTime = FSUtils.getCommitFromCommitFile(commitFilePath.getName());
-            return HoodieTimeline.compareTimestamps(instantTime, latestCommitTimestamp,
-                HoodieTimeline.LESSER_OR_EQUAL);
+            return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp
+            );
           }
         });
     for (FileStatus commitStatus : commitFilesToCopy) {

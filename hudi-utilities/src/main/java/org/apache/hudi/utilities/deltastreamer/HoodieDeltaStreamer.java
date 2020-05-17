@@ -36,6 +36,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.AbstractCommandConfig;
+import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.JsonDFSSource;
 
@@ -45,7 +46,6 @@ import com.beust.jcommander.ParameterException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -54,7 +54,6 @@ import org.apache.spark.sql.SparkSession;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -65,14 +64,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
  * table. Does not maintain any state, queries at runtime to see how far behind the target table is from the source
  * table. This can be overriden to force sync from a timestamp.
- *
+ * <p>
  * In continuous mode, DeltaStreamer runs in loop-mode going through the below operations (a) pull-from-source (b)
  * write-to-sink (c) Schedule Compactions if needed (d) Conditionally Sync to Hive each cycle. For MOR table with
  * continuous mode enabled, a separate compactor thread is allocated to execute compactions
@@ -90,39 +88,36 @@ public class HoodieDeltaStreamer implements Serializable {
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
-        getDefaultHiveConf(jssc.hadoopConfiguration()));
+        jssc.hadoopConfiguration(), null);
   }
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, TypedProperties props) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
-        getDefaultHiveConf(jssc.hadoopConfiguration()), props);
+        jssc.hadoopConfiguration(), props);
   }
 
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf) throws IOException {
+    this(cfg, jssc, fs, conf, null);
+  }
+
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                              TypedProperties properties) throws IOException {
+    if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
+      InitialCheckPointProvider checkPointProvider =
+          UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, properties);
+      checkPointProvider.init(conf);
+      cfg.checkpoint = checkPointProvider.getCheckpoint();
+    }
     this.cfg = cfg;
-    this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, hiveConf, properties);
-  }
-
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf) throws IOException {
-    this.cfg = cfg;
-    this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, hiveConf);
+    this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, conf, properties);
   }
 
   public void shutdownGracefully() {
     deltaSyncService.shutdown(false);
   }
 
-  private static HiveConf getDefaultHiveConf(Configuration cfg) {
-    HiveConf hiveConf = new HiveConf();
-    hiveConf.addResource(cfg);
-    return hiveConf;
-  }
-
   /**
    * Main method to start syncing.
-   * 
-   * @throws Exception
    */
   public void sync() throws Exception {
     if (cfg.continuousMode) {
@@ -143,6 +138,10 @@ public class HoodieDeltaStreamer implements Serializable {
     }
   }
 
+  public Config getConfig() {
+    return cfg;
+  }
+
   private boolean onDeltaSyncShutdown(boolean error) {
     LOG.info("DeltaSync shutdown. Closing write client. Error?" + error);
     deltaSyncService.close();
@@ -153,22 +152,11 @@ public class HoodieDeltaStreamer implements Serializable {
     UPSERT, INSERT, BULK_INSERT
   }
 
-  protected static class OperationConvertor implements IStringConverter<Operation> {
+  protected static class OperationConverter implements IStringConverter<Operation> {
 
     @Override
     public Operation convert(String value) throws ParameterException {
       return Operation.valueOf(value);
-    }
-  }
-
-  protected static class TransformersConverter implements IStringConverter<List<String>> {
-
-    @Override
-    public List<String> convert(String value) throws ParameterException {
-      return value == null ? null : Arrays.stream(value.split(","))
-          .map(String::trim)
-          .filter(s -> !s.isEmpty())
-          .collect(Collectors.toList());
     }
   }
 
@@ -181,7 +169,7 @@ public class HoodieDeltaStreamer implements Serializable {
     public String targetBasePath;
 
     // TODO: How to obtain hive configs to register?
-    @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
+    @Parameter(names = {"--target-table"}, description = "name of the target table", required = true)
     public String targetTableName;
 
     @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
@@ -195,7 +183,7 @@ public class HoodieDeltaStreamer implements Serializable {
         "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-        + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
+        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter")
     public List<String> configs = new ArrayList<>();
 
     @Parameter(names = {"--source-class"},
@@ -225,8 +213,7 @@ public class HoodieDeltaStreamer implements Serializable {
             + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
             + "writing. Default : Not set. E:g - org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which "
             + "allows a SQL query templated to be passed as a transformation function). "
-            + "Pass a comma-separated list of subclass names to chain the transformations.",
-        converter = TransformersConverter.class)
+            + "Pass a comma-separated list of subclass names to chain the transformations.")
     public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
@@ -234,7 +221,7 @@ public class HoodieDeltaStreamer implements Serializable {
     public long sourceLimit = Long.MAX_VALUE;
 
     @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
-        + "is purely new data/inserts to gain speed)", converter = OperationConvertor.class)
+        + "is purely new data/inserts to gain speed)", converter = OperationConverter.class)
     public Operation operation = Operation.UPSERT;
 
     @Parameter(names = {"--filter-dupes"},
@@ -292,6 +279,12 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
     public String checkpoint = null;
+
+    @Parameter(names = {"--initial-checkpoint-provider"}, description = "subclass of "
+        + "org.apache.hudi.utilities.checkpointing.InitialCheckpointProvider. Generate check point for delta streamer "
+        + "for the first run. This field will override the checkpoint of last commit using the checkpoint field. "
+        + "Use this field only when switching source, for example, from DFS source to Kafka Source.")
+    public String initialCheckpointProvider = null;
 
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
@@ -364,7 +357,7 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient DeltaSync deltaSync;
 
-    public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+    public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                             TypedProperties properties) throws IOException {
       this.cfg = cfg;
       this.jssc = jssc;
@@ -384,17 +377,19 @@ public class HoodieDeltaStreamer implements Serializable {
       ValidationUtils.checkArgument(!cfg.filterDupes || cfg.operation != Operation.UPSERT,
           "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
 
-      this.props = properties != null ? properties : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+      this.props = properties != null ? properties : UtilHelpers.readConfig(
+          FSUtils.getFs(cfg.propsFilePath, jssc.hadoopConfiguration()),
+          new Path(cfg.propsFilePath), cfg.configs).getConfig();
       LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
 
-      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, hiveConf,
-        this::onInitializingWriteClient);
+      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, conf,
+          this::onInitializingWriteClient);
     }
 
-    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf)
+    public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf)
         throws IOException {
-      this(cfg, jssc, fs, hiveConf, null);
+      this(cfg, jssc, fs, conf, null);
     }
 
     public DeltaSync getDeltaSync() {
@@ -454,7 +449,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     /**
      * Callback to initialize write client and start compaction service if required.
-     * 
+     *
      * @param writeClient HoodieWriteClient
      * @return
      */
@@ -538,7 +533,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     /**
      * Wait till outstanding pending compactions reduces to the passed in value.
-     * 
+     *
      * @param numPendingCompactions Maximum pending compactions allowed
      * @throws InterruptedException
      */
@@ -555,7 +550,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     /**
      * Fetch Next pending compaction if available.
-     * 
+     *
      * @return
      * @throws InterruptedException
      */

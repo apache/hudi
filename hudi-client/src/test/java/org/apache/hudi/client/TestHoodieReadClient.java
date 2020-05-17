@@ -28,7 +28,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,7 +36,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings("unchecked")
 /**
@@ -79,11 +80,13 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
         });
   }
 
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testReadROViewFailsWithoutSqlContext() {
     HoodieReadClient readClient = new HoodieReadClient(jsc, getConfig());
     JavaRDD<HoodieKey> recordsRDD = jsc.parallelize(new ArrayList<>(), 1);
-    readClient.readROView(recordsRDD, 1);
+    assertThrows(IllegalStateException.class, () -> {
+      readClient.readROView(recordsRDD, 1);
+    });
   }
 
   /**
@@ -131,14 +134,11 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
       assertEquals(75, rows.count());
 
       JavaRDD<HoodieKey> keysWithoutPaths = keyToPathPair.filter(keyPath -> !keyPath._2.isPresent())
-              .map(keyPath -> keyPath._1);
+          .map(keyPath -> keyPath._1);
 
-      try {
+      assertThrows(AnalysisException.class, () -> {
         anotherReadClient.readROView(keysWithoutPaths, 1);
-      } catch (Exception e) {
-        // data frame reader throws exception for empty records. ignore the error.
-        assertEquals(e.getClass(), AnalysisException.class);
-      }
+      });
 
       // Actual tests of getPendingCompactions method are in TestAsyncCompaction
       // This is just testing empty list

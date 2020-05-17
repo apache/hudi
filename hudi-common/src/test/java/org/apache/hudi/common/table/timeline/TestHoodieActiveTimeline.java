@@ -18,18 +18,17 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
+
+import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,9 +43,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link HoodieActiveTimeline}.
@@ -54,10 +53,8 @@ import static org.junit.Assert.assertTrue;
 public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
   private HoodieActiveTimeline timeline;
-  @Rule
-  public final ExpectedException exception = ExpectedException.none();
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initMetaClient();
   }
@@ -95,7 +92,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.createNewInstant(instant5);
     timeline = timeline.reload();
 
-    assertEquals("Total instants should be 5", 5, timeline.countInstants());
+    assertEquals(5, timeline.countInstants(), "Total instants should be 5");
     HoodieTestUtils.assertStreamEquals("Check the instants stream",
         Stream.of(instant1Complete, instant2Complete, instant3Complete, instant4Complete, instant5),
         timeline.getInstants());
@@ -124,7 +121,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // Ensure aux file is present
     assertTrue(metaClient.getFs().exists(new Path(metaClient.getMetaAuxiliaryPath(), instant6.getFileName())));
     // Read 5 bytes
-    assertEquals(timeline.readCompactionPlanAsBytes(instant6).get().length, 5);
+    assertEquals(5, timeline.readCompactionPlanAsBytes(instant6).get().length);
 
     // Delete auxiliary file to mimic future release where we stop writing to aux
     metaClient.getFs().delete(new Path(metaClient.getMetaAuxiliaryPath(), instant6.getFileName()));
@@ -133,19 +130,19 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertFalse(metaClient.getFs().exists(new Path(metaClient.getMetaAuxiliaryPath(), instant6.getFileName())));
 
     // Now read compaction plan again which should not throw exception
-    assertEquals(timeline.readCompactionPlanAsBytes(instant6).get().length, 5);
+    assertEquals(5, timeline.readCompactionPlanAsBytes(instant6).get().length);
   }
 
   @Test
   public void testTimelineOperationsBasic() {
     timeline = new HoodieActiveTimeline(metaClient);
     assertTrue(timeline.empty());
-    assertEquals("", 0, timeline.countInstants());
-    assertEquals("", Option.empty(), timeline.firstInstant());
-    assertEquals("", Option.empty(), timeline.nthInstant(5));
-    assertEquals("", Option.empty(), timeline.nthInstant(-1));
-    assertEquals("", Option.empty(), timeline.lastInstant());
-    assertFalse("", timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "01")));
+    assertEquals(0, timeline.countInstants());
+    assertEquals(Option.empty(), timeline.firstInstant());
+    assertEquals(Option.empty(), timeline.nthInstant(5));
+    assertEquals(Option.empty(), timeline.nthInstant(-1));
+    assertEquals(Option.empty(), timeline.lastInstant());
+    assertFalse(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "01")));
   }
 
   @Test
@@ -163,17 +160,17 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
             .getInstants().map(HoodieInstant::getTimestamp));
     assertFalse(timeline.empty());
     assertFalse(timeline.getCommitTimeline().filterPendingExcludingCompaction().empty());
-    assertEquals("", 12, timeline.countInstants());
+    assertEquals(12, timeline.countInstants());
     HoodieTimeline activeCommitTimeline = timeline.getCommitTimeline().filterCompletedInstants();
-    assertEquals("", 10, activeCommitTimeline.countInstants());
+    assertEquals(10, activeCommitTimeline.countInstants());
 
-    assertEquals("", "01", activeCommitTimeline.firstInstant().get().getTimestamp());
-    assertEquals("", "11", activeCommitTimeline.nthInstant(5).get().getTimestamp());
-    assertEquals("", "19", activeCommitTimeline.lastInstant().get().getTimestamp());
-    assertEquals("", "09", activeCommitTimeline.nthFromLastInstant(5).get().getTimestamp());
-    assertTrue("", activeCommitTimeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "09")));
-    assertFalse("", activeCommitTimeline.isBeforeTimelineStarts("02"));
-    assertTrue("", activeCommitTimeline.isBeforeTimelineStarts("00"));
+    assertEquals("01", activeCommitTimeline.firstInstant().get().getTimestamp());
+    assertEquals("11", activeCommitTimeline.nthInstant(5).get().getTimestamp());
+    assertEquals("19", activeCommitTimeline.lastInstant().get().getTimestamp());
+    assertEquals("09", activeCommitTimeline.nthFromLastInstant(5).get().getTimestamp());
+    assertTrue(activeCommitTimeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "09")));
+    assertFalse(activeCommitTimeline.isBeforeTimelineStarts("02"));
+    assertTrue(activeCommitTimeline.isBeforeTimelineStarts("00"));
   }
 
   @Test
@@ -220,25 +217,25 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   @Test
   public void testTimelineInstantOperations() {
     timeline = new HoodieActiveTimeline(metaClient, true);
-    assertEquals("No instant present", timeline.countInstants(), 0);
+    assertEquals(0, timeline.countInstants(), "No instant present");
 
     // revertToInflight
     HoodieInstant commit = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1");
     timeline.createNewInstant(commit);
     timeline = timeline.reload();
-    assertEquals(timeline.countInstants(), 1);
+    assertEquals(1, timeline.countInstants());
     assertTrue(timeline.containsInstant(commit));
     HoodieInstant inflight = timeline.revertToInflight(commit);
     // revert creates the .requested file
     timeline = timeline.reload();
-    assertEquals(timeline.countInstants(), 1);
+    assertEquals(1, timeline.countInstants());
     assertTrue(timeline.containsInstant(inflight));
     assertFalse(timeline.containsInstant(commit));
 
     // deleteInflight
     timeline.deleteInflight(inflight);
     timeline = timeline.reload();
-    assertEquals(timeline.countInstants(), 1);
+    assertEquals(1, timeline.countInstants());
     assertFalse(timeline.containsInstant(inflight));
     assertFalse(timeline.containsInstant(commit));
 
@@ -246,10 +243,10 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.createNewInstant(commit);
     timeline.createNewInstant(inflight);
     timeline = timeline.reload();
-    assertEquals(timeline.countInstants(), 1);
+    assertEquals(1, timeline.countInstants());
     timeline.deletePending(inflight);
     timeline = timeline.reload();
-    assertEquals(timeline.countInstants(), 1);
+    assertEquals(1, timeline.countInstants());
     assertFalse(timeline.containsInstant(inflight));
     assertTrue(timeline.containsInstant(commit));
 
@@ -257,10 +254,10 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieInstant compaction = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "2");
     timeline.createNewInstant(compaction);
     timeline = timeline.reload();
-    assertEquals(timeline.countInstants(), 2);
+    assertEquals(2, timeline.countInstants());
     timeline.deleteCompactionRequested(compaction);
     timeline = timeline.reload();
-    assertEquals(timeline.countInstants(), 1);
+    assertEquals(1, timeline.countInstants());
     assertFalse(timeline.containsInstant(inflight));
     assertFalse(timeline.containsInstant(compaction));
     assertTrue(timeline.containsInstant(commit));

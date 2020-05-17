@@ -179,7 +179,7 @@ class DedupeSparkJob(cfg: DedupeConfig, sqlContext: SQLContext, fs: FileSystem) 
     fileNameToPathMap.foreach { case (_, filePath) =>
       val srcPath = new Path(s"${cfg.repairOutputPath}/${filePath.getName}")
       val dstPath = new Path(s"${cfg.basePath}/${cfg.duplicatedPartitionPath}/${filePath.getName}")
-      if (dryRun) {
+      if (cfg.dryRun) {
         LOG.info(s"[JUST KIDDING!!!] Copying from $srcPath to $dstPath")
       } else {
         // for real
@@ -202,4 +202,16 @@ class DedupeConfig extends AbstractCommandConfig {
   @Parameter(names = Array("--base-path", "-bp"),
     description = "Base path for the hoodie dataset", required = true)
   var basePath: String = _
+
+  @Parameter(names = Array("--spark-memory", "-sm"),
+    description = "spark memory")
+  var sparkMemory: String = _
+
+  @Parameter(names = Array("--spark-master", "-smt"),
+    description = "spark master")
+  var sparkMaster: String = _
+
+  @Parameter(names = Array("--dry-run", "-dr"),
+    description = "Dry run")
+  var dryRun: Boolean = true
 }

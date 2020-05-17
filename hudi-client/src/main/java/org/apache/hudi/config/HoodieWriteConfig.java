@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.MetricsReporterType;
-import org.apache.hudi.table.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -52,9 +52,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
   private static final String BASE_PATH_PROP = "hoodie.base.path";
   private static final String AVRO_SCHEMA = "hoodie.avro.schema";
+  private static final String AVRO_SCHEMA_VALIDATE = "hoodie.avro.schema.validate";
+  private static final String DEFAULT_AVRO_SCHEMA_VALIDATE = "false";
   private static final String DEFAULT_PARALLELISM = "1500";
   private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
   private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
+  private static final String BULKINSERT_USER_DEFINED_PARTITIONER_CLASS = "hoodie.bulkinsert.user.defined.partitioner.class";
   private static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
   private static final String DELETE_PARALLELISM = "hoodie.delete.shuffle.parallelism";
   private static final String DEFAULT_ROLLBACK_PARALLELISM = "100";
@@ -131,6 +134,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     props.setProperty(AVRO_SCHEMA, schemaStr);
   }
 
+  public boolean getAvroSchemaValidate() {
+    return Boolean.parseBoolean(props.getProperty(AVRO_SCHEMA_VALIDATE));
+  }
+
   public String getTableName() {
     return props.getProperty(TABLE_NAME);
   }
@@ -149,6 +156,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public int getBulkInsertShuffleParallelism() {
     return Integer.parseInt(props.getProperty(BULKINSERT_PARALLELISM));
+  }
+
+  public String getUserDefinedBulkInsertPartitionerClass() {
+    return props.getProperty(BULKINSERT_USER_DEFINED_PARTITIONER_CLASS);
   }
 
   public int getInsertShuffleParallelism() {
@@ -577,6 +588,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withAvroSchemaValidate(boolean enable) {
+      props.setProperty(AVRO_SCHEMA_VALIDATE, String.valueOf(enable));
+      return this;
+    }
+
     public Builder forTable(String tableName) {
       props.setProperty(TABLE_NAME, tableName);
       return this;
@@ -589,6 +605,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public Builder withBulkInsertParallelism(int bulkInsertParallelism) {
       props.setProperty(BULKINSERT_PARALLELISM, String.valueOf(bulkInsertParallelism));
+      return this;
+    }
+
+    public Builder withUserDefinedBulkInsertPartitionerClass(String className) {
+      props.setProperty(BULKINSERT_USER_DEFINED_PARTITIONER_CLASS, className);
       return this;
     }
 
@@ -721,6 +742,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           String.valueOf(DEFAULT_MAX_CONSISTENCY_CHECKS));
       setDefaultOnCondition(props, !props.containsKey(FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP),
           FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP, DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED);
+      setDefaultOnCondition(props, !props.containsKey(AVRO_SCHEMA_VALIDATE), AVRO_SCHEMA_VALIDATE, DEFAULT_AVRO_SCHEMA_VALIDATE);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());

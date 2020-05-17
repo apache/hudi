@@ -110,7 +110,14 @@ public class SparkMain {
     }
   }
 
-  private static void clean(JavaSparkContext jsc, HoodieCleaner.Config config) {
+  private static boolean sparkMasterContained(SparkCommand command) {
+    List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
+        SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN,
+        SparkCommand.IMPORT, SparkCommand.UPSERT, SparkCommand.DEDUPLICATE);
+    return masterContained.contains(command);
+  }
+
+  static void clean(JavaSparkContext jsc, HoodieCleaner.Config config) {
     LOG.info("Command config: " + config.toString());
     new HoodieCleaner(config, jsc).run();
   }
@@ -129,12 +136,6 @@ public class SparkMain {
     LOG.info("Command config for HoodieCompactor: " + config.toString());
     jsc.getConf().set("spark.executor.memory", config.sparkMemory);
     return new HoodieCompactor(config).compact(jsc, config.retry);
-  }
-
-  private static boolean sparkMasterContained(SparkCommand command) {
-    List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
-        SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN);
-    return masterContained.contains(command);
   }
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, DedupeConfig config) {

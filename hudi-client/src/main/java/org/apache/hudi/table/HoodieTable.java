@@ -18,28 +18,31 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.SparkTaskContextSupplier;
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -52,18 +55,18 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieSavepointException;
+import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
@@ -86,13 +89,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   protected final SparkTaskContextSupplier sparkTaskContextSupplier = new SparkTaskContextSupplier();
 
-  protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc, HoodieTableMetaClient metaClient) {
+  protected HoodieTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
     this.config = config;
-    this.hadoopConfiguration = new SerializableConfiguration(jsc.hadoopConfiguration());
-    this.viewManager = FileSystemViewManager.createViewManager(new SerializableConfiguration(jsc.hadoopConfiguration()),
+    this.hadoopConfiguration = new SerializableConfiguration(hadoopConf);
+    this.viewManager = FileSystemViewManager.createViewManager(new SerializableConfiguration(hadoopConf),
         config.getViewStorageConfig());
     this.metaClient = metaClient;
-    this.index = HoodieIndex.createIndex(config, jsc);
+    this.index = HoodieIndex.createIndex(config);
   }
 
   private synchronized FileSystemViewManager getViewManager() {
@@ -102,44 +105,108 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     return viewManager;
   }
 
-  public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieWriteConfig config, JavaSparkContext jsc) {
+  public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieWriteConfig config, Configuration hadoopConf) {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(
-        jsc.hadoopConfiguration(),
+        hadoopConf,
         config.getBasePath(),
         true,
         config.getConsistencyGuardConfig(),
         Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))
     );
-    return HoodieTable.create(metaClient, config, jsc);
+    return HoodieTable.create(metaClient, config, hadoopConf);
   }
 
   public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieTableMetaClient metaClient,
                                                                       HoodieWriteConfig config,
-                                                                      JavaSparkContext jsc) {
+                                                                      Configuration hadoopConf) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        return new HoodieCopyOnWriteTable<>(config, jsc, metaClient);
+        return new HoodieCopyOnWriteTable<>(config, hadoopConf, metaClient);
       case MERGE_ON_READ:
-        return new HoodieMergeOnReadTable<>(config, jsc, metaClient);
+        return new HoodieMergeOnReadTable<>(config, hadoopConf, metaClient);
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
   }
 
   /**
-   * Provides a partitioner to perform the upsert operation, based on the workload profile.
+   * Upsert a batch of new records into Hoodie table at the supplied instantTime.
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param records  JavaRDD of hoodieRecords to upsert
+   * @return HoodieWriteMetadata
    */
-  public abstract Partitioner getUpsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc);
+  public abstract HoodieWriteMetadata upsert(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> records);
 
   /**
-   * Provides a partitioner to perform the insert operation, based on the workload profile.
+   * Insert a batch of new records into Hoodie table at the supplied instantTime.
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param records  JavaRDD of hoodieRecords to upsert
+   * @return HoodieWriteMetadata
    */
-  public abstract Partitioner getInsertPartitioner(WorkloadProfile profile, JavaSparkContext jsc);
+  public abstract HoodieWriteMetadata insert(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> records);
 
   /**
-   * Return whether this HoodieTable implementation can benefit from workload profiling.
+   * Bulk Insert a batch of new records into Hoodie table at the supplied instantTime.
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param records  JavaRDD of hoodieRecords to upsert
+   * @param bulkInsertPartitioner User Defined Partitioner
+   * @return HoodieWriteMetadata
    */
-  public abstract boolean isWorkloadProfileNeeded();
+  public abstract HoodieWriteMetadata bulkInsert(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> records, Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
+
+  /**
+   * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
+   * de-duped and non existent keys will be removed before deleting.
+   *
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param keys   {@link List} of {@link HoodieKey}s to be deleted
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieWriteMetadata delete(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieKey> keys);
+
+  /**
+   * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   * <p>
+   * This implementation requires that the input records are already tagged, and de-duped if needed.
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param preppedRecords  JavaRDD of hoodieRecords to upsert
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieWriteMetadata upsertPrepped(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> preppedRecords);
+
+  /**
+   * Inserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   * <p>
+   * This implementation requires that the input records are already tagged, and de-duped if needed.
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param preppedRecords  JavaRDD of hoodieRecords to upsert
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieWriteMetadata insertPrepped(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> preppedRecords);
+
+  /**
+   * Bulk Insert the given prepared records into the Hoodie table, at the supplied instantTime.
+   * <p>
+   * This implementation requires that the input records are already tagged, and de-duped if needed.
+   * @param jsc    Java Spark Context jsc
+   * @param instantTime Instant Time for the action
+   * @param preppedRecords  JavaRDD of hoodieRecords to upsert
+   * @param bulkInsertPartitioner User Defined Partitioner
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieWriteMetadata bulkInsertPrepped(JavaSparkContext jsc, String instantTime,
+      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
 
   public HoodieWriteConfig getConfig() {
     return config;
@@ -230,24 +297,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
   }
 
-  /**
-   * Get the list of data file names savepointed.
-   */
-  public Stream<String> getSavepointedDataFiles(String savepointTime) {
-    if (!getSavepoints().contains(savepointTime)) {
-      throw new HoodieSavepointException(
-          "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
-    }
-    HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
-    HoodieSavepointMetadata metadata;
-    try {
-      metadata = TimelineMetadataUtils.deserializeHoodieSavepointMetadata(getActiveTimeline().getInstantDetails(instant).get());
-    } catch (IOException e) {
-      throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTime, e);
-    }
-    return metadata.getPartitionMetadata().values().stream().flatMap(s -> s.getSavepointDataFile().stream());
-  }
-
   public HoodieActiveTimeline getActiveTimeline() {
     return metaClient.getActiveTimeline();
   }
@@ -260,35 +309,25 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Perform the ultimate IO for a given upserted (RDD) partition.
-   */
-  public abstract Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition,
-      Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
-
-  /**
-   * Perform the ultimate IO for a given inserted (RDD) partition.
-   */
-  public abstract Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition,
-      Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
-
-  /**
    * Schedule compaction for the instant time.
    * 
    * @param jsc Spark Context
    * @param instantTime Instant Time for scheduling compaction
+   * @param extraMetadata additional metadata to write into plan
    * @return
    */
-  public abstract HoodieCompactionPlan scheduleCompaction(JavaSparkContext jsc, String instantTime);
+  public abstract Option<HoodieCompactionPlan> scheduleCompaction(JavaSparkContext jsc,
+                                                                  String instantTime,
+                                                                  Option<Map<String, String>> extraMetadata);
 
   /**
    * Run Compaction on the table. Compaction arranges the data so that it is optimized for data access.
    *
    * @param jsc Spark Context
    * @param compactionInstantTime Instant Time
-   * @param compactionPlan Compaction Plan
    */
-  public abstract JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String compactionInstantTime,
-      HoodieCompactionPlan compactionPlan);
+  public abstract HoodieWriteMetadata compact(JavaSparkContext jsc,
+                                              String compactionInstantTime);
 
   /**
    * Executes a new clean action.
@@ -298,12 +337,36 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   public abstract HoodieCleanMetadata clean(JavaSparkContext jsc, String cleanInstantTime);
 
   /**
-   * Rollback the (inflight/committed) record changes with the given commit time. Four steps: (1) Atomically unpublish
-   * this commit (2) clean indexing data (3) clean new generated parquet files / log blocks (4) Finally, delete
-   * .<action>.commit or .<action>.inflight file if deleteInstants = true
+   * Rollback the (inflight/committed) record changes with the given commit time.
+   * <pre>
+   *   Three steps:
+   *   (1) Atomically unpublish this commit
+   *   (2) clean indexing data
+   *   (3) clean new generated parquet files.
+   *   (4) Finally delete .commit or .inflight file, if deleteInstants = true
+   * </pre>
    */
-  public abstract List<HoodieRollbackStat> rollback(JavaSparkContext jsc, HoodieInstant instant, boolean deleteInstants)
-      throws IOException;
+  public abstract HoodieRollbackMetadata rollback(JavaSparkContext jsc,
+                                                  String rollbackInstantTime,
+                                                  HoodieInstant commitInstant,
+                                                  boolean deleteInstants);
+
+  /**
+   * Create a savepoint at the specified instant, so that the table can be restored
+   * to this point-in-timeline later if needed.
+   */
+  public abstract HoodieSavepointMetadata savepoint(JavaSparkContext jsc,
+                                                    String instantToSavepoint,
+                                                    String user,
+                                                    String comment);
+
+  /**
+   * Restore the table to the given instant. Note that this is a admin table recovery operation
+   * that would cause any running queries that are accessing file slices written after the instant to fail.
+   */
+  public abstract HoodieRestoreMetadata restore(JavaSparkContext jsc,
+                                                String restoreInstantTime,
+                                                String instantToRestore);
 
   /**
    * Finalize the written data onto storage. Perform any final cleanups.
@@ -312,8 +375,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param stats List of HoodieWriteStats
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
-  public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats)
-      throws HoodieIOException {
+  public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats) throws HoodieIOException {
     cleanFailedWrites(jsc, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled());
   }
 
@@ -322,7 +384,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * 
    * @param instantTs Instant Time
    */
-  protected void deleteMarkerDir(String instantTs) {
+  public void deleteMarkerDir(String instantTs) {
     try {
       FileSystem fs = getMetaClient().getFs();
       Path markerDir = new Path(metaClient.getMarkerFolderPath(instantTs));
@@ -421,8 +483,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param groupByPartition Files grouped by partition
    * @param visibility Appear/Disappear
    */
-  private void waitForAllFiles(JavaSparkContext jsc, Map<String, List<Pair<String, String>>> groupByPartition,
-      FileVisibility visibility) {
+  private void waitForAllFiles(JavaSparkContext jsc, Map<String, List<Pair<String, String>>> groupByPartition, FileVisibility visibility) {
     // This will either ensure all files to be deleted are present.
     boolean checkPassed =
         jsc.parallelize(new ArrayList<>(groupByPartition.entrySet()), config.getFinalizeWriteParallelism())
@@ -434,8 +495,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     }
   }
 
-  private boolean waitForCondition(String partitionPath, Stream<Pair<String, String>> partitionFilePaths,
-      FileVisibility visibility) {
+  private boolean waitForCondition(String partitionPath, Stream<Pair<String, String>> partitionFilePaths, FileVisibility visibility) {
     final FileSystem fileSystem = metaClient.getRawFs();
     List<String> fileList = partitionFilePaths.map(Pair::getValue).collect(Collectors.toList());
     try {
@@ -453,5 +513,53 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   public SparkTaskContextSupplier getSparkTaskContextSupplier() {
     return sparkTaskContextSupplier;
+  }
+
+  /**
+   * Ensure that the current writerSchema is compatible with the latest schema of this dataset.
+   *
+   * When inserting/updating data, we read records using the last used schema and convert them to the
+   * GenericRecords with writerSchema. Hence, we need to ensure that this conversion can take place without errors.
+   *
+   */
+  private void validateSchema() throws HoodieUpsertException, HoodieInsertException {
+
+    if (!config.getAvroSchemaValidate() || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()) {
+      // Check not required
+      return;
+    }
+
+    Schema tableSchema;
+    Schema writerSchema;
+    boolean isValid;
+    try {
+      TableSchemaResolver schemaUtil = new TableSchemaResolver(getMetaClient());
+      writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
+      tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaUtil.getTableAvroSchemaWithoutMetadataFields());
+      isValid = TableSchemaResolver.isSchemaCompatible(tableSchema, writerSchema);
+    } catch (Exception e) {
+      throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
+    }
+
+    if (!isValid) {
+      throw new HoodieException("Failed schema compatibility check for writerSchema :" + writerSchema
+          + ", table schema :" + tableSchema + ", base path :" + metaClient.getBasePath());
+    }
+  }
+
+  public void validateUpsertSchema() throws HoodieUpsertException {
+    try {
+      validateSchema();
+    } catch (HoodieException e) {
+      throw new HoodieUpsertException("Failed upsert schema compatibility check.", e);
+    }
+  }
+
+  public void validateInsertSchema() throws HoodieInsertException {
+    try {
+      validateSchema();
+    } catch (HoodieException e) {
+      throw new HoodieInsertException("Failed insert schema compability check.", e);
+    }
   }
 }

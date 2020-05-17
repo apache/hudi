@@ -42,10 +42,10 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.table.compact.OperationResult;
-import org.apache.hudi.table.compact.strategy.UnBoundedCompactionStrategy;
+import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
 import org.apache.hudi.utilities.HoodieCompactor;
+import org.apache.hudi.table.action.compact.OperationResult;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;

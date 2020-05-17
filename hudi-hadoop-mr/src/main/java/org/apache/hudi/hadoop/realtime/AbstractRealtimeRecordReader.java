@@ -212,7 +212,7 @@ public abstract class AbstractRealtimeRecordReader {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
       } else {
-        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
+        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
       }
     }
 
@@ -360,14 +360,16 @@ public abstract class AbstractRealtimeRecordReader {
   private Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap) {
     // Get all column names of hive table
     String hiveColumnString = jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS);
+    LOG.info("Hive Columns : " + hiveColumnString);
     String[] hiveColumns = hiveColumnString.split(",");
+    LOG.info("Hive Columns : " + hiveColumnString);
     List<Field> hiveSchemaFields = new ArrayList<>();
 
     for (String columnName : hiveColumns) {
       Field field = schemaFieldsMap.get(columnName.toLowerCase());
 
       if (field != null) {
-        hiveSchemaFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
+        hiveSchemaFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
       } else {
         // Hive has some extra virtual columns like BLOCK__OFFSET__INSIDE__FILE which do not exist in table schema.
         // They will get skipped as they won't be found in the original schema.
@@ -378,6 +380,7 @@ public abstract class AbstractRealtimeRecordReader {
     Schema hiveSchema = Schema.createRecord(writerSchema.getName(), writerSchema.getDoc(), writerSchema.getNamespace(),
         writerSchema.isError());
     hiveSchema.setFields(hiveSchemaFields);
+    LOG.info("HIVE Schema is :" + hiveSchema.toString(true));
     return hiveSchema;
   }
 
