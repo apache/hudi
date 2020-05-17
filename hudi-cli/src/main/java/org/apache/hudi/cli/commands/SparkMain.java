@@ -287,7 +287,7 @@ public class SparkMain {
       LOG.info(String.format("The commit \"%s\" rolled back.", instantTime));
       return 0;
     } else {
-      LOG.info(String.format("The commit \"%s\" failed to roll back.", instantTime));
+      LOG.warn(String.format("The commit \"%s\" failed to roll back.", instantTime));
       return -1;
     }
   }
@@ -300,7 +300,7 @@ public class SparkMain {
       LOG.info(String.format("The commit \"%s\" has been savepointed.", commitTime));
       return 0;
     } catch (HoodieSavepointException se) {
-      LOG.info(String.format("Failed: Could not create savepoint \"%s\".", commitTime));
+      LOG.warn(String.format("Failed: Could not create savepoint \"%s\".", commitTime));
       return -1;
     }
   }
@@ -312,7 +312,7 @@ public class SparkMain {
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
       return 0;
     } catch (Exception e) {
-      LOG.info(String.format("The commit \"%s\" failed to roll back.", savepointTime));
+      LOG.warn(String.format("The commit \"%s\" failed to roll back.", savepointTime));
       return -1;
     }
   }
@@ -324,7 +324,7 @@ public class SparkMain {
       LOG.info(String.format("Savepoint \"%s\" deleted.", savepointTime));
       return 0;
     } catch (Exception e) {
-      LOG.info(String.format("Failed: Could not delete savepoint \"%s\".", savepointTime));
+      LOG.warn(String.format("Failed: Could not delete savepoint \"%s\".", savepointTime));
       return -1;
     }
   }
