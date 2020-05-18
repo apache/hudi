@@ -352,6 +352,7 @@
               <exclude>**/test/resources/*.commit</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
+              <exclude>.github/**</exclude>
             </excludes>
           </configuration>
           <executions>
