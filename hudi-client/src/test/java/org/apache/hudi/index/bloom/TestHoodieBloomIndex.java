@@ -475,5 +475,4 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
       }
     }
   }
-
 }
