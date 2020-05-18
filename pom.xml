@@ -347,6 +347,7 @@
               <exclude>**/test/resources/*.data</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
+              <exclude>.github/**</exclude>
             </excludes>
           </configuration>
           <executions>
