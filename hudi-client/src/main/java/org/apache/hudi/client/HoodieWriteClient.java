@@ -540,10 +540,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
             HoodieTimeline.compareTimestamps(latestPending.getTimestamp(), HoodieTimeline.LESSER_THAN, instantTime),
         "Latest pending compaction instant time must be earlier than this instant time. Latest Compaction :"
             + latestPending + ",  Ingesting at " + instantTime));
-    HoodieTable<T> table = HoodieTable.create(metaClient, config, hadoopConf);
-    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    String commitActionType = table.getMetaClient().getCommitActionType();
-    activeTimeline.createNewInstant(new HoodieInstant(State.REQUESTED, commitActionType, instantTime));
+    metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(State.REQUESTED, metaClient.getCommitActionType(),
+        instantTime));
   }
 
   /**
