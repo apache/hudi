@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics.datadog;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metrics.datadog.DatadogReporter.MetricType;
 import org.apache.hudi.metrics.datadog.DatadogReporter.PayloadBuilder;
 
 import com.codahale.metrics.MetricFilter;
@@ -89,7 +90,7 @@ public class TestDatadogReporter {
   @Test
   public void payloadBuilderShouldBuildExpectedPayloadString() {
     String payload = new PayloadBuilder()
-        .withType("gauge")
+        .withMetricType(MetricType.gauge)
         .addGauge("foo", 0, 0)
         .addGauge("bar", 1, 999)
         .withHost("xhost")

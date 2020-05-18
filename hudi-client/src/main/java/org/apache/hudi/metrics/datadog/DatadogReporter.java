@@ -39,7 +39,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Objects;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -88,7 +87,7 @@ public class DatadogReporter extends ScheduledReporter {
     final long now = clock.getTime() / 1000;
     final PayloadBuilder builder = new PayloadBuilder();
 
-    builder.withType("gauge");
+    builder.withMetricType(MetricType.gauge);
     gauges.forEach((metricName, metric) -> {
       builder.addGauge(prefix(metricName), now, (long) metric.getValue());
     });
@@ -127,20 +126,20 @@ public class DatadogReporter extends ScheduledReporter {
 
     private final ObjectNode payload;
     private final ArrayNode series;
-    private String type;
+    private MetricType type;
 
     PayloadBuilder() {
       payload = MAPPER.createObjectNode();
       series = payload.putArray("series");
     }
 
-    PayloadBuilder withType(String type) {
+    PayloadBuilder withMetricType(MetricType type) {
       this.type = type;
       return this;
     }
 
     PayloadBuilder addGauge(String metric, long timestamp, long gaugeValue) {
-      ValidationUtils.checkState(Objects.equals(type, "gauge"));
+      ValidationUtils.checkState(type == MetricType.gauge);
       ObjectNode seriesItem = MAPPER.createObjectNode().put("metric", metric);
       seriesItem.putArray("points").addArray().add(timestamp).add(gaugeValue);
       series.add(seriesItem);
@@ -164,5 +163,9 @@ public class DatadogReporter extends ScheduledReporter {
     String build() {
       return payload.toString();
     }
+  }
+
+  enum MetricType {
+    gauge;
   }
 }
