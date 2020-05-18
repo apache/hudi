@@ -150,21 +150,21 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Get the base file only view of the file system for this table.
    */
   public BaseFileOnlyView getBaseFileOnlyView() {
-    return getViewManager().getFileSystemView(metaClient.getBasePath());
+    return getViewManager().getFileSystemView(metaClient);
   }
 
   /**
    * Get the full view of the file system for this table.
    */
   public SliceView getSliceView() {
-    return getViewManager().getFileSystemView(metaClient.getBasePath());
+    return getViewManager().getFileSystemView(metaClient);
   }
 
   /**
    * Get complete view of the file system for this table with ability to force sync.
    */
   public SyncableFileSystemView getHoodieView() {
-    return getViewManager().getFileSystemView(metaClient.getBasePath());
+    return getViewManager().getFileSystemView(metaClient);
   }
 
   /**
