@@ -120,11 +120,12 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     // read records and get 10 to generate duplicates
     Dataset df = sqlContext.read().parquet(duplicatedPartitionPath);
     Dataset secondPartitionDf = sqlContext.read().parquet(duplicatedPartitionPathWithUpdates);
+    Dataset thirdPartitionDf = sqlContext.read().parquet(duplicatedPartitionPathWithUpserts);
     secondPartitionDf.limit(10).withColumn("_hoodie_commit_time", lit("20160401010101"))
       .write().parquet(duplicatedPartitionPathWithUpdates + File.separator + secondPartitionFileName2);
-    secondPartitionDf.limit(10).withColumn("_hoodie_commit_time", lit("20160401010202"))
+    thirdPartitionDf.limit(10).withColumn("_hoodie_commit_time", lit("20160401010202")).withColumn("_hoodie_file_name", lit(thirdPartitionFileName2))
       .write().parquet(duplicatedPartitionPathWithUpserts + File.separator + thirdPartitionFileName2);
-    secondPartitionDf.limit(10).withColumn("_hoodie_commit_time", lit("20160401010202"))
+    thirdPartitionDf.limit(10).withColumn("_hoodie_commit_time", lit("20160401010202")).withColumn("_hoodie_file_name", lit(thirdPartitionFileName3))
       .write().parquet(duplicatedPartitionPathWithUpserts + File.separator + thirdPartitionFileName3);
 
     String fileName3 = "3_0_20160401010202.parquet";
@@ -194,7 +195,6 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     assertEquals(100, result.count());
   }
 
-  /* TODO: fix this test case
   @Test
   public void testDeduplicateWithUpserts() throws IOException {
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
@@ -221,7 +221,6 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     Dataset result = sqlContext.read().parquet(files);
     assertEquals(100, result.count());
   }
-   */
 
   /**
    * Test case for real run deduplicate.
