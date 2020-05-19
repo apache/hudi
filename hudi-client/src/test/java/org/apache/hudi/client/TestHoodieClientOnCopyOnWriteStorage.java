@@ -20,8 +20,8 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRollingStat;
@@ -979,6 +979,40 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
       assertTrue(cme.getCause() instanceof HoodieIOException);
     }
     return Pair.of(markerFilePath, result);
+  }
+
+  @Test
+  public void testMultiOperationsPerCommit() throws IOException {
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false)
+        .withAllowMultiWriteOnSameInstant(true)
+        .build();
+    HoodieWriteClient client = getHoodieWriteClient(cfg);
+    String firstInstantTime = "0000";
+    client.startCommitWithTime(firstInstantTime);
+    int numRecords = 200;
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(dataGen.generateInserts(firstInstantTime, numRecords), 1);
+    JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, firstInstantTime);
+    assertTrue("Commit should succeed", client.commit(firstInstantTime, result));
+    assertTrue("After explicit commit, commit file should be created", HoodieTestUtils.doesCommitExist(basePath, firstInstantTime));
+
+    // Check the entire dataset has all records still
+    String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+    for (int i = 0; i < fullPartitionPaths.length; i++) {
+      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+    }
+    assertEquals("Must contain " + numRecords + " records", numRecords,
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+
+    String nextInstantTime = "0001";
+    client.startCommitWithTime(nextInstantTime);
+    JavaRDD<HoodieRecord> updateRecords = jsc.parallelize(dataGen.generateUpdates(nextInstantTime, numRecords), 1);
+    JavaRDD<HoodieRecord> insertRecords = jsc.parallelize(dataGen.generateInserts(nextInstantTime, numRecords), 1);
+    JavaRDD<WriteStatus> inserts = client.bulkInsert(insertRecords, nextInstantTime);
+    JavaRDD<WriteStatus> upserts = client.upsert(updateRecords, nextInstantTime);
+    assertTrue("Commit should succeed", client.commit(nextInstantTime, inserts.union(upserts)));
+    assertTrue("After explicit commit, commit file should be created", HoodieTestUtils.doesCommitExist(basePath, firstInstantTime));
+    int totalRecords = 2 * numRecords;
+    assertEquals("Must contain " + totalRecords + " records", totalRecords, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
   }
 
   /**
