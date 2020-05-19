@@ -84,6 +84,11 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_NEW_VALUE = "New Value";
 
   /**
+   * Fields of Savepoints.
+   */
+  public static final String HEADER_SAVEPOINT_TIME = "SavepointTime";
+
+  /**
    * Fields of Rollback.
    */
   public static final String HEADER_ROLLBACK_INSTANT = "Rolledback " + HEADER_INSTANT;
