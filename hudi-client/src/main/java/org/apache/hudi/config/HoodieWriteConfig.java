@@ -99,6 +99,20 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String MAX_CONSISTENCY_CHECKS_PROP = "hoodie.consistency.check.max_checks";
   private static int DEFAULT_MAX_CONSISTENCY_CHECKS = 7;
 
+  /**
+   * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
+   * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
+   *
+   * Given Hudi commit protocol, these are generally unsafe operations and user need to handle failure scenarios. It
+   * only works with COW table. Hudi 0.5.x had stopped this behavior.
+   *
+   * Given the importance of supporting such cases for the user's migration to 0.5.x, we are proposing a safety flag
+   * (disabled by default) which will allow this old behavior.
+   */
+  private static final String ALLOW_MULTI_WRITE_ON_SAME_INSTANT =
+      "_.hoodie.allow.multi.write.on.same.instant";
+  private static final String DEFAULT_ALLOW_MULTI_WRITE_ON_SAME_INSTANT = "false";
+
   private ConsistencyGuardConfig consistencyGuardConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
@@ -192,6 +206,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean shouldCombineBeforeDelete() {
     return Boolean.parseBoolean(props.getProperty(COMBINE_BEFORE_DELETE_PROP));
+  }
+
+  public boolean shouldAllowMultiWriteOnSameInstant() {
+    return Boolean.parseBoolean(props.getProperty(ALLOW_MULTI_WRITE_ON_SAME_INSTANT));
   }
 
   public String getWriteStatusClassName() {
@@ -439,6 +457,22 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean getBloomIndexUpdatePartitionPath() {
     return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH));
+  }
+
+  public int getSimpleIndexParallelism() {
+    return Integer.parseInt(props.getProperty(HoodieIndexConfig.SIMPLE_INDEX_PARALLELISM_PROP));
+  }
+
+  public boolean getSimpleIndexUseCaching() {
+    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.SIMPLE_INDEX_USE_CACHING_PROP));
+  }
+
+  public int getGlobalSimpleIndexParallelism() {
+    return Integer.parseInt(props.getProperty(HoodieIndexConfig.GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP));
+  }
+
+  public boolean getGlobalSimpleIndexUpdatePartitionPath() {
+    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH));
   }
 
   /**
@@ -707,6 +741,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withAllowMultiWriteOnSameInstant(boolean allow) {
+      props.setProperty(ALLOW_MULTI_WRITE_ON_SAME_INSTANT, String.valueOf(allow));
+      return this;
+    }
+
     public HoodieWriteConfig build() {
       // Check for mandatory properties
       setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM, DEFAULT_PARALLELISM);
@@ -722,6 +761,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           DEFAULT_COMBINE_BEFORE_UPSERT);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_DELETE_PROP), COMBINE_BEFORE_DELETE_PROP,
           DEFAULT_COMBINE_BEFORE_DELETE);
+      setDefaultOnCondition(props, !props.containsKey(ALLOW_MULTI_WRITE_ON_SAME_INSTANT),
+          ALLOW_MULTI_WRITE_ON_SAME_INSTANT, DEFAULT_ALLOW_MULTI_WRITE_ON_SAME_INSTANT);
       setDefaultOnCondition(props, !props.containsKey(WRITE_STATUS_STORAGE_LEVEL), WRITE_STATUS_STORAGE_LEVEL,
           DEFAULT_WRITE_STATUS_STORAGE_LEVEL);
       setDefaultOnCondition(props, !props.containsKey(HOODIE_AUTO_COMMIT_PROP), HOODIE_AUTO_COMMIT_PROP,
@@ -761,7 +802,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       String layoutVersion = props.getProperty(TIMELINE_LAYOUT_VERSION);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
-
 
       // Build WriteConfig at the end
       HoodieWriteConfig config = new HoodieWriteConfig(props);

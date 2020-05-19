@@ -73,7 +73,8 @@ public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
         IntStream.range(0, parallelism).mapToObj(i -> FSUtils.createNewFileIdPfx()).collect(Collectors.toList());
 
     table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
-        table.getMetaClient().getCommitActionType(), instantTime), Option.empty());
+        table.getMetaClient().getCommitActionType(), instantTime), Option.empty(),
+        config.shouldAllowMultiWriteOnSameInstant());
 
     JavaRDD<WriteStatus> writeStatusRDD = repartitionedRecords
         .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(instantTime, config, table, fileIDPrefixes), true)

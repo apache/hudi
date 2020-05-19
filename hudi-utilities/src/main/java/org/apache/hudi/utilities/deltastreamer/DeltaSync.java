@@ -41,7 +41,6 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Operation;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
@@ -184,6 +183,8 @@ public class DeltaSync implements Serializable {
 
   /**
    * Refresh Timeline.
+   *
+   * @throws IOException in case of any IOException
    */
   private void refreshTimeline() throws IOException {
     if (fs.exists(new Path(cfg.targetBasePath))) {
@@ -239,6 +240,11 @@ public class DeltaSync implements Serializable {
 
   /**
    * Read from Upstream Source and apply transformation if needed.
+   *
+   * @param commitTimelineOpt Timeline with completed commits
+   * @return Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> Input data read from upstream source, consists
+   * of schemaProvider, checkpointStr and hoodieRecord
+   * @throws Exception in case of any Exception
    */
   private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(
       Option<HoodieTimeline> commitTimelineOpt) throws Exception {
@@ -355,18 +361,23 @@ public class DeltaSync implements Serializable {
 
     boolean isEmpty = records.isEmpty();
 
+    // try to start a new commit
     String instantTime = startCommit();
     LOG.info("Starting commit  : " + instantTime);
 
     JavaRDD<WriteStatus> writeStatusRDD;
-    if (cfg.operation == Operation.INSERT) {
-      writeStatusRDD = writeClient.insert(records, instantTime);
-    } else if (cfg.operation == Operation.UPSERT) {
-      writeStatusRDD = writeClient.upsert(records, instantTime);
-    } else if (cfg.operation == Operation.BULK_INSERT) {
-      writeStatusRDD = writeClient.bulkInsert(records, instantTime);
-    } else {
-      throw new HoodieDeltaStreamerException("Unknown operation :" + cfg.operation);
+    switch (cfg.operation) {
+      case INSERT:
+        writeStatusRDD = writeClient.insert(records, instantTime);
+        break;
+      case UPSERT:
+        writeStatusRDD = writeClient.upsert(records, instantTime);
+        break;
+      case BULK_INSERT:
+        writeStatusRDD = writeClient.bulkInsert(records, instantTime);
+        break;
+      default:
+        throw new HoodieDeltaStreamerException("Unknown operation : " + cfg.operation);
     }
 
     long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
@@ -425,6 +436,13 @@ public class DeltaSync implements Serializable {
     return scheduledCompactionInstant;
   }
 
+  /**
+   * Try to start a new commit.
+   * <p>
+   * Exception will be thrown if it failed in 2 tries.
+   *
+   * @return Instant time of the commit
+   */
   private String startCommit() {
     final int maxRetries = 2;
     int retryNum = 1;

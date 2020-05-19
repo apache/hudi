@@ -245,6 +245,7 @@
         <version>${maven-surefire-plugin.version}</version>
         <configuration>
           <skip>${skipUTs}</skip>
+          <argLine>-Xms256m -Xmx2g</argLine>
           <systemPropertyVariables>
             <log4j.configuration>
               ${surefire-log4j.file}
@@ -351,6 +352,7 @@
               <exclude>**/test/resources/*.commit</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
+              <exclude>.github/**</exclude>
             </excludes>
           </configuration>
           <executions>
