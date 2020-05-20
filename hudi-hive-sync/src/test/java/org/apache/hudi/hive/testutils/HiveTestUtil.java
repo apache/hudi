@@ -80,7 +80,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @SuppressWarnings("SameParameterValue")
-public class TestUtil {
+public class HiveTestUtil {
 
   private static MiniDFSCluster dfsCluster;
   private static ZooKeeperServer zkServer;
