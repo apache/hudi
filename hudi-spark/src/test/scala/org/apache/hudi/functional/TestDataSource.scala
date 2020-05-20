@@ -77,6 +77,54 @@ class TestDataSource {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
   }
 
+  @Test def testSparkAutoPartition(): Unit = {
+    val partitionPaths = new Array[String](3)
+    partitionPaths.update(0, "year=2020/month=01/day=01")
+    partitionPaths.update(1, "year=2020/month=02/day=02")
+    partitionPaths.update(2, "year=2019/month=01/day=01")
+    val dataGen = new HoodieTestDataGenerator(partitionPaths)
+    // Insert Operation
+    val records1 = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
+    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+
+    // Read RO View
+    val hoodieROViewDF1 = spark.read.format("org.apache.hudi")
+      .load(basePath).cache()
+    assertEquals(100, hoodieROViewDF1.count())
+    assertEquals(100, hoodieROViewDF1.filter(col("year") === 2020).count()
+      + hoodieROViewDF1.filter(col("year") === 2019).count())
+    assertEquals(3, hoodieROViewDF1.schema.count(s => List("year", "month", "day").contains(s.name)))
+
+
+    val records2 = DataSourceTestUtils.convertToStringList(dataGen.generateUpdates("001", 100)).toList
+    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    // Upsert Operation
+    inputDF2.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Read RO View
+    val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
+      .load(basePath).cache()
+
+    //Ensure the filter was pushed down to partition
+    //hoodieROViewDF2.filter(col("year") === 2020 && col("month") === 1).explain(extended = true)
+
+    assertEquals(100, hoodieROViewDF2.count()) // still 100, since we only updated
+    assertEquals(100, hoodieROViewDF2.filter(col("year") === 2020).count()
+      + hoodieROViewDF2.filter(col("year") === 2019).count())
+    assertEquals(3, hoodieROViewDF2.schema.count(s => List("year", "month", "day").contains(s.name)))
+    assertEquals(spark.read.format("org.apache.hudi").load(basePath + "/year=2020/month=01").count(),
+      hoodieROViewDF2.filter(col("year") === 2020 && col("month") === 1).count())
+  }
+
   @Test def testCopyOnWriteStorage() {
     // Insert Operation
     val records1 = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
