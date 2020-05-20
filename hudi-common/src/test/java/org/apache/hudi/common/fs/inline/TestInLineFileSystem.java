@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.fs.inline;
 
+import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.conf.Configuration;
@@ -38,8 +39,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.RANDOM;
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getRandomOuterFSPath;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterFSPath;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

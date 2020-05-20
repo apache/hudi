@@ -19,8 +19,8 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent;
 import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent.PartitionEventType;
 import org.apache.hudi.hive.testutils.TestUtil;

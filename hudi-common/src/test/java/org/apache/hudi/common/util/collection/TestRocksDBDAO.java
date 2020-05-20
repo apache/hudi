@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests RocksDB manager {@link RocksDBDAO}.
  */
-public class TestRocksDBManager {
+public class TestRocksDBDAO {
 
   private RocksDBDAO dbManager;
 
@@ -269,7 +269,7 @@ public class TestRocksDBManager {
   }
 
   /**
-   * A payload definition for {@link TestRocksDBManager}.
+   * A payload definition for {@link TestRocksDBDAO}.
    */
   public static class Payload<T> implements Serializable {
 

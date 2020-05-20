@@ -16,9 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 

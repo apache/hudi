@@ -33,7 +33,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
-import static org.apache.hudi.common.model.HoodieTestUtils.generateFakeHoodieWriteStat;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStat;
 import static org.apache.hudi.table.HoodieCopyOnWriteTable.averageBytesPerRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;

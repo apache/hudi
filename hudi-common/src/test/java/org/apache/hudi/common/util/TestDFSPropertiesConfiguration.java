@@ -20,7 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.minicluster.HdfsTestService;
+import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;

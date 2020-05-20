@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.common.testutils;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -29,11 +29,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * A test record entity.
+ * A sample record entity for tests.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @SuppressWarnings({"unused", "FieldCanBeLocal", "MismatchedQueryAndUpdateOfCollection"})
-public class TestRecord implements Serializable {
+public class SampleTestRecord implements Serializable {
 
   class TestMapItemRecord implements Serializable {
 
@@ -74,7 +74,7 @@ public class TestRecord implements Serializable {
   private TestNestedRecord testNestedRecord;
   private String[] stringArray;
 
-  public TestRecord(String instantTime, int recordNumber, String fileId) {
+  public SampleTestRecord(String instantTime, int recordNumber, String fileId) {
     this._hoodie_commit_time = instantTime;
     this._hoodie_record_key = "key" + recordNumber;
     this._hoodie_partition_path = instantTime;

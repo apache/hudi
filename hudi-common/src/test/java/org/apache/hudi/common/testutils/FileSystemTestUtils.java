@@ -16,7 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.fs.inline;
+package org.apache.hudi.common.testutils;
+
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.fs.inline.InMemoryFileSystem;
 
 import org.apache.hadoop.fs.Path;
 
@@ -34,7 +38,7 @@ public class FileSystemTestUtils {
   public static final String FORWARD_SLASH = "/";
   public static final String FILE_SCHEME = "file";
   public static final String COLON = ":";
-  static final Random RANDOM = new Random();
+  public static final Random RANDOM = new Random();
 
   public static Path getRandomOuterInMemPath() {
     String randomFileName = UUID.randomUUID().toString();
@@ -42,7 +46,7 @@ public class FileSystemTestUtils {
     return new Path(InMemoryFileSystem.SCHEME + fileSuffix);
   }
 
-  static Path getRandomOuterFSPath() {
+  public static Path getRandomOuterFSPath() {
     String randomFileName = UUID.randomUUID().toString();
     String fileSuffix = COLON + FORWARD_SLASH + TEMP + FORWARD_SLASH + randomFileName;
     return new Path(FILE_SCHEME + fileSuffix);

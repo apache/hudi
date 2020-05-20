@@ -20,7 +20,8 @@ package org.apache.hudi
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{EmptyHoodieRecordPayload, OverwriteWithLatestAvroPayload}
-import org.apache.hudi.common.util.{Option, SchemaTestUtil}
+import org.apache.hudi.common.testutils.SchemaTestUtil
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, GlobalDeleteKeyGenerator, SimpleKeyGenerator}
 import org.junit.jupiter.api.Assertions.assertEquals

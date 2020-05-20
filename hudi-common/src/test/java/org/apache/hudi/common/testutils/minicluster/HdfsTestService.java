@@ -16,9 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.minicluster;
+package org.apache.hudi.common.testutils.minicluster;
 
-import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 
