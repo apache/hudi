@@ -52,7 +52,7 @@ public abstract class HoodieReadHandle<T extends HoodieRecordPayload> extends Ho
     return partitionPathFilePair.getRight();
   }
 
-  protected HoodieBaseFile getLatestDataFile() {
+  protected HoodieBaseFile getLatestBaseFile() {
     return hoodieTable.getBaseFileOnlyView()
         .getLatestBaseFile(partitionPathFilePair.getLeft(), partitionPathFilePair.getRight()).get();
   }

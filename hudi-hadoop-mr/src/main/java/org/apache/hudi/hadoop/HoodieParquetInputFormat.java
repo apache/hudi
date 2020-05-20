@@ -297,15 +297,15 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
    * super.listStatus() and gets back a FileStatus[] 2. Then it creates the HoodieTableMetaClient for the paths listed.
    * 3. Generation of splits looks at FileStatus size to create splits, which skips this file
    */
-  private HoodieBaseFile checkFileStatus(HoodieBaseFile dataFile) {
-    Path dataPath = dataFile.getFileStatus().getPath();
+  private HoodieBaseFile checkFileStatus(HoodieBaseFile baseFile) {
+    Path dataPath = baseFile.getFileStatus().getPath();
     try {
-      if (dataFile.getFileSize() == 0) {
+      if (baseFile.getFileSize() == 0) {
         FileSystem fs = dataPath.getFileSystem(conf);
-        LOG.info("Refreshing file status " + dataFile.getPath());
+        LOG.info("Refreshing file status " + baseFile.getPath());
         return new HoodieBaseFile(fs.getFileStatus(dataPath));
       }
-      return dataFile;
+      return baseFile;
     } catch (IOException e) {
       throw new HoodieIOException("Could not get FileStatus on path " + dataPath);
     }

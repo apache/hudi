@@ -124,7 +124,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
         case HoodieTimeline.COMMIT_ACTION:
           LOG.info("Rolling back commit action. There are higher delta commits. So only rolling back this instant");
           partitionRollbackRequests.add(
-              RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback));
+              RollbackRequest.createRollbackRequestWithDeleteBaseAndLogFilesAction(partitionPath, instantToRollback));
           break;
         case HoodieTimeline.COMPACTION_ACTION:
           // If there is no delta commit present after the current commit (if compaction), no action, else we
@@ -139,7 +139,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
             // have been written to the log files.
             LOG.info("Rolling back compaction. There are higher delta commits. So only deleting data files");
             partitionRollbackRequests.add(
-                RollbackRequest.createRollbackRequestWithDeleteDataFilesOnlyAction(partitionPath, instantToRollback));
+                RollbackRequest.createRollbackRequestWithDeleteBaseFilesOnlyAction(partitionPath, instantToRollback));
           } else {
             // No deltacommits present after this compaction commit (inflight or requested). In this case, we
             // can also delete any log files that were created with this compaction commit as base
@@ -147,7 +147,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
             LOG.info("Rolling back compaction plan. There are NO higher delta commits. So deleting both data and"
                 + " log files");
             partitionRollbackRequests.add(
-                RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback));
+                RollbackRequest.createRollbackRequestWithDeleteBaseAndLogFilesAction(partitionPath, instantToRollback));
           }
           break;
         case HoodieTimeline.DELTA_COMMIT_ACTION:
@@ -186,7 +186,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
             // We do not know fileIds for inserts (first inserts are either log files or parquet files),
             // delete all files for the corresponding failed commit, if present (same as COW)
             partitionRollbackRequests.add(
-                RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback));
+                RollbackRequest.createRollbackRequestWithDeleteBaseAndLogFilesAction(partitionPath, instantToRollback));
 
             // append rollback blocks for updates
             if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {

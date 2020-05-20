@@ -103,7 +103,7 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
     FileSystem fs = metaClient.getFs();
 
     Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-    LOG.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
+    LOG.info("Compacting base " + operation.getBaseFileName() + " with delta files " + operation.getDeltaFileNames()
         + " for commit " + instantTime);
     // TODO - FIX THIS
     // Reads the entire avro file. Always only specific blocks should be read from the avro file
@@ -129,17 +129,17 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
       return new ArrayList<>();
     }
 
-    Option<HoodieBaseFile> oldDataFileOpt =
+    Option<HoodieBaseFile> oldBaseFileOpt =
         operation.getBaseFile(metaClient.getBasePath(), operation.getPartitionPath());
 
     // Compacting is very similar to applying updates to existing file
     Iterator<List<WriteStatus>> result;
-    // If the dataFile is present, there is a base parquet file present, perform updates else perform inserts into a
+    // If the baseFile is present, there is a base parquet file present, perform updates else perform inserts into a
     // new base parquet file.
-    if (oldDataFileOpt.isPresent()) {
+    if (oldBaseFileOpt.isPresent()) {
       result = hoodieCopyOnWriteTable.handleUpdate(instantTime, operation.getPartitionPath(),
               operation.getFileId(), scanner.getRecords(),
-          oldDataFileOpt.get());
+        oldBaseFileOpt.get());
     } else {
       result = hoodieCopyOnWriteTable.handleInsert(instantTime, operation.getPartitionPath(), operation.getFileId(),
           scanner.iterator());
@@ -203,9 +203,9 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
               // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
               // for spark Map operations and collecting them finally in Avro generated classes for storing
               // into meta files.
-              Option<HoodieBaseFile> dataFile = s.getBaseFile();
-              return new CompactionOperation(dataFile, partitionPath, logFiles,
-                  config.getCompactionStrategy().captureMetrics(config, dataFile, partitionPath, logFiles));
+              Option<HoodieBaseFile> baseFile = s.getBaseFile();
+              return new CompactionOperation(baseFile, partitionPath, logFiles,
+                  config.getCompactionStrategy().captureMetrics(config, baseFile, partitionPath, logFiles));
             }).filter(c -> !c.getDeltaFileNames().isEmpty()).collect(toList()).iterator())
         .collect().stream().map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
     LOG.info("Total of " + operations.size() + " compactions are retrieved");

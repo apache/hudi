@@ -51,15 +51,15 @@ public class BaseFileDTO {
     return baseFile;
   }
 
-  public static BaseFileDTO fromHoodieBaseFile(HoodieBaseFile dataFile) {
-    if (null == dataFile) {
+  public static BaseFileDTO fromHoodieBaseFile(HoodieBaseFile baseFile) {
+    if (null == baseFile) {
       return null;
     }
 
     BaseFileDTO dto = new BaseFileDTO();
-    dto.fileStatus = FileStatusDTO.fromFileStatus(dataFile.getFileStatus());
-    dto.fullPath = dataFile.getPath();
-    dto.fileLen = dataFile.getFileLen();
+    dto.fileStatus = FileStatusDTO.fromFileStatus(baseFile.getFileStatus());
+    dto.fullPath = baseFile.getPath();
+    dto.fileLen = baseFile.getFileLen();
     return dto;
   }
 

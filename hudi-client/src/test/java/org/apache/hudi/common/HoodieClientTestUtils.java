@@ -130,16 +130,16 @@ public class HoodieClientTestUtils {
     fakeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_EXTENSION);
   }
 
-  public static void fakeDataFile(String basePath, String partitionPath, String instantTime, String fileId)
+  public static void fakeBaseFile(String basePath, String partitionPath, String instantTime, String fileId)
       throws Exception {
-    fakeDataFile(basePath, partitionPath, instantTime, fileId, 0);
+    fakeBaseFile(basePath, partitionPath, instantTime, fileId, 0);
   }
 
-  public static void fakeDataFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
+  public static void fakeBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
       throws Exception {
     String parentPath = String.format("%s/%s", basePath, partitionPath);
     new File(parentPath).mkdirs();
-    String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(instantTime, "1-0-1", fileId));
+    String path = String.format("%s/%s", parentPath, FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId));
     new File(path).createNewFile();
     new RandomAccessFile(path, "rw").setLength(length);
   }
@@ -255,7 +255,7 @@ public class HoodieClientTestUtils {
     Thread.sleep(1000);
     String instantTime = HoodieTestUtils.makeNewCommitTime();
     String fileId = UUID.randomUUID().toString();
-    String filename = FSUtils.makeDataFileName(instantTime, "1-0-1", fileId);
+    String filename = FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId);
     HoodieTestUtils.createCommitFiles(basePath, instantTime);
     return HoodieClientTestUtils.writeParquetFile(basePath, partitionPath, filename, records, schema, filter,
         createCommitTime);

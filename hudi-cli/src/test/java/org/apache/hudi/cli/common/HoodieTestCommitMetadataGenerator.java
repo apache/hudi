@@ -92,8 +92,8 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
    * Generate commitMetadata in path.
    */
   public static HoodieCommitMetadata generateCommitMetadata(String basePath) throws IOException {
-    String file1P0C0 = HoodieTestUtils.createNewDataFile(basePath, DEFAULT_FIRST_PARTITION_PATH, "000");
-    String file1P1C0 = HoodieTestUtils.createNewDataFile(basePath, DEFAULT_SECOND_PARTITION_PATH, "000");
+    String file1P0C0 = HoodieTestUtils.createNewBaseFile(basePath, DEFAULT_FIRST_PARTITION_PATH, "000");
+    String file1P1C0 = HoodieTestUtils.createNewBaseFile(basePath, DEFAULT_SECOND_PARTITION_PATH, "000");
     return generateCommitMetadata(new HashMap<String, List<String>>() {
       {
         put(DEFAULT_FIRST_PARTITION_PATH, CollectionUtils.createImmutableList(file1P0C0));

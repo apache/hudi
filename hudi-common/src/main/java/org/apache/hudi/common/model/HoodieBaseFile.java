@@ -88,8 +88,8 @@ public class HoodieBaseFile implements Serializable {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    HoodieBaseFile dataFile = (HoodieBaseFile) o;
-    return Objects.equals(fullPath, dataFile.fullPath);
+    HoodieBaseFile baseFile = (HoodieBaseFile) o;
+    return Objects.equals(fullPath, baseFile.fullPath);
   }
 
   @Override
@@ -99,6 +99,6 @@ public class HoodieBaseFile implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieDataFile{fullPath=" + fullPath + ", fileLen=" + fileLen + '}';
+    return "HoodieBaseFile{fullPath=" + fullPath + ", fileLen=" + fileLen + '}';
   }
 }

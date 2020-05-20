@@ -80,13 +80,13 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Add a new datafile into the file group.
+   * Add a new baseFile into the file group.
    */
-  public void addBaseFile(HoodieBaseFile dataFile) {
-    if (!fileSlices.containsKey(dataFile.getCommitTime())) {
-      fileSlices.put(dataFile.getCommitTime(), new FileSlice(fileGroupId, dataFile.getCommitTime()));
+  public void addBaseFile(HoodieBaseFile baseFile) {
+    if (!fileSlices.containsKey(baseFile.getCommitTime())) {
+      fileSlices.put(baseFile.getCommitTime(), new FileSlice(fileGroupId, baseFile.getCommitTime()));
     }
-    fileSlices.get(dataFile.getCommitTime()).setBaseFile(dataFile);
+    fileSlices.get(baseFile.getCommitTime()).setBaseFile(baseFile);
   }
 
   /**
@@ -153,9 +153,9 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Gets the latest data file.
+   * Gets the latest base file.
    */
-  public Option<HoodieBaseFile> getLatestDataFile() {
+  public Option<HoodieBaseFile> getLatestBaseFile() {
     return Option.fromJavaOptional(getAllBaseFiles().findFirst());
   }
 

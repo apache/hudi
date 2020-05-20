@@ -161,8 +161,8 @@ public class FileSystemViewCommand implements CommandMarker {
       row[idx++] = fs.getBaseInstantTime();
       row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getPath() : "";
 
-      long dataFileSize = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFileSize() : -1;
-      row[idx++] = dataFileSize;
+      long baseFileSize = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFileSize() : -1;
+      row[idx++] = baseFileSize;
 
       if (!baseFileOnly) {
         row[idx++] = fs.getLogFiles().count();
@@ -178,9 +178,9 @@ public class FileSystemViewCommand implements CommandMarker {
         row[idx++] = logFilesUnscheduledTotalSize;
 
         double logSelectedForCompactionToBaseRatio =
-            dataFileSize > 0 ? logFilesScheduledForCompactionTotalSize / (dataFileSize * 1.0) : -1;
+            baseFileSize > 0 ? logFilesScheduledForCompactionTotalSize / (baseFileSize * 1.0) : -1;
         row[idx++] = logSelectedForCompactionToBaseRatio;
-        double logUnscheduledToBaseRatio = dataFileSize > 0 ? logFilesUnscheduledTotalSize / (dataFileSize * 1.0) : -1;
+        double logUnscheduledToBaseRatio = baseFileSize > 0 ? logFilesUnscheduledTotalSize / (baseFileSize * 1.0) : -1;
         row[idx++] = logUnscheduledToBaseRatio;
 
         row[idx++] = fs.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))

@@ -370,7 +370,7 @@ public class CompactionCommand implements CommandMarker {
     List<Comparable[]> rows = new ArrayList<>();
     if ((null != compactionPlan) && (null != compactionPlan.getOperations())) {
       for (HoodieCompactionOperation op : compactionPlan.getOperations()) {
-        rows.add(new Comparable[]{op.getPartitionPath(), op.getFileId(), op.getBaseInstantTime(), op.getDataFilePath(),
+        rows.add(new Comparable[]{op.getPartitionPath(), op.getFileId(), op.getBaseInstantTime(), op.getBaseFilePath(),
                 op.getDeltaFilePaths().size(), op.getMetrics() == null ? "" : op.getMetrics().toString()});
       }
     }
@@ -437,7 +437,7 @@ public class CompactionCommand implements CommandMarker {
       List<Comparable[]> rows = new ArrayList<>();
       res.forEach(r -> {
         Comparable[] row = new Comparable[] {r.getOperation().getFileId(), r.getOperation().getBaseInstantTime(),
-            r.getOperation().getDataFileName().isPresent() ? r.getOperation().getDataFileName().get() : "",
+            r.getOperation().getBaseFileName().isPresent() ? r.getOperation().getBaseFileName().get() : "",
             r.getOperation().getDeltaFileNames().size(), r.isSuccess(),
             r.getException().isPresent() ? r.getException().get().getMessage() : ""};
         rows.add(row);

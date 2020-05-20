@@ -67,10 +67,10 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testMakeDataFileName() {
+  public void testMakeBaseFileName() {
     String instantTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     String fileName = UUID.randomUUID().toString();
-    assertEquals(FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + ".parquet");
+    assertEquals(FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + ".parquet");
   }
 
   @Test
@@ -142,7 +142,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testGetCommitTime() {
     String instantTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     String fileName = UUID.randomUUID().toString();
-    String fullFileName = FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName);
+    String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName);
     assertEquals(FSUtils.getCommitTime(fullFileName), instantTime);
   }
 
@@ -150,7 +150,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testGetFileNameWithoutMeta() {
     String instantTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     String fileName = UUID.randomUUID().toString();
-    String fullFileName = FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName);
+    String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName);
     assertEquals(FSUtils.getFileId(fullFileName), fileName);
   }
 
@@ -320,7 +320,6 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testFileNameRelatedFunctions() throws Exception {
     String instantTime = "20160501010101";
     String partitionStr = "2016/05/01";
-    int taskPartitionId = 456;
     String writeToken = "456";
     String fileId = "Id123";
     int version = 1;
@@ -328,7 +327,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     final String LOG_EXTENTION = "." + LOG_STR;
 
     // data file name
-    String dataFileName = FSUtils.makeDataFileName(instantTime, writeToken, fileId);
+    String dataFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId);
     assertTrue(instantTime.equals(FSUtils.getCommitTime(dataFileName)));
     assertTrue(fileId.equals(FSUtils.getFileId(dataFileName)));
 

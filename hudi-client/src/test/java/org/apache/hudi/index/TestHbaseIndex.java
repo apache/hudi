@@ -315,12 +315,12 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     index.setHbaseConnection(hbaseConnection);
 
     // Get all the files generated
-    int numberOfDataFileIds = (int) writeStatues.map(status -> status.getFileId()).distinct().count();
+    int numberOfBaseFileIds = (int) writeStatues.map(status -> status.getFileId()).distinct().count();
 
     index.updateLocation(writeStatues, jsc, hoodieTable);
-    // 3 batches should be executed given batchSize = 100 and <=numberOfDataFileIds getting updated,
+    // 3 batches should be executed given batchSize = 100 and <=numberOfBaseFileIds getting updated,
     // so each fileId ideally gets updates
-    verify(table, atMost(numberOfDataFileIds)).put((List<Put>) any());
+    verify(table, atMost(numberOfBaseFileIds)).put((List<Put>) any());
   }
 
   @Test

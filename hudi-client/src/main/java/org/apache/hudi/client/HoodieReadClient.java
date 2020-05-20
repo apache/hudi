@@ -117,11 +117,11 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
     }
   }
 
-  private Option<String> convertToDataFilePath(Option<Pair<String, String>> partitionPathFileIDPair) {
+  private Option<String> convertToBaseFilePath(Option<Pair<String, String>> partitionPathFileIDPair) {
     if (partitionPathFileIDPair.isPresent()) {
-      HoodieBaseFile dataFile = hoodieTable.getBaseFileOnlyView()
+      HoodieBaseFile baseFile = hoodieTable.getBaseFileOnlyView()
           .getLatestBaseFile(partitionPathFileIDPair.get().getLeft(), partitionPathFileIDPair.get().getRight()).get();
-      return Option.of(dataFile.getPath());
+      return Option.of(baseFile.getPath());
     } else {
       return Option.empty();
     }
@@ -137,7 +137,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
     JavaPairRDD<HoodieKey, Option<Pair<String, String>>> lookupResultRDD =
         index.fetchRecordLocation(hoodieKeys, jsc, hoodieTable);
     JavaPairRDD<HoodieKey, Option<String>> keyToFileRDD =
-        lookupResultRDD.mapToPair(r -> new Tuple2<>(r._1, convertToDataFilePath(r._2)));
+        lookupResultRDD.mapToPair(r -> new Tuple2<>(r._1, convertToBaseFilePath(r._2)));
     List<String> paths = keyToFileRDD.filter(keyFileTuple -> keyFileTuple._2().isPresent())
         .map(keyFileTuple -> keyFileTuple._2().get()).collect();
 

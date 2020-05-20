@@ -82,11 +82,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
       Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-      HoodieBaseFile dataFileToBeMerged, SparkTaskContextSupplier sparkTaskContextSupplier) {
+      HoodieBaseFile baseFileToBeMerged, SparkTaskContextSupplier sparkTaskContextSupplier) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, sparkTaskContextSupplier);
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchema = true;
-    init(fileId, this.partitionPath, dataFileToBeMerged);
+    init(fileId, this.partitionPath, baseFileToBeMerged);
   }
 
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
@@ -101,12 +101,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
-  private void init(String fileId, String partitionPath, HoodieBaseFile dataFileToBeMerged) {
+  private void init(String fileId, String partitionPath, HoodieBaseFile baseFileToBeMerged) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
     try {
-      String latestValidFilePath = dataFileToBeMerged.getFileName();
+      String latestValidFilePath = baseFileToBeMerged.getFileName();
       writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
@@ -115,7 +115,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
       oldFilePath = new Path(config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
       String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
-          + FSUtils.makeDataFileName(instantTime, writeToken, fileId)).toString();
+          + FSUtils.makeBaseFileName(instantTime, writeToken, fileId)).toString();
       newFilePath = new Path(config.getBasePath(), relativePath);
 
       LOG.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFilePath.toString(),

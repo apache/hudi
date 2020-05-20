@@ -38,27 +38,27 @@ public class BaseFileHandler extends Handler {
     super(conf, viewManager);
   }
 
-  public List<BaseFileDTO> getLatestDataFiles(String basePath, String partitionPath) {
+  public List<BaseFileDTO> getLatestBaseFiles(String basePath, String partitionPath) {
     return viewManager.getFileSystemView(basePath).getLatestBaseFiles(partitionPath)
         .map(BaseFileDTO::fromHoodieBaseFile).collect(Collectors.toList());
   }
 
-  public List<BaseFileDTO> getLatestDataFile(String basePath, String partitionPath, String fileId) {
+  public List<BaseFileDTO> getLatestBaseFile(String basePath, String partitionPath, String fileId) {
     return viewManager.getFileSystemView(basePath).getLatestBaseFile(partitionPath, fileId)
         .map(BaseFileDTO::fromHoodieBaseFile).map(Arrays::asList).orElse(new ArrayList<>());
   }
 
-  public List<BaseFileDTO> getLatestDataFiles(String basePath) {
+  public List<BaseFileDTO> getLatestBaseFiles(String basePath) {
     return viewManager.getFileSystemView(basePath).getLatestBaseFiles().map(BaseFileDTO::fromHoodieBaseFile)
         .collect(Collectors.toList());
   }
 
-  public List<BaseFileDTO> getLatestDataFilesBeforeOrOn(String basePath, String partitionPath, String maxInstantTime) {
+  public List<BaseFileDTO> getLatestBaseFilesBeforeOrOn(String basePath, String partitionPath, String maxInstantTime) {
     return viewManager.getFileSystemView(basePath).getLatestBaseFilesBeforeOrOn(partitionPath, maxInstantTime)
         .map(BaseFileDTO::fromHoodieBaseFile).collect(Collectors.toList());
   }
 
-  public List<BaseFileDTO> getLatestDataFileOn(String basePath, String partitionPath, String instantTime,
+  public List<BaseFileDTO> getLatestBaseFileOn(String basePath, String partitionPath, String instantTime,
                                                String fileId) {
     List<BaseFileDTO> result = new ArrayList<>();
     viewManager.getFileSystemView(basePath).getBaseFileOn(partitionPath, instantTime, fileId)
@@ -66,12 +66,12 @@ public class BaseFileHandler extends Handler {
     return result;
   }
 
-  public List<BaseFileDTO> getLatestDataFilesInRange(String basePath, List<String> instants) {
+  public List<BaseFileDTO> getLatestBaseFilesInRange(String basePath, List<String> instants) {
     return viewManager.getFileSystemView(basePath).getLatestBaseFilesInRange(instants)
         .map(BaseFileDTO::fromHoodieBaseFile).collect(Collectors.toList());
   }
 
-  public List<BaseFileDTO> getAllDataFiles(String basePath, String partitionPath) {
+  public List<BaseFileDTO> getAllBaseFiles(String basePath, String partitionPath) {
     return viewManager.getFileSystemView(basePath).getAllBaseFiles(partitionPath).map(BaseFileDTO::fromHoodieBaseFile)
         .collect(Collectors.toList());
   }

@@ -43,9 +43,9 @@ public class LogFileSizeBasedCompactionStrategy extends BoundedIOCompactionStrat
   private static final String TOTAL_LOG_FILE_SIZE = "TOTAL_LOG_FILE_SIZE";
 
   @Override
-  public Map<String, Double> captureMetrics(HoodieWriteConfig config, Option<HoodieBaseFile> dataFile,
+  public Map<String, Double> captureMetrics(HoodieWriteConfig config, Option<HoodieBaseFile> baseFile,
       String partitionPath, List<HoodieLogFile> logFiles) {
-    Map<String, Double> metrics = super.captureMetrics(config, dataFile, partitionPath, logFiles);
+    Map<String, Double> metrics = super.captureMetrics(config, baseFile, partitionPath, logFiles);
 
     // Total size of all the log files
     Long totalLogFileSize = logFiles.stream().map(HoodieLogFile::getFileSize).filter(size -> size >= 0)

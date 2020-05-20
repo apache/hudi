@@ -86,11 +86,11 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
     // Write date files and log file
     String testWriteToken = "1-0-1";
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
-        .makeDataFileName(commitTime1, testWriteToken, fileId1)));
+        .makeBaseFileName(commitTime1, testWriteToken, fileId1)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime1, 0, testWriteToken)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
-        .makeDataFileName(commitTime2, testWriteToken, fileId1)));
+        .makeBaseFileName(commitTime2, testWriteToken, fileId1)));
     Files.createFile(Paths.get(fullPartitionPath, FSUtils
         .makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime2, 0, testWriteToken)));
 
@@ -212,8 +212,8 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
       row[idx++] = fs.getBaseInstantTime();
       row[idx++] = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getPath() : "";
 
-      long dataFileSize = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFileSize() : -1;
-      row[idx++] = dataFileSize;
+      long baseFileSize = fs.getBaseFile().isPresent() ? fs.getBaseFile().get().getFileSize() : -1;
+      row[idx++] = baseFileSize;
 
       row[idx++] = fs.getLogFiles().count();
       row[idx++] = fs.getLogFiles().mapToLong(HoodieLogFile::getFileSize).sum();
@@ -228,9 +228,9 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
       row[idx++] = logFilesUnscheduledTotalSize;
 
       double logSelectedForCompactionToBaseRatio =
-          dataFileSize > 0 ? logFilesScheduledForCompactionTotalSize / (dataFileSize * 1.0) : -1;
+          baseFileSize > 0 ? logFilesScheduledForCompactionTotalSize / (baseFileSize * 1.0) : -1;
       row[idx++] = logSelectedForCompactionToBaseRatio;
-      double logUnscheduledToBaseRatio = dataFileSize > 0 ? logFilesUnscheduledTotalSize / (dataFileSize * 1.0) : -1;
+      double logUnscheduledToBaseRatio = baseFileSize > 0 ? logFilesUnscheduledTotalSize / (baseFileSize * 1.0) : -1;
       row[idx++] = logUnscheduledToBaseRatio;
 
       row[idx++] = fs.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))

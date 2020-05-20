@@ -195,8 +195,8 @@ public class HoodieSnapshotExporter {
     jsc.parallelize(partitions, partitions.size()).flatMap(partition -> {
       // Only take latest version files <= latestCommit.
       List<Tuple2<String, String>> filePaths = new ArrayList<>();
-      Stream<HoodieBaseFile> dataFiles = fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp);
-      dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
+      Stream<HoodieBaseFile> baseFiles = fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp);
+      baseFiles.forEach(hoodieBaseFile -> filePaths.add(new Tuple2<>(partition, hoodieBaseFile.getPath())));
 
       // also need to copy over partition metadata
       Path partitionMetaFile =

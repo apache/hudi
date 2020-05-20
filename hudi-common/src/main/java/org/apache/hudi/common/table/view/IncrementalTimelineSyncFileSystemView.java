@@ -318,14 +318,14 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
      * Note that while finding the new data/log files added/removed, the path stored in metadata will be missing the
      * base-path,scheme and authority. Ensure the matching process takes care of this discrepancy.
      */
-    Map<String, HoodieBaseFile> viewDataFiles = fileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
+    Map<String, HoodieBaseFile> viewBaseFiles = fileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
         .map(FileSlice::getBaseFile).filter(Option::isPresent).map(Option::get)
-        .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))
+        .map(bf -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(bf.getPath())).toString(), bf))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     // Note: Delta Log Files and Data FIles can be empty when adding/removing pending compactions
-    Map<String, HoodieBaseFile> deltaDataFiles = deltaFileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
+    Map<String, HoodieBaseFile> deltaBaseFiles = deltaFileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
         .map(FileSlice::getBaseFile).filter(Option::isPresent).map(Option::get)
-        .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))
+        .map(bf -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(bf.getPath())).toString(), bf))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     Map<String, HoodieLogFile> viewLogFiles =
@@ -339,11 +339,11 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
 
     switch (mode) {
       case ADD:
-        viewDataFiles.putAll(deltaDataFiles);
+        viewBaseFiles.putAll(deltaBaseFiles);
         viewLogFiles.putAll(deltaLogFiles);
         break;
       case REMOVE:
-        deltaDataFiles.keySet().stream().forEach(p -> viewDataFiles.remove(p));
+        deltaBaseFiles.keySet().stream().forEach(p -> viewBaseFiles.remove(p));
         deltaLogFiles.keySet().stream().forEach(p -> viewLogFiles.remove(p));
         break;
       default:
@@ -352,7 +352,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
 
     HoodieTimeline timeline = deltaFileGroups.stream().map(df -> df.getTimeline()).findAny().get();
     List<HoodieFileGroup> fgs =
-        buildFileGroups(viewDataFiles.values().stream(), viewLogFiles.values().stream(), timeline, true);
+        buildFileGroups(viewBaseFiles.values().stream(), viewLogFiles.values().stream(), timeline, true);
     storePartitionView(partition, fgs);
   }
 

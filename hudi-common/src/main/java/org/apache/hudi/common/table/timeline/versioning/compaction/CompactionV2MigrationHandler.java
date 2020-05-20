@@ -55,7 +55,7 @@ public class CompactionV2MigrationHandler extends AbstractMigratorBase<HoodieCom
       v2CompactionOperationList = input.getOperations().stream().map(inp ->
         HoodieCompactionOperation.newBuilder().setBaseInstantTime(inp.getBaseInstantTime())
             .setFileId(inp.getFileId()).setPartitionPath(inp.getPartitionPath()).setMetrics(inp.getMetrics())
-            .setDataFilePath(inp.getDataFilePath() == null ? null : new Path(inp.getDataFilePath()).getName()).setDeltaFilePaths(
+            .setBaseFilePath(inp.getBaseFilePath() == null ? null : new Path(inp.getBaseFilePath()).getName()).setDeltaFilePaths(
                 inp.getDeltaFilePaths().stream().map(s -> new Path(s).getName()).collect(Collectors.toList()))
         .build()).collect(Collectors.toList());
     }

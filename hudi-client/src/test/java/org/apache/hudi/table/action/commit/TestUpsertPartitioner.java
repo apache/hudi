@@ -75,7 +75,7 @@ public class TestUpsertPartitioner extends HoodieClientTestHarness {
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
 
     HoodieClientTestUtils.fakeCommitFile(basePath, "001");
-    HoodieClientTestUtils.fakeDataFile(basePath, testPartitionPath, "001", "file1", fileSize);
+    HoodieClientTestUtils.fakeBaseFile(basePath, testPartitionPath, "001", "file1", fileSize);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, jsc);
 

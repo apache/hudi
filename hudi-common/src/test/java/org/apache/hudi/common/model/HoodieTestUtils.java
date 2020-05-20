@@ -217,10 +217,10 @@ public class HoodieTestUtils {
         });
   }
 
-  public static String createNewDataFile(String basePath, String partitionPath, String instantTime)
+  public static String createNewBaseFile(String basePath, String partitionPath, String instantTime)
       throws IOException {
     String fileID = UUID.randomUUID().toString();
-    return createDataFile(basePath, partitionPath, instantTime, fileID);
+    return createBaseFile(basePath, partitionPath, instantTime, fileID);
   }
 
   public static String createNewMarkerFile(String basePath, String partitionPath, String instantTime)
@@ -229,11 +229,11 @@ public class HoodieTestUtils {
     return createMarkerFile(basePath, partitionPath, instantTime, fileID);
   }
 
-  public static String createDataFile(String basePath, String partitionPath, String instantTime, String fileID)
+  public static String createBaseFile(String basePath, String partitionPath, String instantTime, String fileID)
       throws IOException {
     String folderPath = basePath + "/" + partitionPath + "/";
     new File(folderPath).mkdirs();
-    new File(folderPath + FSUtils.makeDataFileName(instantTime, DEFAULT_WRITE_TOKEN, fileID)).createNewFile();
+    new File(folderPath + FSUtils.makeBaseFileName(instantTime, DEFAULT_WRITE_TOKEN, fileID)).createNewFile();
     return fileID;
   }
 
@@ -258,7 +258,7 @@ public class HoodieTestUtils {
         version.orElse(DEFAULT_LOG_VERSION), HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
     if (!createFile) {
       throw new IOException(
-          StringUtils.format("cannot create data file for commit %s and fileId %s", instantTime, fileID));
+          StringUtils.format("cannot create base file for commit %s and fileId %s", instantTime, fileID));
     }
     return fileID;
   }
@@ -282,8 +282,8 @@ public class HoodieTestUtils {
         TimelineMetadataUtils.serializeCompactionPlan(plan));
   }
 
-  public static String getDataFilePath(String basePath, String partitionPath, String instantTime, String fileID) {
-    return basePath + "/" + partitionPath + "/" + FSUtils.makeDataFileName(instantTime, DEFAULT_WRITE_TOKEN, fileID);
+  public static String getBaseFilePath(String basePath, String partitionPath, String instantTime, String fileID) {
+    return basePath + "/" + partitionPath + "/" + FSUtils.makeBaseFileName(instantTime, DEFAULT_WRITE_TOKEN, fileID);
   }
 
   public static String getLogFilePath(String basePath, String partitionPath, String instantTime, String fileID,
@@ -306,9 +306,9 @@ public class HoodieTestUtils {
         + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION;
   }
 
-  public static boolean doesDataFileExist(String basePath, String partitionPath, String instantTime,
+  public static boolean doesBaseFileExist(String basePath, String partitionPath, String instantTime,
       String fileID) {
-    return new File(getDataFilePath(basePath, partitionPath, instantTime, fileID)).exists();
+    return new File(getBaseFilePath(basePath, partitionPath, instantTime, fileID)).exists();
   }
 
   public static boolean doesLogFileExist(String basePath, String partitionPath, String instantTime, String fileID,
@@ -406,7 +406,7 @@ public class HoodieTestUtils {
     });
   }
 
-  public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath) throws IOException {
+  public static FileStatus[] listAllBaseFilesInPath(FileSystem fs, String basePath) throws IOException {
     RemoteIterator<LocatedFileStatus> itr = fs.listFiles(new Path(basePath), true);
     List<FileStatus> returns = new ArrayList<>();
     while (itr.hasNext()) {

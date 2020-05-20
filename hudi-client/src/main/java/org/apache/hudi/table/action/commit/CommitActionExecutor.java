@@ -77,9 +77,9 @@ public abstract class CommitActionExecutor<T extends HoodieRecordPayload<T>>
   }
 
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldBaseFile) throws IOException {
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, keyToNewRecords, oldDataFile);
+    HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, keyToNewRecords, oldBaseFile);
     return handleUpdateInternal(upsertHandle, fileId);
   }
 
@@ -119,9 +119,9 @@ public abstract class CommitActionExecutor<T extends HoodieRecordPayload<T>>
   }
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile baseFileToBeMerged) {
     return new HoodieMergeHandle<>(config, instantTime, (HoodieTable<T>)table, keyToNewRecords,
-        partitionPath, fileId, dataFileToBeMerged, sparkTaskContextSupplier);
+        partitionPath, fileId, baseFileToBeMerged, sparkTaskContextSupplier);
   }
 
   @Override

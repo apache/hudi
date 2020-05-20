@@ -107,7 +107,7 @@ public class FSUtils {
     return String.format("%d-%d-%d", taskPartitionId, stageId, taskAttemptId);
   }
 
-  public static String makeDataFileName(String instantTime, String writeToken, String fileId) {
+  public static String makeBaseFileName(String instantTime, String writeToken, String fileId) {
     return String.format("%s_%s_%s.parquet", fileId, writeToken, instantTime);
   }
 
@@ -115,7 +115,7 @@ public class FSUtils {
     return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, HoodieTableMetaClient.MARKER_EXTN);
   }
 
-  public static String translateMarkerToDataPath(String basePath, String markerPath, String instantTs) {
+  public static String translateMarkerToBaseFilePath(String basePath, String markerPath, String instantTs) {
     ValidationUtils.checkArgument(markerPath.endsWith(HoodieTableMetaClient.MARKER_EXTN));
     String markerRootPath = Path.getPathWithoutSchemeAndAuthority(
         new Path(String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTs))).toString();
@@ -194,17 +194,17 @@ public class FSUtils {
     return partitions;
   }
 
-  public static List<String> getAllDataFilesForMarkers(FileSystem fs, String basePath, String instantTs,
+  public static List<String> getAllBaseFilesForMarkers(FileSystem fs, String basePath, String instantTs,
       String markerDir) throws IOException {
-    List<String> dataFiles = new LinkedList<>();
+    List<String> baseFiles = new LinkedList<>();
     processFiles(fs, markerDir, (status) -> {
       String pathStr = status.getPath().toString();
       if (pathStr.endsWith(HoodieTableMetaClient.MARKER_EXTN)) {
-        dataFiles.add(FSUtils.translateMarkerToDataPath(basePath, pathStr, instantTs));
+        baseFiles.add(FSUtils.translateMarkerToBaseFilePath(basePath, pathStr, instantTs));
       }
       return true;
     }, false);
-    return dataFiles;
+    return baseFiles;
   }
 
   /**

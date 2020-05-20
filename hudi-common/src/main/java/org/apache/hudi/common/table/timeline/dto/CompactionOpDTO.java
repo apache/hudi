@@ -42,14 +42,14 @@ public class CompactionOpDTO {
   @JsonProperty("compactionInstant")
   String compactionInstantTime;
 
-  @JsonProperty("dataFileInstant")
-  private String dataFileCommitTime;
+  @JsonProperty("baseFileInstant")
+  private String baseFileCommitTime;
 
   @JsonProperty("deltaFiles")
   private List<String> deltaFilePaths;
 
   @JsonProperty("baseFile")
-  private String dataFilePath;
+  private String baseFilePath;
 
   @JsonProperty("id")
   private String fileId;
@@ -65,8 +65,8 @@ public class CompactionOpDTO {
     dto.fileId = op.getFileId();
     dto.compactionInstantTime = compactionInstantTime;
     dto.baseInstantTime = op.getBaseInstantTime();
-    dto.dataFileCommitTime = op.getDataFileCommitTime().orElse(null);
-    dto.dataFilePath = op.getDataFileName().orElse(null);
+    dto.baseFileCommitTime = op.getBaseFileCommitTime().orElse(null);
+    dto.baseFilePath = op.getBaseFileName().orElse(null);
     dto.deltaFilePaths = new ArrayList<>(op.getDeltaFileNames());
     dto.partitionPath = op.getPartitionPath();
     dto.metrics = op.getMetrics() == null ? new HashMap<>() : new HashMap<>(op.getMetrics());
@@ -76,7 +76,7 @@ public class CompactionOpDTO {
   public static Pair<String, CompactionOperation> toCompactionOperation(CompactionOpDTO dto) {
     return Pair.of(dto.compactionInstantTime,
         new CompactionOperation(dto.fileId, dto.partitionPath, dto.baseInstantTime,
-            Option.ofNullable(dto.dataFileCommitTime), dto.deltaFilePaths, Option.ofNullable(dto.dataFilePath),
+            Option.ofNullable(dto.baseFileCommitTime), dto.deltaFilePaths, Option.ofNullable(dto.baseFilePath),
             dto.metrics));
   }
 }

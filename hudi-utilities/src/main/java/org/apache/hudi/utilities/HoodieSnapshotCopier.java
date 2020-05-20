@@ -101,8 +101,8 @@ public class HoodieSnapshotCopier implements Serializable {
         // Only take latest version files <= latestCommit.
         FileSystem fs1 = FSUtils.getFs(baseDir, serConf.newCopy());
         List<Tuple2<String, String>> filePaths = new ArrayList<>();
-        Stream<HoodieBaseFile> dataFiles = fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp);
-        dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
+        Stream<HoodieBaseFile> baseFiles = fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp);
+        baseFiles.forEach(hoodieBaseFile -> filePaths.add(new Tuple2<>(partition, hoodieBaseFile.getPath())));
 
         // also need to copy over partition metadata
         Path partitionMetaFile =

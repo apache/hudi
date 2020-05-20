@@ -35,7 +35,7 @@ import java.util.List;
  *
  * View : Key : Store both slice and Data file stored. Slice : Key =
  * "type=slice,part=<PartitionPath>,id=<FileId>,instant=<Timestamp>" Value = Serialized FileSlice Data File : Key =
- * "type=df,part=<PartitionPath>,id=<FileId>,instant=<Timestamp>" Value = Serialized DataFile
+ * "type=bf,part=<PartitionPath>,id=<FileId>,instant=<Timestamp>" Value = Serialized BaseFile
  *
  * Partitions : Key = "part=<PartitionPath>" Value = Boolean
  *
@@ -78,12 +78,12 @@ public class RocksDBSchemaHelper {
     return String.format("type=slice,part=%s,id=%s,instant=", partitionPath, fileId);
   }
 
-  public String getPrefixForDataFileViewByPartitionFile(String partitionPath, String fileId) {
-    return String.format("type=df,part=%s,id=%s,instant=", partitionPath, fileId);
+  public String getPrefixForBaseFileViewByPartitionFile(String partitionPath, String fileId) {
+    return String.format("type=bf,part=%s,id=%s,instant=", partitionPath, fileId);
   }
 
-  public String getKeyForDataFileView(HoodieFileGroup fileGroup, FileSlice slice) {
-    return String.format("type=df,part=%s,id=%s,instant=%s", fileGroup.getPartitionPath(),
+  public String getKeyForBaseFileView(HoodieFileGroup fileGroup, FileSlice slice) {
+    return String.format("type=bf,part=%s,id=%s,instant=%s", fileGroup.getPartitionPath(),
         fileGroup.getFileGroupId().getFileId(), slice.getBaseInstantTime());
   }
 
@@ -95,8 +95,8 @@ public class RocksDBSchemaHelper {
     return "type=slice,part=";
   }
 
-  public String getPrefixForDataFileViewByPartition(String partitionPath) {
-    return String.format("type=df,part=%s,id=", partitionPath);
+  public String getPrefixForBaseFileViewByPartition(String partitionPath) {
+    return String.format("type=bf,part=%s,id=", partitionPath);
   }
 
   private String getPartitionFileIdBasedLookup(HoodieFileGroupId fgId) {

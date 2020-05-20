@@ -87,14 +87,14 @@ public class RollbackHelper implements Serializable {
     return jsc.parallelize(rollbackRequests, sparkPartitions).mapToPair(rollbackRequest -> {
       final Map<FileStatus, Boolean> filesToDeletedStatus = new HashMap<>();
       switch (rollbackRequest.getRollbackAction()) {
-        case DELETE_DATA_FILES_ONLY: {
+        case DELETE_BASE_FILES_ONLY: {
           deleteCleanedFiles(metaClient, config, filesToDeletedStatus, instantToRollback.getTimestamp(),
               rollbackRequest.getPartitionPath());
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
                   HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
                           .withDeletedFileResults(filesToDeletedStatus).build());
         }
-        case DELETE_DATA_AND_LOG_FILES: {
+        case DELETE_BASE_AND_LOG_FILES: {
           deleteCleanedFiles(metaClient, config, filesToDeletedStatus, rollbackRequest.getPartitionPath(), filter);
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
                   HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())

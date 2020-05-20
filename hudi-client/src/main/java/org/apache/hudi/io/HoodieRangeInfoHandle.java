@@ -38,7 +38,7 @@ public class HoodieRangeInfoHandle<T extends HoodieRecordPayload> extends Hoodie
   }
 
   public String[] getMinMaxKeys() {
-    HoodieBaseFile dataFile = getLatestDataFile();
-    return ParquetUtils.readMinMaxRecordKeys(hoodieTable.getHadoopConf(), new Path(dataFile.getPath()));
+    HoodieBaseFile baseFile = getLatestBaseFile();
+    return ParquetUtils.readMinMaxRecordKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
   }
 }

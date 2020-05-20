@@ -399,7 +399,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Reconciles WriteStats and marker files to detect and safely delete duplicate data files created because of Spark
+   * Reconciles WriteStats and marker files to detect and safely delete duplicate base files created because of Spark
    * retries.
    *
    * @param jsc Spark Context
@@ -411,7 +411,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   protected void cleanFailedWrites(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats,
       boolean consistencyCheckEnabled) throws HoodieIOException {
     try {
-      // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
+      // Reconcile marker and base files with WriteStats so that partially written base-files due to failed
       // (but succeeded on retry) tasks are removed.
       String basePath = getMetaClient().getBasePath();
       FileSystem fs = getMetaClient().getFs();
@@ -422,17 +422,17 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
         return;
       }
 
-      List<String> invalidDataPaths = FSUtils.getAllDataFilesForMarkers(fs, basePath, instantTs, markerDir.toString());
-      List<String> validDataPaths = stats.stream().map(w -> String.format("%s/%s", basePath, w.getPath()))
+      List<String> invalidBasePaths = FSUtils.getAllBaseFilesForMarkers(fs, basePath, instantTs, markerDir.toString());
+      List<String> validBasePaths = stats.stream().map(w -> String.format("%s/%s", basePath, w.getPath()))
           .filter(p -> p.endsWith(".parquet")).collect(Collectors.toList());
       // Contains list of partially created files. These needs to be cleaned up.
-      invalidDataPaths.removeAll(validDataPaths);
-      if (!invalidDataPaths.isEmpty()) {
+      invalidBasePaths.removeAll(validBasePaths);
+      if (!invalidBasePaths.isEmpty()) {
         LOG.info(
-            "Removing duplicate data files created due to spark retries before committing. Paths=" + invalidDataPaths);
+            "Removing duplicate base files created due to spark retries before committing. Paths=" + invalidBasePaths);
       }
 
-      Map<String, List<Pair<String, String>>> groupByPartition = invalidDataPaths.stream()
+      Map<String, List<Pair<String, String>>> groupByPartition = invalidBasePaths.stream()
           .map(dp -> Pair.of(new Path(dp).getParent().toString(), dp)).collect(Collectors.groupingBy(Pair::getKey));
 
       if (!groupByPartition.isEmpty()) {
@@ -447,7 +447,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
         jsc.parallelize(new ArrayList<>(groupByPartition.values()), config.getFinalizeWriteParallelism())
             .map(partitionWithFileList -> {
               final FileSystem fileSystem = metaClient.getFs();
-              LOG.info("Deleting invalid data files=" + partitionWithFileList);
+              LOG.info("Deleting invalid base files=" + partitionWithFileList);
               if (partitionWithFileList.isEmpty()) {
                 return true;
               }

@@ -41,7 +41,7 @@
                      "default": null
                   },
                   {
-                     "name":"dataFilePath",
+                     "name":"baseFilePath",
                      "type":["null","string"],
                      "default": null
                   },

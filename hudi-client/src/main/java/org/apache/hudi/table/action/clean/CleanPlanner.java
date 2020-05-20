@@ -87,7 +87,7 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
   /**
    * Get the list of data file names savepointed.
    */
-  public Stream<String> getSavepointedDataFiles(String savepointTime) {
+  public Stream<String> getSavepointedBaseFiles(String savepointTime) {
     if (!hoodieTable.getSavepoints().contains(savepointTime)) {
       throw new HoodieSavepointException(
           "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
@@ -194,9 +194,9 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
         + " file versions. ");
     List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     List<String> deletePaths = new ArrayList<>();
-    // Collect all the datafiles savepointed by all the savepoints
+    // Collect all the basefiles savepointed by all the savepoints
     List<String> savepointedFiles = hoodieTable.getSavepoints().stream()
-        .flatMap(this::getSavepointedDataFiles)
+        .flatMap(this::getSavepointedBaseFiles)
         .collect(Collectors.toList());
 
     for (HoodieFileGroup fileGroup : fileGroups) {
@@ -212,8 +212,8 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
       while (fileSliceIterator.hasNext() && keepVersions > 0) {
         // Skip this most recent version
         FileSlice nextSlice = fileSliceIterator.next();
-        Option<HoodieBaseFile> dataFile = nextSlice.getBaseFile();
-        if (dataFile.isPresent() && savepointedFiles.contains(dataFile.get().getFileName())) {
+        Option<HoodieBaseFile> baseFile = nextSlice.getBaseFile();
+        if (baseFile.isPresent() && savepointedFiles.contains(baseFile.get().getFileName())) {
           // do not clean up a savepoint data file
           continue;
         }
@@ -223,8 +223,8 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
       while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
         if (nextSlice.getBaseFile().isPresent()) {
-          HoodieBaseFile dataFile = nextSlice.getBaseFile().get();
-          deletePaths.add(dataFile.getFileName());
+          HoodieBaseFile baseFile = nextSlice.getBaseFile().get();
+          deletePaths.add(baseFile.getFileName());
         }
         if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
           // If merge on read, then clean the log files for the commits as well
@@ -254,9 +254,9 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
     LOG.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");
     List<String> deletePaths = new ArrayList<>();
 
-    // Collect all the datafiles savepointed by all the savepoints
+    // Collect all the basefiles savepointed by all the savepoints
     List<String> savepointedFiles = hoodieTable.getSavepoints().stream()
-        .flatMap(this::getSavepointedDataFiles)
+        .flatMap(this::getSavepointedBaseFiles)
         .collect(Collectors.toList());
 
     // determine if we have enough commits, to start cleaning.
@@ -297,7 +297,7 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
           if (!isFileSliceNeededForPendingCompaction(aSlice) && HoodieTimeline
               .compareTimestamps(earliestCommitToRetain.getTimestamp(), HoodieTimeline.GREATER_THAN, fileCommitTime)) {
             // this is a commit, that should be cleaned.
-            aFile.ifPresent(hoodieDataFile -> deletePaths.add(hoodieDataFile.getFileName()));
+            aFile.ifPresent(hoodieBaseFile -> deletePaths.add(hoodieBaseFile.getFileName()));
             if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
               // If merge on read, then clean the log files for the commits as well
               deletePaths.addAll(aSlice.getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList()));

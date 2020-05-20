@@ -53,12 +53,12 @@ public abstract class CompactionStrategy implements Serializable {
    * Callback hook when a HoodieCompactionOperation is created. Individual strategies can capture the metrics they need
    * to decide on the priority.
    *
-   * @param dataFile - Base file to compact
+   * @param baseFile - Base file to compact
    * @param partitionPath - Partition path
    * @param logFiles - List of log files to compact with the base file
    * @return Map[String, Object] - metrics captured
    */
-  public Map<String, Double> captureMetrics(HoodieWriteConfig writeConfig, Option<HoodieBaseFile> dataFile,
+  public Map<String, Double> captureMetrics(HoodieWriteConfig writeConfig, Option<HoodieBaseFile> baseFile,
       String partitionPath, List<HoodieLogFile> logFiles) {
     Map<String, Double> metrics = new HashMap<>();
     long defaultMaxParquetFileSize = writeConfig.getParquetMaxFileSize();
@@ -67,10 +67,10 @@ public abstract class CompactionStrategy implements Serializable {
         .reduce(Long::sum).orElse(0L);
     // Total read will be the base file + all the log files
     Long totalIORead =
-        FSUtils.getSizeInMB((dataFile.isPresent() ? dataFile.get().getFileSize() : 0L) + totalLogFileSize);
+        FSUtils.getSizeInMB((baseFile.isPresent() ? baseFile.get().getFileSize() : 0L) + totalLogFileSize);
     // Total write will be similar to the size of the base file
     Long totalIOWrite =
-        FSUtils.getSizeInMB(dataFile.isPresent() ? dataFile.get().getFileSize() : defaultMaxParquetFileSize);
+        FSUtils.getSizeInMB(baseFile.isPresent() ? baseFile.get().getFileSize() : defaultMaxParquetFileSize);
     // Total IO will the the IO for read + write
     long totalIO = totalIORead + totalIOWrite;
     // Save these metrics and we will use during the filter

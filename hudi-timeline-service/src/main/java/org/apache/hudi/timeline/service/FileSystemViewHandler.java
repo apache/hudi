@@ -49,7 +49,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Main REST Handler class that handles local view staleness and delegates calls to slice/data-file/timeline handlers.
+ * Main REST Handler class that handles local view staleness and delegates calls to slice/base-file/timeline handlers.
  */
 public class FileSystemViewHandler {
 
@@ -60,18 +60,18 @@ public class FileSystemViewHandler {
   private final Javalin app;
   private final TimelineHandler instantHandler;
   private final FileSliceHandler sliceHandler;
-  private final BaseFileHandler dataFileHandler;
+  private final BaseFileHandler baseFileHandler;
 
   public FileSystemViewHandler(Javalin app, Configuration conf, FileSystemViewManager viewManager) throws IOException {
     this.viewManager = viewManager;
     this.app = app;
     this.instantHandler = new TimelineHandler(conf, viewManager);
     this.sliceHandler = new FileSliceHandler(conf, viewManager);
-    this.dataFileHandler = new BaseFileHandler(conf, viewManager);
+    this.baseFileHandler = new BaseFileHandler(conf, viewManager);
   }
 
   public void register() {
-    registerDataFilesAPI();
+    registerBaseFilesAPI();
     registerFileSlicesAPI();
     registerTimelineAPI();
   }
@@ -156,40 +156,40 @@ public class FileSystemViewHandler {
   }
 
   /**
-   * Register Data-Files API calls.
+   * Register Base-Files API calls.
    */
-  private void registerDataFilesAPI() {
-    app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_DATA_FILES_URL, new ViewHandler(ctx -> {
-      List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFiles(
+  private void registerBaseFilesAPI() {
+    app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_BASE_FILES_URL, new ViewHandler(ctx -> {
+      List<BaseFileDTO> dtos = baseFileHandler.getLatestBaseFiles(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));
 
-    app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_DATA_FILE_URL, new ViewHandler(ctx -> {
-      List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFile(
+    app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_BASE_FILE_URL, new ViewHandler(ctx -> {
+      List<BaseFileDTO> dtos = baseFileHandler.getLatestBaseFile(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow(),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.FILEID_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));
 
-    app.get(RemoteHoodieTableFileSystemView.LATEST_ALL_DATA_FILES, new ViewHandler(ctx -> {
-      List<BaseFileDTO> dtos = dataFileHandler
-          .getLatestDataFiles(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
+    app.get(RemoteHoodieTableFileSystemView.LATEST_ALL_BASE_FILES, new ViewHandler(ctx -> {
+      List<BaseFileDTO> dtos = baseFileHandler
+          .getLatestBaseFiles(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));
 
-    app.get(RemoteHoodieTableFileSystemView.LATEST_DATA_FILES_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
-      List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFilesBeforeOrOn(
+    app.get(RemoteHoodieTableFileSystemView.LATEST_BASE_FILES_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
+      List<BaseFileDTO> dtos = baseFileHandler.getLatestBaseFilesBeforeOrOn(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow(),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));
 
-    app.get(RemoteHoodieTableFileSystemView.LATEST_DATA_FILE_ON_INSTANT_URL, new ViewHandler(ctx -> {
-      List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFileOn(
+    app.get(RemoteHoodieTableFileSystemView.LATEST_BASE_FILE_ON_INSTANT_URL, new ViewHandler(ctx -> {
+      List<BaseFileDTO> dtos = baseFileHandler.getLatestBaseFileOn(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow(),
           ctx.queryParam(RemoteHoodieTableFileSystemView.INSTANT_PARAM),
@@ -197,15 +197,15 @@ public class FileSystemViewHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
-    app.get(RemoteHoodieTableFileSystemView.ALL_DATA_FILES, new ViewHandler(ctx -> {
-      List<BaseFileDTO> dtos = dataFileHandler.getAllDataFiles(
+    app.get(RemoteHoodieTableFileSystemView.ALL_BASE_FILES, new ViewHandler(ctx -> {
+      List<BaseFileDTO> dtos = baseFileHandler.getAllBaseFiles(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));
 
-    app.get(RemoteHoodieTableFileSystemView.LATEST_DATA_FILES_RANGE_INSTANT_URL, new ViewHandler(ctx -> {
-      List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFilesInRange(
+    app.get(RemoteHoodieTableFileSystemView.LATEST_BASE_FILES_RANGE_INSTANT_URL, new ViewHandler(ctx -> {
+      List<BaseFileDTO> dtos = baseFileHandler.getLatestBaseFilesInRange(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(), Arrays
               .asList(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.INSTANTS_PARAM).getOrThrow().split(",")));
       writeValueAsString(ctx, dtos);

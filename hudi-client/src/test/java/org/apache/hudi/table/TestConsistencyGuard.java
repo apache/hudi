@@ -49,9 +49,9 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
 
   @Test
   public void testCheckPassingAppearAndDisAppear() throws Exception {
-    HoodieClientTestUtils.fakeDataFile(basePath, "partition/path", "000", "f1");
-    HoodieClientTestUtils.fakeDataFile(basePath, "partition/path", "000", "f2");
-    HoodieClientTestUtils.fakeDataFile(basePath, "partition/path", "000", "f3");
+    HoodieClientTestUtils.fakeBaseFile(basePath, "partition/path", "000", "f1");
+    HoodieClientTestUtils.fakeBaseFile(basePath, "partition/path", "000", "f2");
+    HoodieClientTestUtils.fakeBaseFile(basePath, "partition/path", "000", "f3");
 
     ConsistencyGuard passing = new FailSafeConsistencyGuard(fs, getConsistencyGuardConfig(1, 1000, 1000));
     passing.waitTillFileAppears(new Path(basePath + "/partition/path/f1_1-0-1_000.parquet"));
@@ -69,7 +69,7 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
 
   @Test
   public void testCheckFailingAppear() throws Exception {
-    HoodieClientTestUtils.fakeDataFile(basePath, "partition/path", "000", "f1");
+    HoodieClientTestUtils.fakeBaseFile(basePath, "partition/path", "000", "f1");
     ConsistencyGuard passing = new FailSafeConsistencyGuard(fs, getConsistencyGuardConfig());
     assertThrows(TimeoutException.class, () -> {
       passing.waitTillAllFilesAppear(basePath + "/partition/path", Arrays
@@ -79,7 +79,7 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
 
   @Test
   public void testCheckFailingAppears() throws Exception {
-    HoodieClientTestUtils.fakeDataFile(basePath, "partition/path", "000", "f1");
+    HoodieClientTestUtils.fakeBaseFile(basePath, "partition/path", "000", "f1");
     ConsistencyGuard passing = new FailSafeConsistencyGuard(fs, getConsistencyGuardConfig());
     assertThrows(TimeoutException.class, () -> {
       passing.waitTillFileAppears(new Path(basePath + "/partition/path/f1_1-0-2_000.parquet"));
@@ -88,7 +88,7 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
 
   @Test
   public void testCheckFailingDisappear() throws Exception {
-    HoodieClientTestUtils.fakeDataFile(basePath, "partition/path", "000", "f1");
+    HoodieClientTestUtils.fakeBaseFile(basePath, "partition/path", "000", "f1");
     ConsistencyGuard passing = new FailSafeConsistencyGuard(fs, getConsistencyGuardConfig());
     assertThrows(TimeoutException.class, () -> {
       passing.waitTillAllFilesDisappear(basePath + "/partition/path", Arrays
@@ -98,8 +98,8 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
 
   @Test
   public void testCheckFailingDisappears() throws Exception {
-    HoodieClientTestUtils.fakeDataFile(basePath, "partition/path", "000", "f1");
-    HoodieClientTestUtils.fakeDataFile(basePath, "partition/path", "000", "f1");
+    HoodieClientTestUtils.fakeBaseFile(basePath, "partition/path", "000", "f1");
+    HoodieClientTestUtils.fakeBaseFile(basePath, "partition/path", "000", "f1");
     ConsistencyGuard passing = new FailSafeConsistencyGuard(fs, getConsistencyGuardConfig());
     assertThrows(TimeoutException.class, () -> {
       passing.waitTillFileDisappears(new Path(basePath + "/partition/path/f1_1-0-1_000.parquet"));

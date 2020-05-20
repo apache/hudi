@@ -426,17 +426,17 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
       // 1. No parquet files yet (i.e. no compaction done yet)
       // 2. Log file but no base file with the same FileID
       /*
-      FileStatus[] allFiles = HoodieTestUtils.listAllDataAndLogFilesInPath(metaClient.getFs(), basePath);
+      FileStatus[] allFiles = HoodieTestUtils.listAllBaseAndLogFilesInPath(metaClient.getFs(), basePath);
       HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitsTimeline();
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, timeline, allFiles);
-      List<String> dataFiles = fsView.getLatestBaseFiles().map(hf -> hf.getPath()).collect(Collectors.toList());
+      List<String> baseFiles = fsView.getLatestBaseFiles().map(bf -> bf.getPath()).collect(Collectors.toList());
 
       Configuration conf = new Configuration();
       String absTableName = "hoodie." + metaClient.getTableConfig().getTableName();
       conf.set(absTableName + ".consume.mode", "INCREMENTAL");
       conf.set(absTableName + ".consume.start.timestamp", instantTime);
       conf.set(absTableName + ".consume.max.commits", "-1");
-      List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(dataFiles, basePath, conf);
+      List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(baseFiles, basePath, conf);
       assertEquals(recordsRead.size(), numExpectedRecords);
       */
     }

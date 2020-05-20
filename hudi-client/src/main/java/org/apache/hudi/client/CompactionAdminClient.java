@@ -287,17 +287,17 @@ public class CompactionAdminClient extends AbstractHoodieClient {
                 .filter(fs -> fs.getFileId().equals(operation.getFileId())).findFirst());
         if (fileSliceOptional.isPresent()) {
           FileSlice fs = fileSliceOptional.get();
-          Option<HoodieBaseFile> df = fs.getBaseFile();
-          if (operation.getDataFileName().isPresent()) {
+          Option<HoodieBaseFile> bf = fs.getBaseFile();
+          if (operation.getBaseFileName().isPresent()) {
             String expPath = metaClient.getFs()
                 .getFileStatus(
                     new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()),
-                        new Path(operation.getDataFileName().get())))
+                        new Path(operation.getBaseFileName().get())))
                 .getPath().toString();
-            ValidationUtils.checkArgument(df.isPresent(),
+            ValidationUtils.checkArgument(bf.isPresent(),
                 "Data File must be present. File Slice was : " + fs + ", operation :" + operation);
-            ValidationUtils.checkArgument(df.get().getPath().equals(expPath),
-                "Base Path in operation is specified as " + expPath + " but got path " + df.get().getPath());
+            ValidationUtils.checkArgument(bf.get().getPath().equals(expPath),
+                "Base Path in operation is specified as " + expPath + " but got path " + bf.get().getPath());
           }
           Set<HoodieLogFile> logFilesInFileSlice = fs.getLogFiles().collect(Collectors.toSet());
           Set<HoodieLogFile> logFilesInCompactionOp = operation.getDeltaFileNames().stream().map(dp -> {
@@ -442,7 +442,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
         .orElse(HoodieLogFile.LOGFILE_BASE_VERSION - 1);
     String logExtn = fileSliceForCompaction.getLogFiles().findFirst().map(lf -> "." + lf.getFileExtension())
         .orElse(HoodieLogFile.DELTA_EXTENSION);
-    String parentPath = fileSliceForCompaction.getBaseFile().map(df -> new Path(df.getPath()).getParent().toString())
+    String parentPath = fileSliceForCompaction.getBaseFile().map(bf -> new Path(bf.getPath()).getParent().toString())
         .orElse(fileSliceForCompaction.getLogFiles().findFirst().map(lf -> lf.getPath().getParent().toString()).get());
     for (HoodieLogFile toRepair : logFilesToRepair) {
       int version = maxUsedVersion + 1;

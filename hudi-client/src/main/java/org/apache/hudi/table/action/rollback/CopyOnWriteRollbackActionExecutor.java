@@ -88,7 +88,7 @@ public class CopyOnWriteRollbackActionExecutor extends BaseRollbackActionExecuto
       throws IOException {
     return FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
         config.shouldAssumeDatePartitioning()).stream()
-        .map(partitionPath -> RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback))
+        .map(partitionPath -> RollbackRequest.createRollbackRequestWithDeleteBaseAndLogFilesAction(partitionPath, instantToRollback))
         .collect(Collectors.toList());
   }
 }

@@ -225,10 +225,10 @@ public class TestUtil {
       String partitionPath = wEntry.getKey();
       for (HoodieWriteStat wStat : wEntry.getValue()) {
         Path path = new Path(wStat.getPath());
-        HoodieBaseFile dataFile = new HoodieBaseFile(fileSystem.getFileStatus(path));
+        HoodieBaseFile baseFile = new HoodieBaseFile(fileSystem.getFileStatus(path));
         HoodieLogFile logFile = generateLogData(path, isLogSchemaSimple);
         HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
-        writeStat.setFileId(dataFile.getFileId());
+        writeStat.setFileId(baseFile.getFileId());
         writeStat.setPath(logFile.getPath().toString());
         commitMetadata.addWriteStat(partitionPath, writeStat);
       }
@@ -259,7 +259,7 @@ public class TestUtil {
     for (int i = 0; i < 5; i++) {
       // Create 5 files
       String fileId = UUID.randomUUID().toString();
-      Path filePath = new Path(partPath.toString() + "/" + FSUtils.makeDataFileName(instantTime, "1-0-1", fileId));
+      Path filePath = new Path(partPath.toString() + "/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId));
       generateParquetData(filePath, isParquetSchemaSimple);
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setFileId(fileId);
@@ -296,15 +296,15 @@ public class TestUtil {
   private static HoodieLogFile generateLogData(Path parquetFilePath, boolean isLogSchemaSimple)
       throws IOException, InterruptedException, URISyntaxException {
     Schema schema = (isLogSchemaSimple ? SchemaTestUtil.getSimpleSchema() : SchemaTestUtil.getEvolvedSchema());
-    HoodieBaseFile dataFile = new HoodieBaseFile(fileSystem.getFileStatus(parquetFilePath));
+    HoodieBaseFile baseFile = new HoodieBaseFile(fileSystem.getFileStatus(parquetFilePath));
     // Write a log file for this parquet file
     Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(dataFile.getFileId())
-        .overBaseCommit(dataFile.getCommitTime()).withFs(fileSystem).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(baseFile.getFileId())
+        .overBaseCommit(baseFile.getCommitTime()).withFs(fileSystem).build();
     List<IndexedRecord> records = (isLogSchemaSimple ? SchemaTestUtil.generateTestRecords(0, 100)
         : SchemaTestUtil.generateEvolvedTestRecords(100, 100));
     Map<HeaderMetadataType, String> header = new HashMap<>(2);
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, baseFile.getCommitTime());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
     logWriter.appendBlock(dataBlock);

@@ -30,8 +30,8 @@ public class RollbackRequest {
    * Rollback Action Types.
    */
   public enum RollbackAction {
-    DELETE_DATA_FILES_ONLY,
-    DELETE_DATA_AND_LOG_FILES,
+    DELETE_BASE_FILES_ONLY,
+    DELETE_BASE_AND_LOG_FILES,
     APPEND_ROLLBACK_BLOCK
   }
 
@@ -69,16 +69,16 @@ public class RollbackRequest {
     this.rollbackAction = rollbackAction;
   }
 
-  public static RollbackRequest createRollbackRequestWithDeleteDataFilesOnlyAction(String partitionPath,
+  public static RollbackRequest createRollbackRequestWithDeleteBaseFilesOnlyAction(String partitionPath,
       HoodieInstant rollbackInstant) {
     return new RollbackRequest(partitionPath, rollbackInstant, Option.empty(), Option.empty(),
-        RollbackAction.DELETE_DATA_FILES_ONLY);
+        RollbackAction.DELETE_BASE_FILES_ONLY);
   }
 
-  public static RollbackRequest createRollbackRequestWithDeleteDataAndLogFilesAction(String partitionPath,
+  public static RollbackRequest createRollbackRequestWithDeleteBaseAndLogFilesAction(String partitionPath,
       HoodieInstant rollbackInstant) {
     return new RollbackRequest(partitionPath, rollbackInstant, Option.empty(), Option.empty(),
-        RollbackAction.DELETE_DATA_AND_LOG_FILES);
+        RollbackAction.DELETE_BASE_AND_LOG_FILES);
   }
 
   public static RollbackRequest createRollbackRequestWithAppendRollbackBlockAction(String partitionPath, String fileId,
