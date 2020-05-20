@@ -55,7 +55,7 @@ public class HoodieCompactor {
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
     public String tableName = null;
-    @Parameter(names = {"--instant-time", "-sp"}, description = "Compaction Instant time", required = true)
+    @Parameter(names = {"--instant-time", "-it"}, description = "Compaction Instant time", required = true)
     public String compactionInstantTime = null;
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = true)
     public int parallelism = 1;
