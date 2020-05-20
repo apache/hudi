@@ -270,7 +270,7 @@ public class SparkMain {
     cfg.propsFilePath = propsFilePath;
     cfg.configs = configs;
     jsc.getConf().set("spark.executor.memory", sparkMemory);
-    return new HoodieCompactor(cfg).compact(jsc, retry);
+    return new HoodieCompactor(jsc, cfg).compact(retry);
   }
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
