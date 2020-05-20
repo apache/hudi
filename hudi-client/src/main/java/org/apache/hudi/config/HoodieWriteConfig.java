@@ -653,24 +653,9 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withRollbackParallelism(int rollbackParallelism) {
-      props.setProperty(ROLLBACK_PARALLELISM, String.valueOf(rollbackParallelism));
-      return this;
-    }
-
-    public Builder withWriteBufferLimitBytes(int writeBufferLimit) {
-      props.setProperty(WRITE_BUFFER_LIMIT_BYTES, String.valueOf(writeBufferLimit));
-      return this;
-    }
-
     public Builder combineInput(boolean onInsert, boolean onUpsert) {
       props.setProperty(COMBINE_BEFORE_INSERT_PROP, String.valueOf(onInsert));
       props.setProperty(COMBINE_BEFORE_UPSERT_PROP, String.valueOf(onUpsert));
-      return this;
-    }
-
-    public Builder withWriteStatusStorageLevel(String level) {
-      props.setProperty(WRITE_STATUS_STORAGE_LEVEL, level);
       return this;
     }
 
@@ -689,12 +674,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public Builder withCompactionConfig(HoodieCompactionConfig compactionConfig) {
       props.putAll(compactionConfig.getProps());
       isCompactionConfigSet = true;
-      return this;
-    }
-
-    public Builder withMetricsConfig(HoodieMetricsConfig metricsConfig) {
-      props.putAll(metricsConfig.getProps());
-      isMetricsConfigSet = true;
       return this;
     }
 

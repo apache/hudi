@@ -29,10 +29,12 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
@@ -129,7 +131,7 @@ public class HoodieDeltaStreamer implements Serializable {
     } else {
       LOG.info("Delta Streamer running only single round");
       try {
-        deltaSyncService.getDeltaSync().syncOnce();
+        deltaSyncService.getDeltaSync().syncOnce(cfg.metricsTableName);
       } catch (Exception ex) {
         LOG.error("Got error running delta sync once. Shutting down", ex);
         throw ex;
@@ -173,6 +175,9 @@ public class HoodieDeltaStreamer implements Serializable {
     // TODO: How to obtain hive configs to register?
     @Parameter(names = {"--target-table"}, description = "name of the target table", required = true)
     public String targetTableName;
+
+    @Parameter(names = {"--metrics-table"}, description = "name of table used to create hoodie metrics")
+    public String metricsTableName;
 
     @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
     public String tableType;
@@ -310,6 +315,10 @@ public class HoodieDeltaStreamer implements Serializable {
       System.exit(1);
     }
 
+    if (StringUtils.isNullOrEmpty(cfg.metricsTableName)) {
+      cfg.metricsTableName = cfg.targetTableName;
+    }
+
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     JavaSparkContext jssc =
         UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
@@ -416,10 +425,12 @@ public class HoodieDeltaStreamer implements Serializable {
           jssc.setLocalProperty("spark.scheduler.pool", SchedulerConfGenerator.DELTASYNC_POOL_NAME);
         }
         try {
+          int iteration = 1;
           while (!isShutdownRequested()) {
             try {
               long start = System.currentTimeMillis();
-              Option<String> scheduledCompactionInstant = deltaSync.syncOnce();
+              HoodieMetrics.setTableName(cfg.metricsTableName + "_" + iteration);
+              Option<String> scheduledCompactionInstant = deltaSync.syncOnce(cfg.metricsTableName + "_" + iteration);
               if (scheduledCompactionInstant.isPresent()) {
                 LOG.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstant + ")");
                 asyncCompactService.enqueuePendingCompaction(new HoodieInstant(State.REQUESTED,
@@ -437,6 +448,7 @@ public class HoodieDeltaStreamer implements Serializable {
               error = true;
               throw new HoodieException(e.getMessage(), e);
             }
+            iteration++;
           }
         } finally {
           shutdownCompactor(error);

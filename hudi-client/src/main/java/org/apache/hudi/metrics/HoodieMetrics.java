@@ -41,7 +41,7 @@ public class HoodieMetrics {
   public String compactionTimerName = null;
   public String indexTimerName = null;
   private HoodieWriteConfig config;
-  private String tableName;
+  private static String tableName;
   private Timer rollbackTimer = null;
   private Timer cleanTimer = null;
   private Timer commitTimer = null;
@@ -63,6 +63,10 @@ public class HoodieMetrics {
       this.compactionTimerName = getMetricsName("timer", HoodieTimeline.COMPACTION_ACTION);
       this.indexTimerName = getMetricsName("timer", "index");
     }
+  }
+
+  public static void setTableName(String name) {
+    tableName = name;
   }
 
   private Timer createTimer(String name) {

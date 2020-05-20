@@ -33,9 +33,9 @@ public class HoodieDeltaStreamerMetrics {
   private Timer overallTimer = null;
   public Timer hiveSyncTimer = null;
 
-  public HoodieDeltaStreamerMetrics(HoodieWriteConfig config) {
+  public HoodieDeltaStreamerMetrics(HoodieWriteConfig config, String tableName) {
     this.config = config;
-    this.tableName = config.getTableName();
+    this.tableName = tableName;
     if (config.isMetricsOn()) {
       Metrics.init(config);
       this.overallTimerName = getMetricsName("timer", "deltastreamer");

@@ -210,9 +210,9 @@ public class DeltaSync implements Serializable {
   /**
    * Run one round of delta sync and return new compaction instant if one got scheduled.
    */
-  public Option<String> syncOnce() throws Exception {
+  public Option<String> syncOnce(String tableName) throws Exception {
     Option<String> scheduledCompaction = Option.empty();
-    HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(schemaProvider));
+    HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(schemaProvider), tableName);
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
 
     // Refresh Timeline
@@ -351,7 +351,7 @@ public class DeltaSync implements Serializable {
    * @return Option Compaction instant if one is scheduled
    */
   private Option<String> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
-                                     HoodieDeltaStreamerMetrics metrics, Timer.Context overallTimerContext) throws Exception {
+                                     HoodieDeltaStreamerMetrics metrics, Timer.Context overallTimerContext) {
 
     Option<String> scheduledCompactionInstant = Option.empty();
     // filter dupes if needed
