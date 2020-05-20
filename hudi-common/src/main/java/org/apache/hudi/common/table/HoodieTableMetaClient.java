@@ -136,7 +136,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * For serailizing and de-serializing.
+   * For serializing and de-serializing.
    *
    * @deprecated
    */
@@ -149,7 +149,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * This method is only used when this object is deserialized in a spark executor.
+   * This method is only used when this object is de-serialized in a spark executor.
    *
    * @deprecated
    */

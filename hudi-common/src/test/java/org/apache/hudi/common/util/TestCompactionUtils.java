@@ -20,7 +20,6 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -29,13 +28,13 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CompactionTestUtils.TestHoodieBaseFile;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.fs.Path;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -52,6 +51,9 @@ import static org.apache.hudi.common.util.CompactionTestUtils.scheduleCompaction
 import static org.apache.hudi.common.util.CompactionTestUtils.setupAndValidateCompactionOperations;
 import static org.apache.hudi.common.util.CompactionUtils.COMPACTION_METADATA_VERSION_1;
 import static org.apache.hudi.common.util.CompactionUtils.LATEST_COMPACTION_METADATA_VERSION;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The utility class for testing compaction.
@@ -68,7 +70,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
   };
   private Function<Pair<String, FileSlice>, Map<String, Double>> metricsCaptureFn = (partitionFileSlice) -> METRICS;
 
-  @Before
+  @BeforeEach
   public void init() throws IOException {
     initMetaClient();
   }
@@ -81,13 +83,13 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
     HoodieCompactionPlan plan = inputAndPlan.getRight();
     System.out.println("Plan=" + plan.getOperations());
-    Assert.assertEquals(LATEST_COMPACTION_METADATA_VERSION, plan.getVersion());
+    assertEquals(LATEST_COMPACTION_METADATA_VERSION, plan.getVersion());
     HoodieCompactionPlan oldPlan = migrator.migrateToVersion(plan, plan.getVersion(), COMPACTION_METADATA_VERSION_1);
     // Check with older version of compaction plan
-    Assert.assertEquals(COMPACTION_METADATA_VERSION_1, oldPlan.getVersion());
+    assertEquals(COMPACTION_METADATA_VERSION_1, oldPlan.getVersion());
     testFileSlicesCompactionPlanEquality(inputAndPlan.getKey(), oldPlan);
     HoodieCompactionPlan newPlan = migrator.upgradeToLatest(plan, plan.getVersion());
-    Assert.assertEquals(LATEST_COMPACTION_METADATA_VERSION, newPlan.getVersion());
+    assertEquals(LATEST_COMPACTION_METADATA_VERSION, newPlan.getVersion());
     testFileSlicesCompactionPlanEquality(inputAndPlan.getKey(), newPlan);
     HoodieCompactionPlan latestPlan = migrator.migrateToVersion(oldPlan, oldPlan.getVersion(), newPlan.getVersion());
     testFileSlicesCompactionPlanEquality(inputAndPlan.getKey(), latestPlan);
@@ -169,14 +171,14 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     // Convert to CompactionOperation
     // Convert back to HoodieCompactionOperation and check for equality
     List<HoodieCompactionOperation> regeneratedOps = originalOps.stream()
-            .map(CompactionUtils::buildCompactionOperation)
-            .map(CompactionUtils::buildHoodieCompactionOperation)
-            .collect(Collectors.toList());
-    Assert.assertTrue("Transformation did get tested", originalOps.size() > 0);
-    Assert.assertEquals("All fields set correctly in transformations", originalOps, regeneratedOps);
+        .map(CompactionUtils::buildCompactionOperation)
+        .map(CompactionUtils::buildHoodieCompactionOperation)
+        .collect(Collectors.toList());
+    assertTrue(originalOps.size() > 0, "Transformation did get tested");
+    assertEquals(originalOps, regeneratedOps, "All fields set correctly in transformations");
   }
 
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testGetAllPendingCompactionOperationsWithDupFileId() throws IOException {
     // Case where there is duplicate fileIds in compaction requests
     HoodieCompactionPlan plan1 = createCompactionPlan(metaClient, "000", "001", 10, true, true);
@@ -187,8 +189,9 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     plan1.getOperations().get(0).setBaseFilePath("bla");
     scheduleCompaction(metaClient, "005", plan1);
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
-    Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> res =
-        CompactionUtils.getAllPendingCompactionOperations(metaClient);
+    assertThrows(IllegalStateException.class, () -> {
+      CompactionUtils.getAllPendingCompactionOperations(metaClient);
+    });
   }
 
   @Test
@@ -230,7 +233,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
    * @param plan Compaction Plan
    */
   private void testFileSlicesCompactionPlanEquality(List<Pair<String, FileSlice>> input, HoodieCompactionPlan plan) {
-    Assert.assertEquals("All file-slices present", input.size(), plan.getOperations().size());
+    assertEquals(input.size(), plan.getOperations().size(), "All file-slices present");
     IntStream.range(0, input.size()).boxed().forEach(idx -> testFileSliceCompactionOpEquality(input.get(idx).getValue(),
         plan.getOperations().get(idx), input.get(idx).getKey(), plan.getVersion()));
   }
@@ -244,19 +247,19 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
    */
   private void testFileSliceCompactionOpEquality(FileSlice slice, HoodieCompactionOperation op, String expPartitionPath,
       int version) {
-    Assert.assertEquals("Partition path is correct", expPartitionPath, op.getPartitionPath());
-    Assert.assertEquals("Same base-instant", slice.getBaseInstantTime(), op.getBaseInstantTime());
-    Assert.assertEquals("Same file-id", slice.getFileId(), op.getFileId());
+    assertEquals(expPartitionPath, op.getPartitionPath(), "Partition path is correct");
+    assertEquals(slice.getBaseInstantTime(), op.getBaseInstantTime(), "Same base-instant");
+    assertEquals(slice.getFileId(), op.getFileId(), "Same file-id");
     if (slice.getBaseFile().isPresent()) {
       HoodieBaseFile bf = slice.getBaseFile().get();
-      Assert.assertEquals("Same base-file", version == COMPACTION_METADATA_VERSION_1 ? bf.getPath() : bf.getFileName(),
-          op.getBaseFilePath());
+      assertEquals(version == COMPACTION_METADATA_VERSION_1 ? bf.getPath() : bf.getFileName(),
+          op.getBaseFilePath(), "Same base-file");
     }
     List<String> paths = slice.getLogFiles().map(l -> l.getPath().toString()).collect(Collectors.toList());
-    IntStream.range(0, paths.size()).boxed().forEach(idx -> Assert.assertEquals("Log File Index " + idx,
+    IntStream.range(0, paths.size()).boxed().forEach(idx -> assertEquals(
         version == COMPACTION_METADATA_VERSION_1 ? paths.get(idx) : new Path(paths.get(idx)).getName(),
-        op.getDeltaFilePaths().get(idx)));
-    Assert.assertEquals("Metrics set", METRICS, op.getMetrics());
+        op.getDeltaFilePaths().get(idx), "Log File Index " + idx));
+    assertEquals(METRICS, op.getMetrics(), "Metrics set");
   }
 
   @Override

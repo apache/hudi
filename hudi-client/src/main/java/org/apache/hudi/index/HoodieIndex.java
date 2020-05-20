@@ -32,6 +32,8 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.hbase.HBaseIndex;
+import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
+import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaPairRDD;
@@ -51,8 +53,8 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
     this.config = config;
   }
 
-  public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(HoodieWriteConfig config,
-      JavaSparkContext jsc) throws HoodieIndexException {
+  public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(
+      HoodieWriteConfig config) throws HoodieIndexException {
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
       Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
@@ -70,6 +72,10 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
         return new HoodieBloomIndex<>(config);
       case GLOBAL_BLOOM:
         return new HoodieGlobalBloomIndex<>(config);
+      case SIMPLE:
+        return new HoodieSimpleIndex<>(config);
+      case GLOBAL_SIMPLE:
+        return new HoodieGlobalSimpleIndex<>(config);
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }
@@ -87,7 +93,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    * present).
    */
   public abstract JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, JavaSparkContext jsc,
-      HoodieTable<T> hoodieTable) throws HoodieIndexException;
+                                                       HoodieTable<T> hoodieTable) throws HoodieIndexException;
 
   /**
    * Extracts the location of written records, and updates the index.
@@ -95,7 +101,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    * TODO(vc): We may need to propagate the record as well in a WriteStatus class
    */
   public abstract JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc,
-      HoodieTable<T> hoodieTable) throws HoodieIndexException;
+                                                      HoodieTable<T> hoodieTable) throws HoodieIndexException;
 
   /**
    * Rollback the efffects of the commit made at instantTime.
@@ -128,9 +134,10 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
   /**
    * Each index type should implement it's own logic to release any resources acquired during the process.
    */
-  public void close() {}
+  public void close() {
+  }
 
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM
+    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE
   }
 }

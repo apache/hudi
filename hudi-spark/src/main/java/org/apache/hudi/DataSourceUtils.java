@@ -241,6 +241,13 @@ public class DataSourceUtils {
     return new HoodieRecord<>(hKey, payload);
   }
 
+  /**
+   * Drop records already present in the dataset.
+   *
+   * @param jssc                  JavaSparkContext
+   * @param incomingHoodieRecords HoodieRecords to deduplicate
+   * @param writeConfig           HoodieWriteConfig
+   */
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
                                                      HoodieWriteConfig writeConfig) {
@@ -284,6 +291,8 @@ public class DataSourceUtils {
     hiveSyncConfig.partitionValueExtractorClass =
         props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
             SlashEncodedDayPartitionValueExtractor.class.getName());
+    hiveSyncConfig.useJdbc = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_USE_JDBC_OPT_KEY(),
+            DataSourceWriteOptions.DEFAULT_HIVE_USE_JDBC_OPT_VAL()));
     return hiveSyncConfig;
   }
 }

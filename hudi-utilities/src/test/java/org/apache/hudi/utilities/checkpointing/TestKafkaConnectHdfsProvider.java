@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.checkpointing;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarnessJunit5;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.conf.Configuration;
@@ -32,7 +32,7 @@ import java.io.File;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarnessJunit5 {
+public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
 
   private String topicPath = null;
   private Configuration hadoopConf = null;

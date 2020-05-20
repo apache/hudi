@@ -75,13 +75,13 @@ public class TestTableSchemaEvolution extends TestHoodieClientBase {
       + TRIP_SCHEMA_SUFFIX;
 
   @BeforeEach
-  public void setUp() throws Exception {
+  public void setUp() throws IOException {
     initResources();
   }
 
   @AfterEach
-  public void tearDown() {
-    cleanupSparkContexts();
+  public void tearDown() throws IOException {
+    cleanupResources();
   }
 
   @Test

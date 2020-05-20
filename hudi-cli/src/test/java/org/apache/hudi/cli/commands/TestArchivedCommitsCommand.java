@@ -92,7 +92,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
 
     // archive
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, metaClient);
-    archiveLog.archiveIfRequired(jsc);
+    archiveLog.archiveIfRequired(hadoopConf);
   }
 
   @AfterEach

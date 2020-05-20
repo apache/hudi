@@ -19,8 +19,8 @@
 package org.apache.hudi.common.minicluster;
 
 import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -31,7 +31,6 @@ import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.util.Objects;
 
@@ -61,14 +60,6 @@ public class HdfsTestService {
     return hadoopConf;
   }
 
-  private static int nextFreePort() {
-    try (ServerSocket socket = new ServerSocket(0)) {
-      return socket.getLocalPort();
-    } catch (IOException e) {
-      throw new HoodieIOException("Unable to find next free port", e);
-    }
-  }
-
   public MiniDFSCluster start(boolean format) throws IOException {
     Objects.requireNonNull(workDir, "The work dir must be set before starting cluster.");
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
@@ -81,10 +72,10 @@ public class HdfsTestService {
       FileIOUtils.deleteDirectory(file);
     }
 
-    int namenodeRpcPort = nextFreePort();
-    int datanodePort = nextFreePort();
-    int datanodeIpcPort = nextFreePort();
-    int datanodeHttpPort = nextFreePort();
+    int namenodeRpcPort = NetworkTestUtils.nextFreePort();
+    int datanodePort = NetworkTestUtils.nextFreePort();
+    int datanodeIpcPort = NetworkTestUtils.nextFreePort();
+    int datanodeHttpPort = NetworkTestUtils.nextFreePort();
 
     // Configure and start the HDFS cluster
     // boolean format = shouldFormatDFSCluster(localDFSLocation, clean);

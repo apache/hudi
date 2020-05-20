@@ -80,8 +80,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * A utility class for testing.
@@ -352,7 +352,7 @@ public class HoodieTestUtils {
     Iterator<?> iter1 = expected.iterator();
     Iterator<?> iter2 = actual.iterator();
     while (iter1.hasNext() && iter2.hasNext()) {
-      assertEquals(message, iter1.next(), iter2.next());
+      assertEquals(iter1.next(), iter2.next(), message);
     }
     assert !iter1.hasNext() && !iter2.hasNext();
   }

@@ -56,6 +56,10 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <groupId>org.apache.rat</groupId>
+        <artifactId>apache-rat-plugin</artifactId>
+      </plugin>
     </plugins>
 
     <resources>
@@ -82,13 +86,8 @@
       <!-- Needs to be at the top to ensure we get the correct dependency versions for jetty-server -->
       <groupId>org.eclipse.jetty.aggregate</groupId>
       <artifactId>jetty-all</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.eclipse.jetty</groupId>
-      <artifactId>jetty-server</artifactId>
       <version>${jetty.version}</version>
+      <classifier>uber</classifier>
       <scope>test</scope>
     </dependency>
 

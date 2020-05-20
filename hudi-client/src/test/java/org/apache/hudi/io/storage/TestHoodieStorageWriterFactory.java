@@ -44,7 +44,7 @@ public class TestHoodieStorageWriterFactory extends TestHoodieClientBase {
     final String instantTime = "100";
     final Path parquetPath = new Path(basePath + "/partition/path/f1_1-0-1_000.parquet");
     final HoodieWriteConfig cfg = getConfig();
-    HoodieTable table = HoodieTable.create(metaClient, cfg, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, cfg, hadoopConf);
     SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
     HoodieStorageWriter<IndexedRecord> parquetWriter = HoodieStorageWriterFactory.getStorageWriter(instantTime,
         parquetPath, table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);

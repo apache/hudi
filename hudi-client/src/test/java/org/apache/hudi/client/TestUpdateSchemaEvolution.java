@@ -67,7 +67,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
   public void testSchemaEvolutionOnUpdate() throws Exception {
     // Create a bunch of records with a old version of schema
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
-    final HoodieTable<?> table = HoodieTable.create(config, jsc);
+    final HoodieTable<?> table = HoodieTable.create(config, hadoopConf);
 
     final List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -102,7 +102,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     final WriteStatus insertResult = statuses.get(0);
     String fileId = insertResult.getFileId();
 
-    final HoodieTable table2 = HoodieTable.create(config2, jsc);
+    final HoodieTable table2 = HoodieTable.create(config2, hadoopConf);
     assertEquals(1, jsc.parallelize(Arrays.asList(1)).map(x -> {
       // New content with values for the newly added field
       String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","

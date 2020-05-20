@@ -89,13 +89,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   protected final SparkTaskContextSupplier sparkTaskContextSupplier = new SparkTaskContextSupplier();
 
-  protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc, HoodieTableMetaClient metaClient) {
+  protected HoodieTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
     this.config = config;
-    this.hadoopConfiguration = new SerializableConfiguration(jsc.hadoopConfiguration());
-    this.viewManager = FileSystemViewManager.createViewManager(new SerializableConfiguration(jsc.hadoopConfiguration()),
+    this.hadoopConfiguration = new SerializableConfiguration(hadoopConf);
+    this.viewManager = FileSystemViewManager.createViewManager(new SerializableConfiguration(hadoopConf),
         config.getViewStorageConfig());
     this.metaClient = metaClient;
-    this.index = HoodieIndex.createIndex(config, jsc);
+    this.index = HoodieIndex.createIndex(config);
   }
 
   private synchronized FileSystemViewManager getViewManager() {
@@ -105,25 +105,25 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     return viewManager;
   }
 
-  public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieWriteConfig config, JavaSparkContext jsc) {
+  public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieWriteConfig config, Configuration hadoopConf) {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(
-        jsc.hadoopConfiguration(),
+        hadoopConf,
         config.getBasePath(),
         true,
         config.getConsistencyGuardConfig(),
         Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))
     );
-    return HoodieTable.create(metaClient, config, jsc);
+    return HoodieTable.create(metaClient, config, hadoopConf);
   }
 
   public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieTableMetaClient metaClient,
                                                                       HoodieWriteConfig config,
-                                                                      JavaSparkContext jsc) {
+                                                                      Configuration hadoopConf) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        return new HoodieCopyOnWriteTable<>(config, jsc, metaClient);
+        return new HoodieCopyOnWriteTable<>(config, hadoopConf, metaClient);
       case MERGE_ON_READ:
-        return new HoodieMergeOnReadTable<>(config, jsc, metaClient);
+        return new HoodieMergeOnReadTable<>(config, hadoopConf, metaClient);
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
@@ -231,21 +231,21 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Get the base file only view of the file system for this table.
    */
   public BaseFileOnlyView getBaseFileOnlyView() {
-    return getViewManager().getFileSystemView(metaClient.getBasePath());
+    return getViewManager().getFileSystemView(metaClient);
   }
 
   /**
    * Get the full view of the file system for this table.
    */
   public SliceView getSliceView() {
-    return getViewManager().getFileSystemView(metaClient.getBasePath());
+    return getViewManager().getFileSystemView(metaClient);
   }
 
   /**
    * Get complete view of the file system for this table with ability to force sync.
    */
   public SyncableFileSystemView getHoodieView() {
-    return getViewManager().getFileSystemView(metaClient.getBasePath());
+    return getViewManager().getFileSystemView(metaClient);
   }
 
   /**
@@ -535,7 +535,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     try {
       TableSchemaResolver schemaUtil = new TableSchemaResolver(getMetaClient());
       writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
-      tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaUtil.getTableSchemaFromCommitMetadata());
+      tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaUtil.getTableAvroSchemaWithoutMetadataFields());
       isValid = TableSchemaResolver.isSchemaCompatible(tableSchema, writerSchema);
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);

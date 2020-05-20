@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -53,7 +54,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -112,9 +112,9 @@ public class HoodieTimelineArchiveLog {
   /**
    * Check if commits need to be archived. If yes, archive commits.
    */
-  public boolean archiveIfRequired(final JavaSparkContext jsc) throws IOException {
+  public boolean archiveIfRequired(final Configuration hadoopConf) throws IOException {
     try {
-      List<HoodieInstant> instantsToArchive = getInstantsToArchive(jsc).collect(Collectors.toList());
+      List<HoodieInstant> instantsToArchive = getInstantsToArchive(hadoopConf).collect(Collectors.toList());
 
       boolean success = true;
       if (!instantsToArchive.isEmpty()) {
@@ -133,13 +133,13 @@ public class HoodieTimelineArchiveLog {
     }
   }
 
-  private Stream<HoodieInstant> getInstantsToArchive(JavaSparkContext jsc) {
+  private Stream<HoodieInstant> getInstantsToArchive(Configuration hadoopConf) {
 
     // TODO : rename to max/minInstantsToKeep
     int maxCommitsToKeep = config.getMaxCommitsToKeep();
     int minCommitsToKeep = config.getMinCommitsToKeep();
 
-    HoodieTable table = HoodieTable.create(metaClient, config, jsc);
+    HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
 
     // GroupBy each action and limit each action timeline to maxCommitsToKeep
     // TODO: Handle ROLLBACK_ACTION in future

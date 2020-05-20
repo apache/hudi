@@ -18,11 +18,12 @@
 
 package org.apache.hudi.common.util;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 public class TestBase64CodecUtil {
 
@@ -39,7 +40,7 @@ public class TestBase64CodecUtil {
       String encodeData = Base64CodecUtil.encode(originalData);
       byte[] decodeData = Base64CodecUtil.decode(encodeData);
 
-      Assert.assertArrayEquals(originalData, decodeData);
+      assertArrayEquals(originalData, decodeData);
     }
 
   }

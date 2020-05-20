@@ -18,25 +18,25 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.io.FilenameFilter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,13 +46,17 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests file system utils.
  */
 public class TestFSUtils extends HoodieCommonTestHarness {
+
   private final long minRollbackToKeep = 10;
   private final long minCleanToKeep = 10;
 
@@ -61,7 +65,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Rule
   public final EnvironmentVariables environmentVariables = new EnvironmentVariables();
 
-  @Before
+  @BeforeEach
   public void setUp() throws IOException {
     initMetaClient();
   }
@@ -120,10 +124,10 @@ public class TestFSUtils extends HoodieCommonTestHarness {
       return true;
     }, true);
 
-    assertTrue("Hoodie MetaFolder MUST be skipped but got :" + collected,
-        collected.stream().noneMatch(s -> s.contains(HoodieTableMetaClient.METAFOLDER_NAME)));
+    assertTrue(collected.stream().noneMatch(s -> s.contains(HoodieTableMetaClient.METAFOLDER_NAME)),
+        "Hoodie MetaFolder MUST be skipped but got :" + collected);
     // Check if only files are listed
-    Assert.assertEquals(2, collected.size());
+    assertEquals(2, collected.size());
 
     // Test including meta-folder
     final List<String> collected2 = new ArrayList<>();
@@ -132,10 +136,10 @@ public class TestFSUtils extends HoodieCommonTestHarness {
       return true;
     }, false);
 
-    Assert.assertFalse("Hoodie MetaFolder will be present :" + collected2,
-        collected2.stream().noneMatch(s -> s.contains(HoodieTableMetaClient.METAFOLDER_NAME)));
+    assertFalse(collected2.stream().noneMatch(s -> s.contains(HoodieTableMetaClient.METAFOLDER_NAME)),
+        "Hoodie MetaFolder will be present :" + collected2);
     // Check if only files are listed including hoodie.properties
-    Assert.assertEquals("Collected=" + collected2, 5, collected2.size());
+    assertEquals(5, collected2.size(), "Collected=" + collected2);
   }
 
   @Test
@@ -143,7 +147,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String instantTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName);
-    assertEquals(FSUtils.getCommitTime(fullFileName), instantTime);
+    assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
   }
 
   @Test
@@ -151,7 +155,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String instantTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeBaseFileName(instantTime, TEST_WRITE_TOKEN, fileName);
-    assertEquals(FSUtils.getFileId(fullFileName), fileName);
+    assertEquals(fileName, FSUtils.getFileId(fullFileName));
   }
 
   @Test
@@ -204,10 +208,10 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(rlPath));
     assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(rlPath));
     assertEquals(1, FSUtils.getFileVersionFromLog(rlPath));
-    Assert.assertNull(FSUtils.getTaskPartitionIdFromLogPath(rlPath));
-    Assert.assertNull(FSUtils.getStageIdFromLogPath(rlPath));
-    Assert.assertNull(FSUtils.getTaskAttemptIdFromLogPath(rlPath));
-    Assert.assertNull(FSUtils.getWriteTokenFromLogPath(rlPath));
+    assertNull(FSUtils.getTaskPartitionIdFromLogPath(rlPath));
+    assertNull(FSUtils.getStageIdFromLogPath(rlPath));
+    assertNull(FSUtils.getTaskAttemptIdFromLogPath(rlPath));
+    assertNull(FSUtils.getWriteTokenFromLogPath(rlPath));
   }
 
   @Test
@@ -222,9 +226,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(fileName, FSUtils.getFileIdFromLogPath(rlPath));
     assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(rlPath));
     assertEquals(2, FSUtils.getFileVersionFromLog(rlPath));
-    assertEquals(new Integer(1), FSUtils.getTaskPartitionIdFromLogPath(rlPath));
-    assertEquals(new Integer(0), FSUtils.getStageIdFromLogPath(rlPath));
-    assertEquals(new Integer(1), FSUtils.getTaskAttemptIdFromLogPath(rlPath));
+    assertEquals(1, FSUtils.getTaskPartitionIdFromLogPath(rlPath));
+    assertEquals(0, FSUtils.getStageIdFromLogPath(rlPath));
+    assertEquals(1, FSUtils.getTaskAttemptIdFromLogPath(rlPath));
   }
 
   /**
@@ -277,20 +281,19 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     List<HoodieInstant> hoodieInstants = new ArrayList<>();
     // create rollback files
     for (String instantTime : instantTimes) {
-      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-          + instantTime + HoodieTimeline.ROLLBACK_EXTENSION).createNewFile();
+      Files.createFile(Paths.get(basePath,
+          HoodieTableMetaClient.METAFOLDER_NAME,
+          instantTime + HoodieTimeline.ROLLBACK_EXTENSION));
       hoodieInstants.add(new HoodieInstant(false, HoodieTimeline.ROLLBACK_ACTION, instantTime));
     }
 
+    String metaPath = Paths.get(basePath, ".hoodie").toString();
     FSUtils.deleteOlderRollbackMetaFiles(FSUtils.getFs(basePath, new Configuration()),
-        basePath + "/.hoodie", hoodieInstants.stream());
-    File[] rollbackFiles = new File(basePath + "/.hoodie").listFiles(new FilenameFilter() {
-      @Override
-      public boolean accept(File dir, String name) {
-        return name.contains(HoodieTimeline.ROLLBACK_EXTENSION);
-      }
-    });
-    assertTrue(rollbackFiles.length == minRollbackToKeep);
+        metaPath, hoodieInstants.stream());
+    File[] rollbackFiles = new File(metaPath).listFiles((dir, name)
+        -> name.contains(HoodieTimeline.ROLLBACK_EXTENSION));
+    assertNotNull(rollbackFiles);
+    assertEquals(rollbackFiles.length, minRollbackToKeep);
   }
 
   @Test
@@ -301,19 +304,18 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     List<HoodieInstant> hoodieInstants = new ArrayList<>();
     // create rollback files
     for (String instantTime : instantTimes) {
-      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-          + instantTime + HoodieTimeline.CLEAN_EXTENSION).createNewFile();
+      Files.createFile(Paths.get(basePath,
+          HoodieTableMetaClient.METAFOLDER_NAME,
+          instantTime + HoodieTimeline.CLEAN_EXTENSION));
       hoodieInstants.add(new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, instantTime));
     }
+    String metaPath = Paths.get(basePath, ".hoodie").toString();
     FSUtils.deleteOlderCleanMetaFiles(FSUtils.getFs(basePath, new Configuration()),
-        basePath + "/.hoodie", hoodieInstants.stream());
-    File[] cleanFiles = new File(basePath + "/.hoodie").listFiles(new FilenameFilter() {
-      @Override
-      public boolean accept(File dir, String name) {
-        return name.contains(HoodieTimeline.CLEAN_EXTENSION);
-      }
-    });
-    assertTrue(cleanFiles.length == minCleanToKeep);
+        metaPath, hoodieInstants.stream());
+    File[] cleanFiles = new File(metaPath).listFiles((dir, name)
+        -> name.contains(HoodieTimeline.CLEAN_EXTENSION));
+    assertNotNull(cleanFiles);
+    assertEquals(cleanFiles.length, minCleanToKeep);
   }
 
   @Test
@@ -326,31 +328,31 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     final String LOG_STR = "log";
     final String LOG_EXTENTION = "." + LOG_STR;
 
-    // data file name
+    // base file name
     String dataFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId);
-    assertTrue(instantTime.equals(FSUtils.getCommitTime(dataFileName)));
-    assertTrue(fileId.equals(FSUtils.getFileId(dataFileName)));
+    assertEquals(instantTime, FSUtils.getCommitTime(dataFileName));
+    assertEquals(fileId, FSUtils.getFileId(dataFileName));
 
     String logFileName = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, version, writeToken);
     assertTrue(FSUtils.isLogFile(new Path(logFileName)));
-    assertTrue(instantTime.equals(FSUtils.getBaseCommitTimeFromLogPath(new Path(logFileName))));
-    assertTrue(fileId.equals(FSUtils.getFileIdFromLogPath(new Path(logFileName))));
-    assertTrue(version == FSUtils.getFileVersionFromLog(new Path(logFileName)));
-    assertTrue(LOG_STR.equals(FSUtils.getFileExtensionFromLog(new Path(logFileName))));
+    assertEquals(instantTime, FSUtils.getBaseCommitTimeFromLogPath(new Path(logFileName)));
+    assertEquals(fileId, FSUtils.getFileIdFromLogPath(new Path(logFileName)));
+    assertEquals(version, FSUtils.getFileVersionFromLog(new Path(logFileName)));
+    assertEquals(LOG_STR, FSUtils.getFileExtensionFromLog(new Path(logFileName)));
 
     // create three versions of log file
-    String partitionPath = basePath + "/" + partitionStr;
-    new File(partitionPath).mkdirs();
-    String  log1 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 1, writeToken);
-    new File(partitionPath + "/" + log1).createNewFile();
-    String  log2 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 2, writeToken);
-    new File(partitionPath + "/" + log2).createNewFile();
-    String  log3 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 3, writeToken);
-    new File(partitionPath + "/" + log3).createNewFile();
+    java.nio.file.Path partitionPath = Paths.get(basePath, partitionStr);
+    Files.createDirectories(partitionPath);
+    String log1 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 1, writeToken);
+    Files.createFile(partitionPath.resolve(log1));
+    String log2 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 2, writeToken);
+    Files.createFile(partitionPath.resolve(log2));
+    String log3 = FSUtils.makeLogFileName(fileId, LOG_EXTENTION, instantTime, 3, writeToken);
+    Files.createFile(partitionPath.resolve(log3));
 
-    assertTrue(3 == FSUtils.getLatestLogVersion(FSUtils.getFs(basePath, new Configuration()),
-        new Path(partitionPath), fileId, LOG_EXTENTION, instantTime).get().getLeft());
-    assertTrue(4 == FSUtils.computeNextLogVersion(FSUtils.getFs(basePath, new Configuration()),
-        new Path(partitionPath), fileId, LOG_EXTENTION, instantTime));
+    assertEquals(3, (int) FSUtils.getLatestLogVersion(FSUtils.getFs(basePath, new Configuration()),
+        new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime).get().getLeft());
+    assertEquals(4, FSUtils.computeNextLogVersion(FSUtils.getFs(basePath, new Configuration()),
+        new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime));
   }
 }

@@ -25,10 +25,9 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -41,6 +40,11 @@ import java.util.List;
 
 import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getRandomOuterFSPath;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link InLineFileSystem}.
@@ -55,7 +59,7 @@ public class TestInLineFileSystem {
     this.listOfGeneratedPaths = new ArrayList<>();
   }
 
-  @After
+  @AfterEach
   public void teardown() throws IOException {
     for (Path pathToDelete : listOfGeneratedPaths) {
       File filePath = new File(pathToDelete.toString().substring(pathToDelete.toString().indexOf(':') + 1));
@@ -102,32 +106,32 @@ public class TestInLineFileSystem {
       Path inlinePath = FileSystemTestUtils.getPhantomFile(outerPath, startOffsetLengthPair.getLeft(), startOffsetLengthPair.getRight());
       InLineFileSystem inlineFileSystem = (InLineFileSystem) inlinePath.getFileSystem(conf);
       FSDataInputStream fsDataInputStream = inlineFileSystem.open(inlinePath);
-      Assert.assertTrue(inlineFileSystem.exists(inlinePath));
+      assertTrue(inlineFileSystem.exists(inlinePath));
       verifyFileStatus(expectedFileStatus, inlinePath, startOffsetLengthPair.getRight(), inlineFileSystem.getFileStatus(inlinePath));
       FileStatus[] actualFileStatuses = inlineFileSystem.listStatus(inlinePath);
-      Assert.assertEquals(1, actualFileStatuses.length);
+      assertEquals(1, actualFileStatuses.length);
       verifyFileStatus(expectedFileStatus, inlinePath, startOffsetLengthPair.getRight(), actualFileStatuses[0]);
       byte[] actualBytes = new byte[expectedBytes.length];
       fsDataInputStream.readFully(0, actualBytes);
-      Assert.assertArrayEquals(expectedBytes, actualBytes);
+      assertArrayEquals(expectedBytes, actualBytes);
       fsDataInputStream.close();
-      Assert.assertEquals(InLineFileSystem.SCHEME, inlineFileSystem.getScheme());
-      Assert.assertEquals(URI.create(InLineFileSystem.SCHEME), inlineFileSystem.getUri());
+      assertEquals(InLineFileSystem.SCHEME, inlineFileSystem.getScheme());
+      assertEquals(URI.create(InLineFileSystem.SCHEME), inlineFileSystem.getUri());
     }
   }
 
   @Test
-  @Ignore // Disabling flaky test for now https://issues.apache.org/jira/browse/HUDI-786
+  @Disabled("Disabling flaky test for now https://issues.apache.org/jira/browse/HUDI-786")
   public void testFileSystemApis() throws IOException {
     OuterPathInfo outerPathInfo = generateOuterFileAndGetInfo(1000);
     Path inlinePath = FileSystemTestUtils.getPhantomFile(outerPathInfo.outerPath, outerPathInfo.startOffset, outerPathInfo.length);
     InLineFileSystem inlineFileSystem = (InLineFileSystem) inlinePath.getFileSystem(conf);
-    FSDataInputStream fsDataInputStream = inlineFileSystem.open(inlinePath);
+    final FSDataInputStream fsDataInputStream = inlineFileSystem.open(inlinePath);
     byte[] actualBytes = new byte[outerPathInfo.expectedBytes.length];
     // verify pos
-    Assert.assertEquals(0 - outerPathInfo.startOffset, fsDataInputStream.getPos());
+    assertEquals(0 - outerPathInfo.startOffset, fsDataInputStream.getPos());
     fsDataInputStream.readFully(0, actualBytes);
-    Assert.assertArrayEquals(outerPathInfo.expectedBytes, actualBytes);
+    assertArrayEquals(outerPathInfo.expectedBytes, actualBytes);
 
     // read partial data
     // test read(long position, byte[] buffer, int offset, int length)
@@ -138,13 +142,9 @@ public class TestInLineFileSystem {
     fsDataInputStream.read(25, actualBytes, 100, 210);
     verifyArrayEquality(outerPathInfo.expectedBytes, 25, 210, actualBytes, 100, 210);
     // give length to read > than actual inline content
-    actualBytes = new byte[1100];
-    try {
-      fsDataInputStream.read(0, actualBytes, 0, 1101);
-      Assert.fail("Should have thrown IndexOutOfBoundsException");
-    } catch (IndexOutOfBoundsException e) {
-      // no op
-    }
+    assertThrows(IndexOutOfBoundsException.class, () -> {
+      fsDataInputStream.read(0, new byte[1100], 0, 1101);
+    }, "Should have thrown IndexOutOfBoundsException");
 
     // test readFully(long position, byte[] buffer, int offset, int length)
     actualBytes = new byte[100];
@@ -154,13 +154,9 @@ public class TestInLineFileSystem {
     fsDataInputStream.readFully(25, actualBytes, 100, 210);
     verifyArrayEquality(outerPathInfo.expectedBytes, 25, 210, actualBytes, 100, 210);
     // give length to read > than actual inline content
-    actualBytes = new byte[1100];
-    try {
-      fsDataInputStream.readFully(0, actualBytes, 0, 1101);
-      Assert.fail("Should have thrown IndexOutOfBoundsException");
-    } catch (IndexOutOfBoundsException e) {
-      // no op
-    }
+    assertThrows(IndexOutOfBoundsException.class, () -> {
+      fsDataInputStream.readFully(0, new byte[1100], 0, 1101);
+    }, "Should have thrown IndexOutOfBoundsException");
 
     // test readFully(long position, byte[] buffer)
     actualBytes = new byte[100];
@@ -185,28 +181,20 @@ public class TestInLineFileSystem {
     */
     // test read(ByteBuffer buf)
     ByteBuffer actualByteBuffer = ByteBuffer.allocate(100);
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       fsDataInputStream.read(actualByteBuffer);
-      Assert.fail("Should have thrown");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown");
 
-    Assert.assertEquals(outerPathInfo.outerPath.getFileSystem(conf).open(outerPathInfo.outerPath).getFileDescriptor(), fsDataInputStream.getFileDescriptor());
+    assertEquals(outerPathInfo.outerPath.getFileSystem(conf).open(outerPathInfo.outerPath).getFileDescriptor(),
+        fsDataInputStream.getFileDescriptor());
 
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       fsDataInputStream.setReadahead(10L);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
 
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       fsDataInputStream.setDropBehind(true);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
 
     // yet to test
     // read(ByteBufferPool bufferPool, int maxLength, EnumSet<ReadOption> opts)
@@ -218,7 +206,8 @@ public class TestInLineFileSystem {
 
   private void verifyArrayEquality(byte[] expected, int expectedOffset, int expectedLength,
                                    byte[] actual, int actualOffset, int actualLength) {
-    Assert.assertArrayEquals(Arrays.copyOfRange(expected, expectedOffset, expectedOffset + expectedLength), Arrays.copyOfRange(actual, actualOffset, actualOffset + actualLength));
+    assertArrayEquals(Arrays.copyOfRange(expected, expectedOffset, expectedOffset + expectedLength),
+        Arrays.copyOfRange(actual, actualOffset, actualOffset + actualLength));
   }
 
   private OuterPathInfo generateOuterFileAndGetInfo(int inlineContentSize) throws IOException {
@@ -251,84 +240,63 @@ public class TestInLineFileSystem {
   public void testOpen() throws IOException {
     Path inlinePath = getRandomInlinePath();
     // open non existant path
-    try {
+    assertThrows(FileNotFoundException.class, () -> {
       inlinePath.getFileSystem(conf).open(inlinePath);
-      Assert.fail("Should have thrown exception");
-    } catch (FileNotFoundException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
   @Test
   public void testCreate() throws IOException {
     Path inlinePath = getRandomInlinePath();
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       inlinePath.getFileSystem(conf).create(inlinePath, true);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
   @Test
   public void testAppend() throws IOException {
     Path inlinePath = getRandomInlinePath();
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       inlinePath.getFileSystem(conf).append(inlinePath);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
   @Test
   public void testRename() throws IOException {
     Path inlinePath = getRandomInlinePath();
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       inlinePath.getFileSystem(conf).rename(inlinePath, inlinePath);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
   @Test
   public void testDelete() throws IOException {
     Path inlinePath = getRandomInlinePath();
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       inlinePath.getFileSystem(conf).delete(inlinePath, true);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
   @Test
   public void testgetWorkingDir() throws IOException {
     Path inlinePath = getRandomInlinePath();
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       inlinePath.getFileSystem(conf).getWorkingDirectory();
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
   @Test
   public void testsetWorkingDirectory() throws IOException {
     Path inlinePath = getRandomInlinePath();
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       inlinePath.getFileSystem(conf).setWorkingDirectory(inlinePath);
-      Assert.fail("Should have thrown exception");
-    } catch (UnsupportedOperationException e) {
-      // ignore
-    }
+    }, "Should have thrown exception");
   }
 
   @Test
   public void testExists() throws IOException {
     Path inlinePath = getRandomInlinePath();
-    Assert.assertFalse(inlinePath.getFileSystem(conf).exists(inlinePath));
+    assertFalse(inlinePath.getFileSystem(conf).exists(inlinePath));
   }
 
   private Path getRandomInlinePath() {
@@ -338,15 +306,15 @@ public class TestInLineFileSystem {
   }
 
   private void verifyFileStatus(FileStatus expected, Path inlinePath, long expectedLength, FileStatus actual) {
-    Assert.assertEquals(inlinePath, actual.getPath());
-    Assert.assertEquals(expectedLength, actual.getLen());
-    Assert.assertEquals(expected.getAccessTime(), actual.getAccessTime());
-    Assert.assertEquals(expected.getBlockSize(), actual.getBlockSize());
-    Assert.assertEquals(expected.getGroup(), actual.getGroup());
-    Assert.assertEquals(expected.getModificationTime(), actual.getModificationTime());
-    Assert.assertEquals(expected.getOwner(), actual.getOwner());
-    Assert.assertEquals(expected.getPermission(), actual.getPermission());
-    Assert.assertEquals(expected.getReplication(), actual.getReplication());
+    assertEquals(inlinePath, actual.getPath());
+    assertEquals(expectedLength, actual.getLen());
+    assertEquals(expected.getAccessTime(), actual.getAccessTime());
+    assertEquals(expected.getBlockSize(), actual.getBlockSize());
+    assertEquals(expected.getGroup(), actual.getGroup());
+    assertEquals(expected.getModificationTime(), actual.getModificationTime());
+    assertEquals(expected.getOwner(), actual.getOwner());
+    assertEquals(expected.getPermission(), actual.getPermission());
+    assertEquals(expected.getReplication(), actual.getReplication());
   }
 
   class OuterPathInfo {

@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.Path;
-import org.junit.Assert;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -49,6 +48,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * The utility class to support testing compaction.
@@ -95,10 +96,11 @@ public class CompactionTestUtils {
     List<HoodieCompactionPlan> plans = CollectionUtils.createImmutableList(plan1, plan2, plan3, plan4);
     IntStream.range(0, 4).boxed().forEach(idx -> {
       if (expectedNumEntries.get(idx) > 0) {
-        Assert.assertEquals("check if plan " + idx + " has exp entries", expectedNumEntries.get(idx).longValue(),
-            plans.get(idx).getOperations().size());
+        assertEquals(expectedNumEntries.get(idx).longValue(),
+            plans.get(idx).getOperations().size(),
+            "check if plan " + idx + " has exp entries");
       } else {
-        Assert.assertNull("Plan " + idx + " has null ops", plans.get(idx).getOperations());
+        assertNull(plans.get(idx).getOperations(), "Plan " + idx + " has null ops");
       }
     });
 
@@ -110,7 +112,7 @@ public class CompactionTestUtils {
         generateExpectedCompactionOperations(Arrays.asList(plan1, plan2, plan3, plan4), baseInstantsToCompaction);
 
     // Ensure Compaction operations are fine.
-    Assert.assertEquals(expPendingCompactionMap, pendingCompactionMap);
+    assertEquals(expPendingCompactionMap, pendingCompactionMap);
     return expPendingCompactionMap;
   }
 

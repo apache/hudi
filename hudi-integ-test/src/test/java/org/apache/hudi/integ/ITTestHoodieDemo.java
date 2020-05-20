@@ -125,8 +125,15 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties"
-            + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
-            + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME),
+            + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider ",
+        "spark-submit --class org.apache.hudi.hive.HiveSyncTool " + HUDI_HIVE_SYNC_BUNDLE
+            + " --database default"
+            + " --table " + COW_TABLE_NAME
+            + " --base-path " + COW_BASE_PATH
+            + " --user hive"
+            + " --pass hive"
+            + " --jdbc-url jdbc:hive2://hiveserver:10000"
+            + " --partitioned-by dt",
         ("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
@@ -161,8 +168,8 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testSparkSQLAfterFirstBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_BATCH1_COMMANDS, true);
     assertStdOutContains(stdOutErrPair, "|default |stock_ticks_cow   |false      |\n"
-                                                    + "|default |stock_ticks_mor_ro |false      |\n" +
-                                                      "|default |stock_ticks_mor_rt |false      |");
+                                                    + "|default |stock_ticks_mor_ro |false      |\n"
+                                                    + "|default |stock_ticks_mor_rt |false      |");
     assertStdOutContains(stdOutErrPair,
         "+------+-------------------+\n|GOOG  |2018-08-31 10:29:00|\n+------+-------------------+", 3);
     assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 09:59:00|6330  |1230.5   |1230.02 |", 3);

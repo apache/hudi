@@ -20,10 +20,9 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.Serializable;
@@ -38,6 +37,11 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 /**
  * Tests RocksDB manager {@link RocksDBDAO}.
  */
@@ -45,13 +49,13 @@ public class TestRocksDBManager {
 
   private RocksDBDAO dbManager;
 
-  @Before
+  @BeforeEach
   public void setUpClass() {
     dbManager = new RocksDBDAO("/dummy/path/" + UUID.randomUUID().toString(),
         FileSystemViewStorageConfig.newBuilder().build().newBuilder().build().getRocksdbBasePath());
   }
 
-  @After
+  @AfterEach
   public void tearDownClass() {
     if (dbManager != null) {
       dbManager.close();
@@ -104,35 +108,36 @@ public class TestRocksDBManager {
         List<Pair<String, Payload>> gotPayloads =
             dbManager.<Payload>prefixSearch(family, prefix).collect(Collectors.toList());
         Integer expCount = countsMap.get(family).get(prefix);
-        Assert.assertEquals("Size check for prefix (" + prefix + ") and family (" + family + ")",
-            expCount == null ? 0L : expCount.longValue(), gotPayloads.size());
+        assertEquals(expCount == null ? 0L : expCount.longValue(), gotPayloads.size(),
+            "Size check for prefix (" + prefix + ") and family (" + family + ")");
         gotPayloads.forEach(p -> {
-          Assert.assertEquals(p.getRight().getFamily(), family);
-          Assert.assertTrue(p.getRight().getKey().toString().startsWith(prefix));
+          assertEquals(p.getRight().getFamily(), family);
+          assertTrue(p.getRight().getKey().toString().startsWith(prefix));
         });
       });
     });
 
     payloads.stream().filter(p -> !p.getPrefix().equalsIgnoreCase(prefix1)).forEach(payload -> {
       Payload p = dbManager.get(payload.getFamily(), payload.getKey());
-      Assert.assertEquals("Retrieved correct payload for key :" + payload.getKey(), payload, p);
+      assertEquals(payload, p, "Retrieved correct payload for key :" + payload.getKey());
 
       dbManager.delete(payload.getFamily(), payload.getKey());
 
       Payload p2 = dbManager.get(payload.getFamily(), payload.getKey());
-      Assert.assertNull("Retrieved correct payload for key :" + payload.getKey(), p2);
+      assertNull(p2, "Retrieved correct payload for key :" + payload.getKey());
     });
 
     colFamilies.forEach(family -> {
       dbManager.prefixDelete(family, prefix1);
 
       int got = dbManager.prefixSearch(family, prefix1).collect(Collectors.toList()).size();
-      Assert.assertEquals("Expected prefix delete to leave at least one item for family: " + family, countsMap.get(family).get(prefix1) == null ? 0 : 1, got);
+      assertEquals(countsMap.get(family).get(prefix1) == null ? 0 : 1, got,
+          "Expected prefix delete to leave at least one item for family: " + family);
     });
 
     payloads.stream().filter(p -> !p.getPrefix().equalsIgnoreCase(prefix1)).forEach(payload -> {
       Payload p2 = dbManager.get(payload.getFamily(), payload.getKey());
-      Assert.assertNull("Retrieved correct payload for key :" + payload.getKey(), p2);
+      assertNull(p2, "Retrieved correct payload for key :" + payload.getKey());
     });
 
     // Now do a prefix search
@@ -140,14 +145,14 @@ public class TestRocksDBManager {
       prefixes.stream().filter(p -> !p.equalsIgnoreCase(prefix1)).forEach(prefix -> {
         List<Pair<String, Payload>> gotPayloads =
             dbManager.<Payload>prefixSearch(family, prefix).collect(Collectors.toList());
-        Assert.assertEquals("Size check for prefix (" + prefix + ") and family (" + family + ")", 0,
-            gotPayloads.size());
+        assertEquals(0, gotPayloads.size(),
+            "Size check for prefix (" + prefix + ") and family (" + family + ")");
       });
     });
 
     String rocksDBBasePath = dbManager.getRocksDBBasePath();
     dbManager.close();
-    Assert.assertFalse(new File(rocksDBBasePath).exists());
+    assertFalse(new File(rocksDBBasePath).exists());
   }
 
   @Test
@@ -196,26 +201,26 @@ public class TestRocksDBManager {
 
     payloads.forEach(payload -> {
       Payload p = dbManager.get(payload.getFamily(), payload.getKey());
-      Assert.assertEquals("Retrieved correct payload for key :" + payload.getKey(), payload, p);
+      assertEquals(payload, p, "Retrieved correct payload for key :" + payload.getKey());
     });
 
     payloadSplits.next().forEach(payload -> {
       dbManager.delete(payload.getFamily(), payload.getKey());
       Payload want = dbManager.get(payload.getFamily(), payload.getKey());
-      Assert.assertNull("Verify deleted during single delete for key :" + payload.getKey(), want);
+      assertNull(want, "Verify deleted during single delete for key :" + payload.getKey());
     });
 
     dbManager.writeBatch(batch -> {
       payloadSplits.next().forEach(payload -> {
         dbManager.deleteInBatch(batch, payload.getFamily(), payload.getKey());
         Payload want = dbManager.get(payload.getFamily(), payload.getKey());
-        Assert.assertEquals("Verify not deleted during batch delete in progress for key :" + payload.getKey(), payload, want);
+        assertEquals(payload, want, "Verify not deleted during batch delete in progress for key :" + payload.getKey());
       });
     });
 
     payloads.forEach(payload -> {
       Payload want = dbManager.get(payload.getFamily(), payload.getKey());
-      Assert.assertNull("Verify delete for key :" + payload.getKey(), want);
+      assertNull(want, "Verify delete for key :" + payload.getKey());
     });
 
     // Now do a prefix search
@@ -223,14 +228,14 @@ public class TestRocksDBManager {
       prefixes.forEach(prefix -> {
         List<Pair<String, Payload>> gotPayloads =
             dbManager.<Payload>prefixSearch(family, prefix).collect(Collectors.toList());
-        Assert.assertEquals("Size check for prefix (" + prefix + ") and family (" + family + ")", 0,
-            gotPayloads.size());
+        assertEquals(0, gotPayloads.size(),
+            "Size check for prefix (" + prefix + ") and family (" + family + ")");
       });
     });
 
     String rocksDBBasePath = dbManager.getRocksDBBasePath();
     dbManager.close();
-    Assert.assertFalse(new File(rocksDBBasePath).exists());
+    assertFalse(new File(rocksDBBasePath).exists());
   }
 
   public static class PayloadKey implements Serializable {
