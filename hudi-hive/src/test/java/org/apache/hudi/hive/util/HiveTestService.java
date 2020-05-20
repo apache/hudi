@@ -105,6 +105,7 @@ public class HiveTestService {
     executorService = Executors.newSingleThreadExecutor();
     tServer = startMetaStore(bindIP, metastorePort, serverConf);
 
+    serverConf.set("hive.in.test", "true");
     hiveServer = startHiveServer(serverConf);
 
     String serverHostname;

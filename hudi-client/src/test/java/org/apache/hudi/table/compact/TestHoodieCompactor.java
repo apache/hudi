@@ -27,8 +27,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
@@ -148,9 +152,13 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       HoodieIndex index = new HoodieBloomIndex<>(config);
       updatedRecords = index.tagLocation(updatedRecordsRDD, jsc, table).collect();
 
-      // Write them to corresponding avro logfiles
+      // Write them to corresponding avro logfiles. Also, set the state transition properly.
       HoodieTestUtils.writeRecordsToLogFiles(fs, metaClient.getBasePath(),
           HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, updatedRecords);
+      metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
+          HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
+      writeClient.commit(newCommitTime, jsc.emptyRDD(), Option.empty());
+      metaClient.reloadActiveTimeline();
 
       // Verify that all data file has one log file
       metaClient = HoodieTableMetaClient.reload(metaClient);
