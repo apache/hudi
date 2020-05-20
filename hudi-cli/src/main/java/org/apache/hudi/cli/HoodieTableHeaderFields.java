@@ -23,6 +23,7 @@ package org.apache.hudi.cli;
  */
 public class HoodieTableHeaderFields {
   public static final String HEADER_PARTITION = "Partition";
+  public static final String HEADER_INSTANT = "Instant";
   public static final String HEADER_PARTITION_PATH = HEADER_PARTITION + " Path";
   public static final String HEADER_FILE_ID = "FileId";
   public static final String HEADER_BASE_INSTANT = "Base-Instant";
@@ -81,4 +82,18 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_HOODIE_PROPERTY = "Property";
   public static final String HEADER_OLD_VALUE = "Old Value";
   public static final String HEADER_NEW_VALUE = "New Value";
+
+  /**
+   * Fields of Savepoints.
+   */
+  public static final String HEADER_SAVEPOINT_TIME = "SavepointTime";
+
+  /**
+   * Fields of Rollback.
+   */
+  public static final String HEADER_ROLLBACK_INSTANT = "Rolledback " + HEADER_INSTANT;
+  public static final String HEADER_TIME_TOKEN_MILLIS = "Time taken in millis";
+  public static final String HEADER_TOTAL_PARTITIONS = "Total Partitions";
+  public static final String HEADER_DELETED_FILE = "Deleted File";
+  public static final String HEADER_SUCCEEDED = "Succeeded";
 }

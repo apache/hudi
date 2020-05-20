@@ -136,7 +136,8 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
       String commitActionType = table.getMetaClient().getCommitActionType();
       HoodieInstant requested = new HoodieInstant(State.REQUESTED, commitActionType, instantTime);
       activeTimeline.transitionRequestedToInflight(requested,
-          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)),
+          config.shouldAllowMultiWriteOnSameInstant());
     } catch (IOException io) {
       throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", io);
     }

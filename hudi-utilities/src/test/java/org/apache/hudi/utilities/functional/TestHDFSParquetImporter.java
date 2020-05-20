@@ -264,7 +264,7 @@ public class TestHDFSParquetImporter implements Serializable {
     }
   }
 
-  private List<GenericRecord> createInsertRecords(Path srcFolder) throws ParseException, IOException {
+  public List<GenericRecord> createInsertRecords(Path srcFolder) throws ParseException, IOException {
     Path srcFile = new Path(srcFolder.toString(), "file1.parquet");
     long startTime = HoodieActiveTimeline.COMMIT_FORMATTER.parse("20170203000000").getTime() / 1000;
     List<GenericRecord> records = new ArrayList<GenericRecord>();
@@ -281,7 +281,7 @@ public class TestHDFSParquetImporter implements Serializable {
     return records;
   }
 
-  private List<GenericRecord> createUpsertRecords(Path srcFolder) throws ParseException, IOException {
+  public List<GenericRecord> createUpsertRecords(Path srcFolder) throws ParseException, IOException {
     Path srcFile = new Path(srcFolder.toString(), "file1.parquet");
     long startTime = HoodieActiveTimeline.COMMIT_FORMATTER.parse("20170203000000").getTime() / 1000;
     List<GenericRecord> records = new ArrayList<GenericRecord>();
@@ -361,7 +361,7 @@ public class TestHDFSParquetImporter implements Serializable {
     }
   }
 
-  private HDFSParquetImporter.Config getHDFSParquetImporterConfig(String srcPath, String targetPath, String tableName,
+  public HDFSParquetImporter.Config getHDFSParquetImporterConfig(String srcPath, String targetPath, String tableName,
       String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile) {
     HDFSParquetImporter.Config cfg = new HDFSParquetImporter.Config();
     cfg.srcPath = srcPath;
@@ -395,7 +395,7 @@ public class TestHDFSParquetImporter implements Serializable {
     double endLat;
     double endLon;
 
-    private HoodieTripModel(double timestamp, String rowKey, String rider, String driver, double beginLat,
+    public HoodieTripModel(double timestamp, String rowKey, String rider, String driver, double beginLat,
         double beginLon, double endLat, double endLon) {
       this.timestamp = timestamp;
       this.rowKey = rowKey;

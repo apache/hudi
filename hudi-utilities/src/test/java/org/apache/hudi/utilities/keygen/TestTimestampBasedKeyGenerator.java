@@ -47,10 +47,15 @@ public class TestTimestampBasedKeyGenerator {
     properties.setProperty(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(), "false");
   }
   
-  private TypedProperties getBaseKeyConfig(String timestampType, String dateFormat, String timezone) {
+  private TypedProperties getBaseKeyConfig(String timestampType, String dateFormat, String timezone, String scalarType) {
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.type", timestampType);
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", dateFormat);
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.timezone", timezone);
+
+    if (scalarType != null) {
+      properties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit", scalarType);
+    }
+
     return properties;
   }
 
@@ -58,25 +63,36 @@ public class TestTimestampBasedKeyGenerator {
   public void testTimestampBasedKeyGenerator() {
     // timezone is GMT+8:00
     baseRecord.put("createTime", 1578283932000L);
-    properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00");
+    properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
     HoodieKey hk1 = new TimestampBasedKeyGenerator(properties).getKey(baseRecord);
     assertEquals("2020-01-06 12", hk1.getPartitionPath());
 
     // timezone is GMT
-    properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT");
+    properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT", null);
     HoodieKey hk2 = new TimestampBasedKeyGenerator(properties).getKey(baseRecord);
     assertEquals("2020-01-06 04", hk2.getPartitionPath());
 
     // timestamp is DATE_STRING, timezone is GMT+8:00
     baseRecord.put("createTime", "2020-01-06 12:12:12");
-    properties = getBaseKeyConfig("DATE_STRING", "yyyy-MM-dd hh", "GMT+8:00");
+    properties = getBaseKeyConfig("DATE_STRING", "yyyy-MM-dd hh", "GMT+8:00", null);
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.input.dateformat", "yyyy-MM-dd hh:mm:ss");
     HoodieKey hk3 = new TimestampBasedKeyGenerator(properties).getKey(baseRecord);
     assertEquals("2020-01-06 12", hk3.getPartitionPath());
 
     // timezone is GMT
-    properties = getBaseKeyConfig("DATE_STRING", "yyyy-MM-dd hh", "GMT");
+    properties = getBaseKeyConfig("DATE_STRING", "yyyy-MM-dd hh", "GMT", null);
     HoodieKey hk4 = new TimestampBasedKeyGenerator(properties).getKey(baseRecord);
     assertEquals("2020-01-06 12", hk4.getPartitionPath());
+  }
+
+  @Test
+  public void testScalar() {
+    // timezone is GMT+8:00
+    baseRecord.put("createTime", 20000L);
+
+    // timezone is GMT
+    properties = getBaseKeyConfig("SCALAR", "yyyy-MM-dd hh", "GMT", "days");
+    HoodieKey hk5 = new TimestampBasedKeyGenerator(properties).getKey(baseRecord);
+    assertEquals(hk5.getPartitionPath(), "2024-10-04 12");
   }
 }

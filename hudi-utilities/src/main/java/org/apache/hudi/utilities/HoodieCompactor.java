@@ -43,11 +43,22 @@ public class HoodieCompactor {
   private final Config cfg;
   private transient FileSystem fs;
   private TypedProperties props;
+  private final JavaSparkContext jsc;
 
-  public HoodieCompactor(Config cfg) {
+  public HoodieCompactor(JavaSparkContext jsc, Config cfg) {
     this.cfg = cfg;
-    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
-        : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+    this.jsc = jsc;
+    this.props = cfg.propsFilePath == null
+        ? UtilHelpers.buildProperties(cfg.configs)
+        : readConfigFromFileSystem(jsc, cfg);
+  }
+
+  private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
+    final FileSystem fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
+
+    return UtilHelpers
+        .readConfig(fs, new Path(cfg.propsFilePath), cfg.configs)
+        .getConfig();
   }
 
   public static class Config implements Serializable {
@@ -55,7 +66,7 @@ public class HoodieCompactor {
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
     public String tableName = null;
-    @Parameter(names = {"--instant-time", "-sp"}, description = "Compaction Instant time", required = true)
+    @Parameter(names = {"--instant-time", "-it"}, description = "Compaction Instant time", required = true)
     public String compactionInstantTime = null;
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = true)
     public int parallelism = 1;
@@ -90,12 +101,12 @@ public class HoodieCompactor {
       cmd.usage();
       System.exit(1);
     }
-    HoodieCompactor compactor = new HoodieCompactor(cfg);
-    compactor.compact(UtilHelpers.buildSparkContext("compactor-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory),
-        cfg.retry);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("compactor-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
+    HoodieCompactor compactor = new HoodieCompactor(jsc, cfg);
+    compactor.compact(cfg.retry);
   }
 
-  public int compact(JavaSparkContext jsc, int retry) {
+  public int compact(int retry) {
     this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     int ret = -1;
     try {

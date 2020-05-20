@@ -197,6 +197,24 @@ public class HoodieAvroUtils {
     return RECORD_KEY_SCHEMA;
   }
 
+  /**
+   * Fetch schema for record key and partition path.
+   */
+  public static Schema getRecordKeyPartitionPathSchema() {
+    List<Schema.Field> toBeAddedFields = new ArrayList<>();
+    Schema recordSchema = Schema.createRecord("HoodieRecordKey", "", "", false);
+
+    Schema.Field recordKeyField =
+        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
+    Schema.Field partitionPathField =
+        new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
+
+    toBeAddedFields.add(recordKeyField);
+    toBeAddedFields.add(partitionPathField);
+    recordSchema.setFields(toBeAddedFields);
+    return recordSchema;
+  }
+
   public static GenericRecord addHoodieKeyToRecord(GenericRecord record, String recordKey, String partitionPath,
       String fileName) {
     record.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);

@@ -99,4 +99,8 @@ public class SparkConfigUtils {
     String fraction = properties.getProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP, DEFAULT_MAX_MEMORY_FRACTION_FOR_COMPACTION);
     return getMaxMemoryAllowedForMerge(fraction);
   }
+
+  public static StorageLevel getSimpleIndexInputStorageLevel(Properties properties) {
+    return StorageLevel.fromString(properties.getProperty(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL));
+  }
 }

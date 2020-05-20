@@ -24,12 +24,12 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieRangeInfoHandle;
 import org.apache.hudi.table.HoodieTable;
 
@@ -52,6 +52,7 @@ import scala.Tuple2;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
 
 /**
  * Indexing mechanism based on bloom filter. Each parquet file includes its row_key bloom filter in its metadata.
@@ -192,18 +193,9 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
                                                              final HoodieTable hoodieTable) {
 
     // Obtain the latest data files from all the partitions.
-    List<Pair<String, String>> partitionPathFileIDList =
-        jsc.parallelize(partitions, Math.max(partitions.size(), 1)).flatMap(partitionPath -> {
-          Option<HoodieInstant> latestCommitTime =
-              hoodieTable.getMetaClient().getCommitsTimeline().filterCompletedInstants().lastInstant();
-          List<Pair<String, String>> filteredFiles = new ArrayList<>();
-          if (latestCommitTime.isPresent()) {
-            filteredFiles = hoodieTable.getBaseFileOnlyView()
-                .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp())
-                .map(f -> Pair.of(partitionPath, f.getFileId())).collect(toList());
-          }
-          return filteredFiles.iterator();
-        }).collect();
+    List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, jsc, hoodieTable).stream()
+        .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))
+        .collect(toList());
 
     if (config.getBloomIndexPruneByRanges()) {
       // also obtain file ranges, if range pruning is enabled
@@ -312,21 +304,6 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
             .collect(Collectors.toList()).iterator());
   }
 
-  HoodieRecord<T> getTaggedRecord(HoodieRecord<T> inputRecord, Option<HoodieRecordLocation> location) {
-    HoodieRecord<T> record = inputRecord;
-    if (location.isPresent()) {
-      // When you have a record in multiple files in the same partition, then rowKeyRecordPairRDD
-      // will have 2 entries with the same exact in memory copy of the HoodieRecord and the 2
-      // separate filenames that the record is found in. This will result in setting
-      // currentLocation 2 times and it will fail the second time. So creating a new in memory
-      // copy of the hoodie record.
-      record = new HoodieRecord<>(inputRecord);
-      record.unseal();
-      record.setCurrentLocation(location.get());
-      record.seal();
-    }
-    return record;
-  }
 
   /**
    * Tag the <rowKey, filename> back to the original HoodieRecord RDD.
@@ -338,7 +315,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null),
     // so we do left outer join.
     return keyRecordPairRDD.leftOuterJoin(keyFilenamePairRDD).values()
-        .map(v1 -> getTaggedRecord(v1._1, Option.ofNullable(v1._2.orNull())));
+        .map(v1 -> HoodieIndexUtils.getTaggedRecord(v1._1, Option.ofNullable(v1._2.orNull())));
   }
 
   @Override

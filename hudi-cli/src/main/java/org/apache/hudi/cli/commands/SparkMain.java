@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.utilities.HDFSParquetImporter;
@@ -54,7 +55,8 @@ public class SparkMain {
    * Commands.
    */
   enum SparkCommand {
-    ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN, COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLEAN
+    ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN,
+    COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLEAN, DELETE_SAVEPOINT
   }
 
   public static void main(String[] args) throws Exception {
@@ -77,22 +79,22 @@ public class SparkMain {
         returnCode = deduplicatePartitionPath(jsc, args[3], args[4], args[5], args[6]);
         break;
       case ROLLBACK_TO_SAVEPOINT:
-        assert (args.length == 3);
-        returnCode = rollbackToSavepoint(jsc, args[1], args[2]);
+        assert (args.length == 5);
+        returnCode = rollbackToSavepoint(jsc, args[3], args[4]);
         break;
       case IMPORT:
       case UPSERT:
-        assert (args.length >= 12);
+        assert (args.length >= 13);
         String propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[11])) {
-          propsFilePath = args[11];
+        if (!StringUtils.isNullOrEmpty(args[12])) {
+          propsFilePath = args[12];
         }
         List<String> configs = new ArrayList<>();
-        if (args.length > 12) {
-          configs.addAll(Arrays.asList(args).subList(12, args.length));
+        if (args.length > 13) {
+          configs.addAll(Arrays.asList(args).subList(13, args.length));
         }
-        returnCode = dataLoad(jsc, command, args[1], args[2], args[3], args[4], args[5], args[6],
-            Integer.parseInt(args[7]), args[8], args[9], Integer.parseInt(args[10]), propsFilePath, configs);
+        returnCode = dataLoad(jsc, command, args[3], args[4], args[5], args[6], args[7], args[8],
+            Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
         break;
       case COMPACT_RUN:
         assert (args.length >= 9);
@@ -154,6 +156,14 @@ public class SparkMain {
         }
         clean(jsc, args[3], propsFilePath, configs);
         break;
+      case SAVEPOINT:
+        assert (args.length == 7);
+        returnCode = createSavepoint(jsc, args[3], args[4], args[5], args[6]);
+        break;
+      case DELETE_SAVEPOINT:
+        assert (args.length == 5);
+        returnCode = deleteSavepoint(jsc, args[3], args[4]);
+        break;
       default:
         break;
     }
@@ -163,7 +173,8 @@ public class SparkMain {
   private static boolean sparkMasterContained(SparkCommand command) {
     List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
         SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN,
-        SparkCommand.DEDUPLICATE);
+        SparkCommand.IMPORT, SparkCommand.UPSERT, SparkCommand.DEDUPLICATE, SparkCommand.SAVEPOINT,
+        SparkCommand.DELETE_SAVEPOINT, SparkCommand.ROLLBACK_TO_SAVEPOINT);
     return masterContained.contains(command);
   }
 
@@ -177,7 +188,7 @@ public class SparkMain {
   }
 
   private static int dataLoad(JavaSparkContext jsc, String command, String srcPath, String targetPath, String tableName,
-      String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile, String sparkMemory,
+      String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile,
       int retry, String propsFilePath, List<String> configs) {
     Config cfg = new Config();
     cfg.command = command;
@@ -191,7 +202,6 @@ public class SparkMain {
     cfg.schemaFile = schemaFile;
     cfg.propsFilePath = propsFilePath;
     cfg.configs = configs;
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
     return new HDFSParquetImporter(cfg).dataImport(jsc, retry);
   }
 
@@ -260,7 +270,7 @@ public class SparkMain {
     cfg.propsFilePath = propsFilePath;
     cfg.configs = configs;
     jsc.getConf().set("spark.executor.memory", sparkMemory);
-    return new HoodieCompactor(cfg).compact(jsc, retry);
+    return new HoodieCompactor(jsc, cfg).compact(retry);
   }
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
@@ -277,7 +287,20 @@ public class SparkMain {
       LOG.info(String.format("The commit \"%s\" rolled back.", instantTime));
       return 0;
     } else {
-      LOG.info(String.format("The commit \"%s\" failed to roll back.", instantTime));
+      LOG.warn(String.format("The commit \"%s\" failed to roll back.", instantTime));
+      return -1;
+    }
+  }
+
+  private static int createSavepoint(JavaSparkContext jsc, String commitTime, String user,
+      String comments, String basePath) throws Exception {
+    HoodieWriteClient client = createHoodieClient(jsc, basePath);
+    try {
+      client.savepoint(commitTime, user, comments);
+      LOG.info(String.format("The commit \"%s\" has been savepointed.", commitTime));
+      return 0;
+    } catch (HoodieSavepointException se) {
+      LOG.warn(String.format("Failed: Could not create savepoint \"%s\".", commitTime));
       return -1;
     }
   }
@@ -289,7 +312,19 @@ public class SparkMain {
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
       return 0;
     } catch (Exception e) {
-      LOG.info(String.format("The commit \"%s\" failed to roll back.", savepointTime));
+      LOG.warn(String.format("The commit \"%s\" failed to roll back.", savepointTime));
+      return -1;
+    }
+  }
+
+  private static int deleteSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
+    HoodieWriteClient client = createHoodieClient(jsc, basePath);
+    try {
+      client.deleteSavepoint(savepointTime);
+      LOG.info(String.format("Savepoint \"%s\" deleted.", savepointTime));
+      return 0;
+    } catch (Exception e) {
+      LOG.warn(String.format("Failed: Could not delete savepoint \"%s\".", savepointTime));
       return -1;
     }
   }

@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaPairRDD;
@@ -125,17 +126,17 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
           HoodieRecord<T> emptyRecord = new HoodieRecord(recordLocationHoodieKeyPair.get()._2,
               new EmptyHoodieRecordPayload());
           // Tag the incoming record for inserting to the new partition
-          HoodieRecord<T> taggedRecord = getTaggedRecord(hoodieRecord, Option.empty());
+          HoodieRecord<T> taggedRecord = HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty());
           return Arrays.asList(emptyRecord, taggedRecord).iterator();
         } else {
           // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
           // When it differs, the record will still be updated at its old partition.
           return Collections.singletonList(
-              getTaggedRecord(new HoodieRecord<>(recordLocationHoodieKeyPair.get()._2, hoodieRecord.getData()),
+              (HoodieRecord<T>) HoodieIndexUtils.getTaggedRecord(new HoodieRecord<>(recordLocationHoodieKeyPair.get()._2, hoodieRecord.getData()),
                   Option.ofNullable(recordLocationHoodieKeyPair.get()._1))).iterator();
         }
       } else {
-        return Collections.singletonList(getTaggedRecord(hoodieRecord, Option.empty())).iterator();
+        return Collections.singletonList((HoodieRecord<T>) HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty())).iterator();
       }
     });
   }
