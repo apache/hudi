@@ -15,10 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
-import org.apache.hudi.client.TestHoodieClientBase;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -71,9 +70,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient DistributedFileSystem dfs;
 
   /**
-   * Initializes resource group for the subclasses of {@link TestHoodieClientBase}.
-   *
-   * @throws IOException
+   * Initializes resource group for the subclasses of {@link HoodieClientTestBase}.
    */
   public void initResources() throws IOException {
     initPath();
@@ -84,9 +81,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   /**
-   * Cleanups resource group for the subclasses of {@link TestHoodieClientBase}.
-   * 
-   * @throws IOException
+   * Cleanups resource group for the subclasses of {@link HoodieClientTestBase}.
    */
   public void cleanupResources() throws IOException {
     cleanupMetaClient();

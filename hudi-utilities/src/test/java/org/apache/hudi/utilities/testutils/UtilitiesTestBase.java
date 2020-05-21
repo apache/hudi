@@ -18,8 +18,6 @@
 
 package org.apache.hudi.utilities.testutils;
 
-import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -32,6 +30,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.hive.testutils.HiveTestService;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.testutils.TestRawTripPayload;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
 

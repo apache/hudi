@@ -18,8 +18,6 @@
 
 package org.apache.hudi.execution;
 
-import org.apache.hudi.common.HoodieClientTestHarness;
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -32,6 +30,8 @@ import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.LazyInsertIterable.HoodieInsertValueGenResult;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.AfterEach;

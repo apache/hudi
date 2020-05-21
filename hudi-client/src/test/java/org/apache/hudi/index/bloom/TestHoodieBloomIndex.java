@@ -19,9 +19,6 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.HoodieClientTestHarness;
-import org.apache.hudi.common.HoodieClientTestUtils;
-import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -36,6 +33,9 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.TestRawTripPayload;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;

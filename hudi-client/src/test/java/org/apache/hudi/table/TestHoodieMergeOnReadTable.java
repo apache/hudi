@@ -21,11 +21,6 @@ package org.apache.hudi.table;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.HoodieClientTestHarness;
-import org.apache.hudi.common.HoodieClientTestUtils;
-import org.apache.hudi.common.HoodieMergeOnReadTestUtils;
-import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.common.TestRawTripPayload.MetadataMergeWriteStatus;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -57,6 +52,11 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.action.deltacommit.DeleteDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.DeltaCommitActionExecutor;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.testutils.TestRawTripPayload.MetadataMergeWriteStatus;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
@@ -83,12 +83,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestMergeOnReadTable extends HoodieClientTestHarness {
+public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
 
   private HoodieParquetInputFormat roInputFormat;
   private JobConf roJobConf;

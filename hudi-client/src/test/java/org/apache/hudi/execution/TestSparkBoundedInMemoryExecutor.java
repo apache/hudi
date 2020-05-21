@@ -18,14 +18,14 @@
 
 package org.apache.hudi.execution;
 
-import org.apache.hudi.common.HoodieClientTestHarness;
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.LazyInsertIterable.HoodieInsertValueGenResult;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.AfterEach;
@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
+public class TestSparkBoundedInMemoryExecutor extends HoodieClientTestHarness {
 
   private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
 

@@ -16,9 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.cli;
+package org.apache.hudi.cli.testutils;
 
-import org.apache.hudi.common.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;

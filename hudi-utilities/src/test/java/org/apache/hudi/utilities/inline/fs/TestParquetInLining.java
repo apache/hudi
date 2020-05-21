@@ -18,11 +18,11 @@
 
 package org.apache.hudi.utilities.inline.fs;
 
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.fs.inline.InMemoryFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
