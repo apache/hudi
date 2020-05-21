@@ -64,7 +64,6 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
     tablePath = basePath + File.separator + tableName;
 
     // Create table and connect
-    System.out.println(tablePath);
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");

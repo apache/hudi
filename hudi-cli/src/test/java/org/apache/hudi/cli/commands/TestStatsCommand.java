@@ -64,7 +64,7 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
     HoodieCLI.conf = jsc.hadoopConfiguration();
     // Create table and connect
     new TableCommand().createTable(
-        tablePath, "test_table", HoodieTableType.COPY_ON_WRITE.name(),
+        tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
   }
 
@@ -74,7 +74,7 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
   @Test
   public void testWriteAmplificationStats() {
     // generate data and metadata
-    Map<String, Integer[]> data = new LinkedHashMap();
+    Map<String, Integer[]> data = new LinkedHashMap<>();
     data.put("100", new Integer[] {15, 10});
     data.put("101", new Integer[] {20, 10});
     data.put("102", new Integer[] {15, 15});
@@ -114,7 +114,7 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
   public void testFileSizeStats() throws IOException {
     String commit1 = "100";
     String commit2 = "101";
-    Map<String, Integer[]> data = new LinkedHashMap();
+    Map<String, Integer[]> data = new LinkedHashMap<>();
     data.put(commit1, new Integer[] {100, 120, 150});
     data.put(commit2, new Integer[] {200, 180, 250, 300});
 

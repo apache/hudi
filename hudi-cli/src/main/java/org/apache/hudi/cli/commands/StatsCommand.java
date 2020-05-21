@@ -154,7 +154,7 @@ public class StatsCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, getFieldNameToConverterMap(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  public Map getFieldNameToConverterMap() {
+  public Map<String, Function<Object, String>> getFieldNameToConverterMap() {
     Function<Object, String> converterFunction =
         entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString())));
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
