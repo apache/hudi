@@ -410,6 +410,8 @@
     <span class="n">read</span><span class="o">.</span>
     <span class="nf">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">).</span>
     <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">)</span>
+    <span class="c1">//load(basePath) 如果使用 "/partitionKey=partitionValue" 文件夹命名格式，Spark将自动识别分区信息
+</span>
 <span class="nv">roViewDF</span><span class="o">.</span><span class="py">registerTempTable</span><span class="o">(</span><span class="s">"hudi_ro_table"</span><span class="o">)</span>
 <span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select fare, begin_lon, begin_lat, ts from  hudi_ro_table where fare &gt; 20.0"</span><span class="o">).</span><span class="py">show</span><span class="o">()</span>
 <span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table"</span><span class="o">).</span><span class="py">show</span><span class="o">()</span>

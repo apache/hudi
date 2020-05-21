@@ -446,7 +446,8 @@ Here we are using the default write operation : <code class="highlighter-rouge">
   <span class="n">read</span><span class="o">.</span>
   <span class="nf">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
   <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">)</span>
-<span class="nv">tripsSnapshotDF</span><span class="o">.</span><span class="py">createOrReplaceTempView</span><span class="o">(</span><span class="s">"hudi_trips_snapshot"</span><span class="o">)</span>
+<span class="c1">//load(basePath) use "/partitionKey=partitionValue" folder structure for Spark auto partition discovery
+</span><span class="nv">tripsSnapshotDF</span><span class="o">.</span><span class="py">createOrReplaceTempView</span><span class="o">(</span><span class="s">"hudi_trips_snapshot"</span><span class="o">)</span>
 
 <span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare &gt; 20.0"</span><span class="o">).</span><span class="py">show</span><span class="o">()</span>
 <span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot"</span><span class="o">).</span><span class="py">show</span><span class="o">()</span>
@@ -637,7 +638,8 @@ Here we are using the default write operation : <code class="highlighter-rouge">
   <span class="n">read</span><span class="o">.</span> \
   <span class="nb">format</span><span class="p">(</span><span class="s">"hudi"</span><span class="p">)</span><span class="o">.</span> \
   <span class="n">load</span><span class="p">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="p">)</span>
-
+<span class="c1"># load(basePath) use "/partitionKey=partitionValue" folder structure for Spark auto partition discovery
+</span>
 <span class="n">tripsSnapshotDF</span><span class="o">.</span><span class="n">createOrReplaceTempView</span><span class="p">(</span><span class="s">"hudi_trips_snapshot"</span><span class="p">)</span>
 
 <span class="n">spark</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s">"select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare &gt; 20.0"</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
