@@ -175,7 +175,7 @@ scala> sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'
 Presto是一种常用的查询引擎，可提供交互式查询性能。 Hudi RO表可以在Presto中无缝查询。
 这需要在整个安装过程中将`hudi-presto-bundle` jar放入`<presto_install>/plugin/hive-hadoop2/`中。
 
-## Impala(此功能还未正式发布)
+## Impala (3.4 or later)
 
 ### 读优化表
 
