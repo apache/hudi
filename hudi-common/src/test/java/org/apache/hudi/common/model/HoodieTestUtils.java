@@ -62,8 +62,13 @@ import org.apache.hadoop.util.StringUtils;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -223,6 +228,12 @@ public class HoodieTestUtils {
     return createDataFile(basePath, partitionPath, instantTime, fileID);
   }
 
+  public static String createNewDataFile(String basePath, String partitionPath, String instantTime, long length)
+      throws IOException {
+    String fileID = UUID.randomUUID().toString();
+    return createDataFileFixLength(basePath, partitionPath, instantTime, fileID, length);
+  }
+
   public static String createNewMarkerFile(String basePath, String partitionPath, String instantTime)
       throws IOException {
     String fileID = UUID.randomUUID().toString();
@@ -234,6 +245,18 @@ public class HoodieTestUtils {
     String folderPath = basePath + "/" + partitionPath + "/";
     new File(folderPath).mkdirs();
     new File(folderPath + FSUtils.makeDataFileName(instantTime, DEFAULT_WRITE_TOKEN, fileID)).createNewFile();
+    return fileID;
+  }
+
+  public static String createDataFileFixLength(String basePath, String partitionPath, String instantTime, String fileID,
+      long length) throws IOException {
+    String folderPath = basePath + "/" + partitionPath + "/";
+    Files.createDirectories(Paths.get(folderPath));
+    String filePath = folderPath + FSUtils.makeDataFileName(instantTime, DEFAULT_WRITE_TOKEN, fileID);
+    Files.createFile(Paths.get(filePath));
+    try (FileChannel output = new FileOutputStream(new File(filePath)).getChannel()) {
+      output.write(ByteBuffer.allocate(1), length - 1);
+    }
     return fileID;
   }
 
