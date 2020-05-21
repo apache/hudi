@@ -177,10 +177,10 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
 
     rows.clear();
 
-    HoodieCommitMetadata metadata = HoodieTestCommitMetadataGenerator.generateCommitMetadata(tablePath);
     for (int i = 100; i < 104; i++) {
       String instant = String.valueOf(i);
       // Since HoodiePrintHelper order data by default, need to order commitMetadata
+      HoodieCommitMetadata metadata = HoodieTestCommitMetadataGenerator.generateCommitMetadata(tablePath, instant);
       Comparable[] result = new Comparable[] {
           instant, "commit", HoodieTestCommitUtilities.convertAndOrderCommitMetadata(metadata)};
       rows.add(result);

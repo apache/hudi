@@ -96,4 +96,21 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_TOTAL_PARTITIONS = "Total Partitions";
   public static final String HEADER_DELETED_FILE = "Deleted File";
   public static final String HEADER_SUCCEEDED = "Succeeded";
+
+  /**
+   * Fields of Stats.
+   */
+  public static final String HEADER_COMMIT_TIME = "CommitTime";
+  public static final String HEADER_TOTAL_UPSERTED = "Total Upserted";
+  public static final String HEADER_TOTAL_WRITTEN = "Total Written";
+  public static final String HEADER_WRITE_AMPLIFICATION_FACTOR = "Write Amplification Factor";
+  public static final String HEADER_HISTOGRAM_MIN = "Min";
+  public static final String HEADER_HISTOGRAM_10TH = "10th";
+  public static final String HEADER_HISTOGRAM_50TH = "50th";
+  public static final String HEADER_HISTOGRAM_AVG = "avg";
+  public static final String HEADER_HISTOGRAM_95TH = "95th";
+  public static final String HEADER_HISTOGRAM_MAX = "Max";
+  public static final String HEADER_HISTOGRAM_NUM_FILES = "NumFiles";
+  public static final String HEADER_HISTOGRAM_STD_DEV = "StdDev";
+
 }
