@@ -92,6 +92,7 @@ val tripsSnapshotDF = spark.
   read.
   format("hudi").
   load(basePath + "/*/*/*/*")
+//load(basePath) use "/partitionKey=partitionValue" folder structure for Spark auto partition discovery
 tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
 
 spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0").show()
@@ -297,6 +298,7 @@ tripsSnapshotDF = spark. \
   read. \
   format("hudi"). \
   load(basePath + "/*/*/*/*")
+# load(basePath) use "/partitionKey=partitionValue" folder structure for Spark auto partition discovery
 
 tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
 

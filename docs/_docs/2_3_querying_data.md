@@ -170,7 +170,7 @@ Additionally, `HoodieReadClient` offers the following functionality using Hudi's
 Presto is a popular query engine, providing interactive query performance. Presto currently supports snapshot queries on COPY_ON_WRITE and read optimized queries 
 on MERGE_ON_READ Hudi tables. This requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation.
 
-## Impala (Not Officially Released)
+## Impala (3.4 or later)
 
 ### Snapshot Query
 

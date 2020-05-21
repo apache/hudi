@@ -70,6 +70,8 @@ val roViewDF = spark.
     read.
     format("org.apache.hudi").
     load(basePath + "/*/*/*/*")
+    //load(basePath) 如果使用 "/partitionKey=partitionValue" 文件夹命名格式，Spark将自动识别分区信息
+
 roViewDF.registerTempTable("hudi_ro_table")
 spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_ro_table where fare > 20.0").show()
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table").show()
