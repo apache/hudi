@@ -149,7 +149,7 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
       }
     });
 
-    // generate expect data
+    // generate expect
     List<Comparable[]> rows = new ArrayList<>();
     for (Map.Entry<String, Histogram> entry : commitHistoMap.entrySet()) {
       Snapshot s = entry.getValue().getSnapshot();
