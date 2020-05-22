@@ -78,9 +78,12 @@ public class RepairsCommand implements CommandMarker {
       @CliOption(key = {"dryrun"},
           help = "Should we actually remove duplicates or just run and store result to repairedOutputPath",
           unspecifiedDefaultValue = "true") final boolean dryRun,
-      @CliOption(key = {"dedupeType"}, help = "Check DeDupeType.scala for valid values",
-          unspecifiedDefaultValue = "insertType") final String dedupeType)
+      @CliOption(key = {"dedupeType"}, help = "Valid values are - insert_type, update_type and upsert_type",
+          unspecifiedDefaultValue = "insert_type") final String dedupeType)
       throws Exception {
+    if (!dedupeType.equals("insert_type") && !dedupeType.equals("update_type") && !dedupeType.equals("upsert_type")) {
+      throw new IllegalArgumentException("Please provide valid dedupe type!");
+    }
     if (StringUtils.isNullOrEmpty(sparkPropertiesPath)) {
       sparkPropertiesPath =
           Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());

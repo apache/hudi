@@ -23,7 +23,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.cli.AbstractShellIntegrationTest;
-import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.RepairsCommand;
 import org.apache.hudi.cli.commands.TableCommand;
@@ -183,7 +182,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
 
     String partitionPath = HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
     String cmdStr = String.format("repair deduplicate --duplicatedPartitionPath %s --repairedOutputPath %s --sparkMaster %s --dedupeType %s",
-        partitionPath, repairedOutputPath, "local", DeDupeType.updateType().toString());
+        partitionPath, repairedOutputPath, "local", "update_type");
     CommandResult cr = getShell().executeCommand(cmdStr);
     assertTrue(cr.isSuccess());
     assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + repairedOutputPath, cr.getResult().toString());
@@ -210,7 +209,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
 
     String partitionPath = HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
     String cmdStr = String.format("repair deduplicate --duplicatedPartitionPath %s --repairedOutputPath %s --sparkMaster %s --dedupeType %s",
-        partitionPath, repairedOutputPath, "local", DeDupeType.upsertType().toString());
+        partitionPath, repairedOutputPath, "local", "upsert_type");
     CommandResult cr = getShell().executeCommand(cmdStr);
     assertTrue(cr.isSuccess());
     assertEquals(RepairsCommand.DEDUPLICATE_RETURN_PREFIX + repairedOutputPath, cr.getResult().toString());

@@ -274,12 +274,12 @@ public class SparkMain {
 
   private static Enumeration.Value getDedupeType(String type) {
     switch (type) {
-      case "insertType":
-        return DeDupeType.insertType();
-      case "updateType":
-        return DeDupeType.updateType();
-      case "upsertType":
-        return DeDupeType.upsertType();
+      case "insert_type":
+        return DeDupeType.withName("insert_type");
+      case "update_type":
+        return DeDupeType.withName("update_type");
+      case "upsert_type":
+        return DeDupeType.withName("upsert_type");
       default:
         throw new IllegalArgumentException("Please provide valid dedupe type!");
     }

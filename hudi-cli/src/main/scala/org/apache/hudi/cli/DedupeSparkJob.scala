@@ -106,7 +106,7 @@ class DedupeSparkJob(basePath: String,
       val (key, rows) = rt
 
       dedupeType match {
-        case DeDupeType.updateType =>
+        case DeDupeType.UPDATE_TYPE =>
           /*
           This corresponds to the case where all duplicates have been updated at least once.
           Once updated, duplicates are bound to have same commit time unless forcefully modified.
@@ -118,7 +118,7 @@ class DedupeSparkJob(basePath: String,
             }
             fileToDeleteKeyMap(f).add(key)
           })
-        case DeDupeType.insertType =>
+        case DeDupeType.INSERT_TYPE =>
           /*
           This corresponds to the case where duplicates got created due to INSERT and have never been updated.
           */
@@ -140,7 +140,7 @@ class DedupeSparkJob(basePath: String,
             }
           })
 
-        case DeDupeType.upsertType =>
+        case DeDupeType.UPSERT_TYPE =>
           /*
           This corresponds to the case where duplicates got created as a result of inserts as well as updates,
           i.e few duplicate records have been updated, while others were never updated.
@@ -177,7 +177,7 @@ class DedupeSparkJob(basePath: String,
         case _ => throw new IllegalArgumentException("Please provide valid type for deduping!")
       }
     })
-    LOG.debug("fileToDeleteKeyMap size : " + fileToDeleteKeyMap.size + ", map: " + fileToDeleteKeyMap)
+    LOG.debug(s"fileToDeleteKeyMap size: ${fileToDeleteKeyMap.size}, map: $fileToDeleteKeyMap")
     fileToDeleteKeyMap
   }
 
