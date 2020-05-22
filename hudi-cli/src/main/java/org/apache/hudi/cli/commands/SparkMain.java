@@ -39,7 +39,6 @@ import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
-import scala.Enumeration;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -267,22 +266,9 @@ public class SparkMain {
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
       String repairedOutputPath, String basePath, boolean dryRun, String dedupeType) {
     DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath, new SQLContext(jsc),
-        FSUtils.getFs(basePath, jsc.hadoopConfiguration()), getDedupeType(dedupeType));
+        FSUtils.getFs(basePath, jsc.hadoopConfiguration()), DeDupeType.withName(dedupeType));
     job.fixDuplicates(dryRun);
     return 0;
-  }
-
-  private static Enumeration.Value getDedupeType(String type) {
-    switch (type) {
-      case "insert_type":
-        return DeDupeType.withName("insert_type");
-      case "update_type":
-        return DeDupeType.withName("update_type");
-      case "upsert_type":
-        return DeDupeType.withName("upsert_type");
-      default:
-        throw new IllegalArgumentException("Please provide valid dedupe type!");
-    }
   }
 
   private static int rollback(JavaSparkContext jsc, String instantTime, String basePath) throws Exception {
