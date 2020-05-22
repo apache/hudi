@@ -209,7 +209,7 @@ public class KafkaOffsetGen {
         ? Config.maxEventsFromKafkaSource : maxEventsToReadFromKafka;
     long numEvents = sourceLimit == Long.MAX_VALUE ? maxEventsToReadFromKafka : sourceLimit;
 
-    if(numEvents < toOffsets.size()) {
+    if (numEvents < toOffsets.size()) {
       throw new HoodieException("sourceLimit should not be less than the number of kafka partitions");
     }
 
