@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -97,7 +98,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private final transient HoodieMetrics metrics;
   private final transient HoodieCleanClient<T> cleanClient;
   private transient Timer.Context compactionTimer;
-
+  private transient Schema schema;
 
   /**
    * Create a write client, without cleaning up failed/inflight commits.
@@ -138,6 +139,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.rollbackPending = rollbackPending;
     this.cleanClient = new HoodieCleanClient<>(jsc, config, metrics, timelineService);
+    if (getConfig().getSchema() != null) {
+      this.schema = new Schema.Parser().parse(getConfig().getSchema());
+    }
   }
 
   /**
@@ -981,7 +985,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       return new Tuple2<>(key, record);
     }).reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
-      T reducedData = (T) rec1.getData().preCombine(rec2.getData());
+      T reducedData = (T) rec1.getData().preCombine(rec2.getData(), schema);
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.
