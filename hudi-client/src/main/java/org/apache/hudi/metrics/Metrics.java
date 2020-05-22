@@ -81,7 +81,7 @@ public class Metrics {
   public static void registerGauge(String metricName, final long value) {
     try {
       MetricRegistry registry = Metrics.getInstance().getRegistry();
-      registry.register(metricName, (Gauge<Long>) () -> value);
+      registry.<Gauge<Long>>register(metricName, () -> value);
     } catch (Exception e) {
       // Here we catch all exception, so the major upsert pipeline will not be affected if the
       // metrics system

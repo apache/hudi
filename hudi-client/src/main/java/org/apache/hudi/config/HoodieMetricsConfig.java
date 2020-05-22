@@ -130,6 +130,9 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
           DEFAULT_JMX_HOST);
       setDefaultOnCondition(props, !props.containsKey(JMX_PORT), JMX_PORT,
           String.valueOf(DEFAULT_JMX_PORT));
+      MetricsReporterType reporterType = MetricsReporterType.valueOf(props.getProperty(METRICS_REPORTER_TYPE));
+      setDefaultOnCondition(props, reporterType == MetricsReporterType.DATADOG,
+          HoodieMetricsDatadogConfig.newBuilder().fromProperties(props).build());
       return config;
     }
   }

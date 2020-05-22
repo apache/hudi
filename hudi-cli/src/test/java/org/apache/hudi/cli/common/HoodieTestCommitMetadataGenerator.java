@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.conf.Configuration;
@@ -61,6 +62,11 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
    * Create a commit file with default CommitMetadata.
    */
   public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration) {
+    createCommitFileWithMetadata(basePath, commitTime, configuration, Option.empty(), Option.empty());
+  }
+
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+      Option<Integer> writes, Option<Integer> updates) {
     Arrays.asList(HoodieTimeline.makeCommitFileName(commitTime), HoodieTimeline.makeInflightCommitFileName(commitTime),
         HoodieTimeline.makeRequestedCommitFileName(commitTime))
         .forEach(f -> {
@@ -71,7 +77,7 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
             FileSystem fs = FSUtils.getFs(basePath, configuration);
             os = fs.create(commitFile, true);
             // Generate commitMetadata
-            HoodieCommitMetadata commitMetadata = generateCommitMetadata(basePath);
+            HoodieCommitMetadata commitMetadata = generateCommitMetadata(basePath, commitTime, writes, updates);
             // Write empty commit metadata
             os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
           } catch (IOException ioe) {
@@ -91,21 +97,27 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
   /**
    * Generate commitMetadata in path.
    */
-  public static HoodieCommitMetadata generateCommitMetadata(String basePath) throws IOException {
-    String file1P0C0 = HoodieTestUtils.createNewBaseFile(basePath, DEFAULT_FIRST_PARTITION_PATH, "000");
-    String file1P1C0 = HoodieTestUtils.createNewBaseFile(basePath, DEFAULT_SECOND_PARTITION_PATH, "000");
+  public static HoodieCommitMetadata generateCommitMetadata(String basePath, String commitTime) throws IOException {
+    return generateCommitMetadata(basePath, commitTime, Option.empty(), Option.empty());
+  }
+
+  public static HoodieCommitMetadata generateCommitMetadata(String basePath, String commitTime,
+      Option<Integer> writes, Option<Integer> updates) throws IOException {
+    String file1P0C0 = HoodieTestUtils.createNewBaseFile(basePath, DEFAULT_FIRST_PARTITION_PATH, commitTime);
+    String file1P1C0 = HoodieTestUtils.createNewBaseFile(basePath, DEFAULT_SECOND_PARTITION_PATH, commitTime);
     return generateCommitMetadata(new HashMap<String, List<String>>() {
       {
         put(DEFAULT_FIRST_PARTITION_PATH, CollectionUtils.createImmutableList(file1P0C0));
         put(DEFAULT_SECOND_PARTITION_PATH, CollectionUtils.createImmutableList(file1P1C0));
       }
-    });
+    }, writes, updates);
   }
 
   /**
    * Method to generate commit metadata.
    */
-  private static HoodieCommitMetadata generateCommitMetadata(Map<String, List<String>> partitionToFilePaths) {
+  private static HoodieCommitMetadata generateCommitMetadata(Map<String, List<String>> partitionToFilePaths,
+      Option<Integer> writes, Option<Integer> updates) {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     partitionToFilePaths.forEach((key, value) -> value.forEach(f -> {
       HoodieWriteStat writeStat = new HoodieWriteStat();
@@ -114,8 +126,8 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
       writeStat.setFileId(DEFAULT_FILEID);
       writeStat.setTotalWriteBytes(DEFAULT_TOTAL_WRITE_BYTES);
       writeStat.setPrevCommit(DEFAULT_PRE_COMMIT);
-      writeStat.setNumWrites(DEFAULT_NUM_WRITES);
-      writeStat.setNumUpdateWrites(DEFAULT_NUM_UPDATE_WRITES);
+      writeStat.setNumWrites(writes.orElse(DEFAULT_NUM_WRITES));
+      writeStat.setNumUpdateWrites(updates.orElse(DEFAULT_NUM_UPDATE_WRITES));
       writeStat.setTotalLogBlocks(DEFAULT_TOTAL_LOG_BLOCKS);
       writeStat.setTotalLogRecords(DEFAULT_TOTAL_LOG_RECORDS);
       metadata.addWriteStat(key, writeStat);
