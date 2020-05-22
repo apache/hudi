@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -38,9 +39,13 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * Class storing configs for the {@link HoodieWriteClient}.
@@ -539,6 +544,45 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public String getJmxPort() {
     return props.getProperty(HoodieMetricsConfig.JMX_PORT);
+  }
+
+  public int getDatadogReportPeriodSeconds() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsDatadogConfig.DATADOG_REPORT_PERIOD_SECONDS));
+  }
+
+  public ApiSite getDatadogApiSite() {
+    return ApiSite.valueOf(props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_SITE));
+  }
+
+  public String getDatadogApiKey() {
+    if (props.containsKey(HoodieMetricsDatadogConfig.DATADOG_API_KEY)) {
+      return props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_KEY);
+    } else {
+      Supplier<String> apiKeySupplier = ReflectionUtils.loadClass(
+          props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_KEY_SUPPLIER));
+      return apiKeySupplier.get();
+    }
+  }
+
+  public boolean getDatadogApiKeySkipValidation() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_KEY_SKIP_VALIDATION));
+  }
+
+  public int getDatadogApiTimeoutSeconds() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_TIMEOUT_SECONDS));
+  }
+
+  public String getDatadogMetricPrefix() {
+    return props.getProperty(HoodieMetricsDatadogConfig.DATADOG_METRIC_PREFIX);
+  }
+
+  public String getDatadogMetricHost() {
+    return props.getProperty(HoodieMetricsDatadogConfig.DATADOG_METRIC_HOST);
+  }
+
+  public List<String> getDatadogMetricTags() {
+    return Arrays.stream(props.getProperty(
+        HoodieMetricsDatadogConfig.DATADOG_METRIC_TAGS).split("\\s*,\\s*")).collect(Collectors.toList());
   }
 
   /**
