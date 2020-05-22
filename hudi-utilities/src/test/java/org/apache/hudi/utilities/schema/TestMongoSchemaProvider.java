@@ -26,7 +26,6 @@ import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.UtilitiesTestBase;
-import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -39,7 +38,6 @@ import org.junit.Test;
 public class TestMongoSchemaProvider extends UtilitiesTestBase {
 
   private MongoSchemaProvider schemaProvider;
-  private KafkaTestUtils testUtils;
 
   @BeforeClass
   public static void initClass() throws Exception {

@@ -1,29 +1,27 @@
 package org.apache.hudi.utilities;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.utilities.sources.helpers.MongoAvroConverter;
 import org.junit.Test;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.List;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-
 public class TestMongoAvroConverter {
+
+  private static String readFile(String path) throws IOException {
+    return UtilitiesTestBase.Helpers.readFile(path);
+  }
 
   @Test
   public void testDocumentId() throws IOException {
     Schema.Parser parser = new Schema.Parser();
-    Path sampleSchemaPath = Paths.get("src/test/resources/unitTest/TestMongoAvroConverterSampleSchema.avsc");
-    String sampleSchemaStr = new String(Files.readAllBytes(sampleSchemaPath));
-    Path sampleKeyPath = Paths.get("src/test/resources/unitTest/TestMongoAvroConverterSampleOplogKey.json");
-    String sampleKeyStr = new String(Files.readAllBytes(sampleKeyPath));
+    String sampleSchemaStr = readFile("unitTest/TestMongoAvroConverterSampleSchema.avsc");
+    String sampleKeyStr = readFile("unitTest/TestMongoAvroConverterSampleOplogKey.json");
     Schema schema = parser.parse(sampleSchemaStr);
     MongoAvroConverter transformer = new MongoAvroConverter(schema);
     String createSampleId = "55555505d648da1824d45a1d";
@@ -33,14 +31,10 @@ public class TestMongoAvroConverter {
   @Test
   public void testKeyValueTransform() throws IOException {
     Schema.Parser parser = new Schema.Parser();
-    Path sampleSchemaPath = Paths.get("src/test/resources/unitTest/TestMongoAvroConverterSampleSchema.avsc");
-    String sampleSchemaStr = new String(Files.readAllBytes(sampleSchemaPath));
-    Path sampleUpdateValuePath = Paths.get("src/test/resources/unitTest/TestMongoAvroConverterSampleOplogUpdate.json");
-    String sampleUpdateValueStr = new String(Files.readAllBytes(sampleUpdateValuePath));
-    Path sampleCreateValuePath = Paths.get("src/test/resources/unitTest/TestMongoAvroConverterSampleOplogCreate.json");
-    String sampleCreateValueStr = new String(Files.readAllBytes(sampleCreateValuePath));
-    Path sampleKeyPath = Paths.get("src/test/resources/unitTest/TestMongoAvroConverterSampleOplogKey.json");
-    String sampleKeyStr = new String(Files.readAllBytes(sampleKeyPath));
+    String sampleSchemaStr = readFile("unitTest/TestMongoAvroConverterSampleSchema.avsc");
+    String sampleUpdateValueStr = readFile("unitTest/TestMongoAvroConverterSampleOplogUpdate.json");
+    String sampleCreateValueStr = readFile("unitTest/TestMongoAvroConverterSampleOplogCreate.json");
+    String sampleKeyStr = readFile("unitTest/TestMongoAvroConverterSampleOplogKey.json");
 
     Schema schema = parser.parse(sampleSchemaStr);
     MongoAvroConverter transformer = new MongoAvroConverter(schema);

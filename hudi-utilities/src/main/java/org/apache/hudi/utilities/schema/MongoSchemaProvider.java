@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.apache.hudi.utilities.mongo.SchemaUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.avro.Schema;
@@ -59,13 +60,6 @@ public class MongoSchemaProvider extends SchemaProvider {
    */
   private static class OplogSchemaProvider {
     private Schema baseSchema;
-    private final String[] fieldNames = new String[]{
-        "_id", "_op", "_ts_ms", "_patch"
-    };
-
-    private final Type[] fieldTypes = new Type[]{
-        Type.STRING, Type.STRING, Type.LONG, Type.STRING
-    };
 
     private Schema buildOplogBaseSchema() {
       SchemaBuilder.FieldAssembler<Schema> fieldAssembler = SchemaBuilder
@@ -75,11 +69,11 @@ public class MongoSchemaProvider extends SchemaProvider {
 
       Schema nullSchema = Schema.create(Schema.Type.NULL);
 
-      for (int i = 0; i < fieldNames.length; ++i) {
-        Schema schema = Schema.create(fieldTypes[i]);
+      for (int i = 0; i < SchemaUtils.OPLOG_FIELD_NAMES.length; ++i) {
+        Schema schema = Schema.create(SchemaUtils.OPLOG_FIELD_TYPES[i]);
         Schema unionSchema = Schema.createUnion(Arrays.asList(nullSchema, schema));
 
-        fieldAssembler.name(fieldNames[i]).type(unionSchema).withDefault(null);
+        fieldAssembler.name(SchemaUtils.OPLOG_FIELD_NAMES[i]).type(unionSchema).withDefault(null);
       }
 
       return fieldAssembler.endRecord();

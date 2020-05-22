@@ -465,7 +465,7 @@
         "null",
         {
             "type": "array",
-            "items": "string"
+            "items": ["null", "string"]
         }
       ],
       "name":"escrow_payment_ids",
