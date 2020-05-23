@@ -26,6 +26,10 @@ Apache Hudi was originally developed at [Uber](https://uber.com), to achieve [lo
 It has been in production since Aug 2016, powering the massive [100PB data lake](https://eng.uber.com/uber-big-data-platform/), including highly business critical tables like core trips,riders,partners. It also 
 powers several incremental Hive ETL pipelines and being currently integrated into Uber's data dispersal system.
 
+### Alibaba Cloud
+Alibaba Cloud provides cloud computing services to online businesses and Alibaba's own e-commerce ecosystem, Apache Hudi is integrated into Alibaba Cloud [Data Lake Analytics](https://www.alibabacloud.com/help/product/70174.htm)
+offering real-time analysis on hudi dataset.
+
 ### Amazon Web Services
 Amazon Web Services is the World's leading cloud services provider. Apache Hudi is [pre-installed](https://aws.amazon.com/emr/features/hudi/) with the AWS Elastic Map Reduce 
 offering, providing means for AWS users to perform record-level updates/deletes and manage storage efficiently.
