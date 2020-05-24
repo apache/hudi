@@ -16,7 +16,7 @@
 #    limitations under the License.
 #
 
-# This script will update apache hudi (incubating) master branch with next release version
+# This script will update apache hudi master branch with next release version
 # and cut release branch for current development version.
 
 # Parse parameters passing into the script
@@ -34,7 +34,7 @@ function clean_up(){
 }
 
 if [[ $# -eq 1 && $1 = "-h" ]]; then
-	echo "This script will update apache hudi(incubating) master branch with next release version and cut release branch for current development version."
+	echo "This script will update apache hudi master branch with next release version and cut release branch for current development version."
 	echo "There are 3 params required:"
 	echo "--release=\${CURRENT_RELEASE_VERSION}"
 	echo "--next_release=\${NEXT_RELEASE_VERSION}"
@@ -119,9 +119,9 @@ else
   exit
 fi
 
-# Checkout and update release branch - Add incubating and remove snapshot
+# Checkout and update release branch
 git checkout ${RELEASE_BRANCH}
-mvn versions:set -DnewVersion=${RELEASE}-incubating-rc${RC_NUM}
+mvn versions:set -DnewVersion=${RELEASE}-rc${RC_NUM}
 
 echo "==================Current working branch======================="
 echo ${RELEASE_BRANCH}

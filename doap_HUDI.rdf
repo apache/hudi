@@ -60,7 +60,7 @@
     </repository>
     <maintainer>
       <foaf:Person>
-        <foaf:name>Apache Hudi-incubating PPMC</foaf:name>
+        <foaf:name>Apache Hudi PMC</foaf:name>
           <foaf:mbox rdf:resource="mailto:dev@hudi.apache.org"/>
       </foaf:Person>
     </maintainer>
