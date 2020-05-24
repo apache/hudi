@@ -63,8 +63,8 @@ fi
 
 MASTER_BRANCH=master
 RELEASE_BRANCH=release-${RELEASE}
-GITHUB_REPO_URL=git@github.com:apache/incubator-hudi.git
-HUDI_ROOT_DIR=incubator-hudi
+GITHUB_REPO_URL=git@github.com:apache/hudi.git
+HUDI_ROOT_DIR=hudi
 LOCAL_CLONE_DIR=hudi_release_${RELEASE}
 
 echo "=====================Environment Variables====================="
