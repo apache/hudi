@@ -1,5 +1,5 @@
 ---
-title: "Apache Hudi (Incubating) Support on Apache Zeppelin"
+title: "Apache Hudi Support on Apache Zeppelin"
 excerpt: "Integrating HUDI's real-time and read-optimized query capabilities into Apache Zeppelin’s notebook"
 author: leesf
 category: blog
