@@ -147,11 +147,6 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder inlineCompactionEvery(int deltaCommits) {
-      props.setProperty(INLINE_COMPACT_PROP, String.valueOf(deltaCommits));
-      return this;
-    }
-
     public Builder withCleanerPolicy(HoodieCleaningPolicy policy) {
       props.setProperty(CLEANER_POLICY_PROP, policy.name());
       return this;
