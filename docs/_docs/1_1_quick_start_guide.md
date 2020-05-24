@@ -49,8 +49,8 @@ val basePath = "file:///tmp/hudi_trips_cow"
 val dataGen = new DataGenerator
 ```
 
-The [DataGenerator](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50) 
-can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
+The [DataGenerator](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50) 
+can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
 {: .notice--info}
 
 
@@ -74,8 +74,8 @@ df.write.format("hudi").
 
 `mode(Overwrite)` overwrites and recreates the table if it already exists.
 You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. We provided a record key 
-(`uuid` in [schema](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/country/city`) and combine logic (`ts` in 
-[schema](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)) to ensure trip records are unique within each partition. For more info, refer to 
+(`uuid` in [schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/country/city`) and combine logic (`ts` in 
+[schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)) to ensure trip records are unique within each partition. For more info, refer to 
 [Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
 and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data.html).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
@@ -247,8 +247,8 @@ basePath = "file:///tmp/hudi_trips_cow"
 dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
 ```
 
-The [DataGenerator](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50) 
-can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
+The [DataGenerator](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50) 
+can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
 {: .notice--info}
 
 
@@ -280,8 +280,8 @@ df.write.format("hudi"). \
 
 `mode(Overwrite)` overwrites and recreates the table if it already exists.
 You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. We provided a record key 
-(`uuid` in [schema](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/county/city`) and combine logic (`ts` in 
-[schema](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)) to ensure trip records are unique within each partition. For more info, refer to 
+(`uuid` in [schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/county/city`) and combine logic (`ts` in 
+[schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)) to ensure trip records are unique within each partition. For more info, refer to 
 [Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
 and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data.html).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
@@ -438,9 +438,9 @@ spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
 
 ## Where to go from here?
 
-You can also do the quickstart by [building hudi yourself](https://github.com/apache/incubator-hudi#building-apache-hudi-from-source), 
+You can also do the quickstart by [building hudi yourself](https://github.com/apache/hudi#building-apache-hudi-from-source), 
 and using `--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar` in the spark-shell command above
-instead of `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/incubator-hudi#build-with-scala-212)
+instead of `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/hudi#build-with-scala-212)
 for more info.
 
 Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 

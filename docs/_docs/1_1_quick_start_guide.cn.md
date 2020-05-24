@@ -32,8 +32,8 @@ val basePath = "file:///tmp/hudi_cow_table"
 val dataGen = new DataGenerator
 ```
 
-[数据生成器](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50)
-可以基于[行程样本模式](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
+[数据生成器](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50)
+可以基于[行程样本模式](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
 生成插入和更新的样本。
 
 ## 插入数据 {#inserts}
@@ -152,7 +152,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 ## 从这开始下一步？
 
-您也可以通过[自己构建hudi](https://github.com/apache/incubator-hudi#building-apache-hudi-from-source)来快速开始，
+您也可以通过[自己构建hudi](https://github.com/apache/hudi#building-apache-hudi-from-source)来快速开始，
 并在spark-shell命令中使用`--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar`，
 而不是`--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating`
 

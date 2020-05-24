@@ -25,7 +25,7 @@ To contribute code, you need
 To contribute, you would need to do the following
  
  - Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [quickstart](/docs/quick-start-guide.html)
- - [Recommended] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please setup your IDE with style files from [here](https://github.com/apache/incubator-hudi/tree/master/style).
+ - [Recommended] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please setup your IDE with style files from [here](https://github.com/apache/hudi/tree/master/style).
 These instructions have been tested on IntelliJ. 
  - [Recommended] Set up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.
  - [Optional] If needed, add spark jars to the classpath of your module in Intellij by following the steps from [here](https://stackoverflow.com/questions/1051640/correct-way-to-add-external-jars-lib-jar-to-an-intellij-idea-project). 
@@ -107,7 +107,7 @@ and more importantly also try to improve the process along the way as well.
    - For involved changes, it's best to also run the entire integration test suite using `mvn clean install`
    - For website changes, please build the site locally & test navigation, formatting & links thoroughly
    - If your code change changes some aspect of documentation (e.g new config, default value change), 
-     please ensure there is another PR to [update the docs](https://github.com/apache/incubator-hudi/tree/asf-site/README.md) as well.
+     please ensure there is another PR to [update the docs](https://github.com/apache/hudi/tree/asf-site/README.md) as well.
  - Sending a Pull Request
    - Format commit and the pull request title like `[HUDI-XXX] Fixes bug in Spark Datasource`, 
      where you replace `HUDI-XXX` with the appropriate JIRA issue. 
