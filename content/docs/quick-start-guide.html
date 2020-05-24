@@ -103,7 +103,7 @@
   </div>
 </div>
 <!--
-<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/incubator-hudi/issues">Report on Issue</a>.
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
   Click <a href="/"> here</a> back to old site.</p>
 -->
 
@@ -408,8 +408,8 @@ From the extracted directory run spark-shell with Hudi as:</p>
 <span class="k">val</span> <span class="nv">dataGen</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">DataGenerator</span>
 </code></pre></div></div>
 
-<p class="notice--info">The <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50">DataGenerator</a> 
-can generate sample inserts and updates based on the the sample trip schema <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57">here</a></p>
+<p class="notice--info">The <a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50">DataGenerator</a> 
+can generate sample inserts and updates based on the the sample trip schema <a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57">here</a></p>
 
 <h2 id="insert-data">Insert data</h2>
 
@@ -430,8 +430,8 @@ can generate sample inserts and updates based on the the sample trip schema <a h
 
 <p class="notice--info"><code class="highlighter-rouge">mode(Overwrite)</code> overwrites and recreates the table if it already exists.
 You can check the data generated under <code class="highlighter-rouge">/tmp/hudi_trips_cow/&lt;region&gt;/&lt;country&gt;/&lt;city&gt;/</code>. We provided a record key 
-(<code class="highlighter-rouge">uuid</code> in <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58">schema</a>), partition field (<code class="highlighter-rouge">region/country/city</code>) and combine logic (<code class="highlighter-rouge">ts</code> in 
-<a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58">schema</a>) to ensure trip records are unique within each partition. For more info, refer to 
+(<code class="highlighter-rouge">uuid</code> in <a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58">schema</a>), partition field (<code class="highlighter-rouge">region/country/city</code>) and combine logic (<code class="highlighter-rouge">ts</code> in 
+<a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58">schema</a>) to ensure trip records are unique within each partition. For more info, refer to 
 <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi">Modeling data stored in Hudi</a>
 and for info on ways to ingest data into Hudi, refer to <a href="/docs/writing_data.html">Writing Hudi Tables</a>.
 Here we are using the default write operation : <code class="highlighter-rouge">upsert</code>. If you have a workload without updates, you can also issue 
@@ -592,8 +592,8 @@ From the extracted directory run spark-shell with Hudi as:</p>
 <span class="n">dataGen</span> <span class="o">=</span> <span class="n">sc</span><span class="o">.</span><span class="n">_jvm</span><span class="o">.</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="o">.</span><span class="n">QuickstartUtils</span><span class="o">.</span><span class="n">DataGenerator</span><span class="p">()</span>
 </code></pre></div></div>
 
-<p class="notice--info">The <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50">DataGenerator</a> 
-can generate sample inserts and updates based on the the sample trip schema <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57">here</a></p>
+<p class="notice--info">The <a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50">DataGenerator</a> 
+can generate sample inserts and updates based on the the sample trip schema <a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57">here</a></p>
 
 <h2 id="insert-data-1">Insert data</h2>
 
@@ -622,8 +622,8 @@ can generate sample inserts and updates based on the the sample trip schema <a h
 
 <p class="notice--info"><code class="highlighter-rouge">mode(Overwrite)</code> overwrites and recreates the table if it already exists.
 You can check the data generated under <code class="highlighter-rouge">/tmp/hudi_trips_cow/&lt;region&gt;/&lt;country&gt;/&lt;city&gt;/</code>. We provided a record key 
-(<code class="highlighter-rouge">uuid</code> in <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58">schema</a>), partition field (<code class="highlighter-rouge">region/county/city</code>) and combine logic (<code class="highlighter-rouge">ts</code> in 
-<a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58">schema</a>) to ensure trip records are unique within each partition. For more info, refer to 
+(<code class="highlighter-rouge">uuid</code> in <a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58">schema</a>), partition field (<code class="highlighter-rouge">region/county/city</code>) and combine logic (<code class="highlighter-rouge">ts</code> in 
+<a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58">schema</a>) to ensure trip records are unique within each partition. For more info, refer to 
 <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi">Modeling data stored in Hudi</a>
 and for info on ways to ingest data into Hudi, refer to <a href="/docs/writing_data.html">Writing Hudi Tables</a>.
 Here we are using the default write operation : <code class="highlighter-rouge">upsert</code>. If you have a workload without updates, you can also issue 
@@ -769,9 +769,9 @@ specific commit time and beginTime to “000” (denoting earliest possible comm
 
 <h2 id="where-to-go-from-here">Where to go from here?</h2>
 
-<p>You can also do the quickstart by <a href="https://github.com/apache/incubator-hudi#building-apache-hudi-from-source">building hudi yourself</a>, 
+<p>You can also do the quickstart by <a href="https://github.com/apache/hudi#building-apache-hudi-from-source">building hudi yourself</a>, 
 and using <code class="highlighter-rouge">--jars &lt;path to hudi_code&gt;/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar</code> in the spark-shell command above
-instead of <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating</code>. Hudi also supports scala 2.12. Refer <a href="https://github.com/apache/incubator-hudi#build-with-scala-212">build with scala 2.12</a>
+instead of <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating</code>. Hudi also supports scala 2.12. Refer <a href="https://github.com/apache/hudi#build-with-scala-212">build with scala 2.12</a>
 for more info.</p>
 
 <p>Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 
@@ -823,11 +823,6 @@ to Hudi, refer to <a href="/docs/migration_guide.html">migration guide</a>.</p>
     <p>
       Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
       Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
-      <br>
-      Apache Hudi is an effort undergoing incubation at The Apache Software Foundation (ASF), sponsored by the <a href="http://incubator.apache.org/">Apache Incubator</a>.
-      Incubation is required of all newly accepted projects until a further review indicates that the infrastructure, communications, and decision making process have
-      stabilized in a manner consistent with other successful ASF projects. While incubation status is not necessarily a
-      reflection of the completeness or stability of the code, it does indicate that the project has yet to be fully endorsed by the ASF.
     </p>
   </div>
 </div>

@@ -709,7 +709,7 @@ var store = [{
         "tags": [],
         "url": "https://hudi.apache.org/blog/exporting-hudi-datasets/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
-        "title": "Apache Hudi (Incubating) Support on Apache Zeppelin",
+        "title": "Apache Hudi Support on Apache Zeppelin",
         "excerpt":"1. Introduction Apache Zeppelin is a web-based notebook that provides interactive data analysis. It is convenient for you to make beautiful documents that can be data-driven, interactive, and collaborative, and supports multiple languages, including Scala (using Apache Spark), Python (Apache Spark), SparkSQL, Hive, Markdown, Shell, and so on. Hive and...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/apache-hudi-apache-zepplin/",

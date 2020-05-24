@@ -4,7 +4,7 @@
     <meta charset="utf-8">
 
 <!-- begin _includes/seo.html --><title>Releases - Apache Hudi</title>
-<meta name="description" content="Apache Hudi ingests &amp; manages storage of large analytical datasets over DFS (HDFS or cloud stores).">
+<meta name="description" content="Apache Hudi brings upserts, deletes and stream processing to data lakes built on HDFS or cloud storage.">
 
 <meta property="og:type" content="website">
 <meta property="og:locale" content="en_US">
@@ -101,7 +101,7 @@
   </div>
 </div>
 <!--
-<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/incubator-hudi/issues">Report on Issue</a>.
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
   Click <a href="/"> here</a> back to old site.</p>
 -->
 
@@ -146,7 +146,7 @@
 
           
         
-          <li><a href="https://github.com/apache/incubator-hudi" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-github" aria-hidden="true"></i> Fork on GitHub</a></li>
+          <li><a href="https://github.com/apache/hudi" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-github" aria-hidden="true"></i> Fork on GitHub</a></li>
 
           
         
@@ -219,12 +219,12 @@
           </nav>
         </aside>
         
-        <h2 id="release-052-incubating-docs"><a href="https://github.com/apache/incubator-hudi/releases/tag/release-0.5.2-incubating">Release 0.5.2-incubating</a> (<a href="/docs/0.5.2-quick-start-guide.html">docs</a>)</h2>
+        <h2 id="release-052-incubating-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating">Release 0.5.2-incubating</a> (<a href="/docs/0.5.2-quick-start-guide.html">docs</a>)</h2>
 
 <h3 id="download-information">Download Information</h3>
 <ul>
-  <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz">Apache Hudi(incubating) 0.5.2-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512">sha512</a>)</li>
-  <li>Apache Hudi (incubating) jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
+  <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz">Apache Hudi 0.5.2-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
 </ul>
 
 <h3 id="migration-guide-for-this-release">Migration Guide for this release</h3>
@@ -236,7 +236,7 @@
 <ul>
   <li>Support for overwriting the payload implementation in <code class="highlighter-rouge">hoodie.properties</code> via specifying the <code class="highlighter-rouge">hoodie.compaction.payload.class</code> config option. Previously, once the payload class is set once in <code class="highlighter-rouge">hoodie.properties</code>, it cannot be changed. In some cases, if a code refactor is done and the jar updated, one may need to pass the new payload class name.</li>
   <li><code class="highlighter-rouge">TimestampBasedKeyGenerator</code> supports for <code class="highlighter-rouge">CharSequence</code>  types. Previously <code class="highlighter-rouge">TimestampBasedKeyGenerator</code> only supports <code class="highlighter-rouge">Double</code>, <code class="highlighter-rouge">Long</code>, <code class="highlighter-rouge">Float</code> and <code class="highlighter-rouge">String</code> 4 data types for the partition key. Now, after data type extending, <code class="highlighter-rouge">CharSequence</code> has been supported in <code class="highlighter-rouge">TimestampBasedKeyGenerator</code>.</li>
-  <li>Hudi now supports incremental pulling from defined partitions via the <code class="highlighter-rouge">hoodie.datasource.read.incr.path.glob</code> <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/scala/org/apache/hudi/DataSourceOptions.scala#L111">config option</a>. For some use case that users only need to pull the incremental part of certain partitions, it can run faster by only loading relevant parquet files.</li>
+  <li>Hudi now supports incremental pulling from defined partitions via the <code class="highlighter-rouge">hoodie.datasource.read.incr.path.glob</code> <a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/scala/org/apache/hudi/DataSourceOptions.scala#L111">config option</a>. For some use case that users only need to pull the incremental part of certain partitions, it can run faster by only loading relevant parquet files.</li>
   <li>With 0.5.2, hudi allows partition path to be updated with <code class="highlighter-rouge">GLOBAL_BLOOM</code> index. Previously, when a record is to be updated with a new partition path, and when set to <code class="highlighter-rouge">GLOBAL_BLOOM</code> as index, hudi ignores the new partition path and update the record in the original partition path. Now, hudi allows records to be inserted into their new partition paths and delete the records in the old partition paths. A configuration (e.g. <code class="highlighter-rouge">hoodie.index.bloom.update.partition.path=true</code>) can be added to enable this feature.</li>
   <li>A <code class="highlighter-rouge">JdbcbasedSchemaProvider</code> schema provider has been provided to get metadata through JDBC. For the use case that users want to synchronize data from MySQL, and at the same time, want to get the schema from the database, it’s very helpful.</li>
   <li>Simplify <code class="highlighter-rouge">HoodieBloomIndex</code> without the need for 2GB limit handling. Prior to spark 2.4.0, each spark partition has a limit of 2GB. In Hudi 0.5.1, after we upgraded to spark 2.4.4, we don’t have the limitation anymore. Hence removing the safe parallelism constraint we had in<code class="highlighter-rouge"> HoodieBloomIndex</code>.</li>
@@ -254,12 +254,12 @@
 <h3 id="raw-release-notes">Raw Release Notes</h3>
 <p>The raw release notes are available <a href="https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346606">here</a></p>
 
-<h2 id="release-051-incubating-docs"><a href="https://github.com/apache/incubator-hudi/releases/tag/release-0.5.1-incubating">Release 0.5.1-incubating</a> (<a href="/docs/0.5.1-quick-start-guide.html">docs</a>)</h2>
+<h2 id="release-051-incubating-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating">Release 0.5.1-incubating</a> (<a href="/docs/0.5.1-quick-start-guide.html">docs</a>)</h2>
 
 <h3 id="download-information-1">Download Information</h3>
 <ul>
-  <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz">Apache Hudi(incubating) 0.5.1-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512">sha512</a>)</li>
-  <li>Apache Hudi (incubating) jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
+  <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz">Apache Hudi 0.5.1-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
 </ul>
 
 <h3 id="migration-guide-for-this-release-1">Migration Guide for this release</h3>
@@ -278,7 +278,7 @@
     </ul>
   </li>
   <li><strong>IMPORTANT</strong> This version requires your runtime spark version to be upgraded to 2.4+.</li>
-  <li>Hudi now supports both Scala 2.11 and Scala 2.12, please refer to <a href="https://github.com/apache/incubator-hudi#build-with-scala-212">Build with Scala 2.12</a> to build with Scala 2.12.
+  <li>Hudi now supports both Scala 2.11 and Scala 2.12, please refer to <a href="https://github.com/apache/hudi#build-with-scala-212">Build with Scala 2.12</a> to build with Scala 2.12.
 Also, the packages hudi-spark, hudi-utilities, hudi-spark-bundle and hudi-utilities-bundle are changed correspondingly to hudi-spark_{scala_version}, hudi-spark_{scala_version}, hudi-utilities_{scala_version}, hudi-spark-bundle_{scala_version} and hudi-utilities-bundle_{scala_version}.
 Note that scala_version here is one of (2.11, 2.12).</li>
   <li>With 0.5.1, we added functionality to stop using renames for Hudi timeline metadata operations. This feature is automatically enabled for newly created Hudi tables. For existing tables, this feature is turned off by default. Please read this <a href="https://hudi.apache.org/docs/deployment.html#upgrading">section</a>, before enabling this feature for existing hudi tables.
@@ -290,7 +290,7 @@ To enable the new hudi timeline layout which avoids renames, use the write confi
   <li>Key generator moved to separate package under org.apache.hudi.keygen. If you are using overridden key generator classes (configuration (“hoodie.datasource.write.keygenerator.class”)) that comes with hudi package, please ensure the fully qualified class name is changed accordingly.</li>
   <li>Hive Sync tool will register RO tables for MOR with a _ro suffix, so query with _ro suffix. You would use <code class="highlighter-rouge">--skip-ro-suffix</code> in sync config in sync config to retain the old naming without the _ro suffix.</li>
   <li>
-    <p>With 0.5.1, hudi-hadoop-mr-bundle which is used by query engines such as presto and hive includes shaded avro package to support hudi real time queries through these engines. Hudi supports pluggable logic for merging of records. Users provide their own implementation of <a href="https://github.com/apache/incubator-hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecordPayload.java">HoodieRecordPayload</a>.
+    <p>With 0.5.1, hudi-hadoop-mr-bundle which is used by query engines such as presto and hive includes shaded avro package to support hudi real time queries through these engines. Hudi supports pluggable logic for merging of records. Users provide their own implementation of <a href="https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecordPayload.java">HoodieRecordPayload</a>.
 If you are using this feature, you need to relocate the avro dependencies in your custom record payload class to be consistent with internal hudi shading. You need to add the following relocation when shading the package containing the record payload implementation.</p>
 
     <div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;relocation&gt;</span>
@@ -307,12 +307,12 @@ If you are using this feature, you need to relocate the avro dependencies in you
 <h3 id="raw-release-notes-1">Raw Release Notes</h3>
 <p>The raw release notes are available <a href="https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346183">here</a></p>
 
-<h2 id="release-050-incubating-docs"><a href="https://github.com/apache/incubator-hudi/releases/tag/release-0.5.0-incubating">Release 0.5.0-incubating</a> (<a href="/docs/0.5.0-quick-start-guide.html">docs</a>)</h2>
+<h2 id="release-050-incubating-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.5.0-incubating">Release 0.5.0-incubating</a> (<a href="/docs/0.5.0-quick-start-guide.html">docs</a>)</h2>
 
 <h3 id="download-information-2">Download Information</h3>
 <ul>
-  <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz">Apache Hudi(incubating) 0.5.0-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512">sha512</a>)</li>
-  <li>Apache Hudi (incubating) jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
+  <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz">Apache Hudi 0.5.0-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
 </ul>
 
 <h3 id="release-highlights-2">Release Highlights</h3>
@@ -326,12 +326,12 @@ If you are using this feature, you need to relocate the avro dependencies in you
 </ul>
 
 <h3 id="migration-guide-for-this-release-2">Migration Guide for this release</h3>
-<p>This is the first Apache release for Hudi (incubating). Prior to this release, Hudi Jars were published using “com.uber.hoodie” maven co-ordinates. We have a <a href="https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi">migration guide</a></p>
+<p>This is the first Apache release for Hudi. Prior to this release, Hudi Jars were published using “com.uber.hoodie” maven co-ordinates. We have a <a href="https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi">migration guide</a></p>
 
 <h3 id="raw-release-notes-2">Raw Release Notes</h3>
 <p>The raw release notes are available <a href="https://jira.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346087">here</a></p>
 
-<h2 id="release-047"><a href="https://github.com/apache/incubator-hudi/releases/tag/hoodie-0.4.7">Release 0.4.7</a></h2>
+<h2 id="release-047"><a href="https://github.com/apache/hudi/releases/tag/hoodie-0.4.7">Release 0.4.7</a></h2>
 
 <h3 id="release-highlights-3">Release Highlights</h3>
 
@@ -346,11 +346,11 @@ If you are using this feature, you need to relocate the avro dependencies in you
 <h3 id="pr-list">PR LIST</h3>
 
 <ul>
-  <li>Skip Meta folder when looking for partitions. <a href="https://github.com/apache/incubator-hudi/pull/698">#698</a></li>
-  <li>HUDI-134 - Disable inline compaction for Hoodie Demo. <a href="https://github.com/apache/incubator-hudi/pull/696">#696</a></li>
-  <li>Default implementation for HBase index qps allocator. <a href="https://github.com/apache/incubator-hudi/pull/685">#685</a></li>
-  <li>Handle duplicate record keys across partitions. <a href="https://github.com/apache/incubator-hudi/pull/687">#687</a></li>
-  <li>Fix up offsets not available on leader exception. <a href="https://github.com/apache/incubator-hudi/pull/650">#650</a></li>
+  <li>Skip Meta folder when looking for partitions. <a href="https://github.com/apache/hudi/pull/698">#698</a></li>
+  <li>HUDI-134 - Disable inline compaction for Hoodie Demo. <a href="https://github.com/apache/hudi/pull/696">#696</a></li>
+  <li>Default implementation for HBase index qps allocator. <a href="https://github.com/apache/hudi/pull/685">#685</a></li>
+  <li>Handle duplicate record keys across partitions. <a href="https://github.com/apache/hudi/pull/687">#687</a></li>
+  <li>Fix up offsets not available on leader exception. <a href="https://github.com/apache/hudi/pull/650">#650</a></li>
 </ul>
 
         
@@ -394,11 +394,6 @@ If you are using this feature, you need to relocate the avro dependencies in you
     <p>
       Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
       Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
-      <br>
-      Apache Hudi is an effort undergoing incubation at The Apache Software Foundation (ASF), sponsored by the <a href="http://incubator.apache.org/">Apache Incubator</a>.
-      Incubation is required of all newly accepted projects until a further review indicates that the infrastructure, communications, and decision making process have
-      stabilized in a manner consistent with other successful ASF projects. While incubation status is not necessarily a
-      reflection of the completeness or stability of the code, it does indicate that the project has yet to be fully endorsed by the ASF.
     </p>
   </div>
 </div>
