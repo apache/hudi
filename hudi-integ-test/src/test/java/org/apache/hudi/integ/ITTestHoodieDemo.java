@@ -26,7 +26,7 @@ import org.junit.Test;
 import java.util.List;
 
 /**
- * Goes through steps described in https://hudi.incubator.apache.org/docker_demo.html
+ * Goes through steps described in https://hudi.apache.org/docker_demo.html
  *
  * To run this as a standalone test in the IDE or command line. First bring up the demo setup using
  * `docker/setup_demo.sh` and then run the test class as you would do normally.
