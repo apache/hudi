@@ -31,7 +31,7 @@ fi
 
 REDIRECT=' > /dev/null 2>&1'
 if [[ $# -lt 2 ]]; then
-    echo "This script will validate source release candidate published in dist for apache hudi(incubating)"
+    echo "This script will validate source release candidate published in dist for apache hudi"
     echo "There are two params required:"
     echo "--release=\${CURRENT_RELEASE_VERSION}"
     echo "--rc_num=\${RC_NUM}"
@@ -65,11 +65,11 @@ rm -rf $WORK_DIR
 mkdir $WORK_DIR
 pushd $WORK_DIR
 
-# Checkout dist incubator repo
+# Checkout dist repo
 LOCAL_SVN_DIR=local_svn_dir
 ROOT_SVN_URL=https://dist.apache.org/repos/dist/
-DEV_REPO=dev/incubator
-#RELEASE_REPO=release/incubator
+DEV_REPO=dev
+#RELEASE_REPO=release
 HUDI_REPO=hudi
 
 rm -rf $LOCAL_SVN_DIR
@@ -77,23 +77,23 @@ mkdir $LOCAL_SVN_DIR
 cd $LOCAL_SVN_DIR
 (bash -c "svn co ${ROOT_SVN_URL}/${DEV_REPO}/${HUDI_REPO} $REDIRECT") || (echo -e "\t\t Unable to checkout  ${ROOT_SVN_URL}/${DEV_REPO}/${HUDI_REPO} . Please run with --verbose to get details\n" && exit -1)
 
-cd ${HUDI_REPO}/hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}
-$SHASUM hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz > got.sha512 
+cd ${HUDI_REPO}/hudi-${RELEASE_VERSION}-rc${RC_NUM}
+$SHASUM hudi-${RELEASE_VERSION}-rc${RC_NUM}.src.tgz > got.sha512
 
 echo "Checking Checksum of Source Release"
-diff -u hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz.sha512 got.sha512 
+diff -u hudi-${RELEASE_VERSION}-rc${RC_NUM}.src.tgz.sha512 got.sha512
 echo -e "\t\tChecksum Check of Source Release - [OK]\n"
 
 # Download KEYS file
-curl https://dist.apache.org/repos/dist/release/incubator/hudi/KEYS > ../KEYS
+curl https://dist.apache.org/repos/dist/release/hudi/KEYS > ../KEYS
 
 # GPG Check
 echo "Checking Signature"
-(bash -c "gpg --import ../KEYS $REDIRECT" && bash -c "gpg --verify hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz.asc hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz $REDIRECT" && echo -e "\t\tSignature Check - [OK]\n") || (echo -e "\t\tSignature Check - [FAILED] - Run with --verbose to get details\n" && exit -1)
+(bash -c "gpg --import ../KEYS $REDIRECT" && bash -c "gpg --verify hudi-${RELEASE_VERSION}-rc${RC_NUM}.src.tgz.asc hudi-${RELEASE_VERSION}-rc${RC_NUM}.src.tgz $REDIRECT" && echo -e "\t\tSignature Check - [OK]\n") || (echo -e "\t\tSignature Check - [FAILED] - Run with --verbose to get details\n" && exit -1)
 
 # Untar 
-(bash -c "tar -zxf hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz $REDIRECT") || (echo -e "\t\t Unable to untar hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz . Please run with --verbose to get details\n" && exit -1)
-cd hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}
+(bash -c "tar -zxf hudi-${RELEASE_VERSION}-rc${RC_NUM}.src.tgz $REDIRECT") || (echo -e "\t\t Unable to untar hudi-${RELEASE_VERSION}-rc${RC_NUM}.src.tgz . Please run with --verbose to get details\n" && exit -1)
+cd hudi-${RELEASE_VERSION}-rc${RC_NUM}
 
 ### BEGIN: Binary Files Check
 echo "Checking for binary files in source release"
