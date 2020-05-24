@@ -124,7 +124,7 @@ df.write.format("hudi").
 ```
 
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
-[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](http://hudi.incubator.apache.org/docs/concepts.html) 
+[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts.html) 
 denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit. 
 {: .notice--info}
 
@@ -327,7 +327,7 @@ df.write.format("hudi"). \
 ```
 
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
-[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](http://hudi.incubator.apache.org/docs/concepts.html) 
+[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts.html) 
 denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit. 
 {: .notice--info}
 
