@@ -20,12 +20,6 @@ power_items:
 
 ## Adoption
 
-### Uber
-
-Apache Hudi was originally developed at [Uber](https://uber.com), to achieve [low latency database ingestion, with high efficiency](http://www.slideshare.net/vinothchandar/hadoop-strata-talk-uber-your-hadoop-has-arrived/32).
-It has been in production since Aug 2016, powering the massive [100PB data lake](https://eng.uber.com/uber-big-data-platform/), including highly business critical tables like core trips,riders,partners. It also 
-powers several incremental Hive ETL pipelines and being currently integrated into Uber's data dispersal system.
-
 ### Alibaba Cloud
 Alibaba Cloud provides cloud computing services to online businesses and Alibaba's own e-commerce ecosystem, Apache Hudi is integrated into Alibaba Cloud [Data Lake Analytics](https://www.alibabacloud.com/help/product/70174.htm)
 offering real-time analysis on hudi dataset.
@@ -38,17 +32,36 @@ offering, providing means for AWS users to perform record-level updates/deletes 
 
 [EMIS Health](https://www.emishealth.com/) is the largest provider of Primary Care IT software in the UK with datasets including more than 500Bn healthcare records. HUDI is used to manage their analytics dataset in production and keeping them up-to-date with their upstream source. Presto is being used to query the data written in HUDI format.
 
+### Logical Clocks
+
+[Hopsworks 1.x series](https://www.logicalclocks.com/blog/introducing-the-hopsworks-1-x-series) supports Apache Hudi feature groups, to enable upserts and time travel.
+ 
+### Tathastu.ai
+
+[Tathastu.ai](https://www.tathastu.ai) offers the largest AI/ML playground of consumer data for data scientists, AI experts and technologists to build upon. They have built a CDC pipeline using Apache Hudi and Debezium. Data from Hudi datasets is being queried using Hive, Presto and Spark.
+
+### Tencent 
+
+[EMR from Tencent](https://intl.cloud.tencent.com/product/emr) Cloud has integrated Hudi as one of its BigData components [since V2.2.0](https://intl.cloud.tencent.com/document/product/1026/35587). Using Hudi, the end-users can handle either read-heavy or write-heavy use cases, and Hudi will manage the underlying data stored on HDFS/COS/CHDFS using Apache Parquet and Apache Avro.
+
+### Uber
+
+Apache Hudi was originally developed at [Uber](https://uber.com), to achieve [low latency database ingestion, with high efficiency](http://www.slideshare.net/vinothchandar/hadoop-strata-talk-uber-your-hadoop-has-arrived/32).
+It has been in production since Aug 2016, powering the massive [100PB data lake](https://eng.uber.com/uber-big-data-platform/), including highly business critical tables like core trips,riders,partners. It also 
+powers several incremental Hive ETL pipelines and being currently integrated into Uber's data dispersal system.
+
+### Udemy 
+
+At [Udemy](https://www.udemy.com/), Apache Hudi on AWS EMR is used to perform ingest MySQL change data capture.
+
 ### Yields.io
 
 Yields.io is the first FinTech platform that uses AI for automated model validation and real-time monitoring on an enterprise-wide scale. Their [data lake](https://www.yields.io/Blog/Apache-Hudi-at-Yields) is managed by Hudi. They are also actively building their infrastructure for incremental, cross language/platform machine learning using Hudi.
 
 ### Yotpo
 
-Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in their open source ETL framework https://github.com/YotpoLtd/metorikku and using as an output writer for a CDC pipeline, with events that are being generated from a database binlog streams to Kafka and then are written to S3. 
- 
-### Tathastu.ai
+Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in their open source ETL framework, [Metorikku](https://github.com/YotpoLtd/metorikku) and using as an output writer for a CDC pipeline, with events that are being generated from a database binlog streams to Kafka and then are written to S3. 
 
-[Tathastu.ai](https://www.tathastu.ai) offers the largest AI/ML playground of consumer data for data scientists, AI experts and technologists to build upon. They have built a CDC pipeline using Apache Hudi and Debezium. Data from Hudi datasets is being queried using Hive, Presto and Spark.
 
 ## Talks & Presentations
 
