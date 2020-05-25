@@ -188,7 +188,7 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
     for (int i = 100; i < 104; i++) {
       String timestamp = String.valueOf(i);
       // Write corrupted requested Compaction
-      HoodieTestCommitMetadataGenerator.createCompactionRequestedFile(tablePath, timestamp, conf);
+      HoodieTestCommitMetadataGenerator.createEmptyCleanRequestedFile(tablePath, timestamp, conf);
     }
 
     // reload meta client

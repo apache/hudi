@@ -108,6 +108,7 @@ public class RepairsCommand implements CommandMarker {
           HoodiePartitionMetadata partitionMetadata =
               new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath, partitionPath);
           partitionMetadata.trySave(0);
+          row[2] = "Repaired";
         }
       }
       rows[ind++] = row;
@@ -118,8 +119,7 @@ public class RepairsCommand implements CommandMarker {
 
   @CliCommand(value = "repair overwrite-hoodie-props", help = "Overwrite hoodie.properties with provided file. Risky operation. Proceed with caution!")
   public String overwriteHoodieProperties(
-      @CliOption(key = {"new-props-file"}, help = "Path to a properties file on local filesystem to overwrite the table's hoodie.properties with")
-      final String overwriteFilePath) throws IOException {
+      @CliOption(key = {"new-props-file"}, help = "Path to a properties file on local filesystem to overwrite the table's hoodie.properties with") final String overwriteFilePath) throws IOException {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Properties newProps = new Properties();
@@ -135,7 +135,7 @@ public class RepairsCommand implements CommandMarker {
     String[][] rows = new String[allPropKeys.size()][];
     int ind = 0;
     for (String propKey : allPropKeys) {
-      String[] row = new String[]{
+      String[] row = new String[] {
           propKey,
           oldProps.getOrDefault(propKey, "null"),
           newProps.getOrDefault(propKey, "null").toString()
