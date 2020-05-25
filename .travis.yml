@@ -7,7 +7,7 @@ env:
     - GIT_USER="CI BOT"
     - GIT_EMAIL="cibot@hudi.apache.org"
     - GIT_REPO="apache"
-    - GIT_PROJECT="incubator-hudi"
+    - GIT_PROJECT="hudi"
     - GIT_BRANCH="asf-site"
     - DOCS_ROOT="`pwd`/docs"
 
