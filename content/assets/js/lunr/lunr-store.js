@@ -575,7 +575,7 @@ var store = [{
         "url": "https://hudi.apache.org/cn/docs/powered_by.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Talks & Powered By",
-        "excerpt":"Adoption Uber Apache Hudi was originally developed at Uber, to achieve low latency database ingestion, with high efficiency. It has been in production since Aug 2016, powering the massive 100PB data lake, including highly business critical tables like core trips,riders,partners. It also powers several incremental Hive ETL pipelines and being...","categories": [],
+        "excerpt":"Adoption Alibaba Cloud Alibaba Cloud provides cloud computing services to online businesses and Alibaba’s own e-commerce ecosystem, Apache Hudi is integrated into Alibaba Cloud Data Lake Analytics offering real-time analysis on hudi dataset. Amazon Web Services Amazon Web Services is the World’s leading cloud services provider. Apache Hudi is pre-installed...","categories": [],
         "tags": [],
         "url": "https://hudi.apache.org/docs/powered_by.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
