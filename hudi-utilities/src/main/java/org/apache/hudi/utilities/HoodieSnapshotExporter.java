@@ -146,7 +146,8 @@ public class HoodieSnapshotExporter {
 
   private Option<String> getLatestCommitTimestamp(FileSystem fs, Config cfg) {
     final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs.getConf(), cfg.sourceBasePath);
-    Option<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
+    Option<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline().getCommitsAndCompactionTimeline()
+        .filterCompletedInstants().lastInstant();
     return latestCommit.isPresent() ? Option.of(latestCommit.get().getTimestamp()) : Option.empty();
   }
 
@@ -251,7 +252,7 @@ public class HoodieSnapshotExporter {
     FileSystem fs = FSUtils.getFs(cfg.sourceBasePath, jsc.hadoopConfiguration());
     HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs.getConf(), cfg.sourceBasePath);
     return new HoodieTableFileSystemView(tableMetadata, tableMetadata
-        .getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+        .getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedInstants());
   }
 
   public static void main(String[] args) throws IOException {
