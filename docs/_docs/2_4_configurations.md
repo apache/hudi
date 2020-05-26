@@ -26,6 +26,10 @@ to cloud stores.
    Configurations required for S3 and Hudi co-operability.
  * [Google Cloud Storage](/docs/gcs_hoodie) <br/>
    Configurations required for GCS and Hudi co-operability.
+ * [Alibaba Cloud OSS](/docs/oss_hoodie.html) <br/>
+   Configurations required for OSS and Hudi co-operability.
+ * [Microsoft Azure](/docs/azure_hoodie.html) <br/>
+   Configurations required for Azure and Hudi co-operability.
 
 ## Spark Datasource Configs {#spark-datasource}
 

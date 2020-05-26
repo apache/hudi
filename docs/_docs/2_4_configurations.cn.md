@@ -29,6 +29,10 @@ language: cn
    S3和Hudi协同工作所需的配置。
  * [Google Cloud Storage](/cn/docs/gcs_hoodie.html) <br/>
    GCS和Hudi协同工作所需的配置。
+ * [Alibaba Cloud OSS](/cn/docs/oss_hoodie.html) <br/>
+   阿里云和Hudi协同工作所需的配置。
+ * [Microsoft Azure](/cn/docs/azure_hoodie.html) <br/>
+   Azure和Hudi协同工作所需的配置。
 
 ## Spark数据源配置 {#spark-datasource}
 
