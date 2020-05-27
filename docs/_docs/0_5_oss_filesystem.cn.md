@@ -1,7 +1,7 @@
 ---
 title: OSS Filesystem
 keywords: hudi, hive, aliyun, oss, spark, presto
-permalink: /docs/oss_hoodie.html
+permalink: /cn/docs/oss_hoodie.html
 summary: In this page, we go over how to configure Hudi with OSS filesystem.
 last_modified_at: 2020-04-21T12:50:50-10:00
 language: cn
