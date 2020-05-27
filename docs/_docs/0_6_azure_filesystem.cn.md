@@ -30,23 +30,23 @@ This combination works out of the box. No extra config needed.
 - Import Hudi jar to databricks workspace
 
 - Mount the file system to dbutils.
-```scala
-dbutils.fs.mount(
-  source = "abfss://xxx@xxx.dfs.core.windows.net",
-  mountPoint = "/mountpoint",
-  extraConfigs = configs)
-```
+  ```scala
+  dbutils.fs.mount(
+    source = "abfss://xxx@xxx.dfs.core.windows.net",
+    mountPoint = "/mountpoint",
+    extraConfigs = configs)
+  ```
 - When writing Hudi dataset, use abfss URL
-```scala
-inputDF.write
-  .format("org.apache.hudi")
-  .options(opts)
-  .mode(SaveMode.Append)
-  .save("abfss://<<storage-account>>.dfs.core.windows.net/hudi-tables/customer")
-```
+  ```scala
+  inputDF.write
+    .format("org.apache.hudi")
+    .options(opts)
+    .mode(SaveMode.Append)
+    .save("abfss://<<storage-account>>.dfs.core.windows.net/hudi-tables/customer")
+  ```
 - When reading Hudi dataset, use the mounting point
-```scala
-spark.read
-  .format("org.apache.hudi")
-  .load("/mountpoint/hudi-tables/customer")
-```
+  ```scala
+  spark.read
+    .format("org.apache.hudi")
+    .load("/mountpoint/hudi-tables/customer")
+  ```
