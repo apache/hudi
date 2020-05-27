@@ -12,7 +12,6 @@ power_items:
   - img_path: /assets/images/powers/qq.png
   - img_path: /assets/images/powers/tongcheng.png
   - img_path: /assets/images/powers/yotpo.png
-  - img_path: /assets/images/powers/kyligence.png
   - img_path: /assets/images/powers/tathastu.png
   - img_path: /assets/images/powers/shunfeng.png
   - img_path: /assets/images/powers/lingyue.png
