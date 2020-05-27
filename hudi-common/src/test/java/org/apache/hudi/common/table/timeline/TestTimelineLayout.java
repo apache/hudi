@@ -16,12 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.table;
+package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 
 import org.junit.jupiter.api.Test;

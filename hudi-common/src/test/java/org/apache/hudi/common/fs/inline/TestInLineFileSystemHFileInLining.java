@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.fs.inline;
 
+import org.apache.hudi.common.testutils.FileSystemTestUtils;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -40,10 +42,10 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.FILE_SCHEME;
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.RANDOM;
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getPhantomFile;
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.FILE_SCHEME;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.getPhantomFile;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterInMemPath;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -51,7 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 /**
  * Tests {@link InLineFileSystem} to inline HFile.
  */
-public class TestHFileInLining {
+public class TestInLineFileSystemHFileInLining {
 
   private final Configuration inMemoryConf;
   private final Configuration inlineConf;
@@ -60,7 +62,7 @@ public class TestHFileInLining {
   private int maxRows = 100 + RANDOM.nextInt(1000);
   private Path generatedPath;
 
-  public TestHFileInLining() {
+  public TestInLineFileSystemHFileInLining() {
     inMemoryConf = new Configuration();
     inMemoryConf.set("fs." + InMemoryFileSystem.SCHEME + ".impl", InMemoryFileSystem.class.getName());
     inlineConf = new Configuration();

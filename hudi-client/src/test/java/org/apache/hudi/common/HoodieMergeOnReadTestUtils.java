@@ -19,7 +19,7 @@
 package org.apache.hudi.common;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 

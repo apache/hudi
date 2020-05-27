@@ -28,8 +28,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionPlanMigrator;
+import org.apache.hudi.common.testutils.CompactionTestUtils.TestHoodieBaseFile;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.util.CompactionTestUtils.TestHoodieBaseFile;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.fs.Path;
@@ -45,10 +45,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
-import static org.apache.hudi.common.util.CompactionTestUtils.createCompactionPlan;
-import static org.apache.hudi.common.util.CompactionTestUtils.scheduleCompaction;
-import static org.apache.hudi.common.util.CompactionTestUtils.setupAndValidateCompactionOperations;
+import static org.apache.hudi.common.testutils.CompactionTestUtils.createCompactionPlan;
+import static org.apache.hudi.common.testutils.CompactionTestUtils.scheduleCompaction;
+import static org.apache.hudi.common.testutils.CompactionTestUtils.setupAndValidateCompactionOperations;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.util.CompactionUtils.COMPACTION_METADATA_VERSION_1;
 import static org.apache.hudi.common.util.CompactionUtils.LATEST_COMPACTION_METADATA_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The utility class for testing compaction.
+ * Tests for {@link CompactionUtils}.
  */
 public class TestCompactionUtils extends HoodieCommonTestHarness {
 

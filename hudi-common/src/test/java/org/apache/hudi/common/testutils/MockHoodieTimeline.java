@@ -16,7 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.table.timeline;
+package org.apache.hudi.common.testutils;
+
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
 import java.util.Comparator;
 import java.util.stream.Collectors;

@@ -16,9 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.storage;
-
-import org.apache.hudi.common.fs.StorageSchemes;
+package org.apache.hudi.common.fs;
 
 import org.junit.jupiter.api.Test;
 

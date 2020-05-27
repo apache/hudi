@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.MercifulJsonConverter;
@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
@@ -86,7 +87,7 @@ public class SchemaTestUtil {
     }
   }
 
-  static Path uriToPath(URI uri) throws IOException {
+  public static Path uriToPath(URI uri) throws IOException {
     final Map<String, String> env = new HashMap<>();
     final String[] array = uri.toString().split("!");
     FileSystem fs;
@@ -176,7 +177,7 @@ public class SchemaTestUtil {
 
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,
       String fileId) throws IOException {
-    TestRecord record = new TestRecord(instantTime, recordNumber, fileId);
+    SampleTestRecord record = new SampleTestRecord(instantTime, recordNumber, fileId);
     MercifulJsonConverter converter = new MercifulJsonConverter();
     return converter.convert(record.toJsonString(), schema);
   }

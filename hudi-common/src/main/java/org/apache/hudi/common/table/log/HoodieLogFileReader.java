@@ -52,7 +52,7 @@ import java.util.Objects;
  * Scans a log file and provides block level iterator on the log file Loads the entire block contents in memory Can emit
  * either a DataBlock, CommandBlock, DeleteBlock or CorruptBlock (if one is found).
  */
-class HoodieLogFileReader implements HoodieLogFormat.Reader {
+public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   public static final int DEFAULT_BUFFER_SIZE = 16 * 1024 * 1024; // 16 MB
   private static final Logger LOG = LogManager.getLogger(HoodieLogFileReader.class);
@@ -67,7 +67,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private boolean reverseReader;
   private boolean closed = false;
 
-  HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
+  public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
       boolean readBlockLazily, boolean reverseReader) throws IOException {
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
@@ -89,12 +89,12 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
     addShutDownHook();
   }
 
-  HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, boolean readBlockLazily,
+  public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, boolean readBlockLazily,
       boolean reverseReader) throws IOException {
     this(fs, logFile, readerSchema, DEFAULT_BUFFER_SIZE, readBlockLazily, reverseReader);
   }
 
-  HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema) throws IOException {
+  public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema) throws IOException {
     this(fs, logFile, readerSchema, DEFAULT_BUFFER_SIZE, false, false);
   }
 
