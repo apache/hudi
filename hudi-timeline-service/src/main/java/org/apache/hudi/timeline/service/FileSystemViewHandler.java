@@ -162,14 +162,14 @@ public class FileSystemViewHandler {
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_DATA_FILES_URL, new ViewHandler(ctx -> {
       List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFiles(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow());
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_DATA_FILE_URL, new ViewHandler(ctx -> {
       List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFile(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow(),
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.FILEID_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));
@@ -183,7 +183,7 @@ public class FileSystemViewHandler {
     app.get(RemoteHoodieTableFileSystemView.LATEST_DATA_FILES_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
       List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFilesBeforeOrOn(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow(),
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));
@@ -191,7 +191,7 @@ public class FileSystemViewHandler {
     app.get(RemoteHoodieTableFileSystemView.LATEST_DATA_FILE_ON_INSTANT_URL, new ViewHandler(ctx -> {
       List<BaseFileDTO> dtos = dataFileHandler.getLatestDataFileOn(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow(),
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
           ctx.queryParam(RemoteHoodieTableFileSystemView.INSTANT_PARAM),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.FILEID_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
@@ -200,7 +200,7 @@ public class FileSystemViewHandler {
     app.get(RemoteHoodieTableFileSystemView.ALL_DATA_FILES, new ViewHandler(ctx -> {
       List<BaseFileDTO> dtos = dataFileHandler.getAllDataFiles(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow());
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
       writeValueAsString(ctx, dtos);
     }, true));
 
@@ -219,14 +219,14 @@ public class FileSystemViewHandler {
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_SLICES_URL, new ViewHandler(ctx -> {
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlices(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow());
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_SLICE_URL, new ViewHandler(ctx -> {
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlice(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow(),
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.FILEID_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));
@@ -234,14 +234,14 @@ public class FileSystemViewHandler {
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_UNCOMPACTED_SLICES_URL, new ViewHandler(ctx -> {
       List<FileSliceDTO> dtos = sliceHandler.getLatestUnCompactedFileSlices(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow());
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
       writeValueAsString(ctx, dtos);
     }, true));
 
     app.get(RemoteHoodieTableFileSystemView.ALL_SLICES_URL, new ViewHandler(ctx -> {
       List<FileSliceDTO> dtos = sliceHandler.getAllFileSlices(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow());
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
       writeValueAsString(ctx, dtos);
     }, true));
 
@@ -255,7 +255,7 @@ public class FileSystemViewHandler {
     app.get(RemoteHoodieTableFileSystemView.LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
       List<FileSliceDTO> dtos = sliceHandler.getLatestMergedFileSlicesBeforeOrOn(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow(),
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));
@@ -263,7 +263,7 @@ public class FileSystemViewHandler {
     app.get(RemoteHoodieTableFileSystemView.LATEST_SLICES_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlicesBeforeOrOn(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow(),
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM).getOrThrow(),
           Boolean.parseBoolean(
               ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM)
@@ -280,7 +280,7 @@ public class FileSystemViewHandler {
     app.get(RemoteHoodieTableFileSystemView.ALL_FILEGROUPS_FOR_PARTITION_URL, new ViewHandler(ctx -> {
       List<FileGroupDTO> dtos = sliceHandler.getAllFileGroups(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
-          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow());
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
       writeValueAsString(ctx, dtos);
     }, true));
 
