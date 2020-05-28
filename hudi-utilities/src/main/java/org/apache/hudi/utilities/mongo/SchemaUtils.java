@@ -46,7 +46,6 @@ public class SchemaUtils {
   public static final Type[] OPLOG_FIELD_TYPES = new Type[]{
       Type.STRING, Type.STRING, Type.LONG, Type.STRING
   };
-  private static final Schema NULL_SCHEMA = Schema.create(Type.NULL);
   private static final Logger LOG = LogManager.getLogger(SchemaUtils.class);
 
   @SuppressWarnings("deprecation") // Backward compatible with Mongo libraries
@@ -67,12 +66,11 @@ public class SchemaUtils {
 
       BsonValue fieldValue = getFieldValue(field, document);
       if (!fieldValue.isNull()) {
-        Schema fieldSchema = getNonNull(field.schema());
         try {
-          Object targetValue = typeTransform(field.name(), fieldValue, fieldSchema);
+          Object targetValue = typeTransform(field.name(), fieldValue, field.schema());
           record.put(field.name(), targetValue);
         } catch (Exception e) {
-          logFieldTypeError(field.name(), fieldSchema.getType().getName(), fieldValue);
+          logFieldTypeError(field.name(), field.schema(), fieldValue);
         }
       }
     }
@@ -85,7 +83,14 @@ public class SchemaUtils {
    * @return True if it is a union with NULL type
    */
   public static boolean isOptional(Schema schema) {
-    return schema.getType().equals(Type.UNION) && schema.getTypes().contains(NULL_SCHEMA);
+    if (schema.getType().equals(Type.UNION)) {
+      for (Schema element : schema.getTypes()) {
+        if (element.getType().equals(Type.NULL)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -216,13 +221,13 @@ public class SchemaUtils {
       value = ByteBuffer.wrap(valueBson.asBinary().getData());
     }
     if (value == null) {
-      logFieldTypeError(fieldName, targetType.getName(), valueBson);
+      logFieldTypeError(fieldName, targetSchema, valueBson);
     }
     return value;
   }
 
-  private static void logFieldTypeError(String fieldName, String typeName, BsonValue fieldValue) {
-    LOG.error(String.format("Field (%s) value cannot be cast to %s: %s", fieldName, typeName,
-        fieldValue.toString()));
+  private static void logFieldTypeError(String fieldName, Schema schema, BsonValue fieldValue) {
+    LOG.error(String.format("Field (%s) value cannot be cast to %s: %s", fieldName,
+        SchemaUtils.getNonNull(schema).getType().getName(), fieldValue.toString()));
   }
 }
