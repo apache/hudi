@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hive.testutils;
 
-import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 
 import org.apache.hadoop.conf.Configuration;
