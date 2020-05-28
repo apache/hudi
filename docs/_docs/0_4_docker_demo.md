@@ -6,7 +6,7 @@ toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
-## A Demo using docker containers
+## A Demo using Docker Containers
 
 Lets use a real world example to see how hudi works end to end. For this purpose, a self contained
 data infrastructure is brought up in a local docker cluster within your computer.
@@ -30,7 +30,9 @@ The steps have been tested on a Mac laptop
     127.0.0.1 sparkmaster
     127.0.0.1 zookeeper
     ```
-
+  * Maven: Apache Maven a popular Java build tool
+  * Java 8: (Java 9 or 10 may work)
+  
 Also, this has not been tested on some environments like Docker on Windows.
 
 
