@@ -792,9 +792,9 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 
 <h4 id="graphite">GRAPHITE</h4>
 
-<h5 id="on">on(metricsOn = true)</h5>
+<h5 id="on">on(metricsOn = false)</h5>
 <p>属性：<code class="highlighter-rouge">hoodie.metrics.on</code> <br />
-<span style="color:grey">打开或关闭发送指标。默认情况下处于启用状态。</span></p>
+<span style="color:grey">打开或关闭发送指标。默认情况下处于关闭状态。</span></p>
 
 <h5 id="withReporterType">withReporterType(reporterType = GRAPHITE)</h5>
 <p>属性：<code class="highlighter-rouge">hoodie.metrics.reporter.type</code> <br />
@@ -814,9 +814,9 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 
 <h4 id="jmx">JMX</h4>
 
-<h5 id="on">on(metricsOn = true)</h5>
+<h5 id="on">on(metricsOn = false)</h5>
 <p>属性：<code class="highlighter-rouge">hoodie.metrics.on</code> <br />
-<span style="color:grey">打开或关闭发送指标。默认情况下处于启用状态。</span></p>
+<span style="color:grey">打开或关闭发送指标。默认情况下处于关闭状态。</span></p>
 
 <h5 id="withReporterType">withReporterType(reporterType = JMX)</h5>
 <p>属性：<code class="highlighter-rouge">hoodie.metrics.reporter.type</code> <br />
@@ -830,9 +830,51 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 <p>属性：<code class="highlighter-rouge">hoodie.metrics.graphite.port</code> <br />
 <span style="color:grey">要连接的Jmx端口</span></p>
 
-<h5 id="usePrefix">usePrefix(prefix = “”)</h5>
-<p>属性：<code class="highlighter-rouge">hoodie.metrics.jmx.metric.prefix</code> <br />
-<span style="color:grey">适用于所有指标的标准前缀。这有助于添加如数据中心、环境等信息</span></p>
+<h4 id="datadog">DATADOG</h4>
+
+<h5 id="on">on(metricsOn = false)</h5>
+<p>属性：<code class="highlighter-rouge">hoodie.metrics.on</code> <br />
+<span style="color:grey">打开或关闭发送指标。默认情况下处于关闭状态。</span></p>
+
+<h5 id="withReporterType">withReporterType(reporterType = DATADOG)</h5>
+<p>属性： <code class="highlighter-rouge">hoodie.metrics.reporter.type</code> <br />
+<span style="color:grey">指标报告者的类型。</span></p>
+
+<h5 id="withDatadogReportPeriodSeconds">withDatadogReportPeriodSeconds(period = 30)</h5>
+<p>属性： <code class="highlighter-rouge">hoodie.metrics.datadog.report.period.seconds</code> <br />
+<span style="color:grey">Datadog报告周期，单位为秒，默认30秒。</span></p>
+
+<h5 id="withDatadogApiSite">withDatadogApiSite(apiSite)</h5>
+<p>属性： <code class="highlighter-rouge">hoodie.metrics.datadog.api.site</code> <br />
+<span style="color:grey">Datadog API站点：EU 或者 US</span></p>
+
+<h5 id="withDatadogApiKey">withDatadogApiKey(apiKey)</h5>
+<p>属性： <code class="highlighter-rouge">hoodie.metrics.datadog.api.key</code> <br />
+<span style="color:grey">Datadog API密匙</span></p>
+
+<h5 id="withDatadogApiKeySkipValidation">withDatadogApiKeySkipValidation(skip = false)</h5>
+<p>属性： <code class="highlighter-rouge">hoodie.metrics.datadog.api.key.skip.validation</code> <br />
+<span style="color:grey">在通过Datadog API发送指标前，选择是否跳过验证API密匙。默认不跳过。</span></p>
+
+<h5 id="withDatadogApiKeySupplier">withDatadogApiKeySupplier(apiKeySupplier)</h5>
+<p>属性： <code class="highlighter-rouge">hoodie.metrics.datadog.api.key.supplier</code> <br />
+<span style="color:grey">Datadog API 密匙提供者，用来在运行时提供密匙。只有当<code class="highlighter-rouge">hoodie.metrics.datadog.api.key</code>未设定的情况下才有效。</span></p>
+
+<h5 id="withDatadogApiTimeoutSeconds">withDatadogApiTimeoutSeconds(timeout = 3)</h5>
+<p>属性： <code class="highlighter-rouge">hoodie.metrics.datadog.metric.prefix</code> <br />
+<span style="color:grey">Datadog API超时时长，单位为秒，默认3秒。</span></p>
+
+<h5 id="withDatadogPrefix">withDatadogPrefix(prefix)</h5>
+<p>属性： <code class="highlighter-rouge">hoodie.metrics.datadog.metric.prefix</code> <br />
+<span style="color:grey">Datadog指标前缀。将被加在所有指标名称前，以点间隔。例如：如果设成<code class="highlighter-rouge">foo</code>，<code class="highlighter-rouge">foo.</code>将被用作实际前缀。</span></p>
+
+<h5 id="withDatadogHost">withDatadogHost(host)</h5>
+<p>属性： <code class="highlighter-rouge">hoodie.metrics.datadog.metric.host</code> <br />
+<span style="color:grey">Datadog指标主机，将和指标数据一并发送。</span></p>
+
+<h5 id="withDatadogTags">withDatadogTags(tags)</h5>
+<p>属性： <code class="highlighter-rouge">hoodie.metrics.datadog.metric.tags</code> <br />
+<span style="color:grey">Datadog指标标签（逗号分隔），将和指标数据一并发送。</span></p>
 
 <h3 id="内存配置">内存配置</h3>
 <p>控制由Hudi内部执行的压缩和合并的内存使用情况

@@ -752,15 +752,16 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <span style="color:grey">This needs to be same as class used during insert/upserts. Just like writing, compaction also uses the record payload class to merge records in the log against each other, merge again with the base file and produce the final record to be written after compaction.</span></p>
 
 <h3 id="metrics-configs">Metrics configs</h3>
+
 <p>Enables reporting on Hudi metrics.
 <a href="#withMetricsConfig">withMetricsConfig</a> (HoodieMetricsConfig) <br />
-<span style="color:grey">Hudi publishes metrics on every commit, clean, rollback etc.The following sections list the supported reporters.</span></p>
+<span style="color:grey">Hudi publishes metrics on every commit, clean, rollback etc. The following sections list the supported reporters.</span></p>
 
 <h4 id="graphite">GRAPHITE</h4>
 
-<h5 id="on">on(metricsOn = true)</h5>
+<h5 id="on">on(metricsOn = false)</h5>
 <p><code class="highlighter-rouge">hoodie.metrics.on</code> <br />
-<span style="color:grey">Turn sending metrics on/off. on by default.</span></p>
+<span style="color:grey">Turn on/off metrics reporting. off by default.</span></p>
 
 <h5 id="withReporterType">withReporterType(reporterType = GRAPHITE)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.metrics.reporter.type</code> <br />
@@ -780,9 +781,9 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 
 <h4 id="jmx">JMX</h4>
 
-<h5 id="on">on(metricsOn = true)</h5>
+<h5 id="on">on(metricsOn = false)</h5>
 <p><code class="highlighter-rouge">hoodie.metrics.on</code> <br />
-<span style="color:grey">Turn sending metrics on/off. on by default.</span></p>
+<span style="color:grey">Turn on/off metrics reporting. off by default.</span></p>
 
 <h5 id="withReporterType">withReporterType(reporterType = JMX)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.metrics.reporter.type</code> <br />
@@ -796,9 +797,51 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p>Property: <code class="highlighter-rouge">hoodie.metrics.jmx.port</code> <br />
 <span style="color:grey">Jmx port to connect to</span></p>
 
-<h5 id="usePrefix">usePrefix(prefix = “”)</h5>
-<p>Property: <code class="highlighter-rouge">hoodie.metrics.jmx.metric.prefix</code> <br />
-<span style="color:grey">Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g</span></p>
+<h4 id="datadog">DATADOG</h4>
+
+<h5 id="on">on(metricsOn = false)</h5>
+<p><code class="highlighter-rouge">hoodie.metrics.on</code> <br />
+<span style="color:grey">Turn on/off metrics reporting. off by default.</span></p>
+
+<h5 id="withReporterType">withReporterType(reporterType = DATADOG)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.metrics.reporter.type</code> <br />
+<span style="color:grey">Type of metrics reporter.</span></p>
+
+<h5 id="withDatadogReportPeriodSeconds">withDatadogReportPeriodSeconds(period = 30)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.metrics.datadog.report.period.seconds</code> <br />
+<span style="color:grey">Datadog report period in seconds. Default to 30.</span></p>
+
+<h5 id="withDatadogApiSite">withDatadogApiSite(apiSite)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.metrics.datadog.api.site</code> <br />
+<span style="color:grey">Datadog API site: EU or US</span></p>
+
+<h5 id="withDatadogApiKey">withDatadogApiKey(apiKey)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.metrics.datadog.api.key</code> <br />
+<span style="color:grey">Datadog API key</span></p>
+
+<h5 id="withDatadogApiKeySkipValidation">withDatadogApiKeySkipValidation(skip = false)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.metrics.datadog.api.key.skip.validation</code> <br />
+<span style="color:grey">Before sending metrics via Datadog API, whether to skip validating Datadog API key or not. Default to false.</span></p>
+
+<h5 id="withDatadogApiKeySupplier">withDatadogApiKeySupplier(apiKeySupplier)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.metrics.datadog.api.key.supplier</code> <br />
+<span style="color:grey">Datadog API key supplier to supply the API key at runtime. This will take effect if <code class="highlighter-rouge">hoodie.metrics.datadog.api.key</code> is not set.</span></p>
+
+<h5 id="withDatadogApiTimeoutSeconds">withDatadogApiTimeoutSeconds(timeout = 3)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.metrics.datadog.metric.prefix</code> <br />
+<span style="color:grey">Datadog API timeout in seconds. Default to 3.</span></p>
+
+<h5 id="withDatadogPrefix">withDatadogPrefix(prefix)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.metrics.datadog.metric.prefix</code> <br />
+<span style="color:grey">Datadog metric prefix to be prepended to each metric name with a dot as delimiter. For example, if it is set to <code class="highlighter-rouge">foo</code>, <code class="highlighter-rouge">foo.</code> will be prepended.</span></p>
+
+<h5 id="withDatadogHost">withDatadogHost(host)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.metrics.datadog.metric.host</code> <br />
+<span style="color:grey">Datadog metric host to be sent along with metrics data.</span></p>
+
+<h5 id="withDatadogTags">withDatadogTags(tags)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.metrics.datadog.metric.tags</code> <br />
+<span style="color:grey">Datadog metric tags (comma-delimited) to be sent along with metrics data.</span></p>
 
 <h3 id="memory-configs">Memory configs</h3>
 <p>Controls memory usage for compaction and merges, performed internally by Hudi
