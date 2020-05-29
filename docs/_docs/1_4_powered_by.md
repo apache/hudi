@@ -34,11 +34,11 @@ offering, providing means for AWS users to perform record-level updates/deletes 
 
 ### Kyligence
 
-Kyligence is the leading Big Data analytics platform company. We’ve built end to end solutions for various Global Fortune 500 companies in US and China. We adopted Apache Hudi in our Cloud solution on AWS in 2019. With the help of Hudi, we are able to process upserts and deletes easily and we use incremental views to build efficient data pipelines in AWS. The Hudi datasets can also be integrated to Kyligence Cloud directly for high concurrent OLAP access.
+[Kyligence](https://kyligence.io/zh/) is the leading Big Data analytics platform company. We’ve built end to end solutions for various Global Fortune 500 companies in US and China. We adopted Apache Hudi in our Cloud solution on AWS in 2019. With the help of Hudi, we are able to process upserts and deletes easily and we use incremental views to build efficient data pipelines in AWS. The Hudi datasets can also be integrated to Kyligence Cloud directly for high concurrent OLAP access.
 
 ### Lingyue-digital Corporation
 
-Lingyue-digital Corporation belongs to BMW Group. Apache Hudi is used to perform ingest MySQL and PostgreSQL change data capture. We build up upsert scenarios on Hadoop and spark.
+[Lingyue-digital Corporation](https://www.lingyue-digital.com/) belongs to BMW Group. Apache Hudi is used to perform ingest MySQL and PostgreSQL change data capture. We build up upsert scenarios on Hadoop and spark.
 
 ### Logical Clocks
 
@@ -46,7 +46,7 @@ Lingyue-digital Corporation belongs to BMW Group. Apache Hudi is used to perform
 
 ### SF-Express
 
-SF-Express is the leading logistics service provider in China. HUDI is used to build a real-time data warehouse, providing real-time computing solutions with higher efficiency and lower cost for our business.
+[SF-Express](https://www.sf-express.com/cn/sc/) is the leading logistics service provider in China. HUDI is used to build a real-time data warehouse, providing real-time computing solutions with higher efficiency and lower cost for our business.
 
 ### Tathastu.ai
 
