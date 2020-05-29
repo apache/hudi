@@ -78,7 +78,7 @@ while getopts ":h:s:p:a:i:l:" opt; do
     printf "Argument hive is %s\n" "$hive"
     ;;
     l) scala="$OPTARG"
-    printf "Argument scala is %s\n" "$hive"
+    printf "Argument scala is %s\n" "$scala"
     ;;
     \?) echo "Invalid option -$OPTARG" >&2
     ;;
