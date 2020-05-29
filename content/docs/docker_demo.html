@@ -390,7 +390,7 @@ data infrastructure is brought up in a local docker cluster within your computer
 
 <ul>
   <li>Docker Setup :  For Mac, Please follow the steps as defined in [https://docs.docker.com/v17.12/docker-for-mac/install/]. For running Spark-SQL queries, please ensure atleast 6 GB and 4 CPUs are allocated to Docker (See Docker -&gt; Preferences -&gt; Advanced). Otherwise, spark-SQL queries could be killed because of memory issues.</li>
-  <li>kafkacat : A command-line utility to publish/consume from kafka topics. Use <code class="highlighter-rouge">brew install kafkacat</code> to install kafkacat</li>
+  <li>kafkacat : A command-line utility to publish/consume from kafka topics. Use <code class="highlighter-rouge">brew install kafkacat</code> to install kafkacat.</li>
   <li>
     <p>/etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts</p>
 
@@ -405,6 +405,9 @@ data infrastructure is brought up in a local docker cluster within your computer
 <span class="mf">127.0</span><span class="o">.</span><span class="mf">0.1</span> <span class="n">zookeeper</span>
 </code></pre></div>    </div>
   </li>
+  <li>Java : Java SE Development Kit 8.</li>
+  <li>Maven : A build automation tool for Java projects.</li>
+  <li>jq : A lightweight and flexible command-line JSON processor. Use <code class="highlighter-rouge">brew instlal jq</code> to install jq.</li>
 </ul>
 
 <p>Also, this has not been tested on some environments like Docker on Windows.</p>
