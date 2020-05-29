@@ -12,6 +12,7 @@ power_items:
   - img_path: /assets/images/powers/qq.png
   - img_path: /assets/images/powers/tongcheng.png
   - img_path: /assets/images/powers/yotpo.png
+  - img_path: /assets/images/powers/kyligence.png
   - img_path: /assets/images/powers/tathastu.png
   - img_path: /assets/images/powers/shunfeng.png
   - img_path: /assets/images/powers/lingyue.png
@@ -31,10 +32,22 @@ offering, providing means for AWS users to perform record-level updates/deletes 
 
 [EMIS Health](https://www.emishealth.com/) is the largest provider of Primary Care IT software in the UK with datasets including more than 500Bn healthcare records. HUDI is used to manage their analytics dataset in production and keeping them up-to-date with their upstream source. Presto is being used to query the data written in HUDI format.
 
+### Kyligence
+
+[Kyligence](https://kyligence.io/zh/) is the leading Big Data analytics platform company. We’ve built end to end solutions for various Global Fortune 500 companies in US and China. We adopted Apache Hudi in our Cloud solution on AWS in 2019. With the help of Hudi, we are able to process upserts and deletes easily and we use incremental views to build efficient data pipelines in AWS. The Hudi datasets can also be integrated to Kyligence Cloud directly for high concurrent OLAP access.
+
+### Lingyue-digital Corporation
+
+[Lingyue-digital Corporation](https://www.lingyue-digital.com/) belongs to BMW Group. Apache Hudi is used to perform ingest MySQL and PostgreSQL change data capture. We build up upsert scenarios on Hadoop and spark.
+
 ### Logical Clocks
 
 [Hopsworks 1.x series](https://www.logicalclocks.com/blog/introducing-the-hopsworks-1-x-series) supports Apache Hudi feature groups, to enable upserts and time travel.
- 
+
+### SF-Express
+
+[SF-Express](https://www.sf-express.com/cn/sc/) is the leading logistics service provider in China. HUDI is used to build a real-time data warehouse, providing real-time computing solutions with higher efficiency and lower cost for our business.
+
 ### Tathastu.ai
 
 [Tathastu.ai](https://www.tathastu.ai) offers the largest AI/ML playground of consumer data for data scientists, AI experts and technologists to build upon. They have built a CDC pipeline using Apache Hudi and Debezium. Data from Hudi datasets is being queried using Hive, Presto and Spark.
