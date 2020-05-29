@@ -16,7 +16,7 @@ The steps have been tested on a Mac laptop
 ### Prerequisites
 
   * Docker Setup :  For Mac, Please follow the steps as defined in [https://docs.docker.com/v17.12/docker-for-mac/install/]. For running Spark-SQL queries, please ensure atleast 6 GB and 4 CPUs are allocated to Docker (See Docker -> Preferences -> Advanced). Otherwise, spark-SQL queries could be killed because of memory issues.
-  * kafkacat : A command-line utility to publish/consume from kafka topics. Use `brew install kafkacat` to install kafkacat
+  * kafkacat : A command-line utility to publish/consume from kafka topics. Use `brew install kafkacat` to install kafkacat.
   * /etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts
 
     ```java
@@ -30,7 +30,10 @@ The steps have been tested on a Mac laptop
     127.0.0.1 sparkmaster
     127.0.0.1 zookeeper
     ```
-
+  * Java : Java SE Development Kit 8.
+  * Maven : A build automation tool for Java projects.
+  * jq : A lightweight and flexible command-line JSON processor. Use `brew instlal jq` to install jq.
+  
 Also, this has not been tested on some environments like Docker on Windows.
 
 
