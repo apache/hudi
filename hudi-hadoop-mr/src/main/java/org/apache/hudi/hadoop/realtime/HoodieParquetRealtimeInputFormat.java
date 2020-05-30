@@ -18,27 +18,17 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
+import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -52,13 +42,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -70,11 +54,6 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
   private static final Logger LOG = LogManager.getLogger(HoodieParquetRealtimeInputFormat.class);
 
-  // These positions have to be deterministic across all tables
-  public static final int HOODIE_COMMIT_TIME_COL_POS = 0;
-  public static final int HOODIE_RECORD_KEY_COL_POS = 2;
-  public static final int HOODIE_PARTITION_PATH_COL_POS = 3;
-  public static final String HOODIE_READ_COLUMNS_PROP = "hoodie.read.columns.set";
   // To make Hive on Spark queries work with RT tables. Our theory is that due to
   // {@link org.apache.hadoop.hive.ql.io.parquet.ProjectionPusher}
   // not handling empty list correctly, the ParquetRecordReaderWrapper ends up adding the same column ids multiple
@@ -85,74 +64,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
     Stream<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits)).map(is -> (FileSplit) is);
 
-    // obtain all unique parent folders for splits
-    Map<Path, List<FileSplit>> partitionsToParquetSplits =
-        fileSplits.collect(Collectors.groupingBy(split -> split.getPath().getParent()));
-    // TODO(vc): Should we handle also non-hoodie splits here?
-    Map<String, HoodieTableMetaClient> metaClientMap = new HashMap<>();
-    Map<Path, HoodieTableMetaClient> partitionsToMetaClient =
-        partitionsToParquetSplits.keySet().stream().collect(Collectors.toMap(Function.identity(), p -> {
-          // find if we have a metaclient already for this partition.
-          Option<String> matchingBasePath = Option.fromJavaOptional(
-              metaClientMap.keySet().stream().filter(basePath -> p.toString().startsWith(basePath)).findFirst());
-          if (matchingBasePath.isPresent()) {
-            return metaClientMap.get(matchingBasePath.get());
-          }
-
-          try {
-            HoodieTableMetaClient metaClient = getTableMetaClient(p.getFileSystem(conf), p);
-            metaClientMap.put(metaClient.getBasePath(), metaClient);
-            return metaClient;
-          } catch (IOException e) {
-            throw new HoodieIOException("Error creating hoodie meta client against : " + p, e);
-          }
-        }));
-
-    // for all unique split parents, obtain all delta files based on delta commit timeline,
-    // grouped on file id
-    List<HoodieRealtimeFileSplit> rtSplits = new ArrayList<>();
-    partitionsToParquetSplits.keySet().forEach(partitionPath -> {
-      // for each partition path obtain the data & log file groupings, then map back to inputsplits
-      HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionPath);
-      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
-      String relPartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), partitionPath);
-
-      try {
-        // Both commit and delta-commits are included - pick the latest completed one
-        Option<HoodieInstant> latestCompletedInstant =
-            metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
-
-        Stream<FileSlice> latestFileSlices = latestCompletedInstant
-            .map(instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, instant.getTimestamp()))
-            .orElse(Stream.empty());
-
-        // subgroup splits again by file id & match with log files.
-        Map<String, List<FileSplit>> groupedInputSplits = partitionsToParquetSplits.get(partitionPath).stream()
-            .collect(Collectors.groupingBy(split -> FSUtils.getFileId(split.getPath().getName())));
-        latestFileSlices.forEach(fileSlice -> {
-          List<FileSplit> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
-          dataFileSplits.forEach(split -> {
-            try {
-              List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-                  .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
-              // Get the maxCommit from the last delta or compaction or commit - when
-              // bootstrapped from COW table
-              String maxCommitTime = metaClient
-                  .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
-                      HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
-                  .filterCompletedInstants().lastInstant().get().getTimestamp();
-              rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths, maxCommitTime));
-            } catch (IOException e) {
-              throw new HoodieIOException("Error creating hoodie real time split ", e);
-            }
-          });
-        });
-      } catch (Exception e) {
-        throw new HoodieException("Error obtaining data file/log file grouping: " + partitionPath, e);
-      }
-    });
-    LOG.info("Returning a total splits of " + rtSplits.size());
-    return rtSplits.toArray(new InputSplit[0]);
+    return HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits);
   }
 
   @Override
@@ -199,9 +111,9 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
   private static void addRequiredProjectionFields(Configuration configuration) {
     // Need this to do merge records in HoodieRealtimeRecordReader
-    addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HOODIE_RECORD_KEY_COL_POS);
-    addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HOODIE_COMMIT_TIME_COL_POS);
-    addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HOODIE_PARTITION_PATH_COL_POS);
+    addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRealtimeConfig.HOODIE_RECORD_KEY_COL_POS);
+    addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRealtimeConfig.HOODIE_COMMIT_TIME_COL_POS);
+    addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRealtimeConfig.HOODIE_PARTITION_PATH_COL_POS);
   }
 
   /**
@@ -228,12 +140,12 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     // risk of experiencing race conditions. Hence, we synchronize on the JobConf object here. There is negligible
     // latency incurred here due to the synchronization since get record reader is called once per spilt before the
     // actual heavy lifting of reading the parquet files happen.
-    if (jobConf.get(HOODIE_READ_COLUMNS_PROP) == null) {
+    if (jobConf.get(HoodieRealtimeConfig.HOODIE_READ_COLUMNS_PROP) == null) {
       synchronized (jobConf) {
         LOG.info(
             "Before adding Hoodie columns, Projections :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
                 + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-        if (jobConf.get(HOODIE_READ_COLUMNS_PROP) == null) {
+        if (jobConf.get(HoodieRealtimeConfig.HOODIE_READ_COLUMNS_PROP) == null) {
           // Hive (across all versions) fails for queries like select count(`_hoodie_commit_time`) from table;
           // In this case, the projection fields gets removed. Looking at HiveInputFormat implementation, in some cases
           // hoodie additional projection columns are reset after calling setConf and only natural projections
@@ -245,7 +157,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
           addRequiredProjectionFields(jobConf);
 
           this.conf = jobConf;
-          this.conf.set(HOODIE_READ_COLUMNS_PROP, "true");
+          this.conf.set(HoodieRealtimeConfig.HOODIE_READ_COLUMNS_PROP, "true");
         }
       }
     }

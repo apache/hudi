@@ -33,7 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.hadoop.HoodieParquetInputFormat.getTableMetaClient;
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getTableMetaClient;
 
 /**
  * InputPathHandler takes in a set of input paths and incremental tables list. Then, classifies the
