@@ -60,7 +60,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   public void init() throws Exception {
     initDFS();
     initPath();
-    initSparkContexts("TestHoodieCommitArchiveLog");
+    initSparkContexts();
     hadoopConf = dfs.getConf();
     hadoopConf.addResource(dfs.getConf());
     dfs.mkdirs(new Path(basePath));

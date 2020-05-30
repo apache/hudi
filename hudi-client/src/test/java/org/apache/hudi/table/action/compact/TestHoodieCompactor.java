@@ -66,7 +66,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     // Initialize a local spark env
-    initSparkContexts("TestHoodieCompactor");
+    initSparkContexts();
 
     // Create a temp folder as the base path
     initPath();

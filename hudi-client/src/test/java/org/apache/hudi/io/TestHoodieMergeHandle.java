@@ -57,7 +57,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
-    initSparkContexts("TestHoodieMergeHandle");
+    initSparkContexts();
     initPath();
     initFileSystem();
     initTestDataGenerator();

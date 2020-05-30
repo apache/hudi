@@ -85,6 +85,7 @@ public class RollbackHelper implements Serializable {
     };
 
     int sparkPartitions = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Perform rollback actions");
     return jsc.parallelize(rollbackRequests, sparkPartitions).mapToPair(rollbackRequest -> {
       final Map<FileStatus, Boolean> filesToDeletedStatus = new HashMap<>();
       switch (rollbackRequest.getRollbackAction()) {

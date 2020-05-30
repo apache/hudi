@@ -71,7 +71,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
-    initSparkContexts("TestHoodieGlobalBloomIndex");
+    initSparkContexts();
     initPath();
     // We have some records to be tagged (two different partitions)
     String schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));

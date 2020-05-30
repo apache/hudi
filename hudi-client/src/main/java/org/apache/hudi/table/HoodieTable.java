@@ -448,6 +448,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
         }
 
         // Now delete partially written files
+        jsc.setJobGroup(this.getClass().getSimpleName(), "Delete all partially written files");
         jsc.parallelize(new ArrayList<>(groupByPartition.values()), config.getFinalizeWriteParallelism())
             .map(partitionWithFileList -> {
               final FileSystem fileSystem = metaClient.getFs();
@@ -489,6 +490,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    */
   private void waitForAllFiles(JavaSparkContext jsc, Map<String, List<Pair<String, String>>> groupByPartition, FileVisibility visibility) {
     // This will either ensure all files to be deleted are present.
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Wait for all files to appear/disappear");
     boolean checkPassed =
         jsc.parallelize(new ArrayList<>(groupByPartition.entrySet()), config.getFinalizeWriteParallelism())
             .map(partitionWithFileList -> waitForCondition(partitionWithFileList.getKey(),
