@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Monitor Hudi metrics with Datadog - Apache Hudi</title>
+<meta name="description" content="Introducing the feature of reporting Hudi metrics via Datadog HTTP API">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Monitor Hudi metrics with Datadog">
+<meta property="og:url" content="https://hudi.apache.org/blog/monitoring-hudi-metrics-with-datadog/">
+
+
+  <meta property="og:description" content="Introducing the feature of reporting Hudi metrics via Datadog HTTP API">
+
+
+
+
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/blog.html" target="_self" >Blog</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+    <div itemscope itemtype="https://schema.org/Person">
+
+  <div class="author__content">
+    
+      <h3 class="author__name" itemprop="name">Quick Links</h3>
+    
+    
+      <div class="author__bio" itemprop="description">
+        <p>Hudi <em>ingests</em> &amp; <em>manages</em> storage of large analytical datasets over DFS.</p>
+
+      </div>
+    
+  </div>
+
+  <div class="author__urls-wrapper">
+    <ul class="author__urls social-icons">
+      
+        
+          <li><a href="/docs/quick-start-guide" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-book" aria-hidden="true"></i> Documentation</a></li>
+
+          
+        
+          <li><a href="https://cwiki.apache.org/confluence/display/HUDI" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-wikipedia-w" aria-hidden="true"></i> Technical Wiki</a></li>
+
+          
+        
+          <li><a href="/contributing" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-thumbs-o-up" aria-hidden="true"></i> Contribution Guide</a></li>
+
+          
+        
+          <li><a href="https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-slack" aria-hidden="true"></i> Join on Slack</a></li>
+
+          
+        
+          <li><a href="https://github.com/apache/hudi" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-github" aria-hidden="true"></i> Fork on GitHub</a></li>
+
+          
+        
+          <li><a href="https://issues.apache.org/jira/projects/HUDI/summary" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Issues</a></li>
+
+          
+        
+          <li><a href="/security" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Security Issues</a></li>
+
+          
+        
+      
+    </ul>
+  </div>
+</div>
+
+  
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Monitor Hudi metrics with Datadog
+</h1>
+          <!-- Output author details if some exist. -->
+          <div class="page__author"><a href="https://cwiki.apache.org/confluence/display/~rxu">Raymond Xu</a> posted on <time datetime="2020-05-28">May 28, 2020</time></span>
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+          <style>
+            .page {
+              padding-right: 0 !important;
+            }
+          </style>
+        
+        <h2 id="availability">Availability</h2>
+
+<p><strong>0.6.0 (unreleased)</strong></p>
+
+<h2 id="introduction">Introduction</h2>
+
+<p><a href="https://www.datadoghq.com/">Datadog</a> is a popular monitoring service. In the upcoming <code class="highlighter-rouge">0.6.0</code> release of Apache Hudi, we will introduce the feature of reporting Hudi metrics via Datadog HTTP API, in addition to the current reporter types: Graphite and JMX.</p>
+
+<h2 id="configurations">Configurations</h2>
+
+<p>Similar to other supported reporters, turning on Datadog reporter requires these 2 properties.</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">hoodie.metrics.on</span><span class="p">=</span><span class="s">true</span>
+<span class="py">hoodie.metrics.reporter.type</span><span class="p">=</span><span class="s">DATADOG</span>
+</code></pre></div></div>
+
+<p>The following property sets the Datadog API site. It determines whether the requests will be sent to <code class="highlighter-rouge">api.datadoghq.eu</code> (EU) or <code class="highlighter-rouge">api.datadoghq.com</code> (US). Set this according to your Datadog account settings.</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">hoodie.metrics.datadog.api.site</span><span class="p">=</span><span class="s">EU # or US</span>
+</code></pre></div></div>
+
+<p>The property <code class="highlighter-rouge">hoodie.metrics.datadog.api.key</code> allows you to set the api key directly from the configuration.</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">hoodie.metrics.datadog.api.key</span><span class="p">=</span><span class="s">&lt;your api key&gt;</span>
+<span class="py">hoodie.metrics.datadog.api.key.supplier</span><span class="p">=</span><span class="s">&lt;your api key supplier&gt;</span>
+</code></pre></div></div>
+
+<p>Due to security consideration in some cases, you may prefer to return the api key at runtime. To go with this approach, implement <code class="highlighter-rouge">java.util.function.Supplier&lt;String&gt;</code> and set the implementation’s FQCN to <code class="highlighter-rouge">hoodie.metrics.datadog.api.key.supplier</code>, and make sure <code class="highlighter-rouge">hoodie.metrics.datadog.api.key</code> is <em>not</em> set since it will take higher precedence.</p>
+
+<p>The following property helps segregate metrics by setting different prefixes for different jobs.</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">hoodie.metrics.datadog.metric.prefix</span><span class="p">=</span><span class="s">&lt;your metrics prefix&gt;</span>
+</code></pre></div></div>
+
+<p>Note that it will use <code class="highlighter-rouge">.</code> to delimit the prefix and the metric name. For example, if the prefix is set to <code class="highlighter-rouge">foo</code>, then <code class="highlighter-rouge">foo.</code> will be prepended to the metric name.</p>
+
+<p>There are other optional properties, which are explained in the configuration reference page.</p>
+
+<h2 id="demo">Demo</h2>
+
+<p>In this demo, we ran a <code class="highlighter-rouge">HoodieDeltaStreamer</code> job with metrics turn on and other configurations set properly.</p>
+
+<p><img src="/assets/images/blog/2020-05-28-datadog-metrics-demo.png" alt="datadog metrics demo" /></p>
+
+<p>As shown above, we were able to collect Hudi’s action-related metrics like</p>
+
+<ul>
+  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.commit.totalScanTime</code></li>
+  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.clean.duration</code></li>
+  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.index.lookup.duration</code></li>
+</ul>
+
+<p>as well as <code class="highlighter-rouge">HoodieDeltaStreamer</code>-specific metrics</p>
+
+<ul>
+  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.deltastreamer.duration</code></li>
+  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.deltastreamer.hiveSyncDuration</code></li>
+</ul>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+
+  </body>
+</html>

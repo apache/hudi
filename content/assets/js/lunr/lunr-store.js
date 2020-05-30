@@ -723,4 +723,9 @@ var store = [{
         "excerpt":"1. Introduction Apache Zeppelin is a web-based notebook that provides interactive data analysis. It is convenient for you to make beautiful documents that can be data-driven, interactive, and collaborative, and supports multiple languages, including Scala (using Apache Spark), Python (Apache Spark), SparkSQL, Hive, Markdown, Shell, and so on. Hive and...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/apache-hudi-apache-zepplin/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Monitor Hudi metrics with Datadog",
+        "excerpt":"Availability 0.6.0 (unreleased) Introduction Datadog is a popular monitoring service. In the upcoming 0.6.0 release of Apache Hudi, we will introduce the feature of reporting Hudi metrics via Datadog HTTP API, in addition to the current reporter types: Graphite and JMX. Configurations Similar to other supported reporters, turning on Datadog...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/monitoring-hudi-metrics-with-datadog/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]
