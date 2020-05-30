@@ -140,6 +140,7 @@ public class HiveTestService {
     File derbyLogFile = new File(localHiveDir, "derby.log");
     derbyLogFile.createNewFile();
     setSystemProperty("derby.stream.error.file", derbyLogFile.getPath());
+    setSystemProperty("derby.system.home", localHiveDir.getAbsolutePath());
     conf.set(HiveConf.ConfVars.METASTOREWAREHOUSE.varname, Files.createTempDir().getAbsolutePath());
     conf.set("datanucleus.schema.autoCreateTables", "true");
     conf.set("hive.metastore.schema.verification", "false");
