@@ -28,14 +28,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: clone repository
-      - uses: actions/checkout@v2
+        uses: actions/checkout@v2
 
       - name: bot actions
-        uses: ./.github/actions/bot
+        uses: actions/github-script@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROVIDER : 'apache'
+          REPOSITORY: 'hudi'
           HUDI_TRAVIS_ORG_TOKEN: ${{ secrets.HUDI_TRAVIS_ORG_TOKEN }}
         with:
-          provider: apache
-          repository: hudi
-          command: ${{ github.event.comment.body }}
+          script: |
+            const path = require('path')
+            const scriptPath = path.resolve('.github/actions/bot/src/action.js')
+            require(scriptPath)({core}, {context}, {github})

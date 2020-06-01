@@ -6,7 +6,7 @@
   "scripts": {
     "lint": "eslint 'src/**.js' 'tests/**.js' --fix",
     "test": "eslint 'src/**.js' 'tests/**.js' && jest --coverage",
-    "build": "ncc build src/main.js"
+    "build": "ncc build src/action.js"
   },
   "author": "lamber-ken",
   "license": "Apache LICENSE 2.0",

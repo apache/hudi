@@ -16,16 +16,12 @@
  * limitations under the License.
  */
 
-async function check() {
+async function check(core, context, github) {
 
     try {
-        const core = require('@actions/core');
-        const {context, GitHub} = require('@actions/github');
-
-        const github = new GitHub(process.env.GITHUB_TOKEN);
-        const provider = core.getInput('provider', {required: true});
-        const repository = core.getInput('repository', {required: true});
-        const command = core.getInput('command', {required: true});
+        const provider = process.env.PROVIDER;
+        const repository = process.env.REPOSITORY;
+        const command = context.payload.comment.body;
 
         if (command !== 'rerun tests') {
             console.log("Invalid command:" + command);
@@ -53,16 +49,16 @@ async function check() {
         checks.data.check_runs.forEach(run => {
 
             if (run.app.owner.login === 'travis-ci') {
-                console.log("rerun travis ci check")
+                console.log("rerun travis ci check: " + run.external_id);
                 rebuild(run.external_id)
             } else {
-                console.log("ignore github action check")
+                console.log("ignore github action check: " + run.id);
             }
 
         });
 
     } catch (e) {
-        console.log(e)
+        console.log("check bot run failed: " + e);
     }
 
 }
@@ -99,4 +95,6 @@ function rebuild(buildId) {
     req.end();
 }
 
-module.exports = check;
+module.exports = ({core}, {context}, {github}) => {
+    return check(core, context, github);
+}
