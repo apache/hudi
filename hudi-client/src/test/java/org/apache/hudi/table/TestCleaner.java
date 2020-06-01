@@ -91,7 +91,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestCleaner extends HoodieClientTestBase {
 
   private static final int BIG_BATCH_INSERT_SIZE = 500;
-  private static final Logger LOG = LogManager.getLogger(HoodieClientTestBase.class);
+  private static final Logger LOG = LogManager.getLogger(TestCleaner.class);
 
   /**
    * Helper method to do first batch of insert for clean by versions/commits tests.
