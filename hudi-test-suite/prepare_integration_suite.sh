@@ -15,12 +15,19 @@ usage() {
     echo "   -s, spark version"
     echo "   -p, parquet version"
     echo "   -a, avro version"
-    echo "   -s, hive version"
+    echo "   -i, hive version"
+    echo "   -l, scala version"
     exit 1
 }
 
 get_spark_command() {
-echo "spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+if [ -z "$scala" ]
+then
+  scala="2.11"
+else
+  scala=$1
+fi
+echo "spark-submit --packages org.apache.spark:spark-avro_${scala}:2.4.4 \
 --master $0 \
 --deploy-mode $1 \
 --properties-file $2 \
@@ -53,7 +60,7 @@ case "$1" in
        ;;
 esac
 
-while getopts ":h:s:p:a:s:" opt; do
+while getopts ":h:s:p:a:i:l:" opt; do
   case $opt in
     h) hadoop="$OPTARG"
     printf "Argument hadoop is %s\n" "$hadoop"
@@ -67,8 +74,11 @@ while getopts ":h:s:p:a:s:" opt; do
     a) avro="$OPTARG"
     printf "Argument avro is %s\n" "$avro"
     ;;
-    s) hive="$OPTARG"
+    i) hive="$OPTARG"
     printf "Argument hive is %s\n" "$hive"
+    ;;
+    l) scala="$OPTARG"
+    printf "Argument scala is %s\n" "$scala"
     ;;
     \?) echo "Invalid option -$OPTARG" >&2
     ;;
@@ -93,10 +103,18 @@ get_versions () {
     hive=$2
     base_command+=' -Dhive.version='$hive
   fi
+
+  if [ -z "$scala" ]
+  then
+    base_command=$base_command
+  else
+    scala=$3
+    base_command+=' -Dscala-'$scala
+  fi
   echo $base_command
 }
 
-versions=$(get_versions $hadoop $hive)
+versions=$(get_versions $hadoop $hive $scala)
 
 final_command='mvn clean install -DskipTests '$versions
 printf "Final command $final_command \n"
@@ -109,4 +127,4 @@ $move_to_root && $final_command
 cd $_CALLING_DIR
 
 printf "A sample spark command to start the integration suite \n"
-get_spark_command
+get_spark_command $scala
