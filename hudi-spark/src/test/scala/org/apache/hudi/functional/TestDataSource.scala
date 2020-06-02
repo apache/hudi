@@ -35,7 +35,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
 /**
- * Basic tests on the spark datasource
+ * Basic tests on the spark datasource.
  */
 class TestDataSource {
 
@@ -67,7 +67,7 @@ class TestDataSource {
     // Insert Operation
     val records = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
     val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    inputDF.write.format("hudi")
+    inputDF.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
