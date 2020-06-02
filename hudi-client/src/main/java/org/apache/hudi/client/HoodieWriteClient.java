@@ -120,7 +120,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     this(jsc, clientConfig, rollbackPending, HoodieIndex.createIndex(clientConfig, jsc));
   }
 
-  HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending, HoodieIndex index) {
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending, HoodieIndex index) {
     this(jsc, clientConfig, rollbackPending, index, Option.empty());
   }
 

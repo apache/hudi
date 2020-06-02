@@ -45,7 +45,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   @After
   public void tearDown() {
     cleanupSparkContexts();
-    cleanupMetaClient();
+    cleanupClients();
   }
 
   @Test

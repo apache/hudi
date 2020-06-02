@@ -78,10 +78,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     cleanupFileSystem();
     cleanupTestDataGenerator();
     cleanupSparkContexts();
-  }
-
-  private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
-    return new HoodieWriteClient(jsc, config);
+    cleanupClients();
   }
 
   private HoodieWriteConfig getConfig() {
@@ -114,8 +111,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     HoodieWriteConfig config = getConfig();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
-
+    try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
       String newCommitTime = writeClient.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
@@ -132,8 +128,8 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   public void testWriteStatusContentsAfterCompaction() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfig();
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
-      String newCommitTime = "100";
+    try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
+     String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);

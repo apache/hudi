@@ -54,7 +54,7 @@ import java.util.stream.Collectors;
 @Component
 public class StatsCommand implements CommandMarker {
 
-  private static final int MAX_FILES = 1000000;
+  public static final int MAX_FILES = 1000000;
 
   @CliCommand(value = "stats wa", help = "Write Amplification. Ratio of how many records were upserted to how many "
       + "records were actually written")
@@ -97,7 +97,7 @@ public class StatsCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  private Comparable[] printFileSizeHistogram(String commitTime, Snapshot s) {
+  public Comparable[] printFileSizeHistogram(String commitTime, Snapshot s) {
     return new Comparable[] {commitTime, s.getMin(), s.getValue(0.1), s.getMedian(), s.getMean(), s.get95thPercentile(),
         s.getMax(), s.size(), s.getStdDev()};
   }

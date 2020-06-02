@@ -242,6 +242,7 @@
         <version>${maven-surefire-plugin.version}</version>
         <configuration>
           <skip>${skipUTs}</skip>
+          <argLine>-Xmx4g</argLine>
           <systemPropertyVariables>
             <log4j.configuration>
               ${surefire-log4j.file}
