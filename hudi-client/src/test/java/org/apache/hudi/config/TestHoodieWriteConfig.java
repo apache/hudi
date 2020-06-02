@@ -16,10 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.config;
+package org.apache.hudi.config;
 
-import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 
 import org.junit.jupiter.api.Test;

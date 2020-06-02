@@ -16,12 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.index;
+package org.apache.hudi.index.hbase;
 
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.HoodieClientTestHarness;
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -32,11 +30,11 @@ import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
-import org.apache.hudi.index.hbase.HBaseIndex;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.hbase.HBaseIndex.HbasePutBatchSizeCalculator;
-import org.apache.hudi.index.hbase.HBaseIndexQPSResourceAllocator;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -81,13 +79,14 @@ import static org.mockito.Mockito.when;
  * {@link MethodOrderer.Alphanumeric} to make sure the tests run in order. Please alter the order of tests running carefully.
  */
 @TestMethodOrder(MethodOrderer.Alphanumeric.class)
-public class TestHbaseIndex extends HoodieClientTestHarness {
+public class TestHBaseIndex extends HoodieClientTestHarness {
 
   private static HBaseTestingUtility utility;
   private static Configuration hbaseConfig;
   private static String tableName = "test_table";
 
-  public TestHbaseIndex() {}
+  public TestHBaseIndex() {
+  }
 
   @AfterAll
   public static void clean() throws Exception {
@@ -111,7 +110,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     // Initialize a local spark env
-    initSparkContexts("TestHbaseIndex");
+    initSparkContexts("TestHBaseIndex");
     hadoopConf.addResource(utility.getConfiguration());
 
     // Create a temp folder as the base path
