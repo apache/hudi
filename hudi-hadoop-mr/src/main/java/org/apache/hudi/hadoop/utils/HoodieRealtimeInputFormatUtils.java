@@ -55,7 +55,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     Map<Path, List<FileSplit>> partitionsToParquetSplits =
         fileSplits.collect(Collectors.groupingBy(split -> split.getPath().getParent()));
     // TODO(vc): Should we handle also non-hoodie splits here?
-    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getMetaClientPerPartition(conf, partitionsToParquetSplits.keySet());
+    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByBasePath(conf, partitionsToParquetSplits.keySet());
 
     // for all unique split parents, obtain all delta files based on delta commit timeline,
     // grouped on file id
@@ -105,11 +105,11 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
   }
 
   // Return parquet file with a list of log files in the same file group.
-  public static Map<String, List<String>> getRealtimeFileGroup(Configuration conf, Stream<FileStatus> fileStatuses) {
+  public static Map<String, List<String>> groupLogsByBaseFile(Configuration conf, Stream<FileStatus> fileStatuses) {
     Map<Path, List<FileStatus>> partitionsToParquetSplits =
         fileStatuses.collect(Collectors.groupingBy(file -> file.getPath().getParent()));
     // TODO(vc): Should we handle also non-hoodie splits here?
-    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getMetaClientPerPartition(conf, partitionsToParquetSplits.keySet());
+    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByBasePath(conf, partitionsToParquetSplits.keySet());
 
     // for all unique split parents, obtain all delta files based on delta commit timeline,
     // grouped on file id
