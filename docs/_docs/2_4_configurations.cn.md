@@ -25,13 +25,13 @@ language: cn
 
 无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。
 
- * [AWS S3](/cn/docs/s3_hoodie.html) <br/>
+ * [AWS S3]({{ site.baseurl }}/cn/docs/s3_hoodie.html) <br/>
    S3和Hudi协同工作所需的配置。
- * [Google Cloud Storage](/cn/docs/gcs_hoodie.html) <br/>
+ * [Google Cloud Storage]({{ site.baseurl }}/cn/docs/gcs_hoodie.html) <br/>
    GCS和Hudi协同工作所需的配置。
- * [Alibaba Cloud OSS](/cn/docs/oss_hoodie.html) <br/>
+ * [Alibaba Cloud OSS]({{ site.baseurl }}/cn/docs/oss_hoodie.html) <br/>
    阿里云和Hudi协同工作所需的配置。
- * [Microsoft Azure](/cn/docs/azure_hoodie.html) <br/>
+ * [Microsoft Azure]({{ site.baseurl }}/cn/docs/azure_hoodie.html) <br/>
    Azure和Hudi协同工作所需的配置。
 
 ## Spark数据源配置 {#spark-datasource}

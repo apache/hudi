@@ -15,14 +15,14 @@ Following shows the speed up obtained for NoSQL database ingestion, from increme
 on 5 tables ranging from small to huge (as opposed to bulk loading the tables)
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_upsert_perf1.png" alt="hudi_upsert_perf1.png" style="max-width: 1000px" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_upsert_perf1.png" alt="hudi_upsert_perf1.png" style="max-width: 1000px" />
 </figure>
 
 Given Hudi can build the table incrementally, it opens doors for also scheduling ingesting more frequently thus reducing latency, with
 significant savings on the overall compute cost.
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_upsert_perf2.png" alt="hudi_upsert_perf2.png" style="max-width: 1000px" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_upsert_perf2.png" alt="hudi_upsert_perf2.png" style="max-width: 1000px" />
 </figure>
 
 Hudi upserts have been stress tested upto 4TB in a single commit across the t1 table. 
@@ -49,17 +49,17 @@ with no impact on queries. Following charts compare the Hudi vs non-Hudi tables 
 **Hive**
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_query_perf_hive.png" alt="hudi_query_perf_hive.png" style="max-width: 800px" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_query_perf_hive.png" alt="hudi_query_perf_hive.png" style="max-width: 800px" />
 </figure>
 
 **Spark**
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_query_perf_spark.png" alt="hudi_query_perf_spark.png" style="max-width: 1000px" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_query_perf_spark.png" alt="hudi_query_perf_spark.png" style="max-width: 1000px" />
 </figure>
 
 **Presto**
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_query_perf_presto.png" alt="hudi_query_perf_presto.png" style="max-width: 1000px" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_query_perf_presto.png" alt="hudi_query_perf_presto.png" style="max-width: 1000px" />
 </figure>

@@ -25,7 +25,7 @@ To contribute code, you need
 
 To contribute, you would need to do the following
  
- - Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [quickstart](/docs/quick-start-guide.html)
+ - Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [quickstart]({{ site.baseurl }}/docs/quick-start-guide.html)
  - [Recommended] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please setup your IDE with style files from [here](https://github.com/apache/hudi/tree/master/style).
 These instructions have been tested on IntelliJ. 
  - [Recommended] Set up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.

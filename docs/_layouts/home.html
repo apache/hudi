@@ -13,20 +13,20 @@ layout: home
     {% include masthead.html %}
 
     <div class="page__hero--overlay" style="background-color: #079fca !important;">
-      <div class="wrapper" style="background-size: 480px;background-repeat: no-repeat; background-position: right center;  background-image: url('/assets/images/logo-big.png');">
+      <div class="wrapper" style="background-size: 480px;background-repeat: no-repeat; background-position: right center;  background-image: url('{{ site.baseurl }}/assets/images/logo-big.png');">
         <h1 id="page-title" class="page__title" itemprop="headline">
           {{ page.title }}
         </h1>
 
         <p class="page__lead">{{ page.excerpt }}</p>
         <p>
-          <a href="/docs/quick-start-guide.html" class="btn btn--light-outline btn--large"><i class="fa fa-paper-plane"></i> Get Started</a>
+          <a href="{{ site.baseurl }}/docs/quick-start-guide.html" class="btn btn--light-outline btn--large"><i class="fa fa-paper-plane"></i> Get Started</a>
         </p>
       </div>
     </div>
 
     <!-- Github and twitter bar -->
-    <div id="share-bar" class="page__hero--overlay" style="background-color: #f6f6f6 !important; box-shadow:0 0 10px #000;">
+    <div id="share-bar" class="page__hero--overlay" style="background-color: #f6f6f6 !important; box-shadow:0 0 10px #000; display: none">
       <div class="wrapper" style="padding: 2px 4px 4px 2em !important;">
         <!-- Github -->
         <div style="display: inline-block; ">
@@ -75,7 +75,7 @@ layout: home
           <p>Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing.</p>
         </div>
         <div class="archive__item-teaser">
-          <img src="/assets/images/hudi-lake.png" style="display:block;margin-left:auto;margin-right:auto;width: auto">
+          <img src="{{ site.baseurl }}/assets/images/hudi-lake.png" style="display:block;margin-left:auto;margin-right:auto;width: auto">
         </div>
         <br>
       </div>

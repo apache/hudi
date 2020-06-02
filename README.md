@@ -114,7 +114,20 @@ Final steps:
  
 #### Link to this version's doc
 
+### Building staging docs
 
+When you submit a pull request for any changes on websites or docs, we recommend you generate staging site for review.
 
+You can refer to the following steps:
+
+1. You need to create a github repo called `hudi-staging-site` under your github account. You can fork this [staging repo](https://github.com/ApacheHudi/hudi-staging-site) as well.
+2. In your `hudi-staging-site` repo, go to `Settings > GitHub Pages`. Enable `GitHub Pages` on `master branch /docs folder`.
+3. Make changes to the website, follow the steps above to verify the changes locally.
+4. Once the changes are verified locally, you can run following command, It will generate the files under `docs/_site`.
+   `bundle exec jekyll serve --config _config.yml,_config.staging.yml`. 
+5. Push the generated website to your `hudi-staging-site`.
+6. Your changes will be live on `https://<your-github-id>.github.io/hudi-staging-site`.
+
+If you have any ideas to improve the review process for website, please feel free to contact us at dev@hudi.apache.org.
 
 

@@ -379,7 +379,7 @@ Compaction successfully repaired
 然后可以将这些指标绘制在grafana等标准工具上。以下是提交持续时间图表示例。
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 100%" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 100%" />
 </figure>
 
 
@@ -412,7 +412,7 @@ Compaction successfully repaired
 典型的upsert() DAG如下所示。请注意，Hudi客户端会缓存中间的RDD，以智能地并调整文件大小和Spark并行度。
 另外，由于还显示了探针作业，Spark UI显示了两次sortByKey，但它只是一个排序。
 <figure>
-    <img class="docimage" src="/assets/images/hudi_upsert_dag.png" alt="hudi_upsert_dag.png" style="max-width: 100%" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_upsert_dag.png" alt="hudi_upsert_dag.png" style="max-width: 100%" />
 </figure>
 
 

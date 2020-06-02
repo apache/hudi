@@ -7,7 +7,7 @@ toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
-Apache Hudi (pronounced “Hudi”) provides the following streaming primitives over hadoop compatible storages
+Apache Hudi (pronounced "Hudi") provides the following streaming primitives over hadoop compatible storages
 
  * Update/Delete Records      (how do I change records in a table?)
  * Change Streams             (how do I fetch records that changed?)
@@ -41,7 +41,7 @@ in one of the following states
  * `COMPLETED` - Denotes completion of an action on the timeline
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_timeline.png" alt="hudi_timeline.png" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_timeline.png" alt="hudi_timeline.png" />
 </figure>
 
 Example above shows upserts happenings between 10:00 and 10:20 on a Hudi table, roughly every 5 mins, leaving commit metadata on the Hudi timeline, along
@@ -120,7 +120,7 @@ Following illustrates how this works conceptually, when data written into copy-o
 
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_cow.png" alt="hudi_cow.png" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_cow.png" alt="hudi_cow.png" />
 </figure>
 
 
@@ -148,7 +148,7 @@ their columnar base file, to keep the query performance in check (larger delta l
 Following illustrates how the table works, and shows two types of queries - snapshot query and read optimized query.
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_mor.png" alt="hudi_mor.png" style="max-width: 100%" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_mor.png" alt="hudi_mor.png" style="max-width: 100%" />
 </figure>
 
 There are lot of interesting things happening in this example, which bring out the subtleties in the approach.

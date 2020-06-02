@@ -10,7 +10,7 @@ language: cn
 
 这一节我们将介绍使用[DeltaStreamer](#deltastreamer)工具从外部源甚至其他Hudi数据集摄取新更改的方法，
 以及通过使用[Hudi数据源](#datasource-writer)的upserts加快大型Spark作业的方法。
-对于此类数据集，我们可以使用各种查询引擎[查询](/cn/docs/querying_data.html)它们。
+对于此类数据集，我们可以使用各种查询引擎[查询]({{ site.baseurl }}/cn/docs/querying_data.html)它们。
 
 ## 写操作
 
@@ -135,7 +135,7 @@ Usage: <main class> [options]
   --op BULK_INSERT
 ```
 
-在某些情况下，您可能需要预先将现有数据集迁移到Hudi。 请参考[迁移指南](/cn/docs/migration_guide.html)。
+在某些情况下，您可能需要预先将现有数据集迁移到Hudi。 请参考[迁移指南]({{ site.baseurl }}/cn/docs/migration_guide.html)。
 
 ## Datasource Writer
 
@@ -211,13 +211,13 @@ Hudi还对存储在Hudi数据集中的数据执行几个关键的存储管理功
 
 以下是一些有效管理Hudi数据集存储的方法。
 
- - Hudi中的[小文件处理功能](/cn/docs/configurations.html#compactionSmallFileSize)，可以分析传入的工作负载并将插入内容分配到现有文件组中，
+ - Hudi中的[小文件处理功能]({{ site.baseurl }}/cn/docs/configurations.html#compactionSmallFileSize)，可以分析传入的工作负载并将插入内容分配到现有文件组中，
  而不是创建新文件组。新文件组会生成小文件。
- - 可以[配置](/cn/docs/configurations.html#retainCommits)Cleaner来清理较旧的文件片，清理的程度可以调整，
+ - 可以[配置]({{ site.baseurl }}/cn/docs/configurations.html#retainCommits)Cleaner来清理较旧的文件片，清理的程度可以调整，
  具体取决于查询所需的最长时间和增量拉取所需的回溯。
- - 用户还可以调整[基础/parquet文件](/cn/docs/configurations.html#limitFileSize)、[日志文件](/cn/docs/configurations.html#logFileMaxSize)的大小
- 和预期的[压缩率](/cn/docs/configurations.html#parquetCompressionRatio)，使足够数量的插入被分到同一个文件组中，最终产生大小合适的基础文件。
- - 智能调整[批插入并行度](/cn/docs/configurations.html#withBulkInsertParallelism)，可以产生大小合适的初始文件组。
+ - 用户还可以调整[基础/parquet文件]({{ site.baseurl }}/cn/docs/configurations.html#limitFileSize)、[日志文件]({{ site.baseurl }}/cn/docs/configurations.html#logFileMaxSize)的大小
+ 和预期的[压缩率]({{ site.baseurl }}/cn/docs/configurations.html#parquetCompressionRatio)，使足够数量的插入被分到同一个文件组中，最终产生大小合适的基础文件。
+ - 智能调整[批插入并行度]({{ site.baseurl }}/cn/docs/configurations.html#withBulkInsertParallelism)，可以产生大小合适的初始文件组。
  实际上，正确执行此操作非常关键，因为文件组一旦创建后就不能删除，只能如前所述对其进行扩展。
- - 对于具有大量更新的工作负载，[读取时合并存储](/cn/docs/concepts.html#merge-on-read-storage)提供了一种很好的机制，
+ - 对于具有大量更新的工作负载，[读取时合并存储]({{ site.baseurl }}/cn/docs/concepts.html#merge-on-read-storage)提供了一种很好的机制，
  可以快速将其摄取到较小的文件中，之后通过压缩将它们合并为较大的基础文件。

@@ -4,18 +4,18 @@ keywords: hudi, talks, presentation
 permalink: /docs/powered_by.html
 last_modified_at: 2019-12-31T15:59:57-04:00
 power_items:
-  - img_path: /assets/images/powers/uber.png
-  - img_path: /assets/images/powers/aws.jpg
-  - img_path: /assets/images/powers/alibaba.png
-  - img_path: /assets/images/powers/emis.jpg
-  - img_path: /assets/images/powers/yield.png
-  - img_path: /assets/images/powers/qq.png
-  - img_path: /assets/images/powers/tongcheng.png
-  - img_path: /assets/images/powers/yotpo.png
-  - img_path: /assets/images/powers/kyligence.png
-  - img_path: /assets/images/powers/tathastu.png
-  - img_path: /assets/images/powers/shunfeng.png
-  - img_path: /assets/images/powers/lingyue.png
+  - img_path: assets/images/powers/uber.png
+  - img_path: assets/images/powers/aws.jpg
+  - img_path: assets/images/powers/alibaba.png
+  - img_path: assets/images/powers/emis.jpg
+  - img_path: assets/images/powers/yield.png
+  - img_path: assets/images/powers/qq.png
+  - img_path: assets/images/powers/tongcheng.png
+  - img_path: assets/images/powers/yotpo.png
+  - img_path: assets/images/powers/kyligence.png
+  - img_path: assets/images/powers/tathastu.png
+  - img_path: assets/images/powers/shunfeng.png
+  - img_path: assets/images/powers/lingyue.png
 ---
 
 ## Adoption
@@ -120,7 +120,7 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
     <div class="home-power-items">
 
       {% for pi in page.power_items %}
-        <div class="power-item"><img src="{{ pi.img_path }}"></div>
+        <div class="power-item"><img src="{{ site.baseurl }}/{{ pi.img_path }}"></div>
       {% endfor %}
 
     </div>

@@ -52,7 +52,7 @@ for partition in [list of partitions in source dataset] {
 
 **Option 3**
 Write your own custom logic of how to load an existing dataset into a Hudi managed one. Please read about the RDD API
- [here](/cn/docs/quick-start-guide.html). Using the HDFSParquetImporter Tool. Once hudi has been built via `mvn clean install -DskipTests`, the shell can be
+ [here]({{ site.baseurl }}/cn/docs/quick-start-guide.html). Using the HDFSParquetImporter Tool. Once hudi has been built via `mvn clean install -DskipTests -DskipITs`, the shell can be
 fired by via `cd hudi-cli && ./hudi-cli.sh`.
 
 ```java

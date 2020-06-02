@@ -8,11 +8,11 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 language: cn
 ---
 
-从概念上讲，Hudi物理存储一次数据到DFS上，同时在其上提供三个逻辑视图，如[之前](/cn/docs/concepts.html#views)所述。
+从概念上讲，Hudi物理存储一次数据到DFS上，同时在其上提供三个逻辑视图，如[之前]({{ site.baseurl }}/cn/docs/concepts.html#views)所述。
 数据集同步到Hive Metastore后，它将提供由Hudi的自定义输入格式支持的Hive外部表。一旦提供了适当的Hudi捆绑包，
 就可以通过Hive、Spark和Presto之类的常用查询引擎来查询数据集。
 
-具体来说，在写入过程中传递了两个由[table name](/cn/docs/configurations.html#TABLE_NAME_OPT_KEY)命名的Hive表。
+具体来说，在写入过程中传递了两个由[table name]({{ site.baseurl }}/cn/docs/configurations.html#TABLE_NAME_OPT_KEY)命名的Hive表。
 例如，如果`table name = hudi_tbl`，我们得到
 
  - `hudi_tbl` 实现了由 `HoodieParquetInputFormat` 支持的数据集的读优化视图，从而提供了纯列式数据。
@@ -21,7 +21,7 @@ language: cn
 如概念部分所述，[增量处理](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop)所需要的
 一个关键原语是`增量拉取`（以从数据集中获取更改流/日志）。您可以增量提取Hudi数据集，这意味着自指定的即时时间起，
 您可以只获得全部更新和新行。 这与插入更新一起使用，对于构建某些数据管道尤其有用，包括将1个或多个源Hudi表（数据流/事实）以增量方式拉出（流/事实）
-并与其他表（数据集/维度）结合以[写出增量](/cn/docs/writing_data.html)到目标Hudi数据集。增量视图是通过查询上表之一实现的，并具有特殊配置，
+并与其他表（数据集/维度）结合以[写出增量]({{ site.baseurl }}/cn/docs/writing_data.html)到目标Hudi数据集。增量视图是通过查询上表之一实现的，并具有特殊配置，
 该特殊配置指示查询计划仅需要从数据集中获取增量数据。
 
 
@@ -159,7 +159,7 @@ scala> sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'
      .load(tablePath); // 用数据集的最底层路径
 ```
 
-请参阅[设置](/cn/docs/configurations.html#spark-datasource)部分，以查看所有数据源选项。
+请参阅[设置]({{ site.baseurl }}/cn/docs/configurations.html#spark-datasource)部分，以查看所有数据源选项。
 
 另外，`HoodieReadClient`通过Hudi的隐式索引提供了以下功能。
 

@@ -7,7 +7,7 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 language: cn
 ---
 
-## [Release 0.5.2-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating) ([docs](/docs/0.5.2-quick-start-guide.html))
+## [Release 0.5.2-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating) ([docs]({{ site.baseurl }}/docs/0.5.2-quick-start-guide.html))
 
 ### Download Information
  * Source Release : [Apache Hudi 0.5.2-incubating Source Release](https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz) ([asc](https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512))
@@ -33,7 +33,7 @@ temp_query --sql "select Instant, NumInserts, NumWrites from satishkotha_debug w
 ### Raw Release Notes
   The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346606)
 
-## [Release 0.5.1-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating) ([docs](/docs/0.5.1-quick-start-guide.html))
+## [Release 0.5.1-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating) ([docs]({{ site.baseurl }}/docs/0.5.1-quick-start-guide.html))
 
 ### Download Information
  * Source Release : [Apache Hudi 0.5.1-incubating Source Release](https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz) ([asc](https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512))

@@ -15,13 +15,13 @@ language: cn
 数据集包括5个从小到大的表（相对于批量加载表）。
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_upsert_perf1.png" alt="hudi_upsert_perf1.png" style="max-width: 1000px" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_upsert_perf1.png" alt="hudi_upsert_perf1.png" style="max-width: 1000px" />
 </figure>
 
 由于Hudi可以通过增量构建数据集，它也为更频繁地调度摄取提供了可能性，从而减少了延迟，并显著节省了总体计算成本。
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_upsert_perf2.png" alt="hudi_upsert_perf2.png" style="max-width: 1000px" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_upsert_perf2.png" alt="hudi_upsert_perf2.png" style="max-width: 1000px" />
 </figure>
 
 Hudi插入更新在t1表的一次提交中就进行了高达4TB的压力测试。
@@ -47,17 +47,17 @@ Hudi插入更新在t1表的一次提交中就进行了高达4TB的压力测试�
 **Hive**
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_query_perf_hive.png" alt="hudi_query_perf_hive.png" style="max-width: 800px" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_query_perf_hive.png" alt="hudi_query_perf_hive.png" style="max-width: 800px" />
 </figure>
 
 **Spark**
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_query_perf_spark.png" alt="hudi_query_perf_spark.png" style="max-width: 1000px" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_query_perf_spark.png" alt="hudi_query_perf_spark.png" style="max-width: 1000px" />
 </figure>
 
 **Presto**
 
 <figure>
-    <img class="docimage" src="/assets/images/hudi_query_perf_presto.png" alt="hudi_query_perf_presto.png" style="max-width: 1000px" />
+    <img class="docimage" src="{{ site.baseurl }}/assets/images/hudi_query_perf_presto.png" alt="hudi_query_perf_presto.png" style="max-width: 1000px" />
 </figure>
