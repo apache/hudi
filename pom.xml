@@ -246,7 +246,7 @@
         <version>${maven-surefire-plugin.version}</version>
         <configuration>
           <skip>${skipUTs}</skip>
-          <argLine>-Xmx2g</argLine>
+          <argLine>-Xmx4g</argLine>
           <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
           <systemPropertyVariables>
             <log4j.configuration>

@@ -112,7 +112,8 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   public void tearDown() throws IOException {
     cleanupSparkContexts();
     cleanupFileSystem();
-    cleanupMetaClient();
+    cleanupClients();
+    cleanupTestDataGenerator();
   }
 
   @ParameterizedTest
@@ -542,10 +543,6 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
-  }
-
-  private HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
-    return new HoodieWriteClient(jsc, cfg, false);
   }
 
   private void instantiateIndex() {

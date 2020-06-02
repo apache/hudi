@@ -17,6 +17,8 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.client.HoodieReadClient;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,6 +32,8 @@ import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.slf4j.Logger;
@@ -56,6 +60,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient ExecutorService executorService;
   protected transient HoodieTableMetaClient metaClient;
   private static AtomicInteger instantGen = new AtomicInteger(1);
+  protected transient HoodieWriteClient client;
 
   protected final SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
 
@@ -84,7 +89,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    * Cleanups resource group for the subclasses of {@link HoodieClientTestBase}.
    */
   public void cleanupResources() throws IOException {
-    cleanupMetaClient();
+    cleanupClients();
     cleanupSparkContexts();
     cleanupTestDataGenerator();
     cleanupFileSystem();
@@ -182,8 +187,12 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   /**
    * Cleanups table type.
    */
-  protected void cleanupMetaClient() {
+  protected void cleanupClients() {
     metaClient = null;
+    if (null != client) {
+      client.close();
+      client = null;
+    }
   }
 
   /**
@@ -227,6 +236,9 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     if (hdfsTestService != null) {
       hdfsTestService.stop();
       dfsCluster.shutdown();
+      hdfsTestService = null;
+      dfsCluster = null;
+      dfs = null;
     }
     // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
     // same JVM
@@ -267,4 +279,25 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     }
   }
 
+  public HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
+    return getHoodieWriteClient(cfg, false);
+  }
+
+  public HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit) {
+    return getHoodieWriteClient(cfg, rollbackInflightCommit, HoodieIndex.createIndex(cfg));
+  }
+
+  public HoodieReadClient getHoodieReadClient(String basePath) {
+    return new HoodieReadClient(jsc, basePath, SQLContext.getOrCreate(jsc.sc()));
+  }
+
+  public HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit,
+      HoodieIndex index) {
+    if (null != client) {
+      client.close();
+      client = null;
+    }
+    client = new HoodieWriteClient(jsc, cfg, rollbackInflightCommit, index);
+    return client;
+  }
 }
