@@ -88,7 +88,7 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    try (HoodieWriteClient client = new HoodieWriteClient(jsc, config, false)) {
+    try (HoodieWriteClient client = getHoodieWriteClient(config)) {
       // Rollback inflight commit3 and commit2
       client.rollback(commitTime3);
       client.rollback(commitTime2);
@@ -119,7 +119,7 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
           row[1] = c;
           // expect data
           row[2] = 3;
-          row[3] = 0;
+          row[3] = metadata.getTimeTakenInMillis();
           row[4] = 3;
           rows.add(row);
         });
@@ -134,8 +134,9 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TIME_TOKEN_MILLIS)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_PARTITIONS);
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 
   /**
@@ -176,7 +177,8 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELETED_FILE)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_SUCCEEDED);
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 }

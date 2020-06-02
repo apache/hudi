@@ -128,7 +128,9 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
     rows.add(new Comparable[] {clean.getTimestamp(), "102", "0", getLatestCleanTimeTakenInMillis().toString()});
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 
   /**
@@ -168,7 +170,9 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS, "0", "0"});
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 
   /**

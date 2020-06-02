@@ -62,7 +62,7 @@ public class TestUpsertPartitioner extends HoodieClientTestHarness {
   @AfterEach
   public void tearDown() throws Exception {
     cleanupSparkContexts();
-    cleanupMetaClient();
+    cleanupClients();
     cleanupFileSystem();
     cleanupTestDataGenerator();
   }

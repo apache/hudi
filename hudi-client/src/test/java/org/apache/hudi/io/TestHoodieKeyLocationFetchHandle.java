@@ -84,7 +84,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
   public void tearDown() throws IOException {
     cleanupSparkContexts();
     cleanupFileSystem();
-    cleanupMetaClient();
+    cleanupClients();
   }
 
   @Test
