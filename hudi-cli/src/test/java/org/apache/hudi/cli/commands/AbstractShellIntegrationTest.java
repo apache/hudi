@@ -58,4 +58,13 @@ public abstract class AbstractShellIntegrationTest extends HoodieClientTestHarne
   protected static JLineShellComponent getShell() {
     return shell;
   }
+
+  /**
+   * Helper to prepare string for matching.
+   * @param str Input string.
+   * @return pruned string with non word characters removed.
+   */
+  protected String removeNonWordAndStripSpace(String str) {
+    return str.replaceAll("[\\s]+", ",").replaceAll("[\\W]+", ",");
+  }
 }

@@ -86,6 +86,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   @AfterClass
   public static void clean() throws Exception {
     if (utility != null) {
+      utility.deleteTable(tableName);
       utility.shutdownMiniCluster();
     }
   }
@@ -115,11 +116,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   public void tearDown() throws Exception {
     cleanupSparkContexts();
     cleanupTestDataGenerator();
-    cleanupMetaClient();
-  }
-
-  private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
-    return new HoodieWriteClient(jsc, config);
+    cleanupClients();
   }
 
   @Test
@@ -132,7 +129,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // Load to memory
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+    try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
@@ -172,7 +169,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // Load to memory
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(newCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
@@ -206,7 +203,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // Load to memory
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    HoodieWriteClient writeClient = getWriteClient(config);
+    HoodieWriteClient writeClient = getHoodieWriteClient(config);
 
     String newCommitTime = writeClient.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
@@ -256,7 +253,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // only for test, set the hbaseConnection to mocked object
     index.setHbaseConnection(hbaseConnection);
 
-    HoodieWriteClient writeClient = getWriteClient(config);
+    HoodieWriteClient writeClient = getHoodieWriteClient(config);
 
     // start a commit and generate test data
     String newCommitTime = writeClient.startCommit();
@@ -281,7 +278,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   public void testTotalPutsBatching() throws Exception {
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    HoodieWriteClient writeClient = getWriteClient(config);
+    HoodieWriteClient writeClient = getHoodieWriteClient(config);
 
     // start a commit and generate test data
     String newCommitTime = writeClient.startCommit();

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import java.io.IOException;
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -58,8 +59,9 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
   }
 
   @After
-  public void tearDown() {
+  public void tearDown() throws IOException {
     cleanupSparkContexts();
+    cleanupFileSystem();
   }
 
   //@Test

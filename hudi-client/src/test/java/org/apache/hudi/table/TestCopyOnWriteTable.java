@@ -85,7 +85,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
   @After
   public void tearDown() throws Exception {
     cleanupSparkContexts();
-    cleanupMetaClient();
+    cleanupClients();
     cleanupFileSystem();
     cleanupTestDataGenerator();
   }

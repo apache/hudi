@@ -60,7 +60,7 @@ public class TestHBaseQPSResourceAllocator extends HoodieClientTestHarness {
   @After
   public void tearDown() throws Exception {
     cleanupSparkContexts();
-    cleanupMetaClient();
+    cleanupClients();
     if (utility != null) {
       utility.shutdownMiniCluster();
     }

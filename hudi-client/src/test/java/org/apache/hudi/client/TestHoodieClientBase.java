@@ -50,7 +50,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.sql.SQLContext;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -87,23 +86,6 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
 
   protected HoodieCleanClient getHoodieCleanClient(HoodieWriteConfig cfg) {
     return new HoodieCleanClient(jsc, cfg, new HoodieMetrics(cfg, cfg.getTableName()));
-  }
-
-  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
-    return getHoodieWriteClient(cfg, false);
-  }
-
-  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit) {
-    return getHoodieWriteClient(cfg, rollbackInflightCommit, HoodieIndex.createIndex(cfg, jsc));
-  }
-
-  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit,
-                                                   HoodieIndex index) {
-    return new HoodieWriteClient(jsc, cfg, rollbackInflightCommit, index);
-  }
-
-  protected HoodieReadClient getHoodieReadClient(String basePath) {
-    return new HoodieReadClient(jsc, basePath, SQLContext.getOrCreate(jsc.sc()));
   }
 
   /**

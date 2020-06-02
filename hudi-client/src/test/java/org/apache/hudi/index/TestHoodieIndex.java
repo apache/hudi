@@ -18,6 +18,7 @@
 
 package org.apache.hudi.index;
 
+import java.io.IOException;
 import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -43,9 +44,11 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   @After
-  public void tearDown() {
+  public void tearDown() throws IOException {
     cleanupSparkContexts();
-    cleanupMetaClient();
+    cleanupFileSystem();
+    cleanupClients();
+    cleanupTestDataGenerator();
   }
 
   @Test
