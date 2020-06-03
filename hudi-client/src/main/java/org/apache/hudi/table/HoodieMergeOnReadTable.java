@@ -179,6 +179,8 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     if (instant.isCompleted()) {
       LOG.error("Un-publishing instant " + instant + ", deleteInstants=" + deleteInstants);
       instant = this.getActiveTimeline().revertToInflight(instant);
+      // reload meta-client to reflect latest timeline status
+      metaClient.reloadActiveTimeline();
     }
 
     List<HoodieRollbackStat> allRollbackStats = new ArrayList<>();

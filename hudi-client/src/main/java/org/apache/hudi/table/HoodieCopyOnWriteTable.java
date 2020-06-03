@@ -359,6 +359,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     if (instant.isCompleted()) {
       LOG.info("Unpublishing instant " + instant);
       instant = activeTimeline.revertToInflight(instant);
+      // reload meta-client to reflect latest timeline status
+      metaClient.reloadActiveTimeline();
     }
 
     // For Requested State (like failure during index lookup), there is nothing to do rollback other than
