@@ -11,12 +11,12 @@ _CALLING_DIR="$(pwd)"
 usage() {
     echo "Usage: $0"
     echo "   --spark-command, prints the spark command"
-    echo "   -h, hadoop-version"
-    echo "   -s, spark version"
-    echo "   -p, parquet version"
-    echo "   -a, avro version"
-    echo "   -i, hive version"
-    echo "   -l, scala version"
+    echo "   -h | --hadoop, hadoop-version"
+    echo "   -s | --spark, spark version"
+    echo "   -p | --parquet, parquet version"
+    echo "   -a | --avro, avro version"
+    echo "   -i | --hive, hive version"
+    echo "   -l | --scala, scala version"
     exit 1
 }
 
@@ -60,7 +60,7 @@ case "$1" in
        ;;
 esac
 
-while getopts ":h:s:p:a:i:l:" opt; do
+while getopts ":h:s:p:a:i:l:-:" opt; do
   case $opt in
     h) hadoop="$OPTARG"
     printf "Argument hadoop is %s\n" "$hadoop"
@@ -80,6 +80,35 @@ while getopts ":h:s:p:a:i:l:" opt; do
     l) scala="$OPTARG"
     printf "Argument scala is %s\n" "$scala"
     ;;
+    -)
+      case "$OPTARG" in
+        hadoop)
+          hadoop="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+          printf "Argument hadoop is %s\n" "$hadoop"
+          ;;
+        spark)
+          spark="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+          printf "Argument spark is %s\n" "$spark"
+          ;;
+        parquet)
+          parquet="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+          printf "Argument parquet is %s\n" "$parquet"
+          ;;
+        avro)
+          avro="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+          printf "Argument avro is %s\n" "$avro"
+          ;;
+        hive)
+          hive="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+          printf "Argument hive is %s\n" "$hive"
+          ;;
+        scala)
+          scala="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+          printf "Argument scala is %s\n" "$scala"
+          ;;
+        *) echo "Invalid option --$OPTARG" >&2
+          ;;
+    esac ;;
     \?) echo "Invalid option -$OPTARG" >&2
     ;;
   esac
