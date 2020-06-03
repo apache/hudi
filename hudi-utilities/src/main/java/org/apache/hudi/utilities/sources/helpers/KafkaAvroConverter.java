@@ -25,7 +25,7 @@ public abstract class KafkaAvroConverter {
     return schemaHolder.getSchema();
   }
 
-  public Iterator<GenericRecord> apply(Iterator<ConsumerRecord> records) {
+  public Iterator<GenericRecord> apply(Iterator<ConsumerRecord<Object, Object>> records) {
     if (!records.hasNext()) {
       return Collections.emptyIterator();
     } else {
