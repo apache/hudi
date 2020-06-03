@@ -132,6 +132,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
   }
 

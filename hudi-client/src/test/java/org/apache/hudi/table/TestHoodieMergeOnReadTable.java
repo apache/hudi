@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
@@ -1327,7 +1328,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
        */
       newCommitTime = "002";
       client.startCommitWithTime(newCommitTime);
-
+      metaClient.reloadActiveTimeline();
       records = dataGen.generateUpdates(newCommitTime, records);
       writeRecords = jsc.parallelize(records, 1);
       statuses = client.upsert(writeRecords, newCommitTime).collect();
@@ -1340,6 +1341,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       final String partitionPath = records.get(0).getPartitionPath();
       final String fileId = statuses.get(0).getFileId();
       client.startCommitWithTime(newDeleteTime);
+      metaClient.reloadActiveTimeline();
 
       List<HoodieRecord> fewRecordsForDelete = dataGen.generateDeletesFromExistingRecords(records);
       JavaRDD<HoodieRecord> deleteRDD = jsc.parallelize(fewRecordsForDelete, 1);
@@ -1377,6 +1379,8 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024 * 1024).build())
         .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
+        .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
+            .withEnableBackupForRemoteFileSystemView(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build());
   }
 
