@@ -462,7 +462,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
 
   private HoodieWriteConfig.Builder getConfigBuilder(int hbaseIndexBatchSize) {
     return HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(1, 1)
+        .withParallelism(1, 1).withDeleteParallelism(1)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
             .withInlineCompaction(false).build())
         .withAutoCommit(false).withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())

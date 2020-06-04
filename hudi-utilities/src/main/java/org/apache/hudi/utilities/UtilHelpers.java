@@ -247,6 +247,7 @@ public class UtilHelpers {
         HoodieWriteConfig.newBuilder().withPath(basePath)
             .withParallelism(parallelism, parallelism)
             .withBulkInsertParallelism(parallelism)
+            .withDeleteParallelism(parallelism)
             .withSchema(schemaStr).combineInput(true, true).withCompactionConfig(compactionConfig)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withProps(properties).build();

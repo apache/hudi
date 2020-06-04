@@ -44,27 +44,36 @@ public class DeleteHelper<T extends HoodieRecordPayload<T>> {
    * Deduplicate Hoodie records, using the given deduplication function.
    *
    * @param keys RDD of HoodieKey to deduplicate
+   * @param table target Hoodie table for deduplicating
+   * @param parallelism parallelism or partitions to be used while reducing/deduplicating
    * @return RDD of HoodieKey already be deduplicated
    */
   private static  <T extends HoodieRecordPayload<T>> JavaRDD<HoodieKey> deduplicateKeys(JavaRDD<HoodieKey> keys,
-      HoodieTable<T> table) {
+      HoodieTable<T> table, int parallelism) {
     boolean isIndexingGlobal = table.getIndex().isGlobal();
     if (isIndexingGlobal) {
       return keys.keyBy(HoodieKey::getRecordKey)
-          .reduceByKey((key1, key2) -> key1)
+          .reduceByKey((key1, key2) -> key1, parallelism)
           .values();
     } else {
-      return keys.distinct();
+      return keys.distinct(parallelism);
     }
   }
 
   public static <T extends HoodieRecordPayload<T>> HoodieWriteMetadata execute(String instantTime,
-                                                                               JavaRDD<HoodieKey> keys, JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable<T> table,
+                                                                               JavaRDD<HoodieKey> keys, JavaSparkContext jsc,
+                                                                               HoodieWriteConfig config, HoodieTable<T> table,
                                                                                CommitActionExecutor<T> deleteExecutor) {
     try {
       HoodieWriteMetadata result = null;
-      // De-dupe/merge if needed
-      JavaRDD<HoodieKey> dedupedKeys = config.shouldCombineBeforeDelete() ? deduplicateKeys(keys, table) : keys;
+      JavaRDD<HoodieKey> dedupedKeys = keys;
+      final int parallelism = config.getDeleteShuffleParallelism();
+      if (config.shouldCombineBeforeDelete()) {
+        // De-dupe/merge if needed
+        dedupedKeys = deduplicateKeys(keys, table, parallelism);
+      } else if (!keys.partitions().isEmpty()) {
+        dedupedKeys = keys.repartition(parallelism);
+      }
 
       JavaRDD<HoodieRecord<T>> dedupedRecords =
           dedupedKeys.map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
@@ -74,7 +83,7 @@ public class DeleteHelper<T extends HoodieRecordPayload<T>> {
           ((HoodieTable<T>)table).getIndex().tagLocation(dedupedRecords, jsc, (HoodieTable<T>)table);
       Duration tagLocationDuration = Duration.between(beginTag, Instant.now());
 
-      // filter out non existant keys/records
+      // filter out non existent keys/records
       JavaRDD<HoodieRecord<T>> taggedValidRecords = taggedRecords.filter(HoodieRecord::isCurrentLocationKnown);
       if (!taggedValidRecords.isEmpty()) {
         result = deleteExecutor.execute(taggedValidRecords);

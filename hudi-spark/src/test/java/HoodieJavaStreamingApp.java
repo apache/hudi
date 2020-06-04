@@ -354,6 +354,7 @@ public class HoodieJavaStreamingApp {
 
     DataStreamWriter<Row> writer = streamingInput.writeStream().format("org.apache.hudi")
         .option("hoodie.insert.shuffle.parallelism", "2").option("hoodie.upsert.shuffle.parallelism", "2")
+        .option("hoodie.delete.shuffle.parallelism", "2")
         .option(DataSourceWriteOptions.OPERATION_OPT_KEY(), operationType)
         .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY(), tableType)
         .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
