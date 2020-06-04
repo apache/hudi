@@ -18,18 +18,22 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.WriteStatus;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.hbase.HBaseIndex;
+import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
+import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaPairRDD;
@@ -49,8 +53,16 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
     this.config = config;
   }
 
-  public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(HoodieWriteConfig config,
-      JavaSparkContext jsc) throws HoodieIndexException {
+  public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(
+      HoodieWriteConfig config) throws HoodieIndexException {
+    // first use index class config to create index.
+    if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
+      Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
+      if (!(instance instanceof HoodieIndex)) {
+        throw new HoodieIndexException(config.getIndexClass() + " is not a subclass of HoodieIndex");
+      }
+      return (HoodieIndex) instance;
+    }
     switch (config.getIndexType()) {
       case HBASE:
         return new HBaseIndex<>(config);
@@ -60,6 +72,10 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
         return new HoodieBloomIndex<>(config);
       case GLOBAL_BLOOM:
         return new HoodieGlobalBloomIndex<>(config);
+      case SIMPLE:
+        return new HoodieSimpleIndex<>(config);
+      case GLOBAL_SIMPLE:
+        return new HoodieGlobalSimpleIndex<>(config);
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }
@@ -77,7 +93,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    * present).
    */
   public abstract JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, JavaSparkContext jsc,
-      HoodieTable<T> hoodieTable) throws HoodieIndexException;
+                                                       HoodieTable<T> hoodieTable) throws HoodieIndexException;
 
   /**
    * Extracts the location of written records, and updates the index.
@@ -85,12 +101,12 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    * TODO(vc): We may need to propagate the record as well in a WriteStatus class
    */
   public abstract JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc,
-      HoodieTable<T> hoodieTable) throws HoodieIndexException;
+                                                      HoodieTable<T> hoodieTable) throws HoodieIndexException;
 
   /**
-   * Rollback the efffects of the commit made at commitTime.
+   * Rollback the efffects of the commit made at instantTime.
    */
-  public abstract boolean rollbackCommit(String commitTime);
+  public abstract boolean rollbackCommit(String instantTime);
 
   /**
    * An index is `global` if {@link HoodieKey} to fileID mapping, does not depend on the `partitionPath`. Such an
@@ -118,9 +134,10 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
   /**
    * Each index type should implement it's own logic to release any resources acquired during the process.
    */
-  public void close() {}
+  public void close() {
+  }
 
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM
+    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE
   }
 }

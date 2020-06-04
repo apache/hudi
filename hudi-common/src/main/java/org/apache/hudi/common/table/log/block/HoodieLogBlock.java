@@ -18,14 +18,13 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import com.google.common.collect.Maps;
 import org.apache.hadoop.fs.FSDataInputStream;
 
 import javax.annotation.Nonnull;
@@ -35,8 +34,8 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
-
 
 /**
  * Abstract class defining a block in HoodieLogFile.
@@ -192,7 +191,7 @@ public abstract class HoodieLogBlock {
    */
   public static Map<HeaderMetadataType, String> getLogMetadata(DataInputStream dis) throws IOException {
 
-    Map<HeaderMetadataType, String> metadata = Maps.newHashMap();
+    Map<HeaderMetadataType, String> metadata = new HashMap<>();
     // 1. Read the metadata written out
     int metadataCount = dis.readInt();
     try {
@@ -231,7 +230,7 @@ public abstract class HoodieLogBlock {
   /**
    * When lazyReading of blocks is turned on, inflate the content of a log block from disk.
    */
-  protected void inflate() throws IOException {
+  protected void inflate() throws HoodieIOException {
 
     try {
       content = Option.of(new byte[(int) this.getBlockContentLocation().get().getBlockSize()]);
@@ -239,13 +238,9 @@ public abstract class HoodieLogBlock {
       inputStream.readFully(content.get(), 0, content.get().length);
       safeSeek(inputStream, this.getBlockContentLocation().get().getBlockEndPos());
     } catch (IOException e) {
-      try {
-        // TODO : fs.open() and return inputstream again, need to pass FS configuration
-        // because the inputstream might close/timeout for large number of log blocks to be merged
-        inflate();
-      } catch (IOException io) {
-        throw new HoodieIOException("unable to lazily read log block from disk", io);
-      }
+      // TODO : fs.open() and return inputstream again, need to pass FS configuration
+      // because the inputstream might close/timeout for large number of log blocks to be merged
+      inflate();
     }
   }
 
@@ -262,7 +257,7 @@ public abstract class HoodieLogBlock {
    * 
    * @param inputStream Input Stream
    * @param pos Position to seek
-   * @throws IOException
+   * @throws IOException -
    */
   private static void safeSeek(FSDataInputStream inputStream, long pos) throws IOException {
     try {

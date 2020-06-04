@@ -18,22 +18,27 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.WriteStatus;
-import org.apache.hudi.common.util.DFSPropertiesConfiguration;
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
-import com.google.common.base.Preconditions;
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -43,16 +48,36 @@ import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.execution.datasources.jdbc.DriverRegistry;
+import org.apache.spark.sql.execution.datasources.jdbc.DriverWrapper;
+import org.apache.spark.sql.execution.datasources.jdbc.JDBCOptions;
+import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils;
+import org.apache.spark.sql.jdbc.JdbcDialect;
+import org.apache.spark.sql.jdbc.JdbcDialects;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
+import java.sql.Connection;
+import java.sql.Driver;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
 
 /**
  * Bunch of helper methods.
@@ -61,7 +86,7 @@ public class UtilHelpers {
   private static final Logger LOG = LogManager.getLogger(UtilHelpers.class);
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
-      SparkSession sparkSession, SchemaProvider schemaProvider) throws IOException {
+                                    SparkSession sparkSession, SchemaProvider schemaProvider) throws IOException {
     try {
       return (Source) ReflectionUtils.loadClass(sourceClass,
           new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class}, cfg,
@@ -72,7 +97,7 @@ public class UtilHelpers {
   }
 
   public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,
-      JavaSparkContext jssc) throws IOException {
+                                                    JavaSparkContext jssc) throws IOException {
     try {
       return schemaProviderClass == null ? null
           : (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
@@ -81,15 +106,29 @@ public class UtilHelpers {
     }
   }
 
-  public static Transformer createTransformer(String transformerClass) throws IOException {
+  public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
     try {
-      return transformerClass == null ? null : (Transformer) ReflectionUtils.loadClass(transformerClass);
+      List<Transformer> transformers = new ArrayList<>();
+      for (String className : Option.ofNullable(classNames).orElse(Collections.emptyList())) {
+        transformers.add(ReflectionUtils.loadClass(className));
+      }
+      return transformers.isEmpty() ? Option.empty() : Option.of(new ChainedTransformer(transformers));
     } catch (Throwable e) {
-      throw new IOException("Could not load transformer class " + transformerClass, e);
+      throw new IOException("Could not load transformer class(es) " + classNames, e);
+    }
+  }
+
+  public static InitialCheckPointProvider createInitialCheckpointProvider(
+      String className, TypedProperties props) throws IOException {
+    try {
+      return (InitialCheckPointProvider) ReflectionUtils.loadClass(className, new Class<?>[] {TypedProperties.class}, props);
+    } catch (Throwable e) {
+      throw new IOException("Could not load initial checkpoint provider class " + className, e);
     }
   }
 
   /**
+   *
    */
   public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
     DFSPropertiesConfiguration conf;
@@ -114,18 +153,22 @@ public class UtilHelpers {
 
   public static TypedProperties buildProperties(List<String> props) {
     TypedProperties properties = new TypedProperties();
-    props.stream().forEach(x -> {
+    props.forEach(x -> {
       String[] kv = x.split("=");
-      Preconditions.checkArgument(kv.length == 2);
+      ValidationUtils.checkArgument(kv.length == 2);
       properties.setProperty(kv[0], kv[1]);
     });
     return properties;
   }
 
+  public static void validateAndAddProperties(String[] configs, SparkLauncher sparkLauncher) {
+    Arrays.stream(configs).filter(config -> config.contains("=") && config.split("=").length == 2).forEach(sparkLauncher::addAppArgs);
+  }
+
   /**
    * Parse Schema from file.
    *
-   * @param fs File System
+   * @param fs         File System
    * @param schemaFile Schema File
    */
   public static String parseSchema(FileSystem fs, String schemaFile) throws Exception {
@@ -161,9 +204,8 @@ public class UtilHelpers {
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
 
-    additionalConfigs.entrySet().forEach(e -> sparkConf.set(e.getKey(), e.getValue()));
-    SparkConf newSparkConf = HoodieWriteClient.registerClasses(sparkConf);
-    return newSparkConf;
+    additionalConfigs.forEach(sparkConf::set);
+    return HoodieWriteClient.registerClasses(sparkConf);
   }
 
   public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, Map<String, String> configs) {
@@ -176,7 +218,7 @@ public class UtilHelpers {
 
   /**
    * Build Spark Context for ingestion/compaction.
-   * 
+   *
    * @return
    */
   public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
@@ -188,13 +230,13 @@ public class UtilHelpers {
   /**
    * Build Hoodie write client.
    *
-   * @param jsc Java Spark Context
-   * @param basePath Base Path
-   * @param schemaStr Schema
+   * @param jsc         Java Spark Context
+   * @param basePath    Base Path
+   * @param schemaStr   Schema
    * @param parallelism Parallelism
    */
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) throws Exception {
+                                                     int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
@@ -218,7 +260,7 @@ public class UtilHelpers {
       }
     });
     if (errors.value() == 0) {
-      LOG.info(String.format("Dataset imported into hoodie dataset with %s instant time.", instantTime));
+      LOG.info(String.format("Table imported into hoodie with %s instant time.", instantTime));
       return 0;
     }
     LOG.error(String.format("Import failed with %d errors.", errors.value()));
@@ -229,5 +271,88 @@ public class UtilHelpers {
     TypedProperties defaults = new TypedProperties();
     defaults.load(in);
     return defaults;
+  }
+
+  /**
+   * Returns a factory for creating connections to the given JDBC URL.
+   *
+   * @param options - JDBC options that contains url, table and other information.
+   * @return
+   * @throws SQLException if the driver could not open a JDBC connection.
+   */
+  private static Connection createConnectionFactory(Map<String, String> options) throws SQLException {
+    String driverClass = options.get(JDBCOptions.JDBC_DRIVER_CLASS());
+    DriverRegistry.register(driverClass);
+    Enumeration<Driver> drivers = DriverManager.getDrivers();
+    Driver driver = null;
+    while (drivers.hasMoreElements()) {
+      Driver d = drivers.nextElement();
+      if (d instanceof DriverWrapper) {
+        if (((DriverWrapper) d).wrapped().getClass().getCanonicalName().equals(driverClass)) {
+          driver = d;
+        }
+      } else if (d.getClass().getCanonicalName().equals(driverClass)) {
+        driver = d;
+      }
+      if (driver != null) {
+        break;
+      }
+    }
+
+    Objects.requireNonNull(driver, String.format("Did not find registered driver with class %s", driverClass));
+
+    Properties properties = new Properties();
+    properties.putAll(options);
+    Connection connect;
+    String url = options.get(JDBCOptions.JDBC_URL());
+    connect = driver.connect(url, properties);
+    Objects.requireNonNull(connect, String.format("The driver could not open a JDBC connection. Check the URL: %s", url));
+    return connect;
+  }
+
+  /**
+   * Returns true if the table already exists in the JDBC database.
+   */
+  private static Boolean tableExists(Connection conn, Map<String, String> options) {
+    JdbcDialect dialect = JdbcDialects.get(options.get(JDBCOptions.JDBC_URL()));
+    try (PreparedStatement statement = conn.prepareStatement(dialect.getTableExistsQuery(options.get(JDBCOptions.JDBC_TABLE_NAME())))) {
+      statement.setQueryTimeout(Integer.parseInt(options.get(JDBCOptions.JDBC_QUERY_TIMEOUT())));
+      statement.executeQuery();
+    } catch (SQLException e) {
+      return false;
+    }
+    return true;
+  }
+
+  /***
+   * call spark function get the schema through jdbc.
+   * The code logic implementation refers to spark 2.4.x and spark 3.x.
+   * @param options
+   * @return
+   * @throws Exception
+   */
+  public static Schema getJDBCSchema(Map<String, String> options) throws Exception {
+    Connection conn = createConnectionFactory(options);
+    String url = options.get(JDBCOptions.JDBC_URL());
+    String table = options.get(JDBCOptions.JDBC_TABLE_NAME());
+    boolean tableExists = tableExists(conn, options);
+
+    if (tableExists) {
+      JdbcDialect dialect = JdbcDialects.get(url);
+      try (PreparedStatement statement = conn.prepareStatement(dialect.getSchemaQuery(table))) {
+        statement.setQueryTimeout(Integer.parseInt(options.get("queryTimeout")));
+        try (ResultSet rs = statement.executeQuery()) {
+          StructType structType;
+          if (Boolean.parseBoolean(options.get("nullable"))) {
+            structType = JdbcUtils.getSchema(rs, dialect, true);
+          } else {
+            structType = JdbcUtils.getSchema(rs, dialect, false);
+          }
+          return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
+        }
+      }
+    } else {
+      throw new HoodieException(String.format("%s table does not exists!", table));
+    }
   }
 }

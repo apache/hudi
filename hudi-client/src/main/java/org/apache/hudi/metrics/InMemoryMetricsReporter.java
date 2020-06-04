@@ -35,4 +35,9 @@ public class InMemoryMetricsReporter extends MetricsReporter {
   public Closeable getReporter() {
     return null;
   }
+
+  @Override
+  public void stop() {
+
+  }
 }

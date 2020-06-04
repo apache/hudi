@@ -49,7 +49,9 @@ public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializa
    */
   private final HashMap<String, WorkloadStat> partitionPathStatMap;
 
-
+  /**
+   * Global workloadStat.
+   */
   private final WorkloadStat globalStat;
 
   public WorkloadProfile(JavaRDD<HoodieRecord<T>> taggedRecords) {
@@ -59,13 +61,18 @@ public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializa
     buildProfile();
   }
 
+  /**
+   *  Method help to build WorkloadProfile.
+   */
   private void buildProfile() {
-
+    // group the records by partitionPath + currentLocation combination, count the number of
+    // records in each partition
     Map<Tuple2<String, Option<HoodieRecordLocation>>, Long> partitionLocationCounts = taggedRecords
         .mapToPair(record -> new Tuple2<>(
             new Tuple2<>(record.getPartitionPath(), Option.ofNullable(record.getCurrentLocation())), record))
         .countByKey();
 
+    // count the number of both inserts and updates in each partition, update the counts to workLoadStats
     for (Map.Entry<Tuple2<String, Option<HoodieRecordLocation>>, Long> e : partitionLocationCounts.entrySet()) {
       String partitionPath = e.getKey()._1();
       Long count = e.getValue();
@@ -93,6 +100,10 @@ public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializa
 
   public Set<String> getPartitionPaths() {
     return partitionPathStatMap.keySet();
+  }
+
+  public HashMap<String, WorkloadStat> getPartitionPathStatMap() {
+    return partitionPathStatMap;
   }
 
   public WorkloadStat getWorkloadStat(String partitionPath) {

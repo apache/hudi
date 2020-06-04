@@ -1,13 +1,12 @@
 /*
- * This code is copied from com.databricks:spark-avro with following license
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * Copyright 2014 Databricks
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,20 +21,30 @@ import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
 import java.util
 
-import com.databricks.spark.avro.SchemaConverters
-import com.databricks.spark.avro.SchemaConverters.IncompatibleSchemaException
-import org.apache.avro.{Schema, SchemaBuilder}
+import org.apache.avro.Conversions.DecimalConversion
+import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
+import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{Fixed, Record}
-import org.apache.avro.generic.{GenericData, GenericRecord}
-import org.apache.hudi.AvroConversionUtils.getNewRecordNamespace
+import org.apache.avro.generic.{GenericData, GenericFixed, GenericRecord}
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.avro.{IncompatibleSchemaException, SchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.GenericRow
 import org.apache.spark.sql.types._
 
 import scala.collection.JavaConverters._
 
 object AvroConversionHelper {
+
+  private def createDecimal(decimal: java.math.BigDecimal, precision: Int, scale: Int): Decimal = {
+    if (precision <= Decimal.MAX_LONG_DIGITS) {
+      // Constructs a `Decimal` with an unscaled `Long` value if possible.
+      Decimal(decimal.unscaledValue().longValue(), precision, scale)
+    } else {
+      // Otherwise, resorts to an unscaled `BigInteger` instead.
+      Decimal(decimal, precision, scale)
+    }
+  }
 
   /**
     *
@@ -76,7 +85,50 @@ object AvroConversionHelper {
               byteBuffer.get(bytes)
               bytes
             }
-
+        case (d: DecimalType, FIXED) =>
+          (item: AnyRef) =>
+            if (item == null) {
+              null
+            } else {
+              val decimalConversion = new DecimalConversion
+              val bigDecimal = decimalConversion.fromFixed(item.asInstanceOf[GenericFixed], avroSchema,
+                LogicalTypes.decimal(d.precision, d.scale))
+              createDecimal(bigDecimal, d.precision, d.scale)
+            }
+        case (d: DecimalType, BYTES) =>
+          (item: AnyRef) =>
+            if (item == null) {
+              null
+            } else {
+              val decimalConversion = new DecimalConversion
+              val bigDecimal = decimalConversion.fromBytes(item.asInstanceOf[ByteBuffer], avroSchema,
+                LogicalTypes.decimal(d.precision, d.scale))
+              createDecimal(bigDecimal, d.precision, d.scale)
+            }
+        case (DateType, INT) =>
+          (item: AnyRef) =>
+            if (item == null) {
+              null
+            } else {
+              new Date(item.asInstanceOf[Long])
+            }
+        case (TimestampType, LONG) =>
+          (item: AnyRef) =>
+            if (item == null) {
+              null
+            } else {
+              avroSchema.getLogicalType match {
+                case _: TimestampMillis =>
+                  new Timestamp(item.asInstanceOf[Long])
+                case _: TimestampMicros =>
+                  new Timestamp(item.asInstanceOf[Long] / 1000)
+                case null =>
+                  new Timestamp(item.asInstanceOf[Long])
+                case other =>
+                  throw new IncompatibleSchemaException(
+                    s"Cannot convert Avro logical type $other to Catalyst Timestamp type.")
+              }
+            }
         case (struct: StructType, RECORD) =>
           val length = struct.fields.length
           val converters = new Array[AnyRef => AnyRef](length)
@@ -162,7 +214,7 @@ object AvroConversionHelper {
               createConverter(Schema.createUnion(remainingUnionTypes.asJava), sqlType, path)
             }
           } else avroSchema.getTypes.asScala.map(_.getType) match {
-            case Seq(t1) => createConverter(avroSchema.getTypes.get(0), sqlType, path)
+            case Seq(_) => createConverter(avroSchema.getTypes.get(0), sqlType, path)
             case Seq(a, b) if Set(a, b) == Set(INT, LONG) && sqlType == LongType =>
               (item: AnyRef) => {
                 item match {
@@ -231,16 +283,26 @@ object AvroConversionHelper {
         if (item == null) null else item.asInstanceOf[Byte].intValue
       case ShortType => (item: Any) =>
         if (item == null) null else item.asInstanceOf[Short].intValue
-      case _: DecimalType => (item: Any) => if (item == null) null else item.toString
+      case dec: DecimalType =>
+        val schema = SchemaConverters.toAvroType(dec, nullable = false, structName, recordNamespace)
+        (item: Any) => {
+          Option(item).map { _ =>
+            val bigDecimalValue = item.asInstanceOf[java.math.BigDecimal]
+            val decimalConversions = new DecimalConversion()
+            decimalConversions.toFixed(bigDecimalValue, schema, LogicalTypes.decimal(dec.precision, dec.scale))
+          }.orNull
+        }
       case TimestampType => (item: Any) =>
-        if (item == null) null else item.asInstanceOf[Timestamp].getTime
+        // Convert time to microseconds since spark-avro by default converts TimestampType to
+        // Avro Logical TimestampMicros
+        Option(item).map(_.asInstanceOf[Timestamp].getTime * 1000).orNull
       case DateType => (item: Any) =>
-        if (item == null) null else item.asInstanceOf[Date].getTime
+        Option(item).map(_.asInstanceOf[Date].toLocalDate.toEpochDay.toInt).orNull
       case ArrayType(elementType, _) =>
         val elementConverter = createConverterToAvro(
           elementType,
           structName,
-          getNewRecordNamespace(elementType, recordNamespace, structName))
+          recordNamespace)
         (item: Any) => {
           if (item == null) {
             null
@@ -260,7 +322,7 @@ object AvroConversionHelper {
         val valueConverter = createConverterToAvro(
           valueType,
           structName,
-          getNewRecordNamespace(valueType, recordNamespace, structName))
+          recordNamespace)
         (item: Any) => {
           if (item == null) {
             null
@@ -273,14 +335,13 @@ object AvroConversionHelper {
           }
         }
       case structType: StructType =>
-        val builder = SchemaBuilder.record(structName).namespace(recordNamespace)
-        val schema: Schema = SchemaConverters.convertStructToAvro(
-          structType, builder, recordNamespace)
+        val schema: Schema = SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
+        val childNameSpace = if (recordNamespace != "") s"$recordNamespace.$structName" else structName
         val fieldConverters = structType.fields.map(field =>
           createConverterToAvro(
             field.dataType,
             field.name,
-            getNewRecordNamespace(field.dataType, recordNamespace, field.name)))
+            childNameSpace))
         (item: Any) => {
           if (item == null) {
             null

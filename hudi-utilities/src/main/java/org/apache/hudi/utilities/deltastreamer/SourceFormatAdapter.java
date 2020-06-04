@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.AvroSource;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.JsonSource;
@@ -50,10 +51,6 @@ public final class SourceFormatAdapter {
 
   /**
    * Fetch new data in avro format. If the source provides data in different format, they are translated to Avro format
-   * 
-   * @param lastCkptStr
-   * @param sourceLimit
-   * @return
    */
   public InputBatch<JavaRDD<GenericRecord>> fetchNewDataInAvroFormat(Option<String> lastCkptStr, long sourceLimit) {
     switch (source.getSourceType()) {
@@ -68,7 +65,17 @@ public final class SourceFormatAdapter {
       case ROW: {
         InputBatch<Dataset<Row>> r = ((RowSource) source).fetchNext(lastCkptStr, sourceLimit);
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(
-            rdd -> (AvroConversionUtils.createRdd(rdd, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD()))
+            rdd -> (
+                (r.getSchemaProvider() instanceof FilebasedSchemaProvider)
+                    // If the source schema is specified through Avro schema,
+                    // pass in the schema for the Row-to-Avro conversion
+                    // to avoid nullability mismatch between Avro schema and Row schema
+                    ? AvroConversionUtils.createRdd(
+                        rdd, r.getSchemaProvider().getSourceSchema(),
+                        HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD()
+                    : AvroConversionUtils.createRdd(
+                        rdd, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD()
+                ))
             .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       default:
@@ -78,10 +85,6 @@ public final class SourceFormatAdapter {
 
   /**
    * Fetch new data in row format. If the source provides data in different format, they are translated to Row format
-   * 
-   * @param lastCkptStr
-   * @param sourceLimit
-   * @return
    */
   public InputBatch<Dataset<Row>> fetchNewDataInRowFormat(Option<String> lastCkptStr, long sourceLimit) {
     switch (source.getSourceType()) {
@@ -95,7 +98,8 @@ public final class SourceFormatAdapter {
                 .ofNullable(
                     r.getBatch()
                         .map(rdd -> AvroConversionUtils.createDataFrame(JavaRDD.toRDD(rdd), sourceSchema.toString(),
-                            source.getSparkSession()))
+                            source.getSparkSession())
+                        )
                         .orElse(null)),
             r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }

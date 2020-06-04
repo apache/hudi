@@ -18,25 +18,25 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.common.model.TimelineLayoutVersion;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-
-import org.apache.spark.api.java.JavaSparkContext;
 
 public class ClientUtils {
 
   /**
    * Create Consistency Aware MetaClient.
    *
-   * @param jsc JavaSparkContext
+   * @param hadoopConf Configuration
    * @param config HoodieWriteConfig
    * @param loadActiveTimelineOnLoad early loading of timeline
    */
-  public static HoodieTableMetaClient createMetaClient(JavaSparkContext jsc, HoodieWriteConfig config,
+  public static HoodieTableMetaClient createMetaClient(Configuration hadoopConf, HoodieWriteConfig config,
       boolean loadActiveTimelineOnLoad) {
-    return new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), loadActiveTimelineOnLoad,
-        config.getConsistencyGuardConfig(), Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())));
+    return new HoodieTableMetaClient(hadoopConf, config.getBasePath(), loadActiveTimelineOnLoad,
+        config.getConsistencyGuardConfig(),
+        Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())));
   }
 }

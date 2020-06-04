@@ -18,14 +18,14 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.SyncableFileSystemView;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
 /**
- * Tests spillable map based file system view {@link SyncableFileSystemView}.
+ * Tests spillable map based file system view {@link SpillableMapBasedFileSystemView}.
  */
 public class TestSpillableMapBasedFileSystemView extends TestHoodieTableFileSystemView {
 
+  @Override
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
     return new SpillableMapBasedFileSystemView(metaClient, timeline, FileSystemViewStorageConfig.newBuilder()
         // pure disk base View

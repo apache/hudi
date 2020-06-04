@@ -18,45 +18,44 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.TestHoodieClientBase;
-import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.HoodieClientTestBase;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for {@link HoodieStorageWriterFactory}.
  */
-public class TestHoodieStorageWriterFactory extends TestHoodieClientBase {
+public class TestHoodieStorageWriterFactory extends HoodieClientTestBase {
 
   @Test
   public void testGetStorageWriter() throws IOException {
     // parquet file format.
-    final String commitTime = "100";
+    final String instantTime = "100";
     final Path parquetPath = new Path(basePath + "/partition/path/f1_1-0-1_000.parquet");
     final HoodieWriteConfig cfg = getConfig();
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
-    HoodieStorageWriter<IndexedRecord> parquetWriter = HoodieStorageWriterFactory.getStorageWriter(commitTime,
-        parquetPath, table, cfg, HoodieTestDataGenerator.avroSchema);
-    Assert.assertTrue(parquetWriter instanceof HoodieParquetWriter);
+    HoodieTable table = HoodieTable.create(metaClient, cfg, hadoopConf);
+    SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
+    HoodieStorageWriter<IndexedRecord> parquetWriter = HoodieStorageWriterFactory.getStorageWriter(instantTime,
+        parquetPath, table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
+    assertTrue(parquetWriter instanceof HoodieParquetWriter);
 
     // other file format exception.
     final Path logPath = new Path(basePath + "/partition/path/f.b51192a8-574b-4a85-b246-bcfec03ac8bf_100.log.2_1-0-1");
-    try {
-      HoodieStorageWriter<IndexedRecord> logWriter = HoodieStorageWriterFactory.getStorageWriter(commitTime, logPath,
-          table, cfg, HoodieTestDataGenerator.avroSchema);
-      fail("should fail since log storage writer is not supported yet.");
-    } catch (Exception e) {
-      Assert.assertTrue(e instanceof UnsupportedOperationException);
-      Assert.assertTrue(e.getMessage().contains("format not supported yet."));
-    }
+    final Throwable thrown = assertThrows(UnsupportedOperationException.class, () -> {
+      HoodieStorageWriter<IndexedRecord> logWriter = HoodieStorageWriterFactory.getStorageWriter(instantTime, logPath,
+          table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
+    }, "should fail since log storage writer is not supported yet.");
+    assertTrue(thrown.getMessage().contains("format not supported yet."));
   }
 }

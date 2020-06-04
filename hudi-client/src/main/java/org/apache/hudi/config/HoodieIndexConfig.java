@@ -18,7 +18,8 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.bloom.filter.BloomFilterTypeCode;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.index.HoodieIndex;
 
 import javax.annotation.concurrent.Immutable;
@@ -36,6 +37,9 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
   public static final String INDEX_TYPE_PROP = "hoodie.index.type";
   public static final String DEFAULT_INDEX_TYPE = HoodieIndex.IndexType.BLOOM.name();
+
+  public static final String INDEX_CLASS_PROP = "hoodie.index.class";
+  public static final String DEFAULT_INDEX_CLASS = "";
 
   // ***** Bloom Index configs *****
   public static final String BLOOM_FILTER_NUM_ENTRIES = "hoodie.index.bloom.num_entries";
@@ -58,6 +62,12 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_BLOOM_INDEX_FILTER_TYPE = BloomFilterTypeCode.SIMPLE.name();
   public static final String HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = "hoodie.bloom.index.filter.dynamic.max.entries";
   public static final String DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = "100000";
+  public static final String SIMPLE_INDEX_USE_CACHING_PROP = "hoodie.simple.index.use.caching";
+  public static final String DEFAULT_SIMPLE_INDEX_USE_CACHING = "true";
+  public static final String SIMPLE_INDEX_PARALLELISM_PROP = "hoodie.simple.index.parallelism";
+  public static final String DEFAULT_SIMPLE_INDEX_PARALLELISM = "0";
+  public static final String GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP = "hoodie.global.simple.index.parallelism";
+  public static final String DEFAULT_GLOBAL_SIMPLE_INDEX_PARALLELISM = "0";
 
   // 1B bloom filter checks happen in 250 seconds. 500ms to read a bloom filter.
   // 10M checks in 2500ms, thus amortizing the cost of reading bloom filter across partitions.
@@ -76,6 +86,22 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
   public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL = "hoodie.bloom.index.input.storage.level";
   public static final String DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
+  public static final String SIMPLE_INDEX_INPUT_STORAGE_LEVEL = "hoodie.simple.index.input.storage.level";
+  public static final String DEFAULT_SIMPLE_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
+
+  /**
+   * Only applies if index type is GLOBAL_BLOOM.
+   * <p>
+   * When set to true, an update to a record with a different partition from its existing one
+   * will insert the record to the new partition and delete it from the old partition.
+   * <p>
+   * When set to false, a record will be updated to the old partition.
+   */
+  public static final String BLOOM_INDEX_UPDATE_PARTITION_PATH = "hoodie.bloom.index.update.partition.path";
+  public static final String DEFAULT_BLOOM_INDEX_UPDATE_PARTITION_PATH = "false";
+
+  public static final String SIMPLE_INDEX_UPDATE_PARTITION_PATH = "hoodie.simple.index.update.partition.path";
+  public static final String DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH = "false";
 
   private HoodieIndexConfig(Properties props) {
     super(props);
@@ -90,12 +116,9 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
     private final Properties props = new Properties();
 
     public Builder fromFile(File propertiesFile) throws IOException {
-      FileReader reader = new FileReader(propertiesFile);
-      try {
+      try (FileReader reader = new FileReader(propertiesFile)) {
         this.props.load(reader);
         return this;
-      } finally {
-        reader.close();
       }
     }
 
@@ -106,6 +129,11 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
     public Builder withIndexType(HoodieIndex.IndexType indexType) {
       props.setProperty(INDEX_TYPE_PROP, indexType.name());
+      return this;
+    }
+
+    public Builder withIndexClass(String indexClass) {
+      props.setProperty(INDEX_CLASS_PROP, indexClass);
       return this;
     }
 
@@ -179,9 +207,40 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withBloomIndexUpdatePartitionPath(boolean updatePartitionPath) {
+      props.setProperty(BLOOM_INDEX_UPDATE_PARTITION_PATH, String.valueOf(updatePartitionPath));
+      return this;
+    }
+
+    public Builder withSimpleIndexParallelism(int parallelism) {
+      props.setProperty(SIMPLE_INDEX_PARALLELISM_PROP, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder simpleIndexUseCaching(boolean useCaching) {
+      props.setProperty(SIMPLE_INDEX_USE_CACHING_PROP, String.valueOf(useCaching));
+      return this;
+    }
+
+    public Builder withSimpleIndexInputStorageLevel(String level) {
+      props.setProperty(SIMPLE_INDEX_INPUT_STORAGE_LEVEL, level);
+      return this;
+    }
+
+    public Builder withGlobalSimpleIndexParallelism(int parallelism) {
+      props.setProperty(GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withGlobalSimpleIndexUpdatePartitionPath(boolean updatePartitionPath) {
+      props.setProperty(SIMPLE_INDEX_UPDATE_PARTITION_PATH, String.valueOf(updatePartitionPath));
+      return this;
+    }
+
     public HoodieIndexConfig build() {
       HoodieIndexConfig config = new HoodieIndexConfig(props);
       setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP), INDEX_TYPE_PROP, DEFAULT_INDEX_TYPE);
+      setDefaultOnCondition(props, !props.containsKey(INDEX_CLASS_PROP), INDEX_CLASS_PROP, DEFAULT_INDEX_CLASS);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_NUM_ENTRIES), BLOOM_FILTER_NUM_ENTRIES,
           DEFAULT_BLOOM_FILTER_NUM_ENTRIES);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_FPP), BLOOM_FILTER_FPP, DEFAULT_BLOOM_FILTER_FPP);
@@ -193,6 +252,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           DEFAULT_BLOOM_INDEX_USE_CACHING);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_INPUT_STORAGE_LEVEL), BLOOM_INDEX_INPUT_STORAGE_LEVEL,
           DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_UPDATE_PARTITION_PATH),
+          BLOOM_INDEX_UPDATE_PARTITION_PATH, DEFAULT_BLOOM_INDEX_UPDATE_PARTITION_PATH);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_TREE_BASED_FILTER_PROP),
           BLOOM_INDEX_TREE_BASED_FILTER_PROP, DEFAULT_BLOOM_INDEX_TREE_BASED_FILTER);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_BUCKETIZED_CHECKING_PROP),
@@ -203,6 +264,16 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           BLOOM_INDEX_FILTER_TYPE, DEFAULT_BLOOM_INDEX_FILTER_TYPE);
       setDefaultOnCondition(props, !props.contains(HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES),
           HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES, DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES);
+      setDefaultOnCondition(props, !props.containsKey(SIMPLE_INDEX_PARALLELISM_PROP), SIMPLE_INDEX_PARALLELISM_PROP,
+          DEFAULT_SIMPLE_INDEX_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(SIMPLE_INDEX_USE_CACHING_PROP), SIMPLE_INDEX_USE_CACHING_PROP,
+          DEFAULT_SIMPLE_INDEX_USE_CACHING);
+      setDefaultOnCondition(props, !props.containsKey(SIMPLE_INDEX_INPUT_STORAGE_LEVEL), SIMPLE_INDEX_INPUT_STORAGE_LEVEL,
+          DEFAULT_SIMPLE_INDEX_INPUT_STORAGE_LEVEL);
+      setDefaultOnCondition(props, !props.containsKey(GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP), GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP,
+          DEFAULT_GLOBAL_SIMPLE_INDEX_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(SIMPLE_INDEX_UPDATE_PARTITION_PATH),
+          SIMPLE_INDEX_UPDATE_PARTITION_PATH, DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH);
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;

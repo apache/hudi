@@ -19,15 +19,16 @@
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
-import org.apache.hudi.NonpartitionedKeyGenerator;
-import org.apache.hudi.SimpleKeyGenerator;
-import org.apache.hudi.common.HoodieClientTestUtils;
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.testutils.DataSourceTestUtils;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -45,7 +46,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Sample program that writes & reads hoodie datasets via the Spark datasource.
+ * Sample program that writes & reads hoodie tables via the Spark datasource.
  */
 public class HoodieJavaApp {
 
@@ -89,7 +90,7 @@ public class HoodieJavaApp {
 
   public static void main(String[] args) throws Exception {
     HoodieJavaApp cli = new HoodieJavaApp();
-    JCommander cmd = new JCommander(cli, args);
+    JCommander cmd = new JCommander(cli, null, args);
 
     if (cli.help) {
       cmd.usage();
@@ -104,6 +105,7 @@ public class HoodieJavaApp {
     SparkSession spark = SparkSession.builder().appName("Hoodie Spark APP")
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
     JavaSparkContext jssc = new JavaSparkContext(spark.sparkContext());
+    spark.sparkContext().setLogLevel("WARN");
     FileSystem fs = FileSystem.get(jssc.hadoopConfiguration());
 
     // Generator of some records to be loaded in.
@@ -114,13 +116,12 @@ public class HoodieJavaApp {
     } else {
       dataGen = new HoodieTestDataGenerator();
     }
-    List<HoodieRecord> recordsSoFar = new ArrayList<>();
 
     /**
      * Commit with only inserts
      */
     // Generate some input..
-    recordsSoFar.addAll(dataGen.generateInserts("001"/* ignore */, 100));
+    List<HoodieRecord> recordsSoFar = new ArrayList<>(dataGen.generateInserts("001"/* ignore */, 100));
     List<String> records1 = DataSourceTestUtils.convertToStringList(recordsSoFar);
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));
 
@@ -132,7 +133,7 @@ public class HoodieJavaApp {
         // full list in HoodieWriteConfig & its package
         .option("hoodie.upsert.shuffle.parallelism", "2")
         // Hoodie Table Type
-        .option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY(), tableType)
+        .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY(), tableType)
         // insert
         .option(DataSourceWriteOptions.OPERATION_OPT_KEY(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())
         // This is the record key
@@ -165,7 +166,7 @@ public class HoodieJavaApp {
     Dataset<Row> inputDF2 = spark.read().json(jssc.parallelize(records2, 2));
     writer = inputDF2.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
-        .option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY(), tableType) // Hoodie Table Type
+        .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY(), tableType) // Hoodie Table Type
         .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
@@ -188,7 +189,7 @@ public class HoodieJavaApp {
     Dataset<Row> inputDF3 = spark.read().json(jssc.parallelize(deletes, 2));
     writer = inputDF3.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
-        .option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY(), tableType) // Hoodie Table Type
+        .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY(), tableType) // Hoodie Table Type
         .option(DataSourceWriteOptions.OPERATION_OPT_KEY(), "delete")
         .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
@@ -206,28 +207,28 @@ public class HoodieJavaApp {
     /**
      * Read & do some queries
      */
-    Dataset<Row> hoodieROViewDF = spark.read().format("org.apache.hudi")
+    Dataset<Row> snapshotQueryDF = spark.read().format("org.apache.hudi")
         // pass any path glob, can include hoodie & non-hoodie
         // datasets
         .load(tablePath + (nonPartitionedTable ? "/*" : "/*/*/*/*"));
-    hoodieROViewDF.registerTempTable("hoodie_ro");
+    snapshotQueryDF.registerTempTable("hoodie_ro");
     spark.sql("describe hoodie_ro").show();
-    // all trips whose fare was greater than 2.
-    spark.sql("select fare, begin_lon, begin_lat, timestamp from hoodie_ro where fare > 2.0").show();
+    // all trips whose fare amount was greater than 2.
+    spark.sql("select fare.amount, begin_lon, begin_lat, timestamp from hoodie_ro where fare.amount > 2.0").show();
 
     if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) {
       /**
        * Consume incrementally, only changes in commit 2 above. Currently only supported for COPY_ON_WRITE TABLE
        */
-      Dataset<Row> hoodieIncViewDF = spark.read().format("org.apache.hudi")
-          .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(), DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL())
+      Dataset<Row> incQueryDF = spark.read().format("org.apache.hudi")
+          .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
           // Only changes in write 2 above
           .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), commitInstantTime1)
           // For incremental view, pass in the root/base path of dataset
           .load(tablePath);
 
       LOG.info("You will only see records from : " + commitInstantTime2);
-      hoodieIncViewDF.groupBy(hoodieIncViewDF.col("_hoodie_commit_time")).count().show();
+      incQueryDF.groupBy(incQueryDF.col("_hoodie_commit_time")).count().show();
     }
   }
 

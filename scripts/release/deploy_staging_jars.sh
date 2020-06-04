@@ -34,11 +34,25 @@ if [[ `basename $CURR_DIR` != "scripts" ]] ; then
   exit 1
 fi
 
+if [[ $# -lt 1 ]]; then
+    echo "This script will deploy artifacts to staging repositories"
+    echo "There is one param required:"
+    echo "--scala_version=\${SCALA_VERSION}"
+    exit
+else
+    for param in "$@"
+    do
+	if [[ $param =~ --scala_version\=(2\.1[1-2]) ]]; then
+		SCALA_VERSION=${BASH_REMATCH[1]}
+	fi
+    done
+fi
+
 ###########################
 
 cd ..
 
-echo "Deploying to repository.apache.org"
+echo "Deploying to repository.apache.org with scala version ${SCALA_VERSION}"
 
-COMMON_OPTIONS="-Prelease -DskipTests -DretryFailedDeploymentCount=10 -DdeployArtifacts=true"
+COMMON_OPTIONS="-Dscala-${SCALA_VERSION} -Prelease -DskipTests -DretryFailedDeploymentCount=10 -DdeployArtifacts=true"
 $MVN clean deploy $COMMON_OPTIONS

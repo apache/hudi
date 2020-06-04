@@ -18,47 +18,50 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.common.HoodieCommonTestHarness;
-import org.apache.hudi.common.model.AvroBinaryTestPayload;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.util.HoodieAvroUtils;
+import org.apache.hudi.common.testutils.AvroBinaryTestPayload;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.testutils.SpillableMapTestUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SchemaTestUtil;
-import org.apache.hudi.common.util.SpillableMapTestUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.SchemaTestUtil.getSimpleSchema;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests dis based map {@link DiskBasedMap}.
  */
 public class TestDiskBasedMap extends HoodieCommonTestHarness {
 
-  @Before
+  @BeforeEach
   public void setup() {
     initPath();
   }
@@ -87,7 +90,7 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
     List<HoodieRecord> hoodieRecords = SchemaTestUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 1000);
     Set<String> recordKeys = new HashSet<>();
     // insert generated records into the map
-    hoodieRecords.stream().forEach(r -> {
+    hoodieRecords.forEach(r -> {
       records.put(r.getRecordKey(), r);
       recordKeys.add(r.getRecordKey());
     });
@@ -167,7 +170,7 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
     schema = SchemaTestUtil.getSimpleSchema();
     List<IndexedRecord> indexedRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1);
     hoodieRecords =
-        indexedRecords.stream().map(r -> new HoodieRecord(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+        indexedRecords.stream().map(r -> new HoodieRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
             new AvroBinaryTestPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
     payloadSize = SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema));
     assertTrue(payloadSize > 0);
@@ -176,7 +179,7 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
     final Schema simpleSchemaWithMetadata = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     indexedRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1);
     hoodieRecords = indexedRecords.stream()
-        .map(r -> new HoodieRecord(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+        .map(r -> new HoodieRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
             new AvroBinaryTestPayload(
                 Option.of(HoodieAvroUtils.rewriteRecord((GenericRecord) r, simpleSchemaWithMetadata)))))
         .collect(Collectors.toList());
@@ -184,16 +187,38 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
     assertTrue(payloadSize > 0);
   }
 
+  @Test
+  public void testPutAll() throws IOException, URISyntaxException {
+    DiskBasedMap<String, HoodieRecord> records = new DiskBasedMap<>(basePath);
+    List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    Map<String, HoodieRecord> recordMap = new HashMap<>();
+    iRecords.forEach(r -> {
+      String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+      String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+      HoodieRecord value = new HoodieRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
+      recordMap.put(key, value);
+    });
+
+    records.putAll(recordMap);
+    // make sure records have spilled to disk
+    assertTrue(records.sizeOfFileOnDiskInBytes() > 0);
+
+    // make sure all added records are present
+    for (Map.Entry<String, HoodieRecord> entry : records.entrySet()) {
+      assertTrue(recordMap.containsKey(entry.getKey()));
+    }
+  }
+
   /**
    * @na: Leaving this test here for a quick performance test
    */
-  @Ignore
+  @Disabled
   @Test
   public void testSizeEstimatorPerformance() throws IOException, URISyntaxException {
     // Test sizeEstimatorPerformance with simpleSchema
     Schema schema = SchemaTestUtil.getSimpleSchema();
     List<HoodieRecord> hoodieRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1, schema);
-    HoodieRecordSizeEstimator sizeEstimator = new HoodieRecordSizeEstimator(schema);
+    HoodieRecordSizeEstimator sizeEstimator = new HoodieRecordSizeEstimator<>(schema);
     HoodieRecord record = hoodieRecords.remove(0);
     long startTime = System.currentTimeMillis();
     SpillableMapUtils.computePayloadSize(record, sizeEstimator);

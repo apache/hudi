@@ -20,11 +20,11 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CollectionUtils;
 
-import com.google.common.collect.Sets;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.util.List;
@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 public class HoodieDataSourceHelpers {
 
   /**
-   * Checks if the Hoodie dataset has new data since given timestamp. This can be subsequently fed to an incremental
+   * Checks if the Hoodie table has new data since given timestamp. This can be subsequently fed to an incremental
    * view read, to perform incremental processing.
    */
   public static boolean hasNewCommits(FileSystem fs, String basePath, String commitTimestamp) {
@@ -68,7 +68,8 @@ public class HoodieDataSourceHelpers {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
     if (metaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
       return metaClient.getActiveTimeline().getTimelineOfActions(
-          Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION, HoodieActiveTimeline.DELTA_COMMIT_ACTION));
+          CollectionUtils.createSet(HoodieActiveTimeline.COMMIT_ACTION,
+              HoodieActiveTimeline.DELTA_COMMIT_ACTION));
     } else {
       return metaClient.getCommitTimeline().filterCompletedInstants();
     }

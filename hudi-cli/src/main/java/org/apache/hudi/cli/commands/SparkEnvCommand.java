@@ -34,11 +34,10 @@ import java.util.Map;
 @Component
 public class SparkEnvCommand implements CommandMarker {
 
-  public static Map<String, String> env = new HashMap<String, String>();
+  public static Map<String, String> env = new HashMap<>();
 
   @CliCommand(value = "set", help = "Set spark launcher env to cli")
-  public void setEnv(@CliOption(key = {"conf"}, help = "Env config to be set") final String confMap)
-      throws IllegalArgumentException {
+  public void setEnv(@CliOption(key = {"conf"}, help = "Env config to be set") final String confMap) {
     String[] map = confMap.split("=");
     if (map.length != 2) {
       throw new IllegalArgumentException("Illegal set parameter, please use like [set --conf SPARK_HOME=/usr/etc/spark]");
@@ -46,12 +45,12 @@ public class SparkEnvCommand implements CommandMarker {
     env.put(map[0].trim(), map[1].trim());
   }
 
-  @CliCommand(value = "show env all", help = "Show spark launcher envs")
+  @CliCommand(value = "show envs all", help = "Show spark launcher envs")
   public String showAllEnv() {
     String[][] rows = new String[env.size()][2];
     int i = 0;
-    for (String key: env.keySet()) {
-      rows[i] = new String[]{key, env.get(key)};
+    for (Map.Entry<String, String> entry: env.entrySet()) {
+      rows[i] = new String[]{entry.getKey(), entry.getValue()};
       i++;
     }
     return HoodiePrintHelper.print(new String[] {"key", "value"}, rows);

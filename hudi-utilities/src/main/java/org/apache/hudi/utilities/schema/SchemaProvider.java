@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -42,7 +42,7 @@ public abstract class SchemaProvider implements Serializable {
   public abstract Schema getSourceSchema();
 
   public Schema getTargetSchema() {
-    // by default, use source schema as target for hoodie dataset as well
+    // by default, use source schema as target for hoodie table as well
     return getSourceSchema();
   }
 }

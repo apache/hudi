@@ -18,10 +18,16 @@
 
 package org.apache.hudi.common.model;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.FileIOUtils;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests hoodie commit metadata {@link HoodieCommitMetadata}.
@@ -33,17 +39,38 @@ public class TestHoodieCommitMetadata {
 
     List<HoodieWriteStat> fakeHoodieWriteStats = HoodieTestUtils.generateFakeHoodieWriteStat(100);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    fakeHoodieWriteStats.stream().forEach(stat -> commitMetadata.addWriteStat(stat.getPartitionPath(), stat));
-    Assert.assertTrue(commitMetadata.getTotalCreateTime() > 0);
-    Assert.assertTrue(commitMetadata.getTotalUpsertTime() > 0);
-    Assert.assertTrue(commitMetadata.getTotalScanTime() > 0);
-    Assert.assertTrue(commitMetadata.getTotalLogFilesCompacted() > 0);
+    fakeHoodieWriteStats.forEach(stat -> commitMetadata.addWriteStat(stat.getPartitionPath(), stat));
+    assertTrue(commitMetadata.getTotalCreateTime() > 0);
+    assertTrue(commitMetadata.getTotalUpsertTime() > 0);
+    assertTrue(commitMetadata.getTotalScanTime() > 0);
+    assertTrue(commitMetadata.getTotalLogFilesCompacted() > 0);
 
     String serializedCommitMetadata = commitMetadata.toJsonString();
     HoodieCommitMetadata metadata =
         HoodieCommitMetadata.fromJsonString(serializedCommitMetadata, HoodieCommitMetadata.class);
     // Make sure timing metrics are not written to instant file
-    Assert.assertTrue(metadata.getTotalScanTime() == 0);
-    Assert.assertTrue(metadata.getTotalLogFilesCompacted() > 0);
+    assertEquals(0, (long) metadata.getTotalScanTime());
+    assertTrue(metadata.getTotalLogFilesCompacted() > 0);
+  }
+
+  @Test
+  public void testCompatibilityWithoutOperationType() throws Exception {
+    // test compatibility of old version file
+    String serializedCommitMetadata =
+        FileIOUtils.readAsUTFString(TestHoodieCommitMetadata.class.getResourceAsStream("/old-version.commit"));
+    HoodieCommitMetadata metadata =
+        HoodieCommitMetadata.fromJsonString(serializedCommitMetadata, HoodieCommitMetadata.class);
+    assertSame(metadata.getOperationType(), WriteOperationType.UNKNOWN);
+
+    // test operate type
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.INSERT);
+    assertSame(commitMetadata.getOperationType(), WriteOperationType.INSERT);
+
+    // test serialized
+    serializedCommitMetadata = commitMetadata.toJsonString();
+    metadata =
+        HoodieCommitMetadata.fromJsonString(serializedCommitMetadata, HoodieCommitMetadata.class);
+    assertSame(metadata.getOperationType(), WriteOperationType.INSERT);
   }
 }

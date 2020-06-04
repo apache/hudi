@@ -19,10 +19,11 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.bloom.filter.BloomFilter;
-import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
+import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -39,19 +40,19 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 public class HoodieStorageWriterFactory {
 
   public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> getStorageWriter(
-      String commitTime, Path path, HoodieTable<T> hoodieTable, HoodieWriteConfig config, Schema schema)
-      throws IOException {
+      String instantTime, Path path, HoodieTable<T> hoodieTable, HoodieWriteConfig config, Schema schema,
+      SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
     final String name = path.getName();
     final String extension = FSUtils.isLogFile(path) ? HOODIE_LOG.getFileExtension() : FSUtils.getFileExtension(name);
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetStorageWriter(commitTime, path, config, schema, hoodieTable);
+      return newParquetStorageWriter(instantTime, path, config, schema, hoodieTable, sparkTaskContextSupplier);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
   private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(
-      String commitTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable)
-      throws IOException {
+      String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
+      SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
     BloomFilter filter = BloomFilterFactory
         .createBloomFilter(config.getBloomFilterNumEntries(), config.getBloomFilterFPP(),
             config.getDynamicBloomFilterMaxNumEntries(),
@@ -63,6 +64,6 @@ public class HoodieStorageWriterFactory {
         config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
         hoodieTable.getHadoopConf(), config.getParquetCompressionRatio());
 
-    return new HoodieParquetWriter<>(commitTime, path, parquetConfig, schema);
+    return new HoodieParquetWriter<>(instantTime, path, parquetConfig, schema, sparkTaskContextSupplier);
   }
 }

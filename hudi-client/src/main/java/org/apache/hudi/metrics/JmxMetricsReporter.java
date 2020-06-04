@@ -21,44 +21,51 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
-import com.google.common.base.Preconditions;
+import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
-import javax.management.remote.JMXConnectorServer;
-import javax.management.remote.JMXConnectorServerFactory;
-import javax.management.remote.JMXServiceURL;
+import javax.management.MBeanServer;
 
 import java.io.Closeable;
 import java.lang.management.ManagementFactory;
-import java.rmi.registry.LocateRegistry;
+import java.util.Objects;
+import java.util.stream.IntStream;
+
 
 /**
  * Implementation of Jmx reporter, which used to report jmx metric.
  */
 public class JmxMetricsReporter extends MetricsReporter {
 
-  private static final Logger LOG = LogManager.getLogger(JmxMetricsReporter.class);
-  private final JMXConnectorServer connector;
-  private String host;
-  private int port;
+  private static final org.apache.log4j.Logger LOG = LogManager.getLogger(JmxMetricsReporter.class);
 
-  public JmxMetricsReporter(HoodieWriteConfig config) {
+  private final MetricRegistry registry;
+  private JmxReporterServer jmxReporterServer;
+
+  public JmxMetricsReporter(HoodieWriteConfig config, MetricRegistry registry) {
     try {
+      this.registry = registry;
       // Check the host and port here
-      this.host = config.getJmxHost();
-      this.port = config.getJmxPort();
-      if (host == null || port == 0) {
-        throw new RuntimeException(
+      String host = config.getJmxHost();
+      String portsConfig = config.getJmxPort();
+      if (host == null || portsConfig == null) {
+        throw new HoodieException(
             String.format("Jmx cannot be initialized with host[%s] and port[%s].",
-                host, port));
+                host, portsConfig));
       }
-      LocateRegistry.createRegistry(port);
-      String serviceUrl =
-          "service:jmx:rmi://" + host + ":" + port + "/jndi/rmi://" + host + ":" + port + "/jmxrmi";
-      JMXServiceURL url = new JMXServiceURL(serviceUrl);
-      this.connector = JMXConnectorServerFactory
-          .newJMXConnectorServer(url, null, ManagementFactory.getPlatformMBeanServer());
+      int[] ports = getPortRangeFromString(portsConfig);
+      boolean successfullyStartedServer = false;
+      for (int port : ports) {
+        jmxReporterServer = createJmxReport(host, port);
+        LOG.info("Started JMX server on port " + port + ".");
+        successfullyStartedServer = true;
+        break;
+      }
+      if (!successfullyStartedServer) {
+        throw new HoodieException(
+            "Could not start JMX server on any configured port. Ports: " + portsConfig);
+      }
+      LOG.info("Configured JMXReporter with {port:" + portsConfig + "}");
     } catch (Exception e) {
       String msg = "Jmx initialize failed: ";
       LOG.error(msg, e);
@@ -68,11 +75,10 @@ public class JmxMetricsReporter extends MetricsReporter {
 
   @Override
   public void start() {
-    try {
-      Preconditions.checkNotNull(connector, "Cannot start as the jmxReporter is null.");
-      connector.start();
-    } catch (Exception e) {
-      throw new HoodieException(e);
+    if (jmxReporterServer != null) {
+      jmxReporterServer.start();
+    } else {
+      LOG.error("Cannot start as the jmxReporter is null.");
     }
   }
 
@@ -82,6 +88,42 @@ public class JmxMetricsReporter extends MetricsReporter {
 
   @Override
   public Closeable getReporter() {
-    return null;
+    return jmxReporterServer.getReporter();
+  }
+
+  @Override
+  public void stop() {
+    Objects.requireNonNull(jmxReporterServer, "jmxReporterServer is not running.");
+    try {
+      jmxReporterServer.stop();
+    } catch (Exception e) {
+      throw new HoodieException("Stop jmxReporterServer fail", e);
+    }
+  }
+
+  private JmxReporterServer createJmxReport(String host, int port) {
+    MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
+    return JmxReporterServer.forRegistry(registry)
+        .host(host)
+        .port(port)
+        .registerWith(mBeanServer)
+        .build();
+  }
+
+  private int[] getPortRangeFromString(String portsConfig) {
+    String range = portsConfig.trim();
+    int dashIdx = range.indexOf('-');
+    final int start;
+    final int end;
+    if (dashIdx == -1) {
+      start = Integer.parseInt(range);
+      end = Integer.parseInt(range);
+    } else {
+      start = Integer.parseInt(range.substring(0, dashIdx));
+      end = Integer.parseInt(range.substring(dashIdx + 1));
+    }
+    return IntStream.rangeClosed(start, end)
+        .filter(port -> (0 <= port && port <= 65535))
+        .toArray();
   }
 }

@@ -33,8 +33,7 @@ import com.github.dockerjava.core.command.ExecStartResultCallback;
 import com.github.dockerjava.jaxrs.JerseyDockerCmdExecFactory;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.junit.Assert;
-import org.junit.Before;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -46,6 +45,8 @@ import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public abstract class ITTestBase {
 
@@ -59,8 +60,8 @@ public abstract class ITTestBase {
   protected static final String HOODIE_JAVA_APP = HOODIE_WS_ROOT + "/hudi-spark/run_hoodie_app.sh";
   protected static final String HUDI_HADOOP_BUNDLE =
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-hadoop-mr-bundle.jar";
-  protected static final String HUDI_HIVE_BUNDLE =
-      HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-hive-bundle.jar";
+  protected static final String HUDI_HIVE_SYNC_BUNDLE =
+      HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-hive-sync-bundle.jar";
   protected static final String HUDI_SPARK_BUNDLE =
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-spark-bundle.jar";
   protected static final String HUDI_UTILITIES_BUNDLE =
@@ -87,7 +88,7 @@ public abstract class ITTestBase {
     cmd.add("hive.stats.autogather=false");
     cmd.add("-e");
     cmd.add("\"" + fullCommand + "\"");
-    return cmd.stream().toArray(String[]::new);
+    return cmd.toArray(new String[0]);
   }
 
   private static String getHiveConsoleCommandFile(String commandFile, String additionalVar) {
@@ -107,18 +108,18 @@ public abstract class ITTestBase {
         .append(" --master local[2] --driver-class-path ").append(HADOOP_CONF_DIR)
         .append(
             " --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --executor-memory 1G --num-executors 1 ")
-        .append(" --packages com.databricks:spark-avro_2.11:4.0.0 ").append(" -i ").append(commandFile).toString();
+        .append(" --packages org.apache.spark:spark-avro_2.11:2.4.4 ").append(" -i ").append(commandFile).toString();
   }
 
   static String getPrestoConsoleCommand(String commandFile) {
     StringBuilder builder = new StringBuilder().append("presto --server " + PRESTO_COORDINATOR_URL)
         .append(" --catalog hive --schema default")
-        .append(" -f " + commandFile );
+        .append(" -f " + commandFile);
     System.out.println("Presto comamnd " + builder.toString());
     return builder.toString();
   }
 
-  @Before
+  @BeforeEach
   public void init() {
     String dockerHost = (OVERRIDDEN_DOCKER_HOST != null) ? OVERRIDDEN_DOCKER_HOST : DEFAULT_DOCKER_HOST;
     // Assuming insecure docker engine
@@ -165,11 +166,9 @@ public abstract class ITTestBase {
     LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
 
     if (expectedToSucceed) {
-      Assert.assertTrue("Command (" + Arrays.toString(command) + ") expected to succeed. Exit (" + exitCode + ")",
-          exitCode == 0);
+      assertEquals(0, exitCode, "Command (" + Arrays.toString(command) + ") expected to succeed. Exit (" + exitCode + ")");
     } else {
-      Assert.assertTrue("Command (" + Arrays.toString(command) + ") expected to fail. Exit (" + exitCode + ")",
-          exitCode != 0);
+      assertNotEquals(0, exitCode, "Command (" + Arrays.toString(command) + ") expected to fail. Exit (" + exitCode + ")");
     }
     cmd.close();
     return callback;
@@ -225,7 +224,7 @@ public abstract class ITTestBase {
     return Pair.of(callback.getStdout().toString().trim(), callback.getStderr().toString().trim());
   }
 
-  void executePrestoCopyCommand(String fromFile, String remotePath){
+  void executePrestoCopyCommand(String fromFile, String remotePath) {
     Container sparkWorkerContainer = runningContainers.get(PRESTO_COORDINATOR);
     dockerClient.copyArchiveToContainerCmd(sparkWorkerContainer.getId())
         .withHostResource(fromFile)
@@ -269,7 +268,7 @@ public abstract class ITTestBase {
       saveUpLogs();
     }
 
-    Assert.assertEquals("Did not find output the expected number of times", times, count);
+    assertEquals(times, count, "Did not find output the expected number of times");
   }
 
   public class TestExecStartResultCallback extends ExecStartResultCallback {

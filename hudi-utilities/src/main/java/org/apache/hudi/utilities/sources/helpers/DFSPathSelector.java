@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -85,7 +85,7 @@ public class DFSPathSelector {
       long maxModificationTime = Long.MIN_VALUE;
       List<FileStatus> filteredFiles = new ArrayList<>();
       for (FileStatus f : eligibleFiles) {
-        if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long.valueOf(lastCheckpointStr.get())) {
+        if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long.valueOf(lastCheckpointStr.get()).longValue()) {
           // skip processed files
           continue;
         }

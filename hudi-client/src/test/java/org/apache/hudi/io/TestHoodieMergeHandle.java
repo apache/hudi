@@ -18,44 +18,44 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.HoodieClientTestHarness;
-import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.WriteStatus;
-import org.apache.hudi.common.HoodieClientTestUtils;
-import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("unchecked")
 public class TestHoodieMergeHandle extends HoodieClientTestHarness {
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     initSparkContexts("TestHoodieMergeHandle");
     initPath();
@@ -64,16 +64,13 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
     initMetaClient();
   }
 
-  @After
+  @AfterEach
   public void tearDown() throws Exception {
     cleanupFileSystem();
     cleanupTestDataGenerator();
     cleanupSparkContexts();
-    cleanupMetaClient();
-  }
-
-  private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
-    return new HoodieWriteClient(jsc, config);
+    cleanupClients();
+    cleanupFileSystem();
   }
 
   @Test
@@ -84,8 +81,8 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
 
     // Build a write config with bulkinsertparallelism set
     HoodieWriteConfig cfg = getConfigBuilder().build();
-    try (HoodieWriteClient client = getWriteClient(cfg);) {
-      FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
+      FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
 
       /**
        * Write 1 (only inserts) This will do a bulk insert of 44 records of which there are 2 records repeated 21 times
@@ -111,11 +108,12 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       // verify that there is a commit
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
-      assertEquals("Expecting a single commit.", 1,
-          timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
-      Assert.assertEquals("Latest commit should be 001", newCommitTime, timeline.lastInstant().get().getTimestamp());
-      assertEquals("Must contain 44 records", records.size(),
-          HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count());
+      assertEquals(1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(),
+          "Expecting a single commit.");
+      assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(), "Latest commit should be 001");
+      assertEquals(records.size(),
+          HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+          "Must contain 44 records");
 
       /**
        * Write 2 (insert) This will do a bulk insert of 1 record with the same row_key as record1 in the previous insert
@@ -136,10 +134,10 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       // verify that there are 2 commits
       metaClient = HoodieTableMetaClient.reload(metaClient);
       timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
-      assertEquals("Expecting two commits.", 2, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
-      Assert.assertEquals("Latest commit should be 002", newCommitTime, timeline.lastInstant().get().getTimestamp());
+      assertEquals(2, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting two commits.");
+      assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(), "Latest commit should be 002");
       Dataset<Row> dataSet = getRecords();
-      assertEquals("Must contain 45 records", 45, dataSet.count());
+      assertEquals(45, dataSet.count(), "Must contain 45 records");
 
       /**
        * Write 3 (insert) This will bulk insert 2 new completely new records. At this point, we will have 2 files with
@@ -156,10 +154,10 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       // verify that there are now 3 commits
       metaClient = HoodieTableMetaClient.reload(metaClient);
       timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
-      assertEquals("Expecting three commits.", 3, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
-      Assert.assertEquals("Latest commit should be 003", newCommitTime, timeline.lastInstant().get().getTimestamp());
+      assertEquals(3, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting three commits.");
+      assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(), "Latest commit should be 003");
       dataSet = getRecords();
-      assertEquals("Must contain 47 records", 47, dataSet.count());
+      assertEquals(47, dataSet.count(), "Must contain 47 records");
 
       /**
        * Write 4 (updates) This will generate 2 upsert records with id1 and id2. The rider and driver names in the
@@ -186,12 +184,12 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
 
       // verify there are now 4 commits
       timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
-      assertEquals("Expecting four commits.", 4, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
-      Assert.assertEquals("Latest commit should be 004", timeline.lastInstant().get().getTimestamp(), newCommitTime);
+      assertEquals(4, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting four commits.");
+      assertEquals(timeline.lastInstant().get().getTimestamp(), newCommitTime, "Latest commit should be 004");
 
       // Check the entire dataset has 47 records still
       dataSet = getRecords();
-      assertEquals("Must contain 47 records", 47, dataSet.count());
+      assertEquals(47, dataSet.count(), "Must contain 47 records");
       Row[] rows = (Row[]) dataSet.collect();
       int record1Count = 0;
       int record2Count = 0;
@@ -225,7 +223,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
   public void testHoodieMergeHandleWriteStatMetrics() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfigBuilder().build();
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+    try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
@@ -234,23 +232,21 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       List<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime).collect();
 
       // All records should be inserts into new parquet
-      Assert.assertTrue(statuses.stream()
+      assertTrue(statuses.stream()
           .filter(status -> status.getStat().getPrevCommit() != HoodieWriteStat.NULL_COMMIT).count() > 0);
       // Num writes should be equal to the number of records inserted
-      Assert.assertEquals(
-          (long) statuses.stream().map(status -> status.getStat().getNumWrites()).reduce((a, b) -> a + b).get(), 100);
+      assertEquals(100,
+          (long) statuses.stream().map(status -> status.getStat().getNumWrites()).reduce((a, b) -> a + b).get());
       // Num update writes should be equal to the number of records updated
-      Assert.assertEquals(
-          (long) statuses.stream().map(status -> status.getStat().getNumUpdateWrites()).reduce((a, b) -> a + b).get(),
-          0);
+      assertEquals(0,
+          (long) statuses.stream().map(status -> status.getStat().getNumUpdateWrites()).reduce((a, b) -> a + b).get());
       // Num update writes should be equal to the number of insert records converted to updates as part of small file
       // handling
-      Assert.assertEquals(
-          (long) statuses.stream().map(status -> status.getStat().getNumInserts()).reduce((a, b) -> a + b).get(), 100);
+      assertEquals(100,
+          (long) statuses.stream().map(status -> status.getStat().getNumInserts()).reduce((a, b) -> a + b).get());
 
       // Update all the 100 records
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
       newCommitTime = "101";
       writeClient.startCommitWithTime(newCommitTime);
@@ -260,20 +256,18 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       statuses = writeClient.upsert(updatedRecordsRDD, newCommitTime).collect();
 
       // All records should be upserts into existing parquet
-      Assert.assertEquals(
-          statuses.stream().filter(status -> status.getStat().getPrevCommit() == HoodieWriteStat.NULL_COMMIT).count(),
-          0);
+      assertEquals(0,
+          statuses.stream().filter(status -> status.getStat().getPrevCommit() == HoodieWriteStat.NULL_COMMIT).count());
       // Num writes should be equal to the number of records inserted
-      Assert.assertEquals(
-          (long) statuses.stream().map(status -> status.getStat().getNumWrites()).reduce((a, b) -> a + b).get(), 100);
+      assertEquals(100,
+          (long) statuses.stream().map(status -> status.getStat().getNumWrites()).reduce((a, b) -> a + b).get());
       // Num update writes should be equal to the number of records updated
-      Assert.assertEquals(
-          (long) statuses.stream().map(status -> status.getStat().getNumUpdateWrites()).reduce((a, b) -> a + b).get(),
-          100);
+      assertEquals(100,
+          (long) statuses.stream().map(status -> status.getStat().getNumUpdateWrites()).reduce((a, b) -> a + b).get());
       // Num update writes should be equal to the number of insert records converted to updates as part of small file
       // handling
-      Assert.assertEquals(
-          (long) statuses.stream().map(status -> status.getStat().getNumInserts()).reduce((a, b) -> a + b).get(), 0);
+      assertEquals(0,
+          (long) statuses.stream().map(status -> status.getStat().getNumInserts()).reduce((a, b) -> a + b).get());
 
       newCommitTime = "102";
       writeClient.startCommitWithTime(newCommitTime);
@@ -284,24 +278,23 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       statuses = writeClient.upsert(allRecordsRDD, newCommitTime).collect();
 
       // All records should be upserts into existing parquet (with inserts as updates small file handled)
-      Assert.assertEquals((long) statuses.stream()
-          .filter(status -> status.getStat().getPrevCommit() == HoodieWriteStat.NULL_COMMIT).count(), 0);
+      assertEquals(0, (long) statuses.stream()
+          .filter(status -> status.getStat().getPrevCommit() == HoodieWriteStat.NULL_COMMIT).count());
       // Num writes should be equal to the total number of records written
-      Assert.assertEquals(
-          (long) statuses.stream().map(status -> status.getStat().getNumWrites()).reduce((a, b) -> a + b).get(), 200);
+      assertEquals(200,
+          (long) statuses.stream().map(status -> status.getStat().getNumWrites()).reduce((a, b) -> a + b).get());
       // Num update writes should be equal to the number of records updated (including inserts converted as updates)
-      Assert.assertEquals(
-          (long) statuses.stream().map(status -> status.getStat().getNumUpdateWrites()).reduce((a, b) -> a + b).get(),
-          100);
+      assertEquals(100,
+          (long) statuses.stream().map(status -> status.getStat().getNumUpdateWrites()).reduce((a, b) -> a + b).get());
       // Num update writes should be equal to the number of insert records converted to updates as part of small file
       // handling
-      Assert.assertEquals(
-          (long) statuses.stream().map(status -> status.getStat().getNumInserts()).reduce((a, b) -> a + b).get(), 100);
+      assertEquals(100,
+          (long) statuses.stream().map(status -> status.getStat().getNumInserts()).reduce((a, b) -> a + b).get());
       // Verify all records have location set
       statuses.forEach(writeStatus -> {
         writeStatus.getWrittenRecords().forEach(r -> {
           // Ensure New Location is set
-          Assert.assertTrue(r.getNewLocation().isPresent());
+          assertTrue(r.getNewLocation().isPresent());
         });
       });
     }
@@ -311,7 +304,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
     // Check the entire dataset has 8 records still
     String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
     for (int i = 0; i < fullPartitionPaths.length; i++) {
-      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+      fullPartitionPaths[i] = Paths.get(basePath, dataGen.getPartitionPaths()[i], "*").toString();
     }
     Dataset<Row> dataSet = HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths);
     return dataSet;
@@ -325,7 +318,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
   void assertNoWriteErrors(List<WriteStatus> statuses) {
     // Verify there are no errors
     for (WriteStatus status : statuses) {
-      assertFalse("Errors found in write of " + status.getFileId(), status.hasErrors());
+      assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId());
     }
   }
 

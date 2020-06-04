@@ -25,7 +25,6 @@ import com.twitter.bijection.avro.GenericAvroCodecs;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
-import java.io.IOException;
 import java.io.Serializable;
 
 /**
@@ -34,6 +33,7 @@ import java.io.Serializable;
  */
 public class AvroConvertor implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   /**
    * To be lazily inited on executors.
    */
@@ -80,7 +80,7 @@ public class AvroConvertor implements Serializable {
     }
   }
 
-  public GenericRecord fromJson(String json) throws IOException {
+  public GenericRecord fromJson(String json) {
     initSchema();
     initJsonConvertor();
     return jsonConverter.convert(json, schema);

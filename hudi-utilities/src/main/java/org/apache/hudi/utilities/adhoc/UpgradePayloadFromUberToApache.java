@@ -18,10 +18,10 @@
 
 package org.apache.hudi.utilities.adhoc;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 
 import com.beust.jcommander.JCommander;
@@ -42,7 +42,7 @@ import java.util.Properties;
 /**
  * This is an one-time use class meant for migrating the configuration for "hoodie.compaction.payload.class" in
  * .hoodie/hoodie.properties from com.uber.hoodie to org.apache.hudi . It takes in a file containing base-paths for a set
- * of hudi datasets and does the migration
+ * of hudi tables and does the migration
  */
 public class UpgradePayloadFromUberToApache implements Serializable {
 
@@ -106,7 +106,7 @@ public class UpgradePayloadFromUberToApache implements Serializable {
 
   public static void main(String[] args) throws Exception {
     final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, args);
+    JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
       System.exit(1);

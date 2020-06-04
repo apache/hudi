@@ -18,26 +18,26 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.common.HoodieCommonTestHarness;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.testutils.SpillableMapTestUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SchemaTestUtil;
-import org.apache.hudi.common.util.SpillableMapTestUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.junit.Before;
-import org.junit.FixMethodOrder;
-import org.junit.Test;
-import org.junit.runners.MethodSorters;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer.Alphanumeric;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -46,19 +46,20 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests external spillable map {@link ExternalSpillableMap}.
  */
-@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+@TestMethodOrder(Alphanumeric.class)
 public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
   private static String failureOutputPath;
 
-  @Before
+  @BeforeEach
   public void setUp() {
     initPath();
     failureOutputPath = basePath + "/test_fail";
@@ -87,7 +88,6 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   public void testSimpleUpsert() throws IOException, URISyntaxException {
 
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
@@ -110,7 +110,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     assertTrue(records.getDiskBasedMapNumEntries() > 0);
 
     // iterate over the updated records and compare the value from Map
-    updatedRecords.stream().forEach(record -> {
+    updatedRecords.forEach(record -> {
       HoodieRecord rec = records.get(((GenericRecord) record).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
       try {
         assertEquals(rec.getData().getInsertValue(schema).get(), record);
@@ -176,7 +176,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     assertTrue(records.size() == 0);
   }
 
-  @Test(expected = IOException.class)
+  @Test
   public void simpleTestWithException() throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
@@ -187,16 +187,17 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
-    while (itr.hasNext()) {
-      throw new IOException("Testing failures...");
-    }
+    assertThrows(IOException.class, () -> {
+      while (itr.hasNext()) {
+        throw new IOException("Testing failures...");
+      }
+    });
   }
 
   @Test
   public void testDataCorrectnessWithUpsertsToDataInMapAndOnDisk() throws IOException, URISyntaxException {
 
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
@@ -217,7 +218,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
     List<String> keysToBeUpdated = new ArrayList<>();
     keysToBeUpdated.add(key);
-    // Update the commitTime for this record
+    // Update the instantTime for this record
     List<IndexedRecord> updatedRecords =
         SchemaTestUtil.updateHoodieTestRecords(keysToBeUpdated, recordsToUpdate, newCommitTime);
     // Upsert this updated record
@@ -240,7 +241,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     // Upsert this updated record
     SpillableMapTestUtils.upsertRecords(updatedRecords, records);
     gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
-    // The record returned for this key should have the updated commitTime
+    // The record returned for this key should have the updated instantTime
     assert newCommitTime.contentEquals(gRecord.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
   }
 
@@ -248,7 +249,6 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   public void testDataCorrectnessWithoutHoodieMetadata() throws IOException, URISyntaxException {
 
     Schema schema = SchemaTestUtil.getSimpleSchema();
-    String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
@@ -278,7 +278,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
         SchemaTestUtil.updateHoodieTestRecordsWithoutHoodieMetadata(recordsToUpdate, schema, fieldName, newValue);
 
     // Upsert this updated record
-    updatedRecords.stream().forEach(r -> {
+    updatedRecords.forEach(r -> {
       records.put(r.getRecordKey(), r);
     });
     GenericRecord gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
@@ -300,7 +300,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
         SchemaTestUtil.updateHoodieTestRecordsWithoutHoodieMetadata(recordsToUpdate, schema, fieldName, newValue);
 
     // Upsert this updated record
-    updatedRecords.stream().forEach(r -> {
+    updatedRecords.forEach(r -> {
       records.put(r.getRecordKey(), r);
     });
     gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();

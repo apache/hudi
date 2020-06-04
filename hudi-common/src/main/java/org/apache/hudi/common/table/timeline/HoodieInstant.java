@@ -18,10 +18,9 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 
-import com.google.common.collect.ImmutableMap;
 import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
@@ -30,7 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * A Hoodie Instant represents a action done on a hoodie dataset. All actions start with a inflight instant and then
+ * A Hoodie Instant represents a action done on a hoodie table. All actions start with a inflight instant and then
  * create a completed instant after done.
  *
  * @see HoodieTimeline
@@ -41,17 +40,17 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
    * A COMPACTION action eventually becomes COMMIT when completed. So, when grouping instants
    * for state transitions, this needs to be taken into account
    */
-  private static final Map<String, String> COMPARABLE_ACTIONS = new ImmutableMap.Builder<String, String>()
-      .put(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION).build();
+  private static final Map<String, String> COMPARABLE_ACTIONS =
+      CollectionUtils.createImmutableMap(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION);
 
   public static final Comparator<HoodieInstant> ACTION_COMPARATOR =
-      Comparator.<HoodieInstant, String>comparing(instant -> getComparableAction(instant.getAction()));
+      Comparator.comparing(instant -> getComparableAction(instant.getAction()));
 
   public static final Comparator<HoodieInstant> COMPARATOR = Comparator.comparing(HoodieInstant::getTimestamp)
       .thenComparing(ACTION_COMPARATOR).thenComparing(HoodieInstant::getState);
 
-  public static final String getComparableAction(String action) {
-    return COMPARABLE_ACTIONS.containsKey(action) ? COMPARABLE_ACTIONS.get(action) : action;
+  public static String getComparableAction(String action) {
+    return COMPARABLE_ACTIONS.getOrDefault(action, action);
   }
 
   /**

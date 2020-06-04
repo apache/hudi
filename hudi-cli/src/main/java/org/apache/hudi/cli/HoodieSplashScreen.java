@@ -50,14 +50,17 @@ public class HoodieSplashScreen extends DefaultBannerProvider {
       + "*                                                                 *" + OsUtils.LINE_SEPARATOR
       + "===================================================================" + OsUtils.LINE_SEPARATOR;
 
+  @Override
   public String getBanner() {
     return screen;
   }
 
+  @Override
   public String getVersion() {
     return "1.0";
   }
 
+  @Override
   public String getWelcomeMessage() {
     return "Welcome to Apache Hudi CLI. Please type help if you are looking for help. ";
   }

@@ -1,5 +1,149 @@
-Apache Hudi (incubating)
-Copyright 2019 The Apache Software Foundation
+Apache Hudi
+Copyright 2019-2020 The Apache Software Foundation
 
 This product includes software developed at
 The Apache Software Foundation (http://www.apache.org/).
+
+--------------------------------------------------------------------------------
+
+This product includes code from Apache Hive, which includes the following in
+its NOTICE file:
+
+  Apache Hive
+  Copyright 2008-2018 The Apache Software Foundation
+
+  This product includes software developed by The Apache Software
+  Foundation (http://www.apache.org/).
+
+  This project includes software licensed under the JSON license.
+
+--------------------------------------------------------------------------------
+
+This product includes code from Apache SystemML, which includes the following in
+its NOTICE file:
+
+  Apache SystemML
+  Copyright [2015-2018] The Apache Software Foundation
+
+  This product includes software developed at
+  The Apache Software Foundation (http://www.apache.org/).
+
+--------------------------------------------------------------------------------
+
+This product includes code from Apache Spark, which includes the following in
+its NOTICE file:
+
+  Apache Spark
+  Copyright 2014 and onwards The Apache Software Foundation.
+
+  This product includes software developed at
+  The Apache Software Foundation (http://www.apache.org/).
+
+
+  Export Control Notice
+  ---------------------
+
+  This distribution includes cryptographic software. The country in which you currently reside may have
+  restrictions on the import, possession, use, and/or re-export to another country, of encryption software.
+  BEFORE using any encryption software, please check your country's laws, regulations and policies concerning
+  the import, possession, or use, and re-export of encryption software, to see if this is permitted. See
+  <http://www.wassenaar.org/> for more information.
+
+  The U.S. Government Department of Commerce, Bureau of Industry and Security (BIS), has classified this
+  software as Export Commodity Control Number (ECCN) 5D002.C.1, which includes information security software
+  using or performing cryptographic functions with asymmetric algorithms. The form and manner of this Apache
+  Software Foundation distribution makes it eligible for export under the License Exception ENC Technology
+  Software Unrestricted (TSU) exception (see the BIS Export Administration Regulations, Section 740.13) for
+  both object code and source code.
+
+  The following provides more details on the included cryptographic software:
+
+  This software uses Apache Commons Crypto (https://commons.apache.org/proper/commons-crypto/) to
+  support authentication, and encryption and decryption of data sent across the network between
+  services.
+
+
+  Metrics
+  Copyright 2010-2013 Coda Hale and Yammer, Inc.
+
+  This product includes software developed by Coda Hale and Yammer, Inc.
+
+  This product includes code derived from the JSR-166 project (ThreadLocalRandom, Striped64,
+  LongAdder), which was released with the following comments:
+
+      Written by Doug Lea with assistance from members of JCP JSR-166
+      Expert Group and released to the public domain, as explained at
+      http://creativecommons.org/publicdomain/zero/1.0/
+
+--------------------------------------------------------------------------------
+
+Portions of this software were developed at
+Twitter, Inc (https://twitter.com/).
+
+--------------------------------------------------------------------------------
+
+This product includes software from the docker-hadoop project
+ * Copyright https://github.com/big-data-europe/docker-hadoop/
+ * Licensed under the MIT License;
+
+--------------------------------------------------------------------------------
+
+This product includes code from Apache Hadoop, which includes the following in
+its NOTICE file:
+
+  Apache Hadoop
+  Copyright 2006 and onwards The Apache Software Foundation.
+
+  This product includes software developed at
+  The Apache Software Foundation (http://www.apache.org/).
+
+  Export Control Notice
+  ---------------------
+
+  This distribution includes cryptographic software.  The country in
+  which you currently reside may have restrictions on the import,
+  possession, use, and/or re-export to another country, of
+  encryption software.  BEFORE using any encryption software, please
+  check your country's laws, regulations and policies concerning the
+  import, possession, or use, and re-export of encryption software, to
+  see if this is permitted.  See <http://www.wassenaar.org/> for more
+  information.
+
+  The U.S. Government Department of Commerce, Bureau of Industry and
+  Security (BIS), has classified this software as Export Commodity
+  Control Number (ECCN) 5D002.C.1, which includes information security
+  software using or performing cryptographic functions with asymmetric
+  algorithms.  The form and manner of this Apache Software Foundation
+  distribution makes it eligible for export under the License Exception
+  ENC Technology Software Unrestricted (TSU) exception (see the BIS
+  Export Administration Regulations, Section 740.13) for both object
+  code and source code.
+
+  The following provides more details on the included cryptographic software:
+
+  This software uses the SSL libraries from the Jetty project written
+  by mortbay.org.
+  Hadoop Yarn Server Web Proxy uses the BouncyCastle Java
+  cryptography APIs written by the Legion of the Bouncy Castle Inc.
+
+--------------------------------------------------------------------------------
+
+This product includes code from Apache Cassandra, which includes the following in
+its NOTICE file:
+
+  Apache Cassandra
+  Copyright 2009-2020 The Apache Software Foundation
+
+  This product includes software developed by The Apache Software
+  Foundation (http://www.apache.org/).
+
+--------------------------------------------------------------------------------
+
+This product includes code from Apache commons-lang, which includes the following in
+its NOTICE file:
+
+  Apache commons-lang
+  Copyright 2001-2020 The Apache Software Foundation
+
+  This product includes software developed at
+  The Apache Software Foundation (http://www.apache.org/).

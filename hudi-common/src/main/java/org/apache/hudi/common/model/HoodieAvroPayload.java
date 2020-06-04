@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.util.HoodieAvroUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -30,7 +30,7 @@ import java.io.IOException;
 
 /**
  * This is a payload to wrap a existing Hoodie Avro Record. Useful to create a HoodieRecord over existing GenericRecords
- * in a hoodie datasets (useful in compactions)
+ * in a hoodie tables (useful in compactions)
  */
 public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload> {
 
@@ -66,5 +66,10 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
       return Option.empty();
     }
     return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+  }
+
+  // for examples
+  public byte[] getRecordBytes() {
+    return recordBytes;
   }
 }

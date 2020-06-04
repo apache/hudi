@@ -18,18 +18,17 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
 
 import org.apache.hadoop.fs.Path;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.UUID;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Tests hoodie write stat {@link HoodieWriteStat}.
@@ -38,7 +37,7 @@ public class TestHoodieWriteStat {
 
   @Test
   public void testSetPaths() {
-    String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    String instantTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     String basePathString = "/data/tables/some-hoodie-table";
     String partitionPathString = "2017/12/31";
     String fileName = UUID.randomUUID().toString();
@@ -46,9 +45,8 @@ public class TestHoodieWriteStat {
 
     Path basePath = new Path(basePathString);
     Path partitionPath = new Path(basePath, partitionPathString);
-    Path tempPath = new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME);
 
-    Path finalizeFilePath = new Path(partitionPath, FSUtils.makeDataFileName(commitTime, writeToken, fileName));
+    Path finalizeFilePath = new Path(partitionPath, FSUtils.makeDataFileName(instantTime, writeToken, fileName));
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setPath(basePath, finalizeFilePath);
     assertEquals(finalizeFilePath, new Path(basePath, writeStat.getPath()));

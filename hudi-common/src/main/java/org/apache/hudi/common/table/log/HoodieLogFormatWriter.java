@@ -18,12 +18,12 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.storage.StorageSchemes;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.HoodieLogFormat.WriterBuilder;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -72,6 +72,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     this.replication = replication;
     this.logWriteToken = logWriteToken;
     this.rolloverLogWriteToken = rolloverLogWriteToken;
+    addShutDownHook();
     Path path = logFile.getPath();
     if (fs.exists(path)) {
       boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
@@ -87,6 +88,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
             // may still happen if scheme is viewfs.
             isAppendSupported = false;
           } else {
+            /*
+             * Before throwing an exception, close the outputstream,
+             * to ensure that the lease on the log file is released.
+             */
+            close();
             throw ioe;
           }
         }
@@ -107,6 +113,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     return fs;
   }
 
+  @Override
   public HoodieLogFile getLogFile() {
     return logFile;
   }
@@ -151,6 +158,9 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     this.output.write(footerBytes);
     // 9. Write the total size of the log block (including magic) which is everything written
     // until now (for reverse pointer)
+    // Update: this information is now used in determining if a block is corrupt by comparing to the
+    //   block size in header. This change assumes that the block size will be the last data written
+    //   to a block. Read will break if any data is written past this point for a block.
     this.output.writeLong(this.output.size() - currentSize);
     // Flush every block to disk
     flush();
@@ -212,11 +222,30 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     output.hsync();
   }
 
+  @Override
   public long getCurrentSize() throws IOException {
     if (output == null) {
       throw new IllegalStateException("Cannot get current size as the underlying stream has been closed already");
     }
     return output.getPos();
+  }
+
+  /**
+   * Close the output stream when the JVM exits.
+   */
+  private void addShutDownHook() {
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      public void run() {
+        try {
+          if (output != null) {
+            close();
+          }
+        } catch (Exception e) {
+          LOG.warn("unable to close output stream for log file " + logFile, e);
+          // fail silently for any sort of exception
+        }
+      }
+    });
   }
 
   private void handleAppendExceptionOrRecoverLease(Path path, RemoteException e)
@@ -254,7 +283,23 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
         throw new HoodieException(e);
       }
     } else {
-      throw new HoodieIOException("Failed to open an append stream ", e);
+      // When fs.append() has failed and an exception is thrown, by closing the output stream
+      // we shall force hdfs to release the lease on the log file. When Spark retries this task (with
+      // new attemptId, say taskId.1) it will be able to acquire lease on the log file (as output stream was
+      // closed properly by taskId.0).
+      //
+      // If close() call were to fail throwing an exception, our best bet is to rollover to a new log file.
+      try {
+        close();
+        // output stream has been successfully closed and lease on the log file has been released,
+        // before throwing an exception for the append failure.
+        throw new HoodieIOException("Failed to append to the output stream ", e);
+      } catch (Exception ce) {
+        LOG.warn("Failed to close the output stream for " + fs.getClass().getName() + " on path " + path
+            + ". Rolling over to a new log file.");
+        this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
+        createNewFile();
+      }
     }
   }
 

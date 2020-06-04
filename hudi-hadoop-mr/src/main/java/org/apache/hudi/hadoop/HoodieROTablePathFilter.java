@@ -18,12 +18,13 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.exception.DatasetNotFoundException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.TableNotFoundException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -39,17 +40,18 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Given a path is a part of - Hoodie dataset = accepts ONLY the latest version of each path - Non-Hoodie dataset = then
+ * Given a path is a part of - Hoodie table = accepts ONLY the latest version of each path - Non-Hoodie table = then
  * always accept
  * <p>
  * We can set this filter, on a query engine's Hadoop Config and if it respects path filters, then you should be able to
- * query both hoodie and non-hoodie datasets as you would normally do.
+ * query both hoodie and non-hoodie tables as you would normally do.
  * <p>
  * hadoopConf.setClass("mapreduce.input.pathFilter.class", org.apache.hudi.hadoop .HoodieROTablePathFilter.class,
  * org.apache.hadoop.fs.PathFilter.class)
  */
 public class HoodieROTablePathFilter implements PathFilter, Serializable {
 
+  private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieROTablePathFilter.class);
 
   /**
@@ -59,16 +61,25 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
   private HashMap<String, HashSet<Path>> hoodiePathCache;
 
   /**
-   * Paths that are known to be non-hoodie datasets.
+   * Paths that are known to be non-hoodie tables.
    */
   private HashSet<String> nonHoodiePathCache;
 
+  /**
+   * Hadoop configurations for the FileSystem.
+   */
+  private SerializableConfiguration conf;
 
   private transient FileSystem fs;
 
   public HoodieROTablePathFilter() {
-    hoodiePathCache = new HashMap<>();
-    nonHoodiePathCache = new HashSet<>();
+    this(new Configuration());
+  }
+
+  public HoodieROTablePathFilter(Configuration conf) {
+    this.hoodiePathCache = new HashMap<>();
+    this.nonHoodiePathCache = new HashSet<>();
+    this.conf = new SerializableConfiguration(conf);
   }
 
   /**
@@ -93,7 +104,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
     Path folder = null;
     try {
       if (fs == null) {
-        fs = path.getFileSystem(new Configuration());
+        fs = path.getFileSystem(conf.get());
       }
 
       // Assumes path is a file
@@ -139,14 +150,14 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
           HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
           HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
               metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), fs.listStatus(folder));
-          List<HoodieDataFile> latestFiles = fsView.getLatestDataFiles().collect(Collectors.toList());
+          List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles().collect(Collectors.toList());
           // populate the cache
           if (!hoodiePathCache.containsKey(folder.toString())) {
             hoodiePathCache.put(folder.toString(), new HashSet<>());
           }
           LOG.info("Based on hoodie metadata from base path: " + baseDir.toString() + ", caching " + latestFiles.size()
               + " files under " + folder);
-          for (HoodieDataFile lfile : latestFiles) {
+          for (HoodieBaseFile lfile : latestFiles) {
             hoodiePathCache.get(folder.toString()).add(new Path(lfile.getPath()));
           }
 
@@ -156,7 +167,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
                 hoodiePathCache.get(folder.toString()).contains(path)));
           }
           return hoodiePathCache.get(folder.toString()).contains(path);
-        } catch (DatasetNotFoundException e) {
+        } catch (TableNotFoundException e) {
           // Non-hoodie path, accept it.
           if (LOG.isDebugEnabled()) {
             LOG.debug(String.format("(1) Caching non-hoodie path under %s \n", folder.toString()));

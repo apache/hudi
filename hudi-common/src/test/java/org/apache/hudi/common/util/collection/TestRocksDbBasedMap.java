@@ -18,17 +18,16 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.SchemaTestUtil;
-import org.apache.hudi.common.util.SpillableMapTestUtils;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.testutils.SpillableMapTestUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -36,12 +35,14 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 /**
  * Tests RocksDB based map {@link RocksDBBasedMap}.
  */
 public class TestRocksDbBasedMap extends HoodieCommonTestHarness {
 
-  @Before
+  @BeforeEach
   public void setUp() {
     initPath();
   }
@@ -61,6 +62,6 @@ public class TestRocksDbBasedMap extends HoodieCommonTestHarness {
       oRecords.add(rec);
       assert recordKeys.contains(rec.getRecordKey());
     }
-    Assert.assertEquals(recordKeys.size(), oRecords.size());
+    assertEquals(recordKeys.size(), oRecords.size());
   }
 }

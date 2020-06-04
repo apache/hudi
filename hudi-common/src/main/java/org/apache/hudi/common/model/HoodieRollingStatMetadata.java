@@ -27,7 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * This class holds statistics about files belonging to a dataset.
+ * This class holds statistics about files belonging to a table.
  */
 public class HoodieRollingStatMetadata implements Serializable {
 
@@ -52,7 +52,7 @@ public class HoodieRollingStatMetadata implements Serializable {
     this.actionType = actionType;
   }
 
-  class RollingStatsHashMap<K, V> extends HashMap<K, V> {
+  static class RollingStatsHashMap<K, V> extends HashMap<K, V> {
 
     @Override
     public V put(K key, V value) {

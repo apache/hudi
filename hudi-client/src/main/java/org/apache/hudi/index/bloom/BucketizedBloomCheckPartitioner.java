@@ -18,15 +18,13 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.hash.Hashing;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -145,14 +143,13 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
   @Override
   public int getPartition(Object key) {
     final Pair<String, String> parts = (Pair<String, String>) key;
-    final long hashOfKey = Hashing.md5().hashString(parts.getRight(), StandardCharsets.UTF_8).asLong();
+    final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", parts.getRight());
     final List<Integer> candidatePartitions = fileGroupToPartitions.get(parts.getLeft());
-    final int idx = (int) Math.floorMod(hashOfKey, candidatePartitions.size());
+    final int idx = (int) Math.floorMod((int) hashOfKey, candidatePartitions.size());
     assert idx >= 0;
     return candidatePartitions.get(idx);
   }
 
-  @VisibleForTesting
   Map<String, List<Integer>> getFileGroupToPartitions() {
     return fileGroupToPartitions;
   }

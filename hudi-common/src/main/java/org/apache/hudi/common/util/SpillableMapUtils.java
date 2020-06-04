@@ -18,11 +18,11 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.DiskBasedMap.FileEntry;
-import org.apache.hudi.common.util.collection.io.storage.SizeAwareDataOutputStream;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 
 import org.apache.avro.generic.GenericRecord;
@@ -56,12 +56,12 @@ public class SpillableMapUtils {
     int keySize = file.readInt();
     int valueSize = file.readInt();
     byte[] key = new byte[keySize];
-    file.read(key, 0, keySize);
+    file.readFully(key, 0, keySize);
     byte[] value = new byte[valueSize];
     if (valueSize != valueLength) {
       throw new HoodieCorruptedDataException("unequal size of payload written to external file, data may be corrupted");
     }
-    file.read(value, 0, valueSize);
+    file.readFully(value, 0, valueSize);
     long crcOfReadValue = generateChecksum(value);
     if (crc != crcOfReadValue) {
       throw new HoodieCorruptedDataException(

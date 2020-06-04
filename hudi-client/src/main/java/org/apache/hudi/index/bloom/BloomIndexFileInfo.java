@@ -18,9 +18,8 @@
 
 package org.apache.hudi.index.bloom;
 
-import com.google.common.base.Objects;
-
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Metadata about a given file group, useful for index lookup.
@@ -65,7 +64,8 @@ public class BloomIndexFileInfo implements Serializable {
    * Does the given key fall within the range (inclusive).
    */
   public boolean isKeyInRange(String recordKey) {
-    return minRecordKey.compareTo(recordKey) <= 0 && maxRecordKey.compareTo(recordKey) >= 0;
+    return Objects.requireNonNull(minRecordKey).compareTo(recordKey) <= 0
+        && Objects.requireNonNull(maxRecordKey).compareTo(recordKey) >= 0;
   }
 
   @Override
@@ -78,16 +78,17 @@ public class BloomIndexFileInfo implements Serializable {
     }
 
     BloomIndexFileInfo that = (BloomIndexFileInfo) o;
-    return Objects.equal(that.fileId, fileId) && Objects.equal(that.minRecordKey, minRecordKey)
-        && Objects.equal(that.maxRecordKey, maxRecordKey);
+    return Objects.equals(that.fileId, fileId) && Objects.equals(that.minRecordKey, minRecordKey)
+        && Objects.equals(that.maxRecordKey, maxRecordKey);
 
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(fileId, minRecordKey, maxRecordKey);
+    return Objects.hash(fileId, minRecordKey, maxRecordKey);
   }
 
+  @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("BloomIndexFileInfo {");
     sb.append(" fileId=").append(fileId);

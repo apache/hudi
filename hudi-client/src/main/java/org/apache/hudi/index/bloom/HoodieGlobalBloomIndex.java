@@ -18,24 +18,27 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.Optional;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -43,7 +46,7 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 /**
- * This filter will only work with hoodie dataset since it will only load partitions with .hoodie_partition_metadata
+ * This filter will only work with hoodie table since it will only load partitions with .hoodie_partition_metadata
  * file in it.
  */
 public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends HoodieBloomIndex<T> {
@@ -56,7 +59,6 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
    * Load all involved files as <Partition, filename> pair RDD from all partitions in the table.
    */
   @Override
-  @VisibleForTesting
   List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final JavaSparkContext jsc,
                                                              final HoodieTable hoodieTable) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
@@ -71,7 +73,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
 
   /**
    * For each incoming record, produce N output records, 1 each for each file against which the record's key needs to be
-   * checked. For datasets, where the keys have a definite insert order (e.g: timestamp as prefix), the number of files
+   * checked. For tables, where the keys have a definite insert order (e.g: timestamp as prefix), the number of files
    * to be compared gets cut down a lot from range pruning.
    * <p>
    * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on
@@ -80,13 +82,12 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
    */
 
   @Override
-  @VisibleForTesting
   JavaRDD<Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
 
     IndexFileFilter indexFileFilter =
-        config.getBloomIndexPruneByRanges() ? new IntervalTreeBasedGlobalIndexFileFilter(partitionToFileIndexInfo)
+        config.useBloomIndexTreebasedFilter() ? new IntervalTreeBasedGlobalIndexFileFilter(partitionToFileIndexInfo)
             : new ListBasedGlobalIndexFileFilter(partitionToFileIndexInfo);
 
     return partitionRecordKeyPairRDD.map(partitionRecordKeyPair -> {
@@ -114,14 +115,28 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
         keyLocationPairRDD.mapToPair(p -> new Tuple2<>(p._1.getRecordKey(), new Tuple2<>(p._2, p._1)));
 
     // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null), so we do left outer join.
-    return incomingRowKeyRecordPairRDD.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().map(record -> {
+    return incomingRowKeyRecordPairRDD.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().flatMap(record -> {
       final HoodieRecord<T> hoodieRecord = record._1;
       final Optional<Tuple2<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record._2;
       if (recordLocationHoodieKeyPair.isPresent()) {
         // Record key matched to file
-        return getTaggedRecord(new HoodieRecord<>(recordLocationHoodieKeyPair.get()._2, hoodieRecord.getData()), Option.ofNullable(recordLocationHoodieKeyPair.get()._1));
+        if (config.getBloomIndexUpdatePartitionPath()
+            && !recordLocationHoodieKeyPair.get()._2.getPartitionPath().equals(hoodieRecord.getPartitionPath())) {
+          // Create an empty record to delete the record in the old partition
+          HoodieRecord<T> emptyRecord = new HoodieRecord(recordLocationHoodieKeyPair.get()._2,
+              new EmptyHoodieRecordPayload());
+          // Tag the incoming record for inserting to the new partition
+          HoodieRecord<T> taggedRecord = HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty());
+          return Arrays.asList(emptyRecord, taggedRecord).iterator();
+        } else {
+          // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
+          // When it differs, the record will still be updated at its old partition.
+          return Collections.singletonList(
+              (HoodieRecord<T>) HoodieIndexUtils.getTaggedRecord(new HoodieRecord<>(recordLocationHoodieKeyPair.get()._2, hoodieRecord.getData()),
+                  Option.ofNullable(recordLocationHoodieKeyPair.get()._1))).iterator();
+        }
       } else {
-        return getTaggedRecord(hoodieRecord, Option.empty());
+        return Collections.singletonList((HoodieRecord<T>) HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty())).iterator();
       }
     });
   }

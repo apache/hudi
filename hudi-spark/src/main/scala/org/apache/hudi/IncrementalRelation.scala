@@ -17,10 +17,11 @@
 
 package org.apache.hudi
 
+import org.apache.hadoop.fs.GlobPattern
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieTableType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.util.ParquetUtils
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.table.HoodieTable
@@ -46,16 +47,15 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val log = LogManager.getLogger(classOf[IncrementalRelation])
 
-  val fs = new Path(basePath).getFileSystem(sqlContext.sparkContext.hadoopConfiguration)
-  val metaClient = new HoodieTableMetaClient(sqlContext.sparkContext.hadoopConfiguration, basePath, true)
-  // MOR datasets not supported yet
+  private val metaClient = new HoodieTableMetaClient(sqlContext.sparkContext.hadoopConfiguration, basePath, true)
+  // MOR tables not supported yet
   if (metaClient.getTableType.equals(HoodieTableType.MERGE_ON_READ)) {
-    throw new HoodieException("Incremental view not implemented yet, for merge-on-read datasets")
+    throw new HoodieException("Incremental view not implemented yet, for merge-on-read tables")
   }
   // TODO : Figure out a valid HoodieWriteConfig
-  val hoodieTable = HoodieTable.getHoodieTable(metaClient, HoodieWriteConfig.newBuilder().withPath(basePath).build(),
-    sqlContext.sparkContext)
-  val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
+  private val hoodieTable = HoodieTable.create(metaClient, HoodieWriteConfig.newBuilder().withPath(basePath).build(),
+    sqlContext.sparkContext.hadoopConfiguration)
+  private val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
   }
@@ -64,27 +64,25 @@ class IncrementalRelation(val sqlContext: SQLContext,
       s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY}")
   }
 
-  val lastInstant = commitTimeline.lastInstant().get()
+  private val lastInstant = commitTimeline.lastInstant().get()
 
-  val commitsToReturn = commitTimeline.findInstantsInRange(
+  private val commitsToReturn = commitTimeline.findInstantsInRange(
     optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY),
     optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, lastInstant.getTimestamp))
     .getInstants.iterator().toList
 
-  // use schema from a file produced in the latest instant
-  val latestSchema = {
-    // use last instant if instant range is empty
-    val instant = commitsToReturn.lastOption.getOrElse(lastInstant)
-    val latestMeta = HoodieCommitMetadata
-          .fromBytes(commitTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
-    val metaFilePath = latestMeta.getFileIdAndFullPaths(basePath).values().iterator().next()
-    AvroConversionUtils.convertAvroSchemaToStructType(ParquetUtils.readAvroSchema(
-      sqlContext.sparkContext.hadoopConfiguration, new Path(metaFilePath)))
+  // use schema from latest metadata, if not present, read schema from the data file
+  private val latestSchema = {
+    val schemaUtil = new TableSchemaResolver(metaClient)
+    val tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaUtil.getTableAvroSchemaWithoutMetadataFields);
+    AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
   }
 
-  val filters = {
+  private val filters = {
     if (optParams.contains(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY)) {
-      val filterStr = optParams.get(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY).getOrElse("")
+      val filterStr = optParams.getOrElse(
+        DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY,
+        DataSourceReadOptions.DEFAULT_PUSH_DOWN_FILTERS_OPT_VAL)
       filterStr.split(",").filter(!_.isEmpty)
     } else {
       Array[String]()
@@ -100,17 +98,26 @@ class IncrementalRelation(val sqlContext: SQLContext,
         .get, classOf[HoodieCommitMetadata])
       fileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap
     }
+    val pathGlobPattern = optParams.getOrElse(
+      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY,
+      DataSourceReadOptions.DEFAULT_INCR_PATH_GLOB_OPT_VAL)
+    val filteredFullPath = if(!pathGlobPattern.equals(DataSourceReadOptions.DEFAULT_INCR_PATH_GLOB_OPT_VAL)) {
+      val globMatcher = new GlobPattern("*" + pathGlobPattern)
+      fileIdToFullPath.filter(p => globMatcher.matches(p._2))
+    } else {
+      fileIdToFullPath
+    }
     // unset the path filter, otherwise if end_instant_time is not the latest instant, path filter set for RO view
     // will filter out all the files incorrectly.
     sqlContext.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class")
     val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
-    if (fileIdToFullPath.isEmpty) {
+    if (filteredFullPath.isEmpty) {
       sqlContext.sparkContext.emptyRDD[Row]
     } else {
       log.info("Additional Filters to be applied to incremental source are :" + filters)
       filters.foldLeft(sqlContext.read.options(sOpts)
         .schema(latestSchema)
-        .parquet(fileIdToFullPath.values.toList: _*)
+        .parquet(filteredFullPath.values.toList: _*)
         .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp))
         .filter(String.format("%s <= '%s'",
           HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)))((e, f) => e.filter(f))

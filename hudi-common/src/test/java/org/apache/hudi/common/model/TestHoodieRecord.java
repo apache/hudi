@@ -18,20 +18,20 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.testutils.AvroBinaryTestPayload;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SchemaTestUtil;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests for {@link HoodieRecord}.
@@ -40,7 +40,7 @@ public class TestHoodieRecord {
 
   private HoodieRecord hoodieRecord;
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     final List<IndexedRecord> indexedRecords = SchemaTestUtil.generateHoodieTestRecords(0, 1);
     final List<HoodieRecord> hoodieRecords =
@@ -53,12 +53,9 @@ public class TestHoodieRecord {
   public void testModificationAfterSeal() {
     hoodieRecord.seal();
     final HoodieRecordLocation location = new HoodieRecordLocation("100", "0");
-    try {
+    assertThrows(UnsupportedOperationException.class, () -> {
       hoodieRecord.setCurrentLocation(location);
-      fail("should fail since modification after sealed is not allowed");
-    } catch (Exception e) {
-      Assert.assertTrue(e instanceof UnsupportedOperationException);
-    }
+    }, "should fail since modification after sealed is not allowed");
   }
 
   @Test

@@ -18,10 +18,13 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.bloom.filter.BloomFilter;
-import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
-import org.apache.hudi.common.bloom.filter.BloomFilterTypeCode;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -74,13 +77,27 @@ public class ParquetUtils {
    * @return Set Set of row keys matching candidateRecordKeys
    */
   public static Set<String> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
+    return filterParquetRowKeys(configuration, filePath, filter, HoodieAvroUtils.getRecordKeySchema());
+  }
+
+  /**
+   * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
+   * return all the rowkeys.
+   *
+   * @param filePath      The parquet file path.
+   * @param configuration configuration to build fs object
+   * @param filter        record keys filter
+   * @param readSchema    schema of columns to be read
+   * @return Set Set of row keys matching candidateRecordKeys
+   */
+  private static Set<String> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter,
+                                                  Schema readSchema) {
     Option<RecordKeysFilterFunction> filterFunction = Option.empty();
     if (filter != null && !filter.isEmpty()) {
       filterFunction = Option.of(new RecordKeysFilterFunction(filter));
     }
     Configuration conf = new Configuration(configuration);
     conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
-    Schema readSchema = HoodieAvroUtils.getRecordKeySchema();
     AvroReadSupport.setAvroReadSchema(conf, readSchema);
     AvroReadSupport.setRequestedProjection(conf, readSchema);
     Set<String> rowKeys = new HashSet<>();
@@ -101,6 +118,41 @@ public class ParquetUtils {
     }
     // ignore
     return rowKeys;
+  }
+
+  /**
+   * Fetch {@link HoodieKey}s from the given parquet file.
+   *
+   * @param filePath      The parquet file path.
+   * @param configuration configuration to build fs object
+   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   */
+  public static List<HoodieKey> fetchRecordKeyPartitionPathFromParquet(Configuration configuration, Path filePath) {
+    List<HoodieKey> hoodieKeys = new ArrayList<>();
+    try {
+      if (!filePath.getFileSystem(configuration).exists(filePath)) {
+        return new ArrayList<>();
+      }
+
+      Configuration conf = new Configuration(configuration);
+      conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
+      Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
+      AvroReadSupport.setAvroReadSchema(conf, readSchema);
+      AvroReadSupport.setRequestedProjection(conf, readSchema);
+      ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build();
+      Object obj = reader.read();
+      while (obj != null) {
+        if (obj instanceof GenericRecord) {
+          String recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          String partitionPath = ((GenericRecord) obj).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          hoodieKeys.add(new HoodieKey(recordKey, partitionPath));
+          obj = reader.read();
+        }
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
+    }
+    return hoodieKeys;
   }
 
   public static ParquetMetadata readMetadata(Configuration conf, Path parquetFilePath) {

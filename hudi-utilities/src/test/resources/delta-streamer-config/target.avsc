@@ -44,11 +44,56 @@
     "name" : "end_lon",
     "type" : "double"
   }, {
-    "name" : "fare",
-    "type" : "double"
+    "name" :"city_to_state",
+    "type" : {
+      "type" : "map",
+      "values": "string"
+    }
   }, {
-    "name" : "haversine_distance",
-    "type" : "double"
+    "name" : "fare",
+    "type" : {
+      "type" : "record",
+      "name" : "fare",
+       "fields" : [
+        {
+         "name" : "amount",
+         "type" : "double"
+        },
+        {
+         "name" : "currency",
+         "type" : "string"
+        }
+       ]
+    }
+  },
+  {
+    "name" : "tip_history",
+    "type" : {
+      "type" : "array",
+      "items" : {
+        "type" : "record",
+        "name" : "tip_history",
+        "fields" : [
+          {
+            "name" : "amount",
+            "type" : "double"
+          },
+          {
+            "name" : "currency",
+            "type" : "string"
+          }
+        ]
+      }
+    }
+  },
+  {
+     "name" : "_hoodie_is_deleted",
+     "type" : "boolean",
+     "default" : false
+  },
+  {
+     "name" : "haversine_distance",
+     "type" : "double"
   }]
 }
 

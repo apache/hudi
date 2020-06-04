@@ -22,21 +22,21 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineDiffHelper;
+import org.apache.hudi.common.table.timeline.TimelineDiffHelper.TimelineDiffResult;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TimelineDiffHelper;
-import org.apache.hudi.common.util.TimelineDiffHelper.TimelineDiffResult;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
@@ -220,7 +220,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   private void addRestoreInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing restore instant (" + instant + ")");
     HoodieRestoreMetadata metadata =
-        AvroUtils.deserializeAvroMetadata(timeline.getInstantDetails(instant).get(), HoodieRestoreMetadata.class);
+        TimelineMetadataUtils.deserializeAvroMetadata(timeline.getInstantDetails(instant).get(), HoodieRestoreMetadata.class);
 
     Map<String, List<Pair<String, String>>> partitionFiles =
         metadata.getHoodieRestoreMetadata().entrySet().stream().flatMap(entry -> {
@@ -244,7 +244,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   private void addRollbackInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing rollback instant (" + instant + ")");
     HoodieRollbackMetadata metadata =
-        AvroUtils.deserializeAvroMetadata(timeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
+        TimelineMetadataUtils.deserializeAvroMetadata(timeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
 
     metadata.getPartitionMetadata().entrySet().stream().forEach(e -> {
       removeFileSlicesForPartition(timeline, instant, e.getKey(), e.getValue().getSuccessDeleteFiles());
@@ -318,13 +318,13 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
      * Note that while finding the new data/log files added/removed, the path stored in metadata will be missing the
      * base-path,scheme and authority. Ensure the matching process takes care of this discrepancy.
      */
-    Map<String, HoodieDataFile> viewDataFiles = fileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
-        .map(FileSlice::getDataFile).filter(Option::isPresent).map(Option::get)
+    Map<String, HoodieBaseFile> viewDataFiles = fileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
+        .map(FileSlice::getBaseFile).filter(Option::isPresent).map(Option::get)
         .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     // Note: Delta Log Files and Data FIles can be empty when adding/removing pending compactions
-    Map<String, HoodieDataFile> deltaDataFiles = deltaFileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
-        .map(FileSlice::getDataFile).filter(Option::isPresent).map(Option::get)
+    Map<String, HoodieBaseFile> deltaDataFiles = deltaFileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
+        .map(FileSlice::getBaseFile).filter(Option::isPresent).map(Option::get)
         .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 

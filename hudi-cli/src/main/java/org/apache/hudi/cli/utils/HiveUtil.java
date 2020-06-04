@@ -49,10 +49,9 @@ public class HiveUtil {
 
   public static long countRecords(String jdbcUrl, HoodieTableMetaClient source, String dbName, String user, String pass)
       throws SQLException {
-    Connection conn = HiveUtil.getConnection(jdbcUrl, user, pass);
     ResultSet rs = null;
-    Statement stmt = conn.createStatement();
-    try {
+    try (Connection conn = HiveUtil.getConnection(jdbcUrl, user, pass);
+         Statement stmt = conn.createStatement()) {
       // stmt.execute("set mapred.job.queue.name=<queue_name>");
       stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
       stmt.execute("set hive.stats.autogather=false");
@@ -67,9 +66,6 @@ public class HiveUtil {
     } finally {
       if (rs != null) {
         rs.close();
-      }
-      if (stmt != null) {
-        stmt.close();
       }
     }
   }
@@ -88,10 +84,9 @@ public class HiveUtil {
 
   private static long countRecords(String jdbcUrl, HoodieTableMetaClient source, String srcDb, String startDateStr,
       String endDateStr, String user, String pass) throws SQLException {
-    Connection conn = HiveUtil.getConnection(jdbcUrl, user, pass);
     ResultSet rs = null;
-    Statement stmt = conn.createStatement();
-    try {
+    try (Connection conn = HiveUtil.getConnection(jdbcUrl, user, pass);
+         Statement stmt = conn.createStatement()) {
       // stmt.execute("set mapred.job.queue.name=<queue_name>");
       stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
       stmt.execute("set hive.stats.autogather=false");
@@ -105,9 +100,6 @@ public class HiveUtil {
     } finally {
       if (rs != null) {
         rs.close();
-      }
-      if (stmt != null) {
-        stmt.close();
       }
     }
   }

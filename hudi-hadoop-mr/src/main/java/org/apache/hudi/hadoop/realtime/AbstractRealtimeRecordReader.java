@@ -18,14 +18,15 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.HoodieAvroUtils;
-import org.apache.hudi.common.util.LogReaderUtils;
+import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericArray;
@@ -36,6 +37,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
+import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.BytesWritable;
@@ -78,7 +80,7 @@ public abstract class AbstractRealtimeRecordReader {
   // Property to set the max memory for dfs inputstream buffer size
   public static final String MAX_DFS_STREAM_BUFFER_SIZE_PROP = "hoodie.memory.dfs.buffer.max.size";
   // Setting this to lower value of 1 MB since no control over how many RecordReaders will be started in a mapper
-  public static final int DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE = 1 * 1024 * 1024; // 1 MB
+  public static final int DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE = 1024 * 1024; // 1 MB
   // Property to set file path prefix for spillable file
   public static final String SPILLABLE_MAP_BASE_PATH_PROP = "hoodie.memory.spillable.map.path";
   // Default file path prefix for spillable file
@@ -170,18 +172,12 @@ public abstract class AbstractRealtimeRecordReader {
     // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L188}
     // Field Names -> {@link https://github.com/apache/hive/blob/f37c5de6c32b9395d1b34fa3c02ed06d1bfbf6eb/serde/src/java
     // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L229}
-    Set<String> fieldOrdersSet = new LinkedHashSet<>();
     String[] fieldOrdersWithDups = fieldOrderCsv.split(",");
-    for (String fieldOrder : fieldOrdersWithDups) {
-      fieldOrdersSet.add(fieldOrder);
-    }
-    String[] fieldOrders = fieldOrdersSet.toArray(new String[fieldOrdersSet.size()]);
+    Set<String> fieldOrdersSet = new LinkedHashSet<>(Arrays.asList(fieldOrdersWithDups));
+    String[] fieldOrders = fieldOrdersSet.toArray(new String[0]);
     List<String> fieldNames = Arrays.stream(fieldNameCsv.split(","))
         .filter(fn -> !partitioningFields.contains(fn)).collect(Collectors.toList());
-    Set<String> fieldNamesSet = new LinkedHashSet<>();
-    for (String fieldName : fieldNames) {
-      fieldNamesSet.add(fieldName);
-    }
+    Set<String> fieldNamesSet = new LinkedHashSet<>(fieldNames);
     // Hive does not provide ids for partitioning fields, so check for lengths excluding that.
     if (fieldNamesSet.size() != fieldOrders.length) {
       throw new HoodieException(String
@@ -189,7 +185,7 @@ public abstract class AbstractRealtimeRecordReader {
               fieldNames.size(), fieldOrders.length));
     }
     TreeMap<Integer, String> orderedFieldMap = new TreeMap<>();
-    String[] fieldNamesArray = fieldNamesSet.toArray(new String[fieldNamesSet.size()]);
+    String[] fieldNamesArray = fieldNamesSet.toArray(new String[0]);
     for (int ox = 0; ox < fieldOrders.length; ox++) {
       orderedFieldMap.put(Integer.parseInt(fieldOrders[ox]), fieldNamesArray[ox]);
     }
@@ -218,7 +214,7 @@ public abstract class AbstractRealtimeRecordReader {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
       } else {
-        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
+        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
       }
     }
 
@@ -306,6 +302,14 @@ public abstract class AbstractRealtimeRecordReader {
           throw new IllegalArgumentException("Only support union with null");
         }
       case FIXED:
+        if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("decimal")) {
+          LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) LogicalTypes.fromSchema(schema);
+          HiveDecimalWritable writable = new HiveDecimalWritable(((GenericFixed) value).bytes(),
+                  decimal.getScale());
+          return HiveDecimalWritable.enforcePrecisionScale(writable,
+                  decimal.getPrecision(),
+                  decimal.getScale());
+        }
         return new BytesWritable(((GenericFixed) value).bytes());
       default:
         return null;
@@ -336,7 +340,7 @@ public abstract class AbstractRealtimeRecordReader {
    */
   private void init() throws IOException {
     Schema schemaFromLogFile =
-        LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaFilePaths(), jobConf);
+        LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaLogPaths(), jobConf);
     if (schemaFromLogFile == null) {
       writerSchema = new AvroSchemaConverter().convert(baseFileSchema);
       LOG.debug("Writer Schema From Parquet => " + writerSchema.getFields());
@@ -360,20 +364,22 @@ public abstract class AbstractRealtimeRecordReader {
 
     readerSchema = generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
     LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
-        split.getDeltaFilePaths(), split.getPath(), projectionFields));
+        split.getDeltaLogPaths(), split.getPath(), projectionFields));
   }
 
   private Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap) {
     // Get all column names of hive table
     String hiveColumnString = jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS);
+    LOG.info("Hive Columns : " + hiveColumnString);
     String[] hiveColumns = hiveColumnString.split(",");
+    LOG.info("Hive Columns : " + hiveColumnString);
     List<Field> hiveSchemaFields = new ArrayList<>();
 
     for (String columnName : hiveColumns) {
       Field field = schemaFieldsMap.get(columnName.toLowerCase());
 
       if (field != null) {
-        hiveSchemaFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
+        hiveSchemaFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
       } else {
         // Hive has some extra virtual columns like BLOCK__OFFSET__INSIDE__FILE which do not exist in table schema.
         // They will get skipped as they won't be found in the original schema.
@@ -384,6 +390,7 @@ public abstract class AbstractRealtimeRecordReader {
     Schema hiveSchema = Schema.createRecord(writerSchema.getName(), writerSchema.getDoc(), writerSchema.getNamespace(),
         writerSchema.isError());
     hiveSchema.setFields(hiveSchemaFields);
+    LOG.info("HIVE Schema is :" + hiveSchema.toString(true));
     return hiveSchema;
   }
 
@@ -402,7 +409,7 @@ public abstract class AbstractRealtimeRecordReader {
   public long getMaxCompactionMemoryInBytes() {
     // jobConf.getMemoryForMapTask() returns in MB
     return (long) Math
-        .ceil(Double.valueOf(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
+        .ceil(Double.parseDouble(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
             * jobConf.getMemoryForMapTask() * 1024 * 1024L);
   }
 }

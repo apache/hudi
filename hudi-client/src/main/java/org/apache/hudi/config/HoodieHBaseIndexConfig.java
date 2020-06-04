@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
 
 import java.io.File;
@@ -60,7 +61,7 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
    * value based on global indexing throughput needs and most importantly, how much the HBase installation in use is
    * able to tolerate without Region Servers going down.
    */
-  public static String HBASE_MAX_QPS_PER_REGION_SERVER_PROP = "hoodie.index.hbase.max.qps.per.region.server";
+  public static final String HBASE_MAX_QPS_PER_REGION_SERVER_PROP = "hoodie.index.hbase.max.qps.per.region.server";
   /**
    * Default batch size, used only for Get, but computed for Put.
    */
@@ -83,10 +84,9 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
    * Min and Max for HBASE_QPS_FRACTION_PROP to stabilize skewed volume workloads.
    */
   public static final String HBASE_MIN_QPS_FRACTION_PROP = "hoodie.index.hbase.min.qps.fraction";
-  public static final String DEFAULT_HBASE_MIN_QPS_FRACTION_PROP = "0.002";
 
   public static final String HBASE_MAX_QPS_FRACTION_PROP = "hoodie.index.hbase.max.qps.fraction";
-  public static final String DEFAULT_HBASE_MAX_QPS_FRACTION_PROP = "0.06";
+
   /**
    * Hoodie index desired puts operation time in seconds.
    */
@@ -115,12 +115,9 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
     private final Properties props = new Properties();
 
     public HoodieHBaseIndexConfig.Builder fromFile(File propertiesFile) throws IOException {
-      FileReader reader = new FileReader(propertiesFile);
-      try {
+      try (FileReader reader = new FileReader(propertiesFile)) {
         this.props.load(reader);
         return this;
-      } finally {
-        reader.close();
       }
     }
 
@@ -194,6 +191,11 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder hbaseIndexSleepMsBetweenGetBatch(int sleepMsBetweenGetBatch) {
+      props.setProperty(HBASE_SLEEP_MS_GET_BATCH_PROP, String.valueOf(sleepMsBetweenGetBatch));
+      return this;
+    }
+
     public Builder withQPSResourceAllocatorType(String qpsResourceAllocatorClass) {
       props.setProperty(HBASE_INDEX_QPS_ALLOCATOR_CLASS, qpsResourceAllocatorClass);
       return this;
@@ -217,7 +219,7 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
     /**
      * <p>
      * Method to set maximum QPS allowed per Region Server. This should be same across various jobs. This is intended to
-     * limit the aggregate QPS generated across various jobs to an Hbase Region Server.
+     * limit the aggregate QPS generated across various jobs to an HBase Region Server.
      * </p>
      * <p>
      * It is recommended to set this value based on your global indexing throughput needs and most importantly, how much
@@ -238,7 +240,7 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(HBASE_PUT_BATCH_SIZE_PROP), HBASE_PUT_BATCH_SIZE_PROP,
           String.valueOf(DEFAULT_HBASE_BATCH_SIZE));
       setDefaultOnCondition(props, !props.containsKey(HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP),
-          HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP, String.valueOf(DEFAULT_HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE));
+          HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP, DEFAULT_HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE);
       setDefaultOnCondition(props, !props.containsKey(HBASE_QPS_FRACTION_PROP), HBASE_QPS_FRACTION_PROP,
           String.valueOf(DEFAULT_HBASE_QPS_FRACTION));
       setDefaultOnCondition(props, !props.containsKey(HBASE_MAX_QPS_PER_REGION_SERVER_PROP),
@@ -250,7 +252,7 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS),
           HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS, String.valueOf(DEFAULT_HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS));
       setDefaultOnCondition(props, !props.containsKey(HBASE_ZK_PATH_QPS_ROOT), HBASE_ZK_PATH_QPS_ROOT,
-          String.valueOf(DEFAULT_HBASE_ZK_PATH_QPS_ROOT));
+          DEFAULT_HBASE_ZK_PATH_QPS_ROOT);
       setDefaultOnCondition(props, !props.containsKey(HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS),
           HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS, String.valueOf(DEFAULT_ZK_SESSION_TIMEOUT_MS));
       setDefaultOnCondition(props, !props.containsKey(HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS),

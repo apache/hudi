@@ -19,12 +19,15 @@
 package org.apache.hudi.cli;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import com.jakewharton.fliptables.FlipTable;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 
 /**
@@ -57,9 +60,36 @@ public class HoodiePrintHelper {
    */
   public static String print(TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
       String sortByField, boolean isDescending, Integer limit, boolean headerOnly, List<Comparable[]> rows) {
+    return print(rowHeader, fieldNameToConverterMap, sortByField, isDescending, limit, headerOnly, rows, "");
+  }
+
+  /**
+   * Serialize Table to printable string and also export a temporary view to easily write sql queries.
+   *
+   * Ideally, exporting view needs to be outside PrintHelper, but all commands use this. So this is easy
+   * way to add support for all commands
+   *
+   * @param rowHeader Row Header
+   * @param fieldNameToConverterMap Field Specific Converters
+   * @param sortByField Sorting field
+   * @param isDescending Order
+   * @param limit Limit
+   * @param headerOnly Headers only
+   * @param rows List of rows
+   * @param tempTableName table name to export
+   * @return Serialized form for printing
+   */
+  public static String print(TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
+      String sortByField, boolean isDescending, Integer limit, boolean headerOnly, List<Comparable[]> rows,
+      String tempTableName) {
 
     if (headerOnly) {
       return HoodiePrintHelper.print(rowHeader);
+    }
+
+    if (!StringUtils.isNullOrEmpty(tempTableName)) {
+      HoodieCLI.getTempViewProvider().createOrReplace(tempTableName, rowHeader.getFieldNames(),
+          rows.stream().map(columns -> Arrays.asList(columns)).collect(Collectors.toList()));
     }
 
     if (!sortByField.isEmpty() && !rowHeader.containsField(sortByField)) {
@@ -84,7 +114,7 @@ public class HoodiePrintHelper {
     buffer.getFieldNames().toArray(header);
 
     String[][] rows =
-        buffer.getRenderRows().stream().map(l -> l.stream().toArray(String[]::new)).toArray(String[][]::new);
+        buffer.getRenderRows().stream().map(l -> l.toArray(new String[l.size()])).toArray(String[][]::new);
     return printTextTable(header, rows);
   }
 

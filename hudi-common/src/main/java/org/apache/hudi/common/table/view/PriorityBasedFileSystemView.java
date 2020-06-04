@@ -20,11 +20,10 @@ package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Functions.Function0;
 import org.apache.hudi.common.util.Functions.Function1;
 import org.apache.hudi.common.util.Functions.Function2;
@@ -120,39 +119,39 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
-  public Stream<HoodieDataFile> getLatestDataFiles(String partitionPath) {
-    return execute(partitionPath, preferredView::getLatestDataFiles, secondaryView::getLatestDataFiles);
+  public Stream<HoodieBaseFile> getLatestBaseFiles(String partitionPath) {
+    return execute(partitionPath, preferredView::getLatestBaseFiles, secondaryView::getLatestBaseFiles);
   }
 
   @Override
-  public Stream<HoodieDataFile> getLatestDataFiles() {
-    return execute(preferredView::getLatestDataFiles, secondaryView::getLatestDataFiles);
+  public Stream<HoodieBaseFile> getLatestBaseFiles() {
+    return execute(preferredView::getLatestBaseFiles, secondaryView::getLatestBaseFiles);
   }
 
   @Override
-  public Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
-    return execute(partitionPath, maxCommitTime, preferredView::getLatestDataFilesBeforeOrOn,
-        secondaryView::getLatestDataFilesBeforeOrOn);
+  public Stream<HoodieBaseFile> getLatestBaseFilesBeforeOrOn(String partitionPath, String maxCommitTime) {
+    return execute(partitionPath, maxCommitTime, preferredView::getLatestBaseFilesBeforeOrOn,
+        secondaryView::getLatestBaseFilesBeforeOrOn);
   }
 
   @Override
-  public Option<HoodieDataFile> getLatestDataFile(String partitionPath, String fileId) {
-    return execute(partitionPath, fileId, preferredView::getLatestDataFile, secondaryView::getLatestDataFile);
+  public Option<HoodieBaseFile> getLatestBaseFile(String partitionPath, String fileId) {
+    return execute(partitionPath, fileId, preferredView::getLatestBaseFile, secondaryView::getLatestBaseFile);
   }
 
   @Override
-  public Option<HoodieDataFile> getDataFileOn(String partitionPath, String instantTime, String fileId) {
-    return execute(partitionPath, instantTime, fileId, preferredView::getDataFileOn, secondaryView::getDataFileOn);
+  public Option<HoodieBaseFile> getBaseFileOn(String partitionPath, String instantTime, String fileId) {
+    return execute(partitionPath, instantTime, fileId, preferredView::getBaseFileOn, secondaryView::getBaseFileOn);
   }
 
   @Override
-  public Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
-    return execute(commitsToReturn, preferredView::getLatestDataFilesInRange, secondaryView::getLatestDataFilesInRange);
+  public Stream<HoodieBaseFile> getLatestBaseFilesInRange(List<String> commitsToReturn) {
+    return execute(commitsToReturn, preferredView::getLatestBaseFilesInRange, secondaryView::getLatestBaseFilesInRange);
   }
 
   @Override
-  public Stream<HoodieDataFile> getAllDataFiles(String partitionPath) {
-    return execute(partitionPath, preferredView::getAllDataFiles, secondaryView::getAllDataFiles);
+  public Stream<HoodieBaseFile> getAllBaseFiles(String partitionPath) {
+    return execute(partitionPath, preferredView::getAllBaseFiles, secondaryView::getAllBaseFiles);
   }
 
   @Override

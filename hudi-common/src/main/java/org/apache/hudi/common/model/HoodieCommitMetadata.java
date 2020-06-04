@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -30,7 +30,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -47,7 +47,9 @@ public class HoodieCommitMetadata implements Serializable {
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
   protected Boolean compacted;
 
-  private Map<String, String> extraMetadataMap;
+  private Map<String, String> extraMetadata;
+
+  private WriteOperationType operationType = WriteOperationType.UNKNOWN;
 
   // for ser/deser
   public HoodieCommitMetadata() {
@@ -55,7 +57,7 @@ public class HoodieCommitMetadata implements Serializable {
   }
 
   public HoodieCommitMetadata(boolean compacted) {
-    extraMetadataMap = new HashMap<>();
+    extraMetadata = new HashMap<>();
     partitionToWriteStats = new HashMap<>();
     this.compacted = compacted;
   }
@@ -68,7 +70,7 @@ public class HoodieCommitMetadata implements Serializable {
   }
 
   public void addMetadata(String metaKey, String value) {
-    extraMetadataMap.put(metaKey, value);
+    extraMetadata.put(metaKey, value);
   }
 
   public List<HoodieWriteStat> getWriteStats(String partitionPath) {
@@ -76,7 +78,7 @@ public class HoodieCommitMetadata implements Serializable {
   }
 
   public Map<String, String> getExtraMetadata() {
-    return extraMetadataMap;
+    return extraMetadata;
   }
 
   public Map<String, List<HoodieWriteStat>> getPartitionToWriteStats() {
@@ -84,7 +86,7 @@ public class HoodieCommitMetadata implements Serializable {
   }
 
   public String getMetadata(String metaKey) {
-    return extraMetadataMap.get(metaKey);
+    return extraMetadata.get(metaKey);
   }
 
   public Boolean getCompacted() {
@@ -104,6 +106,14 @@ public class HoodieCommitMetadata implements Serializable {
       }
     }
     return filePaths;
+  }
+
+  public void setOperationType(WriteOperationType type) {
+    this.operationType = type;
+  }
+
+  public WriteOperationType getOperationType() {
+    return this.operationType;
   }
 
   public HashMap<String, String> getFileIdAndFullPaths(String basePath) {
@@ -175,7 +185,8 @@ public class HoodieCommitMetadata implements Serializable {
     long totalInsertRecordsWritten = 0;
     for (List<HoodieWriteStat> stats : partitionToWriteStats.values()) {
       for (HoodieWriteStat stat : stats) {
-        if (stat.getPrevCommit() != null && stat.getPrevCommit().equalsIgnoreCase("null")) {
+        // determine insert rows in every file
+        if (stat.getPrevCommit() != null) {
           totalInsertRecordsWritten += stat.getNumInserts();
         }
       }
@@ -326,7 +337,7 @@ public class HoodieCommitMetadata implements Serializable {
 
   public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
     try {
-      return fromJsonString(new String(bytes, Charset.forName("utf-8")), clazz);
+      return fromJsonString(new String(bytes, StandardCharsets.UTF_8), clazz);
     } catch (Exception e) {
       throw new IOException("unable to read commit metadata", e);
     }
@@ -342,6 +353,6 @@ public class HoodieCommitMetadata implements Serializable {
   @Override
   public String toString() {
     return "HoodieCommitMetadata{partitionToWriteStats=" + partitionToWriteStats + ", compacted=" + compacted
-        + ", extraMetadataMap=" + extraMetadataMap + '}';
+        + ", extraMetadata=" + extraMetadata + '}';
   }
 }

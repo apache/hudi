@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
@@ -42,7 +43,10 @@ public class MetricsReporterFactory {
         reporter = new InMemoryMetricsReporter();
         break;
       case JMX:
-        reporter = new JmxMetricsReporter(config);
+        reporter = new JmxMetricsReporter(config, registry);
+        break;
+      case DATADOG:
+        reporter = new DatadogMetricsReporter(config, registry);
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");

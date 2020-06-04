@@ -18,19 +18,16 @@
 
 package org.apache.hudi.common.model;
 
-import com.google.common.base.Objects;
-
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * HoodieKey consists of
  * <p>
- * - recordKey : a recordKey that acts as primary key for a record - partitionPath : path to the partition that contains
- * the record.
+ * - recordKey : a recordKey that acts as primary key for a record.
  * - partitionPath : the partition path of a record.
  */
 public class HoodieKey implements Serializable {
-
 
   private final String recordKey;
 
@@ -58,12 +55,12 @@ public class HoodieKey implements Serializable {
       return false;
     }
     HoodieKey otherKey = (HoodieKey) o;
-    return Objects.equal(recordKey, otherKey.recordKey) && Objects.equal(partitionPath, otherKey.partitionPath);
+    return Objects.equals(recordKey, otherKey.recordKey) && Objects.equals(partitionPath, otherKey.partitionPath);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(recordKey, partitionPath);
+    return Objects.hash(recordKey, partitionPath);
   }
 
   @Override

@@ -20,24 +20,24 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 
-import com.google.common.collect.Maps;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHoodieWriteConfig {
 
   @Test
   public void testPropertyLoading() throws IOException {
     Builder builder = HoodieWriteConfig.newBuilder().withPath("/tmp");
-    Map<String, String> params = Maps.newHashMap();
+    Map<String, String> params = new HashMap<>(3);
     params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP, "1");
     params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP, "5");
     params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP, "2");
@@ -50,8 +50,8 @@ public class TestHoodieWriteConfig {
       inputStream.close();
     }
     HoodieWriteConfig config = builder.build();
-    assertEquals(config.getMaxCommitsToKeep(), 5);
-    assertEquals(config.getMinCommitsToKeep(), 2);
+    assertEquals(5, config.getMaxCommitsToKeep());
+    assertEquals(2, config.getMinCommitsToKeep());
   }
 
   private ByteArrayOutputStream saveParamsIntoOutputStream(Map<String, String> params) throws IOException {

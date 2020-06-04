@@ -18,15 +18,17 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.HoodieAvroUtils;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -93,7 +95,7 @@ public class QuickstartUtils {
     }
 
     public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
-        double timestamp) {
+                                                      double timestamp) {
       GenericRecord rec = new GenericData.Record(avroSchema);
       rec.put("uuid", rowKey);
       rec.put("ts", timestamp);
@@ -169,6 +171,18 @@ public class QuickstartUtils {
       return updates;
     }
 
+    /**
+     * Generates delete records for the passed in rows.
+     *
+     * @param rows List of {@link Row}s for which delete record need to be generated
+     * @return list of hoodie records to delete
+     */
+    public List<String> generateDeletes(List<Row> rows) {
+      return rows.stream().map(row ->
+          convertToString(row.getAs("uuid"), row.getAs("partitionPath"))).filter(os -> os.isPresent()).map(os -> os.get())
+          .collect(Collectors.toList());
+    }
+
     public void close() {
       existingKeys.clear();
     }
@@ -184,6 +198,16 @@ public class QuickstartUtils {
     } catch (IOException e) {
       return Option.empty();
     }
+  }
+
+  private static Option<String> convertToString(String uuid, String partitionPath) {
+    StringBuffer stringBuffer = new StringBuffer();
+    stringBuffer.append("{");
+    stringBuffer.append("\"ts\": 0.0,");
+    stringBuffer.append("\"uuid\": \"" + uuid + "\",");
+    stringBuffer.append("\"partitionpath\": \"" + partitionPath + "\"");
+    stringBuffer.append("}");
+    return Option.of(stringBuffer.toString());
   }
 
   public static List<String> convertToStringList(List<HoodieRecord> records) {

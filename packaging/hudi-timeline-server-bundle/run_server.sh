@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-################################################################################
+
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
 #  distributed with this work for additional information
@@ -15,11 +15,10 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 # limitations under the License.
-################################################################################
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 #Ensure we pick the right jar even for hive11 builds
-HOODIE_JAR=`ls -c $DIR/target/hudi-timeline-server-bundle-*.jar | grep -v test | head -1`
+HOODIE_JAR=`ls -c $DIR/target/hudi-timeline-server-bundle-*.jar | grep -v test | grep -v source | head -1`
 
 if [ -z "$HADOOP_HOME" ]; then
   echo "HADOOP_HOME not set. It must be set"

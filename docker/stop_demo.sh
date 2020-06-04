@@ -1,6 +1,5 @@
 #!/bin/bash
 
-################################################################################
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
 #  distributed with this work for additional information
@@ -16,12 +15,12 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 # limitations under the License.
-################################################################################
 
+SCRIPT_PATH=$(cd `dirname $0`; pwd)
 # set up root directory
-WS_ROOT=`dirname $PWD`
+WS_ROOT=`dirname $SCRIPT_PATH`
 # shut down cluster
-HUDI_WS=${WS_ROOT} docker-compose -f compose/docker-compose_hadoop284_hive233_spark244.yml down
+HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/docker-compose_hadoop284_hive233_spark244.yml down
 
 # remove houst mount directory
 rm -rf /tmp/hadoop_data

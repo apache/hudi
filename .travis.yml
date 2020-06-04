@@ -37,3 +37,5 @@ script:
   # https://docs.travis-ci.com/user/common-build-problems/#Build-times-out-because-no-output-was-received
   - while sleep 9m; do echo "=====[ $SECONDS seconds still running ]====="; done &
   - scripts/run_travis_tests.sh $TEST_SUITE
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

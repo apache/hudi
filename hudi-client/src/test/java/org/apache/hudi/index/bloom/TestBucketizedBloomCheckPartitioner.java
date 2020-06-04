@@ -20,7 +20,7 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.util.collection.Pair;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.List;
@@ -28,8 +28,9 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestBucketizedBloomCheckPartitioner {
 
@@ -44,12 +45,12 @@ public class TestBucketizedBloomCheckPartitioner {
     };
     BucketizedBloomCheckPartitioner p = new BucketizedBloomCheckPartitioner(4, fileToComparisons, 10);
     Map<String, List<Integer>> assignments = p.getFileGroupToPartitions();
-    assertEquals("f1 should have 4 buckets", 4, assignments.get("f1").size());
-    assertEquals("f2 should have 4 buckets", 4, assignments.get("f2").size());
-    assertEquals("f3 should have 2 buckets", 2, assignments.get("f3").size());
-    assertArrayEquals("f1 spread across 3 partitions", new Integer[] {0, 0, 1, 3}, assignments.get("f1").toArray());
-    assertArrayEquals("f2 spread across 3 partitions", new Integer[] {1, 2, 2, 0}, assignments.get("f2").toArray());
-    assertArrayEquals("f3 spread across 2 partitions", new Integer[] {3, 1}, assignments.get("f3").toArray());
+    assertEquals(4, assignments.get("f1").size(), "f1 should have 4 buckets");
+    assertEquals(4, assignments.get("f2").size(), "f2 should have 4 buckets");
+    assertEquals(2, assignments.get("f3").size(), "f3 should have 2 buckets");
+    assertArrayEquals(new Integer[] {0, 0, 1, 3}, assignments.get("f1").toArray(), "f1 spread across 3 partitions");
+    assertArrayEquals(new Integer[] {1, 2, 2, 0}, assignments.get("f2").toArray(), "f2 spread across 3 partitions");
+    assertArrayEquals(new Integer[] {3, 1}, assignments.get("f3").toArray(), "f3 spread across 2 partitions");
   }
 
   @Test
@@ -62,11 +63,11 @@ public class TestBucketizedBloomCheckPartitioner {
     };
     BucketizedBloomCheckPartitioner partitioner = new BucketizedBloomCheckPartitioner(100, comparisons1, 10);
     Map<String, List<Integer>> assignments = partitioner.getFileGroupToPartitions();
-    assignments.entrySet().stream().forEach(e -> assertEquals(10, e.getValue().size()));
+    assignments.forEach((key, value) -> assertEquals(10, value.size()));
     Map<Integer, Long> partitionToNumBuckets =
         assignments.entrySet().stream().flatMap(e -> e.getValue().stream().map(p -> Pair.of(p, e.getKey())))
             .collect(Collectors.groupingBy(Pair::getLeft, Collectors.counting()));
-    partitionToNumBuckets.entrySet().stream().forEach(e -> assertEquals(1L, e.getValue().longValue()));
+    partitionToNumBuckets.forEach((key, value) -> assertEquals(1L, value.longValue()));
   }
 
   @Test
@@ -77,6 +78,22 @@ public class TestBucketizedBloomCheckPartitioner {
       }
     };
     BucketizedBloomCheckPartitioner p = new BucketizedBloomCheckPartitioner(10000, comparisons1, 10);
-    assertEquals("num partitions must equal total buckets", 100, p.numPartitions());
+    assertEquals(100, p.numPartitions(), "num partitions must equal total buckets");
   }
+
+  @Test
+  public void testGetPartitions() {
+    Map<String, Long> comparisons1 = new HashMap<String, Long>() {
+      {
+        IntStream.range(0, 100000).forEach(f -> put("f" + f, 100L));
+      }
+    };
+    BucketizedBloomCheckPartitioner p = new BucketizedBloomCheckPartitioner(1000, comparisons1, 10);
+
+    IntStream.range(0, 100000).forEach(f -> {
+      int partition = p.getPartition(Pair.of("f" + f, "value"));
+      assertTrue(0 <= partition && partition <= 1000, "partition is out of range: " + partition);
+    });
+  }
+
 }

@@ -35,11 +35,10 @@ public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload> implements
 
   private static final Logger LOG = LogManager.getLogger(HoodieRecordSizeEstimator.class);
 
-  // Schema used to get GenericRecord from HoodieRecordPayload then convert to bytes and vice-versa
-  private final Schema schema;
+  private final long sizeOfSchema;
 
   public HoodieRecordSizeEstimator(Schema schema) {
-    this.schema = schema;
+    sizeOfSchema = ObjectSizeCalculator.getObjectSize(schema);
   }
 
   @Override
@@ -49,8 +48,9 @@ public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload> implements
     // note the sizes and differences. A correct estimation in such cases is handled in
     /** {@link ExternalSpillableMap} **/
     long sizeOfRecord = ObjectSizeCalculator.getObjectSize(hoodieRecord);
-    long sizeOfSchema = ObjectSizeCalculator.getObjectSize(schema);
-    LOG.info("SizeOfRecord => " + sizeOfRecord + " SizeOfSchema => " + sizeOfSchema);
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("SizeOfRecord => " + sizeOfRecord + " SizeOfSchema => " + sizeOfSchema);
+    }
     return sizeOfRecord;
   }
 }

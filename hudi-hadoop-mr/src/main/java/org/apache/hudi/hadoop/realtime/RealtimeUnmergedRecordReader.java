@@ -18,9 +18,18 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
@@ -28,17 +37,6 @@ import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.hadoop.RecordReaderValueIterator;
 import org.apache.hudi.hadoop.SafeParquetRecordReaderWrapper;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
 
 class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
     implements RecordReader<NullWritable, ArrayWritable> {
@@ -77,15 +75,14 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
     // Consumer of this record reader
     this.iterator = this.executor.getQueue().iterator();
     this.logRecordScanner = new HoodieUnMergedLogRecordScanner(FSUtils.getFs(split.getPath().toString(), jobConf),
-        split.getBasePath(), split.getDeltaFilePaths(), getReaderSchema(), split.getMaxCommitTime(),
-        Boolean
-            .valueOf(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
+        split.getBasePath(), split.getDeltaLogPaths(), getReaderSchema(), split.getMaxCommitTime(),
+        Boolean.parseBoolean(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
         false, jobConf.getInt(MAX_DFS_STREAM_BUFFER_SIZE_PROP, DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE), record -> {
           // convert Hoodie log record to Hadoop AvroWritable and buffer
           GenericRecord rec = (GenericRecord) record.getData().getInsertValue(getReaderSchema()).get();
           ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(rec, getWriterSchema());
           this.executor.getQueue().insertRecord(aWritable);
-        });
+    });
     // Start reading and buffering
     this.executor.startProducers();
   }
@@ -93,7 +90,6 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
   /**
    * Setup log and parquet reading in parallel. Both write to central buffer.
    */
-  @SuppressWarnings("unchecked")
   private List<BoundedInMemoryQueueProducer<ArrayWritable>> getParallelProducers() {
     List<BoundedInMemoryQueueProducer<ArrayWritable>> producers = new ArrayList<>();
     producers.add(new FunctionBasedQueueProducer<>(buffer -> {
@@ -105,7 +101,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
   }
 
   @Override
-  public boolean next(NullWritable key, ArrayWritable value) throws IOException {
+  public boolean next(NullWritable key, ArrayWritable value) {
     if (!iterator.hasNext()) {
       return false;
     }
@@ -125,7 +121,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
   }
 
   @Override
-  public long getPos() throws IOException {
+  public long getPos() {
     // TODO: vb - No logical way to represent parallel stream pos in a single long.
     // Should we just return invalid (-1). Where is it used ?
     return 0;

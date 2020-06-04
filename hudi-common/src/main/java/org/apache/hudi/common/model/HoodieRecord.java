@@ -18,28 +18,27 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-
-import com.google.common.base.Objects;
-import com.google.common.collect.ImmutableList;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * A Single Record managed by Hoodie.
  */
 public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable {
 
-  public static String COMMIT_TIME_METADATA_FIELD = "_hoodie_commit_time";
-  public static String COMMIT_SEQNO_METADATA_FIELD = "_hoodie_commit_seqno";
-  public static String RECORD_KEY_METADATA_FIELD = "_hoodie_record_key";
-  public static String PARTITION_PATH_METADATA_FIELD = "_hoodie_partition_path";
-  public static String FILENAME_METADATA_FIELD = "_hoodie_file_name";
+  public static final String COMMIT_TIME_METADATA_FIELD = "_hoodie_commit_time";
+  public static final String COMMIT_SEQNO_METADATA_FIELD = "_hoodie_commit_seqno";
+  public static final String RECORD_KEY_METADATA_FIELD = "_hoodie_record_key";
+  public static final String PARTITION_PATH_METADATA_FIELD = "_hoodie_partition_path";
+  public static final String FILENAME_METADATA_FIELD = "_hoodie_file_name";
 
   public static final List<String> HOODIE_META_COLUMNS =
-      new ImmutableList.Builder<String>().add(COMMIT_TIME_METADATA_FIELD).add(COMMIT_SEQNO_METADATA_FIELD)
-          .add(RECORD_KEY_METADATA_FIELD).add(PARTITION_PATH_METADATA_FIELD).add(FILENAME_METADATA_FIELD).build();
+      CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
+          RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD);
 
   /**
    * Identifies the record across the table.
@@ -141,13 +140,13 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
       return false;
     }
     HoodieRecord that = (HoodieRecord) o;
-    return Objects.equal(key, that.key) && Objects.equal(data, that.data)
-        && Objects.equal(currentLocation, that.currentLocation) && Objects.equal(newLocation, that.newLocation);
+    return Objects.equals(key, that.key) && Objects.equals(data, that.data)
+        && Objects.equals(currentLocation, that.currentLocation) && Objects.equals(newLocation, that.newLocation);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(key, data, currentLocation, newLocation);
+    return Objects.hash(key, data, currentLocation, newLocation);
   }
 
   @Override
@@ -160,8 +159,8 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
     return sb.toString();
   }
 
-  public static String generateSequenceId(String commitTime, int partitionId, long recordIndex) {
-    return commitTime + "_" + partitionId + "_" + recordIndex;
+  public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
+    return instantTime + "_" + partitionId + "_" + recordIndex;
   }
 
   public String getPartitionPath() {

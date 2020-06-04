@@ -23,6 +23,14 @@ import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
 public class HoodieHiveUtil {
 
   public static final Logger LOG = LogManager.getLogger(HoodieHiveUtil.class);
@@ -30,12 +38,37 @@ public class HoodieHiveUtil {
   public static final String HOODIE_CONSUME_MODE_PATTERN = "hoodie.%s.consume.mode";
   public static final String HOODIE_START_COMMIT_PATTERN = "hoodie.%s.consume.start.timestamp";
   public static final String HOODIE_MAX_COMMIT_PATTERN = "hoodie.%s.consume.max.commits";
+  /*
+   * Boolean property to stop incremental reader when there is a pending compaction.
+   * This is needed to prevent certain race conditions with RO views of MOR tables. only applicable for RO views.
+   *
+   * example timeline:
+   *
+   * t0 -> create bucket1.parquet
+   * t1 -> create and append updates bucket1.log
+   * t2 -> request compaction
+   * t3 -> create bucket2.parquet
+   *
+   * if compaction at t2 takes a long time, incremental readers on RO tables can move to t3 and would skip updates in t1
+   *
+   * To workaround this problem, we want to stop returning data belonging to commits > t2.
+   * After compaction is complete, incremental reader would see updates in t2, t3, so on.
+   */
+  public static final String HOODIE_STOP_AT_COMPACTION_PATTERN = "hoodie.%s.ro.stop.at.compaction";
   public static final String INCREMENTAL_SCAN_MODE = "INCREMENTAL";
-  public static final String LATEST_SCAN_MODE = "LATEST";
-  public static final String DEFAULT_SCAN_MODE = LATEST_SCAN_MODE;
+  public static final String SNAPSHOT_SCAN_MODE = "SNAPSHOT";
+  public static final String DEFAULT_SCAN_MODE = SNAPSHOT_SCAN_MODE;
   public static final int DEFAULT_MAX_COMMITS = 1;
   public static final int MAX_COMMIT_ALL = -1;
   public static final int DEFAULT_LEVELS_TO_BASEPATH = 3;
+  public static final Pattern HOODIE_CONSUME_MODE_PATTERN_STRING = Pattern.compile("hoodie\\.(.*)\\.consume\\.mode");
+
+  public static boolean stopAtCompaction(JobContext job, String tableName) {
+    String compactionPropName = String.format(HOODIE_STOP_AT_COMPACTION_PATTERN, tableName);
+    boolean stopAtCompaction = job.getConfiguration().getBoolean(compactionPropName, true);
+    LOG.info("Read stop at compaction - " + stopAtCompaction);
+    return stopAtCompaction;
+  }
 
   public static Integer readMaxCommits(JobContext job, String tableName) {
     String maxCommitName = String.format(HOODIE_MAX_COMMIT_PATTERN, tableName);
@@ -53,18 +86,28 @@ public class HoodieHiveUtil {
     return job.getConfiguration().get(startCommitTimestampName);
   }
 
-  public static String readMode(JobContext job, String tableName) {
-    String modePropertyName = String.format(HOODIE_CONSUME_MODE_PATTERN, tableName);
-    String mode = job.getConfiguration().get(modePropertyName, DEFAULT_SCAN_MODE);
-    LOG.info(modePropertyName + ": " + mode);
-    return mode;
-  }
-
   public static Path getNthParent(Path path, int n) {
     Path parent = path;
     for (int i = 0; i < n; i++) {
       parent = parent.getParent();
     }
     return parent;
+  }
+
+  public static List<String> getIncrementalTableNames(JobContext job) {
+    Map<String, String> tablesModeMap = job.getConfiguration()
+        .getValByRegex(HOODIE_CONSUME_MODE_PATTERN_STRING.pattern());
+    List<String> result = tablesModeMap.entrySet().stream().map(s -> {
+      if (s.getValue().trim().equals(INCREMENTAL_SCAN_MODE)) {
+        Matcher matcher = HOODIE_CONSUME_MODE_PATTERN_STRING.matcher(s.getKey());
+        return (!matcher.find() ? null : matcher.group(1));
+      }
+      return null;
+    }).filter(Objects::nonNull).collect(Collectors.toList());
+    if (result == null) {
+      // Returns an empty list instead of null.
+      result = new ArrayList<>();
+    }
+    return result;
   }
 }

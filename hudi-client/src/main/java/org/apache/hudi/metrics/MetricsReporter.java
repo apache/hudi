@@ -36,4 +36,9 @@ public abstract class MetricsReporter {
   public abstract void report();
 
   public abstract Closeable getReporter();
+
+  /**
+   * Stop this reporter. Should be used to stop channels, streams and release resources.
+   */
+  public abstract void stop();
 }

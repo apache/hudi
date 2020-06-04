@@ -28,7 +28,7 @@ import java.io.Serializable;
 import java.util.Map;
 
 /**
- * Every Hoodie dataset has an implementation of the <code>HoodieRecordPayload</code> This abstracts out callbacks which
+ * Every Hoodie table has an implementation of the <code>HoodieRecordPayload</code> This abstracts out callbacks which
  * depend on record specific logic.
  */
 public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Serializable {

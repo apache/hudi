@@ -19,10 +19,10 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.SyncableFileSystemView;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
 import java.io.IOException;
+import java.nio.file.Files;
 
 /**
  * Tests rocks db based incremental file system view sync {@link RocksDbBasedFileSystemView}.
@@ -32,7 +32,8 @@ public class TestRocksDBBasedIncrementalFSViewSync extends TestIncrementalFSView
   @Override
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline)
       throws IOException {
+    String subdirPath = Files.createTempDirectory(tempDir, null).toAbsolutePath().toString();
     return new RocksDbBasedFileSystemView(metaClient, timeline, FileSystemViewStorageConfig.newBuilder()
-        .withRocksDBPath(folder.newFolder().getAbsolutePath()).withIncrementalTimelineSync(true).build());
+        .withRocksDBPath(subdirPath).withIncrementalTimelineSync(true).build());
   }
 }

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities.transform;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.payload.AWSDmsAvroPayload;
 
 import org.apache.spark.api.java.JavaSparkContext;

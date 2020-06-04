@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
@@ -82,11 +82,11 @@ public class HoodieFileGroup implements Serializable {
   /**
    * Add a new datafile into the file group.
    */
-  public void addDataFile(HoodieDataFile dataFile) {
+  public void addBaseFile(HoodieBaseFile dataFile) {
     if (!fileSlices.containsKey(dataFile.getCommitTime())) {
       fileSlices.put(dataFile.getCommitTime(), new FileSlice(fileGroupId, dataFile.getCommitTime()));
     }
-    fileSlices.get(dataFile.getCommitTime()).setDataFile(dataFile);
+    fileSlices.get(dataFile.getCommitTime()).setBaseFile(dataFile);
   }
 
   /**
@@ -114,7 +114,7 @@ public class HoodieFileGroup implements Serializable {
   private boolean isFileSliceCommitted(FileSlice slice) {
     String maxCommitTime = lastInstant.get().getTimestamp();
     return timeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime())
-        && HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(), maxCommitTime, HoodieTimeline.LESSER_OR_EQUAL);
+        && HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, maxCommitTime);
 
   }
 
@@ -155,27 +155,27 @@ public class HoodieFileGroup implements Serializable {
   /**
    * Gets the latest data file.
    */
-  public Option<HoodieDataFile> getLatestDataFile() {
-    return Option.fromJavaOptional(getAllDataFiles().findFirst());
+  public Option<HoodieBaseFile> getLatestDataFile() {
+    return Option.fromJavaOptional(getAllBaseFiles().findFirst());
   }
 
   /**
-   * Obtain the latest file slice, upto a commitTime i.e <= maxCommitTime.
+   * Obtain the latest file slice, upto a instantTime i.e <= maxInstantTime.
    */
-  public Option<FileSlice> getLatestFileSliceBeforeOrOn(String maxCommitTime) {
+  public Option<FileSlice> getLatestFileSliceBeforeOrOn(String maxInstantTime) {
     return Option.fromJavaOptional(getAllFileSlices().filter(slice -> HoodieTimeline
-        .compareTimestamps(slice.getBaseInstantTime(), maxCommitTime, HoodieTimeline.LESSER_OR_EQUAL)).findFirst());
+        .compareTimestamps(slice.getBaseInstantTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, maxInstantTime)).findFirst());
   }
 
   /**
-   * Obtain the latest file slice, upto a commitTime i.e < maxInstantTime.
+   * Obtain the latest file slice, upto an instantTime i.e < maxInstantTime.
    * 
    * @param maxInstantTime Max Instant Time
    * @return
    */
   public Option<FileSlice> getLatestFileSliceBefore(String maxInstantTime) {
     return Option.fromJavaOptional(getAllFileSlices().filter(
-        slice -> HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(), maxInstantTime, HoodieTimeline.LESSER))
+        slice -> HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(), HoodieTimeline.LESSER_THAN, maxInstantTime))
         .findFirst());
   }
 
@@ -187,8 +187,8 @@ public class HoodieFileGroup implements Serializable {
   /**
    * Stream of committed data files, sorted reverse commit time.
    */
-  public Stream<HoodieDataFile> getAllDataFiles() {
-    return getAllFileSlices().filter(slice -> slice.getDataFile().isPresent()).map(slice -> slice.getDataFile().get());
+  public Stream<HoodieBaseFile> getAllBaseFiles() {
+    return getAllFileSlices().filter(slice -> slice.getBaseFile().isPresent()).map(slice -> slice.getBaseFile().get());
   }
 
   @Override

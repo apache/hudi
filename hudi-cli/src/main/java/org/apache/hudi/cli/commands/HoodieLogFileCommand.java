@@ -20,11 +20,13 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -36,10 +38,8 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
-import org.apache.hudi.hive.util.SchemaUtil;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.Maps;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileStatus;
@@ -54,9 +54,11 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -83,15 +85,14 @@ public class HoodieLogFileCommand implements CommandMarker {
     List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(logFilePathPattern)))
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
     Map<String, List<Tuple3<HoodieLogBlockType, Tuple2<Map<HeaderMetadataType, String>, Map<HeaderMetadataType, String>>, Integer>>> commitCountAndMetadata =
-        Maps.newHashMap();
-    int totalEntries = 0;
+        new HashMap<>();
     int numCorruptBlocks = 0;
     int dummyInstantTimeCount = 0;
 
     for (String logFilePath : logFilePaths) {
       FileStatus[] fsStatus = fs.listStatus(new Path(logFilePath));
       Schema writerSchema = new AvroSchemaConverter()
-          .convert(SchemaUtil.readSchemaFromLogFile(fs, new Path(logFilePath)));
+          .convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePath))));
       Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(fsStatus[0].getPath()), writerSchema);
 
       // read the avro blocks
@@ -124,24 +125,21 @@ public class HoodieLogFileCommand implements CommandMarker {
         if (commitCountAndMetadata.containsKey(instantTime)) {
           commitCountAndMetadata.get(instantTime).add(
               new Tuple3<>(n.getBlockType(), new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount));
-          totalEntries++;
         } else {
           List<Tuple3<HoodieLogBlockType, Tuple2<Map<HeaderMetadataType, String>, Map<HeaderMetadataType, String>>, Integer>> list =
               new ArrayList<>();
           list.add(
               new Tuple3<>(n.getBlockType(), new Tuple2<>(n.getLogBlockHeader(), n.getLogBlockFooter()), recordCount));
           commitCountAndMetadata.put(instantTime, list);
-          totalEntries++;
         }
       }
       reader.close();
     }
     List<Comparable[]> rows = new ArrayList<>();
-    int i = 0;
     ObjectMapper objectMapper = new ObjectMapper();
     for (Map.Entry<String, List<Tuple3<HoodieLogBlockType, Tuple2<Map<HeaderMetadataType, String>, Map<HeaderMetadataType, String>>, Integer>>> entry : commitCountAndMetadata
         .entrySet()) {
-      String instantTime = entry.getKey().toString();
+      String instantTime = entry.getKey();
       for (Tuple3<HoodieLogBlockType, Tuple2<Map<HeaderMetadataType, String>, Map<HeaderMetadataType, String>>, Integer> tuple3 : entry
           .getValue()) {
         Comparable[] output = new Comparable[5];
@@ -151,23 +149,25 @@ public class HoodieLogFileCommand implements CommandMarker {
         output[3] = objectMapper.writeValueAsString(tuple3._2()._1());
         output[4] = objectMapper.writeValueAsString(tuple3._2()._2());
         rows.add(output);
-        i++;
       }
     }
 
-    TableHeader header = new TableHeader().addTableHeaderField("InstantTime").addTableHeaderField("RecordCount")
-        .addTableHeaderField("BlockType").addTableHeaderField("HeaderMetadata").addTableHeaderField("FooterMetadata");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT_TIME)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_RECORD_COUNT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_BLOCK_TYPE)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_HEADER_METADATA)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_FOOTER_METADATA);
 
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
   @CliCommand(value = "show logfile records", help = "Read records from log files")
   public String showLogFileRecords(
-      @CliOption(key = {"limit"}, mandatory = false, help = "Limit commits",
+      @CliOption(key = {"limit"}, help = "Limit commits",
           unspecifiedDefaultValue = "10") final Integer limit,
       @CliOption(key = "logFilePathPattern", mandatory = true,
           help = "Fully qualified paths for the log files") final String logFilePathPattern,
-      @CliOption(key = "mergeRecords", mandatory = false, help = "If the records in the log files should be merged",
+      @CliOption(key = "mergeRecords", help = "If the records in the log files should be merged",
           unspecifiedDefaultValue = "false") final Boolean shouldMerge)
       throws IOException {
 
@@ -176,13 +176,17 @@ public class HoodieLogFileCommand implements CommandMarker {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     FileSystem fs = client.getFs();
     List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(logFilePathPattern)))
-        .map(status -> status.getPath().toString()).collect(Collectors.toList());
+        .map(status -> status.getPath().toString()).sorted(Comparator.reverseOrder())
+        .collect(Collectors.toList());
+
+    // logFilePaths size must > 1
+    assert logFilePaths.size() > 0 : "There is no log file";
 
     // TODO : readerSchema can change across blocks/log files, fix this inside Scanner
     AvroSchemaConverter converter = new AvroSchemaConverter();
     // get schema from last log file
     Schema readerSchema =
-        converter.convert(SchemaUtil.readSchemaFromLogFile(fs, new Path(logFilePaths.get(logFilePaths.size() - 1))));
+        converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePaths.get(logFilePaths.size() - 1)))));
 
     List<IndexedRecord> allRecords = new ArrayList<>();
 
@@ -191,22 +195,21 @@ public class HoodieLogFileCommand implements CommandMarker {
       HoodieMergedLogRecordScanner scanner =
           new HoodieMergedLogRecordScanner(fs, client.getBasePath(), logFilePaths, readerSchema,
               client.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp(),
-              Long.valueOf(HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES),
-              Boolean.valueOf(HoodieCompactionConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED),
-              Boolean.valueOf(HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED),
-              Integer.valueOf(HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
-              HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
+                  HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES,
+                  Boolean.parseBoolean(HoodieCompactionConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED),
+                  Boolean.parseBoolean(HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED),
+                  HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE,
+                  HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
       for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : scanner) {
         Option<IndexedRecord> record = hoodieRecord.getData().getInsertValue(readerSchema);
-        if (allRecords.size() >= limit) {
-          break;
+        if (allRecords.size() < limit) {
+          allRecords.add(record.get());
         }
-        allRecords.add(record.get());
       }
     } else {
       for (String logFile : logFilePaths) {
         Schema writerSchema = new AvroSchemaConverter()
-            .convert(SchemaUtil.readSchemaFromLogFile(client.getFs(), new Path(logFile)));
+            .convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(client.getFs(), new Path(logFile))));
         HoodieLogFormat.Reader reader =
             HoodieLogFormat.newReader(fs, new HoodieLogFile(new Path(logFile)), writerSchema);
         // read the avro blocks
@@ -215,9 +218,10 @@ public class HoodieLogFileCommand implements CommandMarker {
           if (n instanceof HoodieAvroDataBlock) {
             HoodieAvroDataBlock blk = (HoodieAvroDataBlock) n;
             List<IndexedRecord> records = blk.getRecords();
-            allRecords.addAll(records);
-            if (allRecords.size() >= limit) {
-              break;
+            for (IndexedRecord record : records) {
+              if (allRecords.size() < limit) {
+                allRecords.add(record);
+              }
             }
           }
         }
@@ -235,6 +239,6 @@ public class HoodieLogFileCommand implements CommandMarker {
       rows[i] = data;
       i++;
     }
-    return HoodiePrintHelper.print(new String[] {"Records"}, rows);
+    return HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_RECORDS}, rows);
   }
 }

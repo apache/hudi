@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.embedded;
 
-import org.apache.hudi.common.SerializableConfiguration;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -89,7 +89,9 @@ public class EmbeddedTimelineService {
    * Retrieves proper view storage configs for remote clients to access this service.
    */
   public FileSystemViewStorageConfig getRemoteFileSystemViewConfig() {
-    return FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.REMOTE_FIRST)
+    FileSystemViewStorageType viewStorageType = config.shouldEnableBackupForRemoteFileSystemView()
+            ? FileSystemViewStorageType.REMOTE_FIRST : FileSystemViewStorageType.REMOTE_ONLY;
+    return FileSystemViewStorageConfig.newBuilder().withStorageType(viewStorageType)
         .withRemoteServerHost(hostAddr).withRemoteServerPort(serverPort).build();
   }
 

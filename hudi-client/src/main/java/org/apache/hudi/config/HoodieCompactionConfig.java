@@ -18,12 +18,12 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.io.compact.strategy.CompactionStrategy;
-import org.apache.hudi.io.compact.strategy.LogFileSizeBasedCompactionStrategy;
-
-import com.google.common.base.Preconditions;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -82,7 +82,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   // 200GB of target IO per compaction
   public static final String DEFAULT_COMPACTION_STRATEGY = LogFileSizeBasedCompactionStrategy.class.getName();
   // used to merge records written to log file
-  public static final String DEFAULT_PAYLOAD_CLASS = HoodieAvroPayload.class.getName();
+  public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
   public static final String PAYLOAD_CLASS_PROP = "hoodie.compaction.payload.class";
 
   // used to choose a trade off between IO vs Memory when performing compaction process
@@ -96,7 +96,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_CLEANER_POLICY = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
   private static final String DEFAULT_AUTO_CLEAN = "true";
   private static final String DEFAULT_INLINE_COMPACT = "false";
-  private static final String DEFAULT_INCREMENTAL_CLEANER = "false";
+  private static final String DEFAULT_INCREMENTAL_CLEANER = "true";
   private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "1";
   private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
   private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "10";
@@ -121,12 +121,9 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
     private final Properties props = new Properties();
 
     public Builder fromFile(File propertiesFile) throws IOException {
-      FileReader reader = new FileReader(propertiesFile);
-      try {
+      try (FileReader reader = new FileReader(propertiesFile)) {
         this.props.load(reader);
         return this;
-      } finally {
-        reader.close();
       }
     }
 
@@ -147,11 +144,6 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
     public Builder withInlineCompaction(Boolean inlineCompaction) {
       props.setProperty(INLINE_COMPACT_PROP, String.valueOf(inlineCompaction));
-      return this;
-    }
-
-    public Builder inlineCompactionEvery(int deltaCommits) {
-      props.setProperty(INLINE_COMPACT_PROP, String.valueOf(deltaCommits));
       return this;
     }
 
@@ -292,8 +284,12 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       int maxInstantsToKeep = Integer.parseInt(props.getProperty(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP));
       int cleanerCommitsRetained =
           Integer.parseInt(props.getProperty(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP));
-      Preconditions.checkArgument(maxInstantsToKeep > minInstantsToKeep);
-      Preconditions.checkArgument(minInstantsToKeep > cleanerCommitsRetained,
+      ValidationUtils.checkArgument(maxInstantsToKeep > minInstantsToKeep,
+          String.format(
+              "Increase %s=%d to be greater than %s=%d.",
+              HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP, maxInstantsToKeep,
+              HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP, minInstantsToKeep));
+      ValidationUtils.checkArgument(minInstantsToKeep > cleanerCommitsRetained,
           String.format(
               "Increase %s=%d to be greater than %s=%d. Otherwise, there is risk of incremental pull "
                   + "missing data from few instants.",
