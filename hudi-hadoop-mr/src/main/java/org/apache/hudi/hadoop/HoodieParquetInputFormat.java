@@ -37,7 +37,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
-import org.apache.hadoop.hive.ql.metadata.VirtualColumn;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -63,6 +62,7 @@ import java.util.stream.IntStream;
  * that does not correspond to a hoodie table then they are passed in as is (as what FileInputFormat.listStatus()
  * would do). The JobConf could have paths from multipe Hoodie/Non-Hoodie tables
  */
+@UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
 public class HoodieParquetInputFormat extends MapredParquetInputFormat implements Configurable {
 
@@ -179,7 +179,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     // clearOutExistingPredicate(job);
     // }
     if (split instanceof BootstrapBaseFileSplit) {
-      BootstrapBaseFileSplit eSplit = (BootstrapBaseFileSplit)split;
+      BootstrapBaseFileSplit eSplit = (BootstrapBaseFileSplit) split;
       String[] rawColNames = HoodieColumnProjectionUtils.getReadColumnNames(job);
       List<Integer> rawColIds = HoodieColumnProjectionUtils.getReadColumnIDs(job);
       List<Pair<Integer, String>> projectedColsWithIndex =
@@ -191,7 +191,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
           .collect(Collectors.toList());
       List<Pair<Integer, String>> externalColsProjected = projectedColsWithIndex.stream()
           .filter(idxWithName -> !HoodieRecord.HOODIE_META_COLUMNS.contains(idxWithName.getValue())
-              && !VirtualColumn.VIRTUAL_COLUMN_NAMES.contains(idxWithName.getValue()))
+              && !HoodieHiveUtils.VIRTUAL_COLUMN_NAMES.contains(idxWithName.getValue()))
           .collect(Collectors.toList());
 
       // This always matches hive table description
