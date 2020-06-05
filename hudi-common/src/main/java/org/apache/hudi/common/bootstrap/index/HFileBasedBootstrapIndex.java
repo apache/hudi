@@ -111,13 +111,13 @@ public class HFileBasedBootstrapIndex extends BootstrapIndex {
   }
 
   private static Path getIndexByPartitionPath(HoodieTableMetaClient metaClient) {
-    return new Path(metaClient.getBootstrapIndexByPartitionFolderName(),
+    return new Path(metaClient.getBootstrapIndexByPartitionFolderPath(),
         FSUtils.makeBootstrapIndexFileName(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, BOOTSTRAP_INDEX_FILE_ID,
             BOOTSTRAP_INDEX_FILE_TYPE));
   }
 
   private static Path getIndexByFileIdPath(HoodieTableMetaClient metaClient) {
-    return new Path(metaClient.getBootstrapIndexByFileIdFolderNameFolderName(),
+    return new Path(metaClient.getBootstrapIndexByFileIdFolderNameFolderPath(),
         FSUtils.makeBootstrapIndexFileName(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, BOOTSTRAP_INDEX_FILE_ID,
             BOOTSTRAP_INDEX_FILE_TYPE));
   }

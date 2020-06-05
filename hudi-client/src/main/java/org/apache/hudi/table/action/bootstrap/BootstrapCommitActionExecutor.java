@@ -94,6 +94,7 @@ public class BootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
 
   private static final Logger LOG = LogManager.getLogger(BootstrapCommitActionExecutor.class);
   protected String bootstrapSchema = null;
+  private transient FileSystem bootstrapSourceFileSystem;
 
   public BootstrapCommitActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable<?> table,
       Option<Map<String, String>> extraMetadata) {
@@ -102,6 +103,7 @@ public class BootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
         .withBulkInsertParallelism(config.getBootstrapParallelism())
         .build(), table, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, WriteOperationType.BOOTSTRAP,
         extraMetadata);
+    bootstrapSourceFileSystem = FSUtils.getFs(config.getBootstrapSourceBasePath(), hadoopConf);
   }
 
   private void checkArguments() {
@@ -285,7 +287,7 @@ public class BootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
       HoodieTableMetaClient metaClient) throws IOException {
     FileSystem fs = new Path(config.getBootstrapSourceBasePath()).getFileSystem(jsc.hadoopConfiguration());
     List<Pair<String, List<HoodieFileStatus>>> folders =
-        FSUtils.getAllLeafFoldersWithFiles(fs,
+        FSUtils.getAllLeafFoldersWithFiles(bootstrapSourceFileSystem,
             config.getBootstrapSourceBasePath(), new PathFilter() {
               @Override
               public boolean accept(Path path) {

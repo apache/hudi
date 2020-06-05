@@ -73,10 +73,10 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String METAFOLDER_NAME = ".hoodie";
   public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
   public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
-  public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_NAME = AUXILIARYFOLDER_NAME + File.separator + ".bootstrap";
-  public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_NAME = BOOTSTRAP_INDEX_ROOT_FOLDER_NAME + File.separator
-      + ".partitions";
-  public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_NAME = BOOTSTRAP_INDEX_ROOT_FOLDER_NAME + File.separator
+  public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + File.separator + ".bootstrap";
+  public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH
+      + File.separator + ".partitions";
+  public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH + File.separator
       + ".fileids";
 
   public static final String MARKER_EXTN = ".marker";
@@ -216,15 +216,15 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * @return Bootstrap Index By Partition Folder
    */
-  public String getBootstrapIndexByPartitionFolderName() {
-    return getMetaAuxiliaryPath() + File.separator + BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_NAME;
+  public String getBootstrapIndexByPartitionFolderPath() {
+    return basePath + File.separator + BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH;
   }
 
   /**
    * @return Bootstrap Index By Hudi File Id Folder
    */
-  public String getBootstrapIndexByFileIdFolderNameFolderName() {
-    return getMetaAuxiliaryPath() + File.separator + BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_NAME;
+  public String getBootstrapIndexByFileIdFolderNameFolderPath() {
+    return basePath + File.separator + BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH;
   }
 
   /**
@@ -414,7 +414,7 @@ public class HoodieTableMetaClient implements Serializable {
 
     // Create bootstrap index by partition folder if it does not exist
     final Path bootstrap_index_folder_by_partition =
-        new Path(basePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_NAME);
+        new Path(basePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH);
     if (!fs.exists(bootstrap_index_folder_by_partition)) {
       fs.mkdirs(bootstrap_index_folder_by_partition);
     }
@@ -422,7 +422,7 @@ public class HoodieTableMetaClient implements Serializable {
 
     // Create bootstrap index by partition folder if it does not exist
     final Path bootstrap_index_folder_by_fileids =
-        new Path(basePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_NAME);
+        new Path(basePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH);
     if (!fs.exists(bootstrap_index_folder_by_fileids)) {
       fs.mkdirs(bootstrap_index_folder_by_fileids);
     }
