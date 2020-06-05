@@ -1,0 +1,51 @@
+name: web sync
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.comment.body == 'sync testing site' }}
+
+    steps:
+      - name: clone repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: fetch pull request branch
+        run: |
+          git fetch origin +refs/pull/${{ github.event.issue.number }}/merge
+          git checkout FETCH_HEAD
+
+          siteRef=`git show-ref --hash --verify refs/remotes/origin/asf-site`
+          pullRef=`git log -1 --pretty=format:"%P" -1`
+          if [[ $pullRef =~ $siteRef ]]
+          then
+              exit 0;
+          else
+              exit -1;
+          fi
+
+      - name: jekyll docker build
+        run: |
+          docker run \
+          --privileged=true \
+          -v ${{ github.workspace }}/docs:/srv/jekyll/docs \
+          -v ${{ github.workspace }}/_site:/srv/jekyll/docs/_site \
+          jekyll/jekyll:3.8 \
+          /bin/bash -c "chmod 777 -R /srv/jekyll && cd /srv/jekyll/docs && gem sources -l && bundle install && bundle exec jekyll build --config _config.yml,_config.testing.yml"
+
+      - name: push test site
+        run: |
+          git clone https://${{ secrets.HUDI_GITHUB_WEB_TOKEN }}@github.com/ApacheHudi/hudi-testing-site
+          cd hudi-testing-site
+          mkdir -p docs
+          \cp -rf ../_site/* docs
+          git config user.name webbot
+          git config user.email webbot@hudi.apache.org
+          git add -A
+          git commit -am "push site"
+          git push origin master --force
