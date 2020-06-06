@@ -22,11 +22,14 @@ import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
@@ -34,6 +37,8 @@ import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.HoodieTable;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.slf4j.Logger;
@@ -60,7 +65,10 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient ExecutorService executorService;
   protected transient HoodieTableMetaClient metaClient;
   private static AtomicInteger instantGen = new AtomicInteger(1);
-  protected transient HoodieWriteClient client;
+  protected transient HoodieWriteClient writeClient;
+  protected transient HoodieReadClient readClient;
+  protected transient HoodieTableFileSystemView tableView;
+  protected transient HoodieTable hoodieTable;
 
   protected final SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
 
@@ -93,6 +101,9 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     cleanupSparkContexts();
     cleanupTestDataGenerator();
     cleanupFileSystem();
+    cleanupDFS();
+    cleanupExecutorService();
+    System.gc();
   }
 
   /**
@@ -163,6 +174,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     if (fs != null) {
       LOG.warn("Closing file-system instance used in previous test-run");
       fs.close();
+      fs = null;
     }
   }
 
@@ -185,13 +197,22 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   /**
-   * Cleanups table type.
+   * Cleanups hoodie clients.
    */
-  protected void cleanupClients() {
-    metaClient = null;
-    if (null != client) {
-      client.close();
-      client = null;
+  protected void cleanupClients() throws IOException {
+    if (metaClient != null) {
+      metaClient = null;
+    }
+    if (readClient != null) {
+      readClient = null;
+    }
+    if (writeClient != null) {
+      writeClient.close();
+      writeClient = null;
+    }
+    if (tableView != null) {
+      tableView.close();
+      tableView = null;
     }
   }
 
@@ -208,7 +229,9 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    *
    */
   protected void cleanupTestDataGenerator() {
-    dataGen = null;
+    if (dataGen != null) {
+      dataGen = null;
+    }
   }
 
   /**
@@ -288,16 +311,32 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   public HoodieReadClient getHoodieReadClient(String basePath) {
-    return new HoodieReadClient(jsc, basePath, SQLContext.getOrCreate(jsc.sc()));
+    readClient = new HoodieReadClient(jsc, basePath, SQLContext.getOrCreate(jsc.sc()));
+    return readClient;
   }
 
   public HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit,
       HoodieIndex index) {
-    if (null != client) {
-      client.close();
-      client = null;
+    if (null != writeClient) {
+      writeClient.close();
+      writeClient = null;
     }
-    client = new HoodieWriteClient(jsc, cfg, rollbackInflightCommit, index);
-    return client;
+    writeClient = new HoodieWriteClient(jsc, cfg, rollbackInflightCommit, index);
+    return writeClient;
+  }
+
+  public HoodieTableMetaClient getHoodieMetaClient(Configuration conf, String basePath) {
+    metaClient = new HoodieTableMetaClient(conf, basePath);
+    return metaClient;
+  }
+
+  public HoodieTableFileSystemView getHoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+      FileStatus[] fileStatuses) {
+    if (tableView == null) {
+      tableView =  new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, fileStatuses);
+    } else {
+      tableView.init(metaClient, visibleActiveTimeline, fileStatuses);
+    }
+    return tableView;
   }
 }

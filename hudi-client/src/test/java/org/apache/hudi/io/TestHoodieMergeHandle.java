@@ -66,11 +66,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
 
   @AfterEach
   public void tearDown() throws Exception {
-    cleanupFileSystem();
-    cleanupTestDataGenerator();
-    cleanupSparkContexts();
-    cleanupClients();
-    cleanupFileSystem();
+    cleanupResources();
   }
 
   @Test
