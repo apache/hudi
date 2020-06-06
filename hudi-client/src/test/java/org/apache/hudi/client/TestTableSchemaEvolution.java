@@ -38,8 +38,6 @@ import org.apache.hudi.testutils.TestRawTripPayload;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -75,16 +73,6 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   // TRIP_EXAMPLE_SCHEMA with tip field removed
   public static final String TRIP_EXAMPLE_SCHEMA_DEVOLVED = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
       + TRIP_SCHEMA_SUFFIX;
-
-  @BeforeEach
-  public void setUp() throws IOException {
-    initResources();
-  }
-
-  @AfterEach
-  public void tearDown() throws IOException {
-    cleanupResources();
-  }
 
   @Test
   public void testSchemaCompatibilityBasic() throws Exception {

@@ -53,7 +53,7 @@ public class TestSparkBoundedInMemoryExecutor extends HoodieClientTestHarness {
 
   @AfterEach
   public void tearDown() throws Exception {
-    cleanupTestDataGenerator();
+    cleanupResources();
   }
 
   @Test

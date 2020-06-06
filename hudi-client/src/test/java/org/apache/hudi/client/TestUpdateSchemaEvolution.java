@@ -61,8 +61,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
 
   @AfterEach
   public void tearDown() throws IOException {
-    cleanupSparkContexts();
-    cleanupFileSystem();
+    cleanupResources();
   }
 
   @Test

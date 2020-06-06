@@ -29,14 +29,12 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -46,26 +44,9 @@ import scala.Tuple2;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestUpsertPartitioner extends HoodieClientTestHarness {
+public class TestUpsertPartitioner extends HoodieClientTestBase {
 
   private static final Logger LOG = LogManager.getLogger(TestUpsertPartitioner.class);
-
-  @BeforeEach
-  public void setUp() throws Exception {
-    initSparkContexts("TestUpsertPartitioner");
-    initPath();
-    initMetaClient();
-    initTestDataGenerator();
-    initFileSystem();
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupSparkContexts();
-    cleanupClients();
-    cleanupFileSystem();
-    cleanupTestDataGenerator();
-  }
 
   private UpsertPartitioner getUpsertPartitioner(int smallFileSize, int numInserts, int numUpdates, int fileSize,
       String testPartitionPath, boolean autoSplitInserts) throws Exception {
