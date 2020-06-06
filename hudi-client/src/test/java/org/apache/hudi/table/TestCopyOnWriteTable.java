@@ -18,8 +18,8 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.TestRawTripPayload;
@@ -219,7 +219,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
       if (file.getName().endsWith(".parquet")) {
         if (FSUtils.getFileId(file.getName()).equals(FSUtils.getFileId(parquetFile.getName()))
             && HoodieTimeline.compareTimestamps(FSUtils.getCommitTime(file.getName()),
-                FSUtils.getCommitTime(parquetFile.getName()), HoodieTimeline.GREATER)) {
+            FSUtils.getCommitTime(parquetFile.getName()), HoodieTimeline.GREATER)) {
           updatedParquetFile = file;
           break;
         }

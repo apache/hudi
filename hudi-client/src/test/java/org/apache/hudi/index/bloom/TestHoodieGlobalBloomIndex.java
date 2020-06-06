@@ -78,9 +78,8 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   }
 
   @After
-  public void tearDown() {
-    cleanupSparkContexts();
-    cleanupClients();
+  public void tearDown() throws IOException {
+    cleanupResources();
   }
 
   @Test

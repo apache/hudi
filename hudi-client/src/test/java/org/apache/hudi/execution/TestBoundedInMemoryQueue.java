@@ -69,8 +69,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
 
   @After
   public void tearDown() throws Exception {
-    cleanupTestDataGenerator();
-    cleanupExecutorService();
+    cleanupResources();
   }
 
   // Test to ensure that we are reading all records from queue iterator in the same order

@@ -31,21 +31,20 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
+
 import static org.junit.Assert.assertTrue;
 
 public class TestHoodieIndex extends HoodieClientTestHarness {
 
   @Before
   public void setUp() throws Exception {
-    initSparkContexts("TestHoodieIndex");
-    initPath();
-    initMetaClient();
+    initResources();
   }
 
   @After
-  public void tearDown() {
-    cleanupSparkContexts();
-    cleanupClients();
+  public void tearDown() throws IOException {
+    cleanupResources();
   }
 
   @Test

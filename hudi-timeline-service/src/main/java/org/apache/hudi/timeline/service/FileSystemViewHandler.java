@@ -117,7 +117,7 @@ public class FileSystemViewHandler {
       synchronized (view) {
         if (isLocalViewBehind(ctx)) {
           HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-          LOG.warn("Syncing view as client passed last known instant " + lastKnownInstantFromClient
+          LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
               + " as last known instant but server has the folling timeline :"
               + localTimeline.getInstants().collect(Collectors.toList()));
           view.sync();

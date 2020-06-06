@@ -52,7 +52,7 @@ public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
 
   @After
   public void tearDown() throws Exception {
-    cleanupTestDataGenerator();
+    cleanupResources();
   }
 
   @Test

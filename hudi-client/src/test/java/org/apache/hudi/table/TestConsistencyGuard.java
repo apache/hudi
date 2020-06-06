@@ -42,7 +42,7 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
 
   @After
   public void tearDown() throws Exception {
-    cleanupFileSystem();
+    cleanupResources();
   }
 
   @Test

@@ -90,6 +90,12 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     super.init(metaClient, visibleActiveTimeline);
   }
 
+  public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+      FileStatus[] fileStatuses) {
+    init(metaClient, visibleActiveTimeline);
+    addFilesToView(fileStatuses);
+  }
+
   @Override
   protected void resetViewState() {
     this.fgIdToPendingCompaction = null;

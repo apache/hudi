@@ -33,9 +33,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.compact.OperationResult;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -65,13 +65,6 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     initSparkContexts();
     metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, MERGE_ON_READ);
     client = new CompactionAdminClient(jsc, basePath);
-  }
-
-  @After
-  public void tearDown() {
-    client.close();
-    metaClient = null;
-    cleanupSparkContexts();
   }
 
   @Test
@@ -273,10 +266,10 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
         new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
     // Expect all file-slice whose base-commit is same as compaction commit to contain no new Log files
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
-        .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant)).forEach(fs -> {
-          Assert.assertFalse("No Data file must be present", fs.getBaseFile().isPresent());
-          Assert.assertEquals("No Log Files", 0, fs.getLogFiles().count());
-        });
+            .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant)).forEach(fs -> {
+              Assert.assertFalse("No Data file must be present", fs.getBaseFile().isPresent());
+              Assert.assertEquals("No Log Files", 0, fs.getLogFiles().count());
+            });
 
     // Ensure same number of log-files before and after renaming per fileId
     Map<String, Long> fileIdToCountsAfterRenaming =

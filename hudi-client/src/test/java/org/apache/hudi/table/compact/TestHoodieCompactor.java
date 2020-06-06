@@ -75,10 +75,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
   @After
   public void tearDown() throws Exception {
-    cleanupFileSystem();
-    cleanupTestDataGenerator();
-    cleanupSparkContexts();
-    cleanupClients();
+    cleanupResources();
   }
 
   private HoodieWriteConfig getConfig() {
