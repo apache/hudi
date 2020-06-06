@@ -26,9 +26,6 @@ import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.FullBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.utils.ParquetReaderIterator;
-import org.apache.hudi.common.HoodieMergeOnReadTestUtils;
-import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
@@ -57,6 +54,10 @@ import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.testutils.HoodieClientTestBase;
+import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.testutils.TestRawTripPayload;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -96,7 +97,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests Bootstrap Client functionality.
  */
-public class TestBootstrap extends TestHoodieClientBase {
+public class TestBootstrap extends HoodieClientTestBase {
 
   @TempDir
   public java.nio.file.Path tmpFolder;
@@ -132,7 +133,7 @@ public class TestBootstrap extends TestHoodieClientBase {
 
   @AfterEach
   public void tearDown() throws Exception {
-    cleanupMetaClient();
+    cleanupClients();
     cleanupTestDataGenerator();
     cleanupFileSystem();
     // Do NOT cleanup Spark Context as it is being provided and reused by other tests in hudi-spark.
@@ -513,9 +514,9 @@ public class TestBootstrap extends TestHoodieClientBase {
     }
   }
 
-  HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
+  public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
     HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, IndexType.BLOOM)
-        .withExternalSchemaTrasformation(false);
+        .withExternalSchemaTrasformation(true);
     TypedProperties properties = new TypedProperties();
     properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key");
     properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "datestr");
