@@ -90,6 +90,10 @@ inputDF.write()
   <span style="color:grey">分区路径字段。用作`HoodieKey`中`partitionPath`部分的值。
   通过调用.toString()获得实际的值</span>
 
+#### HIVE_STYLE_PARTITIONING_OPT_KEY {#HIVE_STYLE_PARTITIONING_OPT_KEY}
+  属性：`hoodie.datasource.write.hive_style_partitioning`, 默认值：`false` <br/>
+  <span style="color:grey">如果设置为true，则生成基于Hive格式的partition目录：<partition_column_name>=<partition_value></span>
+
 #### KEYGENERATOR_CLASS_OPT_KEY {#KEYGENERATOR_CLASS_OPT_KEY}
   属性：`hoodie.datasource.write.keygenerator.class`, 默认值：`org.apache.hudi.SimpleKeyGenerator` <br/>
   <span style="color:grey">键生成器类，实现从输入的`Row`对象中提取键</span>
