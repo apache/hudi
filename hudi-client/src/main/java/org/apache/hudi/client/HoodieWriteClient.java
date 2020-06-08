@@ -490,7 +490,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     LOG.info("Cleaner started");
     final Timer.Context context = metrics.getCleanCtx();
     HoodieCleanMetadata metadata = HoodieTable.create(config, hadoopConf).clean(jsc, cleanInstantTime);
-    if (context != null) {
+    if (context != null && metadata != null) {
       long durationMs = metrics.getDurationInMs(context.stop());
       metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
       LOG.info("Cleaned " + metadata.getTotalFilesDeleted() + " files"
