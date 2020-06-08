@@ -98,7 +98,7 @@ public class HoodieHiveUtil {
     Map<String, String> tablesModeMap = job.getConfiguration()
         .getValByRegex(HOODIE_CONSUME_MODE_PATTERN_STRING.pattern());
     List<String> result = tablesModeMap.entrySet().stream().map(s -> {
-      if (s.getValue().trim().equals(INCREMENTAL_SCAN_MODE)) {
+      if (s.getValue().trim().toUpperCase().equals(INCREMENTAL_SCAN_MODE)) {
         Matcher matcher = HOODIE_CONSUME_MODE_PATTERN_STRING.matcher(s.getKey());
         return (!matcher.find() ? null : matcher.group(1));
       }
