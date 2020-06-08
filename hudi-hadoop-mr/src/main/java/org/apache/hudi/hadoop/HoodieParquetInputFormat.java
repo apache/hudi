@@ -183,7 +183,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
       return null;
     }
     String incrementalInputPaths = partitionsToList.stream()
-        .map(s -> tableMetaClient.getBasePath() + Path.SEPARATOR + s)
+        .map(s -> StringUtils.isNullOrEmpty(s) ? tableMetaClient.getBasePath() : tableMetaClient.getBasePath() + Path.SEPARATOR + s)
         .filter(s -> {
           /*
            * Ensure to return only results from the original input path that has incremental changes
