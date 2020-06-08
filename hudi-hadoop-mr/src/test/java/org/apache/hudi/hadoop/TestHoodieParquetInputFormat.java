@@ -185,6 +185,39 @@ public class TestHoodieParquetInputFormat {
   }
 
   @Test
+  public void testInputFormatWithCompaction() throws IOException {
+    // initial commit
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
+    InputFormatTestUtil.commit(basePath, "100");
+
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+
+    InputSplit[] inputSplits = inputFormat.getSplits(jobConf, 10);
+    assertEquals(10, inputSplits.length);
+
+    FileStatus[] files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length);
+
+    // simulate compaction requested
+    createCompactionFile(basePath, "125");
+
+    // add inserts after compaction timestamp
+    InputFormatTestUtil.simulateInserts(partitionDir, "fileId2", 5, "200");
+    InputFormatTestUtil.commit(basePath, "200");
+
+    // verify snapshot reads show all new inserts even though there is pending compaction
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(15, files.length);
+
+    // verify that incremental reads do NOT show inserts after compaction timestamp
+    InputFormatTestUtil.setupIncremental(jobConf, "100", 10);
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(0, files.length,
+        "We should exclude commit 200 when there is a pending compaction at 150");
+  }
+
+  @Test
   public void testIncrementalSimple() throws IOException {
     // initial commit
     File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
