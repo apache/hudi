@@ -281,7 +281,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
    * Make sure the parallelism is atleast the groupby parallelism for tagging location
    */
   JavaPairRDD<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
-    JavaRDD<Tuple2<String, HoodieKey>> fileComparisonsRDD, int shuffleParallelism, HoodieTable hoodieTable,
+      JavaRDD<Tuple2<String, HoodieKey>> fileComparisonsRDD, int shuffleParallelism, HoodieTable hoodieTable,
       Map<String, Long> fileGroupToComparisons) {
     if (config.useBloomIndexBucketizedChecking()) {
       Partitioner partitioner = new BucketizedBloomCheckPartitioner(shuffleParallelism, fileGroupToComparisons,
