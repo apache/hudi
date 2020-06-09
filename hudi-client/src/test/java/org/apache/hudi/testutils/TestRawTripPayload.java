@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.client.WriteStatus;

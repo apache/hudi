@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.cli.common;
+package org.apache.hudi.cli.testutils;
 
 import org.apache.hudi.avro.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieCommitMetadata;

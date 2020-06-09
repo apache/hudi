@@ -20,10 +20,6 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.HoodieClientTestHarness;
-import org.apache.hudi.common.HoodieClientTestUtils;
-import org.apache.hudi.common.TestRawTripPayload;
-import org.apache.hudi.common.TestRawTripPayload.MetadataMergeWriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
@@ -41,6 +37,10 @@ import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.HoodieClientTestBase;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.TestRawTripPayload;
+import org.apache.hudi.testutils.TestRawTripPayload.MetadataMergeWriteStatus;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
@@ -52,8 +52,6 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.TaskContext;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -69,26 +67,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
+public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
   private static final Logger LOG = LogManager.getLogger(TestCopyOnWriteActionExecutor.class);
-
-  @BeforeEach
-  public void setUp() throws Exception {
-    initSparkContexts("TestCopyOnWriteActionExecutor");
-    initPath();
-    initMetaClient();
-    initTestDataGenerator();
-    initFileSystem();
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupSparkContexts();
-    cleanupMetaClient();
-    cleanupFileSystem();
-    cleanupTestDataGenerator();
-  }
 
   @Test
   public void testMakeNewPath() throws Exception {
@@ -129,7 +110,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     // Prepare the AvroParquetIO
     HoodieWriteConfig config = makeHoodieClientConfig();
     String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -173,7 +154,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     GenericRecord newRecord;
     int index = 0;
     for (GenericRecord record : fileRecords) {
-      System.out.println("Got :" + record.get("_row_key").toString() + ", Exp :" + records.get(index).getRecordKey());
+      //System.out.println("Got :" + record.get("_row_key").toString() + ", Exp :" + records.get(index).getRecordKey());
       assertEquals(records.get(index).getRecordKey(), record.get("_row_key").toString());
       index++;
     }
@@ -426,12 +407,5 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
       return newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator());
     }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
-  }
-
-  @AfterEach
-  public void cleanup() {
-    if (jsc != null) {
-      jsc.stop();
-    }
   }
 }

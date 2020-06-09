@@ -16,12 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.index;
+package org.apache.hudi.index.hbase;
 
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.HoodieClientTestHarness;
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -32,11 +30,11 @@ import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
-import org.apache.hudi.index.hbase.HBaseIndex;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.hbase.HBaseIndex.HbasePutBatchSizeCalculator;
-import org.apache.hudi.index.hbase.HBaseIndexQPSResourceAllocator;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -81,17 +79,19 @@ import static org.mockito.Mockito.when;
  * {@link MethodOrderer.Alphanumeric} to make sure the tests run in order. Please alter the order of tests running carefully.
  */
 @TestMethodOrder(MethodOrderer.Alphanumeric.class)
-public class TestHbaseIndex extends HoodieClientTestHarness {
+public class TestHBaseIndex extends HoodieClientTestHarness {
 
   private static HBaseTestingUtility utility;
   private static Configuration hbaseConfig;
   private static String tableName = "test_table";
 
-  public TestHbaseIndex() {}
+  public TestHBaseIndex() {
+  }
 
   @AfterAll
   public static void clean() throws Exception {
     if (utility != null) {
+      utility.deleteTable(tableName);
       utility.shutdownMiniCluster();
     }
   }
@@ -111,7 +111,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     // Initialize a local spark env
-    initSparkContexts("TestHbaseIndex");
+    initSparkContexts("TestHBaseIndex");
     hadoopConf.addResource(utility.getConfiguration());
 
     // Create a temp folder as the base path
@@ -124,11 +124,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   public void tearDown() throws Exception {
     cleanupSparkContexts();
     cleanupTestDataGenerator();
-    cleanupMetaClient();
-  }
-
-  private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
-    return new HoodieWriteClient(jsc, config);
+    cleanupClients();
   }
 
   @Test
@@ -141,7 +137,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // Load to memory
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+    try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable hoodieTable = HoodieTable.create(metaClient, config, hadoopConf);
 
@@ -181,7 +177,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // Load to memory
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(newCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable hoodieTable = HoodieTable.create(metaClient, config, hadoopConf);
@@ -215,7 +211,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // Load to memory
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    HoodieWriteClient writeClient = getWriteClient(config);
+    HoodieWriteClient writeClient = getHoodieWriteClient(config);
 
     String newCommitTime = writeClient.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
@@ -265,7 +261,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // only for test, set the hbaseConnection to mocked object
     index.setHbaseConnection(hbaseConnection);
 
-    HoodieWriteClient writeClient = getWriteClient(config);
+    HoodieWriteClient writeClient = getHoodieWriteClient(config);
 
     // start a commit and generate test data
     String newCommitTime = writeClient.startCommit();
@@ -290,7 +286,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   public void testTotalPutsBatching() throws Exception {
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    HoodieWriteClient writeClient = getWriteClient(config);
+    HoodieWriteClient writeClient = getHoodieWriteClient(config);
 
     // start a commit and generate test data
     String newCommitTime = writeClient.startCommit();
@@ -407,7 +403,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // Load to memory
     HoodieWriteConfig config = getConfig(2);
     HBaseIndex index = new HBaseIndex(config);
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+    try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable hoodieTable = HoodieTable.create(metaClient, config, hadoopConf);
 
@@ -447,7 +443,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     // Load to memory
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+    try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable hoodieTable = HoodieTable.create(metaClient, config, hadoopConf);
 

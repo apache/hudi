@@ -19,10 +19,10 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
-import org.apache.hudi.client.TestHoodieClientBase;
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.HoodieClientTestBase;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
@@ -36,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests for {@link HoodieStorageWriterFactory}.
  */
-public class TestHoodieStorageWriterFactory extends TestHoodieClientBase {
+public class TestHoodieStorageWriterFactory extends HoodieClientTestBase {
 
   @Test
   public void testGetStorageWriter() throws IOException {

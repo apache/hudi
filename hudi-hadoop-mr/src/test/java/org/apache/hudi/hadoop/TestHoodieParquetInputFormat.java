@@ -310,12 +310,14 @@ public class TestHoodieParquetInputFormat {
 
   @Test
   public void testGetIncrementalTableNames() throws IOException {
-    String[] expectedincrTables = {"db1.raw_trips", "db2.model_trips"};
+    String[] expectedincrTables = {"db1.raw_trips", "db2.model_trips", "db3.model_trips"};
     JobConf conf = new JobConf();
     String incrementalMode1 = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, expectedincrTables[0]);
     conf.set(incrementalMode1, HoodieHiveUtil.INCREMENTAL_SCAN_MODE);
     String incrementalMode2 = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, expectedincrTables[1]);
     conf.set(incrementalMode2,HoodieHiveUtil.INCREMENTAL_SCAN_MODE);
+    String incrementalMode3 = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, "db3.model_trips");
+    conf.set(incrementalMode3, HoodieHiveUtil.INCREMENTAL_SCAN_MODE.toLowerCase());
     String defaultmode = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, "db3.first_trips");
     conf.set(defaultmode, HoodieHiveUtil.DEFAULT_SCAN_MODE);
     List<String> actualincrTables = HoodieHiveUtil.getIncrementalTableNames(Job.getInstance(conf));

@@ -74,6 +74,8 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
     if (instantToRollback.isCompleted()) {
       LOG.error("Un-publishing instant " + instantToRollback + ", deleteInstants=" + deleteInstants);
       resolvedInstant = table.getActiveTimeline().revertToInflight(instantToRollback);
+      // reload meta-client to reflect latest timeline status
+      table.getMetaClient().reloadActiveTimeline();
     }
 
     List<HoodieRollbackStat> allRollbackStats = new ArrayList<>();

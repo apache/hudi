@@ -16,19 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.index;
+package org.apache.hudi.index.hbase;
 
-import org.apache.hudi.common.HoodieClientTestHarness;
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
-import org.apache.hudi.index.hbase.HBaseIndex;
-import org.apache.hudi.index.hbase.HBaseIndexQPSResourceAllocator;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
@@ -61,7 +59,7 @@ public class TestHBaseQPSResourceAllocator extends HoodieClientTestHarness {
   @AfterEach
   public void tearDown() throws Exception {
     cleanupSparkContexts();
-    cleanupMetaClient();
+    cleanupClients();
     if (utility != null) {
       utility.shutdownMiniCluster();
     }

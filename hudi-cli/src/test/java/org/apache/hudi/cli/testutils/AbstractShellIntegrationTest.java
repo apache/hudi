@@ -16,9 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.cli;
+package org.apache.hudi.cli.testutils;
 
-import org.apache.hudi.common.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -57,5 +57,14 @@ public abstract class AbstractShellIntegrationTest extends HoodieClientTestHarne
 
   protected static JLineShellComponent getShell() {
     return shell;
+  }
+
+  /**
+   * Helper to prepare string for matching.
+   * @param str Input string.
+   * @return pruned string with non word characters removed.
+   */
+  protected String removeNonWordAndStripSpace(String str) {
+    return str.replaceAll("[\\s]+", ",").replaceAll("[\\W]+", ",");
   }
 }

@@ -97,11 +97,11 @@ cd hudi-${RELEASE_VERSION}-rc${RC_NUM}
 
 ### BEGIN: Binary Files Check
 echo "Checking for binary files in source release"
-numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
+numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'application/json' | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
 
 if [ "$numBinaryFiles" -gt "0" ]; then
   echo -e "There were non-text files in source release. Please check below\n"
-  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'text/' |  grep -va 'application/xml'
+  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'application/json' | grep -va 'text/' |  grep -va 'application/xml'
   exit -1
 fi
 echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
@@ -110,8 +110,8 @@ echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
 ### Checking for DISCLAIMER
 echo "Checking for DISCLAIMER"
 disclaimerFile="./DISCLAIMER"
-if [ ! -f "$disclaimerFile" ]; then
-  echo "DISCLAIMER file missing"
+if [ -f "$disclaimerFile" ]; then
+  echo "DISCLAIMER file should not be present "
   exit -1
 fi
 echo -e "\t\tDISCLAIMER file exists ? [OK]\n"

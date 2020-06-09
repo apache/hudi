@@ -80,7 +80,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
         false, jobConf.getInt(MAX_DFS_STREAM_BUFFER_SIZE_PROP, DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE), record -> {
           // convert Hoodie log record to Hadoop AvroWritable and buffer
           GenericRecord rec = (GenericRecord) record.getData().getInsertValue(getReaderSchema()).get();
-          ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(rec, getWriterSchema());
+          ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(rec, getHiveSchema());
           this.executor.getQueue().insertRecord(aWritable);
     });
     // Start reading and buffering
