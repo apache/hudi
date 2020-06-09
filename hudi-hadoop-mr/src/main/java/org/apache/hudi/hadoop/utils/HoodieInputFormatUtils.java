@@ -53,6 +53,12 @@ import java.util.stream.Collectors;
 
 public class HoodieInputFormatUtils {
 
+  // These positions have to be deterministic across all tables
+  public static final int HOODIE_COMMIT_TIME_COL_POS = 0;
+  public static final int HOODIE_RECORD_KEY_COL_POS = 2;
+  public static final int HOODIE_PARTITION_PATH_COL_POS = 3;
+  public static final String HOODIE_READ_COLUMNS_PROP = "hoodie.read.columns.set";
+
   private static final Logger LOG = LogManager.getLogger(HoodieInputFormatUtils.class);
 
   /**
@@ -149,7 +155,7 @@ public class HoodieInputFormatUtils {
    * @param tableMetaClient
    * @return
    */
-  public static Option<HoodieTimeline> getTimeline(Job job, HoodieTableMetaClient tableMetaClient) {
+  public static Option<HoodieTimeline> getFilteredCommitsTimeline(Job job, HoodieTableMetaClient tableMetaClient) {
     String tableName = tableMetaClient.getTableConfig().getTableName();
     HoodieDefaultTimeline baseTimeline;
     if (HoodieHiveUtils.stopAtCompaction(job, tableName)) {
@@ -161,13 +167,13 @@ public class HoodieInputFormatUtils {
   }
 
   /**
-   * Get commits to check from Hive map reduce configuration.
+   * Get commits for incremental query from Hive map reduce configuration.
    * @param job
    * @param tableName
    * @param timeline
    * @return
    */
-  public static Option<List<HoodieInstant>> getCommitsToCheck(Job job, String tableName, HoodieTimeline timeline) {
+  public static Option<List<HoodieInstant>> getCommitsForIncrementalQuery(Job job, String tableName, HoodieTimeline timeline) {
     String lastIncrementalTs = HoodieHiveUtils.readStartCommitTime(job, tableName);
     // Total number of commits to return in this batch. Set this to -1 to get all the commits.
     Integer maxCommits = HoodieHiveUtils.readMaxCommits(job, tableName);
@@ -177,15 +183,15 @@ public class HoodieInputFormatUtils {
   }
 
   /**
-   * Generate a HoodieTableMetaClient for a given partition.
+   * Extract HoodieTableMetaClient by base path.
    * @param conf
    * @param partitions
    * @return
    */
-  public static Map<Path, HoodieTableMetaClient> getMetaClientPerPartition(Configuration conf, Set<Path> partitions) {
+  public static Map<Path, HoodieTableMetaClient> getTableMetaClientByBasePath(Configuration conf, Set<Path> partitions) {
     Map<String, HoodieTableMetaClient> metaClientMap = new HashMap<>();
     return partitions.stream().collect(Collectors.toMap(Function.identity(), p -> {
-      // find if we have a metaclient already for this partition.
+      // Get meta client if this path is the base path.
       Option<String> matchingBasePath = Option.fromJavaOptional(
           metaClientMap.keySet().stream().filter(basePath -> p.toString().startsWith(basePath)).findFirst());
       if (matchingBasePath.isPresent()) {
@@ -193,7 +199,7 @@ public class HoodieInputFormatUtils {
       }
 
       try {
-        HoodieTableMetaClient metaClient = getTableMetaClient(p.getFileSystem(conf), p);
+        HoodieTableMetaClient metaClient = getTableMetaClientForBasePath(p.getFileSystem(conf), p);
         metaClientMap.put(metaClient.getBasePath(), metaClient);
         return metaClient;
       } catch (IOException e) {
@@ -209,7 +215,7 @@ public class HoodieInputFormatUtils {
    * @return
    * @throws IOException
    */
-  public static HoodieTableMetaClient getTableMetaClient(FileSystem fs, Path dataPath) throws IOException {
+  public static HoodieTableMetaClient getTableMetaClientForBasePath(FileSystem fs, Path dataPath) throws IOException {
     int levels = HoodieHiveUtils.DEFAULT_LEVELS_TO_BASEPATH;
     if (HoodiePartitionMetadata.hasPartitionMetadata(fs, dataPath)) {
       HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, dataPath);
@@ -230,16 +236,15 @@ public class HoodieInputFormatUtils {
    * @param commitsToCheck
    * @return
    */
-  public static List<FileStatus> filterIncrementalFileStatus(
-      Job job, HoodieTableMetaClient tableMetaClient, HoodieTimeline timeline,
-      FileStatus[] fileStatuses, List<HoodieInstant> commitsToCheck) {
+  public static List<FileStatus> filterIncrementalFileStatus(Job job, HoodieTableMetaClient tableMetaClient,
+      HoodieTimeline timeline, FileStatus[] fileStatuses, List<HoodieInstant> commitsToCheck) {
     TableFileSystemView.BaseFileOnlyView roView = new HoodieTableFileSystemView(tableMetaClient, timeline, fileStatuses);
     List<String> commitsList = commitsToCheck.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
     List<FileStatus> returns = new ArrayList<>();
     for (HoodieBaseFile filteredFile : filteredFiles) {
       LOG.debug("Processing incremental hoodie file - " + filteredFile.getPath());
-      filteredFile = checkFileStatus(job.getConfiguration(), filteredFile);
+      filteredFile = refreshFileStatus(job.getConfiguration(), filteredFile);
       returns.add(filteredFile.getFileStatus());
     }
     LOG.info("Total paths to process after hoodie incremental filter " + filteredFiles.size());
@@ -306,7 +311,7 @@ public class HoodieInputFormatUtils {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
       }
-      filteredFile = checkFileStatus(job, filteredFile);
+      filteredFile = refreshFileStatus(job, filteredFile);
       returns.add(filteredFile.getFileStatus());
     }
     return returns;
@@ -320,7 +325,7 @@ public class HoodieInputFormatUtils {
    * @param dataFile
    * @return
    */
-  private static HoodieBaseFile checkFileStatus(Configuration conf, HoodieBaseFile dataFile) {
+  private static HoodieBaseFile refreshFileStatus(Configuration conf, HoodieBaseFile dataFile) {
     Path dataPath = dataFile.getFileStatus().getPath();
     try {
       if (dataFile.getFileSize() == 0) {

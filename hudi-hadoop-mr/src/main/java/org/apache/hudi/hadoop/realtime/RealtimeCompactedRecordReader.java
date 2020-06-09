@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import org.apache.avro.generic.GenericRecord;
@@ -87,7 +88,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
       // TODO(VC): Right now, we assume all records in log, have a matching base record. (which
       // would be true until we have a way to index logs too)
       // return from delta records map if we have some match.
-      String key = arrayWritable.get()[HoodieRealtimeConfig.HOODIE_RECORD_KEY_COL_POS].toString();
+      String key = arrayWritable.get()[HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS].toString();
       if (deltaRecordMap.containsKey(key)) {
         // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
         // deltaRecord may not be a full record and needs values of columns from the parquet

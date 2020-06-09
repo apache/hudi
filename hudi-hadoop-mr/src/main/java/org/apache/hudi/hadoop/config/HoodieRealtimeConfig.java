@@ -21,11 +21,6 @@ package org.apache.hudi.hadoop.config;
  * Class to hold props related to Hoodie RealtimeInputFormat and RealtimeRecordReader.
  */
 public final class HoodieRealtimeConfig {
-  // These positions have to be deterministic across all tables
-  public static final int HOODIE_COMMIT_TIME_COL_POS = 0;
-  public static final int HOODIE_RECORD_KEY_COL_POS = 2;
-  public static final int HOODIE_PARTITION_PATH_COL_POS = 3;
-  public static final String HOODIE_READ_COLUMNS_PROP = "hoodie.read.columns.set";
 
   // Fraction of mapper/reducer task memory used for compaction of log files
   public static final String COMPACTION_MEMORY_FRACTION_PROP = "compaction.memory.fraction";

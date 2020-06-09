@@ -122,11 +122,11 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
       JobConf job, HoodieTableMetaClient tableMetaClient, List<Path> inputPaths) throws IOException {
     String tableName = tableMetaClient.getTableConfig().getTableName();
     Job jobContext = Job.getInstance(job);
-    Option<HoodieTimeline> timeline = HoodieInputFormatUtils.getTimeline(jobContext, tableMetaClient);
+    Option<HoodieTimeline> timeline = HoodieInputFormatUtils.getFilteredCommitsTimeline(jobContext, tableMetaClient);
     if (!timeline.isPresent()) {
       return null;
     }
-    Option<List<HoodieInstant>> commitsToCheck = HoodieInputFormatUtils.getCommitsToCheck(jobContext, tableName, timeline.get());
+    Option<List<HoodieInstant>> commitsToCheck = HoodieInputFormatUtils.getCommitsForIncrementalQuery(jobContext, tableName, timeline.get());
     if (!commitsToCheck.isPresent()) {
       return null;
     }

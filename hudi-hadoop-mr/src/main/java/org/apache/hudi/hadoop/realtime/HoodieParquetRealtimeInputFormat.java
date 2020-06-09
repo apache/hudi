@@ -23,7 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 
 import org.apache.hadoop.conf.Configurable;
@@ -111,9 +111,9 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
   private static void addRequiredProjectionFields(Configuration configuration) {
     // Need this to do merge records in HoodieRealtimeRecordReader
-    addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRealtimeConfig.HOODIE_RECORD_KEY_COL_POS);
-    addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRealtimeConfig.HOODIE_COMMIT_TIME_COL_POS);
-    addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRealtimeConfig.HOODIE_PARTITION_PATH_COL_POS);
+    addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
+    addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS);
+    addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_PARTITION_PATH_COL_POS);
   }
 
   /**
@@ -140,12 +140,12 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     // risk of experiencing race conditions. Hence, we synchronize on the JobConf object here. There is negligible
     // latency incurred here due to the synchronization since get record reader is called once per spilt before the
     // actual heavy lifting of reading the parquet files happen.
-    if (jobConf.get(HoodieRealtimeConfig.HOODIE_READ_COLUMNS_PROP) == null) {
+    if (jobConf.get(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP) == null) {
       synchronized (jobConf) {
         LOG.info(
             "Before adding Hoodie columns, Projections :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
                 + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-        if (jobConf.get(HoodieRealtimeConfig.HOODIE_READ_COLUMNS_PROP) == null) {
+        if (jobConf.get(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP) == null) {
           // Hive (across all versions) fails for queries like select count(`_hoodie_commit_time`) from table;
           // In this case, the projection fields gets removed. Looking at HiveInputFormat implementation, in some cases
           // hoodie additional projection columns are reset after calling setConf and only natural projections
@@ -157,7 +157,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
           addRequiredProjectionFields(jobConf);
 
           this.conf = jobConf;
-          this.conf.set(HoodieRealtimeConfig.HOODIE_READ_COLUMNS_PROP, "true");
+          this.conf.set(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP, "true");
         }
       }
     }
