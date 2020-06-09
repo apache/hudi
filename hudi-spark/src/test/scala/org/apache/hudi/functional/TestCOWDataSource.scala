@@ -17,11 +17,12 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieTestDataGenerator}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.streaming.{OutputMode, ProcessingTime}
@@ -35,9 +36,9 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
 /**
- * Basic tests on the spark datasource
+ * Basic tests on the spark datasource for COW table.
  */
-class TestDataSource {
+class TestCOWDataSource {
 
   var spark: SparkSession = null
   var dataGen: HoodieTestDataGenerator = null
@@ -67,7 +68,7 @@ class TestDataSource {
     // Insert Operation
     val records = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
     val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    inputDF.write.format("hudi")
+    inputDF.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
@@ -151,25 +152,6 @@ class TestDataSource {
       .option(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY, "/2016/*/*/*")
       .load(basePath);
     assertEquals(hoodieIncViewDF2.filter(col("_hoodie_partition_path").contains("2016")).count(), hoodieIncViewDF3.count())
-  }
-
-  @Test def testMergeOnReadStorage() {
-    // Bulk Insert Operation
-    val records1 = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("001", 100)).toList
-    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
-
-    // Read RO View
-    val hoodieROViewDF1 = spark.read.format("org.apache.hudi").load(basePath + "/*/*/*/*")
-    assertEquals(100, hoodieROViewDF1.count()) // still 100, since we only updated
   }
 
   @Test def testDropInsertDup(): Unit = {
