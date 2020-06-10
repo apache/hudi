@@ -182,12 +182,12 @@ public class TestKafkaSource extends UtilitiesTestBase {
     InputBatch<JavaRDD<GenericRecord>> earFetch1 = earliestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
 
     // => [a null pre checkpoint] latest fetch will get a checkpoint same to earliest
-    InputBatch<JavaRDD<GenericRecord>> latFetch1_0 = latestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
-    assertEquals(earFetch1.getCheckpointForNextBatch(), latFetch1_0.getCheckpointForNextBatch());
+    InputBatch<JavaRDD<GenericRecord>> latFetch1 = latestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    assertEquals(earFetch1.getCheckpointForNextBatch(), latFetch1.getCheckpointForNextBatch());
 
     // => [a empty string pre checkpoint] latest fetch will get a checkpoint same to earliest
-    InputBatch<JavaRDD<GenericRecord>> latFetch1_1 = latestKafkaSource.fetchNewDataInAvroFormat(Option.of(""), Long.MAX_VALUE);
-    assertEquals(earFetch1.getCheckpointForNextBatch(), latFetch1_1.getCheckpointForNextBatch());
+    InputBatch<JavaRDD<GenericRecord>> latFetch2 = latestKafkaSource.fetchNewDataInAvroFormat(Option.of(""), Long.MAX_VALUE);
+    assertEquals(earFetch1.getCheckpointForNextBatch(), latFetch2.getCheckpointForNextBatch());
   }
 
   @Test
