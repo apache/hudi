@@ -57,8 +57,7 @@ public class JsonKafkaSource extends JsonSource {
     long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
     LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
     if (totalNewMsgs <= 0) {
-      return new InputBatch<>(Option.empty(),
-              lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : CheckpointUtils.offsetsToStr(offsetRanges));
+      return new InputBatch<>(Option.empty(), CheckpointUtils.offsetsToStr(offsetRanges));
     }
     JavaRDD<String> newDataRDD = toRDD(offsetRanges);
     return new InputBatch<>(Option.of(newDataRDD), CheckpointUtils.offsetsToStr(offsetRanges));

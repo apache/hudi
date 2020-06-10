@@ -93,6 +93,18 @@ public class TestKafkaSource extends UtilitiesTestBase {
     return props;
   }
 
+  private TypedProperties createLatestPropsForJsonSource(Long maxEventsToReadFromKafkaSource) {
+    TypedProperties props = new TypedProperties();
+    props.setProperty("hoodie.deltastreamer.source.kafka.topic", TEST_TOPIC_NAME);
+    props.setProperty("bootstrap.servers", testUtils.brokerAddress());
+    props.setProperty("auto.offset.reset", "latest");
+    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
+            maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
+                    String.valueOf(Config.maxEventsFromKafkaSource));
+    props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
+    return props;
+  }
+
   @Test
   public void testJsonKafkaSource() {
 
@@ -139,6 +151,43 @@ public class TestKafkaSource extends UtilitiesTestBase {
     InputBatch<Dataset<Row>> fetch4AsRows =
         kafkaSource.fetchNewDataInRowFormat(Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(Option.empty(), fetch4AsRows.getBatch());
+  }
+
+  // test case with kafka offset reset strategy
+  @Test
+  public void testJsonKafkaSourceResetStrategy() {
+    // topic setup.
+    testUtils.createTopic(TEST_TOPIC_NAME, 2);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+
+    TypedProperties earliestProps = createPropsForJsonSource(null);
+    Source earliestJsonSource = new JsonKafkaSource(earliestProps, jsc, sparkSession, schemaProvider);
+    SourceFormatAdapter earliestKafkaSource = new SourceFormatAdapter(earliestJsonSource);
+
+    TypedProperties latestProps = createLatestPropsForJsonSource(null);
+    Source latestJsonSource = new JsonKafkaSource(latestProps, jsc, sparkSession, schemaProvider);
+    SourceFormatAdapter latestKafkaSource = new SourceFormatAdapter(latestJsonSource);
+
+    // 1. Extract with a none data kafka checkpoint
+    // => get a checkpoint string like "hoodie_test,0:0,1:0", earliest checkpoint should be equals to latest checkpoint
+    InputBatch<JavaRDD<GenericRecord>> earFetch0 = earliestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    InputBatch<JavaRDD<GenericRecord>> latFetch0 = latestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    assertEquals(earFetch0.getBatch(), latFetch0.getBatch());
+    assertEquals(earFetch0.getCheckpointForNextBatch(), latFetch0.getCheckpointForNextBatch());
+
+    testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+
+    // 2. Extract new checkpoint with a null / empty string pre checkpoint
+    // => earliest fetch will get a batch of data and a end offset checkpoint
+    InputBatch<JavaRDD<GenericRecord>> earFetch1 = earliestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+
+    // => [a null pre checkpoint] latest fetch will get a checkpoint same to earliest
+    InputBatch<JavaRDD<GenericRecord>> latFetch1_0 = latestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    assertEquals(earFetch1.getCheckpointForNextBatch(), latFetch1_0.getCheckpointForNextBatch());
+
+    // => [a empty string pre checkpoint] latest fetch will get a checkpoint same to earliest
+    InputBatch<JavaRDD<GenericRecord>> latFetch1_1 = latestKafkaSource.fetchNewDataInAvroFormat(Option.of(""), Long.MAX_VALUE);
+    assertEquals(earFetch1.getCheckpointForNextBatch(), latFetch1_1.getCheckpointForNextBatch());
   }
 
   @Test
