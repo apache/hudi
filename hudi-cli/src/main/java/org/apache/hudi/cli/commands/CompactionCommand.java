@@ -27,8 +27,7 @@ import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.CommitUtil;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.client.CompactionAdminClient.RenameOpResult;
-import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
+import org.apache.hudi.client.BaseCompactionAdminClient;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -431,7 +430,7 @@ public class CompactionCommand implements CommandMarker {
       if (exitCode != 0) {
         return "Failed to validate compaction for " + compactionInstant;
       }
-      List<ValidationOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
+      List<BaseCompactionAdminClient.ValidationOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
       boolean valid = res.stream().map(OperationResult::isSuccess).reduce(Boolean::logicalAnd).orElse(true);
       String message = "\n\n\t COMPACTION PLAN " + (valid ? "VALID" : "INVALID") + "\n\n";
       List<Comparable[]> rows = new ArrayList<>();
@@ -493,7 +492,7 @@ public class CompactionCommand implements CommandMarker {
       if (exitCode != 0) {
         return "Failed to unschedule compaction for " + compactionInstant;
       }
-      List<RenameOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
+      List<BaseCompactionAdminClient.RenameOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
       output =
           getRenamesToBePrinted(res, limit, sortByField, descending, headerOnly, "unschedule pending compaction");
     } finally {
@@ -537,7 +536,7 @@ public class CompactionCommand implements CommandMarker {
       if (exitCode != 0) {
         return "Failed to unschedule compaction for file " + fileId;
       }
-      List<RenameOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
+      List<BaseCompactionAdminClient.RenameOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
       output = getRenamesToBePrinted(res, limit, sortByField, descending, headerOnly,
           "unschedule file from pending compaction");
     } finally {
@@ -582,7 +581,7 @@ public class CompactionCommand implements CommandMarker {
       if (exitCode != 0) {
         return "Failed to unschedule compaction for " + compactionInstant;
       }
-      List<RenameOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
+      List<BaseCompactionAdminClient.RenameOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
       output = getRenamesToBePrinted(res, limit, sortByField, descending, headerOnly, "repair compaction");
     } finally {
       // Delete tmp file used to serialize result
@@ -593,8 +592,8 @@ public class CompactionCommand implements CommandMarker {
     return output;
   }
 
-  private String getRenamesToBePrinted(List<RenameOpResult> res, Integer limit, String sortByField, boolean descending,
-      boolean headerOnly, String operation) {
+  private String getRenamesToBePrinted(List<BaseCompactionAdminClient.RenameOpResult> res, Integer limit, String sortByField, boolean descending,
+                                       boolean headerOnly, String operation) {
 
     Option<Boolean> result =
         Option.fromJavaOptional(res.stream().map(r -> r.isExecuted() && r.isSuccess()).reduce(Boolean::logicalAnd));

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.functional;
 
+import org.apache.hudi.client.HoodieSparkReadClient;
+import org.apache.hudi.client.HoodieSparkWriteClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -33,6 +35,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -329,6 +332,13 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
     cfg.parallelism = parallelism;
     cfg.schemaFile = schemaFile;
     return cfg;
+  }
+
+  private JavaSparkContext getJavaSparkContext() {
+    // Initialize a local spark env
+    SparkConf sparkConf = new SparkConf().setAppName("TestConversionCommand").setMaster("local[1]");
+    sparkConf = HoodieSparkWriteClient.registerClasses(sparkConf);
+    return new JavaSparkContext(HoodieSparkReadClient.addHoodieSupport(sparkConf));
   }
 
   /**

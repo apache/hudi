@@ -20,8 +20,9 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.HoodieSparkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -33,10 +34,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
@@ -147,7 +150,7 @@ public class DeltaSync implements Serializable {
   /**
    * Callback when write client is instantiated.
    */
-  private transient Function<HoodieWriteClient, Boolean> onInitializingHoodieWriteClient;
+  private transient Function<HoodieSparkWriteClient, Boolean> onInitializingHoodieWriteClient;
 
   /**
    * Timeline with completed commits.
@@ -157,11 +160,11 @@ public class DeltaSync implements Serializable {
   /**
    * Write Client.
    */
-  private transient HoodieWriteClient writeClient;
+  private transient HoodieSparkWriteClient writeClient;
 
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
-                   Function<HoodieWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+                   Function<HoodieSparkWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
 
     this.cfg = cfg;
     this.jssc = jssc;
@@ -244,7 +247,7 @@ public class DeltaSync implements Serializable {
    * Read from Upstream Source and apply transformation if needed.
    *
    * @param commitTimelineOpt Timeline with completed commits
-   * @return Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> Input data read from upstream source, consists
+   * @return Pair<SchemaProvider, Pair < String, JavaRDD < HoodieRecord>>> Input data read from upstream source, consists
    * of schemaProvider, checkpointStr and hoodieRecord
    * @throws Exception in case of any Exception
    */
@@ -361,7 +364,7 @@ public class DeltaSync implements Serializable {
     Option<String> scheduledCompactionInstant = Option.empty();
     // filter dupes if needed
     if (cfg.filterDupes) {
-      records = DataSourceUtils.dropDuplicates(jssc, records, writeClient.getConfig());
+      records = DataSourceUtils.dropDuplicates(new HoodieSparkEngineContext(jssc), records, writeClient.getConfig());
     }
 
     boolean isEmpty = records.isEmpty();
@@ -379,7 +382,7 @@ public class DeltaSync implements Serializable {
         writeStatusRDD = writeClient.upsert(records, instantTime);
         break;
       case BULK_INSERT:
-        writeStatusRDD = writeClient.bulkInsert(records, instantTime);
+        writeStatusRDD = writeClient.bulkInsert(records, instantTime, Option.empty());
         break;
       default:
         throw new HoodieDeltaStreamerException("Unknown operation : " + cfg.operation);
@@ -491,7 +494,7 @@ public class DeltaSync implements Serializable {
     if ((null != schemaProvider) && (null == writeClient)) {
       registerAvroSchemas(schemaProvider);
       HoodieWriteConfig hoodieCfg = getHoodieClientConfig(schemaProvider);
-      writeClient = new HoodieWriteClient<>(jssc, hoodieCfg, true);
+      writeClient = new HoodieSparkWriteClient(new HoodieSparkEngineContext(jssc), hoodieCfg, true);
       onInitializingHoodieWriteClient.apply(writeClient);
     }
   }
@@ -510,6 +513,7 @@ public class DeltaSync implements Serializable {
                 // Inline compaction is disabled for continuous mode. otherwise enabled for MOR
                 .withInlineCompaction(cfg.isInlineCompactionEnabled()).build())
             .forTable(cfg.targetTableName)
+            .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withAutoCommit(autoCommit).withProps(props);
 
     if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {

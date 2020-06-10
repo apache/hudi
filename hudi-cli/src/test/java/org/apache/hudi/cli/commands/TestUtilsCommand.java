@@ -19,7 +19,7 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.HoodieSparkTable;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
@@ -39,7 +39,7 @@ public class TestUtilsCommand extends AbstractShellIntegrationTest {
    */
   @Test
   public void testLoadClass() {
-    String name = HoodieTable.class.getName();
+    String name = HoodieSparkTable.class.getName();
     CommandResult cr = getShell().executeCommand(String.format("utils loadClass --class %s", name));
     assertAll("Command runs success",
         () -> assertTrue(cr.isSuccess()),

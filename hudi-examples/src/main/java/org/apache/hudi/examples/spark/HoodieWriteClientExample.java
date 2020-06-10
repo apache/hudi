@@ -18,8 +18,9 @@
 
 package org.apache.hudi.examples.spark;
 
-import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.HoodieSparkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -32,10 +33,10 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
-import org.apache.hudi.index.HoodieIndex;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -48,7 +49,7 @@ import java.util.stream.Collectors;
 
 
 /**
- * Simple examples of #{@link HoodieWriteClient}.
+ * Simple examples of #{@link HoodieSparkWriteClient}.
  *
  * To run this example, you should
  *   1. For running in IDE, set VM options `-Dspark.master=local[2]`
@@ -91,7 +92,7 @@ public class HoodieWriteClientExample {
               .withSchema(HoodieExampleDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable(tableName)
               .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
               .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(20, 30).build()).build();
-      HoodieWriteClient<HoodieAvroPayload> client = new HoodieWriteClient<>(jsc, cfg);
+      HoodieSparkWriteClient<HoodieAvroPayload> client = new HoodieSparkWriteClient<>(new HoodieSparkEngineContext(jsc), cfg);
 
       // inserts
       String newCommitTime = client.startCommit();

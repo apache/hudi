@@ -18,7 +18,9 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.HoodieSparkWriteClient;
+import org.apache.hudi.common.HoodieEngineContext;
+import org.apache.hudi.common.HoodieSparkEngineContext;
 import org.apache.hudi.async.AbstractAsyncService;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -351,6 +353,11 @@ public class HoodieDeltaStreamer implements Serializable {
     private transient JavaSparkContext jssc;
 
     /**
+     * Hoodie engine context.
+     */
+    private transient HoodieEngineContext context;
+
+    /**
      * Bag of properties with source, hoodie client, key generator etc.
      */
     TypedProperties props;
@@ -374,6 +381,7 @@ public class HoodieDeltaStreamer implements Serializable {
                             TypedProperties properties) throws IOException {
       this.cfg = cfg;
       this.jssc = jssc;
+      this.context = new HoodieSparkEngineContext(jssc);
       this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
 
       if (fs.exists(new Path(cfg.targetBasePath))) {
@@ -478,7 +486,7 @@ public class HoodieDeltaStreamer implements Serializable {
      * @param writeClient HoodieWriteClient
      * @return
      */
-    protected Boolean onInitializingWriteClient(HoodieWriteClient writeClient) {
+    protected Boolean onInitializingWriteClient(HoodieSparkWriteClient writeClient) {
       if (cfg.isAsyncCompactionEnabled()) {
         asyncCompactService = new AsyncCompactService(jssc, writeClient);
         // Enqueue existing pending compactions first
@@ -543,7 +551,7 @@ public class HoodieDeltaStreamer implements Serializable {
     private transient ReentrantLock queueLock = new ReentrantLock();
     private transient Condition consumed = queueLock.newCondition();
 
-    public AsyncCompactService(JavaSparkContext jssc, HoodieWriteClient client) {
+    public AsyncCompactService(JavaSparkContext jssc, HoodieSparkWriteClient client) {
       this.jssc = jssc;
       this.compactor = new Compactor(client, jssc);
       this.maxConcurrentCompaction = 1;

@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 
 import org.junit.jupiter.api.AfterEach;
@@ -90,8 +91,10 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     // reload the timeline and get all the commits before archive
     metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
 
+    hoodieTable = HoodieSparkTable.create(cfg,jsc.hadoopConfiguration());
+
     // archive
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, metaClient);
+    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, metaClient, hoodieTable);
     archiveLog.archiveIfRequired(hadoopConf);
   }
 
@@ -122,7 +125,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     for (int i = 100; i < 104; i++) {
       String instant = String.valueOf(i);
       for (int j = 0; j < 3; j++) {
-        Comparable[] defaultComp = new Comparable[] {"commit", instant,
+        Comparable[] defaultComp = new Comparable[]{"commit", instant,
             HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH,
             HoodieTestCommitMetadataGenerator.DEFAULT_FILEID,
             HoodieTestCommitMetadataGenerator.DEFAULT_PRE_COMMIT,
@@ -164,12 +167,12 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("CommitType");
     for (int i = 100; i < 103; i++) {
       String instant = String.valueOf(i);
-      Comparable[] result = new Comparable[] {instant, "commit"};
+      Comparable[] result = new Comparable[]{instant, "commit"};
       rows.add(result);
       rows.add(result);
       rows.add(result);
     }
-    rows.add(new Comparable[] {"103", "commit"});
+    rows.add(new Comparable[]{"103", "commit"});
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 10, false, rows);
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cr.getResult().toString());
@@ -185,7 +188,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
       String instant = String.valueOf(i);
       // Since HoodiePrintHelper order data by default, need to order commitMetadata
       HoodieCommitMetadata metadata = HoodieTestCommitMetadataGenerator.generateCommitMetadata(tablePath, instant);
-      Comparable[] result = new Comparable[] {
+      Comparable[] result = new Comparable[]{
           instant, "commit", HoodieTestCommitUtilities.convertAndOrderCommitMetadata(metadata)};
       rows.add(result);
       rows.add(result);

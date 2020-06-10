@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
@@ -175,7 +176,9 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
 
     // archive
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, metaClient);
+
+    hoodieTable = HoodieSparkTable.create(metaClient, cfg, jsc.hadoopConfiguration());
+    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, metaClient, hoodieTable);
     archiveLog.archiveIfRequired(jsc.hadoopConfiguration());
 
     CommandResult cr = getShell().executeCommand(String.format("commits showarchived --startTs %s --endTs %s", "100", "104"));

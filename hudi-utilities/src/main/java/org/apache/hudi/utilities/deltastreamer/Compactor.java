@@ -18,8 +18,9 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.HoodieSparkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -35,15 +36,15 @@ import java.io.Serializable;
 /**
  * Run one round of compaction.
  */
-public class Compactor implements Serializable {
+public class Compactor<T extends HoodieRecordPayload> implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(Compactor.class);
 
-  private transient HoodieWriteClient compactionClient;
+  private transient HoodieSparkWriteClient<T> compactionClient;
   private transient JavaSparkContext jssc;
 
-  public Compactor(HoodieWriteClient compactionClient, JavaSparkContext jssc) {
+  public Compactor(HoodieSparkWriteClient<T> compactionClient, JavaSparkContext jssc) {
     this.jssc = jssc;
     this.compactionClient = compactionClient;
   }

@@ -18,9 +18,10 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.client.HoodieReadClient;
-import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.HoodieSparkReadClient;
+import org.apache.hudi.client.HoodieSparkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -46,7 +47,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -100,19 +100,19 @@ public class DataSourceUtils {
       return null;
     } else {
       throw new HoodieException(
-        fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
-          + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+          fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
+              + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
     }
   }
 
   /**
    * This method converts values for fields with certain Avro/Parquet data types that require special handling.
-   *
+   * <p>
    * Logical Date Type is converted to actual Date value instead of Epoch Integer which is how it is
    * represented/stored in parquet.
    *
    * @param fieldSchema avro field schema
-   * @param fieldValue avro field value
+   * @param fieldValue  avro field value
    * @return field value either converted (for certain data types) or as it is.
    */
   private static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue) {
@@ -175,15 +175,16 @@ public class DataSourceUtils {
    * Create a UserDefinedBulkInsertPartitioner class via reflection,
    * <br>
    * if the class name of UserDefinedBulkInsertPartitioner is configured through the HoodieWriteConfig.
+   *
    * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
    */
   private static Option<UserDefinedBulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
-          throws HoodieException {
+      throws HoodieException {
     String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
     try {
       return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
-              ? Option.empty() :
-              Option.of((UserDefinedBulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
+          ? Option.empty() :
+          Option.of((UserDefinedBulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
     } catch (Throwable e) {
       throw new HoodieException("Could not create UserDefinedBulkInsertPartitioner class " + bulkInsertPartitionerClass, e);
     }
@@ -196,7 +197,7 @@ public class DataSourceUtils {
       throws IOException {
     try {
       return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
+          new Class<?>[]{GenericRecord.class, Comparable.class}, record, orderingVal);
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
@@ -210,8 +211,8 @@ public class DataSourceUtils {
     });
   }
 
-  public static HoodieWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
-                                                     String tblName, Map<String, String> parameters) {
+  public static HoodieSparkWriteClient createHoodieClient(HoodieSparkEngineContext context, String schemaStr, String basePath,
+                                                          String tblName, Map<String, String> parameters) {
 
     // inline compaction is on by default for MOR
     boolean inlineCompact = parameters.get(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY())
@@ -229,10 +230,10 @@ public class DataSourceUtils {
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();
 
-    return new HoodieWriteClient<>(jssc, writeConfig, true);
+    return new HoodieSparkWriteClient(context, writeConfig, true);
   }
 
-  public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
+  public static JavaRDD<WriteStatus> doWriteOperation(HoodieSparkWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
                                                       String instantTime, String operation) throws HoodieException {
     if (operation.equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL())) {
       Option<UserDefinedBulkInsertPartitioner> userDefinedBulkInsertPartitioner =
@@ -246,7 +247,7 @@ public class DataSourceUtils {
     }
   }
 
-  public static JavaRDD<WriteStatus> doDeleteOperation(HoodieWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
+  public static JavaRDD<WriteStatus> doDeleteOperation(HoodieSparkWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
                                                        String instantTime) {
     return client.delete(hoodieKeys, instantTime);
   }
@@ -260,15 +261,15 @@ public class DataSourceUtils {
   /**
    * Drop records already present in the dataset.
    *
-   * @param jssc                  JavaSparkContext
+   * @param context               HoodieSparkEngineContext
    * @param incomingHoodieRecords HoodieRecords to deduplicate
    * @param writeConfig           HoodieWriteConfig
    */
   @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
+  public static JavaRDD<HoodieRecord> dropDuplicates(HoodieSparkEngineContext context, JavaRDD<HoodieRecord> incomingHoodieRecords,
                                                      HoodieWriteConfig writeConfig) {
     try {
-      HoodieReadClient client = new HoodieReadClient<>(jssc, writeConfig);
+      HoodieSparkReadClient client = new HoodieSparkReadClient(context, writeConfig);
       return client.tagLocation(incomingHoodieRecords)
           .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
     } catch (TableNotFoundException e) {
@@ -279,11 +280,11 @@ public class DataSourceUtils {
   }
 
   @SuppressWarnings("unchecked")
-  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
+  public static JavaRDD<HoodieRecord> dropDuplicates(HoodieSparkEngineContext context, JavaRDD<HoodieRecord> incomingHoodieRecords,
                                                      Map<String, String> parameters) {
     HoodieWriteConfig writeConfig =
         HoodieWriteConfig.newBuilder().withPath(parameters.get("path")).withProps(parameters).build();
-    return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);
+    return dropDuplicates(context, incomingHoodieRecords, writeConfig);
   }
 
   public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath, String baseFileFormat) {
@@ -309,7 +310,7 @@ public class DataSourceUtils {
         props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
             SlashEncodedDayPartitionValueExtractor.class.getName());
     hiveSyncConfig.useJdbc = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_USE_JDBC_OPT_KEY(),
-            DataSourceWriteOptions.DEFAULT_HIVE_USE_JDBC_OPT_VAL()));
+        DataSourceWriteOptions.DEFAULT_HIVE_USE_JDBC_OPT_VAL()));
     return hiveSyncConfig;
   }
 }

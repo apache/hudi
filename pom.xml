@@ -181,34 +181,34 @@
           </execution>
         </executions>
       </plugin>
-<!--
-      See https://jira.apache.org/jira/browse/HUDI-304
-      <plugin>
-        <groupId>com.diffplug.spotless</groupId>
-        <artifactId>spotless-maven-plugin</artifactId>
-        <version>1.24.3</version>
-        <configuration>
-          <java>
-            <eclipse>
-              <file>${main.basedir}/style/eclipse-java-google-style.xml</file>
-              <version>4.10.0</version>
-            </eclipse>
-          </java>
-          <scala>
-            <trimTrailingWhitespace/>
-          </scala>
-        </configuration>
-        <executions>
-          <execution>
-            <id>spotless-check</id>
-            <phase>compile</phase>
-            <goals>
-              <goal>check</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
--->
+      <!--
+            See https://jira.apache.org/jira/browse/HUDI-304
+            <plugin>
+              <groupId>com.diffplug.spotless</groupId>
+              <artifactId>spotless-maven-plugin</artifactId>
+              <version>1.24.3</version>
+              <configuration>
+                <java>
+                  <eclipse>
+                    <file>${main.basedir}/style/eclipse-java-google-style.xml</file>
+                    <version>4.10.0</version>
+                  </eclipse>
+                </java>
+                <scala>
+                  <trimTrailingWhitespace/>
+                </scala>
+              </configuration>
+              <executions>
+                <execution>
+                  <id>spotless-check</id>
+                  <phase>compile</phase>
+                  <goals>
+                    <goal>check</goal>
+                  </goals>
+                </execution>
+              </executions>
+            </plugin>
+      -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -331,6 +331,7 @@
               <exclude>NOTICE</exclude>
               <exclude>DISCLAIMER</exclude>
               <exclude>**/.*</exclude>
+              <exclude>**/*.iml</exclude>
               <exclude>**/*.json</exclude>
               <exclude>**/*.log</exclude>
               <exclude>**/*.sqltemplate</exclude>

@@ -24,7 +24,8 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.client.{HoodieWriteClient, WriteStatus}
+import org.apache.hudi.client.{HoodieSparkWriteClient, WriteStatus}
+import org.apache.hudi.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecordPayload
@@ -51,6 +52,7 @@ private[hudi] object HoodieSparkSqlWriter {
             df: DataFrame): (Boolean, common.util.Option[String]) = {
 
     val sparkContext = sqlContext.sparkContext
+    val context = new HoodieSparkEngineContext(sparkContext);
     val path = parameters.get("path")
     val tblNameOp = parameters.get(HoodieWriteConfig.TABLE_NAME)
     if (path.isEmpty || tblNameOp.isEmpty) {
@@ -91,7 +93,7 @@ private[hudi] object HoodieSparkSqlWriter {
       }
     }
 
-    val (writeStatuses, writeClient: HoodieWriteClient[HoodieRecordPayload[Nothing]]) =
+    val (writeStatuses, writeClient: HoodieSparkWriteClient[HoodieRecordPayload[Nothing]]) =
       if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
       // register classes & schemas
       val structName = s"${tblName}_record"
@@ -134,13 +136,13 @@ private[hudi] object HoodieSparkSqlWriter {
       }
 
       // Create a HoodieWriteClient & issue the write.
-      val client = DataSourceUtils.createHoodieClient(jsc, schema.toString, path.get, tblName,
+      val client = DataSourceUtils.createHoodieClient(context, schema.toString, path.get, tblName,
         mapAsJavaMap(parameters)
       )
 
       val hoodieRecords =
         if (parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean) {
-          DataSourceUtils.dropDuplicates(jsc, hoodieAllIncomingRecords, mapAsJavaMap(parameters))
+          DataSourceUtils.dropDuplicates(context, hoodieAllIncomingRecords, mapAsJavaMap(parameters))
         } else {
           hoodieAllIncomingRecords
         }
@@ -175,7 +177,7 @@ private[hudi] object HoodieSparkSqlWriter {
       }
 
       // Create a HoodieWriteClient & issue the delete.
-      val client = DataSourceUtils.createHoodieClient(jsc,
+      val client = DataSourceUtils.createHoodieClient(context,
         Schema.create(Schema.Type.NULL).toString, path.get, tblName,
         mapAsJavaMap(parameters)
       )
@@ -258,7 +260,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
   private def checkWriteStatus(writeStatuses: JavaRDD[WriteStatus],
                                parameters: Map[String, String],
-                               client: HoodieWriteClient[_],
+                               client: HoodieSparkWriteClient[_],
                                instantTime: String,
                                basePath: Path,
                                operation: String,

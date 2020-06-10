@@ -24,7 +24,7 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
-import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.HoodieSparkWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -88,7 +88,7 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    try (HoodieWriteClient client = getHoodieWriteClient(config)) {
+    try (HoodieSparkWriteClient client = getHoodieWriteClient(config)) {
       // Rollback inflight commit3 and commit2
       client.rollback(commitTime3);
       client.rollback(commitTime2);

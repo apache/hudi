@@ -59,7 +59,7 @@ public class DataSourceTestUtils {
   }
 
   public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>
-          implements UserDefinedBulkInsertPartitioner<T> {
+          implements UserDefinedBulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
     @Override
     public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {

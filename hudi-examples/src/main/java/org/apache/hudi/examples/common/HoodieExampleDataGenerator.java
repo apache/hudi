@@ -46,7 +46,7 @@ import java.util.stream.Stream;
 /**
  * Class to be used to generate test data.
  */
-public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
+public class HoodieExampleDataGenerator<T extends HoodieRecordPayload> {
 
   public static final String DEFAULT_FIRST_PARTITION_PATH = "2020/01/01";
   public static final String DEFAULT_SECOND_PARTITION_PATH = "2020/01/02";
