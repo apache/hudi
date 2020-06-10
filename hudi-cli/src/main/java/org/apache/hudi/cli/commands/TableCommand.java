@@ -131,4 +131,14 @@ public class TableCommand implements CommandMarker {
     });
     return HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
   }
+
+  /**
+   * Refresh table metadata.
+   */
+  @CliCommand(value = {"refresh", "refresh metadata", "commits refresh", "cleans refresh", "savepoints refresh"},
+      help = "Refresh table metadata")
+  public String refreshMetadata() {
+    HoodieCLI.refreshTableMetadata();
+    return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
+  }
 }

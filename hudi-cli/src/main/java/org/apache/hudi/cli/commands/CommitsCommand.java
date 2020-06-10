@@ -214,12 +214,6 @@ public class CommitsCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "commits refresh", help = "Refresh the commits")
-  public String refreshCommits() throws IOException {
-    HoodieCLI.refreshTableMetadata();
-    return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
-  }
-
   @CliCommand(value = "commit rollback", help = "Rollback a commit")
   public String rollbackCommit(@CliOption(key = {"commit"}, help = "Commit to rollback") final String instantTime,
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath)
@@ -238,7 +232,7 @@ public class CommitsCommand implements CommandMarker {
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
     // Refresh the current
-    refreshCommits();
+    HoodieCLI.refreshTableMetadata();
     if (exitCode != 0) {
       return "Commit " + instantTime + " failed to roll back";
     }

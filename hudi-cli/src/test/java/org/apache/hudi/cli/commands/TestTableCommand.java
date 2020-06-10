@@ -18,17 +18,24 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -139,5 +146,50 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     assertTrue(cr.getResult().toString().contains(tablePath));
     assertTrue(cr.getResult().toString().contains(metaPath));
     assertTrue(cr.getResult().toString().contains("COPY_ON_WRITE"));
+  }
+
+  /**
+   * Test case of command 'refresh'.
+   */
+  @Test
+  public void testRefresh() throws IOException {
+    List<String> refreshCommands = Arrays.asList("refresh", "refresh metadata",
+        "commits refresh", "cleans refresh", "savepoints refresh");
+    for (String command: refreshCommands) {
+      testRefreshCommand(command);
+    }
+  }
+
+  private void testRefreshCommand(String command) throws IOException {
+    // clean table matedata
+    FileSystem fs = FileSystem.get(jsc.hadoopConfiguration());
+    fs.delete(new Path(tablePath + File.separator + HoodieTableMetaClient.METAFOLDER_NAME), true);
+
+    // Create table
+    assertTrue(prepareTable());
+
+    HoodieTimeline timeline =
+        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+    assertEquals(0, timeline.countInstants(), "There should have no instant at first");
+
+    // generate four savepoints
+    for (int i = 100; i < 104; i++) {
+      String instantTime = String.valueOf(i);
+      HoodieTestDataGenerator.createCommitFile(tablePath, instantTime, jsc.hadoopConfiguration());
+    }
+
+    // Before refresh, no instant
+    timeline =
+        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+    assertEquals(0, timeline.countInstants(), "there should have no instant");
+
+    CommandResult cr = getShell().executeCommand(command);
+    assertTrue(cr.isSuccess());
+
+    timeline =
+        HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+
+    // After refresh, there are 4 instants
+    assertEquals(4, timeline.countInstants(), "there should have 4 instants");
   }
 }
