@@ -95,7 +95,7 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
         .map(partition -> new String[]{partition, "No", "None"})
         .toArray(String[][]::new);
     String expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_PARTITION_PATH,
-        HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_REPAIR_ACTION}, rows);
+        HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_ACTION}, rows);
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cr.getResult().toString());
     assertEquals(expected, got);
@@ -126,7 +126,7 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
         .map(partition -> new String[]{partition, "No", "Repaired"})
         .toArray(String[][]::new);
     String expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_PARTITION_PATH,
-        HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_REPAIR_ACTION}, rows);
+        HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_ACTION}, rows);
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cr.getResult().toString());
     assertEquals(expected, got);
@@ -138,7 +138,7 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
         .map(partition -> new String[]{partition, "Yes", "None"})
         .toArray(String[][]::new);
     expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_PARTITION_PATH,
-        HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_REPAIR_ACTION}, rows);
+        HoodieTableHeaderFields.HEADER_METADATA_PRESENT, HoodieTableHeaderFields.HEADER_ACTION}, rows);
     expected = removeNonWordAndStripSpace(expected);
     got = removeNonWordAndStripSpace(cr.getResult().toString());
     assertEquals(expected, got);
