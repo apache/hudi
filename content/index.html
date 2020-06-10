@@ -59,6 +59,7 @@
 
 <link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
 <link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
 
   </head>
 
@@ -116,6 +117,47 @@
         <p>
           <a href="/docs/quick-start-guide.html" class="btn btn--light-outline btn--large"><i class="fa fa-paper-plane"></i> Get Started</a>
         </p>
+      </div>
+    </div>
+
+    <!-- Github and twitter bar -->
+    <div id="share-bar" class="page__hero--overlay" style="background-color: #f6f6f6 !important; box-shadow:0 0 10px #000;">
+      <div class="wrapper" style="padding: 2px 4px 4px 2em !important;">
+        <!-- Github -->
+        <div style="display: inline-block; ">
+          <div style="display: inline-block;">
+            <a class="github-link" style="margin-right: 0.5em;" href=" https://github.com/apache/hudi" aria-label="GitHub link" title="View on GitHub">
+              <i class="fa fa-github" style="color: #055799;" aria-hidden="true"></i>
+            </a>
+            <a class="github-link" style="margin-right: 0.5em;" href="https://twitter.com/ApacheHudi" aria-label="twitter link" title="View on GitHub">
+              <i class="fa fa-twitter" style="color: #055799;" aria-hidden="true"></i>
+            </a>
+            <!-- Github Stars -->
+            <div style="display: inline-block; font-size: 0">
+              <a class="btn--light-outline github-button" href="https://github.com/apache/hudi">
+                <i class="fa fa-star" aria-hidden="true"></i>
+                <span>Star</span>
+              </a>
+              <a id="stars" class="github-count" href="https://github.com/apache/hudi/stargazers"></a>
+            </div>
+            <!-- Github Fork -->
+            <div style="display: inline-block; font-size: 0">
+              <a class="btn--light-outline github-button" href="https://github.com/apache/hudi/fork">
+                <i class="fa fa-code-fork" aria-hidden="true"></i>
+                <span>Fork</span>
+              </a>
+              <a id="fork" class="github-count" href="https://github.com/apache/hudi/network/members"></a>
+            </div>
+            <!-- Github Watch -->
+            <div style="display: inline-block; font-size: 0">
+              <a class="btn--light-outline github-button" href="https://github.com/apache/hudi/subscription">
+                <i class="fa fa-eye" aria-hidden="true"></i>
+                <span>Watch</span>
+              </a>
+              <a id="watch" class="github-count" href="https://github.com/apache/hudi/watchers"></a>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -235,9 +277,21 @@
 </div>
       </footer>
     </div>
-    
-<script src="/assets/js/main.min.js"></script>
-
 
   </body>
+  <script>
+    window.onload=function(){
+      jQuery.ajax({
+        type : "GET",
+        contentType: "application/json;charset=UTF-8",
+        url : "https://api.github.com/repositories/76474200",
+        success : function(data) {
+          $("a#stars").text(data.stargazers_count.toString().replace(/\d+?(?=(?:\d{3})+$)/img, "$&,"));
+          $("a#fork").text(data.forks_count.toString().replace(/\d+?(?=(?:\d{3})+$)/img, "$&,"));
+          $("a#watch").text(data.watchers_count.toString().replace(/\d+?(?=(?:\d{3})+$)/img, "$&,"));
+          $("a#stars,a#fork,a#watch").css("display", "inline-block");
+          $("div#share-bar").css("display", "inline-block");        }
+      });
+    };
+  </script>
 </html>
