@@ -20,6 +20,8 @@ package org.apache.hudi.metrics;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
+import org.apache.hudi.metrics.prometheus.PrometheusReporter;
+import org.apache.hudi.metrics.prometheus.PushGatewayReporter;
 
 import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
@@ -47,6 +49,12 @@ public class MetricsReporterFactory {
         break;
       case DATADOG:
         reporter = new DatadogMetricsReporter(config, registry);
+        break;
+      case PROMETHEUS_PUSHGATEWAY:
+        reporter = new PushGatewayReporter(config, registry);
+        break;
+      case PROMETHEUS:
+        reporter = new PrometheusReporter(config);
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");
