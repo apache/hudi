@@ -169,7 +169,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     SourceFormatAdapter latestKafkaSource = new SourceFormatAdapter(latestJsonSource);
 
     // 1. Extract with a none data kafka checkpoint
-    // => get a checkpoint string like "hoodie_test,0:0,1:0", earliest checkpoint should be equals to latest checkpoint
+    // => get a checkpoint string like "hoodie_test,0:0,1:0", latest checkpoint should be equals to earliest checkpoint
     InputBatch<JavaRDD<GenericRecord>> earFetch0 = earliestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
     InputBatch<JavaRDD<GenericRecord>> latFetch0 = latestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
     assertEquals(earFetch0.getBatch(), latFetch0.getBatch());
@@ -178,16 +178,12 @@ public class TestKafkaSource extends UtilitiesTestBase {
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
 
     // 2. Extract new checkpoint with a null / empty string pre checkpoint
-    // => earliest fetch will get a batch of data and a end offset checkpoint
+    // => earliest fetch with max source limit will get all of data and a end offset checkpoint
     InputBatch<JavaRDD<GenericRecord>> earFetch1 = earliestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
 
-    // => [a null pre checkpoint] latest fetch will get a checkpoint same to earliest
+    // => [a null pre checkpoint] latest reset fetch will get a end offset checkpoint same to earliest
     InputBatch<JavaRDD<GenericRecord>> latFetch1 = latestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
     assertEquals(earFetch1.getCheckpointForNextBatch(), latFetch1.getCheckpointForNextBatch());
-
-    // => [a empty string pre checkpoint] latest fetch will get a checkpoint same to earliest
-    InputBatch<JavaRDD<GenericRecord>> latFetch2 = latestKafkaSource.fetchNewDataInAvroFormat(Option.of(""), Long.MAX_VALUE);
-    assertEquals(earFetch1.getCheckpointForNextBatch(), latFetch2.getCheckpointForNextBatch());
   }
 
   @Test
