@@ -49,11 +49,23 @@ public class Metrics {
     }
     reporter.start();
 
+<<<<<<< HEAD
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       try {
         reporter.report();
         if (getReporter() != null) {
           getReporter().close();
+=======
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
+      public void run() {
+        try {
+          reporter.report();
+          reporter.stop();
+          Closeables.close(reporter.getReporter(), true);
+        } catch (Exception e) {
+          e.printStackTrace();
+>>>>>>> origin/hudi_support_prometheus
         }
       } catch (Exception e) {
         LOG.warn("Error while closing reporter", e);
