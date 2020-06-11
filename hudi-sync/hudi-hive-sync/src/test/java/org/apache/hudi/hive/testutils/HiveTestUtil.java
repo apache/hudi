@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive.testutils;
 
+import org.apache.hive.service.server.HiveServer2;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -38,10 +39,8 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.hive.testutils.TestCluster;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.HoodieHiveClient;
@@ -94,10 +93,10 @@ public class HiveTestUtil {
 
   public static void setUp() throws Exception {
     if (cluster == null) {
-       cluster = new TestCluster();
-       cluster.setup();
-       configuration = cluster.getConf();
-       fileSystem = cluster.dfsCluster.getFileSystem();
+      cluster = new TestCluster();
+      cluster.setup();
+      configuration = cluster.getConf();
+      fileSystem = cluster.dfsCluster.getFileSystem();
     }
     if (zkServer == null) {
       zkService = new ZookeeperTestService(configuration);

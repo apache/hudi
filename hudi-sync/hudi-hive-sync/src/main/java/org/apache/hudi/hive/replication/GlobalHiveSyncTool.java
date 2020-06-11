@@ -23,8 +23,8 @@ import java.util.Map;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -47,7 +47,7 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
         break;
       case MERGE_ON_READ:
         // sync a RO table for MOR
-        syncHoodieTable(roTableTableName.get(), false);
+        syncHoodieTable(roTableName.get(), false);
         // sync a RT table for MOR
         syncHoodieTable(snapshotTableName, true);
         break;
@@ -76,8 +76,8 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
     Option<String> timeStamp = hoodieHiveClient.getLastReplicatedTime(snapshotTableName);
     timeStampMap.put(snapshotTableName, timeStamp);
     if (HoodieTableType.MERGE_ON_READ.equals(hoodieHiveClient.getTableType())) {
-      Option<String> roTimeStamp = hoodieHiveClient.getLastReplicatedTime(roTableTableName.get());
-      timeStampMap.put(roTableTableName.get(), roTimeStamp);
+      Option<String> roTimeStamp = hoodieHiveClient.getLastReplicatedTime(roTableName.get());
+      timeStampMap.put(roTableName.get(), roTimeStamp);
     }
     return timeStampMap;
   }
