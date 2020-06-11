@@ -70,7 +70,7 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
   public static final String PROMETHEUS_HOST = PROMETHEUS_PREFIX + ".host";
   public static final String DEFAULT_PROMETHEUS_HOST = "localhost";
   public static final String PROMETHEUS_PORT = PROMETHEUS_PREFIX + ".port";
-  public static final int DEFAULT_PROMETHEUS_PORT = 9249;
+  public static final int DEFAULT_PROMETHEUS_PORT = 9090;
 
   private HoodieMetricsConfig(Properties props) {
     super(props);
