@@ -43,6 +43,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -1140,13 +1141,8 @@ public class TestCleaner extends HoodieClientTestBase {
    * @throws IOException in case of error
    */
   private int getTotalTempFiles() throws IOException {
-    RemoteIterator<?> itr = fs.listFiles(new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME), true);
-    int count = 0;
-    while (itr.hasNext()) {
-      count++;
-      itr.next();
-    }
-    return count;
+    return FileSystemTestUtils.listPathRecursively(fs, new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME))
+        .size();
   }
 
   private Stream<Pair<String, String>> convertPathToFileIdWithCommitTime(final HoodieTableMetaClient metaClient,

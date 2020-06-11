@@ -422,15 +422,9 @@ public class HoodieTestUtils {
   }
 
   public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath) throws IOException {
-    RemoteIterator<LocatedFileStatus> itr = fs.listFiles(new Path(basePath), true);
-    List<FileStatus> returns = new ArrayList<>();
-    while (itr.hasNext()) {
-      LocatedFileStatus status = itr.next();
-      if (status.getPath().getName().contains(".parquet")) {
-        returns.add(status);
-      }
-    }
-    return returns.toArray(new FileStatus[returns.size()]);
+    return FileSystemTestUtils.listPathRecursively(fs, new Path(basePath))
+        .stream().filter(status -> status.getPath().getName().contains(".parquet"))
+        .toArray(FileStatus[]::new);
   }
 
   public static List<String> monotonicIncreasingCommitTimestamps(int numTimestamps, int startSecsDelta) {

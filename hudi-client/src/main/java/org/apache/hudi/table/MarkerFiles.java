@@ -66,7 +66,7 @@ public class MarkerFiles {
   /**
    * Delete Marker directory corresponding to an instant.
    */
-  public void deleteMarkerDir() {
+  public boolean deleteMarkerDir() {
     try {
       boolean result = fs.delete(markerDirPath, true);
       if (result) {
@@ -74,9 +74,14 @@ public class MarkerFiles {
       } else {
         LOG.info("No marker directory to delete at " + markerDirPath);
       }
+      return result;
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
+  }
+
+  public boolean doesMarkerDirExist() throws IOException {
+    return fs.exists(markerDirPath);
   }
 
   public List<String> getCreatedOrMergedDataPaths() throws IOException {
@@ -137,10 +142,6 @@ public class MarkerFiles {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
     }
     return markerPath;
-  }
-
-  public boolean doesMarkerDirExist() throws IOException {
-    return fs.exists(markerDirPath);
   }
 
   public enum MarkerType {

@@ -96,11 +96,6 @@ public class TestHoodieSnapshotExporter extends HoodieClientTestHarness {
     JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
     hdfsWriteClient.bulkInsert(recordsRDD, COMMIT_TIME);
     hdfsWriteClient.close();
-
-    RemoteIterator<LocatedFileStatus> itr = dfs.listFiles(new Path(sourcePath), true);
-    while (itr.hasNext()) {
-      LOG.info(">>> Prepared test file: " + itr.next().getPath());
-    }
   }
 
   @AfterEach

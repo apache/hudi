@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.fs.inline.InMemoryFileSystem;
@@ -26,8 +30,11 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.UUID;
+import java.util.stream.StreamSupport;
 
 /**
  * Utils class to assist in testing {@link InMemoryFileSystem} and {@link InLineFileSystem}.
@@ -66,5 +73,14 @@ public class FileSystemTestUtils {
           "Unable to delete file " + fileToDelete + ".";
       throw new IOException(message);
     }
+  }
+
+  public static List<FileStatus> listPathRecursively(FileSystem fs, Path path) throws IOException {
+    RemoteIterator<LocatedFileStatus> itr = fs.listFiles(path, true);
+    List<FileStatus> statuses = new ArrayList<>();
+    while (itr.hasNext()) {
+      statuses.add(itr.next());
+    }
+    return statuses;
   }
 }
