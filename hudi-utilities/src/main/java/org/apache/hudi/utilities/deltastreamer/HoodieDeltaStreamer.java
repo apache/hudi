@@ -18,8 +18,9 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.async.AbstractAsyncService;
+import org.apache.hudi.async.AsyncCompactService;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
@@ -62,15 +63,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.IntStream;
 
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
@@ -96,6 +91,8 @@ public class HoodieDeltaStreamer implements Serializable {
   protected transient Option<DeltaSyncService> deltaSyncService;
 
   private final Option<BootstrapExecutor> bootstrapExecutor;
+
+  public static final String DELTASYNC_POOL_NAME = "hoodiedeltasync";
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
@@ -559,8 +556,8 @@ public class HoodieDeltaStreamer implements Serializable {
         boolean error = false;
         if (cfg.isAsyncCompactionEnabled()) {
           // set Scheduler Pool.
-          LOG.info("Setting Spark Pool name for delta-sync to " + SchedulerConfGenerator.DELTASYNC_POOL_NAME);
-          jssc.setLocalProperty("spark.scheduler.pool", SchedulerConfGenerator.DELTASYNC_POOL_NAME);
+          LOG.info("Setting Spark Pool name for delta-sync to " + DELTASYNC_POOL_NAME);
+          jssc.setLocalProperty("spark.scheduler.pool", DELTASYNC_POOL_NAME);
         }
         try {
           while (!isShutdownRequested()) {
@@ -658,100 +655,6 @@ public class HoodieDeltaStreamer implements Serializable {
 
     public TypedProperties getProps() {
       return props;
-    }
-  }
-
-  /**
-   * Async Compactor Service that runs in separate thread. Currently, only one compactor is allowed to run at any time.
-   */
-  public static class AsyncCompactService extends AbstractAsyncService {
-
-    private static final long serialVersionUID = 1L;
-    private final int maxConcurrentCompaction;
-    private transient Compactor compactor;
-    private transient JavaSparkContext jssc;
-    private transient BlockingQueue<HoodieInstant> pendingCompactions = new LinkedBlockingQueue<>();
-    private transient ReentrantLock queueLock = new ReentrantLock();
-    private transient Condition consumed = queueLock.newCondition();
-
-    public AsyncCompactService(JavaSparkContext jssc, HoodieWriteClient client) {
-      this.jssc = jssc;
-      this.compactor = new Compactor(client, jssc);
-      this.maxConcurrentCompaction = 1;
-    }
-
-    /**
-     * Enqueues new Pending compaction.
-     */
-    public void enqueuePendingCompaction(HoodieInstant instant) {
-      pendingCompactions.add(instant);
-    }
-
-    /**
-     * Wait till outstanding pending compactions reduces to the passed in value.
-     *
-     * @param numPendingCompactions Maximum pending compactions allowed
-     * @throws InterruptedException
-     */
-    public void waitTillPendingCompactionsReducesTo(int numPendingCompactions) throws InterruptedException {
-      try {
-        queueLock.lock();
-        while (!isShutdown() && (pendingCompactions.size() > numPendingCompactions)) {
-          consumed.await();
-        }
-      } finally {
-        queueLock.unlock();
-      }
-    }
-
-    /**
-     * Fetch Next pending compaction if available.
-     *
-     * @return
-     * @throws InterruptedException
-     */
-    private HoodieInstant fetchNextCompactionInstant() throws InterruptedException {
-      LOG.info("Compactor waiting for next instant for compaction upto 60 seconds");
-      HoodieInstant instant = pendingCompactions.poll(60, TimeUnit.SECONDS);
-      if (instant != null) {
-        try {
-          queueLock.lock();
-          // Signal waiting thread
-          consumed.signal();
-        } finally {
-          queueLock.unlock();
-        }
-      }
-      return instant;
-    }
-
-    /**
-     * Start Compaction Service.
-     */
-    @Override
-    protected Pair<CompletableFuture, ExecutorService> startService() {
-      ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentCompaction);
-      return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentCompaction).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
-        try {
-          // Set Compactor Pool Name for allowing users to prioritize compaction
-          LOG.info("Setting Spark Pool name for compaction to " + SchedulerConfGenerator.COMPACT_POOL_NAME);
-          jssc.setLocalProperty("spark.scheduler.pool", SchedulerConfGenerator.COMPACT_POOL_NAME);
-
-          while (!isShutdownRequested()) {
-            final HoodieInstant instant = fetchNextCompactionInstant();
-            if (null != instant) {
-              compactor.compact(instant);
-            }
-          }
-          LOG.info("Compactor shutting down properly!!");
-        } catch (InterruptedException ie) {
-          LOG.warn("Compactor executor thread got interrupted exception. Stopping", ie);
-        } catch (IOException e) {
-          LOG.error("Compactor executor failed", e);
-          throw new HoodieIOException(e.getMessage(), e);
-        }
-        return true;
-      }, executor)).toArray(CompletableFuture[]::new)), executor);
     }
   }
 

@@ -281,4 +281,8 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = "false"
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
   val DEFAULT_HIVE_USE_JDBC_OPT_VAL = "true"
+
+  // Async Compaction - Enabled by default for MOR
+  val ASYNC_COMPACT_ENABLE_KEY = "hoodie.datasource.compaction.async.enable"
+  val DEFAULT_ASYNC_COMPACT_ENABLE_VAL = "true"
 }

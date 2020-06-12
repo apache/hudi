@@ -599,6 +599,26 @@ public class HoodieTestDataGenerator {
     return updates;
   }
 
+  /**
+   * Generate update for each record in the dataset.
+   * @param instantTime
+   * @return
+   * @throws IOException
+   */
+  public List<HoodieRecord> generateUpdatesForAllRecords(String instantTime) {
+    List<HoodieRecord> updates = new ArrayList<>();
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    existingKeys.values().forEach(kp -> {
+      try {
+        HoodieRecord record = generateUpdateRecord(kp.key, instantTime);
+        updates.add(record);
+      } catch (IOException ioe) {
+        throw new HoodieIOException(ioe.getMessage(), ioe);
+      }
+    });
+    return updates;
+  }
+
   public List<HoodieRecord> generateUpdatesAsPerSchema(String commitTime, Integer n, String schemaStr) {
     return generateUniqueUpdatesStream(commitTime, n, schemaStr).collect(Collectors.toList());
   }

@@ -50,7 +50,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     try {
       val sqlContext = session.sqlContext
       val options = Map("path" -> "hoodie/test/path", HoodieWriteConfig.TABLE_NAME -> "hoodie_test_tbl")
-      val e = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.ErrorIfExists, options, session.emptyDataFrame))
+      val e = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.ErrorIfExists, options,
+        session.emptyDataFrame))
       assert(e.getMessage.contains("spark.serializer"))
     } finally {
       session.stop()
