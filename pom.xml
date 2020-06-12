@@ -761,10 +761,10 @@
         <version>${hive.version}</version>
         <scope>provided</scope>
         <exclusions>
-          <exclusion>
+          <!--<exclusion>
             <groupId>javax.transaction</groupId>
             <artifactId>jta</artifactId>
-          </exclusion>
+          </exclusion>-->
           <exclusion>
             <groupId>javax.transaction</groupId>
             <artifactId>transaction-api</artifactId>
