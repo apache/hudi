@@ -247,9 +247,9 @@ private[hudi] object HoodieSparkSqlWriter {
     hiveSyncConfig.hivePass = parameters(HIVE_PASS_OPT_KEY)
     hiveSyncConfig.jdbcUrl = parameters(HIVE_URL_OPT_KEY)
     hiveSyncConfig.partitionFields =
-      // Reset partition_fields to empty, when sync hudi non-parititioned table to hive.
+      // Set partitionFields to empty, when the NonPartitionedExtractor is used
       if (classOf[NonPartitionedExtractor].getName.equals(parameters(HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY))) {
-        log.warn(s"Reset $HIVE_PARTITION_FIELDS_OPT_KEY to empty, as NonPartitionedExtractor is used")
+        log.warn(s"Parameter '$HIVE_PARTITION_FIELDS_OPT_KEY' is ignored, since the NonPartitionedExtractor is used")
         Array.empty[String].toList
       } else {
         ListBuffer(parameters(HIVE_PARTITION_FIELDS_OPT_KEY).split(",").map(_.trim).filter(!_.isEmpty).toList: _*)
