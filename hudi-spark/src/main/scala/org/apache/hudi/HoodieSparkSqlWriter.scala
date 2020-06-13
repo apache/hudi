@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool, NonPartitionedExtractor}
+import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
@@ -247,13 +247,7 @@ private[hudi] object HoodieSparkSqlWriter {
     hiveSyncConfig.hivePass = parameters(HIVE_PASS_OPT_KEY)
     hiveSyncConfig.jdbcUrl = parameters(HIVE_URL_OPT_KEY)
     hiveSyncConfig.partitionFields =
-      // Set partitionFields to empty, when the NonPartitionedExtractor is used
-      if (classOf[NonPartitionedExtractor].getName.equals(parameters(HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY))) {
-        log.warn(s"Parameter '$HIVE_PARTITION_FIELDS_OPT_KEY' is ignored, since the NonPartitionedExtractor is used")
-        Array.empty[String].toList
-      } else {
-        ListBuffer(parameters(HIVE_PARTITION_FIELDS_OPT_KEY).split(",").map(_.trim).filter(!_.isEmpty).toList: _*)
-      }
+      ListBuffer(parameters(HIVE_PARTITION_FIELDS_OPT_KEY).split(",").map(_.trim).filter(!_.isEmpty).toList: _*)
     hiveSyncConfig.partitionValueExtractorClass = parameters(HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY)
     hiveSyncConfig.useJdbc = parameters(HIVE_USE_JDBC_OPT_KEY).toBoolean
     hiveSyncConfig
