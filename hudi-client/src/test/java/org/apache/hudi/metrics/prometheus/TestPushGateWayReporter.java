@@ -15,13 +15,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.hudi.metrics.prometheus;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static org.apache.hudi.metrics.Metrics.registerGauge;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,9 +42,6 @@ public class TestPushGateWayReporter {
     new HoodieMetrics(config, "raw_table");
     registerGauge("pushGateWayReporter_metric", 123L);
     assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
-            .get("pushGateWayReporter_metric").getValue().toString());
-
-
-
-    }
+        .get("pushGateWayReporter_metric").getValue().toString());
+  }
 }
