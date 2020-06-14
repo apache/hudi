@@ -32,15 +32,17 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import scala.Tuple2;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
+import scala.Tuple2;
 
 import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
 
@@ -70,6 +72,7 @@ public class HoodieGlobalSimpleIndex<T extends HoodieRecordPayload> extends Hood
    * @param hoodieTable instance of {@link HoodieTable} to use
    * @return {@link JavaRDD} of records with record locations set
    */
+  @Override
   protected JavaRDD<HoodieRecord<T>> tagLocationInternal(JavaRDD<HoodieRecord<T>> inputRecordRDD, JavaSparkContext jsc,
                                                          HoodieTable<T> hoodieTable) {
 

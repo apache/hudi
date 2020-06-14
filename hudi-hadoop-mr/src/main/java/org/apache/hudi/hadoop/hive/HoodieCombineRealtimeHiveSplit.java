@@ -18,14 +18,16 @@
 
 package org.apache.hudi.hadoop.hive;
 
-import java.io.IOException;
-import java.util.Map;
+import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat.CombineHiveInputSplit;
+
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.plan.PartitionDesc;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.lib.CombineFileSplit;
-import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat.CombineHiveInputSplit;
+
+import java.io.IOException;
+import java.util.Map;
 
 /**
  * Represents a CombineHiveInputSplit for realtime tables.

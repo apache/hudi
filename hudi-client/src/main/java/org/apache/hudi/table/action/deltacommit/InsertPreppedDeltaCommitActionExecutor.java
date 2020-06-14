@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -39,6 +40,7 @@ public class InsertPreppedDeltaCommitActionExecutor<T extends HoodieRecordPayloa
     this.preppedRecords = preppedRecords;
   }
 
+  @Override
   public HoodieWriteMetadata execute() {
     return super.execute(preppedRecords);
   }

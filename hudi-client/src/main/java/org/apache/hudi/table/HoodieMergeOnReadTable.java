@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -33,6 +32,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
+import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.deltacommit.BulkInsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.BulkInsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.DeleteDeltaCommitActionExecutor;
@@ -40,9 +40,10 @@ import org.apache.hudi.table.action.deltacommit.InsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.InsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.UpsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.UpsertPreppedDeltaCommitActionExecutor;
-import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.restore.MergeOnReadRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -137,6 +138,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     return new MergeOnReadRollbackActionExecutor(jsc, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
   }
 
+  @Override
   public HoodieRestoreMetadata restore(JavaSparkContext jsc, String restoreInstantTime, String instantToRestore) {
     return new MergeOnReadRestoreActionExecutor(jsc, config, this, restoreInstantTime, instantToRestore).execute();
   }

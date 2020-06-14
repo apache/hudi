@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action;
 
-import java.util.List;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -27,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.time.Duration;
+import java.util.List;
 
 /**
  * Contains metadata, write-statuses and latency times corresponding to a commit/delta-commit action.

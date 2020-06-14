@@ -18,15 +18,6 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -39,6 +30,17 @@ import org.apache.hudi.hadoop.RecordReaderValueIterator;
 import org.apache.hudi.hadoop.SafeParquetRecordReaderWrapper;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
     implements RecordReader<NullWritable, ArrayWritable> {
@@ -62,12 +64,12 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
    * Construct a Unmerged record reader that parallely consumes both parquet and log records and buffers for upstream
    * clients to consume.
    *
-   * @param split File split
-   * @param job Job Configuration
+   * @param split      File split
+   * @param job        Job Configuration
    * @param realReader Parquet Reader
    */
   public RealtimeUnmergedRecordReader(HoodieRealtimeFileSplit split, JobConf job,
-      RecordReader<NullWritable, ArrayWritable> realReader) {
+                                      RecordReader<NullWritable, ArrayWritable> realReader) {
     super(split, job);
     this.parquetReader = new SafeParquetRecordReaderWrapper(realReader);
     // Iterator for consuming records from parquet file
@@ -80,10 +82,10 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
         split.getBasePath(), split.getDeltaLogPaths(), getReaderSchema(), split.getMaxCommitTime(),
         Boolean.parseBoolean(jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
         false, jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE), record -> {
-          // convert Hoodie log record to Hadoop AvroWritable and buffer
-          GenericRecord rec = (GenericRecord) record.getData().getInsertValue(getReaderSchema()).get();
-          ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(rec, getHiveSchema());
-          this.executor.getQueue().insertRecord(aWritable);
+      // convert Hoodie log record to Hadoop AvroWritable and buffer
+      GenericRecord rec = (GenericRecord) record.getData().getInsertValue(getReaderSchema()).get();
+      ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(rec, getHiveSchema());
+      this.executor.getQueue().insertRecord(aWritable);
     });
     // Start reading and buffering
     this.executor.startProducers();

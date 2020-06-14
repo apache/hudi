@@ -18,10 +18,10 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.avro.JsonProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.SchemaCompatabilityException;
 
+import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;

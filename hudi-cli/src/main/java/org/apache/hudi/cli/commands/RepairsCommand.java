@@ -29,11 +29,11 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.AvroRuntimeException;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
@@ -41,7 +41,6 @@ import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
-import scala.collection.JavaConverters;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -51,6 +50,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConverters;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
