@@ -328,6 +328,19 @@ public class HoodieHiveClient {
   }
 
   /**
+   * Get the table partition keys.
+   */
+  public Map<String, String> getTablePartitionKeys(String tableName) {
+    try {
+      // get the partition keys of the table.
+      Table table = this.client.getTable(syncConfig.databaseName, tableName);
+      return table.getPartitionKeys().stream().collect(Collectors.toMap(FieldSchema::getName, f -> f.getType().toUpperCase()));
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to get table partition keys for : " + tableName, e);
+    }
+  }
+
+  /**
    * Gets the schema for a hoodie table. Depending on the type of table, try to read schema from commit metadata if
    * present, else fallback to reading from any file written in the latest commit. We will assume that the schema has
    * not changed within a single atomic write.

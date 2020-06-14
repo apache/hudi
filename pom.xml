@@ -763,6 +763,10 @@
         <exclusions>
           <exclusion>
             <groupId>javax.transaction</groupId>
+            <artifactId>jta</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.transaction</groupId>
             <artifactId>transaction-api</artifactId>
           </exclusion>
           <exclusion>

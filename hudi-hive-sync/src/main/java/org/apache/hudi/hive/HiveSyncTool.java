@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hive;
 
-import static jdk.nashorn.internal.runtime.regexp.joni.Config.log;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.InvalidTableException;

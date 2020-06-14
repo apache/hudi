@@ -20,18 +20,10 @@ package org.apache.hudi.functional
 import java.util.{Date, UUID}
 
 import org.apache.commons.io.FileUtils
-import org.apache.hadoop.hive.conf.HiveConf
-import org.apache.hadoop.hive.metastore.IMetaStoreClient
-import org.apache.hadoop.hive.ql.metadata.Hive
-import org.apache.hive.jdbc.HiveDriver
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkSqlWriter
-import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hive.HoodieHiveSyncException
-import org.apache.hudi.hive.testutils.HiveTestService
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.scalatest.{FunSuite, Matchers}
 
@@ -110,91 +102,4 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
   case class Test(uuid: String, ts: Long)
 
-  test("Table can be created normally without partition keys, when sync non-parititioned table to hive") {
-    // MiniCluster
-    MiniClusterUtil.setUp()
-
-    val hadoopConf = MiniClusterUtil.configuration
-
-    // Hive
-    val hiveTestService = new HiveTestService(hadoopConf)
-    val hiveServer = hiveTestService.start()
-
-    val session = SparkSession.builder()
-      .appName("test_hoodie_trips_hive_non_partitioned")
-      .master("local[*]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .getOrCreate()
-
-    try {
-
-      val sqlContext = session.sqlContext
-      val tableName = "hoodie_trips_hive_non_partitioned"
-      val path = hadoopConf.getRaw("fs.defaultFS") + "/hoodie_test_path"
-
-      import session.implicits._
-      val df = Seq(
-        (100, "name_1", "2020-01-01 13:51:39", 1.32, "type1"),
-        (101, "name_2", "2020-01-01 12:14:58", 2.57, "type2"),
-        (102, "name_3", "2020-01-01 12:15:00", 3.45, "type1"),
-        (103, "name_4", "2020-01-01 13:51:42", 6.78, "type2")
-      )
-        .toDF("id", "name", "ts", "value", "type")
-
-      val tableOptions = Map("path" -> path,
-        HoodieWriteConfig.TABLE_NAME -> tableName,
-        RECORDKEY_FIELD_OPT_KEY -> "id",
-        PRECOMBINE_FIELD_OPT_KEY -> "ts",
-        PARTITIONPATH_FIELD_OPT_KEY -> "type",
-        // enable Hive Sync
-        HIVE_SYNC_ENABLED_OPT_KEY -> "true",
-        HIVE_TABLE_OPT_KEY -> tableName,
-        // HIVE_PARTITION_FIELDS_OPT_KEY should be ignored when sync non-parititioned table to hive
-        HIVE_PARTITION_FIELDS_OPT_KEY -> "type",
-        HIVE_URL_OPT_KEY -> "jdbc:hive2://127.0.0.1:9999",
-        // Set partition value extractor to NonPartitionedExtractor
-        HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY -> "org.apache.hudi.hive.NonPartitionedExtractor",
-        KEYGENERATOR_CLASS_OPT_KEY -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator"
-      )
-      val tableParams = HoodieSparkSqlWriter.parametersWithWriteDefaults(tableOptions)
-
-      // do the write and sync
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableParams, df)
-
-      // validate
-      val hiveMSClient = getHiveMetaStoreClient(hiveServer.getHiveConf)
-
-      // table should exist and have no partitions
-      assert(hiveMSClient.tableExists(tableParams(HIVE_DATABASE_OPT_KEY), tableName), s"Table $tableName should exist after sync complete")
-      assert(hiveMSClient.listPartitions(tableParams(HIVE_DATABASE_OPT_KEY), tableName, -1).size() == 0,
-        "Table should not have partitions because of NonPartitionedExtractor")
-
-      // table create DDL should not contain 'PARTITIONED BY'
-      assert(hiveMSClient.getTable(tableParams(HIVE_DATABASE_OPT_KEY), tableName).getPartitionKeys.size() == 0,
-        "Table create DDL should not contain 'PARTITIONED BY'")
-
-      // finally the total number of fields should be equal
-      assert(hiveMSClient.getTable(tableParams(HIVE_DATABASE_OPT_KEY), tableName)
-        .getSd().getCols().size() == (df.columns.length + HoodieRecord.HOODIE_META_COLUMNS.size()),
-        "Table schema should contain all the fields")
-
-    } finally {
-      session.stop()
-      hiveServer.stop()
-      hiveTestService.stop()
-      MiniClusterUtil.shutdown()
-    }
-  }
-
-  def getHiveMetaStoreClient(hiveConf: HiveConf): IMetaStoreClient ={
-    try {
-      Class.forName(classOf[HiveDriver].getName)
-      Hive.get(hiveConf).getMSC()
-    } catch {
-      case e: ClassNotFoundException =>
-        throw new IllegalStateException("Could not find HiveDriver in classpath. ", e)
-      case _ =>
-        throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient")
-    }
-  }
 }
