@@ -33,7 +33,7 @@ public class UtilsCommand implements CommandMarker {
   @CliCommand(value = "utils loadClass", help = "Load a class")
   public String loadClass(@CliOption(key = {"class"}, help = "Check mode") final String clazz) {
     if (StringUtils.isNullOrEmpty(clazz)) {
-      return "Class to be loaded can not null!";
+      return "Class to be loaded can not be null!";
     }
     try {
       Class klass = Class.forName(clazz);

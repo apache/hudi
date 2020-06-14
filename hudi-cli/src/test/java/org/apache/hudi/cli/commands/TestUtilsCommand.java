@@ -18,7 +18,7 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.cli.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
@@ -41,7 +41,7 @@ public class TestUtilsCommand extends AbstractShellIntegrationTest {
   public void testLoadClass() {
     String name = HoodieTable.class.getName();
     CommandResult cr = getShell().executeCommand(String.format("utils loadClass --class %s", name));
-    assertAll("Command run success",
+    assertAll("Command runs success",
         () -> assertTrue(cr.isSuccess()),
         () -> assertNotNull(cr.getResult().toString()),
         () -> assertTrue(cr.getResult().toString().startsWith("file:")));
@@ -55,7 +55,7 @@ public class TestUtilsCommand extends AbstractShellIntegrationTest {
     String name = "test.class.NotFound";
     CommandResult cr = getShell().executeCommand(String.format("utils loadClass --class %s", name));
 
-    assertAll("Command run success",
+    assertAll("Command runs success",
         () -> assertTrue(cr.isSuccess()),
         () -> assertNotNull(cr.getResult().toString()),
         () -> assertEquals(cr.getResult().toString(), String.format("Class %s not found!", name)));
@@ -69,9 +69,9 @@ public class TestUtilsCommand extends AbstractShellIntegrationTest {
     String name = "";
     CommandResult cr = getShell().executeCommand(String.format("utils loadClass --class %s", name));
 
-    assertAll("Command run success",
+    assertAll("Command runs success",
         () -> assertTrue(cr.isSuccess()),
         () -> assertNotNull(cr.getResult().toString()),
-        () -> assertEquals("Class to be loaded can not null!", cr.getResult().toString()));
+        () -> assertEquals("Class to be loaded can not be null!", cr.getResult().toString()));
   }
 }
