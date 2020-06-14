@@ -153,7 +153,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
    */
   @Test
   public void testRefresh() throws IOException {
-    List<String> refreshCommands = Arrays.asList("refresh", "refresh metadata",
+    List<String> refreshCommands = Arrays.asList("refresh", "metadata refresh",
         "commits refresh", "cleans refresh", "savepoints refresh");
     for (String command: refreshCommands) {
       testRefreshCommand(command);

@@ -135,7 +135,7 @@ public class TableCommand implements CommandMarker {
   /**
    * Refresh table metadata.
    */
-  @CliCommand(value = {"refresh", "refresh metadata", "commits refresh", "cleans refresh", "savepoints refresh"},
+  @CliCommand(value = {"refresh", "metadata refresh", "commits refresh", "cleans refresh", "savepoints refresh"},
       help = "Refresh table metadata")
   public String refreshMetadata() {
     HoodieCLI.refreshTableMetadata();
