@@ -81,26 +81,14 @@ public class TestKafkaSource extends UtilitiesTestBase {
     testUtils.teardown();
   }
 
-  private TypedProperties createPropsForJsonSource(Long maxEventsToReadFromKafkaSource) {
+  private TypedProperties createPropsForJsonSource(Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.deltastreamer.source.kafka.topic", TEST_TOPIC_NAME);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
-    props.setProperty("auto.offset.reset", "earliest");
+    props.setProperty("auto.offset.reset", resetStrategy);
     props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
         maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
             String.valueOf(Config.maxEventsFromKafkaSource));
-    props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
-    return props;
-  }
-
-  private TypedProperties createLatestPropsForJsonSource(Long maxEventsToReadFromKafkaSource) {
-    TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.kafka.topic", TEST_TOPIC_NAME);
-    props.setProperty("bootstrap.servers", testUtils.brokerAddress());
-    props.setProperty("auto.offset.reset", "latest");
-    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
-            maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
-                    String.valueOf(Config.maxEventsFromKafkaSource));
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
     return props;
   }
@@ -111,7 +99,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     // topic setup.
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(null);
+    TypedProperties props = createPropsForJsonSource(null, "earliest");
 
     Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
@@ -160,11 +148,11 @@ public class TestKafkaSource extends UtilitiesTestBase {
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
 
-    TypedProperties earliestProps = createPropsForJsonSource(null);
+    TypedProperties earliestProps = createPropsForJsonSource(null, "earliest");
     Source earliestJsonSource = new JsonKafkaSource(earliestProps, jsc, sparkSession, schemaProvider);
     SourceFormatAdapter earliestKafkaSource = new SourceFormatAdapter(earliestJsonSource);
 
-    TypedProperties latestProps = createLatestPropsForJsonSource(null);
+    TypedProperties latestProps = createPropsForJsonSource(null, "latest");
     Source latestJsonSource = new JsonKafkaSource(latestProps, jsc, sparkSession, schemaProvider);
     SourceFormatAdapter latestKafkaSource = new SourceFormatAdapter(latestJsonSource);
 
@@ -191,7 +179,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     // topic setup.
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(Long.MAX_VALUE);
+    TypedProperties props = createPropsForJsonSource(Long.MAX_VALUE, "earliest");
 
     Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
@@ -220,7 +208,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     // topic setup.
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(500L);
+    TypedProperties props = createPropsForJsonSource(500L, "earliest");
 
     Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
