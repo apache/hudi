@@ -84,12 +84,6 @@ public class CleansCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  @CliCommand(value = "cleans refresh", help = "Refresh the commits")
-  public String refreshCleans() {
-    HoodieCLI.refreshTableMetadata();
-    return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
-  }
-
   @CliCommand(value = "clean showpartitions", help = "Show partition level details of a clean")
   public String showCleanPartitions(@CliOption(key = {"clean"}, help = "clean to show") final String instantTime,
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
