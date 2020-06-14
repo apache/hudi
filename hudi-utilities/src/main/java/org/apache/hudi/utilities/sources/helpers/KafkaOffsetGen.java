@@ -55,9 +55,6 @@ public class KafkaOffsetGen {
      */
     public static HashMap<TopicPartition, Long> strToOffsets(String checkpointStr) {
       HashMap<TopicPartition, Long> offsetMap = new HashMap<>();
-      if (checkpointStr.length() == 0) {
-        return offsetMap;
-      }
       String[] splits = checkpointStr.split(",");
       String topic = splits[0];
       for (int i = 1; i < splits.length; i++) {
