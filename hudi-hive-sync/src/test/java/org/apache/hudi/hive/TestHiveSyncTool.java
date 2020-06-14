@@ -484,8 +484,6 @@ public class TestHiveSyncTool {
             "Hive Schema should match the table schema，ignoring the partition fields");
     assertEquals(0, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
             "Table should not have partitions because of the NonPartitionedExtractor");
-    assertEquals(0, hiveClient.getTablePartitionKeys(hiveSyncConfig.tableName).size(),
-            "Table should not have partition keys because of the NonPartitionedExtractor");
   }
 
   @ParameterizedTest
