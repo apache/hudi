@@ -459,6 +459,35 @@ public class TestHiveSyncTool {
 
   @ParameterizedTest
   @MethodSource("useJdbc")
+  public void testNonPartitionedSync(boolean useJdbc) throws Exception {
+    HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    String instantTime = "100";
+    HiveTestUtil.createCOWTable(instantTime, 5, true);
+
+    HiveSyncConfig hiveSyncConfig = HiveSyncConfig.copy(HiveTestUtil.hiveSyncConfig);
+    // Set partition value extractor to NonPartitionedExtractor
+    hiveSyncConfig.partitionValueExtractorClass = NonPartitionedExtractor.class.getCanonicalName();
+    hiveSyncConfig.tableName = "non_partitioned";
+    hiveSyncConfig.partitionFields = Arrays.asList("year", "month", "day");
+    HiveTestUtil.getCreatedTablesSet().add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
+
+    HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    assertFalse(hiveClient.doesTableExist(hiveSyncConfig.tableName),
+            "Table " + hiveSyncConfig.tableName + " should not exist initially");
+    // Lets do the sync
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+    assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName),
+            "Table " + hiveSyncConfig.tableName + " should exist after sync completes");
+    assertEquals(hiveClient.getTableSchema(hiveSyncConfig.tableName).size(),
+            hiveClient.getDataSchema().getColumns().size(),
+            "Hive Schema should match the table schema，ignoring the partition fields");
+    assertEquals(0, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
+            "Table should not have partitions because of the NonPartitionedExtractor");
+  }
+
+  @ParameterizedTest
+  @MethodSource("useJdbc")
   public void testReadSchemaForMOR(boolean useJdbc) throws Exception {
     HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
     String commitTime = "100";
