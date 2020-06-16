@@ -1,18 +1,19 @@
 ---
+version: 0.5.3
 title: Querying Hudi Tables
 keywords: hudi, hive, spark, sql, presto
-permalink: /docs/querying_data.html
+permalink: /docs/0.5.3-querying_data.html
 summary: In this page, we go over how to enable SQL queries on Hudi built tables.
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
-Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained [before](/docs/concepts.html#query-types). 
+Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained [before](/docs/0.5.3-concepts.html#query-types). 
 Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi's custom inputformats. Once the proper hudi
 bundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and Presto.
 
-Specifically, following Hive tables are registered based off [table name](/docs/configurations.html#TABLE_NAME_OPT_KEY) 
-and [table type](/docs/configurations.html#TABLE_TYPE_OPT_KEY) configs passed during write.   
+Specifically, following Hive tables are registered based off [table name](/docs/0.5.3-configurations.html#TABLE_NAME_OPT_KEY) 
+and [table type](/docs/0.5.3-configurations.html#TABLE_TYPE_OPT_KEY) configs passed during write.   
 
 If `table name = hudi_trips` and `table type = COPY_ON_WRITE`, then we get: 
  - `hudi_trips` supports snapshot query and incremental query on the table backed by `HoodieParquetInputFormat`, exposing purely columnar data.
@@ -25,7 +26,7 @@ If `table name = hudi_trips` and `table type = MERGE_ON_READ`, then we get:
 As discussed in the concepts section, the one key capability needed for [incrementally processing](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop),
 is obtaining a change stream/log from a table. Hudi tables can be queried incrementally, which means you can get ALL and ONLY the updated & new rows 
 since a specified instant time. This, together with upserts, is particularly useful for building data pipelines where 1 or more source Hudi tables are incrementally queried (streams/facts),
-joined with other tables (tables/dimensions), to [write out deltas](/docs/writing_data.html) to a target Hudi table. Incremental queries are realized by querying one of the tables above, 
+joined with other tables (tables/dimensions), to [write out deltas](/docs/0.5.3-writing_data.html) to a target Hudi table. Incremental queries are realized by querying one of the tables above, 
 with special configurations that indicates to query planning that only incremental data needs to be fetched out of the table. 
 
 
@@ -154,8 +155,8 @@ hudiIncQueryDF.createOrReplaceTempView("hudi_trips_incremental")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
 ```
 
-For examples, refer to [Setup spark-shell in quickstart](/docs/quick-start-guide.html#setup-spark-shell). 
-Please refer to [configurations](/docs/configurations.html#spark-datasource) section, to view all datasource options.
+For examples, refer to [Setup spark-shell in quickstart](/docs/0.5.3-quick-start-guide.html#setup-spark-shell). 
+Please refer to [configurations](/docs/0.5.3-configurations.html#spark-datasource) section, to view all datasource options.
 
 Additionally, `HoodieReadClient` offers the following functionality using Hudi's implicit indexing.
 
