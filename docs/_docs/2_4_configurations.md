@@ -89,6 +89,10 @@ the dot notation eg: `a.b.c`</span>
   <span style="color:grey">Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.
 Actual value ontained by invoking .toString()</span>
 
+#### HIVE_STYLE_PARTITIONING_OPT_KEY {#HIVE_STYLE_PARTITIONING_OPT_KEY}
+  Property: `hoodie.datasource.write.hive_style_partitioning`, Default: `false` <br/>
+  <span style="color:grey">When set to true, partition folder names follow the format of Hive partitions: <partition_column_name>=<partition_value></span>
+
 #### KEYGENERATOR_CLASS_OPT_KEY {#KEYGENERATOR_CLASS_OPT_KEY}
   Property: `hoodie.datasource.write.keygenerator.class`, Default: `org.apache.hudi.SimpleKeyGenerator` <br/>
   <span style="color:grey">Key generator class, that implements will extract the key out of incoming `Row` object</span>
