@@ -17,7 +17,7 @@
 
 
 
-  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+  <meta property="article:modified_time" content="2020-05-28T11:40:00-04:00">
 
 
 
@@ -189,7 +189,7 @@
           <nav class="toc">
             <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
             <ul class="toc__menu">
-  <li><a href="#release-052-incubating-docs">Release 0.5.2-incubating (docs)</a>
+  <li><a href="#release-053-docs">Release 0.5.3 (docs)</a>
     <ul>
       <li><a href="#download-information">Download Information</a></li>
       <li><a href="#migration-guide-for-this-release">Migration Guide for this release</a></li>
@@ -197,7 +197,7 @@
       <li><a href="#raw-release-notes">Raw Release Notes</a></li>
     </ul>
   </li>
-  <li><a href="#release-051-incubating-docs">Release 0.5.1-incubating (docs)</a>
+  <li><a href="#release-052-incubating-docs">Release 0.5.2-incubating (docs)</a>
     <ul>
       <li><a href="#download-information-1">Download Information</a></li>
       <li><a href="#migration-guide-for-this-release-1">Migration Guide for this release</a></li>
@@ -205,17 +205,25 @@
       <li><a href="#raw-release-notes-1">Raw Release Notes</a></li>
     </ul>
   </li>
-  <li><a href="#release-050-incubating-docs">Release 0.5.0-incubating (docs)</a>
+  <li><a href="#release-051-incubating-docs">Release 0.5.1-incubating (docs)</a>
     <ul>
       <li><a href="#download-information-2">Download Information</a></li>
-      <li><a href="#release-highlights-2">Release Highlights</a></li>
       <li><a href="#migration-guide-for-this-release-2">Migration Guide for this release</a></li>
+      <li><a href="#release-highlights-2">Release Highlights</a></li>
       <li><a href="#raw-release-notes-2">Raw Release Notes</a></li>
+    </ul>
+  </li>
+  <li><a href="#release-050-incubating-docs">Release 0.5.0-incubating (docs)</a>
+    <ul>
+      <li><a href="#download-information-3">Download Information</a></li>
+      <li><a href="#release-highlights-3">Release Highlights</a></li>
+      <li><a href="#migration-guide-for-this-release-3">Migration Guide for this release</a></li>
+      <li><a href="#raw-release-notes-3">Raw Release Notes</a></li>
     </ul>
   </li>
   <li><a href="#release-047">Release 0.4.7</a>
     <ul>
-      <li><a href="#release-highlights-3">Release Highlights</a></li>
+      <li><a href="#release-highlights-4">Release Highlights</a></li>
       <li><a href="#pr-list">PR LIST</a></li>
     </ul>
   </li>
@@ -223,20 +231,73 @@
           </nav>
         </aside>
         
-        <h2 id="release-052-incubating-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating">Release 0.5.2-incubating</a> (<a href="/docs/0.5.2-quick-start-guide.html">docs</a>)</h2>
+        <h2 id="release-053-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.5.3">Release 0.5.3</a> (<a href="/docs/0.5.3-quick-start-guide.html">docs</a>)</h2>
 
 <h3 id="download-information">Download Information</h3>
 <ul>
-  <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz">Apache Hudi 0.5.2-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Source Release : <a href="https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz">Apache Hudi 0.5.3 Source Release</a> (<a href="https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz.sha512">sha512</a>)</li>
   <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
 </ul>
 
 <h3 id="migration-guide-for-this-release">Migration Guide for this release</h3>
 <ul>
+  <li>This is a bug fix only release and no special migration steps needed when upgrading from 0.5.2. If you are upgrading from earlier releases “X”, please make sure you read the migration guide for each subsequent release between “X” and 0.5.3</li>
+  <li>0.5.3 is the first hudi release after graduation. As a result, all hudi jars will no longer have “-incubating” in the version name. In all the places where hudi version is referred, please make sure “-incubating” is no longer present.</li>
+</ul>
+
+<p>For example hudi-spark-bundle pom dependency would look like:</p>
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="nt">&lt;dependency&gt;</span>
+        <span class="nt">&lt;groupId&gt;</span>org.apache.hudi<span class="nt">&lt;/groupId&gt;</span>
+        <span class="nt">&lt;artifactId&gt;</span>hudi-spark-bundle_2.12<span class="nt">&lt;/artifactId&gt;</span>
+        <span class="nt">&lt;version&gt;</span>0.5.3<span class="nt">&lt;/version&gt;</span>
+    <span class="nt">&lt;/dependency&gt;</span>
+</code></pre></div></div>
+<h3 id="release-highlights">Release Highlights</h3>
+<ul>
+  <li>Hudi now supports <code class="highlighter-rouge">aliyun OSS</code> storage service.</li>
+  <li>Embedded Timeline Server is enabled by default for both delta-streamer and spark datasource writes. This feature was in experimental mode before this release. Embedded Timeline Server caches file listing calls in Spark driver and serves them to Spark writer tasks. This reduces the number of file listings needed to be performed for each write.</li>
+  <li>Incremental Cleaning is enabled by default for both delta-streamer and spark datasource writes. This feature was also in experimental mode before this release. In the steady state, incremental cleaning avoids the costly step of scanning all partitions and instead uses Hudi metadata to find files to be cleaned up.</li>
+  <li>Delta-streamer config files can now be placed in different filesystem than actual data.</li>
+  <li>Hudi Hive Sync now supports tables partitioned by date type column.</li>
+  <li>Hudi Hive Sync now supports syncing directly via Hive MetaStore. You simply need to set hoodie.datasource.hive_sync.use_jdbc
+=false. Hive Metastore Uri will be read implicitly from environment. For example, when writing through Spark Data Source,
+    <div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code> spark.write.format(“hudi”)
+ .option(…)
+ .option(“hoodie.datasource.hive_sync.username”, “<span class="nt">&lt;user&gt;</span>”)
+ .option(“hoodie.datasource.hive_sync.password”, “<span class="nt">&lt;password&gt;</span>”)
+ .option(“hoodie.datasource.hive_sync.partition_fields”, “<span class="nt">&lt;partition_fields&gt;</span>”)
+ .option(“hoodie.datasource.hive_sync.database”, “<span class="nt">&lt;db_name&gt;</span>”)
+ .option(“hoodie.datasource.hive_sync.table”, “<span class="nt">&lt;table_name&gt;</span>”)
+ .option(“hoodie.datasource.hive_sync.use_jdbc”, “false”)
+ .mode(APPEND)
+ .save(“/path/to/dataset”)
+</code></pre></div>    </div>
+  </li>
+  <li>Other Writer Performance related fixes:
+    <ul>
+      <li>DataSource Writer now avoids unnecessary loading of data after write.</li>
+      <li>Hudi Writer now leverages spark parallelism when searching for existing files for writing new records.</li>
+    </ul>
+  </li>
+</ul>
+
+<h3 id="raw-release-notes">Raw Release Notes</h3>
+<p>The raw release notes are available <a href="https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12348256">here</a></p>
+
+<h2 id="release-052-incubating-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating">Release 0.5.2-incubating</a> (<a href="/docs/0.5.2-quick-start-guide.html">docs</a>)</h2>
+
+<h3 id="download-information-1">Download Information</h3>
+<ul>
+  <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz">Apache Hudi 0.5.2-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
+</ul>
+
+<h3 id="migration-guide-for-this-release-1">Migration Guide for this release</h3>
+<ul>
   <li>Write Client restructuring has moved classes around (<a href="https://issues.apache.org/jira/browse/HUDI-554">HUDI-554</a>). Package <code class="highlighter-rouge">client</code> now has all the various client classes, that do the transaction management. <code class="highlighter-rouge">func</code> renamed to <code class="highlighter-rouge">execution</code> and some helpers moved to <code class="highlighter-rouge">client/utils</code>. All compaction code under <code class="highlighter-rouge">io</code> now under <code class="highlighter-rouge">table/compact</code>. Rollback code under <code class="highlighter-rouge">table/rollback</code> and in general all code for individual operations under <code class="highlighter-rouge">table</code>. This change only affects the apps/projects depending on hudi-client. Users of deltastreamer/datasource will not need to change anything.</li>
 </ul>
 
-<h3 id="release-highlights">Release Highlights</h3>
+<h3 id="release-highlights-1">Release Highlights</h3>
 <ul>
   <li>Support for overwriting the payload implementation in <code class="highlighter-rouge">hoodie.properties</code> via specifying the <code class="highlighter-rouge">hoodie.compaction.payload.class</code> config option. Previously, once the payload class is set once in <code class="highlighter-rouge">hoodie.properties</code>, it cannot be changed. In some cases, if a code refactor is done and the jar updated, one may need to pass the new payload class name.</li>
   <li><code class="highlighter-rouge">TimestampBasedKeyGenerator</code> supports for <code class="highlighter-rouge">CharSequence</code>  types. Previously <code class="highlighter-rouge">TimestampBasedKeyGenerator</code> only supports <code class="highlighter-rouge">Double</code>, <code class="highlighter-rouge">Long</code>, <code class="highlighter-rouge">Float</code> and <code class="highlighter-rouge">String</code> 4 data types for the partition key. Now, after data type extending, <code class="highlighter-rouge">CharSequence</code> has been supported in <code class="highlighter-rouge">TimestampBasedKeyGenerator</code>.</li>
@@ -255,23 +316,23 @@
   </li>
 </ul>
 
-<h3 id="raw-release-notes">Raw Release Notes</h3>
+<h3 id="raw-release-notes-1">Raw Release Notes</h3>
 <p>The raw release notes are available <a href="https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346606">here</a></p>
 
 <h2 id="release-051-incubating-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating">Release 0.5.1-incubating</a> (<a href="/docs/0.5.1-quick-start-guide.html">docs</a>)</h2>
 
-<h3 id="download-information-1">Download Information</h3>
+<h3 id="download-information-2">Download Information</h3>
 <ul>
   <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz">Apache Hudi 0.5.1-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512">sha512</a>)</li>
   <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
 </ul>
 
-<h3 id="migration-guide-for-this-release-1">Migration Guide for this release</h3>
+<h3 id="migration-guide-for-this-release-2">Migration Guide for this release</h3>
 <ul>
   <li>In 0.5.1, the community restructured the package of key generators. The key generator related classes have been moved from <code class="highlighter-rouge">org.apache.hudi</code> to <code class="highlighter-rouge">org.apache.hudi.keygen</code>.</li>
 </ul>
 
-<h3 id="release-highlights-1">Release Highlights</h3>
+<h3 id="release-highlights-2">Release Highlights</h3>
 <ul>
   <li>Dependency Version Upgrades
     <ul>
@@ -308,18 +369,18 @@ If you are using this feature, you need to relocate the avro dependencies in you
   <li>Support for DynamicBloomFilter. This is turned off by default, to enable the DynamicBloomFilter, please use the index config <code class="highlighter-rouge">hoodie.bloom.index.filter.type=DYNAMIC_V0</code>.</li>
 </ul>
 
-<h3 id="raw-release-notes-1">Raw Release Notes</h3>
+<h3 id="raw-release-notes-2">Raw Release Notes</h3>
 <p>The raw release notes are available <a href="https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346183">here</a></p>
 
 <h2 id="release-050-incubating-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.5.0-incubating">Release 0.5.0-incubating</a> (<a href="/docs/0.5.0-quick-start-guide.html">docs</a>)</h2>
 
-<h3 id="download-information-2">Download Information</h3>
+<h3 id="download-information-3">Download Information</h3>
 <ul>
   <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz">Apache Hudi 0.5.0-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512">sha512</a>)</li>
   <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
 </ul>
 
-<h3 id="release-highlights-2">Release Highlights</h3>
+<h3 id="release-highlights-3">Release Highlights</h3>
 <ul>
   <li>Package and format renaming from com.uber.hoodie to org.apache.hudi (See migration guide section below)</li>
   <li>Major redo of Hudi bundles to address class and jar version mismatches in different environments</li>
@@ -329,15 +390,15 @@ If you are using this feature, you need to relocate the avro dependencies in you
   <li>HoodieCombinedInputFormat to scale huge hive queries running on Hoodie tables</li>
 </ul>
 
-<h3 id="migration-guide-for-this-release-2">Migration Guide for this release</h3>
+<h3 id="migration-guide-for-this-release-3">Migration Guide for this release</h3>
 <p>This is the first Apache release for Hudi. Prior to this release, Hudi Jars were published using “com.uber.hoodie” maven co-ordinates. We have a <a href="https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi">migration guide</a></p>
 
-<h3 id="raw-release-notes-2">Raw Release Notes</h3>
+<h3 id="raw-release-notes-3">Raw Release Notes</h3>
 <p>The raw release notes are available <a href="https://jira.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346087">here</a></p>
 
 <h2 id="release-047"><a href="https://github.com/apache/hudi/releases/tag/hoodie-0.4.7">Release 0.4.7</a></h2>
 
-<h3 id="release-highlights-3">Release Highlights</h3>
+<h3 id="release-highlights-4">Release Highlights</h3>
 
 <ul>
   <li>Major releases with fundamental changes to filesystem listing &amp; write failure handling</li>
