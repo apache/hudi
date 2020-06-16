@@ -448,6 +448,10 @@ Azure和Hudi协同工作所需的配置。</li>
   <span style="color:grey">分区路径字段。用作<code class="highlighter-rouge">HoodieKey</code>中<code class="highlighter-rouge">partitionPath</code>部分的值。
   通过调用.toString()获得实际的值</span></p>
 
+<h4 id="HIVE_STYLE_PARTITIONING_OPT_KEY">HIVE_STYLE_PARTITIONING_OPT_KEY</h4>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.hive_style_partitioning</code>, 默认值：<code class="highlighter-rouge">false</code> <br />
+  <span style="color:grey">如果设置为true，则生成基于Hive格式的partition目录：<partition_column_name>=<partition_value>&lt;/span&gt;</partition_value></partition_column_name></span></p>
+
 <h4 id="KEYGENERATOR_CLASS_OPT_KEY">KEYGENERATOR_CLASS_OPT_KEY</h4>
 <p>属性：<code class="highlighter-rouge">hoodie.datasource.write.keygenerator.class</code>, 默认值：<code class="highlighter-rouge">org.apache.hudi.SimpleKeyGenerator</code> <br />
   <span style="color:grey">键生成器类，实现从输入的<code class="highlighter-rouge">Row</code>对象中提取键</span></p>

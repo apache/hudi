@@ -447,6 +447,10 @@ the dot notation eg: <code class="highlighter-rouge">a.b.c</code></span></p>
   <span style="color:grey">Partition path field. Value to be used at the <code class="highlighter-rouge">partitionPath</code> component of <code class="highlighter-rouge">HoodieKey</code>.
 Actual value ontained by invoking .toString()</span></p>
 
+<h4 id="HIVE_STYLE_PARTITIONING_OPT_KEY">HIVE_STYLE_PARTITIONING_OPT_KEY</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.datasource.write.hive_style_partitioning</code>, Default: <code class="highlighter-rouge">false</code> <br />
+  <span style="color:grey">When set to true, partition folder names follow the format of Hive partitions: <partition_column_name>=<partition_value>&lt;/span&gt;</partition_value></partition_column_name></span></p>
+
 <h4 id="KEYGENERATOR_CLASS_OPT_KEY">KEYGENERATOR_CLASS_OPT_KEY</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.write.keygenerator.class</code>, Default: <code class="highlighter-rouge">org.apache.hudi.SimpleKeyGenerator</code> <br />
   <span style="color:grey">Key generator class, that implements will extract the key out of incoming <code class="highlighter-rouge">Row</code> object</span></p>
