@@ -317,6 +317,7 @@
     
   </ul>
 </nav>
+
     
 
   
@@ -383,7 +384,7 @@ From the extracted directory run spark-shell with Hudi as:</p>
 
 <div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// spark-shell
 </span><span class="n">spark</span><span class="o">-</span><span class="mf">2.4</span><span class="o">.</span><span class="mi">4</span><span class="o">-</span><span class="n">bin</span><span class="o">-</span><span class="n">hadoop2</span><span class="o">.</span><span class="mi">7</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">spark</span><span class="o">-</span><span class="n">shell</span> <span class="o">\</span>
-  <span class="o">--</span><span class="n">packages</span> <span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">hudi</span><span class="k">:</span><span class="kt">hudi-spark-bundle_2.</span><span class="err">11</span><span class="kt">:</span><span class="err">0</span><span class="kt">.</span><span class="err">5</span><span class="kt">.</span><span class="err">1</span><span class="kt">-incubating</span><span class="o">,</span><span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">spark</span><span class="k">:</span><span class="kt">spark-avro_2.</span><span class="err">11</span><span class="kt">:</span><span class="err">2</span><span class="kt">.</span><span class="err">4</span><span class="kt">.</span><span class="err">4</span> <span class="kt">\</span>
+  <span class="o">--</span><span class="n">packages</span> <span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">hudi</span><span class="k">:</span><span class="kt">hudi-spark-bundle_2.</span><span class="err">11</span><span class="kt">:</span><span class="err">0</span><span class="kt">.</span><span class="err">5</span><span class="kt">.</span><span class="err">3</span><span class="o">,</span><span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">spark</span><span class="k">:</span><span class="kt">spark-avro_2.</span><span class="err">11</span><span class="kt">:</span><span class="err">2</span><span class="kt">.</span><span class="err">4</span><span class="kt">.</span><span class="err">4</span> <span class="kt">\</span>
   <span class="kt">--conf</span> <span class="kt">'spark.serializer</span><span class="o">=</span><span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">spark</span><span class="o">.</span><span class="py">serializer</span><span class="o">.</span><span class="py">KryoSerializer</span><span class="o">'</span>
 </code></pre></div></div>
 
@@ -574,7 +575,7 @@ From the extracted directory run spark-shell with Hudi as:</p>
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># pyspark
 </span><span class="n">export</span> <span class="n">PYSPARK_PYTHON</span><span class="o">=</span><span class="err">$</span><span class="p">(</span><span class="n">which</span> <span class="n">python3</span><span class="p">)</span>
 <span class="n">spark</span><span class="o">-</span><span class="mf">2.4.4</span><span class="o">-</span><span class="nb">bin</span><span class="o">-</span><span class="n">hadoop2</span><span class="mf">.7</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">pyspark</span> \
-  <span class="o">--</span><span class="n">packages</span> <span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="p">:</span><span class="n">hudi</span><span class="o">-</span><span class="n">spark</span><span class="o">-</span><span class="n">bundle_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">0.5.1</span><span class="o">-</span><span class="n">incubating</span><span class="p">,</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">spark</span><span class="p">:</span><span class="n">spark</span><span class="o">-</span><span class="n">avro_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">2.4.4</span> \
+  <span class="o">--</span><span class="n">packages</span> <span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="p">:</span><span class="n">hudi</span><span class="o">-</span><span class="n">spark</span><span class="o">-</span><span class="n">bundle_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">0.5.3</span><span class="p">,</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">spark</span><span class="p">:</span><span class="n">spark</span><span class="o">-</span><span class="n">avro_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">2.4.4</span> \
   <span class="o">--</span><span class="n">conf</span> <span class="s">'spark.serializer=org.apache.spark.serializer.KryoSerializer'</span>
 </code></pre></div></div>
 
@@ -775,7 +776,7 @@ specific commit time and beginTime to “000” (denoting earliest possible comm
 
 <p>You can also do the quickstart by <a href="https://github.com/apache/hudi#building-apache-hudi-from-source">building hudi yourself</a>, 
 and using <code class="highlighter-rouge">--jars &lt;path to hudi_code&gt;/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar</code> in the spark-shell command above
-instead of <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.1-incubating</code>. Hudi also supports scala 2.12. Refer <a href="https://github.com/apache/hudi#build-with-scala-212">build with scala 2.12</a>
+instead of <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3</code>. Hudi also supports scala 2.12. Refer <a href="https://github.com/apache/hudi#build-with-scala-212">build with scala 2.12</a>
 for more info.</p>
 
 <p>Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 

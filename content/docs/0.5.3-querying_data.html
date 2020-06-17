@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Querying Hudi Tables - Apache Hudi</title>
+<meta name="description" content="Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained before. Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi’s custom inputformats. Once the proper hudibundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and Presto.">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Querying Hudi Tables">
+<meta property="og:url" content="https://hudi.apache.org/docs/0.5.3-querying_data.html">
+
+
+  <meta property="og:description" content="Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained before. Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi’s custom inputformats. Once the proper hudibundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and Presto.">
+
+
+
+
+
+  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/blog.html" target="_self" >Blog</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+
+  
+
+    
+      
+
+
+
+
+
+
+
+<nav class="nav__list">
+  
+  <input id="ac-toc" name="accordion-toc" type="checkbox" />
+  <label for="ac-toc">Toggle Menu</label>
+  <ul class="nav__items">
+    
+      <li>
+        
+          <span class="nav__sub-title">Getting Started</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-quick-start-guide.html" class="">Quick Start</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-use_cases.html" class="">Use Cases</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-powered_by.html" class="">Talks & Powered By</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-comparison.html" class="">Comparison</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-docker_demo.html" class="">Docker Demo</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">Documentation</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-concepts.html" class="">Concepts</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-writing_data.html" class="">Writing Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-querying_data.html" class="active">Querying Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-configurations.html" class="">Configuration</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-performance.html" class="">Performance</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-deployment.html" class="">Deployment</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">INFO</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-docs-versions.html" class="">Docs Versions</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.3-privacy.html" class="">Privacy Policy</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+  </ul>
+</nav>
+
+    
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Querying Hudi Tables
+</h1>
+          <!-- Output author details if some exist. -->
+          
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#support-matrix">Support Matrix</a>
+    <ul>
+      <li><a href="#copy-on-write-tables">Copy-On-Write tables</a></li>
+      <li><a href="#merge-on-read-tables">Merge-On-Read tables</a></li>
+    </ul>
+  </li>
+  <li><a href="#hive">Hive</a>
+    <ul>
+      <li><a href="#incremental-query">Incremental query</a></li>
+    </ul>
+  </li>
+  <li><a href="#spark-sql">Spark SQL</a></li>
+  <li><a href="#spark-datasource">Spark Datasource</a>
+    <ul>
+      <li><a href="#spark-incr-query">Incremental query</a></li>
+    </ul>
+  </li>
+  <li><a href="#presto">Presto</a></li>
+  <li><a href="#impala-34-or-later">Impala (3.4 or later)</a>
+    <ul>
+      <li><a href="#snapshot-query">Snapshot Query</a></li>
+    </ul>
+  </li>
+</ul>
+          </nav>
+        </aside>
+        
+        <p>Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained <a href="/docs/0.5.3-concepts.html#query-types">before</a>. 
+Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi’s custom inputformats. Once the proper hudi
+bundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and Presto.</p>
+
+<p>Specifically, following Hive tables are registered based off <a href="/docs/0.5.3-configurations.html#TABLE_NAME_OPT_KEY">table name</a> 
+and <a href="/docs/0.5.3-configurations.html#TABLE_TYPE_OPT_KEY">table type</a> configs passed during write.</p>
+
+<p>If <code class="highlighter-rouge">table name = hudi_trips</code> and <code class="highlighter-rouge">table type = COPY_ON_WRITE</code>, then we get:</p>
+<ul>
+  <li><code class="highlighter-rouge">hudi_trips</code> supports snapshot query and incremental query on the table backed by <code class="highlighter-rouge">HoodieParquetInputFormat</code>, exposing purely columnar data.</li>
+</ul>
+
+<p>If <code class="highlighter-rouge">table name = hudi_trips</code> and <code class="highlighter-rouge">table type = MERGE_ON_READ</code>, then we get:</p>
+<ul>
+  <li><code class="highlighter-rouge">hudi_trips_rt</code> supports snapshot query and incremental query (providing near-real time data) on the table  backed by <code class="highlighter-rouge">HoodieParquetRealtimeInputFormat</code>, exposing merged view of base and log data.</li>
+  <li><code class="highlighter-rouge">hudi_trips_ro</code> supports read optimized query on the table backed by <code class="highlighter-rouge">HoodieParquetInputFormat</code>, exposing purely columnar data stored in base files.</li>
+</ul>
+
+<p>As discussed in the concepts section, the one key capability needed for <a href="https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop">incrementally processing</a>,
+is obtaining a change stream/log from a table. Hudi tables can be queried incrementally, which means you can get ALL and ONLY the updated &amp; new rows 
+since a specified instant time. This, together with upserts, is particularly useful for building data pipelines where 1 or more source Hudi tables are incrementally queried (streams/facts),
+joined with other tables (tables/dimensions), to <a href="/docs/0.5.3-writing_data.html">write out deltas</a> to a target Hudi table. Incremental queries are realized by querying one of the tables above, 
+with special configurations that indicates to query planning that only incremental data needs to be fetched out of the table.</p>
+
+<h2 id="support-matrix">Support Matrix</h2>
+
+<p>Following tables show whether a given query is supported on specific query engine.</p>
+
+<h3 id="copy-on-write-tables">Copy-On-Write tables</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Query Engine</th>
+      <th>Snapshot Queries</th>
+      <th>Incremental Queries</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Hive</strong></td>
+      <td>Y</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Spark SQL</strong></td>
+      <td>Y</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Spark Datasource</strong></td>
+      <td>Y</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Presto</strong></td>
+      <td>Y</td>
+      <td>N</td>
+    </tr>
+    <tr>
+      <td><strong>Impala</strong></td>
+      <td>Y</td>
+      <td>N</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Note that <code class="highlighter-rouge">Read Optimized</code> queries are not applicable for COPY_ON_WRITE tables.</p>
+
+<h3 id="merge-on-read-tables">Merge-On-Read tables</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Query Engine</th>
+      <th>Snapshot Queries</th>
+      <th>Incremental Queries</th>
+      <th>Read Optimized Queries</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Hive</strong></td>
+      <td>Y</td>
+      <td>Y</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Spark SQL</strong></td>
+      <td>Y</td>
+      <td>Y</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Spark Datasource</strong></td>
+      <td>N</td>
+      <td>N</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Presto</strong></td>
+      <td>N</td>
+      <td>N</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Impala</strong></td>
+      <td>N</td>
+      <td>N</td>
+      <td>Y</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>In sections, below we will discuss specific setup to access different query types from different query engines.</p>
+
+<h2 id="hive">Hive</h2>
+
+<p>In order for Hive to recognize Hudi tables and query correctly,</p>
+<ul>
+  <li>the HiveServer2 needs to be provided with the <code class="highlighter-rouge">hudi-hadoop-mr-bundle-x.y.z-SNAPSHOT.jar</code> in its <a href="https://www.cloudera.com/documentation/enterprise/5-6-x/topics/cm_mc_hive_udf.html#concept_nc3_mms_lr">aux jars path</a>. This will ensure the input format 
+classes with its dependencies are available for query planning &amp; execution.</li>
+  <li>For MERGE_ON_READ tables, additionally the bundle needs to be put on the hadoop/hive installation across the cluster, so that queries can pick up the custom RecordReader as well.</li>
+</ul>
+
+<p>In addition to setup above, for beeline cli access, the <code class="highlighter-rouge">hive.input.format</code> variable needs to be set to the fully qualified path name of the 
+inputformat <code class="highlighter-rouge">org.apache.hudi.hadoop.HoodieParquetInputFormat</code>. For Tez, additionally the <code class="highlighter-rouge">hive.tez.input.format</code> needs to be set 
+to <code class="highlighter-rouge">org.apache.hadoop.hive.ql.io.HiveInputFormat</code>. Then proceed to query the table like any other Hive table.</p>
+
+<h3 id="incremental-query">Incremental query</h3>
+<p><code class="highlighter-rouge">HiveIncrementalPuller</code> allows incrementally extracting changes from large fact/dimension tables via HiveQL, combining the benefits of Hive (reliably process complex SQL queries) and 
+incremental primitives (speed up querying tables incrementally instead of scanning fully). The tool uses Hive JDBC to run the hive query and saves its results in a temp table.
+that can later be upserted. Upsert utility (<code class="highlighter-rouge">HoodieDeltaStreamer</code>) has all the state it needs from the directory structure to know what should be the commit time on the target table.
+e.g: <code class="highlighter-rouge">/app/incremental-hql/intermediate/{source_table_name}_temp/{last_commit_included}</code>.The Delta Hive table registered will be of the form <code class="highlighter-rouge">{tmpdb}.{source_table}_{last_commit_included}</code>.</p>
+
+<p>The following are the configuration options for HiveIncrementalPuller</p>
+
+<table>
+  <thead>
+    <tr>
+      <th><strong>Config</strong></th>
+      <th><strong>Description</strong></th>
+      <th><strong>Default</strong></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>hiveUrl</td>
+      <td>Hive Server 2 URL to connect to</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>hiveUser</td>
+      <td>Hive Server 2 Username</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>hivePass</td>
+      <td>Hive Server 2 Password</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>queue</td>
+      <td>YARN Queue name</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>tmp</td>
+      <td>Directory where the temporary delta data is stored in DFS. The directory structure will follow conventions. Please see the below section.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>extractSQLFile</td>
+      <td>The SQL to execute on the source table to extract the data. The data extracted will be all the rows that changed since a particular point in time.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>sourceTable</td>
+      <td>Source Table Name. Needed to set hive environment properties.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>sourceDb</td>
+      <td>Source DB name. Needed to set hive environment properties.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>targetTable</td>
+      <td>Target Table Name. Needed for the intermediate storage directory structure.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>targetDb</td>
+      <td>Target table’s DB name.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>tmpdb</td>
+      <td>The database to which the intermediate temp delta table will be created</td>
+      <td>hoodie_temp</td>
+    </tr>
+    <tr>
+      <td>fromCommitTime</td>
+      <td>This is the most important parameter. This is the point in time from which the changed records are queried from.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>maxCommits</td>
+      <td>Number of commits to include in the query. Setting this to -1 will include all the commits from fromCommitTime. Setting this to a value &gt; 0, will include records that ONLY changed in the specified number of commits after fromCommitTime. This may be needed if you need to catch up say 2 commits at a time.</td>
+      <td>3</td>
+    </tr>
+    <tr>
+      <td>help</td>
+      <td>Utility Help</td>
+      <td> </td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Setting fromCommitTime=0 and maxCommits=-1 will fetch the entire source table and can be used to initiate backfills. If the target table is a Hudi table,
+then the utility can determine if the target table has no commits or is behind more than 24 hour (this is configurable),
+it will automatically use the backfill configuration, since applying the last 24 hours incrementally could take more time than doing a backfill. The current limitation of the tool
+is the lack of support for self-joining the same table in mixed mode (snapshot and incremental modes).</p>
+
+<p><strong>NOTE on Hive incremental queries that are executed using Fetch task:</strong>
+Since Fetch tasks invoke InputFormat.listStatus() per partition, Hoodie metadata can be listed in
+every such listStatus() call. In order to avoid this, it might be useful to disable fetch tasks
+using the hive session property for incremental queries: <code class="highlighter-rouge">set hive.fetch.task.conversion=none;</code> This
+would ensure Map Reduce execution is chosen for a Hive query, which combines partitions (comma
+separated) and calls InputFormat.listStatus() only once with all those partitions.</p>
+
+<h2 id="spark-sql">Spark SQL</h2>
+<p>Once the Hudi tables have been registered to the Hive metastore, it can be queried using the Spark-Hive integration. It supports all query types across both Hudi table types, 
+relying on the custom Hudi input formats again like Hive. Typically notebook users and spark-shell users leverage spark sql for querying Hudi tables. Please add hudi-spark-bundle as described above via –jars or –packages.</p>
+
+<p>By default, Spark SQL will try to use its own parquet reader instead of Hive SerDe when reading from Hive metastore parquet tables. However, for MERGE_ON_READ tables which has 
+both parquet and avro data, this default setting needs to be turned off using set <code class="highlighter-rouge">spark.sql.hive.convertMetastoreParquet=false</code>. 
+This will force Spark to fallback to using the Hive Serde to read the data (planning/executions is still Spark).</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">$</span> <span class="n">spark</span><span class="o">-</span><span class="n">shell</span> <span class="o">--</span><span class="n">driver</span><span class="o">-</span><span class="kd">class</span><span class="err">-</span><span class="nc">path</span> <span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">hive</span><span class="o">/</span><span class="n">conf</span>  <span class="o">--</span><span class="n">packages</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">:</span><span class="n">hudi</span><span class="o">-</span><span class="n">spark</span><span class="o">-</span><span class="n">bundle_2</span><span class="o">.</span><span class="mi">11</span><span class="o">:</span><span class="mf">0.5</span><span class="o">.</span><span class="mi">3</span><span class="o">,</span><span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">spark</span><span class="o">:</span><span class="n">spark</span><span class="o">-</span><span class="n">avro_2</span><span class="o">.</span><span class="mi">11</span><span class="o">:</span><span class="mf">2.4</span><span class="o">.</span><span class="mi">4</span> <span class="o">--</span><span class="n">conf</span> <span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">hive</span><span class="o">.</span><span class="na">convertMetastoreParquet</span><span class="o">=</span><span class="kc">false</span> <span class="o">--</span><span class="n">num</span><span class="o">-</span><span class="n">executors</span> <span class="mi">10</span> <span class="o">--</span><span class="n">driver</span><span class="o">-</span><span class="n">memory</span> <span class="mi">7</span><span class="n">g</span> <span class="o">--</span><span class="n">executor</span><span class="o">-</span><span class="n">memory</span> <span class="mi">2</span><span class="n">g</span>  <span class="o">--</span><span class="n">master</span> <span class="n">yarn</span><span class="o">-</span><span class="n">client</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">sqlContext</span><span class="o">.</span><span class="na">sql</span><span class="o">(</span><span class="s">"select count(*) from hudi_trips_mor_rt where datestr = '2016-10-02'"</span><span class="o">).</span><span class="na">show</span><span class="o">()</span>
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">sqlContext</span><span class="o">.</span><span class="na">sql</span><span class="o">(</span><span class="s">"select count(*) from hudi_trips_mor_rt where datestr = '2016-10-02'"</span><span class="o">).</span><span class="na">show</span><span class="o">()</span>
+</code></pre></div></div>
+
+<p>For COPY_ON_WRITE tables, either Hive SerDe can be used by turning off <code class="highlighter-rouge">spark.sql.hive.convertMetastoreParquet=false</code> as described above or Spark’s built in support can be leveraged. 
+If using spark’s built in support, additionally a path filter needs to be pushed into sparkContext as follows. This method retains Spark built-in optimizations for reading parquet files like vectorized reading on Hudi Hive tables.</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">spark</span><span class="o">.</span><span class="py">sparkContext</span><span class="o">.</span><span class="py">hadoopConfiguration</span><span class="o">.</span><span class="py">setClass</span><span class="o">(</span><span class="s">"mapreduce.input.pathFilter.class"</span><span class="o">,</span> <span class="n">classOf</span><span class="o">[</span><span class="kt">org.apache.hudi.hadoop.HoodieROTablePathFilter</span><span class="o">],</span> <span class="n">classOf</span><span class="o">[</span><span class="kt">org.apache.hadoop.fs.PathFilter</span><span class="o">]);</span>
+</code></pre></div></div>
+
+<h2 id="spark-datasource">Spark Datasource</h2>
+
+<p>The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi COPY_ON_WRITE tables can be queried via Spark datasource similar to how standard 
+datasources work (e.g: <code class="highlighter-rouge">spark.read.parquet</code>). Both snapshot querying and incremental querying are supported here. Typically spark jobs require adding <code class="highlighter-rouge">--jars &lt;path to jar&gt;/hudi-spark-bundle_2.11-&lt;hudi version&gt;.jar</code> to classpath of drivers 
+and executors. Alternatively, hudi-spark-bundle can also fetched via the <code class="highlighter-rouge">--packages</code> options (e.g: <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3</code>).</p>
+
+<h3 id="spark-incr-query">Incremental query</h3>
+<p>Of special interest to spark pipelines, is Hudi’s ability to support incremental queries, like below. A sample incremental query, that will obtain all records written since <code class="highlighter-rouge">beginInstantTime</code>, looks like below.
+Thanks to Hudi’s support for record level change streams, these incremental pipelines often offer 10x efficiency over batch counterparts, by only processing the changed records.
+The following snippet shows how to obtain all records changed after <code class="highlighter-rouge">beginInstantTime</code> and run some SQL on them.</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="nc">Dataset</span><span class="o">&lt;</span><span class="nc">Row</span><span class="o">&gt;</span> <span class="n">hudiIncQueryDF</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="na">read</span><span class="o">()</span>
+     <span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
+     <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceReadOptions</span><span class="o">.</span><span class="na">QUERY_TYPE_OPT_KEY</span><span class="o">(),</span> <span class="nc">DataSourceReadOptions</span><span class="o">.</span><span class="na">QUERY_TYPE_INCREMENTAL_OPT_VAL</span><span class="o">())</span>
+     <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceReadOptions</span><span class="o">.</span><span class="na">BEGIN_INSTANTTIME_OPT_KEY</span><span class="o">(),</span> <span class="o">&lt;</span><span class="n">beginInstantTime</span><span class="o">&gt;)</span>
+     <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceReadOptions</span><span class="o">.</span><span class="na">INCR_PATH_GLOB_OPT_KEY</span><span class="o">(),</span> <span class="s">"/year=2020/month=*/day=*"</span><span class="o">)</span> <span class="c1">// Optional, use glob pattern if querying certain partitions</span>
+     <span class="o">.</span><span class="na">load</span><span class="o">(</span><span class="n">tablePath</span><span class="o">);</span> <span class="c1">// For incremental query, pass in the root/base path of table</span>
+     
+<span class="n">hudiIncQueryDF</span><span class="o">.</span><span class="na">createOrReplaceTempView</span><span class="o">(</span><span class="s">"hudi_trips_incremental"</span><span class="o">)</span>
+<span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">(</span><span class="s">"select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare &gt; 20.0"</span><span class="o">).</span><span class="na">show</span><span class="o">()</span>
+</code></pre></div></div>
+
+<p>For examples, refer to <a href="/docs/0.5.3-quick-start-guide.html#setup-spark-shell">Setup spark-shell in quickstart</a>. 
+Please refer to <a href="/docs/0.5.3-configurations.html#spark-datasource">configurations</a> section, to view all datasource options.</p>
+
+<p>Additionally, <code class="highlighter-rouge">HoodieReadClient</code> offers the following functionality using Hudi’s implicit indexing.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th><strong>API</strong></th>
+      <th><strong>Description</strong></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>read(keys)</td>
+      <td>Read out the data corresponding to the keys as a DataFrame, using Hudi’s own index for faster lookup</td>
+    </tr>
+    <tr>
+      <td>filterExists()</td>
+      <td>Filter out already existing records from the provided <code class="highlighter-rouge">RDD[HoodieRecord]</code>. Useful for de-duplication</td>
+    </tr>
+    <tr>
+      <td>checkExists(keys)</td>
+      <td>Check if the provided keys exist in a Hudi table</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="presto">Presto</h2>
+
+<p>Presto is a popular query engine, providing interactive query performance. Presto currently supports snapshot queries on COPY_ON_WRITE and read optimized queries 
+on MERGE_ON_READ Hudi tables. This requires the <code class="highlighter-rouge">hudi-presto-bundle</code> jar to be placed into <code class="highlighter-rouge">&lt;presto_install&gt;/plugin/hive-hadoop2/</code>, across the installation.</p>
+
+<h2 id="impala-34-or-later">Impala (3.4 or later)</h2>
+
+<h3 id="snapshot-query">Snapshot Query</h3>
+
+<p>Impala is able to query Hudi Copy-on-write table as an <a href="https://docs.cloudera.com/documentation/enterprise/6/6.3/topics/impala_tables.html#external_tables">EXTERNAL TABLE</a> on HDFS.</p>
+
+<p>To create a Hudi read optimized table on Impala:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>CREATE EXTERNAL TABLE database.table_name
+LIKE PARQUET '/path/to/load/xxx.parquet'
+STORED AS HUDIPARQUET
+LOCATION '/path/to/load';
+</code></pre></div></div>
+<p>Impala is able to take advantage of the physical partition structure to improve the query performance.
+To create a partitioned table, the folder should follow the naming convention like <code class="highlighter-rouge">year=2020/month=1</code>.
+Impala use <code class="highlighter-rouge">=</code> to separate partition name and partition value.<br />
+To create a partitioned Hudi read optimized table on Impala:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>CREATE EXTERNAL TABLE database.table_name
+LIKE PARQUET '/path/to/load/xxx.parquet'
+PARTITION BY (year int, month int, day int)
+STORED AS HUDIPARQUET
+LOCATION '/path/to/load';
+ALTER TABLE database.table_name RECOVER PARTITIONS;
+</code></pre></div></div>
+<p>After Hudi made a new commit, refresh the Impala table to get the latest results.</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>REFRESH database.table_name
+</code></pre></div></div>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+
+  </body>
+</html>
