@@ -1,7 +1,8 @@
 ---
+version: 0.5.3
 title: Deployment Guide
 keywords: hudi, administration, operation, devops, deployment
-permalink: /docs/deployment.html
+permalink: /docs/0.5.3-deployment.html
 summary: This section offers an overview of tools available to operate an ecosystem of Hudi
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
@@ -29,9 +30,9 @@ With Merge_On_Read Table, Hudi ingestion needs to also take care of compacting d
 
 ### DeltaStreamer
 
-[DeltaStreamer](/docs/writing_data.html#deltastreamer) is the standalone utility to incrementally pull upstream changes from varied sources such as DFS, Kafka and DB Changelogs and ingest them to hudi tables. It runs as a spark application in 2 modes.
+[DeltaStreamer](/docs/0.5.3-writing_data.html#deltastreamer) is the standalone utility to incrementally pull upstream changes from varied sources such as DFS, Kafka and DB Changelogs and ingest them to hudi tables. It runs as a spark application in 2 modes.
 
- - **Run Once Mode** : In this mode, Deltastreamer performs one ingestion round which includes incrementally pulling events from upstream sources and ingesting them to hudi table. Background operations like cleaning old file versions and archiving hoodie timeline are automatically executed as part of the run. For Merge-On-Read tables, Compaction is also run inline as part of ingestion unless disabled by passing the flag "--disable-compaction". By default, Compaction is run inline for every ingestion run and this can be changed by setting the property "hoodie.compact.inline.max.delta.commits". You can either manually run this spark application or use any cron trigger or workflow orchestrator (most common deployment strategy) such as Apache Airflow to spawn this application. See command line options in [this section](/docs/writing_data.html#deltastreamer) for running the spark application.
+ - **Run Once Mode** : In this mode, Deltastreamer performs one ingestion round which includes incrementally pulling events from upstream sources and ingesting them to hudi table. Background operations like cleaning old file versions and archiving hoodie timeline are automatically executed as part of the run. For Merge-On-Read tables, Compaction is also run inline as part of ingestion unless disabled by passing the flag "--disable-compaction". By default, Compaction is run inline for every ingestion run and this can be changed by setting the property "hoodie.compact.inline.max.delta.commits". You can either manually run this spark application or use any cron trigger or workflow orchestrator (most common deployment strategy) such as Apache Airflow to spawn this application. See command line options in [this section](/docs/0.5.3-writing_data.html#deltastreamer) for running the spark application.
 
 Here is an example invocation for reading from kafka topic in a single-run mode and writing to Merge On Read table type in a yarn cluster.
 
@@ -130,7 +131,7 @@ Here is an example invocation for reading from kafka topic in a continuous mode 
 
 ### Spark Datasource Writer Jobs
 
-As described in [Writing Data](/docs/writing_data.html#datasource-writer), you can use spark datasource to ingest to hudi table. This mechanism allows you to ingest any spark dataframe in Hudi format. Hudi Spark DataSource also supports spark streaming to ingest a streaming source to Hudi table. For Merge On Read table types, inline compaction is turned on by default which runs after every ingestion run. The compaction frequency can be changed by setting the property "hoodie.compact.inline.max.delta.commits". 
+As described in [Writing Data](/docs/0.5.3-writing_data.html#datasource-writer), you can use spark datasource to ingest to hudi table. This mechanism allows you to ingest any spark dataframe in Hudi format. Hudi Spark DataSource also supports spark streaming to ingest a streaming source to Hudi table. For Merge On Read table types, inline compaction is turned on by default which runs after every ingestion run. The compaction frequency can be changed by setting the property "hoodie.compact.inline.max.delta.commits". 
 
 Here is an example invocation using spark datasource
 
@@ -171,7 +172,7 @@ Currently migrating to Hudi can be done using two approaches
 - **Full conversion to Hudi** : This model is suitable if you are currently bulk/full loading the table few times a day (e.g database ingestion). The full conversion of Hudi is simply a one-time step (akin to 1 run of your existing job),
    which moves all of the data into the Hudi format and provides the ability to incrementally update for future writes.
 
-For more details, refer to the detailed [migration guide](/docs/migration_guide.html). In the future, we will be supporting seamless zero-copy bootstrap of existing tables with all the upsert/incremental query capabilities fully supported.
+For more details, refer to the detailed [migration guide](/docs/0.5.3-migration_guide.html). In the future, we will be supporting seamless zero-copy bootstrap of existing tables with all the upsert/incremental query capabilities fully supported.
 
 ## CLI
 
@@ -564,7 +565,7 @@ If you do find errors, then the record was not actually written by Hudi, but han
 
 ### Duplicates
 
-First of all, please confirm if you do indeed have duplicates **AFTER** ensuring the query is accessing the Hudi table [properly](/docs/sql_queries.html) .
+First of all, please confirm if you do indeed have duplicates **AFTER** ensuring the query is accessing the Hudi table [properly](/docs/0.5.3-sql_queries.html) .
 
  - If confirmed, please use the metadata fields above, to identify the physical files & partition files containing the records .
  - If duplicates span files across partitionpath, then this means your application is generating different partitionPaths for same recordKey, Please fix your app
