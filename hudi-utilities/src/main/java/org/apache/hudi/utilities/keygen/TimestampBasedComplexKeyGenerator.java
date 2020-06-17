@@ -20,39 +20,44 @@ package org.apache.hudi.utilities.keygen;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieKeyException;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.keygen.ComplexKeyGenerator;
 
 import org.apache.avro.generic.GenericRecord;
 
 /**
- * Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
+ * Complex key generator, which takes names of fields to be used for recordKey and relies on timestamps for
+ * partitioning field.
+ * <p>
+ * This is suitable for IoT scenarios, which usually use deviceId and deviceTime to build combinedKey(recordKey)
+ * and take deviceTime(which of course in timestamp format) as partitionPath.
  */
-public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
+public class TimestampBasedComplexKeyGenerator extends ComplexKeyGenerator {
 
   private final TimestampProcessor timestampProcessor;
 
-  public TimestampBasedKeyGenerator(TypedProperties props) {
+  public TimestampBasedComplexKeyGenerator(TypedProperties props) {
     super(props);
     timestampProcessor = new TimestampProcessor(props);
   }
 
   @Override
-  public HoodieKey getKey(GenericRecord record) {
-    String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
-    if (recordKey == null || recordKey.isEmpty()) {
-      throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
+  protected String getPartitionPath(GenericRecord record) {
+    if (partitionPathFields.isEmpty()) {
+      throw new HoodieKeyException("Unable to find field names for partition path in cfg");
     }
+    String partitionPathField = partitionPathFields.get(0);
 
     Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathField, true);
     if (partitionVal == null) {
       partitionVal = 1L;
     }
+
     long timeMs = timestampProcessor.convertPartitionValToLong(partitionVal);
     String partitionPath = timestampProcessor.formatPartitionPath(timeMs);
 
-    return new HoodieKey(recordKey, partitionPath);
+    return hiveStylePartitioning ? partitionPathField + "=" + partitionPath
+        : partitionPath;
   }
 
 }
