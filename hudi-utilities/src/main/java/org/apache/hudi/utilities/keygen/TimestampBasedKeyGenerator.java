@@ -27,10 +27,10 @@ import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.commons.lang3.time.FastDateFormat;
 
 import java.io.Serializable;
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -53,9 +53,9 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   private final TimestampType timestampType;
 
-  private SimpleDateFormat inputDateFormat;
-
-  private final String outputDateFormat;
+  private FastDateFormat inputDateFormat;
+  
+  private FastDateFormat partitionPathFormat;
 
   // TimeZone detailed settings reference
   // https://docs.oracle.com/javase/8/docs/api/java/util/TimeZone.html
@@ -83,14 +83,13 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     DataSourceUtils.checkRequiredProperties(config,
         Arrays.asList(Config.TIMESTAMP_TYPE_FIELD_PROP, Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP));
     this.timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
-    this.outputDateFormat = config.getString(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP);
     this.timeZone = TimeZone.getTimeZone(config.getString(Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, "GMT"));
+    this.partitionPathFormat  = FastDateFormat.getInstance(config.getString(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP),timeZone);
 
     if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
       DataSourceUtils.checkRequiredProperties(config,
           Collections.singletonList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
-      this.inputDateFormat = new SimpleDateFormat(config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
-      this.inputDateFormat.setTimeZone(timeZone);
+      this.inputDateFormat =  FastDateFormat.getInstance(config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP),timeZone);
     }
 
     switch (this.timestampType) {
@@ -115,8 +114,6 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     if (partitionVal == null) {
       partitionVal = 1L;
     }
-    SimpleDateFormat partitionPathFormat = new SimpleDateFormat(outputDateFormat);
-    partitionPathFormat.setTimeZone(timeZone);
 
     try {
       long timeMs;
