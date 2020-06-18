@@ -125,7 +125,7 @@ public class RollbacksCommand implements CommandMarker {
   /**
    * An Active timeline containing only rollbacks.
    */
-  static class RollbackTimeline extends HoodieActiveTimeline {
+  public static class RollbackTimeline extends HoodieActiveTimeline {
 
     public RollbackTimeline(HoodieTableMetaClient metaClient) {
       super(metaClient, CollectionUtils.createImmutableSet(HoodieTimeline.ROLLBACK_EXTENSION));
