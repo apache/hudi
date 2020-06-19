@@ -74,7 +74,7 @@ public class ListingBasedRollbackHelper implements Serializable {
       if (path.toString().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
         return instantToRollback.getTimestamp().equals(fileCommitTime);
-      } else if (path.toString().endsWith(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
+      } else if (FSUtils.isLogFile(path)) {
         // Since the baseCommitTime is the only commit for new log files, it's okay here
         String fileCommitTime = FSUtils.getBaseCommitTimeFromLogPath(path);
         return instantToRollback.getTimestamp().equals(fileCommitTime);

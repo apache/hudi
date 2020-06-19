@@ -70,7 +70,7 @@ public class MarkerFiles {
     try {
       boolean result = fs.delete(markerDirPath, true);
       if (result) {
-        LOG.info("Removing marker directory=" + markerDirPath);
+        LOG.info("Removing marker directory at " + markerDirPath);
       } else {
         LOG.info("No marker directory to delete at " + markerDirPath);
       }

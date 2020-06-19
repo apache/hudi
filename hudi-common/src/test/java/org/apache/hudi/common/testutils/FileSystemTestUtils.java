@@ -34,7 +34,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
-import java.util.stream.StreamSupport;
 
 /**
  * Utils class to assist in testing {@link InMemoryFileSystem} and {@link InLineFileSystem}.

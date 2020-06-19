@@ -354,7 +354,7 @@ public class FSUtils {
 
   public static boolean isLogFile(Path logPath) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
-    return matcher.find();
+    return matcher.find() && logPath.getName().contains(".log");
   }
 
   /**

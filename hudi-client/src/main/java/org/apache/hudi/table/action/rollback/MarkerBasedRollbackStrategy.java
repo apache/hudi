@@ -90,7 +90,7 @@ public class MarkerBasedRollbackStrategy implements BaseRollbackActionExecutor.R
   private HoodieRollbackStat undoAppend(String appendBaseFilePath, HoodieInstant instantToRollback) throws IOException, InterruptedException {
     Path baseFilePathForAppend = new Path(basePath, appendBaseFilePath);
     String fileId = FSUtils.getFileIdFromFilePath(baseFilePathForAppend);
-    String baseCommitTime = FSUtils.getCommitTime(baseFilePathForAppend.toString());
+    String baseCommitTime = FSUtils.getCommitTime(baseFilePathForAppend.getName());
     String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), new Path(basePath, appendBaseFilePath).getParent());
 
     HoodieLogFormat.Writer writer = null;

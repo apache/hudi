@@ -26,6 +26,7 @@ import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -57,6 +58,16 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
     markerFiles.createMarkerFile("2020/06/01", "file1", MarkerFiles.MarkerType.MERGE);
     markerFiles.createMarkerFile("2020/06/02", "file2", MarkerFiles.MarkerType.APPEND);
     markerFiles.createMarkerFile("2020/06/03", "file3", MarkerFiles.MarkerType.CREATE);
+  }
+
+  private void createInvalidFile(String partitionPath, String invalidFileName) {
+    Path path = FSUtils.getPartitionPath(markerFolderPath.toString(), partitionPath);
+    Path invalidFilePath = new Path(path, invalidFileName);
+    try {
+      fs.create(invalidFilePath, false).close();
+    } catch (IOException e) {
+      throw new HoodieException("Failed to create invalid file " + invalidFilePath, e);
+    }
   }
 
   @Test
@@ -98,8 +109,12 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
 
   @Test
   public void testDataPathsWhenCreatingOrMerging() throws IOException {
-    // given
+    // add markfiles
     createSomeMarkerFiles();
+    // add invalid file
+    createInvalidFile("2020/06/01", "invalid_file3");
+    int fileSize = FileSystemTestUtils.listPathRecursively(fs, markerFolderPath).size();
+    assertEquals(fileSize,4);
 
     // then
     assertIterableEquals(CollectionUtils.createImmutableList(
@@ -124,7 +139,7 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
   @Test
   public void testStripMarkerSuffix() {
     // Given
-    final String pathPrefix = "file://"+ metaClient.getMetaPath() +"/file";
+    final String pathPrefix = "file://" + metaClient.getMetaPath() + "/file";
     final String markerFilePath = pathPrefix + ".marker.APPEND";
 
     // when-then
