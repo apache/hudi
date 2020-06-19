@@ -1,6 +1,5 @@
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.utilities.mongo.Operation;
@@ -11,6 +10,7 @@ import org.bson.codecs.BsonObjectIdCodec;
 import org.bson.codecs.DecoderContext;
 import org.bson.json.JsonReader;
 import org.json.JSONObject;
+import org.apache.spark.sql.types.StructType;
 
 public class MongoAvroConverter extends KafkaAvroConverter {
 
@@ -23,8 +23,8 @@ public class MongoAvroConverter extends KafkaAvroConverter {
   private static final String PAYLOAD_OPLOGFIELD = "payload";
   private static final String SOURCE_OPLOGFIELD = "source";
 
-  public MongoAvroConverter(Schema avroSchema) {
-    super(avroSchema);
+  public MongoAvroConverter(StructType avroSchema, String name) {
+    super(avroSchema, name);
   }
 
   @Override

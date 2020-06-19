@@ -1,28 +1,33 @@
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.AvroConversionUtils;
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.stream.StreamSupport;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.spark.sql.types.StructType;
 
 /**
  * Convert a list of Kafka ConsumerRecord<String, String> to GenericRecord.
  */
 public abstract class KafkaAvroConverter {
   // Use GenericRecord as schema wrapper to leverage Spark Kyro serialization.
-  private final GenericRecord schemaHolder;
+  
+  private final StructType avroSchema;
+  private final String structName;
 
-  public KafkaAvroConverter(Schema schema) {
-    schemaHolder = new GenericData.Record(schema);
+  public KafkaAvroConverter(StructType schema, String name) {
+    avroSchema = schema;
+    structName = name;
   }
 
   public Schema getSchema() {
-    return schemaHolder.getSchema();
+    return AvroConversionUtils.convertStructTypeToAvroSchema(avroSchema, structName, "hudi." + structName);
   }
 
   public Iterator<GenericRecord> apply(Iterator<ConsumerRecord<Object, Object>> records) {

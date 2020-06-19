@@ -25,6 +25,7 @@ import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 import org.apache.hudi.utilities.sources.helpers.KafkaAvroConverter;
 import org.apache.hudi.utilities.sources.helpers.MongoAvroConverter;
+import org.apache.hudi.AvroConversionUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -59,15 +60,18 @@ public class MongoKafkaSource extends AvroSource {
     long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
     if (totalNewMsgs <= 0) {
       return new InputBatch<>(Option.empty(), lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
+    } else {
+      LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
     }
     JavaRDD<GenericRecord> newDataRDD = toRDD(offsetRanges);
     return new InputBatch<>(Option.of(newDataRDD), CheckpointUtils.offsetsToStr(offsetRanges));
   }
 
   private JavaRDD<GenericRecord> toRDD(OffsetRange[] offsetRanges) {
-    final KafkaAvroConverter converter = new MongoAvroConverter(schemaProvider.getSourceSchema());
+    final KafkaAvroConverter converter = new MongoAvroConverter(AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceSchema()),
+            schemaProvider.getSourceSchema().getName());
     return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-            LocationStrategies.PreferConsistent()).mapPartitions(records -> converter.apply(records));
+            LocationStrategies.PreferConsistent()).mapPartitions(converter::apply);
   }
 }
 

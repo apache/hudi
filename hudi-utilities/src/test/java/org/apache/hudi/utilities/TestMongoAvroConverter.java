@@ -3,6 +3,8 @@ package org.apache.hudi.utilities;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+import org.apache.hudi.AvroConversionUtils;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -23,7 +25,7 @@ public class TestMongoAvroConverter {
     String sampleSchemaStr = readFile("unitTest/TestMongoAvroConverterSampleSchema.avsc");
     String sampleKeyStr = readFile("unitTest/TestMongoAvroConverterSampleOplogKey.json");
     Schema schema = parser.parse(sampleSchemaStr);
-    MongoAvroConverter transformer = new MongoAvroConverter(schema);
+    MongoAvroConverter transformer = new MongoAvroConverter(AvroConversionUtils.convertAvroSchemaToStructType(schema), schema.getName());
     String createSampleId = "55555505d648da1824d45a1d";
     assertEquals(createSampleId, transformer.getDocumentId(sampleKeyStr));
   }
@@ -37,7 +39,7 @@ public class TestMongoAvroConverter {
     String sampleKeyStr = readFile("unitTest/TestMongoAvroConverterSampleOplogKey.json");
 
     Schema schema = parser.parse(sampleSchemaStr);
-    MongoAvroConverter transformer = new MongoAvroConverter(schema);
+    MongoAvroConverter transformer = new MongoAvroConverter(AvroConversionUtils.convertAvroSchemaToStructType(schema), schema.getName());
     GenericRecord resultUpdate = transformer.transform(sampleKeyStr, sampleUpdateValueStr);
     GenericRecord resultCreate = transformer.transform(sampleKeyStr, sampleCreateValueStr);
 

@@ -181,10 +181,13 @@ public class KafkaOffsetGen {
 
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent()) {
+        LOG.info("Get Kafka offsets via hudi checkpoint");
         fromOffsets = checkupValidOffsets(consumer, lastCheckpointStr, topicPartitions);
       } else {
         KafkaResetOffsetStrategies autoResetValue = KafkaResetOffsetStrategies
                 .valueOf(props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
+        LOG.info("Get Kafka offsets via KafkaConsumer");
+
         switch (autoResetValue) {
           case EARLIEST:
             fromOffsets = consumer.beginningOffsets(topicPartitions);
