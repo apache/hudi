@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.testutils.sources.config;
 /**
  * Configurations for Test Data Sources.
  */
-public class TestSourceConfig {
+public class SourceConfigs {
 
   // Used by DistributedTestDataSource only. Number of partitions where each partitions generates test-data
   public static final String NUM_SOURCE_PARTITIONS_PROP = "hoodie.deltastreamer.source.test.num_partitions";
