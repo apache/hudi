@@ -277,6 +277,17 @@
             
 
           
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.5.3-cloud.html" class="">云储存</a></li>
+            
+
+          
         </ul>
         
       </li>
@@ -344,7 +355,6 @@
           <nav class="toc">
             <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
             <ul class="toc__menu">
-  <li><a href="#与云存储连接">与云存储连接</a></li>
   <li><a href="#spark-datasource">Spark数据源配置</a>
     <ul>
       <li><a href="#写选项">写选项</a></li>
@@ -377,21 +387,6 @@
  RecordPayload定义了如何根据传入的新记录和存储的旧记录来产生新值以进行插入更新。
  Hudi提供了诸如<code class="highlighter-rouge">OverwriteWithLatestAvroPayload</code>的默认实现，该实现仅使用最新或最后写入的记录来更新存储。
  在数据源和WriteClient级别，都可以将其重写为扩展<code class="highlighter-rouge">HoodieRecordPayload</code>类的自定义类。</li>
-</ul>
-
-<h2 id="与云存储连接">与云存储连接</h2>
-
-<p>无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。</p>
-
-<ul>
-  <li><a href="/cn/docs/0.5.3-s3_hoodie.html">AWS S3</a> <br />
-S3和Hudi协同工作所需的配置。</li>
-  <li><a href="/cn/docs/0.5.3-gcs_hoodie.html">Google Cloud Storage</a> <br />
-GCS和Hudi协同工作所需的配置。</li>
-  <li><a href="/cn/docs/0.5.3-oss_hoodie.html">Alibaba Cloud OSS</a> <br />
-阿里云和Hudi协同工作所需的配置。</li>
-  <li><a href="/cn/docs/0.5.3-azure_hoodie.html">Microsoft Azure</a> <br />
-Azure和Hudi协同工作所需的配置。</li>
 </ul>
 
 <h2 id="spark-datasource">Spark数据源配置</h2>

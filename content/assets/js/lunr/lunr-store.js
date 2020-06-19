@@ -630,7 +630,7 @@ var store = [{
         "url": "https://hudi.apache.org/docs/0.5.3-querying_data.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "配置",
-        "excerpt":"该页面介绍了几种配置写入或读取Hudi数据集的作业的方法。 简而言之，您可以在几个级别上控制行为。 Spark数据源配置 : 这些配置控制Hudi Spark数据源，提供如下功能： 定义键和分区、选择写操作、指定如何合并记录或选择要读取的视图类型。 WriteClient 配置 : 在内部，Hudi数据源使用基于RDD的HoodieWriteClient API 真正执行对存储的写入。 这些配置可对文件大小、压缩（compression）、并行度、压缩（compaction）、写入模式、清理等底层方面进行完全控制。 尽管Hudi提供了合理的默认设置，但在不同情形下，可能需要对这些配置进行调整以针对特定的工作负载进行优化。 RecordPayload 配置 : 这是Hudi提供的最底层的定制。 RecordPayload定义了如何根据传入的新记录和存储的旧记录来产生新值以进行插入更新。 Hudi提供了诸如OverwriteWithLatestAvroPayload的默认实现，该实现仅使用最新或最后写入的记录来更新存储。 在数据源和WriteClient级别，都可以将其重写为扩展HoodieRecordPayload类的自定义类。 与云存储连接 无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。 AWS S3 S3和Hudi协同工作所需的配置。 Google Cloud Storage GCS和Hudi协同工作所需的配置。 Alibaba Cloud OSS 阿里云和Hudi协同工作所需的配置。 Microsoft Azure Azure和Hudi协同工作所需的配置。 Spark数据源配置 可以通过将以下选项传递到option(k,v)方法中来配置使用数据源的Spark作业。 实际的数据源级别配置在下面列出。 写选项 另外，您可以使用options()或option(k,v)方法直接传递任何WriteClient级别的配置。 inputDF.write() .format(\"org.apache.hudi\") .options(clientOpts) // 任何Hudi客户端选项都可以传入 .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(),...","categories": [],
+        "excerpt":"该页面介绍了几种配置写入或读取Hudi数据集的作业的方法。 简而言之，您可以在几个级别上控制行为。 Spark数据源配置 : 这些配置控制Hudi Spark数据源，提供如下功能： 定义键和分区、选择写操作、指定如何合并记录或选择要读取的视图类型。 WriteClient 配置 : 在内部，Hudi数据源使用基于RDD的HoodieWriteClient API 真正执行对存储的写入。 这些配置可对文件大小、压缩（compression）、并行度、压缩（compaction）、写入模式、清理等底层方面进行完全控制。 尽管Hudi提供了合理的默认设置，但在不同情形下，可能需要对这些配置进行调整以针对特定的工作负载进行优化。 RecordPayload 配置 : 这是Hudi提供的最底层的定制。 RecordPayload定义了如何根据传入的新记录和存储的旧记录来产生新值以进行插入更新。 Hudi提供了诸如OverwriteWithLatestAvroPayload的默认实现，该实现仅使用最新或最后写入的记录来更新存储。 在数据源和WriteClient级别，都可以将其重写为扩展HoodieRecordPayload类的自定义类。 Spark数据源配置 可以通过将以下选项传递到option(k,v)方法中来配置使用数据源的Spark作业。 实际的数据源级别配置在下面列出。 写选项 另外，您可以使用options()或option(k,v)方法直接传递任何WriteClient级别的配置。 inputDF.write() .format(\"org.apache.hudi\") .options(clientOpts) // 任何Hudi客户端选项都可以传入 .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), \"_row_key\") .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), \"partition\") .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), \"timestamp\") .option(HoodieWriteConfig.TABLE_NAME, tableName) .mode(SaveMode.Append) .save(basePath); 用于通过write.format.option(...)写入数据集的选项 TABLE_NAME_OPT_KEY 属性：hoodie.datasource.write.table.name [必须] Hive表名，用于将数据集注册到其中。 OPERATION_OPT_KEY 属性：hoodie.datasource.write.operation, 默认值：upsert...","categories": [],
         "tags": [],
         "url": "https://hudi.apache.org/cn/docs/0.5.3-configurations.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
@@ -658,6 +658,16 @@ var store = [{
         "excerpt":"This section provides all the help you need to deploy and operate Hudi tables at scale. Specifically, we will cover the following aspects. Deployment Model : How various Hudi components are deployed and managed. Upgrading Versions : Picking up new releases of Hudi, guidelines and general best-practices. Migrating to Hudi...","categories": [],
         "tags": [],
         "url": "https://hudi.apache.org/docs/0.5.3-deployment.html",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "云储存",
+        "excerpt":"与云存储连接   无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。      AWS S3   S3和Hudi协同工作所需的配置。   Google Cloud Storage   GCS和Hudi协同工作所需的配置。   Alibaba Cloud OSS   阿里云和Hudi协同工作所需的配置。   Microsoft Azure   Azure和Hudi协同工作所需的配置。  ","categories": [],
+        "tags": [],
+        "url": "https://hudi.apache.org/cn/docs/0.5.3-cloud.html",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Cloud Storage",
+        "excerpt":"Talking to Cloud Storage Immaterial of whether RDD/WriteClient APIs or Datasource is used, the following information helps configure access to cloud stores. AWS S3 Configurations required for S3 and Hudi co-operability. Google Cloud Storage Configurations required for GCS and Hudi co-operability. Alibaba Cloud OSS Configurations required for OSS and Hudi...","categories": [],
+        "tags": [],
+        "url": "https://hudi.apache.org/docs/0.5.3-cloud.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Privacy Policy",
         "excerpt":"Information about your use of this website is collected using server access logs and a tracking cookie. The collected information consists of the following: The IP address from which you access the website; The type of browser and operating system you use to access our site; The date and time...","categories": [],
@@ -815,7 +825,7 @@ var store = [{
         "url": "https://hudi.apache.org/docs/querying_data.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "配置",
-        "excerpt":"该页面介绍了几种配置写入或读取Hudi数据集的作业的方法。 简而言之，您可以在几个级别上控制行为。 Spark数据源配置 : 这些配置控制Hudi Spark数据源，提供如下功能： 定义键和分区、选择写操作、指定如何合并记录或选择要读取的视图类型。 WriteClient 配置 : 在内部，Hudi数据源使用基于RDD的HoodieWriteClient API 真正执行对存储的写入。 这些配置可对文件大小、压缩（compression）、并行度、压缩（compaction）、写入模式、清理等底层方面进行完全控制。 尽管Hudi提供了合理的默认设置，但在不同情形下，可能需要对这些配置进行调整以针对特定的工作负载进行优化。 RecordPayload 配置 : 这是Hudi提供的最底层的定制。 RecordPayload定义了如何根据传入的新记录和存储的旧记录来产生新值以进行插入更新。 Hudi提供了诸如OverwriteWithLatestAvroPayload的默认实现，该实现仅使用最新或最后写入的记录来更新存储。 在数据源和WriteClient级别，都可以将其重写为扩展HoodieRecordPayload类的自定义类。 与云存储连接 无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。 AWS S3 S3和Hudi协同工作所需的配置。 Google Cloud Storage GCS和Hudi协同工作所需的配置。 Alibaba Cloud OSS 阿里云和Hudi协同工作所需的配置。 Microsoft Azure Azure和Hudi协同工作所需的配置。 Spark数据源配置 可以通过将以下选项传递到option(k,v)方法中来配置使用数据源的Spark作业。 实际的数据源级别配置在下面列出。 写选项 另外，您可以使用options()或option(k,v)方法直接传递任何WriteClient级别的配置。 inputDF.write() .format(\"org.apache.hudi\") .options(clientOpts) // 任何Hudi客户端选项都可以传入 .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(),...","categories": [],
+        "excerpt":"该页面介绍了几种配置写入或读取Hudi数据集的作业的方法。 简而言之，您可以在几个级别上控制行为。 Spark数据源配置 : 这些配置控制Hudi Spark数据源，提供如下功能： 定义键和分区、选择写操作、指定如何合并记录或选择要读取的视图类型。 WriteClient 配置 : 在内部，Hudi数据源使用基于RDD的HoodieWriteClient API 真正执行对存储的写入。 这些配置可对文件大小、压缩（compression）、并行度、压缩（compaction）、写入模式、清理等底层方面进行完全控制。 尽管Hudi提供了合理的默认设置，但在不同情形下，可能需要对这些配置进行调整以针对特定的工作负载进行优化。 RecordPayload 配置 : 这是Hudi提供的最底层的定制。 RecordPayload定义了如何根据传入的新记录和存储的旧记录来产生新值以进行插入更新。 Hudi提供了诸如OverwriteWithLatestAvroPayload的默认实现，该实现仅使用最新或最后写入的记录来更新存储。 在数据源和WriteClient级别，都可以将其重写为扩展HoodieRecordPayload类的自定义类。 Spark数据源配置 可以通过将以下选项传递到option(k,v)方法中来配置使用数据源的Spark作业。 实际的数据源级别配置在下面列出。 写选项 另外，您可以使用options()或option(k,v)方法直接传递任何WriteClient级别的配置。 inputDF.write() .format(\"org.apache.hudi\") .options(clientOpts) // 任何Hudi客户端选项都可以传入 .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), \"_row_key\") .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), \"partition\") .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), \"timestamp\") .option(HoodieWriteConfig.TABLE_NAME, tableName) .mode(SaveMode.Append) .save(basePath); 用于通过write.format.option(...)写入数据集的选项 TABLE_NAME_OPT_KEY 属性：hoodie.datasource.write.table.name [必须] Hive表名，用于将数据集注册到其中。 OPERATION_OPT_KEY 属性：hoodie.datasource.write.operation, 默认值：upsert...","categories": [],
         "tags": [],
         "url": "https://hudi.apache.org/cn/docs/configurations.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
@@ -843,6 +853,16 @@ var store = [{
         "excerpt":"This section provides all the help you need to deploy and operate Hudi tables at scale. Specifically, we will cover the following aspects. Deployment Model : How various Hudi components are deployed and managed. Upgrading Versions : Picking up new releases of Hudi, guidelines and general best-practices. Migrating to Hudi...","categories": [],
         "tags": [],
         "url": "https://hudi.apache.org/docs/deployment.html",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "云储存",
+        "excerpt":"与云存储连接   无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。      AWS S3   S3和Hudi协同工作所需的配置。   Google Cloud Storage   GCS和Hudi协同工作所需的配置。   Alibaba Cloud OSS   阿里云和Hudi协同工作所需的配置。   Microsoft Azure   Azure和Hudi协同工作所需的配置。  ","categories": [],
+        "tags": [],
+        "url": "https://hudi.apache.org/cn/docs/cloud.html",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Cloud Storage",
+        "excerpt":"Talking to Cloud Storage Immaterial of whether RDD/WriteClient APIs or Datasource is used, the following information helps configure access to cloud stores. AWS S3 Configurations required for S3 and Hudi co-operability. Google Cloud Storage Configurations required for GCS and Hudi co-operability. Alibaba Cloud OSS Configurations required for OSS and Hudi...","categories": [],
+        "tags": [],
+        "url": "https://hudi.apache.org/docs/cloud.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Privacy Policy",
         "excerpt":"Information about your use of this website is collected using server access logs and a tracking cookie. The collected information consists of the following: The IP address from which you access the website; The type of browser and operating system you use to access our site; The date and time...","categories": [],

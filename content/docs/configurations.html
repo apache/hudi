@@ -277,6 +277,17 @@
             
 
           
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/cloud.html" class="">Cloud Storage</a></li>
+            
+
+          
         </ul>
         
       </li>
@@ -344,7 +355,6 @@
           <nav class="toc">
             <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
             <ul class="toc__menu">
-  <li><a href="#talking-to-cloud-storage">Talking to Cloud Storage</a></li>
   <li><a href="#spark-datasource">Spark Datasource Configs</a>
     <ul>
       <li><a href="#write-options">Write Options</a></li>
@@ -374,22 +384,6 @@ At a high level, you can control behaviour at few levels.</p>
   <li><strong><a href="#PAYLOAD_CLASS_OPT_KEY">RecordPayload Config</a></strong> : This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and 
  stored old record. Hudi provides default implementations such as <code class="highlighter-rouge">OverwriteWithLatestAvroPayload</code> which simply update table with the latest/last-written record. 
  This can be overridden to a custom class extending <code class="highlighter-rouge">HoodieRecordPayload</code> class, on both datasource and WriteClient levels.</li>
-</ul>
-
-<h2 id="talking-to-cloud-storage">Talking to Cloud Storage</h2>
-
-<p>Immaterial of whether RDD/WriteClient APIs or Datasource is used, the following information helps configure access
-to cloud stores.</p>
-
-<ul>
-  <li><a href="/docs/s3_hoodie">AWS S3</a> <br />
-Configurations required for S3 and Hudi co-operability.</li>
-  <li><a href="/docs/gcs_hoodie">Google Cloud Storage</a> <br />
-Configurations required for GCS and Hudi co-operability.</li>
-  <li><a href="/docs/oss_hoodie.html">Alibaba Cloud OSS</a> <br />
-Configurations required for OSS and Hudi co-operability.</li>
-  <li><a href="/docs/azure_hoodie.html">Microsoft Azure</a> <br />
-Configurations required for Azure and Hudi co-operability.</li>
 </ul>
 
 <h2 id="spark-datasource">Spark Datasource Configs</h2>

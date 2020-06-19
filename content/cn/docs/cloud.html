@@ -3,23 +3,23 @@
   <head>
     <meta charset="utf-8">
 
-<!-- begin _includes/seo.html --><title>Azure Filesystem - Apache Hudi</title>
-<meta name="description" content="In this page, we explain how to use Hudi on Microsoft Azure.">
+<!-- begin _includes/seo.html --><title>云储存 - Apache Hudi</title>
+<meta name="description" content="与云存储连接">
 
 <meta property="og:type" content="article">
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="">
-<meta property="og:title" content="Azure Filesystem">
-<meta property="og:url" content="https://hudi.apache.org/cn/docs/azure_hoodie.html">
+<meta property="og:title" content="云储存">
+<meta property="og:url" content="https://hudi.apache.org/cn/docs/cloud.html">
 
 
-  <meta property="og:description" content="In this page, we explain how to use Hudi on Microsoft Azure.">
+  <meta property="og:description" content="与云存储连接">
 
 
 
 
 
-  <meta property="article:modified_time" content="2020-05-25T19:00:57-04:00">
+  <meta property="article:modified_time" content="2019-06-16T21:59:57-04:00">
 
 
 
@@ -284,7 +284,7 @@
             
 
             
-              <li><a href="/cn/docs/cloud.html" class="">云储存</a></li>
+              <li><a href="/cn/docs/cloud.html" class="active">云储存</a></li>
             
 
           
@@ -342,7 +342,7 @@
     <div class="page__inner-wrap">
       
         <header>
-          <h1 id="page-title" class="page__title" itemprop="headline">Azure Filesystem
+          <h1 id="page-title" class="page__title" itemprop="headline">云储存
 </h1>
           <!-- Output author details if some exist. -->
           
@@ -351,60 +351,28 @@
 
       <section class="page__content" itemprop="text">
         
-          <style>
-            .page {
-              padding-right: 0 !important;
-            }
-          </style>
-        
-        <p>In this page, we explain how to use Hudi on Microsoft Azure.</p>
-
-<h2 id="disclaimer">Disclaimer</h2>
-
-<p>This page is maintained by the Hudi community.
-If the information is inaccurate or you have additional information to add.
-Please feel free to create a JIRA ticket. Contribution is highly appreciated.</p>
-
-<h2 id="supported-storage-system">Supported Storage System</h2>
-
-<p>There are two storage systems support Hudi .</p>
-
-<ul>
-  <li>Azure Blob Storage</li>
-  <li>Azure Data Lake Gen 2</li>
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#与云存储连接">与云存储连接</a></li>
 </ul>
+          </nav>
+        </aside>
+        
+        <h2 id="与云存储连接">与云存储连接</h2>
 
-<h2 id="verified-combination-of-spark-and-storage-system">Verified Combination of Spark and storage system</h2>
+<p>无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。</p>
 
-<h4 id="hdinsight-spark24-on-azure-data-lake-storage-gen-2">HDInsight Spark2.4 on Azure Data Lake Storage Gen 2</h4>
-<p>This combination works out of the box. No extra config needed.</p>
-
-<h4 id="databricks-spark24-on-azure-data-lake-storage-gen-2">Databricks Spark2.4 on Azure Data Lake Storage Gen 2</h4>
 <ul>
-  <li>
-    <p>Import Hudi jar to databricks workspace</p>
-  </li>
-  <li>Mount the file system to dbutils.
-    <div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">dbutils</span><span class="o">.</span><span class="py">fs</span><span class="o">.</span><span class="py">mount</span><span class="o">(</span>
-  <span class="n">source</span> <span class="k">=</span> <span class="s">"abfss://xxx@xxx.dfs.core.windows.net"</span><span class="o">,</span>
-  <span class="n">mountPoint</span> <span class="k">=</span> <span class="s">"/mountpoint"</span><span class="o">,</span>
-  <span class="n">extraConfigs</span> <span class="k">=</span> <span class="n">configs</span><span class="o">)</span>
-</code></pre></div>    </div>
-  </li>
-  <li>When writing Hudi dataset, use abfss URL
-    <div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">inputDF</span><span class="o">.</span><span class="py">write</span>
-  <span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">options</span><span class="o">(</span><span class="n">opts</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">mode</span><span class="o">(</span><span class="nv">SaveMode</span><span class="o">.</span><span class="py">Append</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">save</span><span class="o">(</span><span class="s">"abfss://&lt;&lt;storage-account&gt;&gt;.dfs.core.windows.net/hudi-tables/customer"</span><span class="o">)</span>
-</code></pre></div>    </div>
-  </li>
-  <li>When reading Hudi dataset, use the mounting point
-    <div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">spark</span><span class="o">.</span><span class="py">read</span>
-  <span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">load</span><span class="o">(</span><span class="s">"/mountpoint/hudi-tables/customer"</span><span class="o">)</span>
-</code></pre></div>    </div>
-  </li>
+  <li><a href="/cn/docs/s3_hoodie.html">AWS S3</a> <br />
+S3和Hudi协同工作所需的配置。</li>
+  <li><a href="/cn/docs/gcs_hoodie.html">Google Cloud Storage</a> <br />
+GCS和Hudi协同工作所需的配置。</li>
+  <li><a href="/cn/docs/oss_hoodie.html">Alibaba Cloud OSS</a> <br />
+阿里云和Hudi协同工作所需的配置。</li>
+  <li><a href="/cn/docs/azure_hoodie.html">Microsoft Azure</a> <br />
+Azure和Hudi协同工作所需的配置。</li>
 </ul>
 
       </section>

@@ -3,23 +3,23 @@
   <head>
     <meta charset="utf-8">
 
-<!-- begin _includes/seo.html --><title>Comparison - Apache Hudi</title>
-<meta name="description" content="Apache Hudi fills a big void for processing data on top of DFS, and thus mostly co-exists nicely with these technologies. However,it would be useful to understand how Hudi fits into the current big data ecosystem, contrasting it with a few related systemsand bring out the different tradeoffs these systems have accepted in their design.">
+<!-- begin _includes/seo.html --><title>Cloud Storage - Apache Hudi</title>
+<meta name="description" content="Talking to Cloud Storage">
 
 <meta property="og:type" content="article">
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="">
-<meta property="og:title" content="Comparison">
-<meta property="og:url" content="https://hudi.apache.org/docs/comparison.html">
+<meta property="og:title" content="Cloud Storage">
+<meta property="og:url" content="https://hudi.apache.org/docs/0.5.3-cloud.html">
 
 
-  <meta property="og:description" content="Apache Hudi fills a big void for processing data on top of DFS, and thus mostly co-exists nicely with these technologies. However,it would be useful to understand how Hudi fits into the current big data ecosystem, contrasting it with a few related systemsand bring out the different tradeoffs these systems have accepted in their design.">
+  <meta property="og:description" content="Talking to Cloud Storage">
 
 
 
 
 
-  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+  <meta property="article:modified_time" content="2019-06-16T21:59:57-04:00">
 
 
 
@@ -184,7 +184,7 @@
             
 
             
-              <li><a href="/docs/comparison.html" class="active">Comparison</a></li>
+              <li><a href="/docs/comparison.html" class="">Comparison</a></li>
             
 
           
@@ -342,7 +342,7 @@
     <div class="page__inner-wrap">
       
         <header>
-          <h1 id="page-title" class="page__title" itemprop="headline">Comparison
+          <h1 id="page-title" class="page__title" itemprop="headline">Cloud Storage
 </h1>
           <!-- Output author details if some exist. -->
           
@@ -351,60 +351,30 @@
 
       <section class="page__content" itemprop="text">
         
-          <style>
-            .page {
-              padding-right: 0 !important;
-            }
-          </style>
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#talking-to-cloud-storage">Talking to Cloud Storage</a></li>
+</ul>
+          </nav>
+        </aside>
         
-        <p>Apache Hudi fills a big void for processing data on top of DFS, and thus mostly co-exists nicely with these technologies. However,
-it would be useful to understand how Hudi fits into the current big data ecosystem, contrasting it with a few related systems
-and bring out the different tradeoffs these systems have accepted in their design.</p>
+        <h2 id="talking-to-cloud-storage">Talking to Cloud Storage</h2>
 
-<h2 id="kudu">Kudu</h2>
+<p>Immaterial of whether RDD/WriteClient APIs or Datasource is used, the following information helps configure access
+to cloud stores.</p>
 
-<p><a href="https://kudu.apache.org">Apache Kudu</a> is a storage system that has similar goals as Hudi, which is to bring real-time analytics on petabytes of data via first
-class support for <code class="highlighter-rouge">upserts</code>. A key differentiator is that Kudu also attempts to serve as a datastore for OLTP workloads, something that Hudi does not aspire to be.
-Consequently, Kudu does not support incremental pulling (as of early 2017), something Hudi does to enable incremental processing use cases.</p>
-
-<p>Kudu diverges from a distributed file system abstraction and HDFS altogether, with its own set of storage servers talking to each  other via RAFT.
-Hudi, on the other hand, is designed to work with an underlying Hadoop compatible filesystem (HDFS,S3 or Ceph) and does not have its own fleet of storage servers,
-instead relying on Apache Spark to do the heavy-lifting. Thus, Hudi can be scaled easily, just like other Spark jobs, while Kudu would require hardware
-&amp; operational support, typical to datastores like HBase or Vertica. We have not at this point, done any head to head benchmarks against Kudu (given RTTable is WIP).
-But, if we were to go with results shared by <a href="https://db-blog.web.cern.ch/blog/zbigniew-baranowski/2017-01-performance-comparison-different-file-formats-and-storage-engines">CERN</a> ,
-we expect Hudi to positioned at something that ingests parquet with superior performance.</p>
-
-<h2 id="hive-transactions">Hive Transactions</h2>
-
-<p><a href="https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions">Hive Transactions/ACID</a> is another similar effort, which tries to implement storage like
-<code class="highlighter-rouge">merge-on-read</code>, on top of ORC file format. Understandably, this feature is heavily tied to Hive and other efforts like <a href="https://cwiki.apache.org/confluence/display/Hive/LLAP">LLAP</a>.
-Hive transactions does not offer the read-optimized storage option or the incremental pulling, that Hudi does. In terms of implementation choices, Hudi leverages
-the full power of a processing framework like Spark, while Hive transactions feature is implemented underneath by Hive tasks/queries kicked off by user or the Hive metastore.
-Based on our production experience, embedding Hudi as a library into existing Spark pipelines was much easier and less operationally heavy, compared with the other approach.
-Hudi is also designed to work with non-hive enginers like Presto/Spark and will incorporate file formats other than parquet over time.</p>
-
-<h2 id="hbase">HBase</h2>
-
-<p>Even though <a href="https://hbase.apache.org">HBase</a> is ultimately a key-value store for OLTP workloads, users often tend to associate HBase with analytics given the proximity to Hadoop.
-Given HBase is heavily write-optimized, it supports sub-second upserts out-of-box and Hive-on-HBase lets users query that data. However, in terms of actual performance for analytical workloads,
-hybrid columnar storage formats like Parquet/ORC handily beat HBase, since these workloads are predominantly read-heavy. Hudi bridges this gap between faster data and having
-analytical storage formats. From an operational perspective, arming users with a library that provides faster data, is more scalable, than managing a big farm of HBase region servers,
-just for analytics. Finally, HBase does not support incremental processing primitives like <code class="highlighter-rouge">commit times</code>, <code class="highlighter-rouge">incremental pull</code> as first class citizens like Hudi.</p>
-
-<h2 id="stream-processing">Stream Processing</h2>
-
-<p>A popular question, we get is : “How does Hudi relate to stream processing systems?”, which we will try to answer here. Simply put, Hudi can integrate with
-batch (<code class="highlighter-rouge">copy-on-write table</code>) and streaming (<code class="highlighter-rouge">merge-on-read table</code>) jobs of today, to store the computed results in Hadoop. For Spark apps, this can happen via direct
-integration of Hudi library with Spark/Spark streaming DAGs. In case of Non-Spark processing systems (eg: Flink, Hive), the processing can be done in the respective systems
-and later sent into a Hudi table via a Kafka topic/DFS intermediate file. In more conceptual level, data processing
-pipelines just consist of three components : <code class="highlighter-rouge">source</code>, <code class="highlighter-rouge">processing</code>, <code class="highlighter-rouge">sink</code>, with users ultimately running queries against the sink to use the results of the pipeline.
-Hudi can act as either a source or sink, that stores data on DFS. Applicability of Hudi to a given stream processing pipeline ultimately boils down to suitability
-of Presto/SparkSQL/Hive for your queries.</p>
-
-<p>More advanced use cases revolve around the concepts of <a href="https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop">incremental processing</a>, which effectively
-uses Hudi even inside the <code class="highlighter-rouge">processing</code> engine to speed up typical batch pipelines. For e.g: Hudi can be used as a state store inside a processing DAG (similar
-to how <a href="https://ci.apache.org/projects/flink/flink-docs-release-1.2/ops/state_backends.html#the-rocksdbstatebackend">rocksDB</a> is used by Flink). This is an item on the roadmap
-and will eventually happen as a <a href="https://issues.apache.org/jira/browse/HUDI-60">Beam Runner</a></p>
+<ul>
+  <li><a href="/docs/0.5.3-s3_hoodie">AWS S3</a> <br />
+Configurations required for S3 and Hudi co-operability.</li>
+  <li><a href="/docs/0.5.3-gcs_hoodie">Google Cloud Storage</a> <br />
+Configurations required for GCS and Hudi co-operability.</li>
+  <li><a href="/docs/0.5.3-oss_hoodie.html">Alibaba Cloud OSS</a> <br />
+Configurations required for OSS and Hudi co-operability.</li>
+  <li><a href="/docs/0.5.3-azure_hoodie.html">Microsoft Azure</a> <br />
+Configurations required for Azure and Hudi co-operability.</li>
+</ul>
 
       </section>
 
