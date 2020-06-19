@@ -20,19 +20,7 @@ language: cn
    RecordPayload定义了如何根据传入的新记录和存储的旧记录来产生新值以进行插入更新。
    Hudi提供了诸如`OverwriteWithLatestAvroPayload`的默认实现，该实现仅使用最新或最后写入的记录来更新存储。
    在数据源和WriteClient级别，都可以将其重写为扩展`HoodieRecordPayload`类的自定义类。
- 
-## 与云存储连接
 
-无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。
-
- * [AWS S3](/cn/docs/s3_hoodie.html) <br/>
-   S3和Hudi协同工作所需的配置。
- * [Google Cloud Storage](/cn/docs/gcs_hoodie.html) <br/>
-   GCS和Hudi协同工作所需的配置。
- * [Alibaba Cloud OSS](/cn/docs/oss_hoodie.html) <br/>
-   阿里云和Hudi协同工作所需的配置。
- * [Microsoft Azure](/cn/docs/azure_hoodie.html) <br/>
-   Azure和Hudi协同工作所需的配置。
 
 ## Spark数据源配置 {#spark-datasource}
 

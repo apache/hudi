@@ -17,20 +17,6 @@ At a high level, you can control behaviour at few levels.
 - **[RecordPayload Config](#PAYLOAD_CLASS_OPT_KEY)** : This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and 
    stored old record. Hudi provides default implementations such as `OverwriteWithLatestAvroPayload` which simply update table with the latest/last-written record. 
    This can be overridden to a custom class extending `HoodieRecordPayload` class, on both datasource and WriteClient levels.
- 
-## Talking to Cloud Storage
-
-Immaterial of whether RDD/WriteClient APIs or Datasource is used, the following information helps configure access
-to cloud stores.
-
- * [AWS S3](/docs/0.5.3-s3_hoodie) <br/>
-   Configurations required for S3 and Hudi co-operability.
- * [Google Cloud Storage](/docs/0.5.3-gcs_hoodie) <br/>
-   Configurations required for GCS and Hudi co-operability.
- * [Alibaba Cloud OSS](/docs/0.5.3-oss_hoodie.html) <br/>
-   Configurations required for OSS and Hudi co-operability.
- * [Microsoft Azure](/docs/0.5.3-azure_hoodie.html) <br/>
-   Configurations required for Azure and Hudi co-operability.
 
 ## Spark Datasource Configs {#spark-datasource}
 

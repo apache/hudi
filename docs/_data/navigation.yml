@@ -40,6 +40,8 @@ docs:
         url: /docs/performance.html
       - title: "Deployment"
         url: /docs/deployment.html
+      - title: "Cloud Storage"
+        url: /docs/cloud.html
   - title: INFO
     children:
       - title: "Docs Versions"
@@ -87,6 +89,8 @@ cn_docs:
         url: /cn/docs/performance.html
       - title: "管理"
         url: /cn/docs/deployment.html
+      - title: "云储存"
+        url: /cn/docs/cloud.html
   - title: 其他信息
     children:
       - title: "文档版本"
@@ -326,6 +330,8 @@ cn_docs:
         url: /docs/0.5.3-performance.html
       - title: "Deployment"
         url: /docs/0.5.3-deployment.html
+      - title: "Cloud Storage"
+        url: /docs/0.5.3-cloud.html
   - title: INFO
     children:
       - title: "Docs Versions"
@@ -360,6 +366,8 @@ cn_docs:
         url: /cn/docs/0.5.3-performance.html
       - title: "管理"
         url: /cn/docs/0.5.3-deployment.html
+      - title: "云储存"
+        url: /cn/docs/0.5.3-cloud.html
   - title: 其他信息
     children:
       - title: "文档版本"
