@@ -31,7 +31,6 @@ import org.apache.hudi.client.utils.ParquetReaderIterator;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -66,7 +65,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -75,7 +73,6 @@ import java.util.Map;
 /**
  * Implementation of a very heavily read-optimized Hoodie Table where, all data is stored in base files, with
  * zero read amplification.
- *
  * <p>
  * INSERTS - Produce new files, block aligned to desired size (or) Merge with the smallest existing file, to expand it
  * <p>
@@ -207,12 +204,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     return new SavepointActionExecutor(jsc, config, this, instantToSavepoint, user, comment).execute();
   }
 
+  @Override
   public HoodieRestoreMetadata restore(JavaSparkContext jsc, String restoreInstantTime, String instantToRestore) {
     return new CopyOnWriteRestoreActionExecutor(jsc, config, this, restoreInstantTime, instantToRestore).execute();
-  }
-
-  enum BucketType {
-    UPDATE, INSERT
   }
 
   /**
@@ -240,61 +234,4 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     }
   }
 
-  /**
-   * Helper class for a small file's location and its actual size on disk.
-   */
-  static class SmallFile implements Serializable {
-
-    HoodieRecordLocation location;
-    long sizeBytes;
-
-    @Override
-    public String toString() {
-      final StringBuilder sb = new StringBuilder("SmallFile {");
-      sb.append("location=").append(location).append(", ");
-      sb.append("sizeBytes=").append(sizeBytes);
-      sb.append('}');
-      return sb.toString();
-    }
-  }
-
-  /**
-   * Helper class for an insert bucket along with the weight [0.0, 1.0] that defines the amount of incoming inserts that
-   * should be allocated to the bucket.
-   */
-  class InsertBucket implements Serializable {
-
-    int bucketNumber;
-    // fraction of total inserts, that should go into this bucket
-    double weight;
-
-    @Override
-    public String toString() {
-      final StringBuilder sb = new StringBuilder("WorkloadStat {");
-      sb.append("bucketNumber=").append(bucketNumber).append(", ");
-      sb.append("weight=").append(weight);
-      sb.append('}');
-      return sb.toString();
-    }
-  }
-
-  /**
-   * Helper class for a bucket's type (INSERT and UPDATE) and its file location.
-   */
-  class BucketInfo implements Serializable {
-
-    BucketType bucketType;
-    String fileIdPrefix;
-    String partitionPath;
-
-    @Override
-    public String toString() {
-      final StringBuilder sb = new StringBuilder("BucketInfo {");
-      sb.append("bucketType=").append(bucketType).append(", ");
-      sb.append("fileIdPrefix=").append(fileIdPrefix).append(", ");
-      sb.append("partitionPath=").append(partitionPath);
-      sb.append('}');
-      return sb.toString();
-    }
-  }
 }
