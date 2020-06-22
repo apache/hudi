@@ -30,6 +30,7 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -236,7 +237,8 @@ public class MercifulJsonConverter {
     return new JsonToAvroFieldProcessor() {
       @Override
       public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
-        return Pair.of(true, value.toString().getBytes());
+        // Should return ByteBuffer (see GenericData.isBytes())
+        return Pair.of(true, ByteBuffer.wrap(value.toString().getBytes()));
       }
     };
   }
@@ -245,10 +247,16 @@ public class MercifulJsonConverter {
     return new JsonToAvroFieldProcessor() {
       @Override
       public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
-        byte[] src = value.toString().getBytes();
+        // The ObjectMapper use List to represent FixedType
+        // eg: "decimal_val": [0, 0, 14, -63, -52] will convert to ArrayList<Integer>
+        List<Integer> converval = (List<Integer>) value;
+        byte[] src = new byte[converval.size()];
+        for (int i = 0; i < converval.size(); i++) {
+          src[i] = converval.get(i).byteValue();
+        }
         byte[] dst = new byte[schema.getFixedSize()];
         System.arraycopy(src, 0, dst, 0, Math.min(schema.getFixedSize(), src.length));
-        return Pair.of(true, dst);
+        return Pair.of(true, new GenericData.Fixed(schema, dst));
       }
     };
   }

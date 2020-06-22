@@ -44,6 +44,40 @@
     "name" : "end_lon",
     "type" : "double"
   }, {
+    "name" : "distance_in_meters",
+    "type" : "int"
+  }, {
+    "name" : "seconds_since_epoch",
+    "type" : "long"
+  }, {
+    "name" : "weight",
+    "type" : "float"
+  }, {
+    "name" : "nation",
+    "type" : "bytes"
+  },{
+    "name" : "current_date",
+    "type" : {
+      "type" : "int",
+      "logicalType" : "date"
+      }
+  },{
+    "name" : "current_ts",
+    "type" : {
+      "type" : "long",
+      "logicalType" : "timestamp-micros"
+      }
+  }, {
+    "name" : "height",
+    "type" : {
+      "type" : "fixed",
+      "name" : "abc",
+      "size" : 5,
+      "logicalType" : "decimal",
+      "precision" : 10,
+      "scale": 6
+      }
+  }, {
     "name" :"city_to_state",
     "type" : {
       "type" : "map",
