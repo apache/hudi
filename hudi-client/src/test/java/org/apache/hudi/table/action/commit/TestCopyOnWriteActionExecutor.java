@@ -32,12 +32,12 @@ import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.hadoop.HoodieHiveUtil;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.TestRawTripPayload;
 import org.apache.hudi.testutils.TestRawTripPayload.MetadataMergeWriteStatus;
@@ -52,8 +52,6 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.TaskContext;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -69,26 +67,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
+public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
   private static final Logger LOG = LogManager.getLogger(TestCopyOnWriteActionExecutor.class);
-
-  @BeforeEach
-  public void setUp() throws Exception {
-    initSparkContexts("TestCopyOnWriteActionExecutor");
-    initPath();
-    initMetaClient();
-    initTestDataGenerator();
-    initFileSystem();
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupSparkContexts();
-    cleanupMetaClient();
-    cleanupFileSystem();
-    cleanupTestDataGenerator();
-  }
 
   @Test
   public void testMakeNewPath() throws Exception {
@@ -129,7 +110,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     // Prepare the AvroParquetIO
     HoodieWriteConfig config = makeHoodieClientConfig();
     String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -173,7 +154,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
     GenericRecord newRecord;
     int index = 0;
     for (GenericRecord record : fileRecords) {
-      System.out.println("Got :" + record.get("_row_key").toString() + ", Exp :" + records.get(index).getRecordKey());
+      //System.out.println("Got :" + record.get("_row_key").toString() + ", Exp :" + records.get(index).getRecordKey());
       assertEquals(records.get(index).getRecordKey(), record.get("_row_key").toString());
       index++;
     }
@@ -244,15 +225,15 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
 
   private void setupIncremental(JobConf jobConf, String startCommit, int numberOfCommitsToPull) {
     String modePropertyName =
-            String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
-    jobConf.set(modePropertyName, HoodieHiveUtil.INCREMENTAL_SCAN_MODE);
+            String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    jobConf.set(modePropertyName, HoodieHiveUtils.INCREMENTAL_SCAN_MODE);
 
     String startCommitTimestampName =
-            String.format(HoodieHiveUtil.HOODIE_START_COMMIT_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+            String.format(HoodieHiveUtils.HOODIE_START_COMMIT_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
     jobConf.set(startCommitTimestampName, startCommit);
 
     String maxCommitPulls =
-            String.format(HoodieHiveUtil.HOODIE_MAX_COMMIT_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+            String.format(HoodieHiveUtils.HOODIE_MAX_COMMIT_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
     jobConf.setInt(maxCommitPulls, numberOfCommitsToPull);
   }
 
@@ -426,12 +407,5 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestHarness {
       return newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator());
     }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
-  }
-
-  @AfterEach
-  public void cleanup() {
-    if (jsc != null) {
-      jsc.stop();
-    }
   }
 }

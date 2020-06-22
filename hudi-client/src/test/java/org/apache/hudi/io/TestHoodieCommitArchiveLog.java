@@ -69,8 +69,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
 
   @AfterEach
   public void clean() throws IOException {
-    cleanupDFS();
-    cleanupSparkContexts();
+    cleanupResources();
   }
 
   @Test

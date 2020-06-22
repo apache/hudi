@@ -71,8 +71,8 @@ public class SparkMain {
     int returnCode = 0;
     switch (cmd) {
       case ROLLBACK:
-        assert (args.length == 3);
-        returnCode = rollback(jsc, args[1], args[2]);
+        assert (args.length == 5);
+        returnCode = rollback(jsc, args[3], args[4]);
         break;
       case DEDUPLICATE:
         assert (args.length == 7);
@@ -174,7 +174,7 @@ public class SparkMain {
     List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
         SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN,
         SparkCommand.IMPORT, SparkCommand.UPSERT, SparkCommand.DEDUPLICATE, SparkCommand.SAVEPOINT,
-        SparkCommand.DELETE_SAVEPOINT, SparkCommand.ROLLBACK_TO_SAVEPOINT);
+        SparkCommand.DELETE_SAVEPOINT, SparkCommand.ROLLBACK_TO_SAVEPOINT, SparkCommand.ROLLBACK);
     return masterContained.contains(command);
   }
 

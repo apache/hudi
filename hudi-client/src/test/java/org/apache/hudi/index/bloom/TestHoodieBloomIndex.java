@@ -97,9 +97,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
 
   @AfterEach
   public void tearDown() throws Exception {
-    cleanupSparkContexts();
-    cleanupFileSystem();
-    cleanupMetaClient();
+    cleanupResources();
   }
 
   private HoodieWriteConfig makeConfig(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {

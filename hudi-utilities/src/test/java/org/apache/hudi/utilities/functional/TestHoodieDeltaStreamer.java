@@ -49,7 +49,7 @@ import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.testutils.sources.DistributedTestDataSource;
-import org.apache.hudi.utilities.testutils.sources.config.TestSourceConfig;
+import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -490,7 +490,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.UPSERT);
     cfg.continuousMode = true;
     cfg.tableType = tableType.name();
-    cfg.configs.add(String.format("%s=%d", TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, totalRecords));
+    cfg.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfg.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN_PROP));
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     Future dsFuture = Executors.newSingleThreadExecutor().submit(() -> {
@@ -722,9 +722,9 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   @Test
   public void testDistributedTestDataSource() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, "1000");
-    props.setProperty(TestSourceConfig.NUM_SOURCE_PARTITIONS_PROP, "1");
-    props.setProperty(TestSourceConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS, "true");
+    props.setProperty(SourceConfigs.MAX_UNIQUE_RECORDS_PROP, "1000");
+    props.setProperty(SourceConfigs.NUM_SOURCE_PARTITIONS_PROP, "1");
+    props.setProperty(SourceConfigs.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS, "true");
     DistributedTestDataSource distributedTestDataSource = new DistributedTestDataSource(props, jsc, sparkSession, null);
     InputBatch<JavaRDD<GenericRecord>> batch = distributedTestDataSource.fetchNext(Option.empty(), 10000000);
     batch.getBatch().get().cache();

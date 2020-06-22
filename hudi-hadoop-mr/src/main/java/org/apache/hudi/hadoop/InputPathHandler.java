@@ -33,7 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.hadoop.HoodieParquetInputFormat.getTableMetaClient;
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getTableMetaClientForBasePath;
 
 /**
  * InputPathHandler takes in a set of input paths and incremental tables list. Then, classifies the
@@ -97,7 +97,7 @@ public class InputPathHandler {
         // This path is for a table that we dont know about yet.
         HoodieTableMetaClient metaClient;
         try {
-          metaClient = getTableMetaClient(inputPath.getFileSystem(conf), inputPath);
+          metaClient = getTableMetaClientForBasePath(inputPath.getFileSystem(conf), inputPath);
           String tableName = metaClient.getTableConfig().getTableName();
           tableMetaClientMap.put(tableName, metaClient);
           tagAsIncrementalOrSnapshot(inputPath, tableName, metaClient, incrementalTables);

@@ -24,6 +24,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.io.ArrayWritable;
@@ -60,13 +63,17 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
-    return new HoodieMergedLogRecordScanner(FSUtils.getFs(split.getPath().toString(), jobConf), split.getBasePath(),
-        split.getDeltaLogPaths(), usesCustomPayload ? getWriterSchema() : getReaderSchema(), split.getMaxCommitTime(),
+    return new HoodieMergedLogRecordScanner(
+        FSUtils.getFs(split.getPath().toString(), jobConf),
+        split.getBasePath(),
+        split.getDeltaLogPaths(),
+        usesCustomPayload ? getWriterSchema() : getReaderSchema(),
+        split.getMaxCommitTime(),
         getMaxCompactionMemoryInBytes(),
-        Boolean
-            .parseBoolean(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
-        false, jobConf.getInt(MAX_DFS_STREAM_BUFFER_SIZE_PROP, DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
-        jobConf.get(SPILLABLE_MAP_BASE_PATH_PROP, DEFAULT_SPILLABLE_MAP_BASE_PATH));
+        Boolean.parseBoolean(jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
+        false,
+        jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
+        jobConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH));
   }
 
   @Override
@@ -81,7 +88,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
       // TODO(VC): Right now, we assume all records in log, have a matching base record. (which
       // would be true until we have a way to index logs too)
       // return from delta records map if we have some match.
-      String key = arrayWritable.get()[HoodieParquetRealtimeInputFormat.HOODIE_RECORD_KEY_COL_POS].toString();
+      String key = arrayWritable.get()[HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS].toString();
       if (deltaRecordMap.containsKey(key)) {
         // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
         // deltaRecord may not be a full record and needs values of columns from the parquet
@@ -105,11 +112,11 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         // we assume, a later safe record in the log, is newer than what we have in the map &
         // replace it. Since we want to return an arrayWritable which is the same length as the elements in the latest
         // schema, we use writerSchema to create the arrayWritable from the latest generic record
-        ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(recordToReturn, getHiveSchema());
+        ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(recordToReturn, getHiveSchema());
         Writable[] replaceValue = aWritable.get();
         if (LOG.isDebugEnabled()) {
-          LOG.debug(String.format("key %s, base values: %s, log values: %s", key, arrayWritableToString(arrayWritable),
-              arrayWritableToString(aWritable)));
+          LOG.debug(String.format("key %s, base values: %s, log values: %s", key, HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable),
+              HoodieRealtimeRecordReaderUtils.arrayWritableToString(aWritable)));
         }
         Writable[] originalValue = arrayWritable.get();
         try {
@@ -117,10 +124,10 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
           arrayWritable.set(originalValue);
         } catch (RuntimeException re) {
           LOG.error("Got exception when doing array copy", re);
-          LOG.error("Base record :" + arrayWritableToString(arrayWritable));
-          LOG.error("Log record :" + arrayWritableToString(aWritable));
-          String errMsg = "Base-record :" + arrayWritableToString(arrayWritable)
-              + " ,Log-record :" + arrayWritableToString(aWritable) + " ,Error :" + re.getMessage();
+          LOG.error("Base record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable));
+          LOG.error("Log record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(aWritable));
+          String errMsg = "Base-record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable)
+              + " ,Log-record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(aWritable) + " ,Error :" + re.getMessage();
           throw new RuntimeException(errMsg, re);
         }
       }

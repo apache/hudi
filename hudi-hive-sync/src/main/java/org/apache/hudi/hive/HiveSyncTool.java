@@ -38,6 +38,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -64,6 +65,11 @@ public class HiveSyncTool {
   public HiveSyncTool(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
     this.cfg = cfg;
+    // Set partitionFields to empty, when the NonPartitionedExtractor is used
+    if (NonPartitionedExtractor.class.getName().equals(cfg.partitionValueExtractorClass)) {
+      LOG.warn("Set partitionFields to empty, since the NonPartitionedExtractor is used");
+      cfg.partitionFields = new ArrayList<>();
+    }
     switch (hoodieHiveClient.getTableType()) {
       case COPY_ON_WRITE:
         this.snapshotTableName = cfg.tableName;

@@ -81,11 +81,11 @@ public class TestKafkaSource extends UtilitiesTestBase {
     testUtils.teardown();
   }
 
-  private TypedProperties createPropsForJsonSource(Long maxEventsToReadFromKafkaSource) {
+  private TypedProperties createPropsForJsonSource(Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.deltastreamer.source.kafka.topic", TEST_TOPIC_NAME);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
-    props.setProperty("auto.offset.reset", "earliest");
+    props.setProperty("auto.offset.reset", resetStrategy);
     props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
         maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
             String.valueOf(Config.maxEventsFromKafkaSource));
@@ -99,7 +99,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     // topic setup.
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(null);
+    TypedProperties props = createPropsForJsonSource(null, "earliest");
 
     Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
@@ -141,12 +141,45 @@ public class TestKafkaSource extends UtilitiesTestBase {
     assertEquals(Option.empty(), fetch4AsRows.getBatch());
   }
 
+  // test case with kafka offset reset strategy
+  @Test
+  public void testJsonKafkaSourceResetStrategy() {
+    // topic setup.
+    testUtils.createTopic(TEST_TOPIC_NAME, 2);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+
+    TypedProperties earliestProps = createPropsForJsonSource(null, "earliest");
+    Source earliestJsonSource = new JsonKafkaSource(earliestProps, jsc, sparkSession, schemaProvider);
+    SourceFormatAdapter earliestKafkaSource = new SourceFormatAdapter(earliestJsonSource);
+
+    TypedProperties latestProps = createPropsForJsonSource(null, "latest");
+    Source latestJsonSource = new JsonKafkaSource(latestProps, jsc, sparkSession, schemaProvider);
+    SourceFormatAdapter latestKafkaSource = new SourceFormatAdapter(latestJsonSource);
+
+    // 1. Extract with a none data kafka checkpoint
+    // => get a checkpoint string like "hoodie_test,0:0,1:0", latest checkpoint should be equals to earliest checkpoint
+    InputBatch<JavaRDD<GenericRecord>> earFetch0 = earliestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    InputBatch<JavaRDD<GenericRecord>> latFetch0 = latestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    assertEquals(earFetch0.getBatch(), latFetch0.getBatch());
+    assertEquals(earFetch0.getCheckpointForNextBatch(), latFetch0.getCheckpointForNextBatch());
+
+    testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+
+    // 2. Extract new checkpoint with a null / empty string pre checkpoint
+    // => earliest fetch with max source limit will get all of data and a end offset checkpoint
+    InputBatch<JavaRDD<GenericRecord>> earFetch1 = earliestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+
+    // => [a null pre checkpoint] latest reset fetch will get a end offset checkpoint same to earliest
+    InputBatch<JavaRDD<GenericRecord>> latFetch1 = latestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    assertEquals(earFetch1.getCheckpointForNextBatch(), latFetch1.getCheckpointForNextBatch());
+  }
+
   @Test
   public void testJsonKafkaSourceWithDefaultUpperCap() {
     // topic setup.
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(Long.MAX_VALUE);
+    TypedProperties props = createPropsForJsonSource(Long.MAX_VALUE, "earliest");
 
     Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
@@ -175,7 +208,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     // topic setup.
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    TypedProperties props = createPropsForJsonSource(500L);
+    TypedProperties props = createPropsForJsonSource(500L, "earliest");
 
     Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);

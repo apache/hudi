@@ -1044,10 +1044,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieWriteConfig.Builder builder = getConfigBuilder(useNullSchema ? NULL_SCHEMA : TRIP_EXAMPLE_SCHEMA);
     return builder
         .withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().compactionSmallFileSize(HoodieTestDataGenerator.SIZE_PER_RECORD * 15)
-                .insertSplitSize(insertSplitSize).build()) // tolerate upto 15 records
+            HoodieCompactionConfig.newBuilder()
+                .compactionSmallFileSize(dataGen.getEstimatedFileSizeInBytes(150))
+                .insertSplitSize(insertSplitSize).build())
         .withStorageConfig(
-            HoodieStorageConfig.newBuilder().limitFileSize(HoodieTestDataGenerator.SIZE_PER_RECORD * 20).build())
+            HoodieStorageConfig.newBuilder()
+                .limitFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
         .build();
   }
 }

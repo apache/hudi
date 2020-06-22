@@ -40,7 +40,9 @@ public class TestSparkEnvCommand extends AbstractShellIntegrationTest {
     // First, be empty
     CommandResult cr = getShell().executeCommand("show envs all");
     String nullResult = HoodiePrintHelper.print(new String[] {"key", "value"}, new String[0][2]);
-    assertEquals(nullResult, cr.getResult().toString());
+    nullResult = removeNonWordAndStripSpace(nullResult);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(nullResult, got);
 
     // Set SPARK_HOME
     cr = getShell().executeCommand("set --conf SPARK_HOME=/usr/etc/spark");
@@ -49,6 +51,8 @@ public class TestSparkEnvCommand extends AbstractShellIntegrationTest {
     //Get
     cr = getShell().executeCommand("show env --key SPARK_HOME");
     String result = HoodiePrintHelper.print(new String[] {"key", "value"}, new String[][] {new String[] {"SPARK_HOME", "/usr/etc/spark"}});
-    assertEquals(result, cr.getResult().toString());
+    result = removeNonWordAndStripSpace(result);
+    got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(result, got);
   }
 }

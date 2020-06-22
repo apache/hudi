@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -140,7 +141,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
       if (HoodiePartitionMetadata.hasPartitionMetadata(fs, folder)) {
         HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, folder);
         metadata.readFromFS();
-        baseDir = HoodieHiveUtil.getNthParent(folder, metadata.getPartitionDepth());
+        baseDir = HoodieHiveUtils.getNthParent(folder, metadata.getPartitionDepth());
       } else {
         baseDir = safeGetParentsParent(folder);
       }
