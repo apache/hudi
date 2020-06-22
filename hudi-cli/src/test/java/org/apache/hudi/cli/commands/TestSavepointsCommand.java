@@ -75,8 +75,9 @@ public class TestSavepointsCommand extends AbstractShellIntegrationTest {
     String[][] rows = Arrays.asList("100", "101", "102", "103").stream().sorted(Comparator.reverseOrder())
         .map(instant -> new String[]{instant}).toArray(String[][]::new);
     String expected = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_SAVEPOINT_TIME}, rows);
-
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 
   /**

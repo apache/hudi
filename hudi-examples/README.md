@@ -23,13 +23,23 @@ To run the demo:
   2. For hudi write client demo and hudi data source demo, just use spark-submit as common spark app
   3. For hudi delta streamer demo of custom source, run `bin/custom-delta-streamer-example.sh`
   4. For hudi delta streamer demo of dfs source:
+
       4.1 Prepare dfs data, we have provided `src/main/resources/delta-streamer-config/dfs/source-file.json` for test
+
       4.2 Run `bin/dfs-delta-streamer-example.sh`
+
   5. For hudi delta streamer demo of dfs source:
+
       5.1 Start Kafka server
+
       5.2 Configure your Kafka properties, we have provided `src/main/resources/delta-streamer-config/kafka/kafka-source.properties` for test
+
       5.3 Run `bin/kafka-delta-streamer-example.sh`
+
       5.4 continuously write source data to the Kafka topic your configured with `hoodie.deltastreamer.source.kafka.topic` in `kafka-source.properties`
+
   6. Some notes delta streamer demo:
+
       6.1 The configuration files we provided is just the simplest demo, you can change it according to your specific needs.
+
       6.2 You could also use Intellij to run the example directly by configuring parameters as "Program arguments"

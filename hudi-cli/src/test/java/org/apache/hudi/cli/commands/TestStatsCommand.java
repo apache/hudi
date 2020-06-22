@@ -103,8 +103,9 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_WRITTEN)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_WRITE_AMPLIFICATION_FACTOR);
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 
   /**
@@ -170,7 +171,8 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_HISTOGRAM_STD_DEV);
     String expect = HoodiePrintHelper.print(header, new StatsCommand().getFieldNameToConverterMap(),
         "", false, -1, false, rows);
-
-    assertEquals(expect, cr.getResult().toString());
+    expect = removeNonWordAndStripSpace(expect);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expect, got);
   }
 }

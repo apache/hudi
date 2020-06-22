@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -54,9 +55,6 @@ public class KafkaOffsetGen {
      */
     public static HashMap<TopicPartition, Long> strToOffsets(String checkpointStr) {
       HashMap<TopicPartition, Long> offsetMap = new HashMap<>();
-      if (checkpointStr.length() == 0) {
-        return offsetMap;
-      }
       String[] splits = checkpointStr.split(",");
       String topic = splits[0];
       for (int i = 1; i < splits.length; i++) {
@@ -207,6 +205,11 @@ public class KafkaOffsetGen {
     maxEventsToReadFromKafka = (maxEventsToReadFromKafka == Long.MAX_VALUE || maxEventsToReadFromKafka == Integer.MAX_VALUE)
         ? Config.maxEventsFromKafkaSource : maxEventsToReadFromKafka;
     long numEvents = sourceLimit == Long.MAX_VALUE ? maxEventsToReadFromKafka : sourceLimit;
+
+    if (numEvents < toOffsets.size()) {
+      throw new HoodieException("sourceLimit should not be less than the number of kafka partitions");
+    }
+
     return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
   }
 

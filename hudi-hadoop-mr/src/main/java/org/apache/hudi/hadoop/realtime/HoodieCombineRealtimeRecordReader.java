@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hadoop.hive.HoodieCombineRealtimeFileSplit;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -65,7 +66,7 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
   public boolean next(NullWritable key, ArrayWritable value) throws IOException {
     if (this.currentRecordReader.next(key, value)) {
       LOG.info("Reading from record reader");
-      LOG.info(AbstractRealtimeRecordReader.arrayWritableToString(value));
+      LOG.info(HoodieRealtimeRecordReaderUtils.arrayWritableToString(value));
       return true;
     } else if (recordReaders.size() > 0) {
       this.currentRecordReader.close();

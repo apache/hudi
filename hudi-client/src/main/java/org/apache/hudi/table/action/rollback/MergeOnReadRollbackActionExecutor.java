@@ -76,8 +76,10 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
     HoodieInstant resolvedInstant = instantToRollback;
     // Atomically un-publish all non-inflight commits
     if (instantToRollback.isCompleted()) {
-      LOG.error("Un-publishing instant " + instantToRollback + ", deleteInstants=" + deleteInstants);
+      LOG.info("Un-publishing instant " + instantToRollback + ", deleteInstants=" + deleteInstants);
       resolvedInstant = table.getActiveTimeline().revertToInflight(instantToRollback);
+      // reload meta-client to reflect latest timeline status
+      table.getMetaClient().reloadActiveTimeline();
     }
 
     List<HoodieRollbackStat> allRollbackStats = new ArrayList<>();

@@ -63,13 +63,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
 
   @AfterEach
   public void tearDown() throws Exception {
-    cleanupSparkContexts();
-    cleanupDFS();
-    cleanupTestDataGenerator();
-  }
-
-  private HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig config) {
-    return new HoodieWriteClient(jsc, config);
+    cleanupResources();
   }
 
   protected HoodieWriteConfig getHoodieWriteConfig(String basePath) {

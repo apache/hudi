@@ -89,7 +89,7 @@ public class SavepointsCommand implements CommandMarker {
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
     // Refresh the current
-    refreshMetaClient();
+    HoodieCLI.refreshTableMetadata();
     if (exitCode != 0) {
       return String.format("Failed: Could not create savepoint \"%s\".", commitTime);
     }
@@ -123,17 +123,11 @@ public class SavepointsCommand implements CommandMarker {
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
     // Refresh the current
-    refreshMetaClient();
+    HoodieCLI.refreshTableMetadata();
     if (exitCode != 0) {
       return String.format("Savepoint \"%s\" failed to roll back", instantTime);
     }
     return String.format("Savepoint \"%s\" rolled back", instantTime);
-  }
-
-  @CliCommand(value = "savepoints refresh", help = "Refresh the savepoints")
-  public String refreshMetaClient() {
-    HoodieCLI.refreshTableMetadata();
-    return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
   }
 
   @CliCommand(value = "savepoint delete", help = "Delete the savepoint")
@@ -161,7 +155,7 @@ public class SavepointsCommand implements CommandMarker {
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
     // Refresh the current
-    refreshMetaClient();
+    HoodieCLI.refreshTableMetadata();
     if (exitCode != 0) {
       return String.format("Failed: Could not delete savepoint \"%s\".", instantTime);
     }

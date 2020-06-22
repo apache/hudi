@@ -19,7 +19,6 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -85,7 +84,6 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   private IndexType indexType;
   private HoodieIndex index;
   private HoodieWriteConfig config;
-  private HoodieWriteClient writeClient;
   private String schemaStr;
   private Schema schema;
 
@@ -95,14 +93,10 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
 
   private void setUp(IndexType indexType, boolean initializeIndex) throws Exception {
     this.indexType = indexType;
-    initSparkContexts("TestHoodieIndex");
-    initPath();
-    initTestDataGenerator();
-    initFileSystem();
+    initResources();
     // We have some records to be tagged (two different partitions)
     schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
     schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
-    initMetaClient();
     if (initializeIndex) {
       instantiateIndex();
     }
@@ -110,9 +104,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
 
   @AfterEach
   public void tearDown() throws IOException {
-    cleanupSparkContexts();
-    cleanupFileSystem();
-    cleanupMetaClient();
+    cleanupResources();
   }
 
   @ParameterizedTest
@@ -542,10 +534,6 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
-  }
-
-  private HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
-    return new HoodieWriteClient(jsc, cfg, false);
   }
 
   private void instantiateIndex() {
