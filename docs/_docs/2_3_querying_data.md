@@ -136,6 +136,16 @@ The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi
 datasources work (e.g: `spark.read.parquet`). Both snapshot querying and incremental querying are supported here. Typically spark jobs require adding `--jars <path to jar>/hudi-spark-bundle_2.11-<hudi version>.jar` to classpath of drivers 
 and executors. Alternatively, hudi-spark-bundle can also fetched via the `--packages` options (e.g: `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3`).
 
+### Snapshot query {#spark-snap-query}
+This method can be used to retrieve the data table at the present point in time.
+
+```scala
+val hudiIncQueryDF = spark
+     .read()
+     .format("org.apache.hudi")
+     .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
+     .load(tablePath + "/*") //Include "/*" at the end of the path if the table is partitioned
+```
 
 ### Incremental query {#spark-incr-query}
 Of special interest to spark pipelines, is Hudi's ability to support incremental queries, like below. A sample incremental query, that will obtain all records written since `beginInstantTime`, looks like below.

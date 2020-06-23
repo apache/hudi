@@ -176,15 +176,49 @@ In some cases, you may want to migrate your existing table into Hudi beforehand.
 
 ## Datasource Writer
 
-The `hudi-spark` module offers the DataSource API to write (and also read) any data frame into a Hudi table.
-Following is how we can upsert a dataframe, while specifying the field names that need to be used
-for `recordKey => _row_key`, `partitionPath => partition` and `precombineKey => timestamp`
+The `hudi-spark` module offers the DataSource API to write (and read) a Spark DataFrame into a Hudi table. There are a number of options available:
 
+**`HoodieWriteConfig`**:
+
+**TABLE_NAME** (Required)<br>
+
+
+**`DataSourceWriteOptions`**:
+
+**RECORDKEY_FIELD_OPT_KEY** (Required): Primary key field(s). Nested fields can be specified using the dot notation eg: `a.b.c`. When using multiple columns as primary key use comma seperated notaion, eg: `"col1,col2,col3,etc"`. Single or multiple columns as primary key specified by `KEYGENERATOR_CLASS_OPT_KEY` property.<br>
+Default value: `"uuid"`<br>
+
+**PARTITIONPATH_FIELD_OPT_KEY** (Required): Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify paritioning/no partitioning using `HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY`<br>
+Default value: `"partitionpath"`<br>
+
+**PRECOMBINE_FIELD_OPT_KEY** (Required): When two records have the same key value, the record with the largest value from the field specified here will be choosen.<br>
+Default value: `"ts"`<br>
+
+**OPERATION_OPT_KEY**: The [write operations](#write-operations) to use. Note: this cannot change across writes.<br>
+Available values:<br>
+`UPSERT_OPERATION_OPT_VAL` (default), `BULK_INSERT_OPERATION_OPT_VAL`, `INSERT_OPERATION_OPT_VAL`, `DELETE_OPERATION_OPT_VAL`
+
+**TABLE_TYPE_OPT_KEY**: The [type of table](/docs/concepts.html#table-types) to write to.<br>
+Available values:<br>
+[`COW_TABLE_TYPE_OPT_VAL`](/docs/concepts.html#copy-on-write-table) (default), [`MOR_TABLE_TYPE_OPT_VAL`](/docs/concepts.html#merge-on-read-table)
+
+**KEYGENERATOR_CLASS_OPT_KEY**: Key generator class, that will extract the key out of incoming record. If single column key use `SimpleKeyGenerator`. For multiple column keys use `ComplexKeyGenerator`. Note: A custom key generator class can be written/provided here as well. Primary key columns should be provided via `RECORDKEY_FIELD_OPT_KEY` option.<br>
+Available values:<br>
+`classOf[SimpleKeyGenerator].getName` (default), `classOf[NonpartitionedKeyGenerator].getName`, `classOf[ComplexKeyGenerator].getName`
+
+
+**HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY**: Specify if the table should or should not be partitioned.<br>
+Available values:<br>
+`classOf[MultiPartKeysValueExtractor].getCanonicalName` (default), `classOf[NonPartitionedExtractor].getCanonicalName`
+
+
+Example:
+Upsert a DataFrame, specifying the necessary field names for `recordKey => _row_key`, `partitionPath => partition`, and `precombineKey => timestamp`
 
 ```java
 inputDF.write()
        .format("org.apache.hudi")
-       .options(clientOpts) // any of the Hudi client opts can be passed in as well
+       .options(clientOpts) //Where clientOpts is of type Map[String, String]. clientOpts can include any other options necessary.
        .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
        .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
@@ -204,8 +238,7 @@ cd hudi-hive
 ./run_sync_tool.sh  --jdbc-url jdbc:hive2:\/\/hiveserver:10000 --user hive --pass hive --partitioned-by partition --base-path <basePath> --database default --table <tableName>
 ```
 
-Starting with Hudi 0.5.1 version read optimized version of merge-on-read tables are suffixed '_ro' by default. For backwards compatibility with older Hudi versions, 
-an optional HiveSyncConfig - `--skip-ro-suffix`, has been provided to turn off '_ro' suffixing if desired. Explore other hive sync options using the following command:
+Starting with Hudi 0.5.1 version read optimized version of merge-on-read tables are suffixed '_ro' by default. For backwards compatibility with older Hudi versions, an optional HiveSyncConfig - `--skip-ro-suffix`, has been provided to turn off '_ro' suffixing if desired. Explore other hive sync options using the following command:
 
 ```java
 cd hudi-hive
