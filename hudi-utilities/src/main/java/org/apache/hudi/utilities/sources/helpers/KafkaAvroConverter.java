@@ -1,7 +1,6 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.AvroConversionUtils;
-import java.io.Serializable;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Spliterator;
@@ -27,7 +26,8 @@ public abstract class KafkaAvroConverter {
   }
 
   public Schema getSchema() {
-    return AvroConversionUtils.convertStructTypeToAvroSchema(avroSchema, structName, "hudi." + structName);
+    return AvroConversionUtils.convertStructTypeToAvroSchema(avroSchema, structName,
+        "hudi." + structName);
   }
 
   public Iterator<GenericRecord> apply(Iterator<ConsumerRecord<Object, Object>> records) {

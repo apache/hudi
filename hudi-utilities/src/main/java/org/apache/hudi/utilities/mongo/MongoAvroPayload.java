@@ -64,21 +64,28 @@ public class MongoAvroPayload extends BaseAvroPayload implements
 
   @Override
   public MongoAvroPayload preCombine(MongoAvroPayload another, Schema schema) {
-    Pair<GenericRecord, Operation> combinedValue;
+    if (another.orderingVal.compareTo(orderingVal) < 0) {
+      return another.preCombine(this, schema);
+    }
+
+    // Combine the record values
     try {
-      GenericRecord oneValue = (GenericRecord) getInsertValue(schema).get();
-      GenericRecord anotherValue = (GenericRecord) another.getInsertValue(schema).get();
-      // Combine the record values
-      if (another.orderingVal.compareTo(orderingVal) > 0) {
-        combinedValue = combineRecords(oneValue, anotherValue);
-      } else {
-        combinedValue = combineRecords(anotherValue, oneValue);
+      Option<IndexedRecord> oneValue = getInsertValue(schema);
+      if (!oneValue.isPresent()) {
+        return another;
       }
+      Option<IndexedRecord> anotherValue = another.getInsertValue(schema);
+      if (!anotherValue.isPresent()) {
+        return another;
+      }
+
+      final Pair<GenericRecord, Operation> combinedValue = combineRecords(
+          (GenericRecord) oneValue.get(), (GenericRecord) anotherValue.get());
+      return new MongoAvroPayload(combinedValue.getKey(),
+          (Long) combinedValue.getKey().get(SchemaUtils.TS_MS_FIELD));
     } catch (IOException e) {
       throw new HoodieIOException("MongoAvroPayload::preCombine error", e);
     }
-    return new MongoAvroPayload(combinedValue.getKey(),
-        (Long) combinedValue.getKey().get(SchemaUtils.TS_MS_FIELD));
   }
 
   /**
@@ -87,8 +94,12 @@ public class MongoAvroPayload extends BaseAvroPayload implements
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
       throws IOException {
-    Pair<GenericRecord, Operation> combinedValue = combineRecords((GenericRecord) currentValue,
-        (GenericRecord) getInsertValue(schema).get());
+    Option<IndexedRecord> newValue = getInsertValue(schema);
+    if (!newValue.isPresent()) {
+      return Option.empty();
+    }
+    final Pair<GenericRecord, Operation> combinedValue = combineRecords(
+        (GenericRecord) currentValue, (GenericRecord) newValue.get());
     // Return empty record for deletion operation
     if (combinedValue.getValue().equals(Operation.DELETE)) {
       return Option.empty();
@@ -99,7 +110,8 @@ public class MongoAvroPayload extends BaseAvroPayload implements
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    return (recordBytes.length > 0) ? Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema))
+        : Option.empty();
   }
 
   /**
