@@ -147,15 +147,8 @@ public class HoodieParquetRowWriter implements Serializable {
           HoodieRecord.generateSequenceId(instantTime,
               sparkTaskContextSupplier.getPartitionIdSupplier().get(),
               recordIndex.getAndIncrement());
-      Object[] rowFields = call(row);
-      rowFields[fileNameIndex] = hoodiePath.getName();
-      rowFields[recordKeyIndex] = row.getAs(recordKeyProp);
-      rowFields[partitionPathIndex] = row.getAs(partitionPathProp);
-      rowFields[commitTimeIndex] = instantTime;
-      rowFields[commitSeqNoIndex] = seqId;
-      Row rowWithMetadataFields = RowFactory.create(rowFields);
-
-      InternalRow internalRow = encoder.toRow(rowWithMetadataFields);
+      Row rowToWrite = addMetadata(row, seqId);
+      InternalRow internalRow = encoder.toRow(rowToWrite);
       writer.write(internalRow);
       writeSupport.add(row.getAs(recordKeyProp));
       encodableWriteStatus.markSuccess(row);
@@ -197,12 +190,17 @@ public class HoodieParquetRowWriter implements Serializable {
     return encodableWriteStatus;
   }
 
-  public static Object[] call(Row row) throws Exception {
+  private Row addMetadata(Row row, String seqId) throws Exception {
     Object[] result = new Object[row.size()];
     for (int i = 0; i < row.size(); i++) {
       result[i] = row.get(i);
     }
-    return result;
+    result[fileNameIndex] = hoodiePath.getName();
+    result[recordKeyIndex] = row.getAs(recordKeyProp);
+    result[partitionPathIndex] = row.getAs(partitionPathProp);
+    result[commitTimeIndex] = instantTime;
+    result[commitSeqNoIndex] = seqId;
+    return RowFactory.create(result);
   }
 
   public void setGlobalError(Throwable e) {
@@ -218,11 +216,11 @@ public class HoodieParquetRowWriter implements Serializable {
     }
   }
 
-  protected int getPartitionId() {
+  private int getPartitionId() {
     return sparkTaskContextSupplier.getPartitionIdSupplier().get();
   }
 
-  public static Configuration registerFileSystem(Path file, Configuration conf) {
+  private static Configuration registerFileSystem(Path file, Configuration conf) {
     Configuration returnConf = new Configuration(conf);
     String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
     returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
@@ -230,7 +228,7 @@ public class HoodieParquetRowWriter implements Serializable {
     return returnConf;
   }
 
-  public Path makeNewPath(String partitionPath, String writeToken, String fileId, FileSystem fs) {
+  private Path makeNewPath(String partitionPath, String writeToken, String fileId, FileSystem fs) {
     Path path = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
     try {
       fs.mkdirs(path); // create a new partition as needed.
@@ -246,7 +244,7 @@ public class HoodieParquetRowWriter implements Serializable {
    *
    * @param partitionPath Partition path
    */
-  protected void createMarkerFile(String partitionPath, FileSystem fs, String writeToken,
+  private void createMarkerFile(String partitionPath, FileSystem fs, String writeToken,
       String fileId) {
     Path markerPath = makeNewMarkerPath(partitionPath, fs, writeToken, fileId);
     try {

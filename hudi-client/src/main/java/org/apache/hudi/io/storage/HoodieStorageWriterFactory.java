@@ -64,12 +64,6 @@ public class HoodieStorageWriterFactory {
         config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
         hoodieTable.getHadoopConf(), config.getParquetCompressionRatio());
 
-    /*ParquetWriteSupport writeSupport = new ParquetWriteSupport();
-
-    HoodieParquetConfig parquetConfig = new HoodieParquetConfig(writeSupport, config.getParquetCompressionCodec(),
-        config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
-        hoodieTable.getHadoopConf(), config.getParquetCompressionRatio());*/
-
     return new HoodieParquetWriter<>(instantTime, path, parquetConfig, schema, sparkTaskContextSupplier);
   }
 }

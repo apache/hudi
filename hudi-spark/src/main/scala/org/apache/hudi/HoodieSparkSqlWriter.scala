@@ -95,7 +95,7 @@ private[hudi] object HoodieSparkSqlWriter {
     if (operation.equalsIgnoreCase("bulk_insert_direct_parquet_write_support")) {
       val recordKeyProp = parameters(RECORDKEY_FIELD_OPT_KEY)
       val partitionPathProp = parameters(PARTITIONPATH_FIELD_OPT_KEY)
-      val writtenRows: Dataset[java.lang.Boolean] = WriteHelper.writeToParquet(df, basePath.toString, RowEncoder(df.schema), serConfig,
+      val writtenRows: Dataset[java.lang.Boolean] = ParquetWriteHelper.writeToParquet(df, basePath.toString, RowEncoder(df.schema), serConfig,
         parallelism, "SNAPPY", partitionPathProp, recordKeyProp)
       writtenRows.collect()
       (true, org.apache.hudi.common.util.Option.of("Completed"))

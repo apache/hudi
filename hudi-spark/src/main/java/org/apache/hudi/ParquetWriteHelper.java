@@ -33,7 +33,7 @@ import java.io.IOException;
 /**
  * test docs.
  */
-public class WriteHelper {
+public class ParquetWriteHelper {
 
   static Dataset<Boolean> writeToParquet(Dataset<Row> rows, String basePath, ExpressionEncoder<Row> encoder, SerializableConfiguration serConfig, int parallelism,
       String compressionCodec, String partitionPathProp, String recordKeyProp) throws IOException {

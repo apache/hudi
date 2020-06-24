@@ -197,7 +197,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     assertPartitionMetadata(partitionPathSet.stream().toArray(String[]::new), fs);
   }
 
-  void assertPartitionMetadataForRows(List<GenericRecord> inputRecords, FileSystem fs) throws IOException {
+  void assertPartitionMetadataForDataset(List<GenericRecord> inputRecords, FileSystem fs) throws IOException {
     Set<String> partitionPathSet = inputRecords.stream()
         .map(entry -> (String) entry.get("_partition_path"))
         .collect(Collectors.toSet());
@@ -622,7 +622,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     assertNoWriteErrorsEncWriteStatus(statuses);
 
     // check the partition metadata is written out
-    assertPartitionMetadataForRows(records, fs);
+    assertPartitionMetadataForDataset(records, fs);
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);

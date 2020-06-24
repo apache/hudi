@@ -195,5 +195,4 @@ public class HoodieWriteBenchmark {
         .mode(SaveMode.Append)
         .save(tablePath.toString());
   }
-
 }

@@ -18,6 +18,10 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -55,11 +59,6 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -120,8 +119,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   public static <T extends HoodieRecordPayload> HoodieTable<T> create(HoodieTableMetaClient metaClient,
-      HoodieWriteConfig config,
-      JavaSparkContext jsc) {
+                                                                      HoodieWriteConfig config,
+                                                                      JavaSparkContext jsc) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
         return new HoodieCopyOnWriteTable<>(config, jsc, metaClient);
@@ -134,10 +133,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   /**
    * Upsert a batch of new records into Hoodie table at the supplied instantTime.
-   *
-   * @param jsc Java Spark Context jsc
+   * @param jsc    Java Spark Context jsc
    * @param instantTime Instant Time for the action
-   * @param records JavaRDD of hoodieRecords to upsert
+   * @param records  JavaRDD of hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata upsert(JavaSparkContext jsc, String instantTime,
@@ -145,10 +143,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   /**
    * Insert a batch of new records into Hoodie table at the supplied instantTime.
-   *
-   * @param jsc Java Spark Context jsc
+   * @param jsc    Java Spark Context jsc
    * @param instantTime Instant Time for the action
-   * @param records JavaRDD of hoodieRecords to upsert
+   * @param records  JavaRDD of hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata insert(JavaSparkContext jsc, String instantTime,
@@ -156,10 +153,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   /**
    * Bulk Insert a batch of new records into Hoodie table at the supplied instantTime.
-   *
-   * @param jsc Java Spark Context jsc
+   * @param jsc    Java Spark Context jsc
    * @param instantTime Instant Time for the action
-   * @param records JavaRDD of hoodieRecords to upsert
+   * @param records  JavaRDD of hoodieRecords to upsert
    * @param bulkInsertPartitioner User Defined Partitioner
    * @return HoodieWriteMetadata
    */
@@ -179,11 +175,12 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       Dataset<Row> rows, Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
 
   /**
-   * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be de-duped and non existent keys will be removed before deleting.
+   * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
+   * de-duped and non existent keys will be removed before deleting.
    *
-   * @param jsc Java Spark Context jsc
+   * @param jsc    Java Spark Context jsc
    * @param instantTime Instant Time for the action
-   * @param keys {@link List} of {@link HoodieKey}s to be deleted
+   * @param keys   {@link List} of {@link HoodieKey}s to be deleted
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata delete(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieKey> keys);
@@ -192,10 +189,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
    * <p>
    * This implementation requires that the input records are already tagged, and de-duped if needed.
-   *
-   * @param jsc Java Spark Context jsc
+   * @param jsc    Java Spark Context jsc
    * @param instantTime Instant Time for the action
-   * @param preppedRecords JavaRDD of hoodieRecords to upsert
+   * @param preppedRecords  JavaRDD of hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata upsertPrepped(JavaSparkContext jsc, String instantTime,
@@ -205,10 +201,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Inserts the given prepared records into the Hoodie table, at the supplied instantTime.
    * <p>
    * This implementation requires that the input records are already tagged, and de-duped if needed.
-   *
-   * @param jsc Java Spark Context jsc
+   * @param jsc    Java Spark Context jsc
    * @param instantTime Instant Time for the action
-   * @param preppedRecords JavaRDD of hoodieRecords to upsert
+   * @param preppedRecords  JavaRDD of hoodieRecords to upsert
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata insertPrepped(JavaSparkContext jsc, String instantTime,
@@ -218,15 +213,14 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Bulk Insert the given prepared records into the Hoodie table, at the supplied instantTime.
    * <p>
    * This implementation requires that the input records are already tagged, and de-duped if needed.
-   *
-   * @param jsc Java Spark Context jsc
+   * @param jsc    Java Spark Context jsc
    * @param instantTime Instant Time for the action
-   * @param preppedRecords JavaRDD of hoodieRecords to upsert
+   * @param preppedRecords  JavaRDD of hoodieRecords to upsert
    * @param bulkInsertPartitioner User Defined Partitioner
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata bulkInsertPrepped(JavaSparkContext jsc, String instantTime,
-      JavaRDD<HoodieRecord<T>> preppedRecords, Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
+      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
 
   public HoodieWriteConfig getConfig() {
     return config;
@@ -334,10 +328,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param jsc Spark Context
    * @param instantTime Instant Time for scheduling compaction
    * @param extraMetadata additional metadata to write into plan
+   * @return
    */
   public abstract Option<HoodieCompactionPlan> scheduleCompaction(JavaSparkContext jsc,
-      String instantTime,
-      Option<Map<String, String>> extraMetadata);
+                                                                  String instantTime,
+                                                                  Option<Map<String, String>> extraMetadata);
 
   /**
    * Run Compaction on the table. Compaction arranges the data so that it is optimized for data access.
@@ -346,7 +341,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param compactionInstantTime Instant Time
    */
   public abstract HoodieWriteMetadata compact(JavaSparkContext jsc,
-      String compactionInstantTime);
+                                              String compactionInstantTime);
 
   /**
    * Executes a new clean action.
@@ -366,24 +361,26 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * </pre>
    */
   public abstract HoodieRollbackMetadata rollback(JavaSparkContext jsc,
-      String rollbackInstantTime,
-      HoodieInstant commitInstant,
-      boolean deleteInstants);
+                                                  String rollbackInstantTime,
+                                                  HoodieInstant commitInstant,
+                                                  boolean deleteInstants);
 
   /**
-   * Create a savepoint at the specified instant, so that the table can be restored to this point-in-timeline later if needed.
+   * Create a savepoint at the specified instant, so that the table can be restored
+   * to this point-in-timeline later if needed.
    */
   public abstract HoodieSavepointMetadata savepoint(JavaSparkContext jsc,
-      String instantToSavepoint,
-      String user,
-      String comment);
+                                                    String instantToSavepoint,
+                                                    String user,
+                                                    String comment);
 
   /**
-   * Restore the table to the given instant. Note that this is a admin table recovery operation that would cause any running queries that are accessing file slices written after the instant to fail.
+   * Restore the table to the given instant. Note that this is a admin table recovery operation
+   * that would cause any running queries that are accessing file slices written after the instant to fail.
    */
   public abstract HoodieRestoreMetadata restore(JavaSparkContext jsc,
-      String restoreInstantTime,
-      String instantToRestore);
+                                                String restoreInstantTime,
+                                                String instantToRestore);
 
   /**
    * Finalize the written data onto storage. Perform any final cleanups.
@@ -416,12 +413,14 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Reconciles WriteStats and marker files to detect and safely delete duplicate data files created because of Spark retries.
+   * Reconciles WriteStats and marker files to detect and safely delete duplicate data files created because of Spark
+   * retries.
    *
    * @param jsc Spark Context
    * @param instantTs Instant Timestamp
    * @param stats Hoodie Write Stat
    * @param consistencyCheckEnabled Consistency Check Enabled
+   * @throws HoodieIOException
    */
   protected void cleanFailedWrites(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats,
       boolean consistencyCheckEnabled) throws HoodieIOException {
@@ -533,8 +532,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   /**
    * Ensure that the current writerSchema is compatible with the latest schema of this dataset.
    *
-   * When inserting/updating data, we read records using the last used schema and convert them to the GenericRecords with writerSchema. Hence, we need to ensure that this conversion can take place
-   * without errors.
+   * When inserting/updating data, we read records using the last used schema and convert them to the
+   * GenericRecords with writerSchema. Hence, we need to ensure that this conversion can take place without errors.
+   *
    */
   private void validateSchema() throws HoodieUpsertException, HoodieInsertException {
 

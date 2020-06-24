@@ -23,8 +23,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.spark.sql.Row;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,15 +40,9 @@ public class WriteStatus implements Serializable {
 
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
-  private final HashMap<String, Throwable> erroredRows = new HashMap<>();
-
   private final List<HoodieRecord> writtenRecords = new ArrayList<>();
 
   private final List<HoodieRecord> failedRecords = new ArrayList<>();
-
-  private final List<Row> writtenRows = new ArrayList<>();
-
-  private final List<Row> failedRows = new ArrayList<>();
 
   private Throwable globalError = null;
 
@@ -88,19 +80,6 @@ public class WriteStatus implements Serializable {
   }
 
   /**
-   * Mark write as success, optionally using given parameters for the purpose of calculating some aggregate metrics.
-   * This method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
-   *
-   * @param row deflated {@code HoodieRecord} containing information that uniquely identifies it.
-   */
-  public void markSuccess(Row row) {
-    if (trackSuccessRecords) {
-      writtenRows.add(row);
-    }
-    totalRecords++;
-  }
-
-  /**
    * Mark write as failed, optionally using given parameters for the purpose of calculating some aggregate metrics. This
    * method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    *
@@ -112,16 +91,6 @@ public class WriteStatus implements Serializable {
       // Guaranteed to have at-least one error
       failedRecords.add(record);
       errors.put(record.getKey(), t);
-    }
-    totalRecords++;
-    totalErrorRecords++;
-  }
-
-  public void markFailure(Row row, String recordKey, Throwable t) {
-    if (failedRows.isEmpty() || (random.nextDouble() <= failureFraction)) {
-      // Guaranteed to have at-least one error
-      failedRows.add(row);
-      erroredRows.put(recordKey, t);
     }
     totalRecords++;
     totalErrorRecords++;
@@ -147,10 +116,6 @@ public class WriteStatus implements Serializable {
     return errors;
   }
 
-  public HashMap<String, Throwable> getErroredRows() {
-    return erroredRows;
-  }
-
   public boolean hasGlobalError() {
     return globalError != null;
   }
@@ -167,16 +132,8 @@ public class WriteStatus implements Serializable {
     return writtenRecords;
   }
 
-  public List<Row> getWrittenRows() {
-    return writtenRows;
-  }
-
   public List<HoodieRecord> getFailedRecords() {
     return failedRecords;
-  }
-
-  public List<Row> getFailedRows() {
-    return failedRows;
   }
 
   public HoodieWriteStat getStat() {

@@ -19,11 +19,6 @@
 package org.apache.hudi.client;
 
 import com.codahale.metrics.Timer;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.text.ParseException;
-import java.util.List;
-import java.util.Map;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -47,14 +42,18 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
+import java.util.List;
+import java.util.Map;
+
 /**
  * Abstract Write Client providing functionality for performing commit, index updates and rollback
- * Reused for regular write operations like upsert/insert/bulk-insert.. as well as bootstrap
- *
+ *  Reused for regular write operations like upsert/insert/bulk-insert.. as well as bootstrap
  * @param <T> Sub type of HoodieRecordPayload
  */
-public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> extends
-    AbstractHoodieClient {
+public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(AbstractHoodieWriteClient.class);
 
@@ -72,8 +71,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     return this.operationType;
   }
 
-  protected AbstractHoodieWriteClient(JavaSparkContext jsc, HoodieIndex index,
-      HoodieWriteConfig clientConfig,
+  protected AbstractHoodieWriteClient(JavaSparkContext jsc, HoodieIndex index, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineServer) {
     super(jsc, clientConfig, timelineServer);
     this.metrics = new HoodieMetrics(config, config.getTableName());
@@ -126,8 +124,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       emitCommitMetrics(instantTime, metadata, actionType);
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
-      throw new HoodieCommitException(
-          "Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
+      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
     }
     return true;
@@ -138,38 +135,31 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
 
       if (writeContext != null) {
         long durationInMs = metrics.getDurationInMs(writeContext.stop());
-        metrics
-            .updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(instantTime).getTime(),
-                durationInMs,
-                metadata, actionType);
+        metrics.updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(instantTime).getTime(), durationInMs,
+            metadata, actionType);
         writeContext = null;
       }
     } catch (ParseException e) {
-      throw new HoodieCommitException(
-          "Failed to complete commit " + config.getBasePath() + " at time " + instantTime
-              + "Instant time is not of valid format", e);
+      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime
+          + "Instant time is not of valid format", e);
     }
   }
 
   /**
    * Post Commit Hook. Derived classes use this method to perform post-commit processing
-   *
-   * @param metadata Commit Metadata corresponding to committed instant
-   * @param instantTime Instant Time
+   * @param metadata      Commit Metadata corresponding to committed instant
+   * @param instantTime   Instant Time
    * @param extraMetadata Additional Metadata passed by user
    */
-  protected abstract void postCommit(HoodieCommitMetadata metadata, String instantTime,
-      Option<Map<String, String>> extraMetadata);
+  protected abstract void postCommit(HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata);
 
   /**
    * Finalize Write operation.
-   *
-   * @param table HoodieTable
+   * @param table  HoodieTable
    * @param instantTime Instant Time
    * @param stats Hoodie Write Stat
    */
-  protected void finalizeWrite(HoodieTable<T> table, String instantTime,
-      List<HoodieWriteStat> stats) {
+  protected void finalizeWrite(HoodieTable<T> table, String instantTime, List<HoodieWriteStat> stats) {
     try {
       final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
       table.finalizeWrite(jsc, instantTime, stats);
@@ -181,8 +171,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
         });
       }
     } catch (HoodieIOException ioe) {
-      throw new HoodieCommitException(
-          "Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
+      throw new HoodieCommitException("Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
     }
   }
 
@@ -205,8 +194,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
         // TODO: why is stat.getPartitionPath() null at times here.
         metadata.addWriteStat(partitionPath, stat);
         HoodieRollingStat hoodieRollingStat = new HoodieRollingStat(stat.getFileId(),
-            stat.getNumWrites() - (stat.getNumUpdateWrites() - stat.getNumDeletes()),
-            stat.getNumUpdateWrites(),
+            stat.getNumWrites() - (stat.getNumUpdateWrites() - stat.getNumDeletes()), stat.getNumUpdateWrites(),
             stat.getNumDeletes(), stat.getTotalWriteBytes());
         rollingStatMetadata.addRollingStat(partitionPath, hoodieRollingStat);
       }
@@ -215,19 +203,15 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
           table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
       if (lastInstant.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            table.getActiveTimeline().getInstantDetails(lastInstant.get()).get(),
-            HoodieCommitMetadata.class);
+            table.getActiveTimeline().getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
         Option<String> lastRollingStat = Option
-            .ofNullable(commitMetadata.getExtraMetadata()
-                .get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY));
+            .ofNullable(commitMetadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY));
         if (lastRollingStat.isPresent()) {
           rollingStatMetadata = rollingStatMetadata
-              .merge(HoodieCommitMetadata
-                  .fromBytes(lastRollingStat.get().getBytes(), HoodieRollingStatMetadata.class));
+              .merge(HoodieCommitMetadata.fromBytes(lastRollingStat.get().getBytes(), HoodieRollingStatMetadata.class));
         }
       }
-      metadata.addMetadata(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY,
-          rollingStatMetadata.toJsonString());
+      metadata.addMetadata(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, rollingStatMetadata.toJsonString());
     } catch (IOException io) {
       throw new HoodieCommitException("Unable to save rolling stats");
     }
@@ -263,8 +247,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     try {
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
       Option<HoodieInstant> lastInstant =
-          activeTimeline.filterCompletedInstants()
-              .filter(s -> s.getAction().equals(metaClient.getCommitActionType()))
+          activeTimeline.filterCompletedInstants().filter(s -> s.getAction().equals(metaClient.getCommitActionType()))
               .lastInstant();
       if (lastInstant.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(

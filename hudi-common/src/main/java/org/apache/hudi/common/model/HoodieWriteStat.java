@@ -50,7 +50,8 @@ public class HoodieWriteStat implements Serializable {
   private String prevCommit;
 
   /**
-   * Total number of records written for this file. - for updates, its the entire number of records in the file - for inserts, its the actual number of records inserted.
+   * Total number of records written for this file. - for updates, its the entire number of records in the file - for
+   * inserts, its the actual number of records inserted.
    */
   private long numWrites;
 

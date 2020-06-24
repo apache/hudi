@@ -43,6 +43,10 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
+/**
+ * An impl of {@link HoodieWriteClient} to assist in performing data set operations.
+ * @param <T>
+ */
 public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> extends HoodieWriteClient<T> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieDatasetWriteClient.class);

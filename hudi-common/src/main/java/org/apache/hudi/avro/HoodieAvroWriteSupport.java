@@ -33,9 +33,9 @@ import java.util.HashMap;
  */
 public class HoodieAvroWriteSupport extends AvroWriteSupport {
 
-  protected BloomFilter bloomFilter;
-  protected String minRecordKey;
-  protected String maxRecordKey;
+  private BloomFilter bloomFilter;
+  private String minRecordKey;
+  private String maxRecordKey;
 
   public static final String OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "com.uber.hoodie.bloomfilter";
   public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "org.apache.hudi.bloomfilter";

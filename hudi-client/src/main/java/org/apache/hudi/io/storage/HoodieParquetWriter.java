@@ -38,7 +38,8 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides a way to check if the current file can take more records with the <code>canWrite()</code>
+ * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides a way to check if
+ * the current file can take more records with the <code>canWrite()</code>
  */
 public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
     extends ParquetWriter<IndexedRecord> implements HoodieStorageWriter<R> {

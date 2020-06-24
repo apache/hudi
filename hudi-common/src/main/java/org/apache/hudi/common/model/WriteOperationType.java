@@ -35,7 +35,7 @@ public enum WriteOperationType {
   // bulk insert
   BULK_INSERT("bulk_insert"),
   BULK_INSERT_PREPPED("bulk_insert_prepped"),
-  // bulk insert
+  // bulk insert dataset
   BULK_INSERT_DATASET("bulk_insert_dataset"),
   // delete
   DELETE("delete"),

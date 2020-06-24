@@ -37,8 +37,8 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
 
   private Configuration hadoopConf;
   private BloomFilter bloomFilter;
-  protected String minRecordKey;
-  protected String maxRecordKey;
+  private String minRecordKey;
+  private String maxRecordKey;
 
   public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, BloomFilter bloomFilter) {
     super();
