@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_1;
+import static org.apache.hudi.testutils.HoodieTestDataGenerator.EXTRA_TYPE_SCHEMA;
 import static org.apache.hudi.testutils.HoodieTestDataGenerator.FARE_NESTED_SCHEMA;
 import static org.apache.hudi.testutils.HoodieTestDataGenerator.MAP_TYPE_SCHEMA;
 import static org.apache.hudi.testutils.HoodieTestDataGenerator.TIP_NESTED_SCHEMA;
@@ -68,19 +69,19 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       "{\"name\": \"new_field\", \"type\": \"boolean\", \"default\": false},";
 
   // TRIP_EXAMPLE_SCHEMA with a new_field added
-  public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
-      + TIP_NESTED_SCHEMA + EXTRA_FIELD_SCHEMA + TRIP_SCHEMA_SUFFIX;
+  public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
+      + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_FIELD_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
   // TRIP_EXAMPLE_SCHEMA with tip field removed
-  public static final String TRIP_EXAMPLE_SCHEMA_DEVOLVED = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
-      + TRIP_SCHEMA_SUFFIX;
+  public static final String TRIP_EXAMPLE_SCHEMA_DEVOLVED = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
+      + FARE_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
   @Test
   public void testSchemaCompatibilityBasic() throws Exception {
     assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA),
         "Same schema is compatible");
 
-    String reorderedSchema = TRIP_SCHEMA_PREFIX + TIP_NESTED_SCHEMA + FARE_NESTED_SCHEMA
+    String reorderedSchema = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + TIP_NESTED_SCHEMA + FARE_NESTED_SCHEMA
         + MAP_TYPE_SCHEMA + TRIP_SCHEMA_SUFFIX;
     assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, reorderedSchema),
         "Reordered fields are compatible");
@@ -114,15 +115,14 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED),
         "Added field with default is compatible (Evolved Schema)");
 
-    String multipleAddedFieldSchema = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
+    String multipleAddedFieldSchema = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
         + TIP_NESTED_SCHEMA + EXTRA_FIELD_SCHEMA + EXTRA_FIELD_SCHEMA.replace("new_field", "new_new_field")
         + TRIP_SCHEMA_SUFFIX;
     assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, multipleAddedFieldSchema),
         "Multiple added fields with defauls are compatible");
   }
 
-  @Test
-  public void testMORTable() throws Exception {
+  private void testMORTable(Boolean rollbackUsingMarkers) throws Exception {
     tableType = HoodieTableType.MERGE_ON_READ;
 
     // Create the table
@@ -130,13 +130,13 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         HoodieTableType.MERGE_ON_READ, metaClient.getTableConfig().getTableName(),
         metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1);
 
-    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
+    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA, rollbackUsingMarkers);
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     // Initial inserts with TRIP_EXAMPLE_SCHEMA
     int numRecords = 10;
     insertFirstBatch(hoodieWriteConfig, client, "001", initCommitTime,
-                     numRecords, HoodieWriteClient::insert, false, false, numRecords);
+        numRecords, HoodieWriteClient::insert, false, false, numRecords);
     checkLatestDeltaCommit("001");
 
     // Compact once so we can incrementally read later
@@ -146,7 +146,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Updates with same schema is allowed
     final int numUpdateRecords = 5;
     updateBatch(hoodieWriteConfig, client, "003", "002", Option.empty(),
-                initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
+        initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
     checkLatestDeltaCommit("003");
     checkReadRecords("000", numRecords);
 
@@ -154,7 +154,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     final int numDeleteRecords = 2;
     numRecords -= numDeleteRecords;
     deleteBatch(hoodieWriteConfig, client, "004", "003", initCommitTime, numDeleteRecords,
-                HoodieWriteClient::delete, false, false, 0, 0);
+        HoodieWriteClient::delete, false, false, 0, 0);
     checkLatestDeltaCommit("004");
     checkReadRecords("000", numRecords);
 
@@ -178,7 +178,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Update with devolved schema is also not allowed
     try {
       updateBatch(hoodieDevolvedWriteConfig, client, "005", "004", Option.empty(),
-                  initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
+          initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
       fail("Update with devolved scheme should fail");
     } catch (HoodieUpsertException ex) {
       // no new commit
@@ -214,7 +214,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     client = getHoodieWriteClient(hoodieWriteConfig, false);
     try {
       updateBatch(hoodieWriteConfig, client, "007", "006", Option.empty(),
-                  initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
+          initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
       fail("Update with original scheme should fail");
     } catch (HoodieUpsertException ex) {
       // no new commit
@@ -256,7 +256,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Updates with original schema are now allowed
     client = getHoodieWriteClient(hoodieWriteConfig, false);
     updateBatch(hoodieWriteConfig, client, "008", "004", Option.empty(),
-                initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
+        initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
     // new commit
     checkLatestDeltaCommit("008");
     checkReadRecords("000", 2 * numRecords);
@@ -269,13 +269,22 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   }
 
   @Test
-  public void testCopyOnWriteTable() throws Exception {
+  public void testMORTableUsingFileListRollBack() throws Exception {
+    testMORTable(false);
+  }
+
+  @Test
+  public void testMORTableUsingMarkersRollBack() throws Exception {
+    testMORTable(true);
+  }
+
+  private void testCopyOnWriteTable(Boolean rollbackUsingMarkers) throws Exception {
     // Create the table
     HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
         HoodieTableType.COPY_ON_WRITE, metaClient.getTableConfig().getTableName(),
         metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1);
 
-    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
+    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA, rollbackUsingMarkers);
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     // Initial inserts with TRIP_EXAMPLE_SCHEMA
@@ -407,6 +416,16 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     checkReadRecords("000", 2 * numRecords);
   }
 
+  @Test
+  public void testCopyOnWriteTableUsingFileListRollBack() throws Exception {
+    testCopyOnWriteTable(false);
+  }
+
+  @Test
+  public void testCopyOnWriteTableUsingMarkersRollBack() throws Exception {
+    testCopyOnWriteTable(true);
+  }
+
   private void checkReadRecords(String instantTime, int numExpectedRecords) throws IOException {
     if (tableType == HoodieTableType.COPY_ON_WRITE) {
       HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitTimeline();
@@ -466,10 +485,14 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   }
 
   private HoodieWriteConfig getWriteConfig(String schema) {
+    return getWriteConfig(schema, false);
+  }
+
+  private HoodieWriteConfig getWriteConfig(String schema, Boolean rollbackUsingMarkers) {
     return getConfigBuilder(schema)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.INMEMORY).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
-        .withAvroSchemaValidate(true)
+        .withAvroSchemaValidate(true).withRollbackUsingMarkers(rollbackUsingMarkers)
         .build();
   }
 

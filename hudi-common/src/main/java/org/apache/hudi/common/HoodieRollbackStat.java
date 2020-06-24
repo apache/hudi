@@ -106,6 +106,15 @@ public class HoodieRollbackStat implements Serializable {
     }
 
     public HoodieRollbackStat build() {
+      if (successDeleteFiles == null) {
+        successDeleteFiles = Collections.EMPTY_LIST;
+      }
+      if (failedDeleteFiles == null) {
+        failedDeleteFiles = Collections.EMPTY_LIST;
+      }
+      if (commandBlocksCount == null) {
+        commandBlocksCount = Collections.EMPTY_MAP;
+      }
       return new HoodieRollbackStat(partitionPath, successDeleteFiles, failedDeleteFiles, commandBlocksCount);
     }
   }

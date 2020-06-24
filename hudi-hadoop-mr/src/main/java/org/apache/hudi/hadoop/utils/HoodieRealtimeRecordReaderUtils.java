@@ -44,6 +44,7 @@ import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -146,7 +147,7 @@ public class HoodieRealtimeRecordReaderUtils {
       case STRING:
         return new Text(value.toString());
       case BYTES:
-        return new BytesWritable((byte[]) value);
+        return new BytesWritable(((ByteBuffer)value).array());
       case INT:
         return new IntWritable((Integer) value);
       case LONG:

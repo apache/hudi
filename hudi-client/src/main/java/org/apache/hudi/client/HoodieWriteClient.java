@@ -47,6 +47,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
+import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactHelpers;
@@ -327,6 +328,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   @Override
   protected void postCommit(HoodieTable<?> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
     try {
+      if (!config.getRollBackUsingMarkers()) {
+        new MarkerFiles(table, instantTime).deleteMarkerDir();
+      }
       // Do an inline compaction if enabled
       if (config.isInlineCompaction()) {
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");

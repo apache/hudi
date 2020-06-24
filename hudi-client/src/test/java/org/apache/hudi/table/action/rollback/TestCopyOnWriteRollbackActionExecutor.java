@@ -42,6 +42,7 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -102,19 +103,19 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientTestBase 
       if (stat.getPartitionPath().equals("2015/03/16")) {
         assertEquals(1, stat.getSuccessDeleteFiles().size());
         assertEquals(0, stat.getFailedDeleteFiles().size());
-        assertEquals(null, stat.getCommandBlocksCount());
+        assertEquals(Collections.EMPTY_MAP, stat.getCommandBlocksCount());
         assertEquals("file:" + HoodieTestUtils.getDataFilePath(basePath, "2015/03/16", commitTime2, file21),
             stat.getSuccessDeleteFiles().get(0));
       } else if (stat.getPartitionPath().equals("2015/03/17")) {
         assertEquals(1, stat.getSuccessDeleteFiles().size());
         assertEquals(0, stat.getFailedDeleteFiles().size());
-        assertEquals(null, stat.getCommandBlocksCount());
+        assertEquals(Collections.EMPTY_MAP, stat.getCommandBlocksCount());
         assertEquals("file:" + HoodieTestUtils.getDataFilePath(basePath, "2015/03/17", commitTime2, file22),
             stat.getSuccessDeleteFiles().get(0));
       } else if (stat.getPartitionPath().equals("2015/03/17")) {
         assertEquals(0, stat.getSuccessDeleteFiles().size());
         assertEquals(0, stat.getFailedDeleteFiles().size());
-        assertEquals(null, stat.getCommandBlocksCount());
+        assertEquals(Collections.EMPTY_MAP, stat.getCommandBlocksCount());
       }
     });
 

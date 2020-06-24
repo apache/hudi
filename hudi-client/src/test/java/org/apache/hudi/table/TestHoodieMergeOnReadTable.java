@@ -385,13 +385,11 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     }
   }
 
-  @Test
-  public void testCOWToMORConvertedTableRollback() throws Exception {
-
+  private void testCOWToMORConvertedTableRollback(Boolean rollbackUsingMarkers) throws Exception {
     // Set TableType to COW
     HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
 
-    HoodieWriteConfig cfg = getConfig(true);
+    HoodieWriteConfig cfg = getConfig(true, rollbackUsingMarkers);
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
 
       /**
@@ -441,9 +439,17 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testRollbackWithDeltaAndCompactionCommit() throws Exception {
+  public void testCOWToMORConvertedTableRollbackUsingFileList() throws Exception {
+    testCOWToMORConvertedTableRollback(false);
+  }
 
-    HoodieWriteConfig cfg = getConfig(false);
+  @Test
+  public void testCOWToMORConvertedTableRollbackUsingMarkers() throws Exception {
+    testCOWToMORConvertedTableRollback(true);
+  }
+
+  private void testRollbackWithDeltaAndCompactionCommit(Boolean rollbackUsingMarkers) throws Exception {
+    HoodieWriteConfig cfg = getConfig(false, rollbackUsingMarkers);
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
 
       // Test delta commit rollback
@@ -590,8 +596,17 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testMultiRollbackWithDeltaAndCompactionCommit() throws Exception {
+  public void testRollbackWithDeltaAndCompactionCommitUsingFileList() throws Exception {
+    testRollbackWithDeltaAndCompactionCommit(false);
+  }
 
+  @Test
+  public void testRollbackWithDeltaAndCompactionCommitUsingMarkers() throws Exception {
+    testRollbackWithDeltaAndCompactionCommit(true);
+  }
+
+  @Test
+  public void testMultiRollbackWithDeltaAndCompactionCommit() throws Exception {
     HoodieWriteConfig cfg = getConfig(false);
     try (final HoodieWriteClient client = getHoodieWriteClient(cfg);) {
       /**
@@ -939,11 +954,11 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     }
   }
 
-  @Test
-  public void testInsertsGeneratedIntoLogFilesRollback(@TempDir java.nio.file.Path tempFolder) throws Exception {
+  private void testInsertsGeneratedIntoLogFilesRollback(@TempDir java.nio.file.Path tempFolder,
+                                                        Boolean rollbackUsingMarkers) throws Exception {
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
-    HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
+    HoodieWriteConfig config = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY).build();
     try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
@@ -986,12 +1001,17 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       // Rollback will be called twice to test the case where rollback failed first time and retried.
       // We got the "BaseCommitTime cannot be null" exception before the fix
       File file = Files.createTempFile(tempFolder, null, null).toFile();
+      Path markerDir = new Path(Files.createTempDirectory(tempFolder,null).toAbsolutePath().toString());
       metaClient.getFs().copyToLocalFile(new Path(metaClient.getMetaPath(), fileName),
           new Path(file.getAbsolutePath()));
-      writeClient.rollback(newCommitTime);
+      if (rollbackUsingMarkers) {
+        metaClient.getFs().copyToLocalFile(new Path(metaClient.getMarkerFolderPath(lastCommitTime)),
+            markerDir);
+      }
 
+      writeClient.rollback(newCommitTime);
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
+      HoodieTable table = HoodieTable.create(config, hadoopConf);
       SliceView tableRTFileSystemView = table.getSliceView();
 
       long numLogFiles = 0;
@@ -1004,6 +1024,11 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       assertEquals(0, numLogFiles);
       metaClient.getFs().copyFromLocalFile(new Path(file.getAbsolutePath()),
           new Path(metaClient.getMetaPath(), fileName));
+      if (rollbackUsingMarkers) {
+        metaClient.getFs().copyFromLocalFile(markerDir,
+            new Path(metaClient.getMarkerFolderPath(lastCommitTime)));
+      }
+
       Thread.sleep(1000);
       // Rollback again to pretend the first rollback failed partially. This should not error our
       writeClient.rollback(newCommitTime);
@@ -1011,10 +1036,19 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testInsertsGeneratedIntoLogFilesRollbackAfterCompaction() throws Exception {
+  public void testInsertsGeneratedIntoLogFilesRollbackUsingFileList(@TempDir java.nio.file.Path tempFolder) throws Exception {
+    testInsertsGeneratedIntoLogFilesRollback(tempFolder, false);
+  }
+
+  @Test
+  public void testInsertsGeneratedIntoLogFilesRollbackUsingMarkers(@TempDir java.nio.file.Path tempFolder) throws Exception {
+    testInsertsGeneratedIntoLogFilesRollback(tempFolder, true);
+  }
+
+  private void testInsertsGeneratedIntoLogFilesRollbackAfterCompaction(Boolean rollbackUsingMarkers) throws Exception {
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
-    HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
+    HoodieWriteConfig config = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY).build();
     try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
@@ -1060,13 +1094,19 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     }
   }
 
-  /**
-   * Test to ensure rolling stats are correctly written to metadata file.
-   */
   @Test
-  public void testRollingStatsInMetadata() throws Exception {
+  public void testInsertsGeneratedIntoLogFilesRollbackAfterCompactionUsingFileList() throws Exception {
+    testInsertsGeneratedIntoLogFilesRollbackAfterCompaction(false);
+  }
 
-    HoodieWriteConfig cfg = getConfigBuilder(false, IndexType.INMEMORY).withAutoCommit(false).build();
+  @Test
+  public void testInsertsGeneratedIntoLogFilesRollbackAfterCompactionUsingMarkers() throws Exception {
+    testInsertsGeneratedIntoLogFilesRollbackAfterCompaction(true);
+  }
+
+  private void testRollingStatsInMetadata(Boolean rollbackUsingMarkers) throws Exception {
+    HoodieWriteConfig cfg = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY)
+        .withAutoCommit(false).build();
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
       metaClient = getHoodieMetaClient(hadoopConf, basePath);
       HoodieTable table = HoodieTable.create(metaClient, cfg, hadoopConf);
@@ -1158,6 +1198,19 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       assertEquals(200, inserts);
       assertEquals(0, upserts);
     }
+  }
+
+  /**
+   * Test to ensure rolling stats are correctly written to metadata file.
+   */
+  @Test
+  public void testRollingStatsInMetadataUsingFileList() throws Exception {
+    testRollingStatsInMetadata(false);
+  }
+
+  @Test
+  public void testRollingStatsInMetadataUsingMarkers() throws Exception {
+    testRollingStatsInMetadata(true);
   }
 
   /**
@@ -1379,11 +1432,19 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     return getConfigBuilder(autoCommit).build();
   }
 
+  private HoodieWriteConfig getConfig(Boolean autoCommit, Boolean rollbackUsingMarkers) {
+    return getConfigBuilder(autoCommit, rollbackUsingMarkers, IndexType.BLOOM).build();
+  }
+
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit) {
     return getConfigBuilder(autoCommit, IndexType.BLOOM);
   }
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, HoodieIndex.IndexType indexType) {
+    return getConfigBuilder(autoCommit, false, indexType);
+  }
+
+  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withAutoCommit(autoCommit).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
@@ -1392,7 +1453,8 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
         .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
             .withEnableBackupForRemoteFileSystemView(false).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build());
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
+        .withRollbackUsingMarkers(rollbackUsingMarkers);
   }
 
   private void assertNoWriteErrors(List<WriteStatus> statuses) {

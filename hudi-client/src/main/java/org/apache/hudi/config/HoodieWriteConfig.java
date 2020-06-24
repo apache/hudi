@@ -634,6 +634,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return clientSpecifiedViewStorageConfig;
   }
 
+  public boolean getRollBackUsingMarkers() {
+    return Boolean.parseBoolean(props.getProperty(ROLLBACK_USING_MARKERS, DEFAULT_ROLLBACK_USING_MARKERS));
+  }
+
   public static class Builder {
 
     private final Properties props = new Properties();

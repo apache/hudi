@@ -884,16 +884,12 @@ public class TestCleaner extends HoodieClientTestBase {
         file2P0C1));
   }
 
-  /**
-   * Test Cleaning functionality of table.rollback() API.
-   */
-  @Test
-  public void testCleanMarkerDataFilesOnRollback() throws IOException {
+  private void testCleanMarkerDataFilesOnRollback(boolean isRollbackUsingMarkers) throws IOException {
     List<String> markerFiles = createMarkerFiles("000", 10);
     assertEquals(10, markerFiles.size(), "Some marker files are created.");
     assertEquals(markerFiles.size(), getTotalTempFiles(), "Some marker files are created.");
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withRollbackUsingMarkers(isRollbackUsingMarkers).withPath(basePath).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
     table.getActiveTimeline().createNewInstant(new HoodieInstant(State.REQUESTED,
@@ -903,6 +899,19 @@ public class TestCleaner extends HoodieClientTestBase {
     metaClient.reloadActiveTimeline();
     table.rollback(jsc, "001", new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "000"), true);
     assertEquals(0, getTotalTempFiles(), "All temp files are deleted.");
+  }
+
+  /**
+   * Test Cleaning functionality of table.rollback() API.
+   */
+  @Test
+  public void testCleanMarkerDataFilesOnRollbackUsingFileList() throws IOException {
+    testCleanMarkerDataFilesOnRollback(false);
+  }
+
+  @Test
+  public void testCleanMarkerDataFilesOnRollbackUsingMarkers() throws IOException {
+    testCleanMarkerDataFilesOnRollback(true);
   }
 
   /**

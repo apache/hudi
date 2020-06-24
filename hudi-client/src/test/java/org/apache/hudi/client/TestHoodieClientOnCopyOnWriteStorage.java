@@ -943,11 +943,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
   }
 
-  @Test
-  public void testRollbackAfterConsistencyCheckFailure() throws Exception {
+  private void testRollbackAfterConsistencyCheckFailureUsingFileList(boolean rollbackUsingMarkers) throws Exception {
     String instantTime = "000";
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers).withAutoCommit(false).build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
     testConsistencyCheck(metaClient, instantTime);
 
@@ -957,6 +956,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         "After explicit rollback, commit file should not be present");
     // Marker directory must be removed after rollback
     assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
+  }
+
+  @Test
+  public void testRollbackAfterConsistencyCheckFailureUsingFileList() throws Exception {
+    testRollbackAfterConsistencyCheckFailureUsingFileList(false);
+  }
+
+  @Test
+  public void testRollbackAfterConsistencyCheckFailureUsingMarkers() throws Exception {
+    testRollbackAfterConsistencyCheckFailureUsingFileList(true);
   }
 
   private Pair<Path, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String instantTime)

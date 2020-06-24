@@ -426,7 +426,8 @@ public class HoodieTestUtils {
 
   public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath) throws IOException {
     return FileSystemTestUtils.listPathRecursively(fs, new Path(basePath))
-        .stream().filter(status -> status.getPath().getName().contains(".parquet"))
+        .stream().filter(status -> status.getPath().getName().contains(".parquet")
+            && !status.getPath().getName().contains(".marker"))
         .toArray(FileStatus[]::new);
   }
 

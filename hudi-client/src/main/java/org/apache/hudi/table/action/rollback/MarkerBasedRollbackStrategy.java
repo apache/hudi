@@ -95,8 +95,15 @@ public class MarkerBasedRollbackStrategy implements BaseRollbackActionExecutor.R
 
     HoodieLogFormat.Writer writer = null;
     try {
+      Path partitionFullPath = FSUtils.getPartitionPath(basePath, partitionPath);
+
+      if (!table.getMetaClient().getFs().exists(partitionFullPath)) {
+        return HoodieRollbackStat.newBuilder()
+            .withPartitionPath(partitionPath)
+            .build();
+      }
       writer = HoodieLogFormat.newWriterBuilder()
-          .onParentPath(FSUtils.getPartitionPath(basePath, partitionPath))
+          .onParentPath(partitionFullPath)
           .withFileId(fileId)
           .overBaseCommit(baseCommitTime)
           .withFs(table.getMetaClient().getFs())
