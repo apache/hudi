@@ -119,21 +119,19 @@ public class StatsCommand implements CommandMarker {
 
     FileSystem fs = HoodieCLI.fs;
     String globPath = String.format("%s/%s/*", HoodieCLI.getTableMetaClient().getBasePath(), globRegex);
-    FileStatus[] statuses = fs.globStatus(new Path(globPath));
+    List<FileStatus> statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath));
 
     // max, min, #small files < 10MB, 50th, avg, 95th
     Histogram globalHistogram = new Histogram(new UniformReservoir(MAX_FILES));
     HashMap<String, Histogram> commitHistoMap = new HashMap<>();
     for (FileStatus fileStatus : statuses) {
-      if (!fileStatus.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)) {
-        String instantTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
-        long sz = fileStatus.getLen();
-        if (!commitHistoMap.containsKey(instantTime)) {
-          commitHistoMap.put(instantTime, new Histogram(new UniformReservoir(MAX_FILES)));
-        }
-        commitHistoMap.get(instantTime).update(sz);
-        globalHistogram.update(sz);
+      String instantTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
+      long sz = fileStatus.getLen();
+      if (!commitHistoMap.containsKey(instantTime)) {
+        commitHistoMap.put(instantTime, new Histogram(new UniformReservoir(MAX_FILES)));
       }
+      commitHistoMap.get(instantTime).update(sz);
+      globalHistogram.update(sz);
     }
 
     List<Comparable[]> rows = new ArrayList<>();

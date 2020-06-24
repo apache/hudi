@@ -18,7 +18,18 @@
 
 package org.apache.hudi.client.bootstrap;
 
+/**
+ * Identifies different types of bootstrap
+ */
 public enum BootstrapMode {
-  FULL_BOOTSTRAP,
-  METADATA_ONLY_BOOTSTRAP
+  /**
+   * In this mode, record level metadata is generated for each source record and both original recard and metadata
+   * for each record copied.
+   */
+  RECORD_DATA_BOOTSTRAP,
+
+  /**
+   * In this mode, record level metadata alone is generated for each source record and stored in new bootstrap location.
+   */
+  RECORD_METADATA_ONLY_BOOTSTRAP
 }

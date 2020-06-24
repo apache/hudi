@@ -152,7 +152,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public void bootstrap(Option<Map<String, String>> extraMetadata) {
     if (rollbackPending) {
-      rollBackPendingBootstrap();
+      rollBackInflightBootstrap();
     }
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT);
     table.bootstrap(jsc, extraMetadata);
@@ -161,7 +161,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   /**
    * Main API to rollback pending bootstrap.
    */
-  protected void rollBackPendingBootstrap() {
+  protected void rollBackInflightBootstrap() {
     LOG.info("Rolling back pending bootstrap if present");
     HoodieTable<T> table = HoodieTable.create(config, hadoopConf);
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
@@ -669,7 +669,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     for (String commit : commits) {
       if (HoodieTimeline.compareTimestamps(commit, HoodieTimeline.LESSER_THAN_OR_EQUALS,
           HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
-        rollBackPendingBootstrap();
+        rollBackInflightBootstrap();
         break;
       } else {
         rollback(commit);

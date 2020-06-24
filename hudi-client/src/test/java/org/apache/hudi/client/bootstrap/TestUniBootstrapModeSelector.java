@@ -19,8 +19,8 @@
 package org.apache.hudi.client.bootstrap;
 
 import org.apache.hudi.avro.model.HoodieFileStatus;
-import org.apache.hudi.client.bootstrap.selector.FullBootstrapModeSelector;
-import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
+import org.apache.hudi.client.bootstrap.selector.RecordDataBootstrapModeSelector;
+import org.apache.hudi.client.bootstrap.selector.RecordMetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.UniBootstrapModeSelector;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -40,16 +40,16 @@ public class TestUniBootstrapModeSelector {
   @Test
   public void testFullBootstrapModeSelector() {
 
-    FullBootstrapModeSelector modeSelector = new FullBootstrapModeSelector(
+    RecordDataBootstrapModeSelector modeSelector = new RecordDataBootstrapModeSelector(
         HoodieWriteConfig.newBuilder().withPath("").build());
-    testModeSelector(modeSelector, BootstrapMode.FULL_BOOTSTRAP);
+    testModeSelector(modeSelector, BootstrapMode.RECORD_DATA_BOOTSTRAP);
   }
 
   @Test
   public void testMetadataOnlyBootstrapModeSelector() {
-    MetadataOnlyBootstrapModeSelector modeSelector = new MetadataOnlyBootstrapModeSelector(
+    RecordMetadataOnlyBootstrapModeSelector modeSelector = new RecordMetadataOnlyBootstrapModeSelector(
         HoodieWriteConfig.newBuilder().withPath("").build());
-    testModeSelector(modeSelector, BootstrapMode.METADATA_ONLY_BOOTSTRAP);
+    testModeSelector(modeSelector, BootstrapMode.RECORD_METADATA_ONLY_BOOTSTRAP);
   }
 
   private void testModeSelector(UniBootstrapModeSelector modeSelector, BootstrapMode mode) {

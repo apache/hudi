@@ -130,10 +130,10 @@ public class BootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
 
       // First run metadata bootstrap which will implicitly commit
       HoodieWriteMetadata metadataResult = metadataBootstrap(partitionSelections.get(
-          BootstrapMode.METADATA_ONLY_BOOTSTRAP));
+          BootstrapMode.RECORD_METADATA_ONLY_BOOTSTRAP));
       // if there are full bootstrap to be performed, perform that too
       HoodieWriteMetadata fullBootstrapResult =
-          fullBootstrap(partitionSelections.get(BootstrapMode.FULL_BOOTSTRAP));
+          fullBootstrap(partitionSelections.get(BootstrapMode.RECORD_DATA_BOOTSTRAP));
       return new HoodieBootstrapWriteMetadata(metadataResult, fullBootstrapResult);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);

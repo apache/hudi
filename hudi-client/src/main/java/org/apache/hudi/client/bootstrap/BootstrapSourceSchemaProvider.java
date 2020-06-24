@@ -35,10 +35,10 @@ import java.util.List;
  */
 public class BootstrapSourceSchemaProvider {
 
-  protected final HoodieWriteConfig bootstrapConfig;
+  protected final HoodieWriteConfig writeConfig;
 
-  public BootstrapSourceSchemaProvider(HoodieWriteConfig bootstrapConfig) {
-    this.bootstrapConfig = bootstrapConfig;
+  public BootstrapSourceSchemaProvider(HoodieWriteConfig writeConfig) {
+    this.writeConfig = writeConfig;
   }
 
   /**
@@ -48,9 +48,9 @@ public class BootstrapSourceSchemaProvider {
    * @return Avro Schema
    */
   public final Schema getBootstrapSchema(JavaSparkContext jsc, List<Pair<String, List<HoodieFileStatus>>> partitions) {
-    if (bootstrapConfig.getSchema() != null) {
+    if (writeConfig.getSchema() != null) {
       // Use schema specified by user if set
-      return Schema.parse(bootstrapConfig.getSchema());
+      return Schema.parse(writeConfig.getSchema());
     }
     return getBootstrapSourceSchema(jsc, partitions);
   }

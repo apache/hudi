@@ -23,8 +23,8 @@ import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.FullBootstrapInputProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
-import org.apache.hudi.client.bootstrap.selector.FullBootstrapModeSelector;
-import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
+import org.apache.hudi.client.bootstrap.selector.RecordDataBootstrapModeSelector;
+import org.apache.hudi.client.bootstrap.selector.RecordMetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.utils.ParquetReaderIterator;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
@@ -190,7 +190,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     final List<String> bootstrapInstants;
     switch (mode) {
       case FULL_BOOTSTRAP_MODE:
-        bootstrapModeSelectorClass = FullBootstrapModeSelector.class.getCanonicalName();
+        bootstrapModeSelectorClass = RecordDataBootstrapModeSelector.class.getCanonicalName();
         bootstrapCommitInstantTs = HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS;
         checkNumRawFiles = false;
         isBootstrapIndexCreated = false;
@@ -198,7 +198,7 @@ public class TestBootstrap extends HoodieClientTestBase {
         bootstrapInstants = Arrays.asList(bootstrapCommitInstantTs);
         break;
       case METADATA_BOOTSTRAP_MODE:
-        bootstrapModeSelectorClass = MetadataOnlyBootstrapModeSelector.class.getCanonicalName();
+        bootstrapModeSelectorClass = RecordMetadataOnlyBootstrapModeSelector.class.getCanonicalName();
         bootstrapCommitInstantTs = HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS;
         checkNumRawFiles = true;
         isBootstrapIndexCreated = true;
@@ -236,7 +236,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     // Rollback Bootstrap
     FSUtils.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), new HoodieInstant(State.COMPLETED,
         deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION, bootstrapCommitInstantTs));
-    client.rollBackPendingBootstrap();
+    client.rollBackInflightBootstrap();
     metaClient.reloadActiveTimeline();
     assertEquals(0, metaClient.getCommitsTimeline().countInstants());
     assertEquals(0L, FSUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), basePath,
@@ -503,9 +503,9 @@ public class TestBootstrap extends HoodieClientTestBase {
       partitions.stream().forEach(p -> {
         final BootstrapMode mode;
         if (currIdx == 0) {
-          mode = BootstrapMode.METADATA_ONLY_BOOTSTRAP;
+          mode = BootstrapMode.RECORD_METADATA_ONLY_BOOTSTRAP;
         } else {
-          mode = BootstrapMode.FULL_BOOTSTRAP;
+          mode = BootstrapMode.RECORD_DATA_BOOTSTRAP;
         }
         currIdx = (currIdx + 1) % 2;
         selections.add(Pair.of(mode, p.getKey()));

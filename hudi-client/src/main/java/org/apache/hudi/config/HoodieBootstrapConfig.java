@@ -19,7 +19,7 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.client.bootstrap.BootstrapMode;
-import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
+import org.apache.hudi.client.bootstrap.selector.RecordMetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPathTranslator;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 
@@ -50,7 +50,7 @@ public class HoodieBootstrapConfig extends DefaultHoodieConfig {
   public static final String BOOTSTRAP_MODE_SELECTOR_REGEX = "hoodie.bootstrap.mode.selector.regex";
   public static final String BOOTSTRAP_MODE_SELECTOR_REGEX_MODE = "hoodie.bootstrap.mode.selector.regex.mode";
   public static final String DEFAULT_BOOTSTRAP_MODE_SELECTOR_REGEX = ".*";
-  public static final String DEFAULT_BOOTSTRAP_MODE_SELECTOR_REGEX_MODE = BootstrapMode.METADATA_ONLY_BOOTSTRAP.name();
+  public static final String DEFAULT_BOOTSTRAP_MODE_SELECTOR_REGEX_MODE = BootstrapMode.RECORD_METADATA_ONLY_BOOTSTRAP.name();
 
   public HoodieBootstrapConfig(Properties props) {
     super(props);
@@ -123,7 +123,7 @@ public class HoodieBootstrapConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS),
           BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS, DEFAULT_BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS);
       setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_MODE_SELECTOR), BOOTSTRAP_MODE_SELECTOR,
-          MetadataOnlyBootstrapModeSelector.class.getCanonicalName());
+          RecordMetadataOnlyBootstrapModeSelector.class.getCanonicalName());
       setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_MODE_SELECTOR_REGEX), BOOTSTRAP_MODE_SELECTOR_REGEX,
           DEFAULT_BOOTSTRAP_MODE_SELECTOR_REGEX);
       setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_MODE_SELECTOR_REGEX_MODE),

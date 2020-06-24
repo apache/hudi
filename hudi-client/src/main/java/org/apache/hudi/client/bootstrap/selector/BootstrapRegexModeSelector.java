@@ -26,8 +26,13 @@ import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 public class BootstrapRegexModeSelector extends BootstrapModeSelector {
+
+  private static final long serialVersionUID = 1L;
+  private static final Logger LOG = LogManager.getLogger(BootstrapRegexModeSelector.class);
 
   private final Pattern pattern;
   private final BootstrapMode bootstrapModeOnMatch;
@@ -37,9 +42,9 @@ public class BootstrapRegexModeSelector extends BootstrapModeSelector {
     super(writeConfig);
     this.pattern = Pattern.compile(writeConfig.getBootstrapModeSelectorRegex());
     this.bootstrapModeOnMatch = writeConfig.getBootstrapModeForRegexMatch();
-    this.defaultMode = BootstrapMode.FULL_BOOTSTRAP.equals(bootstrapModeOnMatch)
-        ? BootstrapMode.METADATA_ONLY_BOOTSTRAP : BootstrapMode.FULL_BOOTSTRAP;
-    System.out.println("Default Mode :" + defaultMode + ", on Match Mode :" + bootstrapModeOnMatch);
+    this.defaultMode = BootstrapMode.RECORD_DATA_BOOTSTRAP.equals(bootstrapModeOnMatch)
+        ? BootstrapMode.RECORD_METADATA_ONLY_BOOTSTRAP : BootstrapMode.RECORD_DATA_BOOTSTRAP;
+    LOG.info("Default Mode :" + defaultMode + ", on Match Mode :" + bootstrapModeOnMatch);
   }
 
   @Override

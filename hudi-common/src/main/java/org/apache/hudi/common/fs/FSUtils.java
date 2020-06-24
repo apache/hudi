@@ -575,6 +575,14 @@ public class FSUtils {
             : new NoOpConsistencyGuard());
   }
 
+  /**
+   * Returns leaf folders with files under a path.
+   * @param fs  File System
+   * @param basePathStr Base Path to look for leaf folders
+   * @param filePathFilter  Filters to skip directories/paths
+   * @return list of partition paths with files under them.
+   * @throws IOException
+   */
   public static List<Pair<String, List<HoodieFileStatus>>> getAllLeafFoldersWithFiles(FileSystem fs, String basePathStr,
       PathFilter filePathFilter) throws IOException {
     final Path basePath = new Path(basePathStr);
@@ -603,5 +611,19 @@ public class FSUtils {
     int maxLevel = maxLevelOpt.orElse(-1);
     return maxLevel >= 0 ? levelToPartitions.get(maxLevel).stream()
         .map(d -> Pair.of(d, partitionToFiles.get(d))).collect(Collectors.toList()) : new ArrayList<>();
+  }
+
+  /**
+   * Helper to filter out paths under metadata folder when running fs.globStatus.
+   * @param fs  File System
+   * @param globPath Glob Path
+   * @return
+   * @throws IOException
+   */
+  public static List<FileStatus> getGlobStatusExcludingMetaFolder(FileSystem fs, Path globPath) throws IOException {
+    FileStatus[] statuses = fs.globStatus(globPath);
+    return Arrays.stream(statuses)
+        .filter(fileStatus -> !fileStatus.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME))
+        .collect(Collectors.toList());
   }
 }

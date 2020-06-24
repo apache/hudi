@@ -22,6 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -82,7 +83,7 @@ public class HoodieLogFileCommand implements CommandMarker {
       throws IOException {
 
     FileSystem fs = HoodieCLI.getTableMetaClient().getFs();
-    List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(logFilePathPattern)))
+    List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).stream()
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
     Map<String, List<Tuple3<HoodieLogBlockType, Tuple2<Map<HeaderMetadataType, String>, Map<HeaderMetadataType, String>>, Integer>>> commitCountAndMetadata =
         new HashMap<>();
@@ -175,7 +176,7 @@ public class HoodieLogFileCommand implements CommandMarker {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     FileSystem fs = client.getFs();
-    List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(logFilePathPattern)))
+    List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).stream()
         .map(status -> status.getPath().toString()).sorted(Comparator.reverseOrder())
         .collect(Collectors.toList());
 

@@ -52,24 +52,24 @@ public class TestBootstrapRegexModeSelector {
         .map(p -> Pair.<String, List<HoodieFileStatus>>of(p, new ArrayList<>())).collect(Collectors.toList());
     String regex = "2020/05/1[0-9]";
     BootstrapRegexModeSelector regexModeSelector = new BootstrapRegexModeSelector(getConfig(regex,
-        BootstrapMode.FULL_BOOTSTRAP));
+        BootstrapMode.RECORD_DATA_BOOTSTRAP));
 
     Map<BootstrapMode, List<String>> result = regexModeSelector.select(input);
-    assertTrue(result.get(BootstrapMode.METADATA_ONLY_BOOTSTRAP).contains("2020/05/01"));
-    assertTrue(result.get(BootstrapMode.METADATA_ONLY_BOOTSTRAP).contains("2020/05/02"));
-    assertTrue(result.get(BootstrapMode.FULL_BOOTSTRAP).contains("2020/05/10"));
-    assertTrue(result.get(BootstrapMode.FULL_BOOTSTRAP).contains("2020/05/11"));
-    assertEquals(2, result.get(BootstrapMode.METADATA_ONLY_BOOTSTRAP).size());
-    assertEquals(2, result.get(BootstrapMode.FULL_BOOTSTRAP).size());
+    assertTrue(result.get(BootstrapMode.RECORD_METADATA_ONLY_BOOTSTRAP).contains("2020/05/01"));
+    assertTrue(result.get(BootstrapMode.RECORD_METADATA_ONLY_BOOTSTRAP).contains("2020/05/02"));
+    assertTrue(result.get(BootstrapMode.RECORD_DATA_BOOTSTRAP).contains("2020/05/10"));
+    assertTrue(result.get(BootstrapMode.RECORD_DATA_BOOTSTRAP).contains("2020/05/11"));
+    assertEquals(2, result.get(BootstrapMode.RECORD_METADATA_ONLY_BOOTSTRAP).size());
+    assertEquals(2, result.get(BootstrapMode.RECORD_DATA_BOOTSTRAP).size());
 
     regexModeSelector = new BootstrapRegexModeSelector(getConfig(regex,
-        BootstrapMode.METADATA_ONLY_BOOTSTRAP));
+        BootstrapMode.RECORD_METADATA_ONLY_BOOTSTRAP));
     result = regexModeSelector.select(input);
-    assertTrue(result.get(BootstrapMode.FULL_BOOTSTRAP).contains("2020/05/01"));
-    assertTrue(result.get(BootstrapMode.FULL_BOOTSTRAP).contains("2020/05/02"));
-    assertTrue(result.get(BootstrapMode.METADATA_ONLY_BOOTSTRAP).contains("2020/05/10"));
-    assertTrue(result.get(BootstrapMode.METADATA_ONLY_BOOTSTRAP).contains("2020/05/11"));
-    assertEquals(2, result.get(BootstrapMode.METADATA_ONLY_BOOTSTRAP).size());
-    assertEquals(2, result.get(BootstrapMode.FULL_BOOTSTRAP).size());
+    assertTrue(result.get(BootstrapMode.RECORD_DATA_BOOTSTRAP).contains("2020/05/01"));
+    assertTrue(result.get(BootstrapMode.RECORD_DATA_BOOTSTRAP).contains("2020/05/02"));
+    assertTrue(result.get(BootstrapMode.RECORD_METADATA_ONLY_BOOTSTRAP).contains("2020/05/10"));
+    assertTrue(result.get(BootstrapMode.RECORD_METADATA_ONLY_BOOTSTRAP).contains("2020/05/11"));
+    assertEquals(2, result.get(BootstrapMode.RECORD_METADATA_ONLY_BOOTSTRAP).size());
+    assertEquals(2, result.get(BootstrapMode.RECORD_DATA_BOOTSTRAP).size());
   }
 }

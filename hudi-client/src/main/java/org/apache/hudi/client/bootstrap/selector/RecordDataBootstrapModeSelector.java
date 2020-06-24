@@ -21,9 +21,9 @@ package org.apache.hudi.client.bootstrap.selector;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-public class MetadataOnlyBootstrapModeSelector extends UniBootstrapModeSelector {
+public class RecordDataBootstrapModeSelector extends UniBootstrapModeSelector {
 
-  public MetadataOnlyBootstrapModeSelector(HoodieWriteConfig bootstrapConfig) {
-    super(bootstrapConfig, BootstrapMode.METADATA_ONLY_BOOTSTRAP);
+  public RecordDataBootstrapModeSelector(HoodieWriteConfig bootstrapConfig) {
+    super(bootstrapConfig, BootstrapMode.RECORD_DATA_BOOTSTRAP);
   }
 }

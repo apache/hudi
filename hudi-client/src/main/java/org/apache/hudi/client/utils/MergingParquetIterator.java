@@ -21,6 +21,7 @@ package org.apache.hudi.client.utils;
 import java.util.Iterator;
 import java.util.function.Function;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 public class MergingParquetIterator<T extends GenericRecord> implements Iterator<T> {
@@ -38,7 +39,10 @@ public class MergingParquetIterator<T extends GenericRecord> implements Iterator
 
   @Override
   public boolean hasNext() {
-    return leftFileReader.hasNext();
+    boolean leftReaderHasNext = leftFileReader.hasNext();
+    boolean rightReaderHasNext = rightFileReader.hasNext();
+    ValidationUtils.checkArgument(leftReaderHasNext == rightReaderHasNext);
+    return leftReaderHasNext;
   }
 
   @Override
