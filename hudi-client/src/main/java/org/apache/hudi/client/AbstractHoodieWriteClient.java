@@ -154,7 +154,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, commitTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
 
-      postCommit(metadata, commitTime, extraMetadata);
+      postCommit(table, metadata, commitTime, extraMetadata);
 
       if (writeContext != null) {
         long durationInMs = metrics.getDurationInMs(writeContext.stop());
@@ -175,12 +175,13 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
 
   /**
    * Post Commit Hook. Derived classes use this method to perform post-commit processing
+   * @param table         Hoodie Table
    * @param metadata      Commit Metadata corresponding to committed instant
    * @param instantTime   Instant Time
    * @param extraMetadata Additional Metadata passed by user
    * @throws IOException in case of error
    */
-  protected abstract void postCommit(HoodieCommitMetadata metadata, String instantTime,
+  protected abstract void postCommit(HoodieTable<T> table, HoodieCommitMetadata metadata, String instantTime,
       Option<Map<String, String>> extraMetadata) throws IOException;
 
   /**

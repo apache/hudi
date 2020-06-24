@@ -493,11 +493,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   @Override
-  protected void postCommit(HoodieCommitMetadata metadata, String instantTime,
+  protected void postCommit(HoodieTable<T> table, HoodieCommitMetadata metadata, String instantTime,
                             Option<Map<String, String>> extraMetadata) throws IOException {
 
     // Do an inline compaction if enabled
     if (config.isInlineCompaction()) {
+      runEarlierInflightCompactions(table);
       metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
       forceCompact(extraMetadata);
     } else {
@@ -1145,6 +1146,18 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
           "Failed to commit " + metaClient.getBasePath() + " at time " + compactionCommitTime, e);
     }
     return metadata;
+  }
+
+  private void runEarlierInflightCompactions(HoodieTable<T> table) {
+    table.getActiveTimeline().getCommitsAndCompactionTimeline().filterPendingCompactionTimeline().getInstants()
+        .forEach(instant -> {
+          LOG.info("Running previously failed inflight compaction at instant " + instant);
+          try {
+            compact(instant.getTimestamp(), true);
+          } catch (IOException ioe) {
+            throw new HoodieIOException(ioe.getMessage(), ioe);
+          }
+        });
   }
 
   /**
