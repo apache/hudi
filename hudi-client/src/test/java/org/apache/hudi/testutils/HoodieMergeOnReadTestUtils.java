@@ -19,18 +19,19 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.hadoop.HoodieParquetInputFormat;
-import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
-
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
@@ -45,20 +46,19 @@ import java.util.stream.Collectors;
  * Utility methods to aid in testing MergeOnRead (workaround for HoodieReadClient for MOR).
  */
 public class HoodieMergeOnReadTestUtils {
-  public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths, String basePath) {
-    return getRecordsUsingInputFormat(inputPaths, basePath, new Configuration());
+  public static List<GenericRecord> getRecordsUsingInputFormat(Configuration conf, List<String> inputPaths,
+                                                               String basePath) {
+    return getRecordsUsingInputFormat(conf, inputPaths, basePath, new JobConf(conf), true);
   }
 
-  public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths, String basePath,
-      Configuration conf) {
-    JobConf jobConf = new JobConf(conf);
-    return getRecordsUsingInputFormat(inputPaths, basePath, jobConf, new HoodieParquetRealtimeInputFormat());
-  }
-
-  public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths,
+  public static List<GenericRecord> getRecordsUsingInputFormat(Configuration conf, List<String> inputPaths,
                                                                String basePath,
                                                                JobConf jobConf,
-                                                               HoodieParquetInputFormat inputFormat) {
+                                                               boolean realtime) {
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf, basePath);
+    FileInputFormat inputFormat = HoodieInputFormatUtils.getInputFormat(metaClient.getTableConfig().getBaseFileFormat(),
+        realtime, jobConf);
+
     Schema schema = HoodieAvroUtils.addMetadataFields(
         new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
     setPropsForInputFormat(inputFormat, jobConf, schema, basePath);
@@ -93,8 +93,8 @@ public class HoodieMergeOnReadTestUtils {
     }).orElse(new ArrayList<GenericRecord>());
   }
 
-  private static void setPropsForInputFormat(HoodieParquetInputFormat inputFormat, JobConf jobConf,
-      Schema schema, String basePath) {
+  private static void setPropsForInputFormat(FileInputFormat inputFormat, JobConf jobConf, Schema schema,
+                                             String basePath) {
     List<Schema.Field> fields = schema.getFields();
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
     String postions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
@@ -116,7 +116,10 @@ public class HoodieMergeOnReadTestUtils {
     conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
     conf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "datestr");
     conf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, hiveColumnTypes);
-    inputFormat.setConf(conf);
+
+    // Hoodie Input formats are also configurable
+    Configurable configurable = (Configurable)inputFormat;
+    configurable.setConf(conf);
     jobConf.addResource(conf);
   }
 

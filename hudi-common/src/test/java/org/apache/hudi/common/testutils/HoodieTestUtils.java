@@ -28,6 +28,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -120,21 +121,41 @@ public class HoodieTestUtils {
     return init(getDefaultHadoopConf(), basePath, tableType);
   }
 
+  public static HoodieTableMetaClient init(String basePath, HoodieFileFormat baseFileFormat) throws IOException {
+    return init(getDefaultHadoopConf(), basePath, HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+  }
+
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath) throws IOException {
     return init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType)
       throws IOException {
-    return init(hadoopConf, basePath, tableType, RAW_TRIPS_TEST_NAME);
+    return init(hadoopConf, basePath, tableType, new Properties());
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-      String tableName) throws IOException {
+                                           String tableName)
+      throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
-    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
-    properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
+    return init(hadoopConf, basePath, tableType, properties);
+  }
+
+  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                           HoodieFileFormat baseFileFormat)
+      throws IOException {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME, baseFileFormat.toString());
+    return init(hadoopConf, basePath, tableType, properties);
+  }
+
+  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                           Properties properties)
+      throws IOException {
+    properties.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, RAW_TRIPS_TEST_NAME);
+    properties.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
+    properties.putIfAbsent(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 
@@ -442,12 +463,31 @@ public class HoodieTestUtils {
     });
   }
 
+  // TODO: should be removed
   public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath) throws IOException {
+    return listAllDataFilesInPath(fs, basePath, ".parquet");
+  }
+
+  public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath, String datafileExtension)
+      throws IOException {
     RemoteIterator<LocatedFileStatus> itr = fs.listFiles(new Path(basePath), true);
     List<FileStatus> returns = new ArrayList<>();
     while (itr.hasNext()) {
       LocatedFileStatus status = itr.next();
-      if (status.getPath().getName().contains(".parquet")) {
+      if (status.getPath().getName().contains(datafileExtension)) {
+        returns.add(status);
+      }
+    }
+    return returns.toArray(new FileStatus[returns.size()]);
+  }
+
+  public static FileStatus[] listAllLogFilesInPath(FileSystem fs, String basePath, String logfileExtension)
+      throws IOException {
+    RemoteIterator<LocatedFileStatus> itr = fs.listFiles(new Path(basePath), true);
+    List<FileStatus> returns = new ArrayList<>();
+    while (itr.hasNext()) {
+      LocatedFileStatus status = itr.next();
+      if (status.getPath().getName().contains(logfileExtension)) {
         returns.add(status);
       }
     }

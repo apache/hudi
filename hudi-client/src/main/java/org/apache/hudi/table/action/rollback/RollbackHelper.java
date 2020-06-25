@@ -71,8 +71,9 @@ public class RollbackHelper implements Serializable {
    */
   public List<HoodieRollbackStat> performRollback(JavaSparkContext jsc, HoodieInstant instantToRollback, List<RollbackRequest> rollbackRequests) {
 
+    String basefileExtension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
     SerializablePathFilter filter = (path) -> {
-      if (path.toString().contains(".parquet")) {
+      if (path.toString().contains(basefileExtension)) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
         return instantToRollback.getTimestamp().equals(fileCommitTime);
       } else if (path.toString().contains(".log")) {
@@ -184,8 +185,9 @@ public class RollbackHelper implements Serializable {
       Map<FileStatus, Boolean> results, String commit, String partitionPath) throws IOException {
     LOG.info("Cleaning path " + partitionPath);
     FileSystem fs = metaClient.getFs();
+    String basefileExtension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
     PathFilter filter = (path) -> {
-      if (path.toString().contains(".parquet")) {
+      if (path.toString().contains(basefileExtension)) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
         return commit.equals(fileCommitTime);
       }

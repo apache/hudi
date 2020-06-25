@@ -29,6 +29,7 @@ import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -181,15 +182,20 @@ public class HoodieClientTestUtils {
   /**
    * Obtain all new data written into the Hoodie table since the given timestamp.
    */
-  public static Dataset<Row> readSince(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
-                                       String lastCommitTime) {
+  public static Dataset<Row> readSince(String basePath, SQLContext sqlContext,
+                                       HoodieTimeline commitTimeline, String lastCommitTime) {
     List<HoodieInstant> commitsToReturn =
         commitTimeline.findInstantsAfter(lastCommitTime, Integer.MAX_VALUE).getInstants().collect(Collectors.toList());
     try {
       // Go over the commit metadata, and obtain the new files that need to be read.
       HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
-      return sqlContext.read().parquet(fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]))
-          .filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime));
+      String[] paths = fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]);
+      Dataset<Row> rows = null;
+      if (paths[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+        rows = sqlContext.read().parquet(paths);
+      }
+
+      return rows.filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime));
     } catch (IOException e) {
       throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTime, e);
     }

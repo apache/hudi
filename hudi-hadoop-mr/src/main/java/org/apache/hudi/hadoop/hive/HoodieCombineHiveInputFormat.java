@@ -24,7 +24,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieCombineRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
-
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -952,7 +952,11 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         ValidationUtils.checkArgument(split instanceof HoodieCombineRealtimeFileSplit, "Only "
             + HoodieCombineRealtimeFileSplit.class.getName() + " allowed, found " + split.getClass().getName());
         for (InputSplit inputSplit : ((HoodieCombineRealtimeFileSplit) split).getRealtimeFileSplits()) {
-          recordReaders.add(new HoodieParquetRealtimeInputFormat().getRecordReader(inputSplit, job, reporter));
+          if (split.getPaths().length == 0) {
+            continue;
+          }
+          FileInputFormat inputFormat = HoodieInputFormatUtils.getInputFormat(split.getPath(0).toString(), true, job);
+          recordReaders.add(inputFormat.getRecordReader(inputSplit, job, reporter));
         }
         return new HoodieCombineRealtimeRecordReader(job, split, recordReaders);
       }

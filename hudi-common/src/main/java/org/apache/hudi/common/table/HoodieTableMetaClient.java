@@ -128,7 +128,8 @@ public class HoodieTableMetaClient implements Serializable {
     }
     this.timelineLayoutVersion = layoutVersion.orElseGet(() -> tableConfig.getTimelineLayoutVersion().get());
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
-    LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
+    LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ", baseFileFormat="
+        + this.tableConfig.getBaseFileFormat() + ") from " + basePath);
     if (loadActiveTimelineOnLoad) {
       LOG.info("Loading Active commit timeline for " + basePath);
       getActiveTimeline();
@@ -299,12 +300,22 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to initialize a table, with given basePath, tableType, name, archiveFolder.
+   * Helper method to initialize a table, with given basePath, tableType, name, archiveFolder, payloadClass.
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, String tableType,
       String tableName, String archiveLogFolder, String payloadClassName) throws IOException {
     return initTableType(hadoopConf, basePath, HoodieTableType.valueOf(tableType), tableName,
-        archiveLogFolder, payloadClassName, null);
+        archiveLogFolder, payloadClassName, null, null);
+  }
+
+  /**
+   * Helper method to initialize a table, with given basePath, tableType, name, archiveFolder, payloadClass and
+   * base file format.
+   */
+  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, String tableType,
+      String tableName, String archiveLogFolder, String payloadClassName, String baseFileFormat) throws IOException {
+    return initTableType(hadoopConf, basePath, HoodieTableType.valueOf(tableType), tableName,
+        archiveLogFolder, payloadClassName, null, baseFileFormat);
   }
 
   /**
@@ -312,12 +323,20 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
       HoodieTableType tableType, String tableName, String payloadClassName) throws IOException {
-    return initTableType(hadoopConf, basePath, tableType, tableName, null, payloadClassName, null);
+    return initTableType(hadoopConf, basePath, tableType, tableName, null, payloadClassName, null, null);
+  }
+
+  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
+                                                    HoodieTableType tableType, String tableName,
+                                                    String archiveLogFolder, String payloadClassName,
+                                                    Integer timelineLayoutVersion) throws IOException {
+    return initTableType(hadoopConf, basePath, tableType, tableName, archiveLogFolder, payloadClassName,
+        timelineLayoutVersion, null);
   }
 
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
       HoodieTableType tableType, String tableName, String archiveLogFolder, String payloadClassName,
-      Integer timelineLayoutVersion) throws IOException {
+      Integer timelineLayoutVersion, String baseFileFormat) throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
@@ -331,6 +350,10 @@ public class HoodieTableMetaClient implements Serializable {
 
     if (null != timelineLayoutVersion) {
       properties.put(HoodieTableConfig.HOODIE_TIMELINE_LAYOUT_VERSION, String.valueOf(timelineLayoutVersion));
+    }
+
+    if (null != baseFileFormat) {
+      properties.setProperty(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME, baseFileFormat.toUpperCase());
     }
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }

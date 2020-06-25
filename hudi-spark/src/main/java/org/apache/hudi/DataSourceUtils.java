@@ -270,7 +270,7 @@ public class DataSourceUtils {
     return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);
   }
 
-  public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath) {
+  public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath, String baseFileFormat) {
     checkRequiredProperties(props, Collections.singletonList(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY()));
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
     hiveSyncConfig.basePath = basePath;
@@ -280,6 +280,7 @@ public class DataSourceUtils {
     hiveSyncConfig.databaseName = props.getString(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(),
         DataSourceWriteOptions.DEFAULT_HIVE_DATABASE_OPT_VAL());
     hiveSyncConfig.tableName = props.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY());
+    hiveSyncConfig.baseFileFormat = baseFileFormat;
     hiveSyncConfig.hiveUser =
         props.getString(DataSourceWriteOptions.HIVE_USER_OPT_KEY(), DataSourceWriteOptions.DEFAULT_HIVE_USER_OPT_VAL());
     hiveSyncConfig.hivePass =

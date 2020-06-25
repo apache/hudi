@@ -32,8 +32,6 @@ import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -50,7 +48,6 @@ public abstract class AbstractRealtimeRecordReader {
 
   protected final HoodieRealtimeFileSplit split;
   protected final JobConf jobConf;
-  private final MessageType baseFileSchema;
   protected final boolean usesCustomPayload;
   // Schema handles
   private Schema readerSchema;
@@ -66,7 +63,6 @@ public abstract class AbstractRealtimeRecordReader {
     try {
       this.usesCustomPayload = usesCustomPayload();
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
-      baseFileSchema = HoodieRealtimeRecordReaderUtils.readSchema(jobConf, split.getPath());
       init();
     } catch (IOException e) {
       throw new HoodieIOException("Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
@@ -88,7 +84,7 @@ public abstract class AbstractRealtimeRecordReader {
     Schema schemaFromLogFile =
         LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaLogPaths(), jobConf);
     if (schemaFromLogFile == null) {
-      writerSchema = new AvroSchemaConverter().convert(baseFileSchema);
+      writerSchema = HoodieRealtimeRecordReaderUtils.readSchema(jobConf, split.getPath());
       LOG.debug("Writer Schema From Parquet => " + writerSchema.getFields());
     } else {
       writerSchema = schemaFromLogFile;

@@ -22,7 +22,8 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
@@ -40,8 +41,6 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
-import org.apache.parquet.hadoop.ParquetFileReader;
-import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -57,14 +56,14 @@ import java.util.stream.Collectors;
 public class HoodieRealtimeRecordReaderUtils {
 
   /**
-   * Reads the schema from the parquet file. This is different from ParquetUtils as it uses the twitter parquet to
-   * support hive 1.1.0
+   * Reads the schema from the base file.
    */
-  public static MessageType readSchema(Configuration conf, Path parquetFilePath) {
+  public static Schema readSchema(Configuration conf, Path filePath) {
     try {
-      return ParquetFileReader.readFooter(conf, parquetFilePath).getFileMetaData().getSchema();
+      HoodieFileReader storageReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
+      return storageReader.getSchema();
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath, e);
+      throw new HoodieIOException("Failed to read schema from " + filePath, e);
     }
   }
 

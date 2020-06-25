@@ -107,15 +107,21 @@ public class FSUtils {
     return String.format("%d-%d-%d", taskPartitionId, stageId, taskAttemptId);
   }
 
+  // TODO: this should be removed
   public static String makeDataFileName(String instantTime, String writeToken, String fileId) {
-    return String.format("%s_%s_%s.parquet", fileId, writeToken, instantTime);
+    return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, HoodieFileFormat.PARQUET.getFileExtension());
+  }
+
+  public static String makeDataFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
+    return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, fileExtension);
   }
 
   public static String makeMarkerFile(String instantTime, String writeToken, String fileId) {
     return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, HoodieTableMetaClient.MARKER_EXTN);
   }
 
-  public static String translateMarkerToDataPath(String basePath, String markerPath, String instantTs) {
+  public static String translateMarkerToDataPath(String basePath, String markerPath, String instantTs,
+                                                 String baseFileExtension) {
     ValidationUtils.checkArgument(markerPath.endsWith(HoodieTableMetaClient.MARKER_EXTN));
     String markerRootPath = Path.getPathWithoutSchemeAndAuthority(
         new Path(String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTs))).toString();
@@ -123,8 +129,7 @@ public class FSUtils {
     ValidationUtils.checkArgument(begin >= 0,
         "Not in marker dir. Marker Path=" + markerPath + ", Expected Marker Root=" + markerRootPath);
     String rPath = markerPath.substring(begin + markerRootPath.length() + 1);
-    return String.format("%s/%s%s", basePath, rPath.replace(HoodieTableMetaClient.MARKER_EXTN, ""),
-        HoodieFileFormat.PARQUET.getFileExtension());
+    return String.format("%s/%s%s", basePath, rPath.replace(HoodieTableMetaClient.MARKER_EXTN, ""), baseFileExtension);
   }
 
   public static String maskWithoutFileId(String instantTime, int taskPartitionId) {
@@ -195,12 +200,12 @@ public class FSUtils {
   }
 
   public static List<String> getAllDataFilesForMarkers(FileSystem fs, String basePath, String instantTs,
-      String markerDir) throws IOException {
+      String markerDir, String baseFileExtension) throws IOException {
     List<String> dataFiles = new LinkedList<>();
     processFiles(fs, markerDir, (status) -> {
       String pathStr = status.getPath().toString();
       if (pathStr.endsWith(HoodieTableMetaClient.MARKER_EXTN)) {
-        dataFiles.add(FSUtils.translateMarkerToDataPath(basePath, pathStr, instantTs));
+        dataFiles.add(FSUtils.translateMarkerToDataPath(basePath, pathStr, instantTs, baseFileExtension));
       }
       return true;
     }, false);
@@ -545,4 +550,13 @@ public class FSUtils {
         || inputStream.getWrappedStream().getClass().getCanonicalName()
             .equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream");
   }
+
+  public static Configuration registerFileSystem(Path file, Configuration conf) {
+    Configuration returnConf = new Configuration(conf);
+    String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
+    returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
+        HoodieWrapperFileSystem.class.getName());
+    return returnConf;
+  }
+
 }
