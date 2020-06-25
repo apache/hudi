@@ -24,8 +24,9 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieSparkSqlWriter.checkEncWriteStatus
 import org.apache.hudi.client.{EncodableWriteStatus, HoodieDatasetWriteClient, HoodieWriteClient, WriteStatus}
-import org.apache.hudi.common.config.{SerializableConfiguration, TypedProperties}
+import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -36,7 +37,6 @@ import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.{DataFrame, Dataset, SQLContext, SaveMode}
 
 import scala.collection.JavaConversions._
@@ -84,25 +84,23 @@ private[hudi] object HoodieSparkSqlWriter {
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     var exists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
 
-    // register classes & schemas
-    val structName = s"${tblName.get}_record"
-    val nameSpace = s"hoodie.${tblName.get}"
-    sparkContext.getConf.registerKryoClasses(
-      Array(classOf[org.apache.avro.generic.GenericData],
-        classOf[org.apache.avro.Schema]))
-    val schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
-    sparkContext.getConf.registerAvroSchemas(schema)
-    log.info(s"Registered avro schema : ${schema.toString(true)}")
-    val parallelism = parameters("hoodie.bulkinsert.shuffle.parallelism").toInt
-    val serConfig: SerializableConfiguration = new SerializableConfiguration(sparkContext.hadoopConfiguration)
-    if (operation.equalsIgnoreCase("bulk_insert_direct_parquet_write_support")) {
-      val recordKeyProp = parameters(RECORDKEY_FIELD_OPT_KEY)
-      val partitionPathProp = parameters(PARTITIONPATH_FIELD_OPT_KEY)
-      val writtenRows: Dataset[java.lang.Boolean] = ParquetWriteHelper.writeToParquet(df, basePath.toString, RowEncoder(df.schema), serConfig,
-        parallelism, "SNAPPY", partitionPathProp, recordKeyProp)
-      writtenRows.collect()
-      (true, org.apache.hudi.common.util.Option.of("Completed"))
-    } else if (operation.equalsIgnoreCase(BULK_INSERT_DATASET_OPERATION_OPT_VAL)) {
+    if (exists && mode == SaveMode.Append) {
+      val existingTableName = new HoodieTableMetaClient(sparkContext.hadoopConfiguration, path.get).getTableConfig.getTableName
+      if (!existingTableName.equals(tblName.get)) {
+        throw new HoodieException(s"hoodie table with name $existingTableName already exist at $basePath")
+      }
+    }
+
+    //if (operation.equalsIgnoreCase("bulk_insert_direct_parquet_write_support")) {
+    //  val recordKeyProp = parameters(RECORDKEY_FIELD_OPT_KEY)
+    //  val partitionPathProp = parameters(PARTITIONPATH_FIELD_OPT_KEY)
+    //  val writtenRows: Dataset[java.lang.Boolean] = ParquetWriteHelper.writeToParquet(df, basePath.toString, RowEncoder(df.schema), serConfig,
+    //    parallelism, "SNAPPY", partitionPathProp, recordKeyProp)
+    //  writtenRows.collect()
+    //  (true, org.apache.hudi.common.util.Option.of("Completed"))
+    //} else
+    val (writeSuccessful : Boolean, commitTime: common.util.Option[String]) =
+    if (operation.equalsIgnoreCase(BULK_INSERT_DATASET_OPERATION_OPT_VAL)) {
       // register classes & schemas
       val structName = s"${tblName.get}_record"
       val nameSpace = s"hoodie.${tblName.get}"
@@ -144,7 +142,7 @@ private[hudi] object HoodieSparkSqlWriter {
       val writeSuccessful = checkEncWriteStatus(writeStatuses, parameters, client, instantTime, basePath, operation, jsc)
       (writeSuccessful, common.util.Option.ofNullable(instantTime))
     } else {
-      val (writeStatuses: JavaRDD[WriteStatus], writeClient: HoodieWriteClient[HoodieRecordPayload[Nothing]]) =
+      val writeSuccessful: Boolean =
         if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
           // register classes & schemas
           val structName = s"${tblName.get}_record"
@@ -158,11 +156,10 @@ private[hudi] object HoodieSparkSqlWriter {
 
           // Convert to RDD[HoodieRecord]
           val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
-
           val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
           val hoodieAllIncomingRecords = genericRecords.map(gr => {
-            val orderingVal = DataSourceUtils.getNestedFieldValAsString(
-              gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false).asInstanceOf[Comparable[_]]
+            val orderingVal = DataSourceUtils.getNestedFieldVal(gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false)
+              .asInstanceOf[Comparable[_]]
             DataSourceUtils.createHoodieRecord(gr,
               orderingVal, keyGenerator.getKey(gr), parameters(PAYLOAD_CLASS_OPT_KEY))
           }).toJavaRDD()
@@ -205,7 +202,9 @@ private[hudi] object HoodieSparkSqlWriter {
           }
           client.startCommitWithTime(instantTime)
           val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation)
-          (writeStatuses, client)
+          // Check for errors and commit the write.
+          val writeSuccessful = checkWriteStatus(writeStatuses, parameters, client, instantTime, basePath, operation, jsc)
+          writeSuccessful
         } else {
 
           // Handle save modes
@@ -237,21 +236,21 @@ private[hudi] object HoodieSparkSqlWriter {
           // Issue deletes
           client.startCommitWithTime(instantTime)
           val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, instantTime)
-          (writeStatuses, client)
+          // Check for errors and commit the write.
+          val writeSuccessful = checkWriteStatus(writeStatuses, parameters, client, instantTime, basePath, operation, jsc)
+          writeSuccessful
         }
-
-      // Check for errors and commit the write.
-      val writeSuccessful = checkWriteStatus(writeStatuses, parameters, writeClient, instantTime, basePath, operation, jsc)
       (writeSuccessful, common.util.Option.ofNullable(instantTime))
     }
+    (writeSuccessful, commitTime)
   }
 
   /**
-   * Add default options for unspecified write options keys.
-   *
-   * @param parameters
-   * @return
-   */
+    * Add default options for unspecified write options keys.
+    *
+    * @param parameters
+    * @return
+    */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
     Map(OPERATION_OPT_KEY -> DEFAULT_OPERATION_OPT_VAL,
       TABLE_TYPE_OPT_KEY -> DEFAULT_TABLE_TYPE_OPT_VAL,

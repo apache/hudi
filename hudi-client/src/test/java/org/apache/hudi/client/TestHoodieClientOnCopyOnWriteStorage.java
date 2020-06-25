@@ -55,8 +55,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Test;
 
 import java.io.FileInputStream;
@@ -129,14 +127,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test Auto Commit behavior for HoodieWriteClient bulk-insert API.
-   */
-  @Test
-  public void testAutoCommitOnBulkInsertDataset() throws Exception {
-    testAutoCommitDataset(HoodieDatasetWriteClient::bulkInsertDataset, false);
-  }
-
-  /**
    * Test Auto Commit behavior for HoodieWriteClient bulk-insert prepped API.
    */
   @Test
@@ -166,32 +156,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
       assertFalse(HoodieTestUtils.doesCommitExist(basePath, newCommitTime),
           "If Autocommit is false, then commit should not be made automatically");
       assertTrue(client.commit(newCommitTime, result), "Commit should succeed");
-      assertTrue(HoodieTestUtils.doesCommitExist(basePath, newCommitTime),
-          "After explicit commit, commit file should be created");
-    }
-  }
-
-  /**
-   * Test auto-commit by applying write function.
-   *
-   * @param writeFn One of HoodieWriteClient Write API
-   * @throws Exception in case of failure
-   */
-  private void testAutoCommitDataset(Function3<Dataset<EncodableWriteStatus>, HoodieDatasetWriteClient, Dataset<Row>, String> writeFn,
-      boolean isPrepped) throws Exception {
-    // Set autoCommit false
-    HoodieWriteConfig cfg = getConfigBuilder().build();
-    try (HoodieDatasetWriteClient client = getHoodieDatasetWriteClient(cfg);) {
-
-      String prevCommitTime = "000";
-      String newCommitTime = "001";
-      int numRecords = 10;
-      Dataset<EncodableWriteStatus> result = insertFirstBatchDataset(cfg, client, newCommitTime, prevCommitTime, numRecords, writeFn,
-          isPrepped, true, numRecords);
-
-      assertFalse(HoodieTestUtils.doesCommitExist(basePath, newCommitTime),
-          "If Autocommit is false, then commit should not be made automatically");
-      assertTrue(client.commitDataset(newCommitTime, result), "Commit should succeed");
       assertTrue(HoodieTestUtils.doesCommitExist(basePath, newCommitTime),
           "After explicit commit, commit file should be created");
     }
