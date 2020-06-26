@@ -25,7 +25,7 @@ import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
 import org.apache.hudi.client.bootstrap.BootstrapSourceSchemaProvider;
 import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
-import org.apache.hudi.client.bootstrap.FullBootstrapInputProvider;
+import org.apache.hudi.client.bootstrap.RecordDataBootstrapInputProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.MetadataBootstrapPartitionPathTranslator;
 import org.apache.hudi.client.utils.ParquetReaderIterator;
@@ -206,8 +206,8 @@ public class BootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
     }
     TypedProperties properties = new TypedProperties();
     properties.putAll(config.getProps());
-    FullBootstrapInputProvider inputProvider =
-        (FullBootstrapInputProvider) ReflectionUtils.loadClass(config.getFullBootstrapInputProvider(),
+    RecordDataBootstrapInputProvider inputProvider =
+        (RecordDataBootstrapInputProvider) ReflectionUtils.loadClass(config.getFullBootstrapInputProvider(),
             properties, jsc);
     JavaRDD<HoodieRecord> inputRecordsRDD =
         inputProvider.generateInputRecordRDD("bootstrap_source", config.getBootstrapSourceBasePath(),

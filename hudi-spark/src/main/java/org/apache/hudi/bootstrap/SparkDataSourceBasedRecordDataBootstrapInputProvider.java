@@ -22,7 +22,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
-import org.apache.hudi.client.bootstrap.FullBootstrapInputProvider;
+import org.apache.hudi.client.bootstrap.RecordDataBootstrapInputProvider;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -43,11 +43,11 @@ import java.util.List;
 /**
  * Spark Data frame based bootstrap input provider.
  */
-public class SparkDataSourceBasedFullBootstrapInputProvider extends FullBootstrapInputProvider {
+public class SparkDataSourceBasedRecordDataBootstrapInputProvider extends RecordDataBootstrapInputProvider {
 
   private final transient SparkSession sparkSession;
 
-  public SparkDataSourceBasedFullBootstrapInputProvider(TypedProperties props,
+  public SparkDataSourceBasedRecordDataBootstrapInputProvider(TypedProperties props,
       JavaSparkContext jsc) {
     super(props, jsc);
     this.sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();

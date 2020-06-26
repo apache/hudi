@@ -34,14 +34,14 @@ import java.util.List;
 /**
  * Creates RDD of Hoodie Records given a list of partitions.
  */
-public abstract class FullBootstrapInputProvider implements Serializable {
+public abstract class RecordDataBootstrapInputProvider implements Serializable {
 
-  protected static final Logger LOG = LogManager.getLogger(FullBootstrapInputProvider.class);
+  protected static final Logger LOG = LogManager.getLogger(RecordDataBootstrapInputProvider.class);
 
   protected final TypedProperties props;
   protected final transient JavaSparkContext jsc;
 
-  public FullBootstrapInputProvider(TypedProperties props, JavaSparkContext jsc) {
+  public RecordDataBootstrapInputProvider(TypedProperties props, JavaSparkContext jsc) {
     this.props = props;
     this.jsc = jsc;
   }

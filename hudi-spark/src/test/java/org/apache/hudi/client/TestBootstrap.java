@@ -21,7 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
-import org.apache.hudi.client.bootstrap.FullBootstrapInputProvider;
+import org.apache.hudi.client.bootstrap.RecordDataBootstrapInputProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.RecordDataBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.selector.RecordMetadataOnlyBootstrapModeSelector;
@@ -440,7 +440,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     assertEquals(totalRecords, seenKeys.size());
   }
 
-  public static class FullTestBootstrapInputProvider extends FullBootstrapInputProvider {
+  public static class FullTestBootstrapInputProvider extends RecordDataBootstrapInputProvider {
 
     public FullTestBootstrapInputProvider(TypedProperties props, JavaSparkContext jsc) {
       super(props, jsc);
