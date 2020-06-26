@@ -130,7 +130,8 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).withGlobalSimpleIndexUpdatePartitionPath(true)
+            .withBloomIndexUpdatePartitionPath(true).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());

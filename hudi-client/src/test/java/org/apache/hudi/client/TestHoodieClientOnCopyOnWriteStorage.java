@@ -56,6 +56,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Test;
 
 import java.io.FileInputStream;
@@ -73,6 +75,9 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
+import static org.apache.hudi.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+import static org.apache.hudi.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+import static org.apache.hudi.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.apache.hudi.testutils.HoodieTestDataGenerator.NULL_SCHEMA;
 import static org.apache.hudi.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -400,56 +405,125 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test update of a record to different partition with Global Index.
+   * Test Upserts to diff partition path with regular global index updates records to new partition paths.
    */
   @Test
-  public void testUpsertToDiffPartitionGlobalIndex() throws Exception {
-    HoodieWriteClient client = getHoodieWriteClient(getConfig(IndexType.GLOBAL_BLOOM), false);
-    /**
-     * Write 1 (inserts and deletes) Write actual 200 insert records and ignore 100 delete records
-     */
-    String newCommitTime = "001";
-    List<HoodieRecord> inserts1 = dataGen.generateInserts(newCommitTime, 100);
+  public void testUpsertsUpdatePartitionPathRegularGlobalBloom() throws Exception {
+    testUpsertsUpdatePartitionPathGlobalBloom(getConfig(IndexType.GLOBAL_BLOOM), HoodieWriteClient::upsert);
+  }
 
-    // Write 1 (only inserts)
-    client.startCommitWithTime(newCommitTime);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(inserts1, 1);
+  /**
+   * Test Upserts to diff partition path with simple global index updates records to new partition paths.
+   */
+  @Test
+  public void testUpsertsUpdatePartitionPathSimpleGlobalBloom() throws Exception {
+    testUpsertsUpdatePartitionPathGlobalBloom(getConfig(IndexType.GLOBAL_SIMPLE), HoodieWriteClient::upsert);
+  }
 
-    JavaRDD<WriteStatus> result = client.insert(writeRecords, newCommitTime);
-    List<WriteStatus> statuses = result.collect();
-    assertNoWriteErrors(statuses);
+  private void testUpsertsUpdatePartitionPathGlobalBloom(HoodieWriteConfig config,
+      Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn)
+      throws Exception {
+    try {
+      // Force using older timeline layout
+      HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
+          .withProps(config.getProps())
+          .withTimelineLayoutVersion(
+              VERSION_0).build();
+      HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
+          metaClient.getTableType(),
+          metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
+          metaClient.getTableConfig().getPayloadClass(), VERSION_0);
+      HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
-    // check the partition metadata is written out
-    assertPartitionMetadataForRecords(inserts1, fs);
-    String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
-    for (int i = 0; i < fullPartitionPaths.length; i++) {
-      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+      // Write 1 (only inserts)
+      String newCommitTime = "001";
+      int numRecords = 10;
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
+      List<Pair<String, String>> expectedPartitionPathRecKeyPairs = new ArrayList<>();
+      for (HoodieRecord rec : records) {
+        expectedPartitionPathRecKeyPairs.add(Pair.of(rec.getPartitionPath(), rec.getRecordKey()));
+      }
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      JavaRDD<WriteStatus> result = writeFn.apply(client, writeRecords, newCommitTime);
+      List<WriteStatus> statuses = result.collect();
+
+      // Check the entire dataset has all records still
+      String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+      for (int i = 0; i < fullPartitionPaths.length; i++) {
+        fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+      }
+      Dataset<Row> rows = HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths);
+      List<Pair<String, String>> actualPartitionPathRecKeyPairs = new ArrayList<>();
+      for (Row row : rows.collectAsList()) {
+        actualPartitionPathRecKeyPairs
+            .add(Pair.of(row.getAs("_hoodie_partition_path"), row.getAs("_row_key")));
+      }
+
+      // verify all partitionpath, record key matches
+      assertEquals(expectedPartitionPathRecKeyPairs.size(), actualPartitionPathRecKeyPairs.size());
+      for (Pair<String, String> entry : actualPartitionPathRecKeyPairs) {
+        assertTrue(expectedPartitionPathRecKeyPairs.contains(entry));
+      }
+
+      for (Pair<String, String> entry : expectedPartitionPathRecKeyPairs) {
+        assertTrue(actualPartitionPathRecKeyPairs.contains(entry));
+      }
+
+      // Write 2 (updates)
+      newCommitTime = "002";
+      numRecords = 5;
+
+      records = dataGen.generateUniqueUpdates(newCommitTime, numRecords);
+
+      // update to diff partition paths
+      List<HoodieRecord> recordsToUpsert = new ArrayList<>();
+      for (HoodieRecord rec : records) {
+        expectedPartitionPathRecKeyPairs
+            .remove(Pair.of(rec.getPartitionPath(), rec.getRecordKey()));
+        String partitionPath = rec.getPartitionPath();
+        String newPartitionPath = null;
+        if (partitionPath.equalsIgnoreCase(DEFAULT_FIRST_PARTITION_PATH)) {
+          newPartitionPath = DEFAULT_SECOND_PARTITION_PATH;
+        } else if (partitionPath.equalsIgnoreCase(DEFAULT_SECOND_PARTITION_PATH)) {
+          newPartitionPath = DEFAULT_THIRD_PARTITION_PATH;
+        } else if (partitionPath.equalsIgnoreCase(DEFAULT_THIRD_PARTITION_PATH)) {
+          newPartitionPath = DEFAULT_FIRST_PARTITION_PATH;
+        } else {
+          throw new IllegalStateException("Unknown partition path " + rec.getPartitionPath());
+        }
+        recordsToUpsert.add(
+            new HoodieRecord(new HoodieKey(rec.getRecordKey(), newPartitionPath),
+                rec.getData()));
+        expectedPartitionPathRecKeyPairs.add(Pair.of(newPartitionPath, rec.getRecordKey()));
+      }
+
+      writeRecords = jsc.parallelize(recordsToUpsert, 1);
+      result = writeFn.apply(client, writeRecords, newCommitTime);
+      statuses = result.collect();
+
+      // read all rows
+      rows = HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths);
+      actualPartitionPathRecKeyPairs.clear();
+      for (Row row : rows.collectAsList()) {
+        actualPartitionPathRecKeyPairs
+            .add(Pair.of(row.getAs("_hoodie_partition_path"), row.getAs("_row_key")));
+      }
+
+      // verify all partitionpath, record key matches
+      assertEquals(expectedPartitionPathRecKeyPairs.size(), actualPartitionPathRecKeyPairs.size());
+      for (Pair<String, String> entry : actualPartitionPathRecKeyPairs) {
+        assertTrue(expectedPartitionPathRecKeyPairs.contains(entry));
+      }
+
+      for (Pair<String, String> entry : expectedPartitionPathRecKeyPairs) {
+        assertTrue(actualPartitionPathRecKeyPairs.contains(entry));
+      }
+
+    } catch (Throwable e) {
+      e.printStackTrace();
     }
-    assertEquals(100, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
-        "Must contain 100 records");
-
-    /**
-     * Write 2. Updates with different partition
-     */
-    newCommitTime = "004";
-    client.startCommitWithTime(newCommitTime);
-
-    List<HoodieRecord> updates1 = dataGen.generateUpdatesWithDiffPartition(newCommitTime, inserts1);
-    JavaRDD<HoodieRecord> updateRecords = jsc.parallelize(updates1, 1);
-
-    JavaRDD<WriteStatus> result1 = client.upsert(updateRecords, newCommitTime);
-    List<WriteStatus> statuses1 = result1.collect();
-    assertNoWriteErrors(statuses1);
-
-    // check the partition metadata is written out
-    assertPartitionMetadataForRecords(updates1, fs);
-    // Check the entire dataset has all records still
-    fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
-    for (int i = 0; i < fullPartitionPaths.length; i++) {
-      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
-    }
-    assertEquals(100, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
-        "Must contain 100 records");
   }
 
   /**
