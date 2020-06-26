@@ -16,26 +16,15 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.common.functional;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieTable;
-
-import java.io.IOException;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 
 /**
- * Extract range information for a given file slice.
+ * Tests Avro log format {@link HoodieAvroDataBlock}.
  */
-public class HoodieRangeInfoHandle<T extends HoodieRecordPayload> extends HoodieReadHandle<T> {
-
-  public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieTable<T> hoodieTable,
-      Pair<String, String> partitionPathFilePair) {
-    super(config, null, hoodieTable, partitionPathFilePair);
-  }
-
-  public String[] getMinMaxKeys() throws IOException {
-    return createNewFileReader().readMinMaxRecordKeys();
+public class TestHoodieAvroLogFormat extends TestHoodieLogFormat {
+  public TestHoodieAvroLogFormat() {
+    super(HoodieLogBlockType.AVRO_DATA_BLOCK);
   }
 }

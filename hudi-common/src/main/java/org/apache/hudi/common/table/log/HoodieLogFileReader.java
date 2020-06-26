@@ -193,7 +193,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         if (nextBlockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
           return HoodieAvroDataBlock.getBlock(content, readerSchema);
         } else {
-          return HoodieAvroDataBlock.getBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
+          return new HoodieAvroDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
               contentPosition, contentLength, blockEndPos, readerSchema, header, footer);
         }
       case DELETE_BLOCK:

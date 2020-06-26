@@ -31,7 +31,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
-import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -356,20 +356,7 @@ public class TableSchemaResolver {
    * @return
    */
   public MessageType readSchemaFromLogFile(Path path) throws IOException {
-    FileSystem fs = metaClient.getRawFs();
-    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null);
-    HoodieAvroDataBlock lastBlock = null;
-    while (reader.hasNext()) {
-      HoodieLogBlock block = reader.next();
-      if (block instanceof HoodieAvroDataBlock) {
-        lastBlock = (HoodieAvroDataBlock) block;
-      }
-    }
-    reader.close();
-    if (lastBlock != null) {
-      return new AvroSchemaConverter().convert(lastBlock.getSchema());
-    }
-    return null;
+    return readSchemaFromLogFile(metaClient.getRawFs(), path);
   }
 
   /**
@@ -394,11 +381,11 @@ public class TableSchemaResolver {
    */
   public static MessageType readSchemaFromLogFile(FileSystem fs, Path path) throws IOException {
     Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null);
-    HoodieAvroDataBlock lastBlock = null;
+    HoodieDataBlock lastBlock = null;
     while (reader.hasNext()) {
       HoodieLogBlock block = reader.next();
-      if (block instanceof HoodieAvroDataBlock) {
-        lastBlock = (HoodieAvroDataBlock) block;
+      if (block instanceof HoodieDataBlock) {
+        lastBlock = (HoodieDataBlock) block;
       }
     }
     reader.close();

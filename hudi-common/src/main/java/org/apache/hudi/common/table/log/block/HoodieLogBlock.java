@@ -84,9 +84,7 @@ public abstract class HoodieLogBlock {
     throw new HoodieException("No implementation was provided");
   }
 
-  public HoodieLogBlockType getBlockType() {
-    throw new HoodieException("No implementation was provided");
-  }
+  public abstract HoodieLogBlockType getBlockType();
 
   public long getLogBlockLength() {
     throw new HoodieException("No implementation was provided");

@@ -20,8 +20,10 @@ package org.apache.hudi.hadoop.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -59,25 +61,29 @@ public class InputFormatTestUtil {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
-  public static File prepareTable(java.nio.file.Path basePath, int numberOfFiles, String commitNumber)
+  public static File prepareTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
+                                  String commitNumber)
       throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat);
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
     Files.createDirectories(partitionPath);
-    return simulateInserts(partitionPath.toFile(), "fileId1", numberOfFiles, commitNumber);
+    return simulateInserts(partitionPath.toFile(), baseFileFormat.getFileExtension(), "fileId1", numberOfFiles,
+        commitNumber);
   }
 
-  public static File simulateInserts(File partitionPath, String fileId, int numberOfFiles, String commitNumber)
+  public static File simulateInserts(File partitionPath, String baseFileExtension, String fileId, int numberOfFiles,
+                                     String commitNumber)
       throws IOException {
     for (int i = 0; i < numberOfFiles; i++) {
       Files.createFile(partitionPath.toPath()
-          .resolve(FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, fileId + i)));
+          .resolve(FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, fileId + i, baseFileExtension)));
     }
     return partitionPath;
   }
 
-  public static void simulateUpdates(File directory, final String originalCommit, int numberOfFilesUpdated,
-      String newCommit, boolean randomize) throws IOException {
+  public static void simulateUpdates(File directory, String baseFileExtension, final String originalCommit,
+                                     int numberOfFilesUpdated, String newCommit, boolean randomize) throws IOException {
     List<File> dataFiles = Arrays.asList(Objects.requireNonNull(directory.listFiles((dir, name) -> {
       String commitTs = FSUtils.getCommitTime(name);
       return originalCommit.equals(commitTs);
@@ -88,7 +94,8 @@ public class InputFormatTestUtil {
     List<File> toUpdateList = dataFiles.subList(0, Math.min(numberOfFilesUpdated, dataFiles.size()));
     for (File file : toUpdateList) {
       String fileId = FSUtils.getFileId(file.getName());
-      Files.createFile(directory.toPath().resolve(FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId)));
+      Files.createFile(directory.toPath().resolve(FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId,
+          baseFileExtension)));
     }
   }
 

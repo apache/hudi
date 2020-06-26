@@ -18,19 +18,27 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.model.HoodieRecord;
-
-import org.apache.avro.generic.IndexedRecord;
-
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.Set;
 
-public interface HoodieStorageWriter<R extends IndexedRecord> {
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.bloom.BloomFilter;
 
-  void writeAvroWithMetadata(R newRecord, HoodieRecord record) throws IOException;
+public interface HoodieFileReader<R extends IndexedRecord> {
 
-  boolean canWrite();
+  public String[] readMinMaxRecordKeys();
 
-  void close() throws IOException;
+  public BloomFilter readBloomFilter();
 
-  void writeAvro(String key, R oldRecord) throws IOException;
+  public Set<String> filterRowKeys(Set<String> candidateRowKeys);
+
+  public Iterator<R> getRecordIterator(Schema schema) throws IOException;
+
+  Schema getSchema();
+
+  void close();
+
+  long getTotalRecords();
 }

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieIOException;
 
