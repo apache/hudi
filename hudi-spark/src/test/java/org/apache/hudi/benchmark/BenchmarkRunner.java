@@ -19,7 +19,7 @@
 package org.apache.hudi.benchmark;
 
 /**
- * Main class to run benchmarks
+ * Main class to run benchmarks.
  */
 public class BenchmarkRunner {
   public static void main(String[] args) throws Exception {

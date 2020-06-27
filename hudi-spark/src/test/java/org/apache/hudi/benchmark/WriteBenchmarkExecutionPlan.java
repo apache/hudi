@@ -35,16 +35,15 @@ import org.openjdk.jmh.annotations.State;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
- * Execution plan for benchmarking. This has set up methods and acts as arguments to benchmark methods
+ * Execution plan for benchmarking. This has set up methods and acts as arguments to benchmark methods.
  */
 @State(Scope.Benchmark)
 public class WriteBenchmarkExecutionPlan {
 
-  @Param( {"itr1"})
+  @Param({"itr1"})
   public String iterationIndex;
 
   String basePath = "/tmp/hudi_benchmark/";

@@ -52,6 +52,7 @@ import scala.collection.JavaConversions;
 import scala.collection.JavaConverters;
 
 import static org.apache.spark.sql.functions.callUDF;
+import static org.apache.spark.sql.functions.col;
 
 public class BulkInsertDatasetHelper {
 
@@ -106,14 +107,31 @@ public class BulkInsertDatasetHelper {
       }
     }, DataTypes.StringType);
 
-    Dataset<Row> rowDatasetWithHoodieColumns = rows.withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
-        callUDF("hudi_partition_gen_function",
-            org.apache.spark.sql.functions.struct(
-                JavaConverters.collectionAsScalaIterableConverter(originalFields).asScala().toSeq())))
-        .withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD, callUDF("hudi_recordkey_gen_function",
-            org.apache.spark.sql.functions.struct(
-                JavaConverters.collectionAsScalaIterableConverter(originalFields).asScala().toSeq())))
-        .withColumn(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+    final Dataset<Row> rowDatasetWithRecordKeys;
+    if (config.getRecordKeyFields().size() == 1) {
+      rowDatasetWithRecordKeys = rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD,
+         col(config.getRecordKeyFields().get(0)));
+    } else {
+      rowDatasetWithRecordKeys = rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD,
+          callUDF("hudi_recordkey_gen_function", org.apache.spark.sql.functions.struct(
+              JavaConverters.collectionAsScalaIterableConverter(originalFields).asScala().toSeq())));
+    }
+
+    final Dataset<Row> rowDatasetWithRecordKeysAndPartitionPath;
+    if (config.getPartitionPathFields().size() == 1) {
+      rowDatasetWithRecordKeysAndPartitionPath =
+          rowDatasetWithRecordKeys.withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+              col(config.getPartitionPathFields().get(0)));
+    } else {
+      rowDatasetWithRecordKeysAndPartitionPath =
+          rowDatasetWithRecordKeys.withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+          callUDF("hudi_partition_gen_function",
+              org.apache.spark.sql.functions.struct(
+                  JavaConverters.collectionAsScalaIterableConverter(originalFields).asScala().toSeq())));
+    }
+
+    Dataset<Row> rowDatasetWithHoodieColumns =
+        rowDatasetWithRecordKeysAndPartitionPath.withColumn(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
             functions.lit(instantTime).cast(DataTypes.StringType))
         .withColumn(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
             functions.lit("").cast(DataTypes.StringType))
