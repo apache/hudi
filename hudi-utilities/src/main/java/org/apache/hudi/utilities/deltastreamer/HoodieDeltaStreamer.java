@@ -70,7 +70,7 @@ import java.util.stream.IntStream;
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
  * table. Does not maintain any state, queries at runtime to see how far behind the target table is from the source
  * table. This can be overriden to force sync from a timestamp.
- *
+ * <p>
  * In continuous mode, DeltaStreamer runs in loop-mode going through the below operations (a) pull-from-source (b)
  * write-to-sink (c) Schedule Compactions if needed (d) Conditionally Sync to Hive each cycle. For MOR table with
  * continuous mode enabled, a separate compactor thread is allocated to execute compactions
@@ -154,7 +154,7 @@ public class HoodieDeltaStreamer implements Serializable {
     UPSERT, INSERT, BULK_INSERT
   }
 
-  protected static class OperationConvertor implements IStringConverter<Operation> {
+  protected static class OperationConverter implements IStringConverter<Operation> {
 
     @Override
     public Operation convert(String value) throws ParameterException {
@@ -176,6 +176,9 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
     public String tableType;
+
+    @Parameter(names = {"--base-file-format"}, description = "File format for the base files. PARQUET (or) HFILE", required = false)
+    public String baseFileFormat;
 
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
@@ -223,7 +226,7 @@ public class HoodieDeltaStreamer implements Serializable {
     public long sourceLimit = Long.MAX_VALUE;
 
     @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
-        + "is purely new data/inserts to gain speed)", converter = OperationConvertor.class)
+        + "is purely new data/inserts to gain speed)", converter = OperationConverter.class)
     public Operation operation = Operation.UPSERT;
 
     @Parameter(names = {"--filter-dupes"},
@@ -379,8 +382,20 @@ public class HoodieDeltaStreamer implements Serializable {
         // This will guarantee there is no surprise with table type
         ValidationUtils.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.tableType)),
             "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.tableType);
+
+        // Load base file format
+        // This will guarantee there is no surprise with base file type
+        String baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
+        ValidationUtils.checkArgument(baseFileFormat.equals(cfg.baseFileFormat) || cfg.baseFileFormat == null,
+            "Hoodie table's base file format is of type " + baseFileFormat + " but passed in CLI argument is "
+                + cfg.baseFileFormat);
+        cfg.baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
+        this.cfg.baseFileFormat = cfg.baseFileFormat;
       } else {
         tableType = HoodieTableType.valueOf(cfg.tableType);
+        if (cfg.baseFileFormat == null) {
+          cfg.baseFileFormat = "PARQUET"; // default for backward compatibility
+        }
       }
 
       ValidationUtils.checkArgument(!cfg.filterDupes || cfg.operation != Operation.UPSERT,

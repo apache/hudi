@@ -23,9 +23,10 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -120,9 +121,38 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @MethodSource("bloomFilterTypeCodes")
+  public void testFetchRecordKeyPartitionPathFromParquet(String typeCode) throws Exception {
+    List<String> rowKeys = new ArrayList<>();
+    List<HoodieKey> expected = new ArrayList<>();
+    String partitionPath = "path1";
+    for (int i = 0; i < 1000; i++) {
+      String rowKey = UUID.randomUUID().toString();
+      rowKeys.add(rowKey);
+      expected.add(new HoodieKey(rowKey, partitionPath));
+    }
+
+    String filePath = basePath + "/test.parquet";
+    Schema schema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
+    writeParquetFile(typeCode, filePath, rowKeys, schema, true, partitionPath);
+
+    // Read and verify
+    List<HoodieKey> fetchedRows =
+        ParquetUtils.fetchRecordKeyPartitionPathFromParquet(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath));
+    assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
+
+    for (HoodieKey entry : fetchedRows) {
+      assertTrue(expected.contains(entry), "Record key must be in the given filter");
+    }
+  }
+
   private void writeParquetFile(String typeCode, String filePath, List<String> rowKeys) throws Exception {
+    writeParquetFile(typeCode, filePath, rowKeys, HoodieAvroUtils.getRecordKeySchema(), false, "");
+  }
+
+  private void writeParquetFile(String typeCode, String filePath, List<String> rowKeys, Schema schema, boolean addPartitionPathField, String partitionPath) throws Exception {
     // Write out a parquet file
-    Schema schema = HoodieAvroUtils.getRecordKeySchema();
     BloomFilter filter = BloomFilterFactory
         .createBloomFilter(1000, 0.0001, 10000, typeCode);
     HoodieAvroWriteSupport writeSupport =
@@ -132,6 +162,9 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     for (String rowKey : rowKeys) {
       GenericRecord rec = new GenericData.Record(schema);
       rec.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, rowKey);
+      if (addPartitionPathField) {
+        rec.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPath);
+      }
       writer.write(rec);
       writeSupport.add(rowKey);
     }

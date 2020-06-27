@@ -19,9 +19,6 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.HoodieClientTestHarness;
-import org.apache.hudi.common.HoodieClientTestUtils;
-import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -36,6 +33,9 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.TestRawTripPayload;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
@@ -97,9 +97,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
 
   @AfterEach
   public void tearDown() throws Exception {
-    cleanupSparkContexts();
-    cleanupFileSystem();
-    cleanupMetaClient();
+    cleanupResources();
   }
 
   private HoodieWriteConfig makeConfig(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
@@ -259,7 +257,11 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     List<String> uuids =
         Arrays.asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
 
-    List<String> results = HoodieKeyLookupHandle.checkCandidatesAgainstFile(hadoopConf, uuids,
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
+    HoodieKeyLookupHandle keyHandle = new HoodieKeyLookupHandle<>(config, table,
+        Pair.of("2016/01/31/", FSUtils.getFileId(filename)));
+    List<String> results = keyHandle.checkCandidatesAgainstFile(hadoopConf, uuids,
         new Path(basePath + "/2016/01/31/" + filename));
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
@@ -475,5 +477,4 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
       }
     }
   }
-
 }

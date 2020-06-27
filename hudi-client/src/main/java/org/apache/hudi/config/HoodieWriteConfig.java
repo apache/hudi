@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -38,9 +39,13 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * Class storing configs for the {@link HoodieWriteClient}.
@@ -49,55 +54,69 @@ import java.util.Properties;
 public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public static final String TABLE_NAME = "hoodie.table.name";
-  private static final String TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
-  private static final String BASE_PATH_PROP = "hoodie.base.path";
-  private static final String AVRO_SCHEMA = "hoodie.avro.schema";
-  private static final String AVRO_SCHEMA_VALIDATE = "hoodie.avro.schema.validate";
-  private static final String DEFAULT_AVRO_SCHEMA_VALIDATE = "false";
-  private static final String DEFAULT_PARALLELISM = "1500";
-  private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
-  private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
-  private static final String BULKINSERT_USER_DEFINED_PARTITIONER_CLASS = "hoodie.bulkinsert.user.defined.partitioner.class";
-  private static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
-  private static final String DELETE_PARALLELISM = "hoodie.delete.shuffle.parallelism";
-  private static final String DEFAULT_ROLLBACK_PARALLELISM = "100";
-  private static final String ROLLBACK_PARALLELISM = "hoodie.rollback.parallelism";
-  private static final String WRITE_BUFFER_LIMIT_BYTES = "hoodie.write.buffer.limit.bytes";
-  private static final String DEFAULT_WRITE_BUFFER_LIMIT_BYTES = String.valueOf(4 * 1024 * 1024);
-  private static final String COMBINE_BEFORE_INSERT_PROP = "hoodie.combine.before.insert";
-  private static final String DEFAULT_COMBINE_BEFORE_INSERT = "false";
-  private static final String COMBINE_BEFORE_UPSERT_PROP = "hoodie.combine.before.upsert";
-  private static final String DEFAULT_COMBINE_BEFORE_UPSERT = "true";
-  private static final String COMBINE_BEFORE_DELETE_PROP = "hoodie.combine.before.delete";
-  private static final String DEFAULT_COMBINE_BEFORE_DELETE = "true";
+  public static final String TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
+  public static final String BASE_PATH_PROP = "hoodie.base.path";
+  public static final String AVRO_SCHEMA = "hoodie.avro.schema";
+  public static final String AVRO_SCHEMA_VALIDATE = "hoodie.avro.schema.validate";
+  public static final String DEFAULT_AVRO_SCHEMA_VALIDATE = "false";
+  public static final String DEFAULT_PARALLELISM = "1500";
+  public static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
+  public static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
+  public static final String BULKINSERT_USER_DEFINED_PARTITIONER_CLASS = "hoodie.bulkinsert.user.defined.partitioner.class";
+  public static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
+  public static final String DELETE_PARALLELISM = "hoodie.delete.shuffle.parallelism";
+  public static final String DEFAULT_ROLLBACK_PARALLELISM = "100";
+  public static final String ROLLBACK_PARALLELISM = "hoodie.rollback.parallelism";
+  public static final String WRITE_BUFFER_LIMIT_BYTES = "hoodie.write.buffer.limit.bytes";
+  public static final String DEFAULT_WRITE_BUFFER_LIMIT_BYTES = String.valueOf(4 * 1024 * 1024);
+  public static final String COMBINE_BEFORE_INSERT_PROP = "hoodie.combine.before.insert";
+  public static final String DEFAULT_COMBINE_BEFORE_INSERT = "false";
+  public static final String COMBINE_BEFORE_UPSERT_PROP = "hoodie.combine.before.upsert";
+  public static final String DEFAULT_COMBINE_BEFORE_UPSERT = "true";
+  public static final String COMBINE_BEFORE_DELETE_PROP = "hoodie.combine.before.delete";
+  public static final String DEFAULT_COMBINE_BEFORE_DELETE = "true";
   public static final String WRITE_STATUS_STORAGE_LEVEL = "hoodie.write.status.storage.level";
-  private static final String DEFAULT_WRITE_STATUS_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
-  private static final String HOODIE_AUTO_COMMIT_PROP = "hoodie.auto.commit";
-  private static final String DEFAULT_HOODIE_AUTO_COMMIT = "true";
-  private static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP = "hoodie.assume.date.partitioning";
-  private static final String DEFAULT_ASSUME_DATE_PARTITIONING = "false";
-  private static final String HOODIE_WRITE_STATUS_CLASS_PROP = "hoodie.writestatus.class";
-  private static final String DEFAULT_HOODIE_WRITE_STATUS_CLASS = WriteStatus.class.getName();
-  private static final String FINALIZE_WRITE_PARALLELISM = "hoodie.finalize.write.parallelism";
-  private static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = DEFAULT_PARALLELISM;
+  public static final String DEFAULT_WRITE_STATUS_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
+  public static final String HOODIE_AUTO_COMMIT_PROP = "hoodie.auto.commit";
+  public static final String DEFAULT_HOODIE_AUTO_COMMIT = "true";
+  public static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP = "hoodie.assume.date.partitioning";
+  public static final String DEFAULT_ASSUME_DATE_PARTITIONING = "false";
+  public static final String HOODIE_WRITE_STATUS_CLASS_PROP = "hoodie.writestatus.class";
+  public static final String DEFAULT_HOODIE_WRITE_STATUS_CLASS = WriteStatus.class.getName();
+  public static final String FINALIZE_WRITE_PARALLELISM = "hoodie.finalize.write.parallelism";
+  public static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = DEFAULT_PARALLELISM;
 
-  private static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";
-  private static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "false";
+  public static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";
+  public static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "true";
 
-  private static final String FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP = "hoodie.fail.on.timeline.archiving";
-  private static final String DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED = "true";
+  public static final String FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP = "hoodie.fail.on.timeline.archiving";
+  public static final String DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED = "true";
   // time between successive attempts to ensure written data's metadata is consistent on storage
-  private static final String INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP =
+  public static final String INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP =
       "hoodie.consistency.check.initial_interval_ms";
-  private static long DEFAULT_INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = 2000L;
+  public static long DEFAULT_INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = 2000L;
 
   // max interval time
-  private static final String MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP = "hoodie.consistency.check.max_interval_ms";
-  private static long DEFAULT_MAX_CONSISTENCY_CHECK_INTERVAL_MS = 300000L;
+  public static final String MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP = "hoodie.consistency.check.max_interval_ms";
+  public static long DEFAULT_MAX_CONSISTENCY_CHECK_INTERVAL_MS = 300000L;
 
   // maximum number of checks, for consistency of written data. Will wait upto 256 Secs
-  private static final String MAX_CONSISTENCY_CHECKS_PROP = "hoodie.consistency.check.max_checks";
-  private static int DEFAULT_MAX_CONSISTENCY_CHECKS = 7;
+  public static final String MAX_CONSISTENCY_CHECKS_PROP = "hoodie.consistency.check.max_checks";
+  public static int DEFAULT_MAX_CONSISTENCY_CHECKS = 7;
+
+  /**
+   * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
+   * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
+   *
+   * Given Hudi commit protocol, these are generally unsafe operations and user need to handle failure scenarios. It
+   * only works with COW table. Hudi 0.5.x had stopped this behavior.
+   *
+   * Given the importance of supporting such cases for the user's migration to 0.5.x, we are proposing a safety flag
+   * (disabled by default) which will allow this old behavior.
+   */
+  public static final String ALLOW_MULTI_WRITE_ON_SAME_INSTANT =
+      "_.hoodie.allow.multi.write.on.same.instant";
+  public static final String DEFAULT_ALLOW_MULTI_WRITE_ON_SAME_INSTANT = "false";
 
   private ConsistencyGuardConfig consistencyGuardConfig;
 
@@ -194,6 +213,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(COMBINE_BEFORE_DELETE_PROP));
   }
 
+  public boolean shouldAllowMultiWriteOnSameInstant() {
+    return Boolean.parseBoolean(props.getProperty(ALLOW_MULTI_WRITE_ON_SAME_INSTANT));
+  }
+
   public String getWriteStatusClassName() {
     return props.getProperty(HOODIE_WRITE_STATUS_CLASS_PROP);
   }
@@ -247,6 +270,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public int getParquetSmallFileLimit() {
     return Integer.parseInt(props.getProperty(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT_BYTES));
+  }
+
+  public double getRecordSizeEstimationThreshold() {
+    return Double.parseDouble(props.getProperty(HoodieCompactionConfig.RECORD_SIZE_ESTIMATION_THRESHOLD_PROP));
   }
 
   public int getCopyOnWriteInsertSplitSize() {
@@ -441,6 +468,22 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH));
   }
 
+  public int getSimpleIndexParallelism() {
+    return Integer.parseInt(props.getProperty(HoodieIndexConfig.SIMPLE_INDEX_PARALLELISM_PROP));
+  }
+
+  public boolean getSimpleIndexUseCaching() {
+    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.SIMPLE_INDEX_USE_CACHING_PROP));
+  }
+
+  public int getGlobalSimpleIndexParallelism() {
+    return Integer.parseInt(props.getProperty(HoodieIndexConfig.GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP));
+  }
+
+  public boolean getGlobalSimpleIndexUpdatePartitionPath() {
+    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH));
+  }
+
   /**
    * storage properties.
    */
@@ -505,6 +548,45 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public String getJmxPort() {
     return props.getProperty(HoodieMetricsConfig.JMX_PORT);
+  }
+
+  public int getDatadogReportPeriodSeconds() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsDatadogConfig.DATADOG_REPORT_PERIOD_SECONDS));
+  }
+
+  public ApiSite getDatadogApiSite() {
+    return ApiSite.valueOf(props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_SITE));
+  }
+
+  public String getDatadogApiKey() {
+    if (props.containsKey(HoodieMetricsDatadogConfig.DATADOG_API_KEY)) {
+      return props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_KEY);
+    } else {
+      Supplier<String> apiKeySupplier = ReflectionUtils.loadClass(
+          props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_KEY_SUPPLIER));
+      return apiKeySupplier.get();
+    }
+  }
+
+  public boolean getDatadogApiKeySkipValidation() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_KEY_SKIP_VALIDATION));
+  }
+
+  public int getDatadogApiTimeoutSeconds() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsDatadogConfig.DATADOG_API_TIMEOUT_SECONDS));
+  }
+
+  public String getDatadogMetricPrefix() {
+    return props.getProperty(HoodieMetricsDatadogConfig.DATADOG_METRIC_PREFIX);
+  }
+
+  public String getDatadogMetricHost() {
+    return props.getProperty(HoodieMetricsDatadogConfig.DATADOG_METRIC_HOST);
+  }
+
+  public List<String> getDatadogMetricTags() {
+    return Arrays.stream(props.getProperty(
+        HoodieMetricsDatadogConfig.DATADOG_METRIC_TAGS).split("\\s*,\\s*")).collect(Collectors.toList());
   }
 
   /**
@@ -707,6 +789,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withAllowMultiWriteOnSameInstant(boolean allow) {
+      props.setProperty(ALLOW_MULTI_WRITE_ON_SAME_INSTANT, String.valueOf(allow));
+      return this;
+    }
+
     public HoodieWriteConfig build() {
       // Check for mandatory properties
       setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM, DEFAULT_PARALLELISM);
@@ -722,6 +809,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           DEFAULT_COMBINE_BEFORE_UPSERT);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_DELETE_PROP), COMBINE_BEFORE_DELETE_PROP,
           DEFAULT_COMBINE_BEFORE_DELETE);
+      setDefaultOnCondition(props, !props.containsKey(ALLOW_MULTI_WRITE_ON_SAME_INSTANT),
+          ALLOW_MULTI_WRITE_ON_SAME_INSTANT, DEFAULT_ALLOW_MULTI_WRITE_ON_SAME_INSTANT);
       setDefaultOnCondition(props, !props.containsKey(WRITE_STATUS_STORAGE_LEVEL), WRITE_STATUS_STORAGE_LEVEL,
           DEFAULT_WRITE_STATUS_STORAGE_LEVEL);
       setDefaultOnCondition(props, !props.containsKey(HOODIE_AUTO_COMMIT_PROP), HOODIE_AUTO_COMMIT_PROP,
@@ -761,7 +850,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       String layoutVersion = props.getProperty(TIMELINE_LAYOUT_VERSION);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
-
 
       // Build WriteConfig at the end
       HoodieWriteConfig config = new HoodieWriteConfig(props);

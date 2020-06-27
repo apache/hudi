@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -267,7 +268,7 @@ public abstract class AbstractHoodieLogRecordScanner {
    * Iterate over the GenericRecord in the block, read the hoodie key and partition path and call subclass processors to
    * handle it.
    */
-  private void processAvroDataBlock(HoodieAvroDataBlock dataBlock) throws Exception {
+  private void processDataBlock(HoodieDataBlock dataBlock) throws Exception {
     // TODO (NA) - Implement getRecordItr() in HoodieAvroDataBlock and use that here
     List<IndexedRecord> recs = dataBlock.getRecords();
     totalLogRecords.addAndGet(recs.size());
@@ -302,7 +303,7 @@ public abstract class AbstractHoodieLogRecordScanner {
       HoodieLogBlock lastBlock = lastBlocks.pollLast();
       switch (lastBlock.getBlockType()) {
         case AVRO_DATA_BLOCK:
-          processAvroDataBlock((HoodieAvroDataBlock) lastBlock);
+          processDataBlock((HoodieAvroDataBlock) lastBlock);
           break;
         case DELETE_BLOCK:
           Arrays.stream(((HoodieDeleteBlock) lastBlock).getKeysToDelete()).forEach(this::processNextDeletedKey);

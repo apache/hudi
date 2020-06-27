@@ -22,9 +22,14 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 
+import java.io.IOException;
+
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 /**
  * Base class for read operations done logically on the file group.
@@ -55,5 +60,10 @@ public abstract class HoodieReadHandle<T extends HoodieRecordPayload> extends Ho
   protected HoodieBaseFile getLatestDataFile() {
     return hoodieTable.getBaseFileOnlyView()
         .getLatestBaseFile(partitionPathFilePair.getLeft(), partitionPathFilePair.getRight()).get();
+  }
+
+  protected HoodieFileReader createNewFileReader() throws IOException {
+    return HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(),
+        new Path(getLatestDataFile().getPath()));
   }
 }

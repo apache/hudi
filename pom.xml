@@ -30,8 +30,8 @@
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
   <version>0.6.0-SNAPSHOT</version>
-  <description>Apache Hudi (incubating) brings stream style processing on big data</description>
-  <url>https://github.com/apache/incubator-hudi</url>
+  <description>Apache Hudi brings stream style processing on big data</description>
+  <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
 
   <modules>
@@ -51,6 +51,7 @@
     <module>packaging/hudi-timeline-server-bundle</module>
     <module>docker/hoodie/hadoop</module>
     <module>hudi-integ-test</module>
+    <module>hudi-examples</module>
   </modules>
 
   <licenses>
@@ -102,7 +103,7 @@
     <scalatest.version>3.0.1</scalatest.version>
     <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
-    <jetty.version>7.6.0.v20120127</jetty.version>
+    <jetty.version>9.4.15.v20190215</jetty.version>
     <hbase.version>1.2.3</hbase.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
     <h2.version>1.4.199</h2.version>
@@ -122,9 +123,9 @@
   </properties>
 
   <scm>
-    <connection>scm:git:git@github.com:apache/incubator-hudi.git</connection>
-    <developerConnection>scm:git:git@github.com:apache/incubator-hudi.git</developerConnection>
-    <url>git@github.com:apache/incubator-hudi.git</url>
+    <connection>scm:git:git@github.com:apache/hudi.git</connection>
+    <developerConnection>scm:git:git@github.com:apache/hudi.git</developerConnection>
+    <url>git@github.com:apache/hudi.git</url>
     <tag>HEAD</tag>
   </scm>
 
@@ -245,6 +246,8 @@
         <version>${maven-surefire-plugin.version}</version>
         <configuration>
           <skip>${skipUTs}</skip>
+          <argLine>-Xmx2g</argLine>
+          <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
           <systemPropertyVariables>
             <log4j.configuration>
               ${surefire-log4j.file}
@@ -264,6 +267,15 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-jar-plugin</artifactId>
           <version>${maven-jar-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>net.alchim31.maven</groupId>
+          <artifactId>scala-maven-plugin</artifactId>
+          <version>${scala-maven-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
         </plugin>
         <plugin>
           <groupId>org.jacoco</groupId>
@@ -351,6 +363,7 @@
               <exclude>**/test/resources/*.commit</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
+              <exclude>.github/**</exclude>
             </excludes>
           </configuration>
           <executions>
@@ -459,13 +472,6 @@
         <groupId>org.glassfish.jersey.containers</groupId>
         <artifactId>jersey-container-servlet-core</artifactId>
         <version>${glassfish.version}</version>
-      </dependency>
-      <!-- Needed for running HiveServer for Tests -->
-      <dependency>
-        <groupId>org.eclipse.jetty.aggregate</groupId>
-        <artifactId>jetty-all</artifactId>
-        <scope>test</scope>
-        <version>${jetty.version}</version>
       </dependency>
 
       <!-- Avro -->
@@ -1115,8 +1121,4 @@
     </profile>
   </profiles>
 
-  <issueManagement>
-    <system>GitHub</system>
-    <url>https://github.com/apache/incubator-hudi/issues</url>
-  </issueManagement>
 </project>

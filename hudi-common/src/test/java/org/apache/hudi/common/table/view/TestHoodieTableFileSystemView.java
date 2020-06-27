@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -103,13 +104,17 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
    */
   @Test
   public void testViewForFileSlicesWithNoBaseFile() throws Exception {
-    testViewForFileSlicesWithNoBaseFile(1, 0);
+    testViewForFileSlicesWithNoBaseFile(1, 0, "2016/05/01");
   }
 
-  protected void testViewForFileSlicesWithNoBaseFile(int expNumTotalFileSlices, int expNumTotalDataFiles)
-      throws Exception {
-    String partitionPath = "2016/05/01";
-    new File(basePath + "/" + partitionPath).mkdirs();
+  @Test
+  public void testViewForFileSlicesWithNoBaseFileNonPartitioned() throws Exception {
+    testViewForFileSlicesWithNoBaseFile(1, 0, "");
+  }
+
+  protected void testViewForFileSlicesWithNoBaseFile(int expNumTotalFileSlices, int expNumTotalDataFiles,
+      String partitionPath) throws Exception {
+    Paths.get(basePath, partitionPath).toFile().mkdirs();
     String fileId = UUID.randomUUID().toString();
 
     String instantTime1 = "1";
@@ -119,8 +124,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime1, 0, TEST_WRITE_TOKEN);
     String fileName2 =
         FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, instantTime1, 1, TEST_WRITE_TOKEN);
-    new File(basePath + "/" + partitionPath + "/" + fileName1).createNewFile();
-    new File(basePath + "/" + partitionPath + "/" + fileName2).createNewFile();
+
+    Paths.get(basePath, partitionPath, fileName1).toFile().createNewFile();
+    Paths.get(basePath, partitionPath, fileName2).toFile().createNewFile();
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
     HoodieInstant deltaInstant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime1);

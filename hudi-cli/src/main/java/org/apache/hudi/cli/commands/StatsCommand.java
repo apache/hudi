@@ -20,6 +20,7 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -54,7 +55,7 @@ import java.util.stream.Collectors;
 @Component
 public class StatsCommand implements CommandMarker {
 
-  private static final int MAX_FILES = 1000000;
+  public static final int MAX_FILES = 1000000;
 
   @CliCommand(value = "stats wa", help = "Write Amplification. Ratio of how many records were upserted to how many "
       + "records were actually written")
@@ -92,12 +93,14 @@ public class StatsCommand implements CommandMarker {
     }
     rows.add(new Comparable[] {"Total", totalRecordsUpserted, totalRecordsWritten, waf});
 
-    TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("Total Upserted")
-        .addTableHeaderField("Total Written").addTableHeaderField("Write Amplification Factor");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_COMMIT_TIME)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_UPSERTED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_WRITTEN)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_WRITE_AMPLIFICATION_FACTOR);
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  private Comparable[] printFileSizeHistogram(String instantTime, Snapshot s) {
+  public Comparable[] printFileSizeHistogram(String instantTime, Snapshot s) {
     return new Comparable[] {instantTime, s.getMin(), s.getValue(0.1), s.getMedian(), s.getMean(), s.get95thPercentile(),
         s.getMax(), s.size(), s.getStdDev()};
   }
@@ -138,6 +141,20 @@ public class StatsCommand implements CommandMarker {
     Snapshot s = globalHistogram.getSnapshot();
     rows.add(printFileSizeHistogram("ALL", s));
 
+    TableHeader header = new TableHeader()
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_COMMIT_TIME)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_HISTOGRAM_MIN)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_HISTOGRAM_10TH)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_HISTOGRAM_50TH)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_HISTOGRAM_AVG)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_HISTOGRAM_95TH)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_HISTOGRAM_MAX)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_HISTOGRAM_NUM_FILES)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_HISTOGRAM_STD_DEV);
+    return HoodiePrintHelper.print(header, getFieldNameToConverterMap(), sortByField, descending, limit, headerOnly, rows);
+  }
+
+  public Map<String, Function<Object, String>> getFieldNameToConverterMap() {
     Function<Object, String> converterFunction =
         entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString())));
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
@@ -148,10 +165,6 @@ public class StatsCommand implements CommandMarker {
     fieldNameToConverterMap.put("95th", converterFunction);
     fieldNameToConverterMap.put("Max", converterFunction);
     fieldNameToConverterMap.put("StdDev", converterFunction);
-
-    TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("Min")
-        .addTableHeaderField("10th").addTableHeaderField("50th").addTableHeaderField("avg").addTableHeaderField("95th")
-        .addTableHeaderField("Max").addTableHeaderField("NumFiles").addTableHeaderField("StdDev");
-    return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows);
+    return fieldNameToConverterMap;
   }
 }

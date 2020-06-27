@@ -18,6 +18,7 @@
 
 package org.apache.hudi.integ;
 
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -27,7 +28,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Goes through steps described in https://hudi.incubator.apache.org/docker_demo.html
+ * Goes through steps described in https://hudi.apache.org/docker_demo.html
  *
  * To run this as a standalone test in the IDE or command line. First bring up the demo setup using
  * `docker/setup_demo.sh` and then run the test class as you would do normally.
@@ -67,6 +68,8 @@ public class ITTestHoodieDemo extends ITTestBase {
   private static final String HIVE_INCREMENTAL_MOR_RO_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/hive-incremental-mor-ro.commands";
   private static final String HIVE_INCREMENTAL_MOR_RT_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/hive-incremental-mor-rt.commands";
 
+  private static HoodieFileFormat baseFileFormat;
+
   private static String HIVE_SYNC_CMD_FMT =
       " --enable-hive-sync --hoodie-conf hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000 "
           + " --hoodie-conf hoodie.datasource.hive_sync.username=hive "
@@ -76,7 +79,9 @@ public class ITTestHoodieDemo extends ITTestBase {
           + " --hoodie-conf hoodie.datasource.hive_sync.table=%s";
 
   @Test
-  public void testDemo() throws Exception {
+  public void testParquetDemo() throws Exception {
+    baseFileFormat = HoodieFileFormat.PARQUET;
+
     setupDemo();
 
     // batch 1
@@ -122,6 +127,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     List<String> cmds = CollectionUtils.createImmutableList(
         "spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
+            + " --base-file-format " + baseFileFormat.toString()
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties"
@@ -130,12 +136,14 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --database default"
             + " --table " + COW_TABLE_NAME
             + " --base-path " + COW_BASE_PATH
+            + " --base-file-format " + baseFileFormat.toString()
             + " --user hive"
             + " --pass hive"
             + " --jdbc-url jdbc:hive2://hiveserver:10000"
             + " --partitioned-by dt",
         ("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
+            + " --base-file-format " + baseFileFormat.toString()
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties"
@@ -168,8 +176,8 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testSparkSQLAfterFirstBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_BATCH1_COMMANDS, true);
     assertStdOutContains(stdOutErrPair, "|default |stock_ticks_cow   |false      |\n"
-                                                    + "|default |stock_ticks_mor_ro |false      |\n" +
-                                                      "|default |stock_ticks_mor_rt |false      |");
+                                                    + "|default |stock_ticks_mor_ro |false      |\n"
+                                                    + "|default |stock_ticks_mor_rt |false      |");
     assertStdOutContains(stdOutErrPair,
         "+------+-------------------+\n|GOOG  |2018-08-31 10:29:00|\n+------+-------------------+", 3);
     assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 09:59:00|6330  |1230.5   |1230.02 |", 3);

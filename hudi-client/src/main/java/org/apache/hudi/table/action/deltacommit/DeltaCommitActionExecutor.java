@@ -83,7 +83,7 @@ public abstract class DeltaCommitActionExecutor<T extends HoodieRecordPayload<T>
   @Override
   public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr)
       throws Exception {
-    // If canIndexLogFiles, write inserts to log files else write inserts to parquet files
+    // If canIndexLogFiles, write inserts to log files else write inserts to base files
     if (table.getIndex().canIndexLogFiles()) {
       return new LazyInsertIterable<>(recordItr, config, instantTime, (HoodieTable<T>)table, idPfx,
           sparkTaskContextSupplier, new AppendHandleFactory<>());

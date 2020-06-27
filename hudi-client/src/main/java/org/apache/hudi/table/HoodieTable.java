@@ -34,12 +34,14 @@ import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -231,21 +233,21 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Get the base file only view of the file system for this table.
    */
   public BaseFileOnlyView getBaseFileOnlyView() {
-    return getViewManager().getFileSystemView(metaClient.getBasePath());
+    return getViewManager().getFileSystemView(metaClient);
   }
 
   /**
    * Get the full view of the file system for this table.
    */
   public SliceView getSliceView() {
-    return getViewManager().getFileSystemView(metaClient.getBasePath());
+    return getViewManager().getFileSystemView(metaClient);
   }
 
   /**
    * Get complete view of the file system for this table with ability to force sync.
    */
   public SyncableFileSystemView getHoodieView() {
-    return getViewManager().getFileSystemView(metaClient.getBasePath());
+    return getViewManager().getFileSystemView(metaClient);
   }
 
   /**
@@ -310,7 +312,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   /**
    * Schedule compaction for the instant time.
-   * 
+   *
    * @param jsc Spark Context
    * @param instantTime Instant Time for scheduling compaction
    * @param extraMetadata additional metadata to write into plan
@@ -381,7 +383,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   /**
    * Delete Marker directory corresponding to an instant.
-   * 
+   *
    * @param instantTs Instant Time
    */
   public void deleteMarkerDir(String instantTs) {
@@ -422,9 +424,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
         return;
       }
 
-      List<String> invalidDataPaths = FSUtils.getAllDataFilesForMarkers(fs, basePath, instantTs, markerDir.toString());
+      final String baseFileExtension = getBaseFileFormat().getFileExtension();
+      List<String> invalidDataPaths = FSUtils.getAllDataFilesForMarkers(fs, basePath, instantTs, markerDir.toString(),
+          baseFileExtension);
       List<String> validDataPaths = stats.stream().map(w -> String.format("%s/%s", basePath, w.getPath()))
-          .filter(p -> p.endsWith(".parquet")).collect(Collectors.toList());
+          .filter(p -> p.endsWith(baseFileExtension)).collect(Collectors.toList());
       // Contains list of partially created files. These needs to be cleaned up.
       invalidDataPaths.removeAll(validDataPaths);
       if (!invalidDataPaths.isEmpty()) {
@@ -478,7 +482,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   /**
    * Ensures all files passed either appear or disappear.
-   * 
+   *
    * @param jsc JavaSparkContext
    * @param groupByPartition Files grouped by partition
    * @param visibility Appear/Disappear
@@ -561,5 +565,27 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     } catch (HoodieException e) {
       throw new HoodieInsertException("Failed insert schema compability check.", e);
     }
+  }
+
+  public HoodieFileFormat getBaseFileFormat() {
+    return metaClient.getTableConfig().getBaseFileFormat();
+  }
+
+  public HoodieFileFormat getLogFileFormat() {
+    return metaClient.getTableConfig().getLogFileFormat();
+  }
+
+  public HoodieLogBlockType getLogDataBlockFormat() {
+    switch (getBaseFileFormat()) {
+      case PARQUET:
+        return HoodieLogBlockType.AVRO_DATA_BLOCK;
+      default:
+        throw new HoodieException("Base file format " + getBaseFileFormat()
+            + " does not have associated log block format");
+    }
+  }
+
+  public String getBaseFileExtension() {
+    return getBaseFileFormat().getFileExtension();
   }
 }

@@ -110,7 +110,11 @@ object AvroConversionHelper {
             if (item == null) {
               null
             } else {
-              new Date(item.asInstanceOf[Long])
+              if (item.isInstanceOf[Integer]) {
+                new Date(item.asInstanceOf[Integer].longValue())
+              } else {
+                new Date(item.asInstanceOf[Long])
+              }
             }
         case (TimestampType, LONG) =>
           (item: AnyRef) =>
@@ -268,8 +272,7 @@ object AvroConversionHelper {
     createConverter(sourceAvroSchema, targetSqlType, List.empty[String])
   }
 
-  def createConverterToAvro(avroSchema: Schema,
-                            dataType: DataType,
+  def createConverterToAvro(dataType: DataType,
                             structName: String,
                             recordNamespace: String): Any => Any = {
     dataType match {
@@ -284,13 +287,15 @@ object AvroConversionHelper {
         if (item == null) null else item.asInstanceOf[Byte].intValue
       case ShortType => (item: Any) =>
         if (item == null) null else item.asInstanceOf[Short].intValue
-      case dec: DecimalType => (item: Any) =>
-        Option(item).map { _ =>
-          val bigDecimalValue = item.asInstanceOf[java.math.BigDecimal]
-          val decimalConversions = new DecimalConversion()
-          decimalConversions.toFixed(bigDecimalValue, avroSchema.getField(structName).schema().getTypes.get(0),
-            LogicalTypes.decimal(dec.precision, dec.scale))
-        }.orNull
+      case dec: DecimalType =>
+        val schema = SchemaConverters.toAvroType(dec, nullable = false, structName, recordNamespace)
+        (item: Any) => {
+          Option(item).map { _ =>
+            val bigDecimalValue = item.asInstanceOf[java.math.BigDecimal]
+            val decimalConversions = new DecimalConversion()
+            decimalConversions.toFixed(bigDecimalValue, schema, LogicalTypes.decimal(dec.precision, dec.scale))
+          }.orNull
+        }
       case TimestampType => (item: Any) =>
         // Convert time to microseconds since spark-avro by default converts TimestampType to
         // Avro Logical TimestampMicros
@@ -299,7 +304,6 @@ object AvroConversionHelper {
         Option(item).map(_.asInstanceOf[Date].toLocalDate.toEpochDay.toInt).orNull
       case ArrayType(elementType, _) =>
         val elementConverter = createConverterToAvro(
-          avroSchema,
           elementType,
           structName,
           recordNamespace)
@@ -320,7 +324,6 @@ object AvroConversionHelper {
         }
       case MapType(StringType, valueType, _) =>
         val valueConverter = createConverterToAvro(
-          avroSchema,
           valueType,
           structName,
           recordNamespace)
@@ -340,7 +343,6 @@ object AvroConversionHelper {
         val childNameSpace = if (recordNamespace != "") s"$recordNamespace.$structName" else structName
         val fieldConverters = structType.fields.map(field =>
           createConverterToAvro(
-            avroSchema,
             field.dataType,
             field.name,
             childNameSpace))

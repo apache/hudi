@@ -40,6 +40,12 @@ RUN echo "Installing Spark-version (${SPARK_VERSION})" \
       && rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
       && cd /
 
+# Install python3 to enable and use pyspark shell
+RUN apt-get update \
+    && apt-get -yq install python3 \
+    && ln -sf $(which python3) /usr/bin/python \
+    && rm -rf /var/lib/apt/lists/*
+
 #Give permission to execute scripts
 RUN chmod +x /wait-for-step.sh && chmod +x /execute-step.sh && chmod +x /finish-step.sh
 

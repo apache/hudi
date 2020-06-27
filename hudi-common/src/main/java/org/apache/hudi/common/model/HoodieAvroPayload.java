@@ -67,4 +67,9 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
     }
     return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
+
+  // for examples
+  public byte[] getRecordBytes() {
+    return recordBytes;
+  }
 }

@@ -22,8 +22,8 @@ set -e
 
 LOCAL_SVN_DIR=local_svn_dir
 ROOT_SVN_URL=https://dist.apache.org/repos/dist/
-DEV_REPO=dev/incubator
-RELEASE_REPO=release/incubator
+DEV_REPO=dev
+RELEASE_REPO=release
 HUDI_REPO=hudi
 
 cd ~

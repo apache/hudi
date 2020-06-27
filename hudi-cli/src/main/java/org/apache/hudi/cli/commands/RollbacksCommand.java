@@ -21,6 +21,7 @@ package org.apache.hudi.cli.commands;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -56,8 +57,7 @@ public class RollbacksCommand implements CommandMarker {
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly)
-      throws IOException {
+          unspecifiedDefaultValue = "false") final boolean headerOnly) {
     HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.getTableMetaClient());
     HoodieTimeline rollback = activeTimeline.getRollbackTimeline().filterCompletedInstants();
 
@@ -79,9 +79,11 @@ public class RollbacksCommand implements CommandMarker {
         e.printStackTrace();
       }
     });
-    TableHeader header = new TableHeader().addTableHeaderField("Instant").addTableHeaderField("Rolledback Instant")
-        .addTableHeaderField("Total Files Deleted").addTableHeaderField("Time taken in millis")
-        .addTableHeaderField("Total Partitions");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_ROLLBACK_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_DELETED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TIME_TOKEN_MILLIS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_PARTITIONS);
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
@@ -112,15 +114,18 @@ public class RollbacksCommand implements CommandMarker {
               rows.add(row);
             }));
 
-    TableHeader header = new TableHeader().addTableHeaderField("Instant").addTableHeaderField("Rolledback Instants")
-        .addTableHeaderField("Partition").addTableHeaderField("Deleted File").addTableHeaderField("Succeeded");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_ROLLBACK_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELETED_FILE)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_SUCCEEDED);
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
   /**
    * An Active timeline containing only rollbacks.
    */
-  static class RollbackTimeline extends HoodieActiveTimeline {
+  public static class RollbackTimeline extends HoodieActiveTimeline {
 
     public RollbackTimeline(HoodieTableMetaClient metaClient) {
       super(metaClient, CollectionUtils.createImmutableSet(HoodieTimeline.ROLLBACK_EXTENSION));

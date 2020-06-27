@@ -62,6 +62,12 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_BLOOM_INDEX_FILTER_TYPE = BloomFilterTypeCode.SIMPLE.name();
   public static final String HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = "hoodie.bloom.index.filter.dynamic.max.entries";
   public static final String DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = "100000";
+  public static final String SIMPLE_INDEX_USE_CACHING_PROP = "hoodie.simple.index.use.caching";
+  public static final String DEFAULT_SIMPLE_INDEX_USE_CACHING = "true";
+  public static final String SIMPLE_INDEX_PARALLELISM_PROP = "hoodie.simple.index.parallelism";
+  public static final String DEFAULT_SIMPLE_INDEX_PARALLELISM = "0";
+  public static final String GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP = "hoodie.global.simple.index.parallelism";
+  public static final String DEFAULT_GLOBAL_SIMPLE_INDEX_PARALLELISM = "0";
 
   // 1B bloom filter checks happen in 250 seconds. 500ms to read a bloom filter.
   // 10M checks in 2500ms, thus amortizing the cost of reading bloom filter across partitions.
@@ -80,6 +86,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
   public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL = "hoodie.bloom.index.input.storage.level";
   public static final String DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
+  public static final String SIMPLE_INDEX_INPUT_STORAGE_LEVEL = "hoodie.simple.index.input.storage.level";
+  public static final String DEFAULT_SIMPLE_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
 
   /**
    * Only applies if index type is GLOBAL_BLOOM.
@@ -91,6 +99,9 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
    */
   public static final String BLOOM_INDEX_UPDATE_PARTITION_PATH = "hoodie.bloom.index.update.partition.path";
   public static final String DEFAULT_BLOOM_INDEX_UPDATE_PARTITION_PATH = "false";
+
+  public static final String SIMPLE_INDEX_UPDATE_PARTITION_PATH = "hoodie.simple.index.update.partition.path";
+  public static final String DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH = "false";
 
   private HoodieIndexConfig(Properties props) {
     super(props);
@@ -201,6 +212,31 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withSimpleIndexParallelism(int parallelism) {
+      props.setProperty(SIMPLE_INDEX_PARALLELISM_PROP, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder simpleIndexUseCaching(boolean useCaching) {
+      props.setProperty(SIMPLE_INDEX_USE_CACHING_PROP, String.valueOf(useCaching));
+      return this;
+    }
+
+    public Builder withSimpleIndexInputStorageLevel(String level) {
+      props.setProperty(SIMPLE_INDEX_INPUT_STORAGE_LEVEL, level);
+      return this;
+    }
+
+    public Builder withGlobalSimpleIndexParallelism(int parallelism) {
+      props.setProperty(GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withGlobalSimpleIndexUpdatePartitionPath(boolean updatePartitionPath) {
+      props.setProperty(SIMPLE_INDEX_UPDATE_PARTITION_PATH, String.valueOf(updatePartitionPath));
+      return this;
+    }
+
     public HoodieIndexConfig build() {
       HoodieIndexConfig config = new HoodieIndexConfig(props);
       setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP), INDEX_TYPE_PROP, DEFAULT_INDEX_TYPE);
@@ -228,6 +264,16 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           BLOOM_INDEX_FILTER_TYPE, DEFAULT_BLOOM_INDEX_FILTER_TYPE);
       setDefaultOnCondition(props, !props.contains(HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES),
           HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES, DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES);
+      setDefaultOnCondition(props, !props.containsKey(SIMPLE_INDEX_PARALLELISM_PROP), SIMPLE_INDEX_PARALLELISM_PROP,
+          DEFAULT_SIMPLE_INDEX_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(SIMPLE_INDEX_USE_CACHING_PROP), SIMPLE_INDEX_USE_CACHING_PROP,
+          DEFAULT_SIMPLE_INDEX_USE_CACHING);
+      setDefaultOnCondition(props, !props.containsKey(SIMPLE_INDEX_INPUT_STORAGE_LEVEL), SIMPLE_INDEX_INPUT_STORAGE_LEVEL,
+          DEFAULT_SIMPLE_INDEX_INPUT_STORAGE_LEVEL);
+      setDefaultOnCondition(props, !props.containsKey(GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP), GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP,
+          DEFAULT_GLOBAL_SIMPLE_INDEX_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(SIMPLE_INDEX_UPDATE_PARTITION_PATH),
+          SIMPLE_INDEX_UPDATE_PARTITION_PATH, DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH);
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;

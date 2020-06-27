@@ -18,11 +18,11 @@
 
 package org.apache.hudi.utilities.inline.fs;
 
-import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.common.fs.inline.FileSystemTestUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.fs.inline.InMemoryFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.testutils.FileSystemTestUtils;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -42,9 +42,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.FILE_SCHEME;
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getPhantomFile;
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.FILE_SCHEME;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.getPhantomFile;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterInMemPath;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 /**

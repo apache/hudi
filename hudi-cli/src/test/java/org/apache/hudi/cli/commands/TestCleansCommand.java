@@ -19,12 +19,12 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.cli.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.common.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -128,7 +128,9 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
     rows.add(new Comparable[] {clean.getTimestamp(), "102", "0", getLatestCleanTimeTakenInMillis().toString()});
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 
   /**
@@ -168,7 +170,9 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS, "0", "0"});
 
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 
   /**

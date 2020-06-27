@@ -18,9 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.common.HoodieClientTestUtils;
-import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -29,13 +26,13 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRollingStat;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
-import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
@@ -49,6 +46,10 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.WriteHelper;
+import org.apache.hudi.testutils.HoodieClientTestBase;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.testutils.TestRawTripPayload;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
@@ -70,10 +71,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.HoodieTestDataGenerator.NULL_SCHEMA;
-import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
+import static org.apache.hudi.testutils.HoodieTestDataGenerator.NULL_SCHEMA;
+import static org.apache.hudi.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -82,7 +83,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
-public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
+public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   private static final Logger LOG = LogManager.getLogger(TestHoodieClientOnCopyOnWriteStorage.class);
 
@@ -988,6 +989,44 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     return Pair.of(markerFilePath, result);
   }
 
+  @Test
+  public void testMultiOperationsPerCommit() throws IOException {
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false)
+        .withAllowMultiWriteOnSameInstant(true)
+        .build();
+    HoodieWriteClient client = getHoodieWriteClient(cfg);
+    String firstInstantTime = "0000";
+    client.startCommitWithTime(firstInstantTime);
+    int numRecords = 200;
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(dataGen.generateInserts(firstInstantTime, numRecords), 1);
+    JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, firstInstantTime);
+    assertTrue(client.commit(firstInstantTime, result), "Commit should succeed");
+    assertTrue(HoodieTestUtils.doesCommitExist(basePath, firstInstantTime),
+        "After explicit commit, commit file should be created");
+
+    // Check the entire dataset has all records still
+    String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+    for (int i = 0; i < fullPartitionPaths.length; i++) {
+      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+    }
+    assertEquals(numRecords,
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        "Must contain " + numRecords + " records");
+
+    String nextInstantTime = "0001";
+    client.startCommitWithTime(nextInstantTime);
+    JavaRDD<HoodieRecord> updateRecords = jsc.parallelize(dataGen.generateUpdates(nextInstantTime, numRecords), 1);
+    JavaRDD<HoodieRecord> insertRecords = jsc.parallelize(dataGen.generateInserts(nextInstantTime, numRecords), 1);
+    JavaRDD<WriteStatus> inserts = client.bulkInsert(insertRecords, nextInstantTime);
+    JavaRDD<WriteStatus> upserts = client.upsert(updateRecords, nextInstantTime);
+    assertTrue(client.commit(nextInstantTime, inserts.union(upserts)), "Commit should succeed");
+    assertTrue(HoodieTestUtils.doesCommitExist(basePath, firstInstantTime),
+        "After explicit commit, commit file should be created");
+    int totalRecords = 2 * numRecords;
+    assertEquals(totalRecords, HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count(),
+        "Must contain " + totalRecords + " records");
+  }
+
   /**
    * Build Hoodie Write Config for small data file sizes.
    */
@@ -1002,10 +1041,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     HoodieWriteConfig.Builder builder = getConfigBuilder(useNullSchema ? NULL_SCHEMA : TRIP_EXAMPLE_SCHEMA);
     return builder
         .withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().compactionSmallFileSize(HoodieTestDataGenerator.SIZE_PER_RECORD * 15)
-                .insertSplitSize(insertSplitSize).build()) // tolerate upto 15 records
+            HoodieCompactionConfig.newBuilder()
+                .compactionSmallFileSize(dataGen.getEstimatedFileSizeInBytes(150))
+                .insertSplitSize(insertSplitSize).build())
         .withStorageConfig(
-            HoodieStorageConfig.newBuilder().limitFileSize(HoodieTestDataGenerator.SIZE_PER_RECORD * 20).build())
+            HoodieStorageConfig.newBuilder()
+                .limitFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
         .build();
   }
 }

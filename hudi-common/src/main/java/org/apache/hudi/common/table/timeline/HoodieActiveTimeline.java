@@ -305,11 +305,16 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
+    transitionState(fromInstant, toInstant, data, false);
+  }
+
+  private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data,
+       boolean allowRedundantTransitions) {
     ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
     try {
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
         // Re-create the .inflight file by opening a new file and write the commit metadata in
-        createFileInMetaPath(fromInstant.getFileName(), data, false);
+        createFileInMetaPath(fromInstant.getFileName(), data, allowRedundantTransitions);
         Path fromInstantPath = new Path(metaClient.getMetaPath(), fromInstant.getFileName());
         Path toInstantPath = new Path(metaClient.getMetaPath(), toInstant.getFileName());
         boolean success = metaClient.getFs().rename(fromInstantPath, toInstantPath);
@@ -322,7 +327,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         ValidationUtils.checkArgument(metaClient.getFs().exists(new Path(metaClient.getMetaPath(),
             fromInstant.getFileName())));
         // Use Write Once to create Target File
-        createImmutableFileInPath(new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
+        if (allowRedundantTransitions) {
+          createFileInPath(new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
+        } else {
+          createImmutableFileInPath(new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
+        }
         LOG.info("Create new file for toInstant ?" + new Path(metaClient.getMetaPath(), toInstant.getFileName()));
       }
     } catch (IOException e) {
@@ -365,9 +374,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content) {
+    transitionRequestedToInflight(requested, content, false);
+  }
+
+  public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content,
+      boolean allowRedundantTransitions) {
     HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, requested.getAction(), requested.getTimestamp());
     ValidationUtils.checkArgument(requested.isRequested(), "Instant " + requested + " in wrong state");
-    transitionState(requested, inflight, content);
+    transitionState(requested, inflight, content, allowRedundantTransitions);
   }
 
   public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content) {

@@ -36,8 +36,6 @@ import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.hadoop.fs.FSDataInputStream;
 
-import javax.annotation.Nonnull;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -49,56 +47,42 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-/**
- * DataBlock contains a list of records serialized using Avro. The Datablock contains 1. Data Block version 2. Total
- * number of records in the block 3. Size of a record 4. Actual avro serialized content of the record
- */
-public class HoodieAvroDataBlock extends HoodieLogBlock {
+import javax.annotation.Nonnull;
 
-  private List<IndexedRecord> records;
-  private Schema schema;
+/**
+ * HoodieAvroDataBlock contains a list of records serialized using Avro. It is used with the Parquet base file format.
+ */
+public class HoodieAvroDataBlock extends HoodieDataBlock {
+
   private ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
   private ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
 
-  public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header,
-      @Nonnull Map<HeaderMetadataType, String> footer) {
-    super(header, footer, Option.empty(), Option.empty(), null, false);
-    this.records = records;
-    this.schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+  public HoodieAvroDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
+       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
+       @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
+       FSDataInputStream inputStream, boolean readBlockLazily) {
+    super(logBlockHeader, logBlockFooter, blockContentLocation, content, inputStream, readBlockLazily);
+  }
+
+  public HoodieAvroDataBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
+       boolean readBlockLazily, long position, long blockSize, long blockEndpos, Schema readerSchema,
+       Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+    super(content, inputStream, readBlockLazily,
+          Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), readerSchema, header,
+          footer);
   }
 
   public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header) {
-    this(records, header, new HashMap<>());
-  }
-
-  private HoodieAvroDataBlock(Option<byte[]> content, @Nonnull FSDataInputStream inputStream, boolean readBlockLazily,
-      Option<HoodieLogBlockContentLocation> blockContentLocation, Schema readerSchema,
-      @Nonnull Map<HeaderMetadataType, String> headers, @Nonnull Map<HeaderMetadataType, String> footer) {
-    super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
-    this.schema = readerSchema;
-  }
-
-  public static HoodieLogBlock getBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
-      boolean readBlockLazily, long position, long blockSize, long blockEndpos, Schema readerSchema,
-      Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
-
-    return new HoodieAvroDataBlock(content, inputStream, readBlockLazily,
-        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), readerSchema, header,
-        footer);
-
+    super(records, header, new HashMap<>());
   }
 
   @Override
-  public byte[] getContentBytes() throws IOException {
+  public HoodieLogBlockType getBlockType() {
+    return HoodieLogBlockType.AVRO_DATA_BLOCK;
+  }
 
-    // In case this method is called before realizing records from content
-    if (getContent().isPresent()) {
-      return getContent().get();
-    } else if (readBlockLazily && !getContent().isPresent() && records == null) {
-      // read block lazily
-      createRecordsFromContentBytes();
-    }
-
+  @Override
+  protected byte[] serializeRecords() throws IOException {
     Schema schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
     GenericDatumWriter<IndexedRecord> writer = new GenericDatumWriter<>(schema);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -137,40 +121,10 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
     return baos.toByteArray();
   }
 
-  @Override
-  public HoodieLogBlockType getBlockType() {
-    return HoodieLogBlockType.AVRO_DATA_BLOCK;
-  }
-
-  public List<IndexedRecord> getRecords() {
-    if (records == null) {
-      try {
-        // in case records are absent, read content lazily and then convert to IndexedRecords
-        createRecordsFromContentBytes();
-      } catch (IOException io) {
-        throw new HoodieIOException("Unable to convert content bytes to records", io);
-      }
-    }
-    return records;
-  }
-
-  public Schema getSchema() {
-    // if getSchema was invoked before converting byte [] to records
-    if (records == null) {
-      getRecords();
-    }
-    return schema;
-  }
-
   // TODO (na) - Break down content into smaller chunks of byte [] to be GC as they are used
   // TODO (na) - Implement a recordItr instead of recordList
-  private void createRecordsFromContentBytes() throws IOException {
-
-    if (readBlockLazily && !getContent().isPresent()) {
-      // read log block contents from disk
-      inflate();
-    }
-
+  @Override
+  protected void deserializeRecords() throws IOException {
     SizeAwareDataInputStream dis =
         new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(getContent().get())));
 
@@ -212,6 +166,9 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
 
   //----------------------------------------------------------------------------------------
   //                                  DEPRECATED METHODS
+  //
+  // These methods were only supported by HoodieAvroDataBlock and have been deprecated. Hence,
+  // these are only implemented here even though they duplicate the code from HoodieAvroDataBlock.
   //----------------------------------------------------------------------------------------
 
   /**
@@ -230,7 +187,7 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
    * HoodieLogFormat V1.
    */
   @Deprecated
-  public static HoodieLogBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
+  public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
 
     SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
 
@@ -302,5 +259,4 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
     output.close();
     return baos.toByteArray();
   }
-
 }

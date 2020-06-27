@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.fs.inline;
 
+import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.conf.Configuration;
@@ -26,7 +27,6 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -38,8 +38,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.RANDOM;
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getRandomOuterFSPath;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterFSPath;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -121,7 +121,6 @@ public class TestInLineFileSystem {
   }
 
   @Test
-  @Disabled("Disabling flaky test for now https://issues.apache.org/jira/browse/HUDI-786")
   public void testFileSystemApis() throws IOException {
     OuterPathInfo outerPathInfo = generateOuterFileAndGetInfo(1000);
     Path inlinePath = FileSystemTestUtils.getPhantomFile(outerPathInfo.outerPath, outerPathInfo.startOffset, outerPathInfo.length);
@@ -129,9 +128,21 @@ public class TestInLineFileSystem {
     final FSDataInputStream fsDataInputStream = inlineFileSystem.open(inlinePath);
     byte[] actualBytes = new byte[outerPathInfo.expectedBytes.length];
     // verify pos
-    assertEquals(0 - outerPathInfo.startOffset, fsDataInputStream.getPos());
+    assertEquals(0, fsDataInputStream.getPos());
     fsDataInputStream.readFully(0, actualBytes);
     assertArrayEquals(outerPathInfo.expectedBytes, actualBytes);
+
+    // test seek
+    int[] validPositions = {1, 100, 290, 520, 990, 999, 1000};
+    for (int pos : validPositions) {
+      fsDataInputStream.seek(pos);
+    }
+    int[] invalidPositions = {1001, 1100, 10000};
+    for (int pos : invalidPositions) {
+      assertThrows(IOException.class, () -> {
+        fsDataInputStream.seek(pos);
+      }, "Should have thrown IOException");
+    }
 
     // read partial data
     // test read(long position, byte[] buffer, int offset, int length)
@@ -142,9 +153,12 @@ public class TestInLineFileSystem {
     fsDataInputStream.read(25, actualBytes, 100, 210);
     verifyArrayEquality(outerPathInfo.expectedBytes, 25, 210, actualBytes, 100, 210);
     // give length to read > than actual inline content
-    assertThrows(IndexOutOfBoundsException.class, () -> {
+    assertThrows(IOException.class, () -> {
       fsDataInputStream.read(0, new byte[1100], 0, 1101);
-    }, "Should have thrown IndexOutOfBoundsException");
+    }, "Should have thrown IOException");
+    assertThrows(IOException.class, () -> {
+      fsDataInputStream.read(0, new byte[10], 991, 10);
+    }, "Should have thrown IOException");
 
     // test readFully(long position, byte[] buffer, int offset, int length)
     actualBytes = new byte[100];
@@ -154,9 +168,12 @@ public class TestInLineFileSystem {
     fsDataInputStream.readFully(25, actualBytes, 100, 210);
     verifyArrayEquality(outerPathInfo.expectedBytes, 25, 210, actualBytes, 100, 210);
     // give length to read > than actual inline content
-    assertThrows(IndexOutOfBoundsException.class, () -> {
+    assertThrows(IOException.class, () -> {
       fsDataInputStream.readFully(0, new byte[1100], 0, 1101);
-    }, "Should have thrown IndexOutOfBoundsException");
+    }, "Should have thrown IOException");
+    assertThrows(IOException.class, () -> {
+      fsDataInputStream.readFully(0, new byte[100], 910, 100);
+    }, "Should have thrown IOException");
 
     // test readFully(long position, byte[] buffer)
     actualBytes = new byte[100];
@@ -166,19 +183,10 @@ public class TestInLineFileSystem {
     fsDataInputStream.readFully(25, actualBytes);
     verifyArrayEquality(outerPathInfo.expectedBytes, 25, 210, actualBytes, 0, 210);
     // give length to read > than actual inline content
-    actualBytes = new byte[1100];
-    fsDataInputStream.readFully(0, actualBytes);
-    verifyArrayEquality(outerPathInfo.expectedBytes, 0, 1000, actualBytes, 0, 1000);
+    assertThrows(IOException.class, () -> {
+      fsDataInputStream.readFully(0, new byte[1100]);
+    }, "Should have thrown IOException");
 
-    // TODO. seek does not move the position. need to investigate.
-    // test seekToNewSource(long targetPos)
-    /* fsDataInputStream.seekToNewSource(75);
-    Assert.assertEquals(outerPathInfo.startOffset + 75, fsDataInputStream.getPos());
-    fsDataInputStream.seekToNewSource(180);
-    Assert.assertEquals(outerPathInfo.startOffset + 180, fsDataInputStream.getPos());
-    fsDataInputStream.seekToNewSource(910);
-    Assert.assertEquals(outerPathInfo.startOffset + 910, fsDataInputStream.getPos());
-    */
     // test read(ByteBuffer buf)
     ByteBuffer actualByteBuffer = ByteBuffer.allocate(100);
     assertThrows(UnsupportedOperationException.class, () -> {
@@ -195,11 +203,6 @@ public class TestInLineFileSystem {
     assertThrows(UnsupportedOperationException.class, () -> {
       fsDataInputStream.setDropBehind(true);
     }, "Should have thrown exception");
-
-    // yet to test
-    // read(ByteBufferPool bufferPool, int maxLength, EnumSet<ReadOption> opts)
-    // releaseBuffer(ByteBuffer buffer)
-    // unbuffer()
 
     fsDataInputStream.close();
   }

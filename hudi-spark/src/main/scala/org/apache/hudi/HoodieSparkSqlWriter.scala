@@ -106,8 +106,8 @@ private[hudi] object HoodieSparkSqlWriter {
       val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
       val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
       val hoodieAllIncomingRecords = genericRecords.map(gr => {
-        val orderingVal = DataSourceUtils.getNestedFieldValAsString(
-          gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false).asInstanceOf[Comparable[_]]
+        val orderingVal = DataSourceUtils.getNestedFieldVal(gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false)
+            .asInstanceOf[Comparable[_]]
         DataSourceUtils.createHoodieRecord(gr,
           orderingVal, keyGenerator.getKey(gr), parameters(PAYLOAD_CLASS_OPT_KEY))
       }).toJavaRDD()
@@ -212,6 +212,7 @@ private[hudi] object HoodieSparkSqlWriter {
       HIVE_SYNC_ENABLED_OPT_KEY -> DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL,
       HIVE_DATABASE_OPT_KEY -> DEFAULT_HIVE_DATABASE_OPT_VAL,
       HIVE_TABLE_OPT_KEY -> DEFAULT_HIVE_TABLE_OPT_VAL,
+      HIVE_BASE_FILE_FORMAT_OPT_KEY -> DEFAULT_HIVE_BASE_FILE_FORMAT_OPT_VAL,
       HIVE_USER_OPT_KEY -> DEFAULT_HIVE_USER_OPT_VAL,
       HIVE_PASS_OPT_KEY -> DEFAULT_HIVE_PASS_OPT_VAL,
       HIVE_URL_OPT_KEY -> DEFAULT_HIVE_URL_OPT_VAL,
@@ -239,6 +240,7 @@ private[hudi] object HoodieSparkSqlWriter {
   private def buildSyncConfig(basePath: Path, parameters: Map[String, String]): HiveSyncConfig = {
     val hiveSyncConfig: HiveSyncConfig = new HiveSyncConfig()
     hiveSyncConfig.basePath = basePath.toString
+    hiveSyncConfig.baseFileFormat = parameters(HIVE_BASE_FILE_FORMAT_OPT_KEY);
     hiveSyncConfig.usePreApacheInputFormat =
       parameters.get(HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY).exists(r => r.toBoolean)
     hiveSyncConfig.databaseName = parameters(HIVE_DATABASE_OPT_KEY)
