@@ -42,6 +42,8 @@ docs:
         url: /docs/deployment.html
       - title: "Cloud Storage"
         url: /docs/cloud.html
+      - title: "Metrics"
+        url: /docs/metrics.html
   - title: INFO
     children:
       - title: "Docs Versions"

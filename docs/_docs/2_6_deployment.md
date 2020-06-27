@@ -527,24 +527,6 @@ Compaction successfully repaired
 .....
 ```
 
-
-## [Metrics](docs/configurations.html#metrics-configs) {#metrics}
-
-Once the Hudi writer is configured with the right table and environment for metrics, it produces the following graphite metrics, that aid in debugging hudi tables
-
- - **Commit Duration** - This is amount of time it took to successfully commit a batch of records
- - **Rollback Duration** - Similarly, amount of time taken to undo partial data left over by a failed commit (happens everytime automatically after a failing write)
- - **File Level metrics** - Shows the amount of new files added, versions, deleted (cleaned) in each commit
- - **Record Level Metrics** - Total records inserted/updated etc per commit
- - **Partition Level metrics** - number of partitions upserted (super useful to understand sudden spikes in commit duration)
-
-These metrics can then be plotted on a standard tool like grafana. Below is a sample commit duration chart.
-
-<figure>
-    <img class="docimage" src="/assets/images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 100%" />
-</figure>
-
-
 ## Troubleshooting
 
 Section below generally aids in debugging Hudi failures. Off the bat, the following metadata is added to every record to help triage  issues easily using standard Hadoop SQL engines (Hive/Presto/Spark)
