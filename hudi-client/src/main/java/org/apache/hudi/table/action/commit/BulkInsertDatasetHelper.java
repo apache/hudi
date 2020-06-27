@@ -28,7 +28,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.HoodieDatasetWriteMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.sql.Dataset;
@@ -48,12 +48,12 @@ public class BulkInsertDatasetHelper {
 
   private static final Logger LOG = LogManager.getLogger(BulkInsertDatasetHelper.class);
 
-  public static <T extends HoodieRecordPayload<T>> HoodieWriteMetadata bulkInsertDataset(
+  public static <T extends HoodieRecordPayload<T>> HoodieDatasetWriteMetadata bulkInsertDataset(
       Dataset<Row> rowDataset, String instantTime,
       HoodieTable<T> table, HoodieWriteConfig config,
       BulkInsertDatasetCommitActionExecutor<T> executor, boolean performDedupe,
       Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieWriteMetadata result = new HoodieWriteMetadata();
+    HoodieDatasetWriteMetadata result = new HoodieDatasetWriteMetadata();
 
     // De-dupe/merge if needed
     Dataset<Row> dedupedRecords = rowDataset;
@@ -80,12 +80,6 @@ public class BulkInsertDatasetHelper {
             functions.lit("").cast(DataTypes.StringType))
         .withColumn(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
             functions.lit("").cast(DataTypes.StringType));
-
-    // since we can't get partition index in scala mapPartition func, we have to generate these fileIds within
-    // mapPartition functions
-    /* // generate new file ID prefixes for each output partition
-    final List<String> fileIDPrefixes =
-        IntStream.range(0, parallelism).mapToObj(i -> FSUtils.createNewFileIdPfx()).collect(Collectors.toList());*/
 
     table.getActiveTimeline()
         .transitionRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED,

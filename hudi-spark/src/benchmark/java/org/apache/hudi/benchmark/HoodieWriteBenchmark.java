@@ -54,7 +54,7 @@ public class HoodieWriteBenchmark {
   // @Benchmark
   @BenchmarkMode(Mode.AverageTime)
   @Warmup(iterations = 1)
-  @Measurement(iterations = 1)
+  @Measurement(iterations = 50)
   @OutputTimeUnit(TimeUnit.SECONDS)
   public void benchmarkInsert(WriteBenchmarkExecutionPlan plan) throws Exception {
     try {

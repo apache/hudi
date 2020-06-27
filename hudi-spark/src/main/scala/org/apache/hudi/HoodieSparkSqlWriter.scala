@@ -404,8 +404,8 @@ private[hudi] object HoodieSparkSqlWriter {
           .take(100)
           .foreach(ws => {
             log.trace("Global error :", ws.globalError)
-            if (ws.failedRows.size() > 0) {
-              ws.failedRows.foreach(kt =>
+            if (ws.getFailedRowsSize() > 0) {
+              ws.getFailedRows.foreach(kt =>
                 log.trace(s"Error for key: ${kt._2}", kt._3))
             }
           })

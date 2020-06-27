@@ -18,32 +18,29 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.util.Option;
-
-import org.apache.hadoop.fs.Path;
-import org.apache.spark.sql.Row;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.util.Option;
+import org.apache.spark.sql.Row;
 import scala.Tuple3;
 
 public class EncodableWriteStatus implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private String recordKeyProp;
-  public String fileId;
-  public String partitionPath;
-  public List<Row> successRows = new ArrayList<>();
-  public List<Tuple3<Row, String, Throwable>> failedRows = new ArrayList<>();
+  private String fileId;
+  private String partitionPath;
+  private List<Row> successRows = new ArrayList<>();
+  private List<Tuple3<Row, String, Throwable>> failedRows = new ArrayList<>();
   public Throwable globalError;
   public Path path;
-  public long endTime;
-  public long recordsWritten;
-  public long insertRecordsWritten;
+  private long endTime;
+  private long recordsWritten;
+  private long insertRecordsWritten;
   private HoodieWriteStat stat;
 
   public EncodableWriteStatus() {
@@ -57,7 +54,8 @@ public class EncodableWriteStatus implements Serializable {
     this.successRows.add(row);
   }
 
-  public void markFailure(Row row, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markFailure(Row row, Throwable t,
+      Option<Map<String, String>> optionalRecordMetadata) {
     // Guaranteed to have at-least one error
     failedRows.add(new Tuple3<>(row, row.getAs(recordKeyProp), t));
   }
@@ -79,7 +77,7 @@ public class EncodableWriteStatus implements Serializable {
     this.stat = stat;
   }
 
-  /*public String getFileId() {
+  public String getFileId() {
     return fileId;
   }
 
@@ -99,33 +97,38 @@ public class EncodableWriteStatus implements Serializable {
     return successRows;
   }
 
-  public void setSuccessRows(List<Row> successRows) {
-    this.successRows = successRows;
+  public long getFailedRowsSize() {
+    return failedRows.size();
   }
 
   public List<Tuple3<Row, String, Throwable>> getFailedRows() {
     return failedRows;
   }
 
+  /*
   public void setFailedRows(List<Tuple3<Row, String, Throwable>> failedRows) {
     this.failedRows = failedRows;
-  }
+  }*/
 
+  /*
   public Throwable getGlobalError() {
     return globalError;
-  }
+  }*/
 
+  /*
   public void setGlobalError(Throwable globalError) {
     this.globalError = globalError;
-  }
+  }*/
 
-  public Path getPath() {
+  /*
+  public Path getFilePath() {
     return path;
-  }
+  }*/
 
-  public void setPath(Path path) {
+  /*
+  public void setFilePath(Path path) {
     this.path = path;
-  }
+  }*/
 
   public long getEndTime() {
     return endTime;
@@ -149,11 +152,13 @@ public class EncodableWriteStatus implements Serializable {
 
   public void setInsertRecordsWritten(long insertRecordsWritten) {
     this.insertRecordsWritten = insertRecordsWritten;
-  } */
+  }
 
   @Override
   public String toString() {
-    return "PartitionPath " + partitionPath + ", FileID " + fileId + ", Success records " + successRows.size()
-        + ", errored Rows " + failedRows.size() + ", global error " + (globalError != null) + ", end time " + endTime;
+    return "PartitionPath " + partitionPath + ", FileID " + fileId + ", Success records "
+        + successRows.size()
+        + ", errored Rows " + failedRows.size() + ", global error " + (globalError != null)
+        + ", end time " + endTime;
   }
 }

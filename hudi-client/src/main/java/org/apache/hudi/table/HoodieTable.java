@@ -58,6 +58,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.action.HoodieDatasetWriteMetadata;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -171,7 +172,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param bulkInsertPartitioner User Defined Partitioner
    * @return HoodieWriteMetadata
    */
-  public abstract HoodieWriteMetadata bulkInsertDataset(JavaSparkContext jsc, String instantTime,
+  public abstract HoodieDatasetWriteMetadata bulkInsertDataset(JavaSparkContext jsc, String instantTime,
       Dataset<Row> rows, Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
 
   /**

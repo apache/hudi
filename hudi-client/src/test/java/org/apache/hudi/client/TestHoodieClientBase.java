@@ -178,7 +178,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   public static void assertNoWriteErrorsEncWriteStatus(List<EncodableWriteStatus> statuses) {
     // Verify there are no errors
     for (EncodableWriteStatus status : statuses) {
-      assertEquals(status.failedRows.size(), 0, "Errors found in write of " + status.fileId);
+      assertEquals(status.getFailedRowsSize(), 0, "Errors found in write of " + status.getFileId());
     }
   }
 

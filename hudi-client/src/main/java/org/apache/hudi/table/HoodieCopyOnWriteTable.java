@@ -46,6 +46,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.table.action.HoodieDatasetWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BulkInsertCommitActionExecutor;
@@ -111,7 +112,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public HoodieWriteMetadata bulkInsertDataset(JavaSparkContext jsc, String instantTime, Dataset<Row> rows,
+  public HoodieDatasetWriteMetadata bulkInsertDataset(JavaSparkContext jsc, String instantTime, Dataset<Row> rows,
                                           Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
     return new BulkInsertDatasetCommitActionExecutor<>(jsc, config,
         this, instantTime, rows, bulkInsertPartitioner).execute();

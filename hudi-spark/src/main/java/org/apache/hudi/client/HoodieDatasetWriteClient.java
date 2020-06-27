@@ -53,7 +53,7 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.HoodieDatasetWriteMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -63,9 +63,9 @@ import org.apache.spark.sql.Row;
 
 /**
  * Client for performing data set operations.
- * @param <T>
  */
-public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements Serializable, AutoCloseable {
+public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements Serializable,
+    AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieDatasetWriteClient.class);
 
@@ -139,15 +139,19 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
     LOG.info("Generate a new instant time " + instantTime);
     HoodieTableMetaClient metaClient = createMetaClient(true);
     // if there are pending compactions, their instantTime must not be greater than that of this instant time
-    metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().ifPresent(latestPending ->
-        ValidationUtils.checkArgument(
-            HoodieTimeline.compareTimestamps(latestPending.getTimestamp(), HoodieTimeline.LESSER_THAN, instantTime),
-            "Latest pending compaction instant time must be earlier than this instant time. Latest Compaction :"
-                + latestPending + ",  Ingesting at " + instantTime));
+    metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant()
+        .ifPresent(latestPending ->
+            ValidationUtils.checkArgument(
+                HoodieTimeline
+                    .compareTimestamps(latestPending.getTimestamp(), HoodieTimeline.LESSER_THAN,
+                        instantTime),
+                "Latest pending compaction instant time must be earlier than this instant time. Latest Compaction :"
+                    + latestPending + ",  Ingesting at " + instantTime));
     HoodieTable<T> table = HoodieTable.create(metaClient, config, jsc);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     String commitActionType = table.getMetaClient().getCommitActionType();
-    activeTimeline.createNewInstant(new HoodieInstant(State.REQUESTED, commitActionType, instantTime));
+    activeTimeline
+        .createNewInstant(new HoodieInstant(State.REQUESTED, commitActionType, instantTime));
   }
 
   /**
@@ -173,7 +177,7 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT);
-    HoodieWriteMetadata result = table
+    HoodieDatasetWriteMetadata result = table
         .bulkInsertDataset(jsc, instantTime, records, bulkInsertPartitioner);
     return postWriteDataset(result, instantTime, table);
   }
@@ -187,7 +191,7 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
    * @param hoodieTable Hoodie Table
    * @return Write Status
    */
-  private Dataset<EncodableWriteStatus> postWriteDataset(HoodieWriteMetadata result,
+  private Dataset<EncodableWriteStatus> postWriteDataset(HoodieDatasetWriteMetadata result,
       String instantTime, HoodieTable<T> hoodieTable) {
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(getOperationType().name(),
@@ -218,7 +222,8 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
   public boolean commitDataset(String instantTime, Dataset<EncodableWriteStatus> encWriteStatuses,
       Option<Map<String, String>> extraMetadata) {
     HoodieTableMetaClient metaClient = createMetaClient(false);
-    return commitDataset(instantTime, encWriteStatuses, extraMetadata, metaClient.getCommitActionType());
+    return commitDataset(instantTime, encWriteStatuses, extraMetadata,
+        metaClient.getCommitActionType());
   }
 
   private boolean commitDataset(String instantTime, Dataset<EncodableWriteStatus> encWriteStatuses,
@@ -263,13 +268,16 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
 
       if (writeContext != null) {
         long durationInMs = metrics.getDurationInMs(writeContext.stop());
-        metrics.updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(instantTime).getTime(), durationInMs,
-            metadata, actionType);
+        metrics
+            .updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(instantTime).getTime(),
+                durationInMs,
+                metadata, actionType);
         writeContext = null;
       }
     } catch (ParseException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime
-          + "Instant time is not of valid format", e);
+      throw new HoodieCommitException(
+          "Failed to complete commit " + config.getBasePath() + " at time " + instantTime
+              + "Instant time is not of valid format", e);
     }
   }
 
@@ -296,7 +304,8 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
         // TODO: why is stat.getPartitionPath() null at times here.
         metadata.addWriteStat(partitionPath, stat);
         HoodieRollingStat hoodieRollingStat = new HoodieRollingStat(stat.getFileId(),
-            stat.getNumWrites() - (stat.getNumUpdateWrites() - stat.getNumDeletes()), stat.getNumUpdateWrites(),
+            stat.getNumWrites() - (stat.getNumUpdateWrites() - stat.getNumDeletes()),
+            stat.getNumUpdateWrites(),
             stat.getNumDeletes(), stat.getTotalWriteBytes());
         rollingStatMetadata.addRollingStat(partitionPath, hoodieRollingStat);
       }
@@ -305,15 +314,19 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
           table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
       if (lastInstant.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            table.getActiveTimeline().getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
+            table.getActiveTimeline().getInstantDetails(lastInstant.get()).get(),
+            HoodieCommitMetadata.class);
         Option<String> lastRollingStat = Option
-            .ofNullable(commitMetadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY));
+            .ofNullable(commitMetadata.getExtraMetadata()
+                .get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY));
         if (lastRollingStat.isPresent()) {
           rollingStatMetadata = rollingStatMetadata
-              .merge(HoodieCommitMetadata.fromBytes(lastRollingStat.get().getBytes(), HoodieRollingStatMetadata.class));
+              .merge(HoodieCommitMetadata
+                  .fromBytes(lastRollingStat.get().getBytes(), HoodieRollingStatMetadata.class));
         }
       }
-      metadata.addMetadata(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, rollingStatMetadata.toJsonString());
+      metadata.addMetadata(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY,
+          rollingStatMetadata.toJsonString());
     } catch (IOException io) {
       throw new HoodieCommitException("Unable to save rolling stats");
     }
@@ -344,7 +357,8 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
     try {
       metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
       // We cannot have unbounded commit files. Archive commits if we have to archive
-      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, createMetaClient(true));
+      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config,
+          createMetaClient(true));
       archiveLog.archiveIfRequired(jsc);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
@@ -353,11 +367,13 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
 
   /**
    * Finalize Write operation.
-   * @param table  HoodieTable
+   *
+   * @param table HoodieTable
    * @param instantTime Instant Time
    * @param stats Hoodie Write Stat
    */
-  protected void finalizeWrite(HoodieTable<T> table, String instantTime, List<HoodieWriteStat> stats) {
+  protected void finalizeWrite(HoodieTable<T> table, String instantTime,
+      List<HoodieWriteStat> stats) {
     try {
       final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
       table.finalizeWrite(jsc, instantTime, stats);
@@ -369,7 +385,8 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
         });
       }
     } catch (HoodieIOException ioe) {
-      throw new HoodieCommitException("Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
+      throw new HoodieCommitException(
+          "Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
     }
   }
 
@@ -383,8 +400,10 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
    */
   private void rollbackPendingCommits() {
     HoodieTable<T> table = HoodieTable.create(config, jsc);
-    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
-    List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp)
+    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline()
+        .filterPendingExcludingCompaction();
+    List<String> commits = inflightTimeline.getReverseOrderedInstants()
+        .map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     for (String commit : commits) {
       rollback(commit);
@@ -403,11 +422,14 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
     final Timer.Context context = this.metrics.getRollbackCtx();
     try {
       HoodieTable<T> table = HoodieTable.create(config, jsc);
-      Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstants()
-          .filter(instant -> HoodieActiveTimeline.EQUALS.test(instant.getTimestamp(), commitInstantTime))
-          .findFirst());
+      Option<HoodieInstant> commitInstantOpt = Option
+          .fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstants()
+              .filter(instant -> HoodieActiveTimeline.EQUALS
+                  .test(instant.getTimestamp(), commitInstantTime))
+              .findFirst());
       if (commitInstantOpt.isPresent()) {
-        HoodieRollbackMetadata rollbackMetadata = table.rollback(jsc, rollbackInstantTime, commitInstantOpt.get(), true);
+        HoodieRollbackMetadata rollbackMetadata = table
+            .rollback(jsc, rollbackInstantTime, commitInstantOpt.get(), true);
         if (context != null) {
           long durationInMs = metrics.getDurationInMs(context.stop());
           metrics.updateRollbackMetrics(durationInMs, rollbackMetadata.getTotalFilesDeleted());
@@ -418,7 +440,8 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
         return false;
       }
     } catch (Exception e) {
-      throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime, e);
+      throw new HoodieRollbackException(
+          "Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime, e);
     }
   }
 }

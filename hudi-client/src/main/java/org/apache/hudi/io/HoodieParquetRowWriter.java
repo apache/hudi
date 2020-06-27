@@ -105,9 +105,9 @@ public class HoodieParquetRowWriter implements Serializable {
     this.writeSupport = writeSupport;
     this.timer = new HoodieTimer().startTimer();
     this.encodableWriteStatus = new EncodableWriteStatus(recordKeyProp);
-    this.encodableWriteStatus.fileId = fileId;
+    this.encodableWriteStatus.setFileId(fileId);
     try {
-      encodableWriteStatus.partitionPath = partitionPath;
+      encodableWriteStatus.setPartitionPath(partitionPath);
       path = makeNewPath(partitionPath, writeToken, fileId, fs);
       Configuration localConf = registerFileSystem(path, hoodieTable.getHadoopConf());
       // convert to hoodiePath and instantiate WrapperFileSystem to assist in finding file size
@@ -136,9 +136,8 @@ public class HoodieParquetRowWriter implements Serializable {
   }
 
   public boolean canWrite(Row row) {
-    return encodableWriteStatus.globalError == null
-        && wrapperFileSystem.getBytesWritten(hoodiePath) < maxFileSize
-        && row.getAs(config.getPartitionPathFieldProp()).equals(encodableWriteStatus.partitionPath);
+    return wrapperFileSystem.getBytesWritten(hoodiePath) < maxFileSize
+        && row.getAs(partitionPathProp).equals(encodableWriteStatus.getPartitionPath());
   }
 
   public void writeRow(Row row) {
@@ -162,17 +161,17 @@ public class HoodieParquetRowWriter implements Serializable {
   public EncodableWriteStatus close() throws IOException {
     writer.close();
     encodableWriteStatus.path = path;
-    encodableWriteStatus.recordsWritten = recordsWritten;
-    encodableWriteStatus.insertRecordsWritten = insertRecordsWritten;
-    encodableWriteStatus.endTime = timer.endTimer();
+    encodableWriteStatus.setRecordsWritten(recordsWritten);
+    encodableWriteStatus.setInsertRecordsWritten(insertRecordsWritten);
+    encodableWriteStatus.setEndTime(timer.endTimer());
 
     HoodieWriteStat stat = new HoodieWriteStat();
-    stat.setPartitionPath(encodableWriteStatus.partitionPath);
-    stat.setNumWrites(encodableWriteStatus.recordsWritten);
+    stat.setPartitionPath(encodableWriteStatus.getPartitionPath());
+    stat.setNumWrites(encodableWriteStatus.getRecordsWritten());
     stat.setNumDeletes(0);
-    stat.setNumInserts(encodableWriteStatus.insertRecordsWritten);
+    stat.setNumInserts(encodableWriteStatus.getInsertRecordsWritten());
     stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
-    stat.setFileId(encodableWriteStatus.fileId);
+    stat.setFileId(encodableWriteStatus.getFileId());
     if (path != null) {
       stat.setPath(new Path(config.getBasePath()), path);
       long fileSizeInBytes = FSUtils.getFileSize(fs, path);
@@ -182,9 +181,9 @@ public class HoodieParquetRowWriter implements Serializable {
       stat.setTotalWriteBytes(0);
       stat.setFileSizeInBytes(0);
     }
-    stat.setTotalWriteErrors(encodableWriteStatus.failedRows.size());
+    stat.setTotalWriteErrors(encodableWriteStatus.getFailedRowsSize());
     HoodieWriteStat.RuntimeStats runtimeStats = new HoodieWriteStat.RuntimeStats();
-    runtimeStats.setTotalCreateTime(encodableWriteStatus.endTime);
+    runtimeStats.setTotalCreateTime(encodableWriteStatus.getEndTime());
     stat.setRuntimeStats(runtimeStats);
     encodableWriteStatus.setStat(stat);
     return encodableWriteStatus;
@@ -205,11 +204,9 @@ public class HoodieParquetRowWriter implements Serializable {
 
   public void setGlobalError(Throwable e) {
     if (encodableWriteStatus.globalError == null) {
-      LOG.error("Setting Global error for " + partitionPath + ", fileId " + fileId + " :: " + e
-          .getCause());
       encodableWriteStatus.globalError = e;
     } else {
-      LOG.error(
+      LOG.warn(
           "Ignoring global error since its already set for " + partitionPath + ", fieId " + fileId
               + ". Existing " + encodableWriteStatus.globalError.getCause() + ".. New " + e
               .getCause());
