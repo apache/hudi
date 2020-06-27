@@ -16,17 +16,25 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.exception;
+package org.apache.hudi.keygen;
 
-import org.apache.hudi.exception.HoodieException;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 
-public class HoodieDeltaStreamerException extends HoodieException {
+public class TestKeyGeneratorUtilities {
 
-  public HoodieDeltaStreamerException(String msg, Throwable e) {
-    super(msg, e);
-  }
+  public String exampleSchema = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+      + "{\"name\": \"timestamp\",\"type\": \"long\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"ts_ms\", \"type\": \"string\"},"
+      + "{\"name\": \"pii_col\", \"type\": \"string\"}]}";
 
-  public HoodieDeltaStreamerException(String msg) {
-    super(msg);
+  public GenericRecord getRecord() {
+    GenericRecord record = new GenericData.Record(new Schema.Parser().parse(exampleSchema));
+    record.put("timestamp", 4357686);
+    record.put("_row_key", "key1");
+    record.put("ts_ms", "2020-03-21");
+    record.put("pii_col", "pi");
+    return record;
   }
 }

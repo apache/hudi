@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.keygen;
+package org.apache.hudi.keygen;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
@@ -40,13 +40,13 @@ public class TestTimestampBasedKeyGenerator {
   public void initialize() throws IOException {
     Schema schema = SchemaTestUtil.getTimestampEvolvedSchema();
     baseRecord = SchemaTestUtil
-        .generateAvroRecordFromJson(schema, 1, "001", "f1");
+      .generateAvroRecordFromJson(schema, 1, "001", "f1");
 
     properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "field1");
     properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "createTime");
     properties.setProperty(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(), "false");
   }
-  
+
   private TypedProperties getBaseKeyConfig(String timestampType, String dateFormat, String timezone, String scalarType) {
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.type", timestampType);
     properties.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", dateFormat);
@@ -55,7 +55,6 @@ public class TestTimestampBasedKeyGenerator {
     if (scalarType != null) {
       properties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit", scalarType);
     }
-
     return properties;
   }
 
