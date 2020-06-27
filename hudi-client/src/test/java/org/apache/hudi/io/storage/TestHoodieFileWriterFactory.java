@@ -34,26 +34,26 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for {@link HoodieStorageWriterFactory}.
+ * Tests for {@link HoodieFileWriterFactory}.
  */
-public class TestHoodieStorageWriterFactory extends HoodieClientTestBase {
+public class TestHoodieFileWriterFactory extends HoodieClientTestBase {
 
   @Test
-  public void testGetStorageWriter() throws IOException {
+  public void testGetFileWriter() throws IOException {
     // parquet file format.
     final String instantTime = "100";
     final Path parquetPath = new Path(basePath + "/partition/path/f1_1-0-1_000.parquet");
     final HoodieWriteConfig cfg = getConfig();
     HoodieTable table = HoodieTable.create(metaClient, cfg, hadoopConf);
     SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
-    HoodieStorageWriter<IndexedRecord> parquetWriter = HoodieStorageWriterFactory.getStorageWriter(instantTime,
+    HoodieFileWriter<IndexedRecord> parquetWriter = HoodieFileWriterFactory.getFileWriter(instantTime,
         parquetPath, table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
     assertTrue(parquetWriter instanceof HoodieParquetWriter);
 
     // other file format exception.
     final Path logPath = new Path(basePath + "/partition/path/f.b51192a8-574b-4a85-b246-bcfec03ac8bf_100.log.2_1-0-1");
     final Throwable thrown = assertThrows(UnsupportedOperationException.class, () -> {
-      HoodieStorageWriter<IndexedRecord> logWriter = HoodieStorageWriterFactory.getStorageWriter(instantTime, logPath,
+      HoodieFileWriter<IndexedRecord> logWriter = HoodieFileWriterFactory.getFileWriter(instantTime, logPath,
           table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
     }, "should fail since log storage writer is not supported yet.");
     assertTrue(thrown.getMessage().contains("format not supported yet."));

@@ -205,7 +205,7 @@ public class DeltaSync implements Serializable {
     } else {
       this.commitTimelineOpt = Option.empty();
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
-          cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName);
+          cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat);
     }
   }
 
@@ -274,7 +274,7 @@ public class DeltaSync implements Serializable {
       }
     } else {
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
-          cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName);
+          cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat);
     }
 
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
@@ -474,7 +474,7 @@ public class DeltaSync implements Serializable {
    */
   private void syncHive() {
     if (cfg.enableHiveSync) {
-      HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath);
+      HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
       LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
           + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
       new HiveSyncTool(hiveSyncConfig, new HiveConf(conf, HiveConf.class), fs).syncHoodieTable();

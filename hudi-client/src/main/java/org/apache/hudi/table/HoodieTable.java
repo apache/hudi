@@ -40,6 +40,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -310,7 +311,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   /**
    * Schedule compaction for the instant time.
-   * 
+   *
    * @param jsc Spark Context
    * @param instantTime Instant Time for scheduling compaction
    * @param extraMetadata additional metadata to write into plan
@@ -460,7 +461,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   /**
    * Ensures all files passed either appear or disappear.
-   * 
+   *
    * @param jsc JavaSparkContext
    * @param groupByPartition Files grouped by partition
    * @param visibility Appear/Disappear
@@ -543,5 +544,27 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     } catch (HoodieException e) {
       throw new HoodieInsertException("Failed insert schema compability check.", e);
     }
+  }
+
+  public HoodieFileFormat getBaseFileFormat() {
+    return metaClient.getTableConfig().getBaseFileFormat();
+  }
+
+  public HoodieFileFormat getLogFileFormat() {
+    return metaClient.getTableConfig().getLogFileFormat();
+  }
+
+  public HoodieLogBlockType getLogDataBlockFormat() {
+    switch (getBaseFileFormat()) {
+      case PARQUET:
+        return HoodieLogBlockType.AVRO_DATA_BLOCK;
+      default:
+        throw new HoodieException("Base file format " + getBaseFileFormat()
+            + " does not have associated log block format");
+    }
+  }
+
+  public String getBaseFileExtension() {
+    return getBaseFileFormat().getFileExtension();
   }
 }

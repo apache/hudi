@@ -34,7 +34,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
-import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
@@ -215,7 +215,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writerSchema.toString());
       if (recordList.size() > 0) {
-        writer = writer.appendBlock(new HoodieAvroDataBlock(recordList, header));
+        writer = writer.appendBlock(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header));
         recordList.clear();
       }
       if (keysToDelete.size() > 0) {

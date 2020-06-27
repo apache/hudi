@@ -36,8 +36,7 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.io.storage.HoodieStorageWriter;
-import org.apache.hudi.io.storage.HoodieStorageWriterFactory;
+import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -61,7 +60,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
   private Map<String, HoodieRecord<T>> keyToNewRecords;
   private Set<String> writtenRecordKeys;
-  private HoodieStorageWriter<IndexedRecord> storageWriter;
+  private HoodieFileWriter<IndexedRecord> fileWriter;
   private Path newFilePath;
   private Path oldFilePath;
   private long recordsWritten = 0;
@@ -128,8 +127,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       createMarkerFile(partitionPath, newFileName);
 
       // Create the writer for writing the new version file
-      storageWriter =
-          HoodieStorageWriterFactory.getStorageWriter(instantTime, newFilePath, hoodieTable, config, writerSchema, sparkTaskContextSupplier);
+      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, writerSchema, sparkTaskContextSupplier);
+
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
@@ -187,7 +186,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       if (indexedRecord.isPresent()) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) indexedRecord.get());
-        storageWriter.writeAvroWithMetadata(recordWithMetadataInSchema, hoodieRecord);
+        fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, hoodieRecord);
         recordsWritten++;
       } else {
         recordsDeleted++;
@@ -240,7 +239,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       String errMsg = "Failed to merge old record into new file for key " + key + " from old file " + getOldFilePath()
           + " to new file " + newFilePath;
       try {
-        storageWriter.writeAvro(key, oldRecord);
+        fileWriter.writeAvro(key, oldRecord);
       } catch (ClassCastException e) {
         LOG.error("Schema mismatch when rewriting old record " + oldRecord + " from file " + getOldFilePath()
             + " to file " + newFilePath + " with writerSchema " + writerSchema.toString(true));
@@ -274,8 +273,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       keyToNewRecords.clear();
       writtenRecordKeys.clear();
 
-      if (storageWriter != null) {
-        storageWriter.close();
+      if (fileWriter != null) {
+        fileWriter.close();
       }
 
       long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);

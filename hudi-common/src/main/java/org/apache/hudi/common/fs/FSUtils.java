@@ -105,8 +105,13 @@ public class FSUtils {
     return String.format("%d-%d-%d", taskPartitionId, stageId, taskAttemptId);
   }
 
+  // TODO: this should be removed
   public static String makeDataFileName(String instantTime, String writeToken, String fileId) {
-    return String.format("%s_%s_%s.parquet", fileId, writeToken, instantTime);
+    return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, HoodieFileFormat.PARQUET.getFileExtension());
+  }
+
+  public static String makeDataFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
+    return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, fileExtension);
   }
 
   public static String maskWithoutFileId(String instantTime, int taskPartitionId) {
@@ -502,4 +507,13 @@ public class FSUtils {
         || inputStream.getWrappedStream().getClass().getCanonicalName()
             .equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream");
   }
+
+  public static Configuration registerFileSystem(Path file, Configuration conf) {
+    Configuration returnConf = new Configuration(conf);
+    String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
+    returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
+        HoodieWrapperFileSystem.class.getName());
+    return returnConf;
+  }
+
 }

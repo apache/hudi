@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -87,7 +89,8 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
       throw new HoodieIOException("Failed to make dir " + path, e);
     }
 
-    return new Path(path.toString(), FSUtils.makeDataFileName(instantTime, writeToken, fileId));
+    return new Path(path.toString(), FSUtils.makeDataFileName(instantTime, writeToken, fileId,
+        hoodieTable.getMetaClient().getTableConfig().getBaseFileFormat().getFileExtension()));
   }
 
   /**
@@ -163,5 +166,10 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
 
   protected long getAttemptId() {
     return sparkTaskContextSupplier.getAttemptIdSupplier().get();
+  }
+
+  protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T> hoodieTable,
+      HoodieWriteConfig config, Schema schema, SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
+    return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, sparkTaskContextSupplier);
   }
 }

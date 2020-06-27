@@ -18,8 +18,10 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
@@ -30,11 +32,15 @@ import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
-
+import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
+import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
+import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.log4j.LogManager;
@@ -60,6 +66,54 @@ public class HoodieInputFormatUtils {
   public static final String HOODIE_READ_COLUMNS_PROP = "hoodie.read.columns.set";
 
   private static final Logger LOG = LogManager.getLogger(HoodieInputFormatUtils.class);
+
+  public static FileInputFormat getInputFormat(HoodieFileFormat baseFileFormat, boolean realtime, Configuration conf) {
+    switch (baseFileFormat) {
+      case PARQUET:
+        if (realtime) {
+          HoodieParquetRealtimeInputFormat inputFormat = new HoodieParquetRealtimeInputFormat();
+          inputFormat.setConf(conf);
+          return inputFormat;
+        } else {
+          HoodieParquetInputFormat inputFormat = new HoodieParquetInputFormat();
+          inputFormat.setConf(conf);
+          return inputFormat;
+        }
+      default:
+        throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
+    }
+  }
+
+  public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime, Configuration conf) {
+    FileInputFormat inputFormat = getInputFormat(baseFileFormat, realtime, conf);
+    return inputFormat.getClass().getName();
+  }
+
+  public static String getOutputFormatClassName(HoodieFileFormat baseFileFormat) {
+    switch (baseFileFormat) {
+      case PARQUET:
+        return MapredParquetOutputFormat.class.getName();
+      default:
+        throw new HoodieIOException("No OutputFormat for base file format " + baseFileFormat);
+    }
+  }
+
+  public static String getSerDeClassName(HoodieFileFormat baseFileFormat) {
+    switch (baseFileFormat) {
+      case PARQUET:
+        return ParquetHiveSerDe.class.getName();
+      default:
+        throw new HoodieIOException("No SerDe for base file format " + baseFileFormat);
+    }
+  }
+
+  public static FileInputFormat getInputFormat(String path, boolean realtime, Configuration conf) {
+    final String extension = FSUtils.getFileExtension(path.toString());
+    if (extension.equals(HoodieFileFormat.PARQUET.getFileExtension())) {
+      return getInputFormat(HoodieFileFormat.PARQUET, realtime, conf);
+    }
+    throw new HoodieIOException("Hoodie InputFormat not implemented for base file of type " + extension);
+  }
 
   /**
    * Filter any specific instants that we do not want to process.
@@ -255,19 +309,20 @@ public class HoodieInputFormatUtils {
    * Takes in a list of filesStatus and a list of table metadatas. Groups the files status list
    * based on given table metadata.
    * @param fileStatuses
+   * @param fileExtension
    * @param metaClientList
    * @return
    * @throws IOException
    */
   public static Map<HoodieTableMetaClient, List<FileStatus>> groupFileStatusForSnapshotPaths(
-      FileStatus[] fileStatuses, Collection<HoodieTableMetaClient> metaClientList) {
+      FileStatus[] fileStatuses, String fileExtension, Collection<HoodieTableMetaClient> metaClientList) {
     // This assumes the paths for different tables are grouped together
     Map<HoodieTableMetaClient, List<FileStatus>> grouped = new HashMap<>();
     HoodieTableMetaClient metadata = null;
     for (FileStatus status : fileStatuses) {
       Path inputPath = status.getPath();
-      if (!inputPath.getName().endsWith(".parquet")) {
-        //FIXME(vc): skip non parquet files for now. This wont be needed once log file name start
+      if (!inputPath.getName().endsWith(fileExtension)) {
+        //FIXME(vc): skip non data files for now. This wont be needed once log file name start
         // with "."
         continue;
       }

@@ -34,23 +34,21 @@ import org.apache.parquet.avro.AvroSchemaConverter;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
-public class HoodieStorageWriterFactory {
+public class HoodieFileWriterFactory {
 
-  public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> getStorageWriter(
+  public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> getFileWriter(
       String instantTime, Path path, HoodieTable<T> hoodieTable, HoodieWriteConfig config, Schema schema,
       SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
-    final String name = path.getName();
-    final String extension = FSUtils.isLogFile(path) ? HOODIE_LOG.getFileExtension() : FSUtils.getFileExtension(name);
+    final String extension = FSUtils.getFileExtension(path.getName());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetStorageWriter(instantTime, path, config, schema, hoodieTable, sparkTaskContextSupplier);
+      return newParquetFileWriter(instantTime, path, config, schema, hoodieTable, sparkTaskContextSupplier);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
-  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(
+  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newParquetFileWriter(
       String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
       SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
     BloomFilter filter = BloomFilterFactory

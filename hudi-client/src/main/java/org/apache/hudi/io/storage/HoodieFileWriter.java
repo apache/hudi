@@ -16,26 +16,21 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.io.storage;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.common.model.HoodieRecord;
+
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 
-/**
- * Extract range information for a given file slice.
- */
-public class HoodieRangeInfoHandle<T extends HoodieRecordPayload> extends HoodieReadHandle<T> {
+public interface HoodieFileWriter<R extends IndexedRecord> {
 
-  public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieTable<T> hoodieTable,
-      Pair<String, String> partitionPathFilePair) {
-    super(config, null, hoodieTable, partitionPathFilePair);
-  }
+  void writeAvroWithMetadata(R newRecord, HoodieRecord record) throws IOException;
 
-  public String[] getMinMaxKeys() throws IOException {
-    return createNewFileReader().readMinMaxRecordKeys();
-  }
+  boolean canWrite();
+
+  void close() throws IOException;
+
+  void writeAvro(String key, R oldRecord) throws IOException;
 }
