@@ -19,6 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.log4j.LogManager
@@ -161,6 +162,17 @@ object DataSourceWriteOptions {
     }
   }
 
+  def translateRecordKeyPartitionPathConfigs(optParams: Map[String, String]) : Map[String, String] = {
+    var res = optParams
+    if (optParams.contains(RECORDKEY_FIELD_OPT_KEY)) {
+      res = res ++ Map(HoodieWriteConfig.RECORD_KEY_FIELD_PROP -> optParams(RECORDKEY_FIELD_OPT_KEY))
+    }
+
+    if (optParams.contains(PARTITIONPATH_FIELD_OPT_KEY)) {
+      res = res ++ Map(HoodieWriteConfig.PARTITION_PATH_FIELD_PROP -> optParams(PARTITIONPATH_FIELD_OPT_KEY))
+    }
+    res
+  }
 
   /**
     * Hive table name, to register the table into.

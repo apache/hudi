@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.commit;
+package org.apache.hudi.table.action.commit.dataset;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -44,9 +44,11 @@ import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.HoodieDatasetWriteMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SQLContext;
 
 public class BulkInsertDatasetCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseActionExecutor<HoodieDatasetWriteMetadata> {
@@ -74,7 +76,8 @@ public class BulkInsertDatasetCommitActionExecutor<T extends HoodieRecordPayload
   public HoodieDatasetWriteMetadata execute() {
     try {
       return BulkInsertDatasetHelper
-          .bulkInsertDataset(rowDataset, instantTime, (HoodieTable<T>) table, config,
+          .bulkInsertDataset(new SQLContext(jsc.sc()),
+              rowDataset, instantTime, (HoodieTable<T>) table, config,
               this, true, bulkInsertPartitioner);
     } catch (Throwable e) {
       if (e instanceof HoodieInsertException) {

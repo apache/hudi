@@ -16,10 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.commit;
+package org.apache.hudi.table.action.commit.dataset;
 
-import java.util.List;
-import java.util.stream.Collectors;
 import org.apache.hudi.client.EncodableWriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -31,9 +29,12 @@ import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 import org.apache.hudi.table.action.HoodieDatasetWriteMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer$;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.catalyst.encoders.RowEncoder;
@@ -41,14 +42,23 @@ import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import scala.collection.JavaConversions;
 import scala.collection.JavaConverters;
+
+import static org.apache.spark.sql.functions.callUDF;
 
 public class BulkInsertDatasetHelper {
 
   private static final Logger LOG = LogManager.getLogger(BulkInsertDatasetHelper.class);
 
   public static <T extends HoodieRecordPayload<T>> HoodieDatasetWriteMetadata bulkInsertDataset(
+      SQLContext sqlContext,
       Dataset<Row> rowDataset, String instantTime,
       HoodieTable<T> table, HoodieWriteConfig config,
       BulkInsertDatasetCommitActionExecutor<T> executor, boolean performDedupe,
@@ -65,31 +75,71 @@ public class BulkInsertDatasetHelper {
 
     // no user defined repartitioning support yet
 
+    List<Column> sortFields = Stream.concat(config.getPartitionPathFields().stream().map(Column::new),
+        config.getRecordKeyFields().stream().map(Column::new)).collect(Collectors.toList());
+
     final Dataset<Row> rows = dedupedRecords
-        .sort(config.getPartitionPathFieldProp(), config.getRecordKeyFieldProp())
+        .sort(JavaConverters.collectionAsScalaIterableConverter(sortFields).asScala().toSeq())
         .coalesce(config.getBulkInsertShuffleParallelism());
 
-    Dataset<Row> repartitionedRecords = rows
-        .withColumn(HoodieRecord.FILENAME_METADATA_FIELD,
-            functions.lit("").cast(DataTypes.StringType))
-        .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
-            functions.lit("").cast(DataTypes.StringType))
-        .withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD,
-            functions.lit("").cast(DataTypes.StringType))
+    List<Column> originalFields =
+        Arrays.stream(rows.schema().fields()).map(f -> new Column(f.name())).collect(Collectors.toList());
+
+    StructType structTypeForUDF = rows.schema();
+    final PartitionPathGeneratorMapFunction partitionPathGenMapFunction =
+        new PartitionPathGeneratorMapFunction(structTypeForUDF, config.getPartitionPathFields(),
+            config.useHiveStylePartitioning());
+    final RecordKeyGeneratorMapFunction recordKeyGeneratorMapFunction = new RecordKeyGeneratorMapFunction(
+        structTypeForUDF, config.getRecordKeyFields());
+
+    sqlContext.udf().register("hudi_recordkey_gen_function", new UDF1<Row, String>() {
+      @Override
+      public String call(Row row) throws Exception {
+        return recordKeyGeneratorMapFunction.call(row);
+      }
+    }, DataTypes.StringType);
+
+    sqlContext.udf().register("hudi_partition_gen_function", new UDF1<Row, String>() {
+      @Override
+      public String call(Row row) throws Exception {
+        return partitionPathGenMapFunction.call(row);
+      }
+    }, DataTypes.StringType);
+
+    Dataset<Row> rowDatasetWithHoodieColumns = rows.withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+        callUDF("hudi_partition_gen_function",
+            org.apache.spark.sql.functions.struct(
+                JavaConverters.collectionAsScalaIterableConverter(originalFields).asScala().toSeq())))
+        .withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD, callUDF("hudi_recordkey_gen_function",
+            org.apache.spark.sql.functions.struct(
+                JavaConverters.collectionAsScalaIterableConverter(originalFields).asScala().toSeq())))
         .withColumn(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-            functions.lit("").cast(DataTypes.StringType))
+            functions.lit(instantTime).cast(DataTypes.StringType))
         .withColumn(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
+            functions.lit("").cast(DataTypes.StringType))
+        .withColumn(HoodieRecord.FILENAME_METADATA_FIELD,
             functions.lit("").cast(DataTypes.StringType));
+
+    List<Column> orderedFields = Stream.concat(HoodieRecord.HOODIE_META_COLUMNS.stream().map(Column::new),
+        originalFields.stream()).collect(Collectors.toList());
+    Dataset<Row> hoodieRowDataset = rowDatasetWithHoodieColumns.select(
+        JavaConverters.collectionAsScalaIterableConverter(orderedFields).asScala().toSeq());
+
+    // since we can't get partition index in scala mapPartition func, we have to generate these fileIds within
+    // mapPartition functions
+    /* // generate new file ID prefixes for each output partition
+    final List<String> fileIDPrefixes =
+        IntStream.range(0, parallelism).mapToObj(i -> FSUtils.createNewFileIdPfx()).collect(Collectors.toList());*/
 
     table.getActiveTimeline()
         .transitionRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED,
             table.getMetaClient().getCommitActionType(), instantTime), Option.empty());
 
     // Generate encoder for Row
-    ExpressionEncoder encoder = getEncoder(repartitionedRecords.schema());
+    ExpressionEncoder encoder = getEncoder(hoodieRowDataset.schema());
 
     try {
-      Dataset<EncodableWriteStatus> encWriteStatusDataset = repartitionedRecords.mapPartitions(
+      Dataset<EncodableWriteStatus> encWriteStatusDataset = hoodieRowDataset.mapPartitions(
           new BulkInsertDatasetMapFunction<>(instantTime, config, table, encoder),
           Encoders.bean(EncodableWriteStatus.class));
 

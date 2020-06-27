@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import java.util.Arrays;
+import java.util.List;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
@@ -81,11 +83,16 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String FINALIZE_WRITE_PARALLELISM = "hoodie.finalize.write.parallelism";
   private static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = DEFAULT_PARALLELISM;
 
-  private static final String RECORD_KEY_FIELD_PROP = "hoodie.datasource.write.recordkey.field";
-  private static final String DEFAULT_RECORD_KEY_FIELD = "uuid";
+  // Comma separated field names.
+  public static final String RECORD_KEY_FIELD_PROP = "hoodie.write.recordkey.fields";
+  private static final String DEFAULT_RECORD_KEY_FIELD = "";
 
-  private static final String PARTITION_PATH_FIELD_PROP = "hoodie.datasource.write.partitionpath.field";
-  private static final String DEFAULT_PARTITION_PATH_FIELD = "partitionpath";
+  // Comma separated field names.
+  public static final String PARTITION_PATH_FIELD_PROP = "hoodie.write.partitionpath.fields";
+  private static final String DEFAULT_PARTITION_PATH_FIELD = "";
+
+  public static final String HIVE_STYLE_PARTITIONING_PROP = "hoodie.write.hive_style_partitioning";
+  private static final String DEFAULT_HIVE_STYLE_PARTITIONING_KEY = "false";
 
   private static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";
   private static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "false";
@@ -228,12 +235,16 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP));
   }
 
-  public String getRecordKeyFieldProp() {
-    return props.getProperty(RECORD_KEY_FIELD_PROP, DEFAULT_RECORD_KEY_FIELD);
+  public List<String> getRecordKeyFields() {
+    return Arrays.asList(props.getProperty(RECORD_KEY_FIELD_PROP, DEFAULT_RECORD_KEY_FIELD).split(","));
   }
 
-  public String getPartitionPathFieldProp() {
-    return props.getProperty(PARTITION_PATH_FIELD_PROP, DEFAULT_PARTITION_PATH_FIELD);
+  public List<String> getPartitionPathFields() {
+    return Arrays.asList(props.getProperty(PARTITION_PATH_FIELD_PROP, DEFAULT_PARTITION_PATH_FIELD).split(","));
+  }
+
+  public boolean useHiveStylePartitioning() {
+    return Boolean.valueOf(props.getProperty(HIVE_STYLE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING));
   }
 
   /**
@@ -755,6 +766,13 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP),
           FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP, DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED);
       setDefaultOnCondition(props, !props.containsKey(AVRO_SCHEMA_VALIDATE), AVRO_SCHEMA_VALIDATE, DEFAULT_AVRO_SCHEMA_VALIDATE);
+
+      setDefaultOnCondition(props, !props.containsKey(RECORD_KEY_FIELD_PROP), RECORD_KEY_FIELD_PROP,
+          DEFAULT_RECORD_KEY_FIELD);
+      setDefaultOnCondition(props, !props.containsKey(PARTITION_PATH_FIELD_PROP), PARTITION_PATH_FIELD_PROP,
+          DEFAULT_PARTITION_PATH_FIELD);
+      setDefaultOnCondition(props, !props.containsKey(HIVE_STYLE_PARTITIONING_PROP), HIVE_STYLE_PARTITIONING_PROP,
+          DEFAULT_HIVE_STYLE_PARTITIONING_KEY);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());

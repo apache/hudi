@@ -273,7 +273,7 @@ private[hudi] object HoodieSparkSqlWriter {
       HIVE_PARTITION_FIELDS_OPT_KEY -> DEFAULT_HIVE_PARTITION_FIELDS_OPT_VAL,
       HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY -> DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL,
       HIVE_STYLE_PARTITIONING_OPT_KEY -> DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL
-    ) ++ translateStorageTypeToTableType(parameters)
+    ) ++ translateStorageTypeToTableType(parameters) ++ translateRecordKeyPartitionPathConfigs(parameters)
   }
 
   def toProperties(params: Map[String, String]): TypedProperties = {

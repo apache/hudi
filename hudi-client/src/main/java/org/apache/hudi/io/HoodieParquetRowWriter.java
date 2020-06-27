@@ -73,19 +73,13 @@ public class HoodieParquetRowWriter implements Serializable {
   private long maxFileSize;
   private long recordsWritten = 0;
   private long insertRecordsWritten = 0;
-  private int fileNameIndex;
-  private int recordKeyIndex;
-  private int partitionPathIndex;
-  private int commitTimeIndex;
-  private int commitSeqNoIndex;
   private String recordKeyProp;
   private String partitionPathProp;
 
   public HoodieParquetRowWriter(HoodieTable hoodieTable, HoodieWriteConfig config,
       String partitionPath, String fileId, String writeToken,
       String instantTime, ExpressionEncoder<Row> encoder, long maxFileSize, double compressionRatio,
-      HoodieRowParquetWriteSupport writeSupport, int fileNameIndex, int recordKeyIndex,
-      int partitionPathIndex, int commitTimeIndex, int commitSeqNoIndex) throws IOException {
+      HoodieRowParquetWriteSupport writeSupport) throws IOException {
     this.config = config;
     this.hoodieTable = hoodieTable;
     this.fileId = fileId;
@@ -95,13 +89,8 @@ public class HoodieParquetRowWriter implements Serializable {
     this.instantTime = instantTime;
     this.encoder = encoder;
     this.maxFileSize = maxFileSize + Math.round(maxFileSize * compressionRatio);
-    this.fileNameIndex = fileNameIndex;
-    this.recordKeyIndex = recordKeyIndex;
-    this.partitionPathIndex = partitionPathIndex;
-    this.commitSeqNoIndex = commitSeqNoIndex;
-    this.commitTimeIndex = commitTimeIndex;
-    this.recordKeyProp = config.getRecordKeyFieldProp();
-    this.partitionPathProp = config.getPartitionPathFieldProp();
+    this.recordKeyProp = config.getRecordKeyFields().get(0);
+    this.partitionPathProp = config.getPartitionPathFields().get(0);
     this.writeSupport = writeSupport;
     this.timer = new HoodieTimer().startTimer();
     this.encodableWriteStatus = new EncodableWriteStatus(recordKeyProp);
@@ -194,11 +183,8 @@ public class HoodieParquetRowWriter implements Serializable {
     for (int i = 0; i < row.size(); i++) {
       result[i] = row.get(i);
     }
-    result[fileNameIndex] = hoodiePath.getName();
-    result[recordKeyIndex] = row.getAs(recordKeyProp);
-    result[partitionPathIndex] = row.getAs(partitionPathProp);
-    result[commitTimeIndex] = instantTime;
-    result[commitSeqNoIndex] = seqId;
+    result[1] = hoodiePath.getName();
+    result[4] = seqId;
     return RowFactory.create(result);
   }
 

@@ -48,8 +48,8 @@ public class WriteBenchmarkExecutionPlan {
   public String iterationIndex;
 
   String basePath = "/tmp/hudi_benchmark/";
-  int totalRecordsToTest = 1000;
-  int parallelism = 1;
+  int totalRecordsToTest = 100000;
+  int parallelism = 3;
   SparkSession spark;
   JavaSparkContext jssc;
   FileSystem fs;

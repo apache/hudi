@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.commit;
+package org.apache.hudi.table.action.commit.dataset;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -109,15 +109,10 @@ public class BulkInsertDatasetMapFunction<T extends HoodieRecordPayload> impleme
         hoodieTable.getHadoopConf(), row.schema(), filter);
 
     return new HoodieParquetRowWriter(hoodieTable, config,
-        row.getAs(config.getPartitionPathFieldProp()), getNextFileId(filePrefix),
+        row.getAs(config.getPartitionPathFields().get(0)), getNextFileId(filePrefix),
         writeToken, instantTime, encoder, config.getParquetMaxFileSize(),
         config.getParquetCompressionRatio(),
-        writeSupport,
-        row.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD),
-        row.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD),
-        row.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
-        row.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
-        row.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD));
+        writeSupport);
   }
 
   private String getNextFileId(String filePrefix) {

@@ -121,7 +121,7 @@ public class HoodieWriteBenchmark {
    * Benchmarks bulk insert in Hudi
    */
   @Fork(value = 1)
-  @Benchmark
+  //@Benchmark
   @BenchmarkMode(Mode.AverageTime)
   @Warmup(iterations = 1)
   @Measurement(iterations = 5)
@@ -144,10 +144,10 @@ public class HoodieWriteBenchmark {
    * Benchmarks bulk insert in Hudi
    */
   @Fork(value = 1)
-  // @Benchmark
+  @Benchmark
   @BenchmarkMode(Mode.AverageTime)
   @Warmup(iterations = 1)
-  @Measurement(iterations = 1)
+  @Measurement(iterations = 5)
   @OutputTimeUnit(TimeUnit.SECONDS)
   public void benchmarkDirectParquetWrites(WriteBenchmarkExecutionPlan plan) throws Exception {
     try {

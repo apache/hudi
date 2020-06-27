@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.Serializable;
+import org.apache.spark.sql.Row;
 
 /**
  * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record.
@@ -40,4 +41,16 @@ public abstract class KeyGenerator implements Serializable {
    * Generate a Hoodie Key out of provided generic record.
    */
   public abstract HoodieKey getKey(GenericRecord record);
+
+  public boolean isRowKeySupported() {
+    return false;
+  }
+
+  public String getRecordKey(Row row) {
+    throw new IllegalArgumentException("Not Implemented");
+  }
+
+  public String getPartitionPath(Row row) {
+    throw new IllegalArgumentException("Not Implemented");
+  }
 }

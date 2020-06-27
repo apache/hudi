@@ -50,7 +50,7 @@ import org.apache.hudi.table.action.HoodieDatasetWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BulkInsertCommitActionExecutor;
-import org.apache.hudi.table.action.commit.BulkInsertDatasetCommitActionExecutor;
+import org.apache.hudi.table.action.commit.dataset.BulkInsertDatasetCommitActionExecutor;
 import org.apache.hudi.table.action.commit.BulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.DeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.InsertCommitActionExecutor;
