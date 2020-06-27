@@ -74,10 +74,10 @@ public class HoodieSnapshotCopier implements Serializable {
     final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
     final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs.getConf(), baseDir);
     final BaseFileOnlyView fsView = new HoodieTableFileSystemView(tableMetadata,
-        tableMetadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+        tableMetadata.getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedInstants());
     // Get the latest commit
     Option<HoodieInstant> latestCommit =
-        tableMetadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
+        tableMetadata.getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedInstants().lastInstant();
     if (!latestCommit.isPresent()) {
       LOG.warn("No commits present. Nothing to snapshot");
       return;

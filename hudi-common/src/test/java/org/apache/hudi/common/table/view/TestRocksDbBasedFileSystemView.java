@@ -24,10 +24,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 
 /**
- * Tests RocksDB based file system view {@link SyncableFileSystemView}.
+ * Tests RocksDB based file system view {@link RocksDbBasedFileSystemView}.
  */
 public class TestRocksDbBasedFileSystemView extends TestHoodieTableFileSystemView {
 
+  @Override
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) throws IOException {
     String subdirPath = Files.createTempDirectory(tempDir, null).toAbsolutePath().toString();
     return new RocksDbBasedFileSystemView(metaClient, timeline,

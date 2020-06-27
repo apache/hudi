@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.keygen;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.util.SchemaTestUtil;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;

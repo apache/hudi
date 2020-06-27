@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -43,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * Test-cases for covering HoodieReadClient APIs
  */
-public class TestHoodieReadClient extends TestHoodieClientBase {
+public class TestHoodieReadClient extends HoodieClientTestBase {
 
   /**
    * Test ReadFilter API after writing new records using HoodieWriteClient.insert.

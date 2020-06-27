@@ -19,23 +19,23 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.cli.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
 import org.apache.hudi.client.HoodieWriteClient;
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -88,7 +88,7 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    try (HoodieWriteClient client = new HoodieWriteClient(jsc, config, false)) {
+    try (HoodieWriteClient client = getHoodieWriteClient(config)) {
       // Rollback inflight commit3 and commit2
       client.rollback(commitTime3);
       client.rollback(commitTime2);
@@ -119,7 +119,7 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
           row[1] = c;
           // expect data
           row[2] = 3;
-          row[3] = 0;
+          row[3] = metadata.getTimeTakenInMillis();
           row[4] = 3;
           rows.add(row);
         });
@@ -134,8 +134,9 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TIME_TOKEN_MILLIS)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_PARTITIONS);
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 
   /**
@@ -176,7 +177,8 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_DELETED_FILE)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_SUCCEEDED);
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 }

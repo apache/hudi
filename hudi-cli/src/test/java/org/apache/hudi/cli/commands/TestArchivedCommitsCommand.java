@@ -18,12 +18,12 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.cli.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.common.HoodieTestCommitMetadataGenerator;
-import org.apache.hudi.cli.common.HoodieTestCommitUtilities;
+import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.cli.testutils.HoodieTestCommitUtilities;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -146,7 +146,9 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
 
     String expectedResult = HoodiePrintHelper.print(
         header, new HashMap<>(), "", false, -1, false, rows);
-    assertEquals(expectedResult, cr.getResult().toString());
+    expectedResult = removeNonWordAndStripSpace(expectedResult);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expectedResult, got);
   }
 
   /**
@@ -169,7 +171,9 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     }
     rows.add(new Comparable[] {"103", "commit"});
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 10, false, rows);
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
 
     // Test with Metadata and no limit
     cr = getShell().executeCommand("show archived commits --skipMetadata false --limit -1");
@@ -189,6 +193,8 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     }
     header = header.addTableHeaderField("CommitDetails");
     expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 }

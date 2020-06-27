@@ -18,21 +18,21 @@
 
 package org.apache.hudi.cli.commands;
 
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Snapshot;
-import com.codahale.metrics.UniformReservoir;
-import org.apache.hudi.cli.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.common.HoodieTestCommitMetadataGenerator;
-import org.apache.hudi.common.HoodieTestDataGenerator;
+import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Snapshot;
+import com.codahale.metrics.UniformReservoir;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
@@ -103,8 +103,9 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_WRITTEN)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_WRITE_AMPLIFICATION_FACTOR);
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 
   /**
@@ -170,7 +171,8 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_HISTOGRAM_STD_DEV);
     String expect = HoodiePrintHelper.print(header, new StatsCommand().getFieldNameToConverterMap(),
         "", false, -1, false, rows);
-
-    assertEquals(expect, cr.getResult().toString());
+    expect = removeNonWordAndStripSpace(expect);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expect, got);
   }
 }

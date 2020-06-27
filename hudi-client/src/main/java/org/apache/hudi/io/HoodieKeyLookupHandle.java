@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -34,6 +33,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -61,23 +61,26 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
     this.candidateRecordKeys = new ArrayList<>();
     this.totalKeysChecked = 0;
     HoodieTimer timer = new HoodieTimer().startTimer();
-    this.bloomFilter = ParquetUtils.readBloomFilterFromParquetMetadata(hoodieTable.getHadoopConf(),
-        new Path(getLatestBaseFile().getPath()));
+
+    try {
+      this.bloomFilter = createNewFileReader().readBloomFilter();
+    } catch (IOException e) {
+      throw new HoodieIndexException(String.format("Error reading bloom filter from %s: %s", partitionPathFilePair, e));
+    }
     LOG.info(String.format("Read bloom filter from %s in %d ms", partitionPathFilePair, timer.endTimer()));
   }
 
   /**
    * Given a list of row keys and one file, return only row keys existing in that file.
    */
-  public static List<String> checkCandidatesAgainstFile(Configuration configuration, List<String> candidateRecordKeys,
-                                                        Path filePath) throws HoodieIndexException {
+  public List<String> checkCandidatesAgainstFile(Configuration configuration, List<String> candidateRecordKeys,
+                                                 Path filePath) throws HoodieIndexException {
     List<String> foundRecordKeys = new ArrayList<>();
     try {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = new HoodieTimer().startTimer();
-        Set<String> fileRowKeys =
-            ParquetUtils.filterParquetRowKeys(configuration, filePath, new HashSet<>(candidateRecordKeys));
+        Set<String> fileRowKeys = createNewFileReader().filterRowKeys(new HashSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);
         LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
             timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));

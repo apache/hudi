@@ -26,7 +26,7 @@
     <license rdf:resource="http://usefulinc.com/doap/licenses/asl20" />
     <name>Apache Hudi</name>
     <homepage rdf:resource="https://hudi.apache.org" />
-    <asfext:pmc rdf:resource="https://incubator.apache.org" />
+    <asfext:pmc rdf:resource="https://hudi.apache.org" />
     <shortdesc>Ingests and Manages storage of large analytical datasets</shortdesc>
     <description>Hudi (pronounced “Hoodie”) brings stream processing to big data, providing upserts, deletes and incremental data streams.</description>
     <bug-database rdf:resource="https://issues.apache.org/jira/browse/HUDI" />
@@ -51,16 +51,21 @@
         <created>2020-03-26</created>
         <revision>0.5.2</revision>
       </Version>
+      <Version>
+        <name>Apache Hudi 0.5.3</name>
+        <created>2020-06-16</created>
+        <revision>0.5.3</revision>
+      </Version>
     </release>
     <repository>
       <GitRepository>
-        <location rdf:resource="https://github.com/apache/incubator-hudi.git"/>
-        <browse rdf:resource="https://github.com/apache/incubator-hudi"/>
+        <location rdf:resource="https://github.com/apache/hudi.git"/>
+        <browse rdf:resource="https://github.com/apache/hudi"/>
       </GitRepository>
     </repository>
     <maintainer>
       <foaf:Person>
-        <foaf:name>Apache Hudi-incubating PPMC</foaf:name>
+        <foaf:name>Apache Hudi PMC</foaf:name>
           <foaf:mbox rdf:resource="mailto:dev@hudi.apache.org"/>
       </foaf:Person>
     </maintainer>

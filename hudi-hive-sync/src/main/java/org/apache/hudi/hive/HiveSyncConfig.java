@@ -35,6 +35,9 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--table"}, description = "name of the target table in Hive", required = true)
   public String tableName;
 
+  @Parameter(names = {"--base-file-format"}, description = "Format of the base files (PARQUET (or) HFILE)")
+  public String baseFileFormat = "PARQUET";
+
   @Parameter(names = {"--user"}, description = "Hive username", required = true)
   public String hiveUser;
 

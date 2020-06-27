@@ -110,7 +110,11 @@ object AvroConversionHelper {
             if (item == null) {
               null
             } else {
-              new Date(item.asInstanceOf[Long])
+              if (item.isInstanceOf[Integer]) {
+                new Date(item.asInstanceOf[Integer].longValue())
+              } else {
+                new Date(item.asInstanceOf[Long])
+              }
             }
         case (TimestampType, LONG) =>
           (item: AnyRef) =>

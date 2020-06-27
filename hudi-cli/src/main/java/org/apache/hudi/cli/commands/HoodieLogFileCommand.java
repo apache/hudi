@@ -30,8 +30,8 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCorruptBlock;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
@@ -118,8 +118,8 @@ public class HoodieLogFileCommand implements CommandMarker {
             dummyInstantTimeCount++;
             instantTime = "dummy_instant_time_" + dummyInstantTimeCount;
           }
-          if (n instanceof HoodieAvroDataBlock) {
-            recordCount = ((HoodieAvroDataBlock) n).getRecords().size();
+          if (n instanceof HoodieDataBlock) {
+            recordCount = ((HoodieDataBlock) n).getRecords().size();
           }
         }
         if (commitCountAndMetadata.containsKey(instantTime)) {
@@ -215,8 +215,8 @@ public class HoodieLogFileCommand implements CommandMarker {
         // read the avro blocks
         while (reader.hasNext()) {
           HoodieLogBlock n = reader.next();
-          if (n instanceof HoodieAvroDataBlock) {
-            HoodieAvroDataBlock blk = (HoodieAvroDataBlock) n;
+          if (n instanceof HoodieDataBlock) {
+            HoodieDataBlock blk = (HoodieDataBlock) n;
             List<IndexedRecord> records = blk.getRecords();
             for (IndexedRecord record : records) {
               if (allRecords.size() < limit) {

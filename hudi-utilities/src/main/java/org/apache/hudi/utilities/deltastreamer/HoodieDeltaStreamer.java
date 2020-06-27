@@ -177,6 +177,9 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
     public String tableType;
 
+    @Parameter(names = {"--base-file-format"}, description = "File format for the base files. PARQUET (or) HFILE", required = false)
+    public String baseFileFormat;
+
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
         + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
@@ -379,8 +382,20 @@ public class HoodieDeltaStreamer implements Serializable {
         // This will guarantee there is no surprise with table type
         ValidationUtils.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.tableType)),
             "Hoodie table is of type " + tableType + " but passed in CLI argument is " + cfg.tableType);
+
+        // Load base file format
+        // This will guarantee there is no surprise with base file type
+        String baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
+        ValidationUtils.checkArgument(baseFileFormat.equals(cfg.baseFileFormat) || cfg.baseFileFormat == null,
+            "Hoodie table's base file format is of type " + baseFileFormat + " but passed in CLI argument is "
+                + cfg.baseFileFormat);
+        cfg.baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
+        this.cfg.baseFileFormat = cfg.baseFileFormat;
       } else {
         tableType = HoodieTableType.valueOf(cfg.tableType);
+        if (cfg.baseFileFormat == null) {
+          cfg.baseFileFormat = "PARQUET"; // default for backward compatibility
+        }
       }
 
       ValidationUtils.checkArgument(!cfg.filterDupes || cfg.operation != Operation.UPSERT,

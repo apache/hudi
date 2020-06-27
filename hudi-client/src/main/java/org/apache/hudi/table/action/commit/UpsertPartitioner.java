@@ -131,7 +131,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     Set<String> partitionPaths = profile.getPartitionPaths();
     long averageRecordSize =
         averageBytesPerRecord(table.getMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants(),
-            config.getCopyOnWriteRecordSizeEstimate());
+            config);
     LOG.info("AvgRecordSize => " + averageRecordSize);
 
     Map<String, List<SmallFile>> partitionSmallFilesMap =
@@ -289,8 +289,9 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
    * Obtains the average record size based on records written during previous commits. Used for estimating how many
    * records pack into one file.
    */
-  protected static long averageBytesPerRecord(HoodieTimeline commitTimeline, int defaultRecordSizeEstimate) {
-    long avgSize = defaultRecordSizeEstimate;
+  protected static long averageBytesPerRecord(HoodieTimeline commitTimeline, HoodieWriteConfig hoodieWriteConfig) {
+    long avgSize = hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();
+    long fileSizeThreshold = (long) (hoodieWriteConfig.getRecordSizeEstimationThreshold() * hoodieWriteConfig.getParquetSmallFileLimit());
     try {
       if (!commitTimeline.empty()) {
         // Go over the reverse ordered commits to get a more recent estimate of average record size.
@@ -301,7 +302,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
               .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
           long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
           long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
-          if (totalBytesWritten > 0 && totalRecordsWritten > 0) {
+          if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
             avgSize = (long) Math.ceil((1.0 * totalBytesWritten) / totalRecordsWritten);
             break;
           }

@@ -26,8 +26,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.net.URI;
 
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.RANDOM;
-import static org.apache.hudi.common.fs.inline.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterInMemPath;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;

@@ -55,6 +55,15 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
   private static final Double DEFAULT_MEM_FRACTION_FOR_PENDING_COMPACTION = 0.01;
   private static final Long DEFAULT_MAX_MEMORY_FOR_VIEW = 100 * 1024 * 1024L; // 100 MB
 
+  /**
+   * Configs to control whether backup needs to be configured if clients were not able to reach
+   * timeline service.
+   */
+  public static final String REMOTE_BACKUP_VIEW_HANDLER_ENABLE =
+      "hoodie.filesystem.remote.backup.view.enable";
+  // Need to be disabled only for tests.
+  public static final String DEFAULT_REMOTE_BACKUP_VIEW_HANDLER_ENABLE = "true";
+
   public static FileSystemViewStorageConfig.Builder newBuilder() {
     return new Builder();
   }
@@ -96,6 +105,10 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
 
   public FileSystemViewStorageType getSecondaryStorageType() {
     return FileSystemViewStorageType.valueOf(props.getProperty(FILESYSTEM_SECONDARY_VIEW_STORAGE_TYPE));
+  }
+
+  public boolean shouldEnableBackupForRemoteFileSystemView() {
+    return Boolean.parseBoolean(props.getProperty(REMOTE_BACKUP_VIEW_HANDLER_ENABLE));
   }
 
   public String getRocksdbBasePath() {
@@ -166,6 +179,11 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withEnableBackupForRemoteFileSystemView(boolean enable) {
+      props.setProperty(REMOTE_BACKUP_VIEW_HANDLER_ENABLE, Boolean.toString(enable));
+      return this;
+    }
+
     public FileSystemViewStorageConfig build() {
       setDefaultOnCondition(props, !props.containsKey(FILESYSTEM_VIEW_STORAGE_TYPE), FILESYSTEM_VIEW_STORAGE_TYPE,
           DEFAULT_VIEW_STORAGE_TYPE.name());
@@ -187,6 +205,9 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
 
       setDefaultOnCondition(props, !props.containsKey(ROCKSDB_BASE_PATH_PROP), ROCKSDB_BASE_PATH_PROP,
           DEFAULT_ROCKSDB_BASE_PATH);
+
+      setDefaultOnCondition(props, !props.containsKey(REMOTE_BACKUP_VIEW_HANDLER_ENABLE),
+          REMOTE_BACKUP_VIEW_HANDLER_ENABLE, DEFAULT_REMOTE_BACKUP_VIEW_HANDLER_ENABLE);
 
       // Validations
       FileSystemViewStorageType.valueOf(props.getProperty(FILESYSTEM_VIEW_STORAGE_TYPE));
