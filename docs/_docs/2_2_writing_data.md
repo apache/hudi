@@ -185,31 +185,31 @@ The `hudi-spark` module offers the DataSource API to write (and read) a Spark Da
 
 **`DataSourceWriteOptions`**:
 
-**RECORDKEY_FIELD_OPT_KEY** (Required): Primary key field(s). Nested fields can be specified using the dot notation eg: `a.b.c`. When using multiple columns as primary key use comma seperated notaion, eg: `"col1,col2,col3,etc"`. Single or multiple columns as primary key specified by `KEYGENERATOR_CLASS_OPT_KEY` property.<br>
+**RECORDKEY_FIELD_OPT_KEY** (Required): Primary key field(s). Nested fields can be specified using the dot notation eg: `a.b.c`. When using multiple columns as primary key use comma separated notation, eg: `"col1,col2,col3,etc"`. Single or multiple columns as primary key specified by `KEYGENERATOR_CLASS_OPT_KEY` property.<br>
 Default value: `"uuid"`<br>
 
-**PARTITIONPATH_FIELD_OPT_KEY** (Required): Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify paritioning/no partitioning using `HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY`<br>
+**PARTITIONPATH_FIELD_OPT_KEY** (Required): Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify partitioning/no partitioning using `KEYGENERATOR_CLASS_OPT_KEY` and if using hive `HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY`<br>
 Default value: `"partitionpath"`<br>
 
-**PRECOMBINE_FIELD_OPT_KEY** (Required): When two records have the same key value, the record with the largest value from the field specified here will be choosen.<br>
+**PRECOMBINE_FIELD_OPT_KEY** (Required): When two records have the same key value, the record with the largest value from the field specified will be choosen.<br>
 Default value: `"ts"`<br>
 
-**OPERATION_OPT_KEY**: The [write operations](#write-operations) to use. Note: this cannot change across writes.<br>
+**OPERATION_OPT_KEY**: The [write operations](#write-operations) to use.<br>
 Available values:<br>
 `UPSERT_OPERATION_OPT_VAL` (default), `BULK_INSERT_OPERATION_OPT_VAL`, `INSERT_OPERATION_OPT_VAL`, `DELETE_OPERATION_OPT_VAL`
 
-**TABLE_TYPE_OPT_KEY**: The [type of table](/docs/concepts.html#table-types) to write to.<br>
+**TABLE_TYPE_OPT_KEY**: The [type of table](/docs/concepts.html#table-types) to write to. Note: After the initial creation of a table, this value must stay consistent when writing to (updating) the table using the Spark `SaveMode.Append` mode.<br>
 Available values:<br>
 [`COW_TABLE_TYPE_OPT_VAL`](/docs/concepts.html#copy-on-write-table) (default), [`MOR_TABLE_TYPE_OPT_VAL`](/docs/concepts.html#merge-on-read-table)
 
 **KEYGENERATOR_CLASS_OPT_KEY**: Key generator class, that will extract the key out of incoming record. If single column key use `SimpleKeyGenerator`. For multiple column keys use `ComplexKeyGenerator`. Note: A custom key generator class can be written/provided here as well. Primary key columns should be provided via `RECORDKEY_FIELD_OPT_KEY` option.<br>
 Available values:<br>
-`classOf[SimpleKeyGenerator].getName` (default), `classOf[NonpartitionedKeyGenerator].getName`, `classOf[ComplexKeyGenerator].getName`
+`classOf[SimpleKeyGenerator].getName` (default), `classOf[NonpartitionedKeyGenerator].getName` (Non-partitioned tables can currently only have a single key column, [HUDI-1053](https://issues.apache.org/jira/browse/HUDI-1053)), `classOf[ComplexKeyGenerator].getName`
 
 
 **HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY**: Specify if the table should or should not be partitioned.<br>
 Available values:<br>
-`classOf[MultiPartKeysValueExtractor].getCanonicalName` (default), `classOf[NonPartitionedExtractor].getCanonicalName`
+`classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName` (default), `classOf[MultiPartKeysValueExtractor].getCanonicalName`, `classOf[TimestampBasedKeyGenerator].getCanonicalName`, `classOf[NonPartitionedExtractor].getCanonicalName`, `classOf[GlobalDeleteKeyGenerator].getCanonicalName` (to be used when `OPERATION_OPT_KEY` is set to `DELETE_OPERATION_OPT_VAL`)
 
 
 Example:
