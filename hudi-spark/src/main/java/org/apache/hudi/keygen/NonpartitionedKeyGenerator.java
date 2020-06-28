@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
 
 /**
  * Simple Key generator for unpartitioned Hive Tables.
@@ -43,5 +44,14 @@ public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
       throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
     }
     return new HoodieKey(recordKey, EMPTY_PARTITION);
+  }
+
+  public boolean isRowKeyExtractionSupported() {
+    // key-generator implementation that inherits from this class needs to implement this method
+    return this.getClass().equals(NonpartitionedKeyGenerator.class);
+  }
+
+  public String getPartitionPathFromRow(Row row) {
+    return EMPTY_PARTITION;
   }
 }

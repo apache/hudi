@@ -28,6 +28,7 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieParquetRowWriter;
@@ -108,7 +109,7 @@ public class BulkInsertDatasetMapFunction<T extends HoodieRecordPayload> impleme
         hoodieTable.getHadoopConf(), row.schema(), filter);
 
     return new HoodieParquetRowWriter(hoodieTable, config,
-        row.getAs(config.getPartitionPathFields().get(0)), getNextFileId(filePrefix),
+        row.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD), getNextFileId(filePrefix),
         writeToken, instantTime, encoder, config.getParquetMaxFileSize(),
         config.getParquetCompressionRatio(),
         writeSupport);

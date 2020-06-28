@@ -18,6 +18,7 @@
 
 package org.apache.hudi.keygen;
 
+import java.util.Arrays;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
@@ -25,6 +26,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -33,18 +35,22 @@ public class SimpleKeyGenerator extends KeyGenerator {
 
   private static final String DEFAULT_PARTITION_PATH = "default";
 
+  @Deprecated
   protected final String recordKeyField;
-
+  @Deprecated
   protected final String partitionPathField;
 
   protected final boolean hiveStylePartitioning;
 
   public SimpleKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyField = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
-    this.partitionPathField = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY());
+    this.setRecordKeyFields(Arrays.asList(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY())));
+    this.setPartitionPathFields(Arrays.asList(props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY())));
     this.hiveStylePartitioning = props.getBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
         Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
+    // Retaining this for compatibility
+    this.recordKeyField = getRecordKeyFields().get(0);
+    this.partitionPathField = getPartitionPathFields().get(0);
   }
 
   @Override
@@ -67,5 +73,19 @@ public class SimpleKeyGenerator extends KeyGenerator {
     }
 
     return new HoodieKey(recordKey, partitionPath);
+  }
+
+  public boolean isRowKeyExtractionSupported() {
+    // key-generator implementation that inherits from this class needs to implement this method
+    return this.getClass().equals(SimpleKeyGenerator.class);
+  }
+
+  public String getRecordKeyFromRow(Row row) {
+    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), getRowKeyFieldsPos());
+  }
+
+  public String getPartitionPathFromRow(Row row) {
+    return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(), getRowPartitionPathFieldsPos(),
+        hiveStylePartitioning);
   }
 }

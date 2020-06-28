@@ -173,7 +173,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @return HoodieWriteMetadata
    */
   public abstract HoodieDatasetWriteMetadata bulkInsertDataset(JavaSparkContext jsc, String instantTime,
-      Dataset<Row> rows, Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
+      Dataset<Row> rows, Option<UserDefinedBulkInsertDatasetPartitioner> bulkInsertPartitioner);
 
   /**
    * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be

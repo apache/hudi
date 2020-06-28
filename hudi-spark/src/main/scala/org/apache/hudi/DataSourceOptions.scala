@@ -171,6 +171,8 @@ object DataSourceWriteOptions {
     if (optParams.contains(PARTITIONPATH_FIELD_OPT_KEY)) {
       res = res ++ Map(HoodieWriteConfig.PARTITION_PATH_FIELD_PROP -> optParams(PARTITIONPATH_FIELD_OPT_KEY))
     }
+
+    res = res ++ Map(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP -> optParams(KEYGENERATOR_CLASS_OPT_KEY))
     res
   }
 

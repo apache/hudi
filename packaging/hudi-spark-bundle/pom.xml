@@ -95,6 +95,8 @@
                   <include>org.apache.hive:hive-service-rpc</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
+                  <include>org.openjdk.jmh:jmh-core</include>
+                  <include>org.openjdk.jmh:jmh-generator-annprocess</include>
                 </includes>
               </artifactSet>
               <relocations>

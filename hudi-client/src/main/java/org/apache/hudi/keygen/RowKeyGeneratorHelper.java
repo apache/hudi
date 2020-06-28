@@ -16,42 +16,42 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.commit.dataset;
-
-import org.apache.spark.api.java.function.MapFunction;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.types.StructType;
+package org.apache.hudi.keygen;
 
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.spark.sql.Row;
 
-/**
- * Partition Path Generator For Row Writer.
- */
-public class PartitionPathGeneratorMapFunction implements MapFunction<Row, String> {
+public class RowKeyGeneratorHelper {
 
   private static final String DEFAULT_PARTITION_PATH = "default";
   private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
 
-  private final List<String> rowKeyFields;
-  private final List<Integer> rowKeyFieldPos;
-  private final boolean hiveStylePartitioning;
+  protected static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
+  protected static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
 
-  public PartitionPathGeneratorMapFunction(StructType structType, List<String> rowKeyFields,
-      boolean hiveStylePartitioning) {
-    this.hiveStylePartitioning = hiveStylePartitioning;
-    this.rowKeyFields = rowKeyFields;
-    this.rowKeyFieldPos = rowKeyFields.stream()
-        .map(f -> (Integer)(structType.getFieldIndex(f).get()))
-        .collect(Collectors.toList());
+
+  public static String getRecordKeyFromRow(Row row, List<String> recordKeyFields, List<Integer> recordKeyFieldsPos) {
+    return IntStream.range(0, recordKeyFields.size()).mapToObj(idx -> {
+      String field = recordKeyFields.get(idx);
+      Integer fieldPos = recordKeyFieldsPos.get(idx);
+      if (row.isNullAt(fieldPos)) {
+        return fieldPos + ":" + NULL_RECORDKEY_PLACEHOLDER;
+      }
+      String val = row.getAs(field).toString();
+      if (val.isEmpty()) {
+        return fieldPos + ":" + EMPTY_RECORDKEY_PLACEHOLDER;
+      }
+      return fieldPos + ":" + val;
+    }).collect(Collectors.joining(","));
   }
 
-  @Override
-  public String call(Row row) throws Exception {
-    return IntStream.range(0, rowKeyFields.size()).mapToObj(idx -> {
-      String field = rowKeyFields.get(idx);
-      Integer fieldPos = rowKeyFieldPos.get(idx);
+  public static String getPartitionPathFromRow(Row row, List<String> partitionPathFields,
+      List<Integer> partitionPathFieldsPos, boolean hiveStylePartitioning) {
+    return IntStream.range(0, partitionPathFields.size()).mapToObj(idx -> {
+      String field = partitionPathFields.get(idx);
+      Integer fieldPos = partitionPathFieldsPos.get(idx);
       if (row.isNullAt(fieldPos)) {
         return hiveStylePartitioning ? field + "=" + DEFAULT_PARTITION_PATH : DEFAULT_PARTITION_PATH;
       }

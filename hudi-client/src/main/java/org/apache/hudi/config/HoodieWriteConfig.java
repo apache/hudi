@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
@@ -93,6 +94,9 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public static final String HIVE_STYLE_PARTITIONING_PROP = "hoodie.write.hive_style_partitioning";
   private static final String DEFAULT_HIVE_STYLE_PARTITIONING_KEY = "false";
+
+  public static final String KEYGENERATOR_CLASS_PROP = "hoodie.write.keygenerator.class";
+  public static final String DEFAULT_KEYGENERATOR_CLASS = "org.apache.hudi.keygen.SimpleKeyGenerator";
 
   private static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";
   private static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "false";
@@ -245,6 +249,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean useHiveStylePartitioning() {
     return Boolean.valueOf(props.getProperty(HIVE_STYLE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING));
+  }
+
+  public String getKeyGeneratorClass() {
+    return props.getProperty(KEYGENERATOR_CLASS_PROP, DEFAULT_KEYGENERATOR_CLASS);
   }
 
   /**
@@ -773,6 +781,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           DEFAULT_PARTITION_PATH_FIELD);
       setDefaultOnCondition(props, !props.containsKey(HIVE_STYLE_PARTITIONING_PROP), HIVE_STYLE_PARTITIONING_PROP,
           DEFAULT_HIVE_STYLE_PARTITIONING_KEY);
+      setDefaultOnCondition(props, !props.containsKey(KEYGENERATOR_CLASS_PROP), KEYGENERATOR_CLASS_PROP,
+          DEFAULT_KEYGENERATOR_CLASS);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());

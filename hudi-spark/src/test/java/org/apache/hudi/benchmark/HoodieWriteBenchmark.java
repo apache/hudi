@@ -72,12 +72,12 @@ public class HoodieWriteBenchmark {
    * Benchmarks bulk insert in Hudi.
    */
   @Fork(value = 1)
-  // @Benchmark
+  @Benchmark
   @BenchmarkMode(Mode.AverageTime)
   @Warmup(iterations = 1)
-  @Measurement(iterations = 3)
+  @Measurement(iterations = 5)
   @OutputTimeUnit(TimeUnit.SECONDS)
-  public void benchmarkBulkInsert(WriteBenchmarkExecutionPlan plan) throws Exception {
+  public void benchmarkOriginalBulkInsert(WriteBenchmarkExecutionPlan plan) throws Exception {
     try {
       String randomPath = UUID.randomUUID().toString();
       org.apache.hadoop.fs.Path tablePath = new org.apache.hadoop.fs.Path(plan.basePath + "/" + PATH_PREFIX + "/" + randomPath);

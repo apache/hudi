@@ -39,6 +39,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.UserDefinedBulkInsertDatasetPartitioner;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.HoodieDatasetWriteMetadata;
@@ -57,7 +58,7 @@ public class BulkInsertDatasetCommitActionExecutor<T extends HoodieRecordPayload
       .getLogger(BulkInsertDatasetCommitActionExecutor.class);
 
   private final Dataset<Row> rowDataset;
-  private final Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner;
+  private final Option<UserDefinedBulkInsertDatasetPartitioner> bulkInsertPartitioner;
 
   private final WriteOperationType operationType;
   protected final SparkTaskContextSupplier sparkTaskContextSupplier = new SparkTaskContextSupplier();
@@ -65,7 +66,7 @@ public class BulkInsertDatasetCommitActionExecutor<T extends HoodieRecordPayload
   public BulkInsertDatasetCommitActionExecutor(JavaSparkContext jsc,
       HoodieWriteConfig config, HoodieTable table,
       String instantTime, Dataset<Row> rowDataset,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      Option<UserDefinedBulkInsertDatasetPartitioner> bulkInsertPartitioner) {
     super(jsc, config, table, instantTime);
     this.operationType = WriteOperationType.BULK_INSERT_DATASET;
     this.rowDataset = rowDataset;

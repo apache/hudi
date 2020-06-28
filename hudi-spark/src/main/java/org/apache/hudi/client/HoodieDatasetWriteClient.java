@@ -52,7 +52,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
-import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
+import org.apache.hudi.table.UserDefinedBulkInsertDatasetPartitioner;
 import org.apache.hudi.table.action.HoodieDatasetWriteMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -173,7 +173,7 @@ public class HoodieDatasetWriteClient<T extends HoodieRecordPayload> implements 
   }
 
   public Dataset<EncodableWriteStatus> bulkInsertDataset(Dataset<Row> records,
-      final String instantTime, Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      final String instantTime, Option<UserDefinedBulkInsertDatasetPartitioner> bulkInsertPartitioner) {
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT);

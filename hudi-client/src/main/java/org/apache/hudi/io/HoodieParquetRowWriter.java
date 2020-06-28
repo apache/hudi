@@ -89,8 +89,8 @@ public class HoodieParquetRowWriter implements Serializable {
     this.instantTime = instantTime;
     this.encoder = encoder;
     this.maxFileSize = maxFileSize + Math.round(maxFileSize * compressionRatio);
-    this.recordKeyProp = config.getRecordKeyFields().get(0);
-    this.partitionPathProp = config.getPartitionPathFields().get(0);
+    this.recordKeyProp = HoodieRecord.RECORD_KEY_METADATA_FIELD;
+    this.partitionPathProp = HoodieRecord.PARTITION_PATH_METADATA_FIELD;
     this.writeSupport = writeSupport;
     this.timer = new HoodieTimer().startTimer();
     this.encodableWriteStatus = new EncodableWriteStatus(recordKeyProp);
@@ -126,7 +126,7 @@ public class HoodieParquetRowWriter implements Serializable {
 
   public boolean canWrite(Row row) {
     return wrapperFileSystem.getBytesWritten(hoodiePath) < maxFileSize
-        && row.getAs(partitionPathProp).equals(encodableWriteStatus.getPartitionPath());
+        && row.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD).equals(encodableWriteStatus.getPartitionPath());
   }
 
   public void writeRow(Row row) {
@@ -143,6 +143,7 @@ public class HoodieParquetRowWriter implements Serializable {
       recordsWritten++;
       insertRecordsWritten++;
     } catch (Throwable e) {
+      LOG.error("Got error when writing row", e);
       encodableWriteStatus.markFailure(row, row.getAs(recordKeyProp), e);
     }
   }

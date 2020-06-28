@@ -113,7 +113,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
   @Override
   public HoodieDatasetWriteMetadata bulkInsertDataset(JavaSparkContext jsc, String instantTime, Dataset<Row> rows,
-                                          Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+                                          Option<UserDefinedBulkInsertDatasetPartitioner> bulkInsertPartitioner) {
     return new BulkInsertDatasetCommitActionExecutor<>(jsc, config,
         this, instantTime, rows, bulkInsertPartitioner).execute();
   }

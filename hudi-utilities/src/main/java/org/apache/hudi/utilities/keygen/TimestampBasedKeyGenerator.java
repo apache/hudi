@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.keygen;
 
+import java.sql.Timestamp;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
@@ -35,6 +36,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.TimeZone;
+import org.apache.spark.sql.Row;
 
 /**
  * Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
@@ -122,5 +124,20 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     } catch (ParseException pe) {
       throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, pe);
     }
+  }
+
+  public boolean isRowKeyExtractionSupported() {
+    // key-generator implementation that inherits from this class needs to implement this method
+    return true;
+  }
+  
+  public String getPartitionPathFromRow(Row row) {
+    Timestamp fieldVal = row.getAs(partitionPathField);
+    if (fieldVal == null) {
+      fieldVal = new Timestamp(1L);
+    }
+    SimpleDateFormat partitionPathFormat = new SimpleDateFormat(outputDateFormat);
+    partitionPathFormat.setTimeZone(timeZone);
+    return partitionPathFormat.format(fieldVal);
   }
 }

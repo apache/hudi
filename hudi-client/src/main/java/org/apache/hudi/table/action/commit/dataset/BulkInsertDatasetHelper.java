@@ -19,12 +19,17 @@
 package org.apache.hudi.table.action.commit.dataset;
 
 import org.apache.hudi.client.EncodableWriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.UserDefinedBulkInsertDatasetPartitioner;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 import org.apache.hudi.table.action.HoodieDatasetWriteMetadata;
 import org.apache.log4j.LogManager;
@@ -63,7 +68,7 @@ public class BulkInsertDatasetHelper {
       Dataset<Row> rowDataset, String instantTime,
       HoodieTable<T> table, HoodieWriteConfig config,
       BulkInsertDatasetCommitActionExecutor<T> executor, boolean performDedupe,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      Option<UserDefinedBulkInsertDatasetPartitioner> bulkInsertPartitioner) {
     HoodieDatasetWriteMetadata result = new HoodieDatasetWriteMetadata();
 
     // De-dupe/merge if needed
@@ -74,41 +79,44 @@ public class BulkInsertDatasetHelper {
           config.getInsertShuffleParallelism(), ((HoodieTable<T>)table));
     }*/
 
-    // no user defined repartitioning support yet
+    final Dataset<Row> rows;
+    if (bulkInsertPartitioner.isPresent()) {
+      rows = bulkInsertPartitioner.get().repartitionRecords(dedupedRecords, config.getBulkInsertShuffleParallelism());
+    } else {
+      List<Column> sortFields = Stream.concat(
+          config.getPartitionPathFields().stream().filter(p -> !p.isEmpty()).map(Column::new),
+          config.getRecordKeyFields().stream().map(Column::new)).collect(Collectors.toList());
+      rows = dedupedRecords.sort(JavaConverters.collectionAsScalaIterableConverter(sortFields).asScala().toSeq())
+          .coalesce(config.getBulkInsertShuffleParallelism());
+    }
 
-    List<Column> sortFields = Stream.concat(config.getPartitionPathFields().stream().map(Column::new),
-        config.getRecordKeyFields().stream().map(Column::new)).collect(Collectors.toList());
-
-    final Dataset<Row> rows = dedupedRecords
-        .sort(JavaConverters.collectionAsScalaIterableConverter(sortFields).asScala().toSeq())
-        .coalesce(config.getBulkInsertShuffleParallelism());
-
+    TypedProperties properties = new TypedProperties();
+    properties.putAll(config.getProps());
+    KeyGenerator keyGenerator =  (KeyGenerator)ReflectionUtils.loadClass(config.getKeyGeneratorClass(), properties);
+    ValidationUtils.checkArgument(keyGenerator.isRowKeyExtractionSupported(),
+        "Key Generator (" + keyGenerator.getClass() + ") do not support APIs for extracting record key "
+            + "and partition path from Row");
     List<Column> originalFields =
         Arrays.stream(rows.schema().fields()).map(f -> new Column(f.name())).collect(Collectors.toList());
-
     StructType structTypeForUDF = rows.schema();
-    final PartitionPathGeneratorMapFunction partitionPathGenMapFunction =
-        new PartitionPathGeneratorMapFunction(structTypeForUDF, config.getPartitionPathFields(),
-            config.useHiveStylePartitioning());
-    final RecordKeyGeneratorMapFunction recordKeyGeneratorMapFunction = new RecordKeyGeneratorMapFunction(
-        structTypeForUDF, config.getRecordKeyFields());
+    keyGenerator.initializeRowKeyGenerator(structTypeForUDF);
 
     sqlContext.udf().register("hudi_recordkey_gen_function", new UDF1<Row, String>() {
       @Override
       public String call(Row row) throws Exception {
-        return recordKeyGeneratorMapFunction.call(row);
+        return keyGenerator.getRecordKeyFromRow(row);
       }
     }, DataTypes.StringType);
 
     sqlContext.udf().register("hudi_partition_gen_function", new UDF1<Row, String>() {
       @Override
       public String call(Row row) throws Exception {
-        return partitionPathGenMapFunction.call(row);
+        return keyGenerator.getPartitionPathFromRow(row);
       }
     }, DataTypes.StringType);
 
     final Dataset<Row> rowDatasetWithRecordKeys;
-    if (config.getRecordKeyFields().size() == 1) {
+    if (false) {
       rowDatasetWithRecordKeys = rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD,
          col(config.getRecordKeyFields().get(0)));
     } else {
@@ -118,7 +126,7 @@ public class BulkInsertDatasetHelper {
     }
 
     final Dataset<Row> rowDatasetWithRecordKeysAndPartitionPath;
-    if (config.getPartitionPathFields().size() == 1) {
+    if (false) {
       rowDatasetWithRecordKeysAndPartitionPath =
           rowDatasetWithRecordKeys.withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
               col(config.getPartitionPathFields().get(0)));

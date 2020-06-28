@@ -971,6 +971,10 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     public TestGenerator(TypedProperties props) {
       super(props);
     }
+
+    public boolean isRowKeyExtractionSupported() {
+      return true;
+    }
   }
 
   public static class DummyAvroPayload extends OverwriteWithLatestAvroPayload {
