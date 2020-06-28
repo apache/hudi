@@ -13,14 +13,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-language: java
+os: linux
 dist: trusty
+language: java
 jdk:
   - openjdk8
-sudo: required
-env:
-  - HUDI_QUIETER_LOGGING=1 TEST_SUITE=unit
-  - TEST_SUITE=integration
+jobs:
+  include:
+    - name: "Unit tests except hudi-client"
+      env: MODE=unit MODULES='!hudi-client' HUDI_QUIETER_LOGGING=1
+    - name: "Unit tests for hudi-client"
+      env: MODE=unit MODULES=hudi-client HUDI_QUIETER_LOGGING=1
+    - name: "Functional tests"
+      env: MODE=functional HUDI_QUIETER_LOGGING=1
+    - name: "Integration tests"
+      env: MODE=integration
 install: true
 services:
   - docker
@@ -36,6 +43,6 @@ script:
   # ping stdout every 9 minutes or Travis kills build
   # https://docs.travis-ci.com/user/common-build-problems/#Build-times-out-because-no-output-was-received
   - while sleep 9m; do echo "=====[ $SECONDS seconds still running ]====="; done &
-  - scripts/run_travis_tests.sh $TEST_SUITE
+  - scripts/run_travis_tests.sh $MODE $MODULES
 after_success:
-  - bash <(curl -s https://codecov.io/bash)
+  - scripts/report_coverage.sh
