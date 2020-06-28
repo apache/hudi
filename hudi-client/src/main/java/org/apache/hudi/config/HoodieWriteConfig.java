@@ -296,8 +296,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.AUTO_CLEAN_PROP));
   }
 
-  public boolean isRunParallelAutoClean() {
-    return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.PARALLEL_AUTO_CLEAN_PROP));
+  public boolean isAsyncClean() {
+    return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.ASYNC_CLEAN_PROP));
   }
 
   public boolean incrementalCleanerModeEnabled() {

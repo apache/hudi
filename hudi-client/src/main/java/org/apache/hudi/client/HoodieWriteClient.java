@@ -80,8 +80,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private final boolean rollbackPending;
   private final transient HoodieMetrics metrics;
   private transient Timer.Context compactionTimer;
-
-  private transient AutoCleanerService autoCleanerService;
+  private transient AsyncCleanerService asyncCleanerService;
 
   /**
    * Create a write client, without cleaning up failed/inflight commits.
@@ -97,28 +96,28 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * Create a write client, with new hudi index.
    *
    * @param jsc Java Spark Context
-   * @param clientConfig instance of HoodieWriteConfig
+   * @param writeConfig instance of HoodieWriteConfig
    * @param rollbackPending whether need to cleanup pending commits
    */
-  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending) {
-    this(jsc, clientConfig, rollbackPending, HoodieIndex.createIndex(clientConfig));
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig writeConfig, boolean rollbackPending) {
+    this(jsc, writeConfig, rollbackPending, HoodieIndex.createIndex(writeConfig));
   }
 
-  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending, HoodieIndex index) {
-    this(jsc, clientConfig, rollbackPending, index, Option.empty());
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig writeConfig, boolean rollbackPending, HoodieIndex index) {
+    this(jsc, writeConfig, rollbackPending, index, Option.empty());
   }
 
   /**
    *  Create a write client, allows to specify all parameters.
    *
    * @param jsc Java Spark Context
-   * @param clientConfig instance of HoodieWriteConfig
+   * @param writeConfig instance of HoodieWriteConfig
    * @param rollbackPending whether need to cleanup pending commits
    * @param timelineService Timeline Service that runs as part of write client.
    */
-  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending,
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig writeConfig, boolean rollbackPending,
       HoodieIndex index, Option<EmbeddedTimelineService> timelineService) {
-    super(jsc, index, clientConfig, timelineService);
+    super(jsc, index, writeConfig, timelineService);
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.rollbackPending = rollbackPending;
   }
@@ -160,7 +159,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT);
     table.validateUpsertSchema();
     setOperationType(WriteOperationType.UPSERT);
-    AutoCleanerService.spawnAutoCleanerIfEnabled(this, instantTime);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.upsert(jsc, instantTime, records);
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
@@ -181,7 +180,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT_PREPPED);
     table.validateUpsertSchema();
     setOperationType(WriteOperationType.UPSERT_PREPPED);
-    AutoCleanerService.spawnAutoCleanerIfEnabled(this, instantTime);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.upsertPrepped(jsc,instantTime, preppedRecords);
     return postWrite(result, instantTime, table);
   }
@@ -200,7 +199,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.INSERT);
-    AutoCleanerService.spawnAutoCleanerIfEnabled(this, instantTime);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.insert(jsc,instantTime, records);
     return postWrite(result, instantTime, table);
   }
@@ -220,7 +219,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT_PREPPED);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.INSERT_PREPPED);
-    AutoCleanerService.spawnAutoCleanerIfEnabled(this, instantTime);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.insertPrepped(jsc,instantTime, preppedRecords);
     return postWrite(result, instantTime, table);
   }
@@ -260,7 +259,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT);
-    AutoCleanerService.spawnAutoCleanerIfEnabled(this, instantTime);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.bulkInsert(jsc,instantTime, records, bulkInsertPartitioner);
     return postWrite(result, instantTime, table);
   }
@@ -286,7 +285,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT_PREPPED);
-    AutoCleanerService.spawnAutoCleanerIfEnabled(this, instantTime);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.bulkInsertPrepped(jsc,instantTime, preppedRecords, bulkInsertPartitioner);
     return postWrite(result, instantTime, table);
   }
@@ -359,9 +358,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private void autoCleanOnCommit(String instantTime) {
     if (config.isAutoClean()) {
       // Call clean to cleanup if there is anything to cleanup after the commit,
-      if (config.isRunParallelAutoClean()) {
+      if (config.isAsyncClean()) {
         LOG.info("Cleaner has been spawned already. Waiting for it to finish");
-        AutoCleanerService.waitForAutoCleanerToFinish(autoCleanerService);
+        AsyncCleanerService.waitForCompletion(asyncCleanerService);
         LOG.info("Cleaner has finished");
       } else {
         LOG.info("Auto cleaning is enabled. Running cleaner now");
@@ -497,9 +496,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   @Override
   public void close() {
-    AutoCleanerService.shutdownAutoCleaner(autoCleanerService);
-    autoCleanerService = null;
-    // Stop timeline-server if running
+    AsyncCleanerService.forceShutdown(asyncCleanerService);
+    asyncCleanerService = null;
     super.close();
   }
 
