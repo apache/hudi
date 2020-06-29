@@ -25,6 +25,7 @@ import java.util.Set;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.util.Option;
 
 public interface HoodieFileReader<R extends IndexedRecord> {
 
@@ -34,7 +35,17 @@ public interface HoodieFileReader<R extends IndexedRecord> {
 
   public Set<String> filterRowKeys(Set<String> candidateRowKeys);
 
-  public Iterator<R> getRecordIterator(Schema schema) throws IOException;
+  public Iterator<R> getRecordIterator(Schema readerSchema) throws IOException;
+
+  default Iterator<R> getRecordIterator() throws IOException {
+    return getRecordIterator(getSchema());
+  }
+
+  public Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException;
+
+  default Option<R> getRecordByKey(String key) throws IOException {
+    return getRecordByKey(key, getSchema());
+  }
 
   Schema getSchema();
 

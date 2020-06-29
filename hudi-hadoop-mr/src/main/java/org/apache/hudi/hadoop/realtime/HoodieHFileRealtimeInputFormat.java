@@ -18,15 +18,10 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.hadoop.HoodieParquetInputFormat;
-import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.stream.Stream;
 
-import org.apache.hadoop.conf.Configurable;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
@@ -36,40 +31,34 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.hadoop.HoodieHFileInputFormat;
+import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 import org.apache.hudi.hadoop.UseRecordReaderFromInputFormat;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.stream.Stream;
-
 /**
- * Input Format, that provides a real-time view of data in a Hoodie table.
+ * HoodieRealtimeInputFormat for HUDI datasets which store data in HFile base file format.
  */
 @UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
-public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat implements Configurable {
+public class HoodieHFileRealtimeInputFormat extends HoodieHFileInputFormat {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieParquetRealtimeInputFormat.class);
-
-  // To make Hive on Spark queries work with RT tables. Our theory is that due to
-  // {@link org.apache.hadoop.hive.ql.io.parquet.ProjectionPusher}
-  // not handling empty list correctly, the ParquetRecordReaderWrapper ends up adding the same column ids multiple
-  // times which ultimately breaks the query.
+  private static final Logger LOG = LogManager.getLogger(HoodieHFileRealtimeInputFormat.class);
 
   @Override
   public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
-
     Stream<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits)).map(is -> (FileSplit) is);
-
     return HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits);
   }
 
   @Override
   public FileStatus[] listStatus(JobConf job) throws IOException {
-    // Call the HoodieInputFormat::listStatus to obtain all latest parquet files, based on commit
-    // timeline.
+    // Call the HoodieInputFormat::listStatus to obtain all latest hfiles, based on commit timeline.
     return super.listStatus(job);
   }
 
@@ -81,7 +70,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
   @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf jobConf,
-                                                                   final Reporter reporter) throws IOException {
+      final Reporter reporter) throws IOException {
     // Hive on Spark invokes multiple getRecordReaders from different threads in the same spark task (and hence the
     // same JVM) unlike Hive on MR. Due to this, accesses to JobConf, which is shared across all threads, is at the
     // risk of experiencing race conditions. Hence, we synchronize on the JobConf object here. There is negligible
@@ -111,17 +100,11 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
     LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-
     // sanity check
-    ValidationUtils.checkArgument(split instanceof RealtimeSplit,
-        "HoodieRealtimeRecordReader can only work on RealtimeSplit and not with " + split);
+    ValidationUtils.checkArgument(split instanceof HoodieRealtimeFileSplit,
+        "HoodieRealtimeRecordReader can only work on HoodieRealtimeFileSplit and not with " + split);
 
-    return new HoodieRealtimeRecordReader((RealtimeSplit) split, jobConf,
+    return new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) split, jobConf,
         super.getRecordReader(split, jobConf, reporter));
-  }
-
-  @Override
-  public Configuration getConf() {
-    return conf;
   }
 }

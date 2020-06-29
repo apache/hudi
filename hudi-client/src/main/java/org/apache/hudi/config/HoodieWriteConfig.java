@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
@@ -554,6 +555,18 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public double getLogFileToParquetCompressionRatio() {
     return Double.parseDouble(props.getProperty(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO));
+  }
+
+  public long getHFileMaxFileSize() {
+    return Long.parseLong(props.getProperty(HoodieStorageConfig.HFILE_FILE_MAX_BYTES));
+  }
+
+  public int getHFileBlockSize() {
+    return Integer.parseInt(props.getProperty(HoodieStorageConfig.HFILE_BLOCK_SIZE_BYTES));
+  }
+
+  public Compression.Algorithm getHFileCompressionAlgorithm() {
+    return Compression.Algorithm.valueOf(props.getProperty(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM));
   }
 
   /**

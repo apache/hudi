@@ -33,8 +33,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.HoodieHFileInputFormat;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -82,6 +84,16 @@ public class HoodieInputFormatUtils {
           inputFormat.setConf(conf);
           return inputFormat;
         }
+      case HFILE:
+        if (realtime) {
+          HoodieHFileRealtimeInputFormat inputFormat = new HoodieHFileRealtimeInputFormat();
+          inputFormat.setConf(conf);
+          return inputFormat;
+        } else {
+          HoodieHFileInputFormat inputFormat = new HoodieHFileInputFormat();
+          inputFormat.setConf(conf);
+          return inputFormat;
+        }
       default:
         throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
     }
@@ -96,6 +108,8 @@ public class HoodieInputFormatUtils {
     switch (baseFileFormat) {
       case PARQUET:
         return MapredParquetOutputFormat.class.getName();
+      case HFILE:
+        return MapredParquetOutputFormat.class.getName();
       default:
         throw new HoodieIOException("No OutputFormat for base file format " + baseFileFormat);
     }
@@ -104,6 +118,8 @@ public class HoodieInputFormatUtils {
   public static String getSerDeClassName(HoodieFileFormat baseFileFormat) {
     switch (baseFileFormat) {
       case PARQUET:
+        return ParquetHiveSerDe.class.getName();
+      case HFILE:
         return ParquetHiveSerDe.class.getName();
       default:
         throw new HoodieIOException("No SerDe for base file format " + baseFileFormat);
@@ -114,6 +130,9 @@ public class HoodieInputFormatUtils {
     final String extension = FSUtils.getFileExtension(path);
     if (extension.equals(HoodieFileFormat.PARQUET.getFileExtension())) {
       return getInputFormat(HoodieFileFormat.PARQUET, realtime, conf);
+    }
+    if (extension.equals(HoodieFileFormat.HFILE.getFileExtension())) {
+      return getInputFormat(HoodieFileFormat.HFILE, realtime, conf);
     }
     throw new HoodieIOException("Hoodie InputFormat not implemented for base file of type " + extension);
   }

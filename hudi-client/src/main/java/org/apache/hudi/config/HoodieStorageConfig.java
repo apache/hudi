@@ -39,6 +39,10 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_PARQUET_BLOCK_SIZE_BYTES = DEFAULT_PARQUET_FILE_MAX_BYTES;
   public static final String PARQUET_PAGE_SIZE_BYTES = "hoodie.parquet.page.size";
   public static final String DEFAULT_PARQUET_PAGE_SIZE_BYTES = String.valueOf(1 * 1024 * 1024);
+  public static final String HFILE_FILE_MAX_BYTES = "hoodie.hfile.max.file.size";
+  public static final String HFILE_BLOCK_SIZE_BYTES = "hoodie.hfile.block.size";
+  public static final String DEFAULT_HFILE_BLOCK_SIZE_BYTES = String.valueOf(1 * 1024 * 1024);
+  public static final String DEFAULT_HFILE_FILE_MAX_BYTES = String.valueOf(120 * 1024 * 1024);
   // used to size log files
   public static final String LOGFILE_SIZE_MAX_BYTES = "hoodie.logfile.max.size";
   public static final String DEFAULT_LOGFILE_SIZE_MAX_BYTES = String.valueOf(1024 * 1024 * 1024); // 1 GB
@@ -49,8 +53,10 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
   // Default compression ratio for parquet
   public static final String DEFAULT_STREAM_COMPRESSION_RATIO = String.valueOf(0.1);
   public static final String PARQUET_COMPRESSION_CODEC = "hoodie.parquet.compression.codec";
+  public static final String HFILE_COMPRESSION_ALGORITHM = "hoodie.hfile.compression.algorithm";
   // Default compression codec for parquet
   public static final String DEFAULT_PARQUET_COMPRESSION_CODEC = "gzip";
+  public static final String DEFAULT_HFILE_COMPRESSION_ALGORITHM = "GZ";
   public static final String LOGFILE_TO_PARQUET_COMPRESSION_RATIO = "hoodie.logfile.to.parquet.compression.ratio";
   // Default compression ratio for log file to parquet, general 3x
   public static final String DEFAULT_LOGFILE_TO_PARQUET_COMPRESSION_RATIO = String.valueOf(0.35);
@@ -81,6 +87,7 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
 
     public Builder limitFileSize(long maxFileSize) {
       props.setProperty(PARQUET_FILE_MAX_BYTES, String.valueOf(maxFileSize));
+      props.setProperty(HFILE_FILE_MAX_BYTES, String.valueOf(maxFileSize));
       return this;
     }
 
@@ -91,6 +98,11 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
 
     public Builder parquetPageSize(int pageSize) {
       props.setProperty(PARQUET_PAGE_SIZE_BYTES, String.valueOf(pageSize));
+      return this;
+    }
+
+    public Builder hfileBlockSize(int blockSize) {
+      props.setProperty(HFILE_BLOCK_SIZE_BYTES, String.valueOf(blockSize));
       return this;
     }
 
@@ -111,6 +123,11 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
 
     public Builder parquetCompressionCodec(String parquetCompressionCodec) {
       props.setProperty(PARQUET_COMPRESSION_CODEC, parquetCompressionCodec);
+      return this;
+    }
+
+    public Builder hfileCompressionAlgorithm(String hfileCompressionAlgorithm) {
+      props.setProperty(HFILE_COMPRESSION_ALGORITHM, hfileCompressionAlgorithm);
       return this;
     }
 
@@ -137,6 +154,14 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
           DEFAULT_PARQUET_COMPRESSION_CODEC);
       setDefaultOnCondition(props, !props.containsKey(LOGFILE_TO_PARQUET_COMPRESSION_RATIO),
           LOGFILE_TO_PARQUET_COMPRESSION_RATIO, DEFAULT_LOGFILE_TO_PARQUET_COMPRESSION_RATIO);
+
+      setDefaultOnCondition(props, !props.containsKey(HFILE_BLOCK_SIZE_BYTES), HFILE_BLOCK_SIZE_BYTES,
+          DEFAULT_HFILE_BLOCK_SIZE_BYTES);
+      setDefaultOnCondition(props, !props.containsKey(HFILE_COMPRESSION_ALGORITHM), HFILE_COMPRESSION_ALGORITHM,
+          DEFAULT_HFILE_COMPRESSION_ALGORITHM);
+      setDefaultOnCondition(props, !props.containsKey(HFILE_FILE_MAX_BYTES), HFILE_FILE_MAX_BYTES,
+          DEFAULT_HFILE_FILE_MAX_BYTES);
+
       return config;
     }
   }

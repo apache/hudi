@@ -27,8 +27,10 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -76,5 +78,10 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
   public long getTotalRecords() {
     // TODO Auto-generated method stub
     return 0;
+  }
+
+  @Override
+  public Option getRecordByKey(String key, Schema schema) throws IOException {
+    throw new HoodieException("HoodieParquetReader does not support reading records by key");
   }
 }

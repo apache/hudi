@@ -497,6 +497,14 @@
         <scope>provided</scope>
       </dependency>
 
+      <!-- Spark Avro from databricks -->
+      <dependency>
+        <groupId>com.databricks</groupId>
+        <artifactId>spark-avro_${scala.binary.version}</artifactId>
+        <version>4.0.0</version>
+        <scope>test</scope>
+      </dependency>
+
       <!-- Dropwizard Metrics -->
       <dependency>
         <groupId>io.dropwizard.metrics</groupId>
