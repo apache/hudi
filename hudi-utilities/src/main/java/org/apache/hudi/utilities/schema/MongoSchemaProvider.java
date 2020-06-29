@@ -25,19 +25,16 @@ import com.amazonaws.services.s3.model.S3Object;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Date;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import org.apache.hudi.utilities.mongo.SchemaUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
-import org.apache.avro.SchemaBuilder;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.mongo.SchemaUtils;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
@@ -55,39 +52,6 @@ public class MongoSchemaProvider extends SchemaProvider {
     private static final String SOURCE_SCHEMA_EXPIRED   = "hoodie.deltastreamer.schemaprovider" + ".source.schema.expired";
   }
 
-  /*
-   * Embedded schema provider that build oplog schemas
-   */
-  private static class OplogSchemaProvider {
-    private Schema baseSchema;
-
-    private Schema buildOplogBaseSchema() {
-      SchemaBuilder.FieldAssembler<Schema> fieldAssembler = SchemaBuilder
-          .record("MongoOplog")
-          .namespace("com.wish.log")
-          .fields();
-
-      Schema nullSchema = Schema.create(Schema.Type.NULL);
-
-      for (int i = 0; i < SchemaUtils.OPLOG_FIELD_NAMES.length; ++i) {
-        Schema schema = Schema.create(SchemaUtils.OPLOG_FIELD_TYPES[i]);
-        Schema unionSchema = Schema.createUnion(Arrays.asList(nullSchema, schema));
-
-        fieldAssembler.name(SchemaUtils.OPLOG_FIELD_NAMES[i]).type(unionSchema).withDefault(null);
-      }
-
-      return fieldAssembler.endRecord();
-    }
-
-    private OplogSchemaProvider() {
-      baseSchema = buildOplogBaseSchema();
-    }
-
-    public Schema getBaseSchema() {
-      return this.baseSchema;
-    }
-  }
-
   private static final Logger LOG = LogManager.getLogger(MongoSchemaProvider.class);
 
   private final String s3Bucket;
@@ -95,7 +59,6 @@ public class MongoSchemaProvider extends SchemaProvider {
   private final long schemaExpiredTime;
 
   private Schema sourceSchema;
-  private static final OplogSchemaProvider OPLOG_SCHEMA_PROVIDER = new OplogSchemaProvider();
   private AmazonS3 s3Client;
   private long lastModifiedTS;
   private long schemaCachedTS;
@@ -184,7 +147,7 @@ public class MongoSchemaProvider extends SchemaProvider {
    * Combine Mongo table and oplog schemas.
    */
   private Schema combineSchemaFromS3(Schema tableSchema) throws IOException {
-    Schema oplogSchema = OPLOG_SCHEMA_PROVIDER.getBaseSchema();
+    Schema oplogSchema = SchemaUtils.buildOplogBaseSchema();
 
     List<Schema.Field> fieldList = oplogSchema.getFields().stream().map(
         field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))

@@ -22,6 +22,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
+import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
@@ -40,17 +41,18 @@ public class SchemaUtils {
   public static final String OP_FIELD = "_op";
   public static final String TS_MS_FIELD = "_ts_ms";
   public static final String PATCH_FIELD = "_patch";
-  public static final String[] OPLOG_FIELD_NAMES = new String[]{
-      ID_FIELD, OP_FIELD, TS_MS_FIELD, PATCH_FIELD
-  };
-  public static final Type[] OPLOG_FIELD_TYPES = new Type[]{
-      Type.STRING, Type.STRING, Type.LONG, Type.STRING
-  };
   private static final Logger LOG = LogManager.getLogger(SchemaUtils.class);
 
   @SuppressWarnings("deprecation") // Backward compatible with Mongo libraries
   public static final JsonWriterSettings STRICT_JSON = JsonWriterSettings.builder()
       .outputMode(JsonMode.STRICT).build();
+
+  public static Schema buildOplogBaseSchema() {
+    SchemaBuilder.FieldAssembler<Schema> fieldAssembler = SchemaBuilder
+        .record("MongoOplog").namespace("com.wish.log").fields();
+    return fieldAssembler.optionalString(ID_FIELD).optionalString(OP_FIELD)
+        .optionalLong(TS_MS_FIELD).optionalString(PATCH_FIELD).endRecord();
+  }
 
   /**
    * Extract fields from json value to generic record.

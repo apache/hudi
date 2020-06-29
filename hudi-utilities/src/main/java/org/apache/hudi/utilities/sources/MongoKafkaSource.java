@@ -18,16 +18,14 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.KafkaAvroConverter;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
-import org.apache.hudi.utilities.sources.helpers.KafkaAvroConverter;
 import org.apache.hudi.utilities.sources.helpers.MongoAvroConverter;
-import org.apache.hudi.AvroConversionUtils;
-
-import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -46,7 +44,8 @@ public class MongoKafkaSource extends AvroSource {
     
   private final SchemaProvider schemaProvider;
 
-  public MongoKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession, SchemaProvider schemaProvider) {
+  public MongoKafkaSource(TypedProperties properties, JavaSparkContext sparkContext,
+      SparkSession sparkSession, SchemaProvider schemaProvider) {
     super(properties, sparkContext, sparkSession, schemaProvider);
     properties.put("key.deserializer", StringDeserializer.class);
     properties.put("value.deserializer", StringDeserializer.class);
@@ -55,21 +54,24 @@ public class MongoKafkaSource extends AvroSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr,
+      long sourceLimit) {
     OffsetRange[] offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit);
     long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
     if (totalNewMsgs <= 0) {
-      return new InputBatch<>(Option.empty(), lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
+      return new InputBatch<>(Option.empty(),
+          lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
     } else {
-      LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
+      LOG.info(
+          "About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
     }
     JavaRDD<GenericRecord> newDataRDD = toRDD(offsetRanges);
     return new InputBatch<>(Option.of(newDataRDD), CheckpointUtils.offsetsToStr(offsetRanges));
   }
 
   private JavaRDD<GenericRecord> toRDD(OffsetRange[] offsetRanges) {
-    final KafkaAvroConverter converter = new MongoAvroConverter(AvroConversionUtils.convertAvroSchemaToStructType(schemaProvider.getSourceSchema()),
-            schemaProvider.getSourceSchema().getName());
+    final KafkaAvroConverter converter = new MongoAvroConverter(
+        schemaProvider.getSourceSchema().toString());
     return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
             LocationStrategies.PreferConsistent()).mapPartitions(converter::apply);
   }

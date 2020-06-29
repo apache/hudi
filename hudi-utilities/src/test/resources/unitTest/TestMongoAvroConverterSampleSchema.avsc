@@ -3,16 +3,28 @@
   "name":"MongoOplog",
   "fields":[
     {
-      "name":"_op",
-      "type":"string"
+      "default":null,
+      "type":[
+        "null",
+        "string"
+      ],
+      "name":"_id"
     },
     {
-      "name":"_ts_ms",
+      "default":null,
+      "type":[
+        "null",
+        "string"
+      ],
+      "name":"_op"
+    },
+    {
+      "default":null,
       "type":[
         "null",
         "long"
       ],
-      "default":null
+      "name":"_ts_ms"
     },
     {
       "name":"_patch",
@@ -21,14 +33,6 @@
         "string"
       ],
       "default":null
-    },
-    {
-      "default":null,
-      "type":[
-        "null",
-        "string"
-      ],
-      "name":"_id"
     },
     {
       "default":null,

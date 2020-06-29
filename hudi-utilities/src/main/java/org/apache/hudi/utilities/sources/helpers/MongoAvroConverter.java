@@ -1,5 +1,6 @@
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.utilities.mongo.Operation;
@@ -10,7 +11,6 @@ import org.bson.codecs.BsonObjectIdCodec;
 import org.bson.codecs.DecoderContext;
 import org.bson.json.JsonReader;
 import org.json.JSONObject;
-import org.apache.spark.sql.types.StructType;
 
 public class MongoAvroConverter extends KafkaAvroConverter {
 
@@ -23,13 +23,13 @@ public class MongoAvroConverter extends KafkaAvroConverter {
   private static final String PAYLOAD_OPLOGFIELD = "payload";
   private static final String SOURCE_OPLOGFIELD = "source";
 
-  public MongoAvroConverter(StructType avroSchema, String name) {
-    super(avroSchema, name);
+  public MongoAvroConverter(String schemaStr) {
+    super(schemaStr);
   }
 
   @Override
-  public GenericRecord transform(String key, String value) {
-    GenericRecord genericRecord = new Record(this.getSchema());
+  public GenericRecord transform(Schema schema, String key, String value) {
+    GenericRecord genericRecord = new Record(schema);
     genericRecord.put(SchemaUtils.ID_FIELD, getDocumentId(key));
 
     // Payload field may be absent when value.converter.schemas.enable=false
@@ -59,7 +59,7 @@ public class MongoAvroConverter extends KafkaAvroConverter {
     return genericRecord;
   }
 
-  private static long getTimeMs(JSONObject valueJson) {
+  private static Long getTimeMs(JSONObject valueJson) {
     // Source field is mandatory
     JSONObject source = valueJson.getJSONObject(SOURCE_OPLOGFIELD);
     long timeMs = source.optLong(TS_MS_OPLOGFIELD);

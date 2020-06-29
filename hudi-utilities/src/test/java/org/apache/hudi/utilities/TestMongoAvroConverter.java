@@ -3,13 +3,12 @@ package org.apache.hudi.utilities;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-import org.apache.hudi.AvroConversionUtils;
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.utilities.sources.helpers.MongoAvroConverter;
 import org.junit.Test;
 
@@ -25,7 +24,7 @@ public class TestMongoAvroConverter {
     String sampleSchemaStr = readFile("unitTest/TestMongoAvroConverterSampleSchema.avsc");
     String sampleKeyStr = readFile("unitTest/TestMongoAvroConverterSampleOplogKey.json");
     Schema schema = parser.parse(sampleSchemaStr);
-    MongoAvroConverter transformer = new MongoAvroConverter(AvroConversionUtils.convertAvroSchemaToStructType(schema), schema.getName());
+    MongoAvroConverter transformer = new MongoAvroConverter(schema.toString());
     String createSampleId = "55555505d648da1824d45a1d";
     assertEquals(createSampleId, transformer.getDocumentId(sampleKeyStr));
   }
@@ -39,9 +38,17 @@ public class TestMongoAvroConverter {
     String sampleKeyStr = readFile("unitTest/TestMongoAvroConverterSampleOplogKey.json");
 
     Schema schema = parser.parse(sampleSchemaStr);
-    MongoAvroConverter transformer = new MongoAvroConverter(AvroConversionUtils.convertAvroSchemaToStructType(schema), schema.getName());
-    GenericRecord resultUpdate = transformer.transform(sampleKeyStr, sampleUpdateValueStr);
-    GenericRecord resultCreate = transformer.transform(sampleKeyStr, sampleCreateValueStr);
+    MongoAvroConverter transformer = new MongoAvroConverter(schema.toString());
+    GenericRecord resultUpdate = transformer.transform(schema, sampleKeyStr, sampleUpdateValueStr);
+    GenericRecord resultCreate = transformer.transform(schema, sampleKeyStr, sampleCreateValueStr);
+
+    byte[] recordBytes = HoodieAvroUtils.avroToBytes(resultUpdate);
+    GenericRecord resultUpdate2 = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    assertEquals(resultUpdate2, resultUpdate);
+
+    recordBytes = HoodieAvroUtils.avroToBytes(resultCreate);
+    GenericRecord resultCreate2 = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    assertEquals(resultCreate2, resultCreate);
 
     String updateSampleId = "55555505d648da1824d45a1d";
     String updateSampleOp = "u";
@@ -76,5 +83,4 @@ public class TestMongoAvroConverter {
     assertEquals(createSampleQ, resultCreate.get("quantity"));
     assertEquals(createSampleTestField, resultCreate.get("testfield"));
   }
-
 }
