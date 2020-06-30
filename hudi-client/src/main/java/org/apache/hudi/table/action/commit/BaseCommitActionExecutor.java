@@ -190,9 +190,8 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
 
     result.setCommitted(true);
     List<HoodieWriteStat> stats = result.getWriteStatuses().map(WriteStatus::getStat).collect();
+    stats.forEach(stat -> metadata.addWriteStat(stat.getPartitionPath(), stat));
     result.setWriteStats(stats);
-
-    updateMetadataAndRollingStats(metadata, stats);
 
     // Finalize write
     finalizeWrite(instantTime, stats, result);
@@ -227,18 +226,6 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
       result.setFinalizeDuration(Duration.between(start, Instant.now()));
     } catch (HoodieIOException ioe) {
       throw new HoodieCommitException("Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
-    }
-  }
-
-  private void updateMetadataAndRollingStats(HoodieCommitMetadata metadata, List<HoodieWriteStat> writeStats) {
-    // 1. Look up the previous compaction/commit and get the HoodieCommitMetadata from there.
-    // 2. Now, first read the existing rolling stats and merge with the result of current metadata.
-
-    // Need to do this on every commit (delta or commit) to support COW and MOR.
-    for (HoodieWriteStat stat : writeStats) {
-      String partitionPath = stat.getPartitionPath();
-      // TODO: why is stat.getPartitionPath() null at times here.
-      metadata.addWriteStat(partitionPath, stat);
     }
   }
 
