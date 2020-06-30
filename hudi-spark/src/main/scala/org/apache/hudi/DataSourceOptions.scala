@@ -49,7 +49,7 @@ object DataSourceReadOptions {
   val QUERY_TYPE_SNAPSHOT_OPT_VAL = "snapshot"
   val QUERY_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
   val QUERY_TYPE_INCREMENTAL_OPT_VAL = "incremental"
-  val DEFAULT_QUERY_TYPE_OPT_VAL: String = QUERY_TYPE_READ_OPTIMIZED_OPT_VAL
+  val DEFAULT_QUERY_TYPE_OPT_VAL: String = QUERY_TYPE_SNAPSHOT_OPT_VAL
 
   @Deprecated
   val VIEW_TYPE_OPT_KEY = "hoodie.datasource.view.type"

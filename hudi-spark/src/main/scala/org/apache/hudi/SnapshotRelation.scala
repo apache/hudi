@@ -47,13 +47,13 @@ import scala.collection.JavaConverters._
 class SnapshotRelation(val sqlContext: SQLContext,
                        val basePath: String,
                        val optParams: Map[String, String],
-                       val userSchema: StructType) extends BaseRelation with PrunedFilteredScan {
+                       val userSchema: StructType,
+                       val metaClient: HoodieTableMetaClient) extends BaseRelation with PrunedFilteredScan {
 
   private val log = LogManager.getLogger(classOf[SnapshotRelation])
   private val conf = sqlContext.sparkContext.hadoopConfiguration
 
-  // Load Hudi metadata
-  val metaClient = new HoodieTableMetaClient(conf, basePath, true)
+  // Load Hudi table
   private val hoodieTable = HoodieTable.create(metaClient, HoodieWriteConfig.newBuilder().withPath(basePath).build(), conf)
   private val commitTimeline = hoodieTable.getMetaClient.getCommitsAndCompactionTimeline
   if (commitTimeline.empty()) {

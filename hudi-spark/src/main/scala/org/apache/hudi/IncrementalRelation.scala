@@ -43,11 +43,11 @@ import scala.collection.mutable
 class IncrementalRelation(val sqlContext: SQLContext,
                           val basePath: String,
                           val optParams: Map[String, String],
-                          val userSchema: StructType) extends BaseRelation with TableScan {
+                          val userSchema: StructType,
+                          val metaClient: HoodieTableMetaClient) extends BaseRelation with TableScan {
 
   private val log = LogManager.getLogger(classOf[IncrementalRelation])
 
-  private val metaClient = new HoodieTableMetaClient(sqlContext.sparkContext.hadoopConfiguration, basePath, true)
   // MOR tables not supported yet
   if (metaClient.getTableType.equals(HoodieTableType.MERGE_ON_READ)) {
     throw new HoodieException("Incremental view not implemented yet, for merge-on-read tables")
