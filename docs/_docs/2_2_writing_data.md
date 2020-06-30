@@ -207,7 +207,7 @@ Available values:<br>
 `classOf[SimpleKeyGenerator].getName` (default), `classOf[NonpartitionedKeyGenerator].getName` (Non-partitioned tables can currently only have a single key column, [HUDI-1053](https://issues.apache.org/jira/browse/HUDI-1053)), `classOf[ComplexKeyGenerator].getName`
 
 
-**HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY**: Specify if the table should or should not be partitioned.<br>
+**HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY**: If using hive, specify if the table should or should not be partitioned.<br>
 Available values:<br>
 `classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName` (default), `classOf[MultiPartKeysValueExtractor].getCanonicalName`, `classOf[TimestampBasedKeyGenerator].getCanonicalName`, `classOf[NonPartitionedExtractor].getCanonicalName`, `classOf[GlobalDeleteKeyGenerator].getCanonicalName` (to be used when `OPERATION_OPT_KEY` is set to `DELETE_OPERATION_OPT_VAL`)
 
@@ -253,9 +253,16 @@ For more info refer to [Delete support in Hudi](https://cwiki.apache.org/conflue
 
  - **Soft Deletes** : With soft deletes, user wants to retain the key but just null out the values for all other fields. 
  This can be simply achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
- - **Hard Deletes** : A stronger form of delete is to physically remove any trace of the record from the table. This can be achieved by issuing an upsert with a custom payload implementation
- via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in `org.apache.hudi.EmptyHoodieRecordPayload` class that does exactly this.
  
+ - **Hard Deletes** : A stronger form of deletion is to physically remove any trace of the record from the table. This can be achieved in 3 different ways.
+
+   1) Using DataSource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all records in the DataSet being submitted.
+   
+   2) Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all records in the DataSet being submitted. 
+   
+   3) Using DataSource or DeltaStreamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all records to be deleted and either `false` or left null for any records to be upserted.
+    
+Example using hard delete method 2, remove all the records from the table that exist in DataSet `deleteDF`:
 ```java
  deleteDF // dataframe containing just records to be deleted
    .write().format("org.apache.hudi")

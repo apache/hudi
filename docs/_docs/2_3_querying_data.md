@@ -138,14 +138,14 @@ and executors. Alternatively, hudi-spark-bundle can also fetched via the `--pack
 
 ### Snapshot query {#spark-snap-query}
 This method can be used to retrieve the data table at the present point in time.
-Note: When the table is partitioned the file path must be suffixed with a wildcard asterisks (`/*`) for each partition level. Eg: with table file path "tablePath" partitioned by columns "a", "b", and "c", the load path must be `tablePath + "/*/*/*"`
+Note: The file path must be suffixed with a number of wildcard asterisk (`/*`) one greater than the number of partition levels. Eg: with table file path "tablePath" partitioned by columns "a", "b", and "c", the load path must be `tablePath + "/*/*/*/*"`
 
 ```scala
 val hudiIncQueryDF = spark
      .read()
      .format("org.apache.hudi")
      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
-     .load(tablePath + "/*") //The number of wildcard asterisks here must match the number of partition columns
+     .load(tablePath + "/*") //The number of wildcard asterisks here must be one greater than the number of partition
 ```
 
 ### Incremental query {#spark-incr-query}
