@@ -77,7 +77,7 @@ public class SparkMain {
         break;
       case DEDUPLICATE:
         assert (args.length == 8);
-        returnCode = deduplicatePartitionPath(jsc, args[3], args[4], args[5], Boolean.parseBoolean(args[7]), args[6]);
+        returnCode = deduplicatePartitionPath(jsc, args[3], args[4], args[5], Boolean.parseBoolean(args[6]), args[7]);
         break;
       case ROLLBACK_TO_SAVEPOINT:
         assert (args.length == 5);

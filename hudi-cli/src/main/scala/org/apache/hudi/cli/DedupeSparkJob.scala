@@ -118,6 +118,7 @@ class DedupeSparkJob(basePath: String,
             }
             fileToDeleteKeyMap(f).add(key)
           })
+
         case DeDupeType.INSERT_TYPE =>
           /*
           This corresponds to the case where duplicates got created due to INSERT and have never been updated.
@@ -129,6 +130,7 @@ class DedupeSparkJob(basePath: String,
             if (c > maxCommit)
               maxCommit = c
           })
+
           rows.foreach(r => {
             val c = r(3).asInstanceOf[String].toLong
             if (c != maxCommit) {
@@ -181,8 +183,6 @@ class DedupeSparkJob(basePath: String,
     fileToDeleteKeyMap
   }
 
-
-
   def fixDuplicates(dryRun: Boolean = true) = {
     val metadata = new HoodieTableMetaClient(fs.getConf, basePath)
 
@@ -209,7 +209,7 @@ class DedupeSparkJob(basePath: String,
       val newFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}")
       LOG.info(" Skipping and writing new file for : " + fileName)
       SparkHelpers.skipKeysAndWriteNewFile(instantTime, fs, badFilePath, newFilePath, dupeFixPlan(fileName))
-      fs.delete(badFilePath, true)
+      fs.delete(badFilePath, false)
     }
 
     // 3. Check that there are no duplicates anymore.
@@ -231,7 +231,6 @@ class DedupeSparkJob(basePath: String,
       missedRecordKeysDF.show()
       throw new HoodieException("Some records in source are not found in fixed files. Inspect output!!")
     }
-
 
     println("No duplicates found & counts are in check!!!! ")
     // 4. Prepare to copy the fixed files back.

@@ -139,7 +139,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
    * Test case for dry run deduplicate.
    */
   @Test
-  public void testDeduplicate() throws IOException {
+  public void testDeduplicateWithInserts() throws IOException {
     // get fs and check number of latest files
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants(),

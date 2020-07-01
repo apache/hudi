@@ -18,6 +18,7 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
@@ -81,7 +82,8 @@ public class RepairsCommand implements CommandMarker {
       @CliOption(key = {"dedupeType"}, help = "Valid values are - insert_type, update_type and upsert_type",
           unspecifiedDefaultValue = "insert_type") final String dedupeType)
       throws Exception {
-    if (!dedupeType.equals("insert_type") && !dedupeType.equals("update_type") && !dedupeType.equals("upsert_type")) {
+    if (!dedupeType.equals(DeDupeType.INSERT_TYPE().toString()) && !dedupeType.equals(DeDupeType.UPDATE_TYPE().toString())
+        && !dedupeType.equals(DeDupeType.UPSERT_TYPE().toString())) {
       throw new IllegalArgumentException("Please provide valid dedupe type!");
     }
     if (StringUtils.isNullOrEmpty(sparkPropertiesPath)) {
@@ -91,8 +93,8 @@ public class RepairsCommand implements CommandMarker {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.DEDUPLICATE.toString(), master, sparkMemory,
-        duplicatedPartitionPath, repairedOutputPath, HoodieCLI.getTableMetaClient().getBasePath(), dedupeType,
-        String.valueOf(dryRun));
+        duplicatedPartitionPath, repairedOutputPath, HoodieCLI.getTableMetaClient().getBasePath(),
+        String.valueOf(dryRun), dedupeType);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
