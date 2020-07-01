@@ -229,6 +229,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   @AfterAll
   public static void cleanupClass() {
     UtilitiesTestBase.cleanupClass();
+    testUtils.teardown();
   }
 
   @BeforeEach
