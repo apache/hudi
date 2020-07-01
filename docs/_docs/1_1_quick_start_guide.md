@@ -66,7 +66,7 @@ df.write.format("hudi").
   options(getQuickstartWriteConfigs).
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partition_path").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
   option(TABLE_NAME, tableName).
   mode(Overwrite).
   save(basePath)
@@ -117,7 +117,7 @@ df.write.format("hudi").
   options(getQuickstartWriteConfigs).
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partition_path").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
@@ -186,9 +186,9 @@ Delete records for the HoodieKeys passed in.
 ```scala
 // spark-shell
 // fetch total records count
-spark.sql("select uuid, partition_path from hudi_trips_snapshot").count()
+spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 // fetch two records to be deleted
-val ds = spark.sql("select uuid, partition_path from hudi_trips_snapshot").limit(2)
+val ds = spark.sql("select uuid, partitionpath from hudi_trips_snapshot").limit(2)
 
 // issue deletes
 val deletes = dataGen.generateDeletes(ds.collectAsList())
@@ -203,7 +203,7 @@ df
   .option(OPERATION_OPT_KEY,"delete")
   .option(PRECOMBINE_FIELD_OPT_KEY, "ts")
   .option(RECORDKEY_FIELD_OPT_KEY, "uuid")
-  .option(PARTITIONPATH_FIELD_OPT_KEY, "partition_path")
+  .option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath")
   .option(TABLE_NAME, tableName)
   .mode(Append)
   .save(basePath)
@@ -216,7 +216,7 @@ val roAfterDeleteViewDF = spark
 
 roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 // fetch should return (total - 2) records
-spark.sql("select uuid, partition_path from hudi_trips_snapshot").count()
+spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
 Note: Only `Append` mode is supported for delete operation.
 
@@ -273,7 +273,7 @@ df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 hudi_options = {
   'hoodie.table.name': tableName,
   'hoodie.datasource.write.recordkey.field': 'uuid',
-  'hoodie.datasource.write.partitionpath.field': 'partition_path',
+  'hoodie.datasource.write.partitionpath.field': 'partitionpath',
   'hoodie.datasource.write.table.name': tableName,
   'hoodie.datasource.write.operation': 'insert',
   'hoodie.datasource.write.precombine.field': 'ts',
@@ -409,15 +409,15 @@ Note: Only `Append` mode is supported for delete operation.
 ```python
 # pyspark
 # fetch total records count
-spark.sql("select uuid, partition_path from hudi_trips_snapshot").count()
+spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 # fetch two records to be deleted
-ds = spark.sql("select uuid, partition_path from hudi_trips_snapshot").limit(2)
+ds = spark.sql("select uuid, partitionpath from hudi_trips_snapshot").limit(2)
 
 # issue deletes
 hudi_delete_options = {
   'hoodie.table.name': tableName,
   'hoodie.datasource.write.recordkey.field': 'uuid',
-  'hoodie.datasource.write.partitionpath.field': 'partition_path',
+  'hoodie.datasource.write.partitionpath.field': 'partitionpath',
   'hoodie.datasource.write.table.name': tableName,
   'hoodie.datasource.write.operation': 'delete',
   'hoodie.datasource.write.precombine.field': 'ts',
@@ -427,7 +427,7 @@ hudi_delete_options = {
 
 from pyspark.sql.functions import lit
 deletes = list(map(lambda row: (row[0], row[1]), ds.collect()))
-df = spark.sparkContext.parallelize(deletes).toDF(['partition_path', 'uuid']).withColumn('ts', lit(0.0))
+df = spark.sparkContext.parallelize(deletes).toDF(['partitionpath', 'uuid']).withColumn('ts', lit(0.0))
 df.write.format("hudi"). \
   options(**hudi_delete_options). \
   mode("append"). \
@@ -440,9 +440,10 @@ roAfterDeleteViewDF = spark. \
   load(basePath + "/*/*/*/*") 
 roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 # fetch should return (total - 2) records
-spark.sql("select uuid, partition_path from hudi_trips_snapshot").count()
+spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
 
+See the [deletion section](/docs/writing_data.html#deletes) of the writing data page for more details.
 
 
 ## Where to go from here?

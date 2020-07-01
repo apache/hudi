@@ -17,8 +17,8 @@ Before that, it may be helpful to understand the 3 different write operations pr
 can be chosen/changed across each commit/deltacommit issued against the table.
 
 
- - **UPSERT** : This is the default operation where the input records are first tagged as inserts or updates by looking up the index and 
- the records are ultimately written after heuristics are run to determine how best to pack them on storage to optimize for things like file sizing. 
+ - **UPSERT** : This is the default operation where the input records are first tagged as inserts or updates by looking up the index. 
+ The records are ultimately written after heuristics are run to determine how best to pack them on storage to optimize for things like file sizing. 
  This operation is recommended for use-cases like database change capture where the input almost certainly contains updates.
  - **INSERT** : This operation is very similar to upsert in terms of heuristics/file sizing but completely skips the index lookup step. Thus, it can be a lot faster than upserts 
  for use-cases like log de-duplication (in conjunction with options to filter duplicates mentioned below). This is also suitable for use-cases where the table can tolerate duplicates, but just 
@@ -188,7 +188,7 @@ The `hudi-spark` module offers the DataSource API to write (and read) a Spark Da
 **RECORDKEY_FIELD_OPT_KEY** (Required): Primary key field(s). Nested fields can be specified using the dot notation eg: `a.b.c`. When using multiple columns as primary key use comma separated notation, eg: `"col1,col2,col3,etc"`. Single or multiple columns as primary key specified by `KEYGENERATOR_CLASS_OPT_KEY` property.<br>
 Default value: `"uuid"`<br>
 
-**PARTITIONPATH_FIELD_OPT_KEY** (Required): Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify partitioning/no partitioning using `KEYGENERATOR_CLASS_OPT_KEY` and if using hive `HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY`<br>
+**PARTITIONPATH_FIELD_OPT_KEY** (Required): Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify partitioning/no partitioning using `KEYGENERATOR_CLASS_OPT_KEY`. If synchronizing to hive, also specify using `HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.`<br>
 Default value: `"partitionpath"`<br>
 
 **PRECOMBINE_FIELD_OPT_KEY** (Required): When two records have the same key value, the record with the largest value from the field specified will be choosen.<br>
@@ -251,18 +251,18 @@ cd hudi-hive
 Hudi supports implementing two types of deletes on data stored in Hudi tables, by enabling the user to specify a different record payload implementation. 
 For more info refer to [Delete support in Hudi](https://cwiki.apache.org/confluence/x/6IqvC).
 
- - **Soft Deletes** : With soft deletes, user wants to retain the key but just null out the values for all other fields. 
- This can be simply achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
+ - **Soft Deletes** : Retain the record key and just null out the values for all the other fields. 
+ This can be achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
  
  - **Hard Deletes** : A stronger form of deletion is to physically remove any trace of the record from the table. This can be achieved in 3 different ways.
 
-   1) Using DataSource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all records in the DataSet being submitted.
+   1) Using DataSource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
    
-   2) Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all records in the DataSet being submitted. 
+   2) Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
    
-   3) Using DataSource or DeltaStreamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all records to be deleted and either `false` or left null for any records to be upserted.
+   3) Using DataSource or DeltaStreamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all the records to be deleted and either `false` or left null for any records which are to be upserted.
     
-Example using hard delete method 2, remove all the records from the table that exist in DataSet `deleteDF`:
+Example using hard delete method 2, remove all the records from the table that exist in the DataSet `deleteDF`:
 ```java
  deleteDF // dataframe containing just records to be deleted
    .write().format("org.apache.hudi")
