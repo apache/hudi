@@ -207,7 +207,7 @@ public class KafkaOffsetGen {
     if (sourceLimit == Long.MAX_VALUE) {
       numEvents = maxEventsToReadFromKafka;
       LOG.info("SourceLimit not configured, set numEvents to default value : " + maxEventsToReadFromKafka);
-    }else {
+    } else {
       numEvents = sourceLimit;
     }
 
