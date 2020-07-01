@@ -97,6 +97,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline filterPendingExcludingClustering() {
+    return new HoodieDefaultTimeline(instants.stream().filter(instant -> (!instant.isCompleted())
+            && (!instant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION))), details);
+  }
+
+  @Override
   public HoodieTimeline filterCompletedInstants() {
     return new HoodieDefaultTimeline(instants.stream().filter(HoodieInstant::isCompleted), details);
   }
@@ -111,6 +117,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   public HoodieDefaultTimeline getCommitsAndCompactionTimeline() {
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION);
     return new HoodieDefaultTimeline(instants.stream().filter(s -> validActions.contains(s.getAction())), details);
+  }
+
+  @Override
+  public HoodieTimeline filterPendingClusteringTimeline() {
+    return new HoodieDefaultTimeline(
+        instants.stream().filter(s -> s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)), details);
   }
 
   @Override

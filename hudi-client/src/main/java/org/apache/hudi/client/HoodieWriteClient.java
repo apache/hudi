@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -49,6 +50,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.clustering.ClusteringHelpers;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
 
@@ -80,6 +82,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private final boolean rollbackPending;
   private final transient HoodieMetrics metrics;
   private transient Timer.Context compactionTimer;
+  private transient Timer.Context clusteringTimer;
   private transient AsyncCleanerService asyncCleanerService;
 
   /**
@@ -342,6 +345,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       } else {
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
       }
+      if (config.isInlineClustering()) {
+        inlineClustering(extraMetadata);
+      } else {
+        metadata.addMetadata(HoodieCompactionConfig.INLINE_CLUSTERING_PROP, "false");
+      }
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, createMetaClient(true));
       archiveLog.archiveIfRequired(hadoopConf);
@@ -565,6 +573,18 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
         instantTime));
   }
 
+  public Option<String> scheduleClustering(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    return scheduleClusteringAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
+  }
+
+  public boolean scheduleClusteringAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
+    LOG.info("Scheduling clustering at instant time :" + instantTime);
+    Option<HoodieClusteringPlan> plan = HoodieTable.create(config, hadoopConf)
+            .scheduleClustering(jsc, instantTime, extraMetadata);
+    return plan.isPresent();
+  }
+
   /**
    * Schedules a new compaction instant.
    *
@@ -596,6 +616,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public JavaRDD<WriteStatus> compact(String compactionInstantTime) {
     return compact(compactionInstantTime, config.shouldAutoCommit());
+  }
+
+  public JavaRDD<WriteStatus> clustering(String clusteringInstantTime) {
+    return clustering(clusteringInstantTime, config.shouldAutoCommit());
   }
 
   /**
@@ -638,6 +662,27 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     LOG.info("Compacted successfully on commit " + compactionCommitTime);
   }
 
+  protected void completeClustering(HoodieCommitMetadata metadata, JavaRDD<WriteStatus> writeStatuses, HoodieTable<T> table,
+                                    String clusteringCommitTime) {
+
+    List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
+    finalizeWrite(table, clusteringCommitTime, writeStats);
+    LOG.info("Committing Clustering " + clusteringCommitTime + ". Finished with result " + metadata);
+    ClusteringHelpers.completeInflightClustering(table, clusteringCommitTime, metadata);
+
+    if (clusteringTimer != null) {
+      long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
+      try {
+        metrics.updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(clusteringCommitTime).getTime(),
+                durationInMs, metadata, HoodieActiveTimeline.COMPACTION_ACTION);
+      } catch (ParseException e) {
+        throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
+                + config.getBasePath() + " at time " + clusteringCommitTime, e);
+      }
+    }
+    LOG.info("Clustering successfully on commit " + clusteringCommitTime);
+  }
+
   /**
    * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file to the .requested file
    *
@@ -647,6 +692,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   public void rollbackInflightCompaction(HoodieInstant inflightInstant, HoodieTable table) {
     table.rollback(jsc, HoodieActiveTimeline.createNewInstantTime(), inflightInstant, false);
     table.getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
+  }
+
+  public void rollbackInflightClustering(HoodieInstant inflightInstant, HoodieTable table) {
+    table.rollback(jsc, HoodieActiveTimeline.createNewInstantTime(), inflightInstant, false);
+    table.getActiveTimeline().revertClusteringInflightToRequested(inflightInstant);
   }
 
   /**
@@ -685,6 +735,23 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     return statuses;
   }
 
+  private JavaRDD<WriteStatus> clustering(String clusteringInstantTime, boolean shouldComplete) {
+    HoodieTable<T> table = HoodieTable.create(config, hadoopConf);
+    HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingClusteringTimeline();
+    HoodieInstant inflightInstant = HoodieTimeline.getClusteringInflightInstant(clusteringInstantTime);
+    if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
+      rollbackInflightClustering(inflightInstant, table);
+      table.getMetaClient().reloadActiveTimeline();
+    }
+    clusteringTimer = metrics.getClusteringCtx();
+    HoodieWriteMetadata clusteringMetadata = table.clustering(jsc, clusteringInstantTime);
+    JavaRDD<WriteStatus> statuses = clusteringMetadata.getWriteStatuses();
+    if (shouldComplete && clusteringMetadata.getCommitMetadata().isPresent()) {
+      completeClustering(clusteringMetadata.getCommitMetadata().get(), statuses, table, clusteringInstantTime);
+    }
+    return statuses;
+  }
+
   /**
    * Performs a compaction operation on a table, serially before or after an insert/upsert action.
    */
@@ -695,5 +762,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       compact(compactionInstantTime, true);
     });
     return compactionInstantTimeOpt;
+  }
+
+  private Option<String> inlineClustering(Option<Map<String, String>> extraMetadata) {
+    Option<String> clusteringInstantTimeOpt = scheduleClustering(extraMetadata);
+    clusteringInstantTimeOpt.ifPresent(clusteringInstantTime -> {
+      clustering(clusteringInstantTime, true);
+    });
+    return clusteringInstantTimeOpt;
   }
 }

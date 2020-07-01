@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -95,6 +97,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     // Load Pending Compaction Operations
     resetPendingCompactionOperations(CompactionUtils.getAllPendingCompactionOperations(metaClient).values().stream()
         .map(e -> Pair.of(e.getKey(), CompactionOperation.convertFromAvroRecordInstance(e.getValue()))));
+
+    resetPendingClusteringOperations(ClusteringUtils.getAllPendingClusteringOperations(metaClient).values().stream()
+        .map(e -> Pair.of(e.getKey(), ClusteringOperation.convertFromAvroRecordInstance(e.getValue()))));
   }
 
   /**
@@ -318,6 +323,16 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     try {
       readLock.lock();
       return fetchPendingCompactionOperations();
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
+  public final Stream<Pair<String, ClusteringOperation>> getPendingClusteringOperations() {
+    try {
+      readLock.lock();
+      return fetchPendingClusteringOperations();
     } finally {
       readLock.unlock();
     }
@@ -580,6 +595,30 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   abstract void removePendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations);
 
+  protected abstract boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId);
+
+  /**
+   * resets the pending compaction operation and overwrite with the new list.
+   *
+   * @param operations Pending Compaction Operations
+   */
+  abstract void resetPendingClusteringOperations(Stream<Pair<String, ClusteringOperation>> operations);
+
+  /**
+   * Add pending compaction operations to store.
+   *
+   * @param operations Pending compaction operations to be added
+   */
+  abstract void addPendingClusteringOperations(Stream<Pair<String, ClusteringOperation>> operations);
+
+  /**
+   * Remove pending compaction operations from store.
+   *
+   * @param operations Pending compaction operations to be removed
+   */
+  abstract void removePendingClusteringOperations(Stream<Pair<String, ClusteringOperation>> operations);
+
+
   /**
    * Return pending compaction operation for a file-group.
    *
@@ -588,10 +627,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected abstract Option<Pair<String, CompactionOperation>> getPendingCompactionOperationWithInstant(
       HoodieFileGroupId fileGroupId);
 
+  protected abstract Option<Pair<String, ClusteringOperation>> getPendingClusteringOperationWithInstant(
+          HoodieFileGroupId fileGroupId);
+
   /**
    * Fetch all pending compaction operations.
    */
   abstract Stream<Pair<String, CompactionOperation>> fetchPendingCompactionOperations();
+
+  abstract Stream<Pair<String, ClusteringOperation>> fetchPendingClusteringOperations();
 
   /**
    * Checks if partition is pre-loaded and available in store.

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -154,6 +155,8 @@ public interface TableFileSystemView {
    * @return Pair<Pair<InstantTime,CompactionOperation>>
    */
   Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations();
+
+  Stream<Pair<String, ClusteringOperation>> getPendingClusteringOperations();
 
   /**
    * Last Known Instant on which the view is built.

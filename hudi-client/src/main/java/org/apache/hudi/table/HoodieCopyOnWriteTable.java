@@ -22,6 +22,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -47,6 +48,8 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.clustering.RunClusteringActionExecutor;
+import org.apache.hudi.table.action.clustering.ScheduleClusteringActionExecutor;
 import org.apache.hudi.table.action.commit.BulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.BulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.DeleteCommitActionExecutor;
@@ -123,6 +126,16 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       JavaRDD<HoodieRecord<T>> preppedRecords,  Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
     return new BulkInsertPreppedCommitActionExecutor<>(jsc, config,
         this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
+  }
+
+  @Override
+  public Option<HoodieClusteringPlan> scheduleClustering(JavaSparkContext jsc, String instantTime, Option<Map<String, String>> extraMetadata) {
+    return new ScheduleClusteringActionExecutor(jsc, config, this, instantTime, extraMetadata).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata clustering(JavaSparkContext jsc, String compactionInstantTime) {
+    return new RunClusteringActionExecutor(jsc, config, this, compactionInstantTime).execute();
   }
 
   @Override

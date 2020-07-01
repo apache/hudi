@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -96,6 +98,11 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
+  protected boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId) {
+    return getPendingClusteringOperationWithInstant(fgId).isPresent();
+  }
+
+  @Override
   protected void resetPendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     rocksDB.writeBatch(batch -> {
       operations.forEach(opPair ->
@@ -103,6 +110,17 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
               schemaHelper.getKeyForPendingCompactionLookup(opPair.getValue().getFileGroupId()), opPair)
       );
       LOG.info("Initializing pending compaction operations. Count=" + batch.count());
+    });
+  }
+
+  @Override
+  protected void resetPendingClusteringOperations(Stream<Pair<String, ClusteringOperation>> operations) {
+    rocksDB.writeBatch(batch -> {
+      operations.flatMap(o -> o.getValue().getBaseFilePaths().stream().map(s -> new HoodieFileGroupId(o.getKey(), FSUtils.getFileId(s)))).forEach(opPair ->
+              rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingClustering(),
+                      schemaHelper.getKeyForPendingClusteringLookup(opPair), opPair)
+      );
+      LOG.info("Initializing pending clustering operations. Count=" + batch.count());
     });
   }
 
@@ -120,6 +138,11 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
+  protected void addPendingClusteringOperations(Stream<Pair<String, ClusteringOperation>> operations) {
+    // TODO
+  }
+
+  @Override
   void removePendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
     rocksDB.writeBatch(batch ->
         operations.forEach(opInstantPair -> {
@@ -134,6 +157,11 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
+  void removePendingClusteringOperations(Stream<Pair<String, ClusteringOperation>> operations) {
+    // TODO
+  }
+
+  @Override
   protected void resetViewState() {
     LOG.info("Deleting all rocksdb data associated with table filesystem view");
     rocksDB.close();
@@ -145,6 +173,14 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     String lookupKey = schemaHelper.getKeyForPendingCompactionLookup(fgId);
     Pair<String, CompactionOperation> instantOperationPair =
         rocksDB.get(schemaHelper.getColFamilyForPendingCompaction(), lookupKey);
+    return Option.ofNullable(instantOperationPair);
+  }
+
+  @Override
+  protected Option<Pair<String, ClusteringOperation>> getPendingClusteringOperationWithInstant(HoodieFileGroupId fileGroupId) {
+    String lookupKey = schemaHelper.getKeyForPendingClusteringLookup(fileGroupId);
+    Pair<String, ClusteringOperation> instantOperationPair =
+            rocksDB.get(schemaHelper.getColFamilyForPendingClustering(), lookupKey);
     return Option.ofNullable(instantOperationPair);
   }
 
@@ -259,6 +295,13 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   Stream<Pair<String, CompactionOperation>> fetchPendingCompactionOperations() {
     return rocksDB.<Pair<String, CompactionOperation>>prefixSearch(schemaHelper.getColFamilyForPendingCompaction(), "")
         .map(Pair::getValue);
+  }
+
+  @Override
+  Stream<Pair<String, ClusteringOperation>> fetchPendingClusteringOperations() {
+    // TODO
+    return rocksDB.<Pair<String, ClusteringOperation>>prefixSearch(schemaHelper.getColFamilyForPendingClustering(), "")
+            .map(Pair::getValue);
   }
 
   @Override

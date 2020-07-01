@@ -43,6 +43,7 @@ import java.util.Map;
 public class HoodieCommitMetadata implements Serializable {
 
   public static final String SCHEMA_KEY = "schema";
+  public static final String CLUSTERING_KEY = "clustering";
   private static final Logger LOG = LogManager.getLogger(HoodieCommitMetadata.class);
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
   protected Boolean compacted;

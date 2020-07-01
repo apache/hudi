@@ -22,6 +22,10 @@ import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.action.clustering.strategy.BaseFileSizeBasedClusteringStrategy;
+import org.apache.hudi.table.action.clustering.strategy.ClusteringStrategy;
+import org.apache.hudi.table.action.clustering.updates.RejectUpdateStrategy;
+import org.apache.hudi.table.action.clustering.updates.UpdateStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -44,8 +48,10 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
   // Turn on inline compaction - after fw delta commits a inline compaction will be run
   public static final String INLINE_COMPACT_PROP = "hoodie.compact.inline";
+  public static final String INLINE_CLUSTERING_PROP = "hoodie.clustering.inline";
   // Run a compaction every N delta commits
   public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = "hoodie.compact.inline.max.delta.commits";
+  public static final String INLINE_CLUSTERING_NUM_DELTA_COMMITS_PROP = "hoodie.clustering.inline.max.delta.commits";
   public static final String CLEANER_FILE_VERSIONS_RETAINED_PROP = "hoodie.cleaner.fileversions.retained";
   public static final String CLEANER_COMMITS_RETAINED_PROP = "hoodie.cleaner.commits.retained";
   public static final String CLEANER_INCREMENTAL_MODE = "hoodie.cleaner.incremental.mode";
@@ -86,9 +92,17 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String TARGET_IO_PER_COMPACTION_IN_MB_PROP = "hoodie.compaction.target.io";
   // 500GB of target IO per compaction (both read and write)
   public static final String DEFAULT_TARGET_IO_PER_COMPACTION_IN_MB = String.valueOf(500 * 1024);
+  public static final String TARGET_IO_PER_CLUSTERING_IN_MB_PROP = "hoodie.clustering.target.io";
+  // 500GB of target IO per clustering (both read and write)
+  public static final String DEFAULT_TARGET_IO_PER_CLUSTERING_IN_MB = String.valueOf(500 * 1024 * 1024);
   public static final String COMPACTION_STRATEGY_PROP = "hoodie.compaction.strategy";
   // 200GB of target IO per compaction
   public static final String DEFAULT_COMPACTION_STRATEGY = LogFileSizeBasedCompactionStrategy.class.getName();
+  public static final String CLUSTERING_STRATEGY_PROP = "hoodie.clustering.strategy";
+  public static final String DEFAULT_CLUSTERING_STRATEGY = BaseFileSizeBasedClusteringStrategy.class.getName();
+  public static final String CLUSTERING_UPDATES_STRATEGY_PROP = "hoodie.clustering.updates.strategy";
+  public static final String DEFAULT_CLUSTERING_UPDATES_STRATEGY = RejectUpdateStrategy.class.getName();
+
   // used to merge records written to log file
   public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
   public static final String PAYLOAD_CLASS_PROP = "hoodie.compaction.payload.class";
@@ -107,6 +121,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_INLINE_COMPACT = "false";
   private static final String DEFAULT_INCREMENTAL_CLEANER = "true";
   private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "5";
+  private static final String DEFAULT_INLINE_CLUSTERING_NUM_DELTA_COMMITS = "5";
   private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
   private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "10";
   private static final String DEFAULT_MAX_COMMITS_TO_KEEP = "30";
@@ -161,6 +176,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withInlineClustering(Boolean inlineClustering) {
+      props.setProperty(INLINE_CLUSTERING_PROP, String.valueOf(inlineClustering));
+      return this;
+    }
+
     public Builder withCleanerPolicy(HoodieCleaningPolicy policy) {
       props.setProperty(CLEANER_POLICY_PROP, policy.name());
       return this;
@@ -212,6 +232,16 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withClusteringStrategy(ClusteringStrategy clusteringStrategy) {
+      props.setProperty(CLUSTERING_STRATEGY_PROP, clusteringStrategy.getClass().getName());
+      return this;
+    }
+
+    public Builder withClusteringUpdatesStrategy(UpdateStrategy updatesStrategy) {
+      props.setProperty(CLUSTERING_UPDATES_STRATEGY_PROP, updatesStrategy.getClass().getName());
+      return this;
+    }
+
     public Builder withCompactionStrategy(CompactionStrategy compactionStrategy) {
       props.setProperty(COMPACTION_STRATEGY_PROP, compactionStrategy.getClass().getName());
       return this;
@@ -229,6 +259,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
     public Builder withMaxNumDeltaCommitsBeforeCompaction(int maxNumDeltaCommitsBeforeCompaction) {
       props.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, String.valueOf(maxNumDeltaCommitsBeforeCompaction));
+      return this;
+    }
+
+    public Builder withMaxNumDeltaCommitsBeforeClustering(int maxNumDeltaCommitsBeforeClustering) {
+      props.setProperty(INLINE_CLUSTERING_NUM_DELTA_COMMITS_PROP, String.valueOf(maxNumDeltaCommitsBeforeClustering));
       return this;
     }
 
@@ -263,6 +298,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           DEFAULT_INLINE_COMPACT);
       setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_NUM_DELTA_COMMITS_PROP),
           INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS);
+      setDefaultOnCondition(props, !props.containsKey(INLINE_CLUSTERING_NUM_DELTA_COMMITS_PROP),
+          INLINE_CLUSTERING_NUM_DELTA_COMMITS_PROP, DEFAULT_INLINE_CLUSTERING_NUM_DELTA_COMMITS);
       setDefaultOnCondition(props, !props.containsKey(CLEANER_POLICY_PROP), CLEANER_POLICY_PROP,
           DEFAULT_CLEANER_POLICY);
       setDefaultOnCondition(props, !props.containsKey(CLEANER_FILE_VERSIONS_RETAINED_PROP),
@@ -285,11 +322,17 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE, DEFAULT_COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE);
       setDefaultOnCondition(props, !props.containsKey(CLEANER_PARALLELISM), CLEANER_PARALLELISM,
           DEFAULT_CLEANER_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(CLUSTERING_STRATEGY_PROP), CLUSTERING_STRATEGY_PROP,
+          DEFAULT_CLUSTERING_STRATEGY);
+      setDefaultOnCondition(props, !props.containsKey(CLUSTERING_UPDATES_STRATEGY_PROP), CLUSTERING_UPDATES_STRATEGY_PROP,
+          DEFAULT_CLUSTERING_UPDATES_STRATEGY);
       setDefaultOnCondition(props, !props.containsKey(COMPACTION_STRATEGY_PROP), COMPACTION_STRATEGY_PROP,
           DEFAULT_COMPACTION_STRATEGY);
       setDefaultOnCondition(props, !props.containsKey(PAYLOAD_CLASS_PROP), PAYLOAD_CLASS_PROP, DEFAULT_PAYLOAD_CLASS);
       setDefaultOnCondition(props, !props.containsKey(TARGET_IO_PER_COMPACTION_IN_MB_PROP),
           TARGET_IO_PER_COMPACTION_IN_MB_PROP, DEFAULT_TARGET_IO_PER_COMPACTION_IN_MB);
+      setDefaultOnCondition(props, !props.containsKey(TARGET_IO_PER_CLUSTERING_IN_MB_PROP),
+          TARGET_IO_PER_CLUSTERING_IN_MB_PROP, DEFAULT_TARGET_IO_PER_CLUSTERING_IN_MB);
       setDefaultOnCondition(props, !props.containsKey(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP),
           COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED);
       setDefaultOnCondition(props, !props.containsKey(COMPACTION_REVERSE_LOG_READ_ENABLED_PROP),

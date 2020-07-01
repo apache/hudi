@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -89,6 +90,10 @@ public class TimelineMetadataUtils {
     return serializeAvroMetadata(compactionWorkload, HoodieCompactionPlan.class);
   }
 
+  public static Option<byte[]> serializeClusteringPlan(HoodieClusteringPlan clusteringPlan) throws IOException {
+    return serializeAvroMetadata(clusteringPlan, HoodieClusteringPlan.class);
+  }
+
   public static Option<byte[]> serializeCleanerPlan(HoodieCleanerPlan cleanPlan) throws IOException {
     return serializeAvroMetadata(cleanPlan, HoodieCleanerPlan.class);
   }
@@ -126,6 +131,10 @@ public class TimelineMetadataUtils {
 
   public static HoodieCompactionPlan deserializeCompactionPlan(byte[] bytes) throws IOException {
     return deserializeAvroMetadata(bytes, HoodieCompactionPlan.class);
+  }
+
+  public static HoodieClusteringPlan deserializeClusteringPlan(byte[] bytes) throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieClusteringPlan.class);
   }
 
   public static HoodieCleanMetadata deserializeHoodieCleanMetadata(byte[] bytes) throws IOException {

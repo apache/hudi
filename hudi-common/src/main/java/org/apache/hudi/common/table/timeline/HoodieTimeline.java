@@ -52,12 +52,13 @@ public interface HoodieTimeline extends Serializable {
   // With Async Compaction, compaction instant can be in 3 states :
   // (compaction-requested), (compaction-inflight), (completed)
   String COMPACTION_ACTION = "compaction";
+  String CLUSTERING_ACTION = "clustering";
   String REQUESTED_EXTENSION = ".requested";
   String RESTORE_ACTION = "restore";
 
   String[] VALID_ACTIONS_IN_TIMELINE = {COMMIT_ACTION, DELTA_COMMIT_ACTION,
       CLEAN_ACTION, SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,
-      COMPACTION_ACTION};
+      COMPACTION_ACTION, CLUSTERING_ACTION};
 
   String COMMIT_EXTENSION = "." + COMMIT_ACTION;
   String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
@@ -75,8 +76,12 @@ public interface HoodieTimeline extends Serializable {
   String INFLIGHT_SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_COMPACTION_SUFFIX = StringUtils.join(COMPACTION_ACTION, REQUESTED_EXTENSION);
   String REQUESTED_COMPACTION_EXTENSION = StringUtils.join(".", REQUESTED_COMPACTION_SUFFIX);
+  String REQUESTED_CLUSTERING_SUFFIX = StringUtils.join(CLUSTERING_ACTION, REQUESTED_EXTENSION);
+  String REQUESTED_CLUSTERING_EXTENSION = StringUtils.join(".", REQUESTED_CLUSTERING_SUFFIX);
   String INFLIGHT_COMPACTION_EXTENSION = StringUtils.join(".", COMPACTION_ACTION, INFLIGHT_EXTENSION);
+  String INFLIGHT_CLUSTERING_EXTENSION = StringUtils.join(".", CLUSTERING_ACTION, INFLIGHT_EXTENSION);
   String INFLIGHT_RESTORE_EXTENSION = "." + RESTORE_ACTION + INFLIGHT_EXTENSION;
+
   String RESTORE_EXTENSION = "." + RESTORE_ACTION;
 
   String INVALID_INSTANT_TS = "0";
@@ -101,6 +106,8 @@ public interface HoodieTimeline extends Serializable {
    * @return New instance of HoodieTimeline with just in-flights excluding compaction inflights
    */
   HoodieTimeline filterPendingExcludingCompaction();
+
+  HoodieTimeline filterPendingExcludingClustering();
 
   /**
    * Filter this timeline to just include the completed instants.
@@ -132,6 +139,8 @@ public interface HoodieTimeline extends Serializable {
    * @return
    */
   HoodieTimeline filterPendingCompactionTimeline();
+
+  HoodieTimeline filterPendingClusteringTimeline();
 
   /**
    * Create a new Timeline with instants after startTs and before or on endTs.
@@ -270,6 +279,14 @@ public interface HoodieTimeline extends Serializable {
     return new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, timestamp);
   }
 
+  static HoodieInstant getClusteringRequestedInstant(final String timestamp) {
+    return new HoodieInstant(State.REQUESTED, CLUSTERING_ACTION, timestamp);
+  }
+
+  static HoodieInstant getClusteringInflightInstant(final String timestamp) {
+    return new HoodieInstant(State.INFLIGHT, CLUSTERING_ACTION, timestamp);
+  }
+
   /**
    * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
    * between inflight and completed instants (compaction <=> commit).
@@ -338,6 +355,14 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeRequestedCompactionFileName(String instantTime) {
     return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
+  }
+
+  static String makeInflightClusteringFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_CLUSTERING_EXTENSION);
+  }
+
+  static String makeRequestedClusteringFileName(String instantTime) {
+    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_CLUSTERING_EXTENSION);
   }
 
   static String makeRestoreFileName(String instant) {

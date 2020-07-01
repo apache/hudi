@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
+import org.apache.hudi.table.action.clustering.strategy.ClusteringStrategy;
+import org.apache.hudi.table.action.clustering.updates.UpdateStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -308,8 +310,24 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_PROP));
   }
 
+  public boolean isInlineClustering() {
+    return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.INLINE_CLUSTERING_PROP));
+  }
+
   public int getInlineCompactDeltaCommitMax() {
     return Integer.parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP));
+  }
+
+  public int getInlineClusteringDeltaCommitMax() {
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.INLINE_CLUSTERING_NUM_DELTA_COMMITS_PROP));
+  }
+
+  public ClusteringStrategy getClusteringStrategy() {
+    return ReflectionUtils.loadClass(props.getProperty(HoodieCompactionConfig.CLUSTERING_STRATEGY_PROP));
+  }
+
+  public UpdateStrategy getClusteringUpdatesStrategy() {
+    return ReflectionUtils.loadClass(props.getProperty(HoodieCompactionConfig.CLUSTERING_UPDATES_STRATEGY_PROP));
   }
 
   public CompactionStrategy getCompactionStrategy() {
@@ -318,6 +336,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public Long getTargetIOPerCompactionInMB() {
     return Long.parseLong(props.getProperty(HoodieCompactionConfig.TARGET_IO_PER_COMPACTION_IN_MB_PROP));
+  }
+
+  public long getTargetIOPerClusteringInMB() {
+    return Long.parseLong(props.getProperty(HoodieCompactionConfig.TARGET_IO_PER_CLUSTERING_IN_MB_PROP));
   }
 
   public Boolean getCompactionLazyBlockReadEnabled() {

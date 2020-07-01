@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -110,6 +111,15 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
       JavaRDD<HoodieRecord<T>> preppedRecords,  Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
     return new BulkInsertPreppedDeltaCommitActionExecutor<>(jsc, config,
         this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
+  }
+
+  @Override
+  public Option<HoodieClusteringPlan> scheduleClustering(JavaSparkContext jsc, String instantTime, Option<Map<String, String>> extraMetadata) {
+    Option<HoodieCompactionPlan> planOption = scheduleCompaction(jsc, instantTime, extraMetadata);
+    if (planOption.isPresent()) {
+      compact(jsc, instantTime);
+    }
+    return super.scheduleClustering(jsc, instantTime, extraMetadata);
   }
 
   @Override

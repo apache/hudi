@@ -65,7 +65,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
       INFLIGHT_DELTA_COMMIT_EXTENSION, REQUESTED_DELTA_COMMIT_EXTENSION, SAVEPOINT_EXTENSION,
       INFLIGHT_SAVEPOINT_EXTENSION, CLEAN_EXTENSION, REQUESTED_CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION,
-      INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION));
+      INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION,
+      INFLIGHT_CLUSTERING_EXTENSION, REQUESTED_CLUSTERING_EXTENSION));
 
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
@@ -233,6 +234,19 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return requestedInstant;
   }
 
+  public HoodieInstant revertClusteringInflightToRequested(HoodieInstant inflightInstant) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.isInflight());
+    HoodieInstant requestedInstant =
+            new HoodieInstant(State.REQUESTED, CLUSTERING_ACTION, inflightInstant.getTimestamp());
+    if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
+      transitionState(inflightInstant, requestedInstant, Option.empty());
+    } else {
+      deleteInflight(inflightInstant);
+    }
+    return requestedInstant;
+  }
+
   /**
    * Transition Compaction State from requested to inflight.
    *
@@ -257,6 +271,38 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public HoodieInstant transitionCompactionInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.isInflight());
+    HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, COMMIT_ACTION, inflightInstant.getTimestamp());
+    transitionState(inflightInstant, commitInstant, data);
+    return commitInstant;
+  }
+
+  public Option<byte[]> readClusteringPlanAsBytes(HoodieInstant instant) {
+    try {
+      // Reading from auxiliary path first. In future release, we will cleanup compaction management
+      // to only write to timeline and skip auxiliary and this code will be able to handle it.
+      return readDataFromPath(new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName()));
+    } catch (HoodieIOException e) {
+      // This will be removed in future release. See HUDI-546
+      if (e.getIOException() instanceof FileNotFoundException) {
+        return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  public HoodieInstant transitionClusteringRequestedToInflight(HoodieInstant requestedInstant) {
+    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION));
+    ValidationUtils.checkArgument(requestedInstant.isRequested());
+    HoodieInstant inflightInstant =
+            new HoodieInstant(State.INFLIGHT, CLUSTERING_ACTION, requestedInstant.getTimestamp());
+    transitionState(requestedInstant, inflightInstant, Option.empty());
+    return inflightInstant;
+  }
+
+  public HoodieInstant transitionClusteringInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, COMMIT_ACTION, inflightInstant.getTimestamp());
     transitionState(inflightInstant, commitInstant, data);
@@ -390,6 +436,17 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
+    // Write workload to auxiliary folder
+    createFileInAuxiliaryFolder(instant, content);
+    createFileInMetaPath(instant.getFileName(), content, overwrite);
+  }
+
+  public void saveToClusteringRequested(HoodieInstant instant, Option<byte[]> content) {
+    saveToClusteringRequested(instant, content, false);
+  }
+
+  public void saveToClusteringRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
+    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION));
     // Write workload to auxiliary folder
     createFileInAuxiliaryFolder(instant, content);
     createFileInMetaPath(instant.getFileName(), content, overwrite);

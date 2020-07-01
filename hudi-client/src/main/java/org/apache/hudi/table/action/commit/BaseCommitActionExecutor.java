@@ -91,6 +91,8 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
     if (isWorkloadProfileNeeded()) {
       profile = new WorkloadProfile(inputRecordsRDD);
       LOG.info("Workload profile :" + profile);
+      // apply update strategy.
+      config.getClusteringUpdatesStrategy().apply(table.getMetaClient(), profile);
       saveWorkloadProfileMetadataToInflight(profile, instantTime);
     }
 

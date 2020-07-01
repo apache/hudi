@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -309,6 +310,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   public HoodieIndex<T> getIndex() {
     return index;
   }
+
+  public abstract Option<HoodieClusteringPlan> scheduleClustering(JavaSparkContext jsc,
+                                                                  String instantTime,
+                                                                  Option<Map<String, String>> extraMetadata);
+
+  public abstract HoodieWriteMetadata clustering(JavaSparkContext jsc,
+                                                 String clusteringInstantTime);
 
   /**
    * Schedule compaction for the instant time.

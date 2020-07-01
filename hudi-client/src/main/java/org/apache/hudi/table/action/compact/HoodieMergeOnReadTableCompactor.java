@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -191,11 +192,14 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
     }
 
     SliceView fileSystemView = hoodieTable.getSliceView();
+    Set<HoodieFileGroupId> fgIdsInPendingClustering = ((SyncableFileSystemView) fileSystemView).getPendingClusteringOperations()
+            .flatMap(instantTimeOpPair -> instantTimeOpPair.getValue().getBaseFilePaths().stream().map(s -> new HoodieFileGroupId(instantTimeOpPair.getValue().getPartitionPath(), s)))
+            .collect(Collectors.toSet());
     LOG.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
     List<HoodieCompactionOperation> operations = jsc.parallelize(partitionPaths, partitionPaths.size())
         .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> fileSystemView
             .getLatestFileSlices(partitionPath)
-            .filter(slice -> !fgIdsInPendingCompactions.contains(slice.getFileGroupId())).map(s -> {
+            .filter(slice -> (!fgIdsInPendingCompactions.contains(slice.getFileGroupId()) && !fgIdsInPendingClustering.contains(slice.getFileGroupId()))).map(s -> {
               List<HoodieLogFile> logFiles =
                   s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
               totalLogFiles.add((long) logFiles.size());

@@ -92,6 +92,8 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
     final String instantTimeToRollback = instantToRollback.getTimestamp();
     final boolean isPendingCompaction = Objects.equals(HoodieTimeline.COMPACTION_ACTION, instantToRollback.getAction())
         && !instantToRollback.isCompleted();
+    final boolean isPendingClustering = Objects.equals(HoodieTimeline.CLUSTERING_ACTION, instantToRollback.getAction())
+            && !instantToRollback.isCompleted();
     HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
     // Check if any of the commits is a savepoint - do not allow rollback on those commits
@@ -111,7 +113,7 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
 
     // Make sure only the last n commits are being rolled back
     // If there is a commit in-between or after that is not rolled back, then abort
-    if (!isPendingCompaction) {
+    if (!isPendingCompaction && !isPendingClustering) {
       if ((instantTimeToRollback != null) && !commitTimeline.empty()
           && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
         throw new HoodieRollbackException(

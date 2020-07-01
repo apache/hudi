@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -196,6 +197,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   @Override
   public Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations() {
     return execute(preferredView::getPendingCompactionOperations, secondaryView::getPendingCompactionOperations);
+  }
+
+  @Override
+  public Stream<Pair<String, ClusteringOperation>> getPendingClusteringOperations() {
+    return execute(preferredView::getPendingClusteringOperations, secondaryView::getPendingClusteringOperations);
   }
 
   @Override

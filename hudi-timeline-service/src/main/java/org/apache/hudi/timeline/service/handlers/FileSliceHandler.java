@@ -18,6 +18,7 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
+import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
@@ -82,6 +83,12 @@ public class FileSliceHandler extends Handler {
     return viewManager.getFileSystemView(basePath).getPendingCompactionOperations()
         .map(instantOp -> CompactionOpDTO.fromCompactionOperation(instantOp.getKey(), instantOp.getValue()))
         .collect(Collectors.toList());
+  }
+
+  public List<ClusteringOpDTO> getPendingClusteringOperations(String basePath) {
+    return viewManager.getFileSystemView(basePath).getPendingClusteringOperations()
+            .map(instantOp -> ClusteringOpDTO.fromClusteringOperation(instantOp.getKey(), instantOp.getValue()))
+            .collect(Collectors.toList());
   }
 
   public List<FileGroupDTO> getAllFileGroups(String basePath, String partitionPath) {

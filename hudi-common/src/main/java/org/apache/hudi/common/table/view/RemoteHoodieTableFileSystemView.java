@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
+import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
@@ -71,6 +73,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   public static final String PENDING_COMPACTION_OPS = String.format("%s/%s", BASE_URL, "compactions/pending/");
 
+  public static final String PENDING_CLUSTERING_OPS = String.format("%s/%s", BASE_URL, "clustering/pending/");
+
   public static final String LATEST_PARTITION_DATA_FILES_URL =
       String.format("%s/%s", BASE_URL, "datafiles/latest/partition");
   public static final String LATEST_PARTITION_DATA_FILE_URL =
@@ -105,6 +109,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String TIMELINE_HASH = "timelinehash";
   public static final String REFRESH_OFF = "refreshoff";
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
+  public static final String INCLUDE_FILES_IN_PENDING_CLUSTERING_PARAM = "includependingclustering";
 
 
   private static final Logger LOG = LogManager.getLogger(RemoteHoodieTableFileSystemView.class);
@@ -295,7 +300,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime,
       boolean includeFileSlicesInPendingCompaction) {
     Map<String, String> paramsMap = getParamsWithAdditionalParams(partitionPath,
-        new String[] {MAX_INSTANT_PARAM, INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM},
+        new String[] {MAX_INSTANT_PARAM, INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM, INCLUDE_FILES_IN_PENDING_CLUSTERING_PARAM},
         new String[] {maxCommitTime, String.valueOf(includeFileSlicesInPendingCompaction)});
     try {
       List<FileSliceDTO> dataFiles = executeRequest(LATEST_SLICES_BEFORE_ON_INSTANT_URL, paramsMap,
@@ -371,6 +376,18 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
       List<CompactionOpDTO> dtos = executeRequest(PENDING_COMPACTION_OPS, paramsMap,
           new TypeReference<List<CompactionOpDTO>>() {}, RequestMethod.GET);
       return dtos.stream().map(CompactionOpDTO::toCompactionOperation);
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Stream<Pair<String, ClusteringOperation>> getPendingClusteringOperations() {
+    Map<String, String> paramsMap = getParams();
+    try {
+      List<ClusteringOpDTO> dtos = executeRequest(PENDING_CLUSTERING_OPS, paramsMap,
+              new TypeReference<List<ClusteringOpDTO>>() {}, RequestMethod.GET);
+      return dtos.stream().map(ClusteringOpDTO::toClusteringOperation);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }

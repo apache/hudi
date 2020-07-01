@@ -45,10 +45,12 @@ public class RocksDBSchemaHelper {
 
   private final String colFamilyForView;
   private final String colFamilyForPendingCompaction;
+  private final String colFamilyForPendingClusering;
   private final String colFamilyForStoredPartitions;
 
   public RocksDBSchemaHelper(HoodieTableMetaClient metaClient) {
     this.colFamilyForPendingCompaction = "hudi_pending_compaction_" + metaClient.getBasePath().replace("/", "_");
+    this.colFamilyForPendingClusering = "hudi_pending_clustering_" + metaClient.getBasePath().replace("/", "_");
     this.colFamilyForStoredPartitions = "hudi_partitions_" + metaClient.getBasePath().replace("/", "_");
     this.colFamilyForView = "hudi_view_" + metaClient.getBasePath().replace("/", "_");
   }
@@ -62,6 +64,10 @@ public class RocksDBSchemaHelper {
   }
 
   public String getKeyForPendingCompactionLookup(HoodieFileGroupId fgId) {
+    return getPartitionFileIdBasedLookup(fgId);
+  }
+
+  public String getKeyForPendingClusteringLookup(HoodieFileGroupId fgId) {
     return getPartitionFileIdBasedLookup(fgId);
   }
 
@@ -109,6 +115,10 @@ public class RocksDBSchemaHelper {
 
   public String getColFamilyForPendingCompaction() {
     return colFamilyForPendingCompaction;
+  }
+
+  public String getColFamilyForPendingClustering() {
+    return colFamilyForPendingClusering;
   }
 
   public String getColFamilyForStoredPartitions() {

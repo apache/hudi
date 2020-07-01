@@ -19,12 +19,12 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.CollectionUtils;
 
 import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -41,7 +41,11 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
    * for state transitions, this needs to be taken into account
    */
   private static final Map<String, String> COMPARABLE_ACTIONS =
-      CollectionUtils.createImmutableMap(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION);
+      new HashMap<>();
+  static {
+    COMPARABLE_ACTIONS.put(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION);
+    COMPARABLE_ACTIONS.put(HoodieTimeline.CLUSTERING_ACTION, HoodieTimeline.COMMIT_ACTION);
+  }
 
   public static final Comparator<HoodieInstant> ACTION_COMPARATOR =
       Comparator.comparing(instant -> getComparableAction(instant.getAction()));
@@ -156,6 +160,14 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
         return HoodieTimeline.makeInflightCompactionFileName(timestamp);
       } else if (isRequested()) {
         return HoodieTimeline.makeRequestedCompactionFileName(timestamp);
+      } else {
+        return HoodieTimeline.makeCommitFileName(timestamp);
+      }
+    } else if (HoodieTimeline.CLUSTERING_ACTION.equals(action)) {
+      if (isInflight()) {
+        return HoodieTimeline.makeInflightClusteringFileName(timestamp);
+      } else if (isRequested()) {
+        return HoodieTimeline.makeRequestedClusteringFileName(timestamp);
       } else {
         return HoodieTimeline.makeCommitFileName(timestamp);
       }

@@ -39,6 +39,7 @@ public class HoodieMetrics {
   public String deltaCommitTimerName = null;
   public String finalizeTimerName = null;
   public String compactionTimerName = null;
+  public String clusteringTimerName = null;
   public String indexTimerName = null;
   private HoodieWriteConfig config;
   private String tableName;
@@ -48,6 +49,7 @@ public class HoodieMetrics {
   private Timer deltaCommitTimer = null;
   private Timer finalizeTimer = null;
   private Timer compactionTimer = null;
+  private Timer clusteringTimer = null;
   private Timer indexTimer = null;
 
   public HoodieMetrics(HoodieWriteConfig config, String tableName) {
@@ -61,6 +63,7 @@ public class HoodieMetrics {
       this.deltaCommitTimerName = getMetricsName("timer", HoodieTimeline.DELTA_COMMIT_ACTION);
       this.finalizeTimerName = getMetricsName("timer", "finalize");
       this.compactionTimerName = getMetricsName("timer", HoodieTimeline.COMPACTION_ACTION);
+      this.clusteringTimerName = getMetricsName("timer", HoodieTimeline.CLUSTERING_ACTION);
       this.indexTimerName = getMetricsName("timer", "index");
     }
   }
@@ -81,6 +84,13 @@ public class HoodieMetrics {
       compactionTimer = createTimer(commitTimerName);
     }
     return compactionTimer == null ? null : compactionTimer.time();
+  }
+
+  public Timer.Context getClusteringCtx() {
+    if (config.isMetricsOn() && clusteringTimer == null) {
+      clusteringTimer = createTimer(clusteringTimerName);
+    }
+    return clusteringTimer == null ? null : clusteringTimer.time();
   }
 
   public Timer.Context getCleanCtx() {
