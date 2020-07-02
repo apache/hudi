@@ -186,33 +186,42 @@ Delete records for the HoodieKeys passed in.
 ```scala
 // spark-shell
 // fetch total records count
-spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
+spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 // fetch two records to be deleted
-val ds = spark.sql("select uuid, partitionPath from hudi_trips_snapshot").limit(2)
+val ds = spark.sql("select uuid, partitionpath from hudi_trips_snapshot").limit(2)
 
 // issue deletes
 val deletes = dataGen.generateDeletes(ds.collectAsList())
-val df = spark.read.json(spark.sparkContext.parallelize(deletes, 2));
-df.write.format("hudi").
-  options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY,"delete").
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
-  mode(Append).
-  save(basePath)
+val df = spark
+  .read
+  .json(spark.sparkContext.parallelize(deletes, 2))
+
+df
+  .write
+  .format("hudi")
+  .options(getQuickstartWriteConfigs)
+  .option(OPERATION_OPT_KEY,"delete")
+  .option(PRECOMBINE_FIELD_OPT_KEY, "ts")
+  .option(RECORDKEY_FIELD_OPT_KEY, "uuid")
+  .option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath")
+  .option(TABLE_NAME, tableName)
+  .mode(Append)
+  .save(basePath)
 
 // run the same read query as above.
-val roAfterDeleteViewDF = spark.
-  read.
-  format("hudi").
-  load(basePath + "/*/*/*/*")
+val roAfterDeleteViewDF = spark
+  .read
+  .format("hudi")
+  .load(basePath + "/*/*/*/*")
+
 roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 // fetch should return (total - 2) records
-spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
+spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
 Note: Only `Append` mode is supported for delete operation.
+
+See the [deletion section](/docs/writing_data.html#deletes) of the writing data page for more details.
+
 
 # Pyspark example
 ## Setup
@@ -400,9 +409,9 @@ Note: Only `Append` mode is supported for delete operation.
 ```python
 # pyspark
 # fetch total records count
-spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
+spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 # fetch two records to be deleted
-ds = spark.sql("select uuid, partitionPath from hudi_trips_snapshot").limit(2)
+ds = spark.sql("select uuid, partitionpath from hudi_trips_snapshot").limit(2)
 
 # issue deletes
 hudi_delete_options = {
@@ -431,9 +440,10 @@ roAfterDeleteViewDF = spark. \
   load(basePath + "/*/*/*/*") 
 roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 # fetch should return (total - 2) records
-spark.sql("select uuid, partitionPath from hudi_trips_snapshot").count()
+spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
 
+See the [deletion section](/docs/writing_data.html#deletes) of the writing data page for more details.
 
 
 ## Where to go from here?
