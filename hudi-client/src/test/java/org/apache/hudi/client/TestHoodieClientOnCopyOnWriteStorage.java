@@ -24,8 +24,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRollingStat;
-import org.apache.hudi.common.model.HoodieRollingStatMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -850,10 +849,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test to ensure commit metadata points to valid files.
+   * Test to ensure commit metadata points to valid files.10.
    */
   @Test
-  public void testRollingStatsInMetadata() throws Exception {
+  public void testMetadataStatsOnCommit() throws Exception {
 
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
@@ -877,14 +876,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String everything = FileIOUtils.readAsUTFString(inputStream);
     HoodieCommitMetadata metadata =
         HoodieCommitMetadata.fromJsonString(everything.toString(), HoodieCommitMetadata.class);
-    HoodieRollingStatMetadata rollingStatMetadata = HoodieCommitMetadata.fromJsonString(
-        metadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY),
-        HoodieRollingStatMetadata.class);
     int inserts = 0;
-    for (Map.Entry<String, Map<String, HoodieRollingStat>> pstat : rollingStatMetadata.getPartitionToRollingStats()
-        .entrySet()) {
-      for (Map.Entry<String, HoodieRollingStat> stat : pstat.getValue().entrySet()) {
-        inserts += stat.getValue().getInserts();
+    for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
+      for (HoodieWriteStat stat : pstat.getValue()) {
+        inserts += stat.getNumInserts();
       }
     }
     assertEquals(200, inserts);
@@ -906,19 +901,15 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     inputStream = new FileInputStream(filename);
     everything = FileIOUtils.readAsUTFString(inputStream);
     metadata = HoodieCommitMetadata.fromJsonString(everything.toString(), HoodieCommitMetadata.class);
-    rollingStatMetadata = HoodieCommitMetadata.fromJsonString(
-        metadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY),
-        HoodieRollingStatMetadata.class);
     inserts = 0;
     int upserts = 0;
-    for (Map.Entry<String, Map<String, HoodieRollingStat>> pstat : rollingStatMetadata.getPartitionToRollingStats()
-        .entrySet()) {
-      for (Map.Entry<String, HoodieRollingStat> stat : pstat.getValue().entrySet()) {
-        inserts += stat.getValue().getInserts();
-        upserts += stat.getValue().getUpserts();
+    for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
+      for (HoodieWriteStat stat : pstat.getValue()) {
+        inserts += stat.getNumInserts();
+        upserts += stat.getNumUpdateWrites();
       }
     }
-    assertEquals(200, inserts);
+    assertEquals(0, inserts);
     assertEquals(200, upserts);
 
   }

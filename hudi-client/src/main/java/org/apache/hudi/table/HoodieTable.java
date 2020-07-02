@@ -403,18 +403,18 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
         }).collect();
   }
 
-  private List<String> getinvalidMarkerFilePath(List<String> allMarkerFilePath, List<String> inValidDataPaths, String basePath){
+  private List<String> getinvalidMarkerFilePath(List<String> allMarkerFilePath, List<String> inValidDataPaths, String basePath) {
     List<String> inValidRelativeDataPaths = inValidDataPaths.stream().map(w ->
-      w.substring(basePath.length() + 1)).collect(Collectors.toList());
+        w.substring(basePath.length() + 1)).collect(Collectors.toList());
     List<String> invalidMarkerFilePath = allMarkerFilePath.stream().filter(w -> {
       boolean isMarkerFileInValid = false;
-      for(String dataPath: inValidRelativeDataPaths){
-        if(w.contains(dataPath)){
+      for (String dataPath: inValidRelativeDataPaths) {
+        if (w.contains(dataPath)) {
           isMarkerFileInValid = true;
           break;
         }
       }
-      return isMarkerFileInValid;}).collect(Collectors.toList());
+      return isMarkerFileInValid; }).collect(Collectors.toList());
     return invalidMarkerFilePath;
   }
 

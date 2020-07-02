@@ -28,9 +28,8 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRollingStat;
-import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -1138,16 +1137,18 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     testInsertsGeneratedIntoLogFilesRollbackAfterCompaction(baseFileFormat, true);
   }
 
-  private void testRollingStatsInMetadata(HoodieFileFormat baseFileFormat, Boolean rollbackUsingMarkers) throws Exception {
+  /**
+   * Test to ensure metadata stats are correctly written to metadata file.
+   */
+  public void testMetadataStatsOnCommit(HoodieFileFormat baseFileFormat, Boolean rollbackUsingMarkers) throws Exception {
     init(baseFileFormat);
-
     HoodieWriteConfig cfg = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY)
         .withAutoCommit(false).build();
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
       metaClient = getHoodieMetaClient(hadoopConf, basePath);
       HoodieTable table = HoodieTable.create(metaClient, cfg, hadoopConf);
 
-      // Create a commit without rolling stats in metadata to test backwards compatibility
+      // Create a commit without metadata stats in metadata to test backwards compatibility
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       String commitActionType = table.getMetaClient().getCommitActionType();
       HoodieInstant instant = new HoodieInstant(State.REQUESTED, commitActionType, "000");
@@ -1170,14 +1171,10 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(
           table.getActiveTimeline().getInstantDetails(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get()).get(),
           HoodieCommitMetadata.class);
-      HoodieRollingStatMetadata rollingStatMetadata = HoodieCommitMetadata.fromBytes(
-          metadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY).getBytes(),
-          HoodieRollingStatMetadata.class);
       int inserts = 0;
-      for (Map.Entry<String, Map<String, HoodieRollingStat>> pstat : rollingStatMetadata.getPartitionToRollingStats()
-          .entrySet()) {
-        for (Map.Entry<String, HoodieRollingStat> stat : pstat.getValue().entrySet()) {
-          inserts += stat.getValue().getInserts();
+      for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
+        for (HoodieWriteStat stat : pstat.getValue()) {
+          inserts += stat.getNumInserts();
         }
       }
       assertEquals(200, inserts);
@@ -1195,20 +1192,17 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
           table.getActiveTimeline()
               .getInstantDetails(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get()).get(),
           HoodieCommitMetadata.class);
-      rollingStatMetadata = HoodieCommitMetadata.fromBytes(
-          metadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY).getBytes(),
-          HoodieRollingStatMetadata.class);
+      
       inserts = 0;
       int upserts = 0;
-      for (Map.Entry<String, Map<String, HoodieRollingStat>> pstat : rollingStatMetadata.getPartitionToRollingStats()
-          .entrySet()) {
-        for (Map.Entry<String, HoodieRollingStat> stat : pstat.getValue().entrySet()) {
-          inserts += stat.getValue().getInserts();
-          upserts += stat.getValue().getUpserts();
+      for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
+        for (HoodieWriteStat stat : pstat.getValue()) {
+          inserts += stat.getNumInserts();
+          upserts += stat.getNumUpdateWrites();
         }
       }
 
-      assertEquals(200, inserts);
+      assertEquals(0, inserts);
       assertEquals(200, upserts);
 
       client.rollback(instantTime);
@@ -1219,16 +1213,12 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
           table.getActiveTimeline()
               .getInstantDetails(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get()).get(),
           HoodieCommitMetadata.class);
-      rollingStatMetadata = HoodieCommitMetadata.fromBytes(
-          metadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY).getBytes(),
-          HoodieRollingStatMetadata.class);
       inserts = 0;
       upserts = 0;
-      for (Map.Entry<String, Map<String, HoodieRollingStat>> pstat : rollingStatMetadata.getPartitionToRollingStats()
-          .entrySet()) {
-        for (Map.Entry<String, HoodieRollingStat> stat : pstat.getValue().entrySet()) {
-          inserts += stat.getValue().getInserts();
-          upserts += stat.getValue().getUpserts();
+      for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
+        for (HoodieWriteStat stat : pstat.getValue()) {
+          inserts += stat.getNumInserts();
+          upserts += stat.getNumUpdateWrites();
         }
       }
       assertEquals(200, inserts);
@@ -1241,14 +1231,14 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
    */
   @ParameterizedTest
   @MethodSource("argumentsProvider")
-  public void testRollingStatsInMetadataUsingFileList(HoodieFileFormat baseFileFormat) throws Exception {
-    testRollingStatsInMetadata(baseFileFormat, false);
+  public void testMetadataStatsOnCommitUsingFileList(HoodieFileFormat baseFileFormat) throws Exception {
+    testMetadataStatsOnCommit(baseFileFormat, false);
   }
 
   @ParameterizedTest
   @MethodSource("argumentsProvider")
-  public void testRollingStatsInMetadataUsingMarkers(HoodieFileFormat baseFileFormat) throws Exception {
-    testRollingStatsInMetadata(baseFileFormat, true);
+  public void testMetadataStatsOnCommitUsingMarkers(HoodieFileFormat baseFileFormat) throws Exception {
+    testMetadataStatsOnCommit(baseFileFormat, true);
   }
 
   /**
@@ -1256,7 +1246,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
    */
   @ParameterizedTest
   @MethodSource("argumentsProvider")
-  public void testRollingStatsWithSmallFileHandling(HoodieFileFormat baseFileFormat) throws Exception {
+  public void testMetadataStatsWithSmallFileHandling(HoodieFileFormat baseFileFormat) throws Exception {
     init(baseFileFormat);
 
     HoodieWriteConfig cfg = getConfigBuilder(false, IndexType.INMEMORY).withAutoCommit(false).build();
@@ -1279,16 +1269,12 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
           table.getActiveTimeline()
               .getInstantDetails(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get()).get(),
           HoodieCommitMetadata.class);
-      HoodieRollingStatMetadata rollingStatMetadata = HoodieCommitMetadata.fromBytes(
-          metadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY).getBytes(),
-          HoodieRollingStatMetadata.class);
       int inserts = 0;
-      for (Map.Entry<String, Map<String, HoodieRollingStat>> pstat : rollingStatMetadata.getPartitionToRollingStats()
-          .entrySet()) {
-        for (Map.Entry<String, HoodieRollingStat> stat : pstat.getValue().entrySet()) {
-          inserts += stat.getValue().getInserts();
-          fileIdToInsertsMap.put(stat.getKey(), stat.getValue().getInserts());
-          fileIdToUpsertsMap.put(stat.getKey(), stat.getValue().getUpserts());
+      for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
+        for (HoodieWriteStat stat : pstat.getValue()) {
+          inserts += stat.getNumInserts();
+          fileIdToInsertsMap.put(stat.getFileId(), stat.getNumInserts());
+          fileIdToUpsertsMap.put(stat.getFileId(), stat.getNumUpdateWrites());
         }
       }
       assertEquals(200, inserts);
@@ -1308,23 +1294,18 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
           table.getActiveTimeline()
               .getInstantDetails(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get()).get(),
           HoodieCommitMetadata.class);
-      rollingStatMetadata = HoodieCommitMetadata.fromBytes(
-          metadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY).getBytes(),
-          HoodieRollingStatMetadata.class);
       inserts = 0;
       int upserts = 0;
-      for (Map.Entry<String, Map<String, HoodieRollingStat>> pstat : rollingStatMetadata.getPartitionToRollingStats()
-          .entrySet()) {
-        for (Map.Entry<String, HoodieRollingStat> stat : pstat.getValue().entrySet()) {
-          // No new file id should be created, all the data should be written to small files already there
-          assertTrue(fileIdToInsertsMap.containsKey(stat.getKey()));
-          assertTrue(fileIdToUpsertsMap.containsKey(stat.getKey()));
-          inserts += stat.getValue().getInserts();
-          upserts += stat.getValue().getUpserts();
+      for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
+        for (HoodieWriteStat stat : pstat.getValue()) {
+          assertTrue(fileIdToInsertsMap.containsKey(stat.getFileId()));
+          assertTrue(fileIdToUpsertsMap.containsKey(stat.getFileId()));
+          inserts += stat.getNumInserts();
+          upserts += stat.getNumUpdateWrites();
         }
       }
 
-      assertEquals(400, inserts);
+      assertEquals(200, inserts);
       assertEquals(200, upserts);
 
       // Test small file handling after compaction
@@ -1335,20 +1316,16 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
 
       // Read from commit file
       table = HoodieTable.create(cfg, hadoopConf);
-      metadata = HoodieCommitMetadata.fromBytes(
+      HoodieCommitMetadata metadata1 = HoodieCommitMetadata.fromBytes(
           table.getActiveTimeline()
               .getInstantDetails(table.getActiveTimeline().getCommitsTimeline().lastInstant().get()).get(),
           HoodieCommitMetadata.class);
-      HoodieRollingStatMetadata rollingStatMetadata1 = HoodieCommitMetadata.fromBytes(
-          metadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY).getBytes(),
-          HoodieRollingStatMetadata.class);
 
-      // Ensure that the rolling stats from the extra metadata of delta commits is copied over to the compaction commit
-      for (Map.Entry<String, Map<String, HoodieRollingStat>> entry : rollingStatMetadata.getPartitionToRollingStats()
-          .entrySet()) {
-        assertTrue(rollingStatMetadata1.getPartitionToRollingStats().containsKey(entry.getKey()));
-        assertEquals(rollingStatMetadata1.getPartitionToRollingStats().get(entry.getKey()).size(),
-            entry.getValue().size());
+      // Ensure that the metadata stats from the extra metadata of delta commits is copied over to the compaction commit
+      for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
+        assertTrue(metadata1.getPartitionToWriteStats().containsKey(pstat.getKey()));
+        assertEquals(metadata1.getPartitionToWriteStats().get(pstat.getKey()).size(),
+            pstat.getValue().size());
       }
 
       // Write inserts + updates
@@ -1367,23 +1344,18 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
           table.getActiveTimeline()
               .getInstantDetails(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get()).get(),
           HoodieCommitMetadata.class);
-      rollingStatMetadata = HoodieCommitMetadata.fromBytes(
-          metadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY).getBytes(),
-          HoodieRollingStatMetadata.class);
       inserts = 0;
       upserts = 0;
-      for (Map.Entry<String, Map<String, HoodieRollingStat>> pstat : rollingStatMetadata.getPartitionToRollingStats()
-          .entrySet()) {
-        for (Map.Entry<String, HoodieRollingStat> stat : pstat.getValue().entrySet()) {
-          // No new file id should be created, all the data should be written to small files already there
-          assertTrue(fileIdToInsertsMap.containsKey(stat.getKey()));
-          inserts += stat.getValue().getInserts();
-          upserts += stat.getValue().getUpserts();
+      for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
+        for (HoodieWriteStat stat : pstat.getValue()) {
+          assertTrue(fileIdToInsertsMap.containsKey(stat.getFileId()));
+          inserts += stat.getNumInserts();
+          upserts += stat.getNumUpdateWrites();
         }
       }
 
-      assertEquals(600, inserts);
-      assertEquals(600, upserts);
+      assertEquals(200, inserts);
+      assertEquals(400, upserts);
     }
   }
 

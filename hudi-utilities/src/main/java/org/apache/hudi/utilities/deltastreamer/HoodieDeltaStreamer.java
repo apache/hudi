@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.async.AbstractAsyncService;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -326,7 +327,7 @@ public class HoodieDeltaStreamer implements Serializable {
   /**
    * Syncs data either in single-run or in continuous mode.
    */
-  public static class DeltaSyncService extends AbstractDeltaStreamerService {
+  public static class DeltaSyncService extends AbstractAsyncService {
 
     private static final long serialVersionUID = 1L;
     /**
@@ -532,7 +533,7 @@ public class HoodieDeltaStreamer implements Serializable {
   /**
    * Async Compactor Service that runs in separate thread. Currently, only one compactor is allowed to run at any time.
    */
-  public static class AsyncCompactService extends AbstractDeltaStreamerService {
+  public static class AsyncCompactService extends AbstractAsyncService {
 
     private static final long serialVersionUID = 1L;
     private final int maxConcurrentCompaction;

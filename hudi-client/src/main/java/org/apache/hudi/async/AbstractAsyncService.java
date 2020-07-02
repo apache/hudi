@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.deltastreamer;
+package org.apache.hudi.async;
 
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -32,11 +32,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 /**
- * Base Class for running delta-sync/compaction in separate thread and controlling their life-cycle.
+ * Base Class for running clean/delta-sync/compaction in separate thread and controlling their life-cycle.
  */
-public abstract class AbstractDeltaStreamerService implements Serializable {
+public abstract class AbstractAsyncService implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractDeltaStreamerService.class);
+  private static final Logger LOG = LogManager.getLogger(AbstractAsyncService.class);
 
   // Flag to track if the service is started.
   private boolean started;
@@ -49,15 +49,15 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
   // Future tracking delta-sync/compaction
   private transient CompletableFuture future;
 
-  AbstractDeltaStreamerService() {
+  protected AbstractAsyncService() {
     shutdownRequested = false;
   }
 
-  boolean isShutdownRequested() {
+  protected boolean isShutdownRequested() {
     return shutdownRequested;
   }
 
-  boolean isShutdown() {
+  protected boolean isShutdown() {
     return shutdown;
   }
 
@@ -67,7 +67,7 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
    * @throws ExecutionException
    * @throws InterruptedException
    */
-  void waitForShutdown() throws ExecutionException, InterruptedException {
+  public void waitForShutdown() throws ExecutionException, InterruptedException {
     try {
       future.get();
     } catch (ExecutionException ex) {
@@ -82,7 +82,7 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
    * 
    * @param force Forcefully shutdown
    */
-  void shutdown(boolean force) {
+  public void shutdown(boolean force) {
     if (!shutdownRequested || force) {
       shutdownRequested = true;
       if (executor != null) {
@@ -145,7 +145,9 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
       } finally {
         // Mark as shutdown
         shutdown = true;
-        onShutdownCallback.apply(error);
+        if (null != onShutdownCallback) {
+          onShutdownCallback.apply(error);
+        }
       }
     });
   }
