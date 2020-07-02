@@ -380,6 +380,45 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     reconcileAgainstMarkers(jsc, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled());
   }
 
+  private void deleteInvalidFilesByPartitions(JavaSparkContext jsc,
+                                              Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
+    // Now delete partially written files
+    jsc.parallelize(new ArrayList<>(invalidFilesByPartition.values()), config.getFinalizeWriteParallelism())
+        .map(partitionWithFileList -> {
+          final FileSystem fileSystem = metaClient.getFs();
+          LOG.info("Deleting invalid data files=" + partitionWithFileList);
+          if (partitionWithFileList.isEmpty()) {
+            return true;
+          }
+          // Delete
+          partitionWithFileList.stream().map(Pair::getValue).forEach(file -> {
+            try {
+              fileSystem.delete(new Path(file), false);
+            } catch (IOException e) {
+              throw new HoodieIOException(e.getMessage(), e);
+            }
+          });
+
+          return true;
+        }).collect();
+  }
+
+  private List<String> getinvalidMarkerFilePath(List<String> allMarkerFilePath, List<String> inValidDataPaths, String basePath){
+    List<String> inValidRelativeDataPaths = inValidDataPaths.stream().map(w ->
+      w.substring(basePath.length() + 1)).collect(Collectors.toList());
+    List<String> invalidMarkerFilePath = allMarkerFilePath.stream().filter(w -> {
+      boolean isMarkerFileInValid = false;
+      for(String dataPath: inValidRelativeDataPaths){
+        if(w.contains(dataPath)){
+          isMarkerFileInValid = true;
+          break;
+        }
+      }
+      return isMarkerFileInValid;}).collect(Collectors.toList());
+    return invalidMarkerFilePath;
+  }
+
+
   /**
    * Reconciles WriteStats and marker files to detect and safely delete duplicate data files created because of Spark
    * retries.
@@ -415,43 +454,39 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       if (!allAttemptedDataPaths.isEmpty()) {
         LOG.info("Removing duplicate data files created due to spark retries before committing. Paths=" + allAttemptedDataPaths);
       }
-
+      List<String> allMarkerFilePath = markers.relativeMarkerFilePaths();
+      // also delete the invalid markerfiles
+      List<String> invalidMarkerFileRelativePath  = getinvalidMarkerFilePath(allMarkerFilePath, allAttemptedDataPaths, basePath);
+      String markerFolderPath = this.getMetaClient().getMarkerFolderPath(instantTs);
+      List<String> invalidMarkerFilePath = invalidMarkerFileRelativePath.stream().map(w ->
+          String.format("%s/%s", markerFolderPath, w)).collect(Collectors.toList());
       Map<String, List<Pair<String, String>>> invalidPathsByPartition = allAttemptedDataPaths.stream()
-          .map(dp -> Pair.of(new Path(dp).getParent().toString(), dp))
+          .map(dp ->
+              Pair.of(new Path(dp).getParent().toString(), dp))
           .collect(Collectors.groupingBy(Pair::getKey));
 
+      Map<String, List<Pair<String, String>>> invalidMarkersByPartition = invalidMarkerFilePath.stream()
+          .map(dp ->
+              Pair.of(new Path(dp).getParent().toString(), dp))
+          .collect(Collectors.groupingBy(Pair::getKey));
       if (!invalidPathsByPartition.isEmpty()) {
         // Ensure all files in delete list is actually present. This is mandatory for an eventually consistent FS.
         // Otherwise, we may miss deleting such files. If files are not found even after retries, fail the commit
         if (consistencyCheckEnabled) {
           // This will either ensure all files to be deleted are present.
           waitForAllFiles(jsc, invalidPathsByPartition, FileVisibility.APPEAR);
+          waitForAllFiles(jsc, invalidMarkersByPartition, FileVisibility.APPEAR);
         }
 
         // Now delete partially written files
-        jsc.parallelize(new ArrayList<>(invalidPathsByPartition.values()), config.getFinalizeWriteParallelism())
-            .map(partitionWithFileList -> {
-              final FileSystem fileSystem = metaClient.getFs();
-              LOG.info("Deleting invalid data files=" + partitionWithFileList);
-              if (partitionWithFileList.isEmpty()) {
-                return true;
-              }
-              // Delete
-              partitionWithFileList.stream().map(Pair::getValue).forEach(file -> {
-                try {
-                  fileSystem.delete(new Path(file), false);
-                } catch (IOException e) {
-                  throw new HoodieIOException(e.getMessage(), e);
-                }
-              });
-
-              return true;
-            }).collect();
+        deleteInvalidFilesByPartitions(jsc, invalidPathsByPartition);
+        deleteInvalidFilesByPartitions(jsc, invalidMarkersByPartition);
 
         // Now ensure the deleted files disappear
         if (consistencyCheckEnabled) {
           // This will either ensure all files to be deleted are absent.
           waitForAllFiles(jsc, invalidPathsByPartition, FileVisibility.DISAPPEAR);
+          waitForAllFiles(jsc, invalidMarkersByPartition, FileVisibility.DISAPPEAR);
         }
       }
     } catch (IOException ioe) {
