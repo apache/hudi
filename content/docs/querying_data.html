@@ -369,6 +369,7 @@
   <li><a href="#spark-sql">Spark SQL</a></li>
   <li><a href="#spark-datasource">Spark Datasource</a>
     <ul>
+      <li><a href="#spark-snap-query">Snapshot query</a></li>
       <li><a href="#spark-incr-query">Incremental query</a></li>
     </ul>
   </li>
@@ -638,6 +639,17 @@ If using spark’s built in support, additionally a path filter needs to be push
 <p>The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi COPY_ON_WRITE tables can be queried via Spark datasource similar to how standard 
 datasources work (e.g: <code class="highlighter-rouge">spark.read.parquet</code>). Both snapshot querying and incremental querying are supported here. Typically spark jobs require adding <code class="highlighter-rouge">--jars &lt;path to jar&gt;/hudi-spark-bundle_2.11-&lt;hudi version&gt;.jar</code> to classpath of drivers 
 and executors. Alternatively, hudi-spark-bundle can also fetched via the <code class="highlighter-rouge">--packages</code> options (e.g: <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3</code>).</p>
+
+<h3 id="spark-snap-query">Snapshot query</h3>
+<p>This method can be used to retrieve the data table at the present point in time.
+Note: The file path must be suffixed with a number of wildcard asterisk (<code class="highlighter-rouge">/*</code>) one greater than the number of partition levels. Eg: with table file path “tablePath” partitioned by columns “a”, “b”, and “c”, the load path must be <code class="highlighter-rouge">tablePath + "/*/*/*/*"</code></p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">val</span> <span class="nv">hudiIncQueryDF</span> <span class="k">=</span> <span class="n">spark</span>
+     <span class="o">.</span><span class="py">read</span><span class="o">()</span>
+     <span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
+     <span class="o">.</span><span class="py">option</span><span class="o">(</span><span class="nv">DataSourceReadOptions</span><span class="o">.</span><span class="py">QUERY_TYPE_OPT_KEY</span><span class="o">(),</span> <span class="nv">DataSourceReadOptions</span><span class="o">.</span><span class="py">QUERY_TYPE_SNAPSHOT_OPT_VAL</span><span class="o">())</span>
+     <span class="o">.</span><span class="py">load</span><span class="o">(</span><span class="n">tablePath</span> <span class="o">+</span> <span class="s">"/*"</span><span class="o">)</span> <span class="c1">//The number of wildcard asterisks here must be one greater than the number of partition
+</span></code></pre></div></div>
 
 <h3 id="spark-incr-query">Incremental query</h3>
 <p>Of special interest to spark pipelines, is Hudi’s ability to support incremental queries, like below. A sample incremental query, that will obtain all records written since <code class="highlighter-rouge">beginInstantTime</code>, looks like below.

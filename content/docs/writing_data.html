@@ -374,8 +374,8 @@ speeding up large Spark jobs via upserts using the <a href="#datasource-writer">
 can be chosen/changed across each commit/deltacommit issued against the table.</p>
 
 <ul>
-  <li><strong>UPSERT</strong> : This is the default operation where the input records are first tagged as inserts or updates by looking up the index and 
- the records are ultimately written after heuristics are run to determine how best to pack them on storage to optimize for things like file sizing. 
+  <li><strong>UPSERT</strong> : This is the default operation where the input records are first tagged as inserts or updates by looking up the index. 
+ The records are ultimately written after heuristics are run to determine how best to pack them on storage to optimize for things like file sizing. 
  This operation is recommended for use-cases like database change capture where the input almost certainly contains updates.</li>
   <li><strong>INSERT</strong> : This operation is very similar to upsert in terms of heuristics/file sizing but completely skips the index lookup step. Thus, it can be a lot faster than upserts 
  for use-cases like log de-duplication (in conjunction with options to filter duplicates mentioned below). This is also suitable for use-cases where the table can tolerate duplicates, but just 
@@ -532,13 +532,45 @@ provided under <code class="highlighter-rouge">hudi-utilities/src/test/resources
 
 <h2 id="datasource-writer">Datasource Writer</h2>
 
-<p>The <code class="highlighter-rouge">hudi-spark</code> module offers the DataSource API to write (and also read) any data frame into a Hudi table.
-Following is how we can upsert a dataframe, while specifying the field names that need to be used
-for <code class="highlighter-rouge">recordKey =&gt; _row_key</code>, <code class="highlighter-rouge">partitionPath =&gt; partition</code> and <code class="highlighter-rouge">precombineKey =&gt; timestamp</code></p>
+<p>The <code class="highlighter-rouge">hudi-spark</code> module offers the DataSource API to write (and read) a Spark DataFrame into a Hudi table. There are a number of options available:</p>
+
+<p><strong><code class="highlighter-rouge">HoodieWriteConfig</code></strong>:</p>
+
+<p><strong>TABLE_NAME</strong> (Required)<br /></p>
+
+<p><strong><code class="highlighter-rouge">DataSourceWriteOptions</code></strong>:</p>
+
+<p><strong>RECORDKEY_FIELD_OPT_KEY</strong> (Required): Primary key field(s). Nested fields can be specified using the dot notation eg: <code class="highlighter-rouge">a.b.c</code>. When using multiple columns as primary key use comma separated notation, eg: <code class="highlighter-rouge">"col1,col2,col3,etc"</code>. Single or multiple columns as primary key specified by <code class="highlighter-rouge">KEYGENERATOR_CLASS_OPT_KEY</code> property.<br />
+Default value: <code class="highlighter-rouge">"uuid"</code><br /></p>
+
+<p><strong>PARTITIONPATH_FIELD_OPT_KEY</strong> (Required): Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: <code class="highlighter-rouge">""</code>. Specify partitioning/no partitioning using <code class="highlighter-rouge">KEYGENERATOR_CLASS_OPT_KEY</code>. If synchronizing to hive, also specify using <code class="highlighter-rouge">HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.</code><br />
+Default value: <code class="highlighter-rouge">"partitionpath"</code><br /></p>
+
+<p><strong>PRECOMBINE_FIELD_OPT_KEY</strong> (Required): When two records have the same key value, the record with the largest value from the field specified will be choosen.<br />
+Default value: <code class="highlighter-rouge">"ts"</code><br /></p>
+
+<p><strong>OPERATION_OPT_KEY</strong>: The <a href="#write-operations">write operations</a> to use.<br />
+Available values:<br />
+<code class="highlighter-rouge">UPSERT_OPERATION_OPT_VAL</code> (default), <code class="highlighter-rouge">BULK_INSERT_OPERATION_OPT_VAL</code>, <code class="highlighter-rouge">INSERT_OPERATION_OPT_VAL</code>, <code class="highlighter-rouge">DELETE_OPERATION_OPT_VAL</code></p>
+
+<p><strong>TABLE_TYPE_OPT_KEY</strong>: The <a href="/docs/concepts.html#table-types">type of table</a> to write to. Note: After the initial creation of a table, this value must stay consistent when writing to (updating) the table using the Spark <code class="highlighter-rouge">SaveMode.Append</code> mode.<br />
+Available values:<br />
+<a href="/docs/concepts.html#copy-on-write-table"><code class="highlighter-rouge">COW_TABLE_TYPE_OPT_VAL</code></a> (default), <a href="/docs/concepts.html#merge-on-read-table"><code class="highlighter-rouge">MOR_TABLE_TYPE_OPT_VAL</code></a></p>
+
+<p><strong>KEYGENERATOR_CLASS_OPT_KEY</strong>: Key generator class, that will extract the key out of incoming record. If single column key use <code class="highlighter-rouge">SimpleKeyGenerator</code>. For multiple column keys use <code class="highlighter-rouge">ComplexKeyGenerator</code>. Note: A custom key generator class can be written/provided here as well. Primary key columns should be provided via <code class="highlighter-rouge">RECORDKEY_FIELD_OPT_KEY</code> option.<br />
+Available values:<br />
+<code class="highlighter-rouge">classOf[SimpleKeyGenerator].getName</code> (default), <code class="highlighter-rouge">classOf[NonpartitionedKeyGenerator].getName</code> (Non-partitioned tables can currently only have a single key column, <a href="https://issues.apache.org/jira/browse/HUDI-1053">HUDI-1053</a>), <code class="highlighter-rouge">classOf[ComplexKeyGenerator].getName</code></p>
+
+<p><strong>HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY</strong>: If using hive, specify if the table should or should not be partitioned.<br />
+Available values:<br />
+<code class="highlighter-rouge">classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName</code> (default), <code class="highlighter-rouge">classOf[MultiPartKeysValueExtractor].getCanonicalName</code>, <code class="highlighter-rouge">classOf[TimestampBasedKeyGenerator].getCanonicalName</code>, <code class="highlighter-rouge">classOf[NonPartitionedExtractor].getCanonicalName</code>, <code class="highlighter-rouge">classOf[GlobalDeleteKeyGenerator].getCanonicalName</code> (to be used when <code class="highlighter-rouge">OPERATION_OPT_KEY</code> is set to <code class="highlighter-rouge">DELETE_OPERATION_OPT_VAL</code>)</p>
+
+<p>Example:
+Upsert a DataFrame, specifying the necessary field names for <code class="highlighter-rouge">recordKey =&gt; _row_key</code>, <code class="highlighter-rouge">partitionPath =&gt; partition</code>, and <code class="highlighter-rouge">precombineKey =&gt; timestamp</code></p>
 
 <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">inputDF</span><span class="o">.</span><span class="na">write</span><span class="o">()</span>
        <span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
-       <span class="o">.</span><span class="na">options</span><span class="o">(</span><span class="n">clientOpts</span><span class="o">)</span> <span class="c1">// any of the Hudi client opts can be passed in as well</span>
+       <span class="o">.</span><span class="na">options</span><span class="o">(</span><span class="n">clientOpts</span><span class="o">)</span> <span class="c1">//Where clientOpts is of type Map[String, String]. clientOpts can include any other options necessary.</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">RECORDKEY_FIELD_OPT_KEY</span><span class="o">(),</span> <span class="s">"_row_key"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">(),</span> <span class="s">"partition"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="nc">DataSourceWriteOptions</span><span class="o">.</span><span class="na">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">(),</span> <span class="s">"timestamp"</span><span class="o">)</span>
@@ -557,8 +589,7 @@ once you have built the hudi-hive module. Following is how we sync the above Dat
 <span class="o">./</span><span class="n">run_sync_tool</span><span class="o">.</span><span class="na">sh</span>  <span class="o">--</span><span class="n">jdbc</span><span class="o">-</span><span class="n">url</span> <span class="nl">jdbc:hive2:</span><span class="err">\</span><span class="o">/</span><span class="err">\</span><span class="o">/</span><span class="nl">hiveserver:</span><span class="mi">10000</span> <span class="o">--</span><span class="n">user</span> <span class="n">hive</span> <span class="o">--</span><span class="n">pass</span> <span class="n">hive</span> <span class="o">--</span><span class="n">partitioned</span><span class="o">-</span><span class="n">by</span> <span class="n">partition</span> <span class="o">--</span><span class="n">base</span><span class="o">-</span><span class="n">path</span> <span class="o">&lt;</span><span class="n">basePath</span><span class="o">&gt;</span> <span class="o">--</span><span class="n">database</span> <span class="k">default</span> <span class="o">--</span><span class="n">table</span> <span class="o">&lt;</span><span class="n">tableName</span><span class="o">&gt;</span>
 </code></pre></div></div>
 
-<p>Starting with Hudi 0.5.1 version read optimized version of merge-on-read tables are suffixed ‘_ro’ by default. For backwards compatibility with older Hudi versions, 
-an optional HiveSyncConfig - <code class="highlighter-rouge">--skip-ro-suffix</code>, has been provided to turn off ‘_ro’ suffixing if desired. Explore other hive sync options using the following command:</p>
+<p>Starting with Hudi 0.5.1 version read optimized version of merge-on-read tables are suffixed ‘_ro’ by default. For backwards compatibility with older Hudi versions, an optional HiveSyncConfig - <code class="highlighter-rouge">--skip-ro-suffix</code>, has been provided to turn off ‘_ro’ suffixing if desired. Explore other hive sync options using the following command:</p>
 
 <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">cd</span> <span class="n">hudi</span><span class="o">-</span><span class="n">hive</span>
 <span class="o">./</span><span class="n">run_sync_tool</span><span class="o">.</span><span class="na">sh</span>
@@ -571,12 +602,22 @@ an optional HiveSyncConfig - <code class="highlighter-rouge">--skip-ro-suffix</c
 For more info refer to <a href="https://cwiki.apache.org/confluence/x/6IqvC">Delete support in Hudi</a>.</p>
 
 <ul>
-  <li><strong>Soft Deletes</strong> : With soft deletes, user wants to retain the key but just null out the values for all other fields. 
- This can be simply achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.</li>
-  <li><strong>Hard Deletes</strong> : A stronger form of delete is to physically remove any trace of the record from the table. This can be achieved by issuing an upsert with a custom payload implementation
- via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in <code class="highlighter-rouge">org.apache.hudi.EmptyHoodieRecordPayload</code> class that does exactly this.</li>
+  <li>
+    <p><strong>Soft Deletes</strong> : Retain the record key and just null out the values for all the other fields. 
+ This can be achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.</p>
+  </li>
+  <li>
+    <p><strong>Hard Deletes</strong> : A stronger form of deletion is to physically remove any trace of the record from the table. This can be achieved in 3 different ways.</p>
+
+    <p>1) Using DataSource, set <code class="highlighter-rouge">OPERATION_OPT_KEY</code> to <code class="highlighter-rouge">DELETE_OPERATION_OPT_VAL</code>. This will remove all the records in the DataSet being submitted.</p>
+
+    <p>2) Using DataSource, set <code class="highlighter-rouge">PAYLOAD_CLASS_OPT_KEY</code> to <code class="highlighter-rouge">"org.apache.hudi.EmptyHoodieRecordPayload"</code>. This will remove all the records in the DataSet being submitted.</p>
+
+    <p>3) Using DataSource or DeltaStreamer, add a column named <code class="highlighter-rouge">_hoodie_is_deleted</code> to DataSet. The value of this column must be set to <code class="highlighter-rouge">true</code> for all the records to be deleted and either <code class="highlighter-rouge">false</code> or left null for any records which are to be upserted.</p>
+  </li>
 </ul>
 
+<p>Example using hard delete method 2, remove all the records from the table that exist in the DataSet <code class="highlighter-rouge">deleteDF</code>:</p>
 <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="n">deleteDF</span> <span class="c1">// dataframe containing just records to be deleted</span>
    <span class="o">.</span><span class="na">write</span><span class="o">().</span><span class="na">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
    <span class="o">.</span><span class="na">option</span><span class="o">(...)</span> <span class="c1">// Add HUDI options like record-key, partition-path and others as needed for your setup</span>
