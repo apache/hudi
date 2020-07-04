@@ -410,7 +410,36 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Tests when update partition path is set in global bloom, existing record in old partition is deleted appropriately.
+   * When records getting inserted are deleted in the same write batch, hudi should have deleted those records and
+   * not be available in read path.
+   * @throws Exception
+   */
+  @Test
+  public void testDeletesForInsertsInSameBatch() throws Exception {
+    HoodieWriteClient client = getHoodieWriteClient(getConfig(), false);
+
+    /**
+     * Write 200 inserts and issue deletes to a subset(50) of inserts.
+     */
+    String initCommitTime = "000";
+    String newCommitTime = "001";
+
+    final List<HoodieRecord> recordsInFirstBatch = new ArrayList<>();
+    Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
+        (String instantTime, Integer numRecordsInThisCommit) -> {
+          List<HoodieRecord> fewRecordsForInsert = dataGen.generateInserts(instantTime, 200);
+          List<HoodieRecord> fewRecordsForDelete = fewRecordsForInsert.subList(40, 90);
+
+          recordsInFirstBatch.addAll(fewRecordsForInsert);
+          recordsInFirstBatch.addAll(dataGen.generateDeletesFromExistingRecords(fewRecordsForDelete));
+          return recordsInFirstBatch;
+        };
+    writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime,
+        -1, recordGenFunction, HoodieWriteClient::upsert, true, 150, 150, 1);
+  }
+
+  /**
+   * Test update of a record to different partition with Global Index.
    */
   @ParameterizedTest
   @EnumSource(value = IndexType.class, names = {"GLOBAL_BLOOM", "GLOBAL_SIMPLE"})

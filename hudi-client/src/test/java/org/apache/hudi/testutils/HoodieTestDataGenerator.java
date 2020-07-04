@@ -226,7 +226,7 @@ public class HoodieTestDataGenerator {
   public static TestRawTripPayload generateRandomDeleteValue(HoodieKey key, String instantTime) throws IOException {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0.0,
         true, false);
-    return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+    return new TestRawTripPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true);
   }
 
   /**
