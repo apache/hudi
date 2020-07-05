@@ -22,30 +22,27 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
- * Key generator for deletes using global indices. Global index deletes do not require partition value
- * so this key generator avoids using partition value for generating HoodieKey.
+ * Key generator for deletes using global indices. Global index deletes do not require partition value so this key generator avoids using partition value for generating HoodieKey.
  */
 public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
 
   private static final String EMPTY_PARTITION = "";
 
-  protected final List<String> recordKeyFields;
-
   public GlobalDeleteKeyGenerator(TypedProperties config) {
     super(config);
-    this.recordKeyFields = Arrays.stream(config.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.setRecordKeyFields(Arrays.asList(config.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(",")));
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return KeyGenUtils.getRecordKey(record, recordKeyFields);
+    return KeyGenUtils.getRecordKey(record, getRecordKeyFields());
   }
 
   @Override
@@ -54,12 +51,17 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
-  public List<String> getRecordKeyFields() {
-    return recordKeyFields;
+  public List<String> getPartitionPathFields() {
+    return new ArrayList<>();
   }
 
   @Override
-  public List<String> getPartitionPathFields() {
-    return new ArrayList<>();
+  public String getRecordKeyFromRow(Row row) {
+    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), getRecordKeyPositions(), true);
+  }
+
+  @Override
+  public String getPartitionPathFromRow(Row row) {
+    return EMPTY_PARTITION;
   }
 }

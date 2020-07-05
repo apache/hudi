@@ -16,44 +16,30 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.keygen;
-
-import org.apache.hudi.common.config.TypedProperties;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.spark.sql.Row;
+package org.apache.hudi.internal;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.spark.sql.sources.v2.writer.WriterCommitMessage;
 
 /**
- * Simple Key generator for unpartitioned Hive Tables.
+ * Hoodie's {@link WriterCommitMessage} used in datasource implementation.
  */
-public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
+public class HoodieWriterCommitMessage implements WriterCommitMessage {
 
-  private static final String EMPTY_PARTITION = "";
+  private List<HoodieInternalWriteStatus> writeStatuses = new ArrayList<>();
 
-  public NonpartitionedKeyGenerator(TypedProperties props) {
-    super(props);
+  public HoodieWriterCommitMessage(List<HoodieInternalWriteStatus> writeStatuses) {
+    this.writeStatuses = writeStatuses;
+  }
+
+  public List<HoodieInternalWriteStatus> getWriteStatuses() {
+    return writeStatuses;
   }
 
   @Override
-  public String getPartitionPath(GenericRecord record) {
-    return EMPTY_PARTITION;
-  }
-
-  @Override
-  public List<String> getPartitionPathFields() {
-    return new ArrayList<>();
-  }
-
-  @Override
-  public String getRecordKeyFromRow(Row row) {
-    return super.getRecordKeyFromRow(row);
-  }
-
-  @Override
-  public String getPartitionPathFromRow(Row row) {
-    return EMPTY_PARTITION;
+  public String toString() {
+    return "HoodieWriterCommitMessage{" + "writeStatuses=" + writeStatuses + '}';
   }
 }

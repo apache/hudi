@@ -29,7 +29,6 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{HoodieWriteClient, WriteStatus}
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
@@ -62,7 +61,7 @@ private[hudi] object HoodieSparkSqlWriter {
             asyncCompactionTriggerFn: Option[Function1[HoodieWriteClient[HoodieRecordPayload[Nothing]], Unit]] = Option.empty
            )
   : (Boolean, common.util.Option[String], common.util.Option[String],
-    HoodieWriteClient[HoodieRecordPayload[Nothing]], HoodieTableConfig) = {
+     HoodieWriteClient[HoodieRecordPayload[Nothing]], HoodieTableConfig) = {
 
     val sparkContext = sqlContext.sparkContext
     val path = parameters.get("path")
@@ -105,6 +104,22 @@ private[hudi] object HoodieSparkSqlWriter {
     } else {
       // Handle various save modes
       handleSaveModes(mode, basePath, tableConfig, tblName, operation, fs)
+      // Create the table if not present
+      if (!tableExists) {
+        val tableMetaClient = HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get,
+          HoodieTableType.valueOf(tableType), tblName, "archived", parameters(PAYLOAD_CLASS_OPT_KEY),
+          null.asInstanceOf[String])
+        tableConfig = tableMetaClient.getTableConfig
+      }
+
+      // short-circuit if bulk_insert via row is enabled.
+      // scalastyle:off
+      if (operation.equalsIgnoreCase(BULK_INSERT_DATASET_OPERATION_OPT_VAL)) {
+        val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
+                                                                                basePath, path, instantTime)
+        return (success, commitTime, common.util.Option.of(""), hoodieWriteClient.orNull, tableConfig)
+      }
+      // scalastyle:on
 
       val (writeStatuses, writeClient: HoodieWriteClient[HoodieRecordPayload[Nothing]]) =
         if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
@@ -127,14 +142,6 @@ private[hudi] object HoodieSparkSqlWriter {
               orderingVal, keyGenerator.getKey(gr),
               parameters(PAYLOAD_CLASS_OPT_KEY))
           }).toJavaRDD()
-
-          // Create the table if not present
-          if (!tableExists) {
-            val tableMetaClient = HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get,
-              HoodieTableType.valueOf(tableType), tblName, "archived", parameters(PAYLOAD_CLASS_OPT_KEY),
-              null.asInstanceOf[String])
-            tableConfig = tableMetaClient.getTableConfig
-          }
 
           // Create a HoodieWriteClient & issue the write.
           val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, schema.toString, path.get,
@@ -250,12 +257,37 @@ private[hudi] object HoodieSparkSqlWriter {
     metaSyncSuccess
   }
 
+  def bulkInsertAsRow(sqlContext: SQLContext,
+                      parameters: Map[String, String],
+                      df: DataFrame,
+                      tblName: String,
+                      basePath: Path,
+                      path: Option[String],
+                      instantTime: String): (Boolean, common.util.Option[String]) = {
+    val structName = s"${tblName}_record"
+    val nameSpace = s"hoodie.${tblName}"
+    val writeConfig = DataSourceUtils.createHoodieConfig(null, path.get, tblName, mapAsJavaMap(parameters))
+    val hoodieDF = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace)
+    hoodieDF.write.format("org.apache.hudi.internal")
+      .option(INSTANT_TIME, instantTime)
+      .options(parameters)
+      .save()
+    val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
+    val metaSyncEnabled = parameters.get(META_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
+    val syncHiveSucess = if (hiveSyncEnabled || metaSyncEnabled) {
+      metaSync(parameters, basePath, sqlContext.sparkContext.hadoopConfiguration)
+    } else {
+      true
+    }
+    (syncHiveSucess, common.util.Option.ofNullable(instantTime))
+  }
+
   /**
-    * Add default options for unspecified write options keys.
-    *
-    * @param parameters
-    * @return
-    */
+   * Add default options for unspecified write options keys.
+   *
+   * @param parameters
+   * @return
+   */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
     Map(OPERATION_OPT_KEY -> DEFAULT_OPERATION_OPT_VAL,
       TABLE_TYPE_OPT_KEY -> DEFAULT_TABLE_TYPE_OPT_VAL,
@@ -298,7 +330,7 @@ private[hudi] object HoodieSparkSqlWriter {
     if (mode == SaveMode.Append && tableExists) {
       val existingTableName = tableConfig.getTableName
       if (!existingTableName.equals(tableName)) {
-        throw new HoodieException(s"hoodie table with name $existingTableName already exist at $tablePath")
+        throw new HoodieException(s"hoodie table with name $existingTableName already exists at $tablePath")
       }
     }
 
@@ -411,11 +443,11 @@ private[hudi] object HoodieSparkSqlWriter {
 
       val asyncCompactionEnabled = isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())
       val compactionInstant : common.util.Option[java.lang.String] =
-      if (asyncCompactionEnabled) {
-        client.scheduleCompaction(common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
-      } else {
-        common.util.Option.empty()
-      }
+        if (asyncCompactionEnabled) {
+          client.scheduleCompaction(common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
+        } else {
+          common.util.Option.empty()
+        }
 
       log.info(s"Compaction Scheduled is $compactionInstant")
       val metaSyncSuccess =  metaSync(parameters, basePath, jsc.hadoopConfiguration())

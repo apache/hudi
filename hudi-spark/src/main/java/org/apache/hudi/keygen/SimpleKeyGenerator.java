@@ -22,17 +22,19 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
 
 import java.util.Arrays;
-import java.util.List;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
 public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
+  @Deprecated
   protected final String recordKeyField;
 
+  @Deprecated
   protected final String partitionPathField;
 
   protected final boolean hiveStylePartitioning;
@@ -45,12 +47,15 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   public SimpleKeyGenerator(TypedProperties props, String partitionPathField) {
     super(props);
-    this.recordKeyField = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
-    this.partitionPathField = partitionPathField;
+    this.setRecordKeyFields(Arrays.asList(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY())));
+    this.setPartitionPathFields(Arrays.asList(partitionPathField));
     this.hiveStylePartitioning = props.getBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
         Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
     this.encodePartitionPath = props.getBoolean(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY(),
         Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL()));
+    // Retaining this for compatibility
+    this.recordKeyField = getRecordKeyFields().get(0);
+    this.partitionPathField = getPartitionPathFields().get(0);
   }
 
   @Override
@@ -64,12 +69,13 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
-  public List<String> getRecordKeyFields() {
-    return Arrays.asList(recordKeyField);
+  public String getRecordKeyFromRow(Row row) {
+    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), getRecordKeyPositions(), false);
   }
 
   @Override
-  public List<String> getPartitionPathFields() {
-    return Arrays.asList(partitionPathField);
+  public String getPartitionPathFromRow(Row row) {
+    return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(),
+        hiveStylePartitioning, getPartitionPathPositions());
   }
 }

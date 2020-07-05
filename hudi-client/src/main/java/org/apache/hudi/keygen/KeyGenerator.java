@@ -22,6 +22,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.Serializable;
 import java.util.List;
@@ -50,5 +52,33 @@ public abstract class KeyGenerator implements Serializable {
   public List<String> getRecordKeyFieldNames() {
     throw new UnsupportedOperationException("Bootstrap not supported for key generator. "
         + "Please override this method in your custom key generator.");
+  }
+
+  /**
+   * Initializes {@link KeyGenerator} for {@link Row} based operations.
+   * @param structType structype of the dataset.
+   * @param structName struct name of the dataset.
+   * @param recordNamespace record namespace of the dataset.
+   */
+  public void initializeRowKeyGenerator(StructType structType, String structName, String recordNamespace) {
+    throw new UnsupportedOperationException("This method is invoked only for operation BULK_INSERT_DATASET. Expected to be overridden by sub classes");
+  }
+
+  /**
+   * Fetch record key from {@link Row}.
+   * @param row instance of {@link Row} from which record key is requested.
+   * @return the record key of interest from {@link Row}.
+   */
+  public String getRecordKeyFromRow(Row row) {
+    throw new UnsupportedOperationException("This method is invoked only for operation BULK_INSERT_DATASET. Expected to be overridden by sub classes");
+  }
+
+  /**
+   * Fetch partition path from {@link Row}.
+   * @param row instance of {@link Row} from which partition path is requested
+   * @return the partition path of interest from {@link Row}.
+   */
+  public String getPartitionPathFromRow(Row row) {
+    throw new UnsupportedOperationException("This method is invoked only for operation BULK_INSERT_DATASET. Expected to be overridden by sub classes");
   }
 }

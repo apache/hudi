@@ -16,11 +16,21 @@
  * limitations under the License.
  */
 {
-  "namespace": "example.avro",
-  "type": "record",
-  "name": "User",
-  "fields": [
-    {"name": "field1", "type": ["null", "string"], "default": null},
-    {"name": "createTime", "type": ["null", "long"], "default": null}
-  ]
+    "namespace": "example.schema",
+    "type": "record",
+    "name": "trip",
+    "fields": [
+        {
+            "name": "_row_key",
+            "type": "string"
+        },
+        {
+            "name": "partition",
+            "type": "string"
+        },
+        {
+            "name": "ts",
+            "type": ["long", "null"]
+        }
+    ]
 }
