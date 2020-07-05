@@ -19,18 +19,15 @@
 package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.payload.AWSDmsAvroPayload;
-import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.testutils.FunctionalTestHarness;
 import org.apache.hudi.utilities.transform.AWSDmsTransformer;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -40,23 +37,8 @@ import java.util.Arrays;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestAWSDatabaseMigrationServiceSource {
-
-  private static JavaSparkContext jsc;
-  private static SparkSession spark;
-
-  @BeforeAll
-  public static void setupTest() {
-    jsc = UtilHelpers.buildSparkContext("aws-dms-test", "local[2]");
-    spark = SparkSession.builder().config(jsc.getConf()).getOrCreate();
-  }
-
-  @AfterAll
-  public static void tearDownTest() {
-    if (jsc != null) {
-      jsc.stop();
-    }
-  }
+@Tag("functional")
+public class TestAWSDatabaseMigrationServiceSource extends FunctionalTestHarness {
 
   @Test
   public void testPayload() throws IOException {
@@ -83,6 +65,7 @@ public class TestAWSDatabaseMigrationServiceSource {
   }
 
   static class Record implements Serializable {
+
     String id;
     long ts;
 
@@ -95,11 +78,11 @@ public class TestAWSDatabaseMigrationServiceSource {
   @Test
   public void testTransformer() {
     AWSDmsTransformer transformer = new AWSDmsTransformer();
-    Dataset<Row> inputFrame = spark.createDataFrame(Arrays.asList(
+    Dataset<Row> inputFrame = spark().createDataFrame(Arrays.asList(
         new Record("1", 3433L),
         new Record("2", 3433L)), Record.class);
 
-    Dataset<Row> outputFrame = transformer.apply(jsc, spark, inputFrame, null);
+    Dataset<Row> outputFrame = transformer.apply(jsc(), spark(), inputFrame, null);
     assertTrue(Arrays.stream(outputFrame.schema().fields())
         .map(f -> f.name()).anyMatch(n -> n.equals(AWSDmsAvroPayload.OP_FIELD)));
     assertTrue(outputFrame.select(AWSDmsAvroPayload.OP_FIELD).collectAsList().stream()
