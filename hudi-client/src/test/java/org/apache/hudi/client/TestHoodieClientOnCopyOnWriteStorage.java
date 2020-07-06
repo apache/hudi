@@ -72,6 +72,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.HoodieTestDataGenerator.NULL_SCHEMA;
 import static org.apache.hudi.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;

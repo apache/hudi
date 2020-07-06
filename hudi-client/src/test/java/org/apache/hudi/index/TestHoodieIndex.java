@@ -73,6 +73,7 @@ import java.util.UUID;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -542,13 +543,6 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
             .build()).withAutoCommit(false).build();
     writeClient = getHoodieWriteClient(config);
     this.index = writeClient.getIndex();
-  }
-
-  private void assertNoWriteErrors(List<WriteStatus> statuses) {
-    // Verify there are no errors
-    for (WriteStatus status : statuses) {
-      assertFalse(status.hasErrors());
-    }
   }
 
   public static class DummyHoodieIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {

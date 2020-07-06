@@ -42,6 +42,7 @@ import java.io.File;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
