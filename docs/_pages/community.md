@@ -11,7 +11,8 @@ There are several ways to get in touch with the Hudi community.
 
 | When? | Channel to use |
 |-------|--------|
-| For any general questions, user support, development discussions | Dev Mailing list ([Subscribe](mailto:dev-subscribe@hudi.apache.org), [Unsubscribe](mailto:dev-unsubscribe@hudi.apache.org), [Archives](https://lists.apache.org/list.html?dev@hudi.apache.org)). Empty email works for subscribe/unsubscribe. Please use [gists](https://gist.github.com) to share code/stacktraces on the email. |
+| For development discussions | Dev Mailing list ([Subscribe](mailto:dev-subscribe@hudi.apache.org), [Unsubscribe](mailto:dev-unsubscribe@hudi.apache.org), [Archives](https://lists.apache.org/list.html?dev@hudi.apache.org)). Empty email works for subscribe/unsubscribe. Please use [gists](https://gist.github.com) to share code/stacktraces on the email. |
+| For any general questions, user support | Users Mailing list ([Subscribe](mailto:users-subscribe@hudi.apache.org), [Unsubscribe](mailto:users-unsubscribe@hudi.apache.org), [Archives](https://lists.apache.org/list.html?users@hudi.apache.org)). Empty email works for subscribe/unsubscribe. Please use [gists](https://gist.github.com) to share code/stacktraces on the email. |
 | For reporting bugs or issues or discover known issues | Please use [ASF Hudi JIRA](https://issues.apache.org/jira/projects/HUDI/summary). See [#here](#accounts) for access |
 | For quick pings & 1-1 chats | Join our [slack group](https://join.slack.com/t/apache-hudi/signup). In case your mail domain is not there in pre-approved list for joining slack group, please check out the [github issue](https://github.com/apache/hudi/issues/143) |
 | For proposing large features, changes | Start a RFC. Instructions [here](https://cwiki.apache.org/confluence/display/HUDI/RFC+Process).
