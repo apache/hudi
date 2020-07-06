@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.testutils;
+package org.apache.hudi.testutils.providers;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
