@@ -73,7 +73,6 @@ public class MarkerBasedRollbackStrategy implements BaseRollbackActionExecutor.R
 
   private HoodieRollbackStat undoCreate(String createdBaseFilePath) throws IOException {
     LOG.info("Rolling back by deleting the created base file:" + createdBaseFilePath);
-
     return deleteBaseFile(createdBaseFilePath);
   }
 
@@ -139,7 +138,7 @@ public class MarkerBasedRollbackStrategy implements BaseRollbackActionExecutor.R
       return jsc.parallelize(markerFilePaths, parallelism)
           .map(markerFilePath -> {
             String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
-            MarkerFiles.MarkerType type = MarkerFiles.MarkerType.valueOf(typeStr);
+            MarkerFiles.IOType type = MarkerFiles.IOType.valueOf(typeStr);
             switch (type) {
               case MERGE:
                 return undoMerge(MarkerFiles.stripMarkerSuffix(markerFilePath));

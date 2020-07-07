@@ -89,7 +89,7 @@ public class MarkerFiles {
     FSUtils.processFiles(fs, markerDirPath.toString(), (status) -> {
       String pathStr = status.getPath().toString();
       if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN)
-          && !pathStr.endsWith(MarkerType.APPEND.name())) {
+          && !pathStr.endsWith(IOType.APPEND.name())) {
         dataFiles.add(translateMarkerToDataPath(pathStr));
       }
       return true;
@@ -124,9 +124,9 @@ public class MarkerFiles {
   /**
    * The marker path will be <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename.marker.writeIOType.
    */
-  public Path createMarkerFile(String partitionPath,
+  public Path create(String partitionPath,
                                String dataFileName,
-                               MarkerType type) {
+                               IOType type) {
     Path path = FSUtils.getPartitionPath(markerDirPath, partitionPath);
     try {
       fs.mkdirs(path); // create a new partition as needed.
@@ -144,7 +144,7 @@ public class MarkerFiles {
     return markerPath;
   }
 
-  public enum MarkerType {
+  public enum IOType {
     MERGE,
     CREATE,
     APPEND

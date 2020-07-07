@@ -109,7 +109,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       partitionMetadata.trySave(getPartitionId());
 
       oldFilePath = new Path(config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
-      String newFileName = FSUtils.makeDataFileName(instantTime, writeToken, fileId);
+      String newFileName = FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
       String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
           + newFileName).toString();
       newFilePath = new Path(config.getBasePath(), relativePath);
@@ -310,7 +310,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   }
 
   @Override
-  public MarkerFiles.MarkerType getIOType() {
-    return MarkerFiles.MarkerType.MERGE;
+  public MarkerFiles.IOType getIOType() {
+    return MarkerFiles.IOType.MERGE;
   }
 }

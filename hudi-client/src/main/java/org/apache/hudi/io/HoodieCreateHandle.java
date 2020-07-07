@@ -68,7 +68,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(getPartitionId());
-      createMarkerFile(partitionPath, FSUtils.makeDataFileName(this.instantTime, this.writeToken, this.fileId));
+      createMarkerFile(partitionPath, FSUtils.makeDataFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
       this.fileWriter =
           HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, writerSchema, this.sparkTaskContextSupplier);
     } catch (IOException e) {
@@ -149,8 +149,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   @Override
-  public MarkerFiles.MarkerType getIOType() {
-    return MarkerFiles.MarkerType.CREATE;
+  public MarkerFiles.IOType getIOType() {
+    return MarkerFiles.IOType.CREATE;
   }
 
   /**

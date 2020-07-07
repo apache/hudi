@@ -38,6 +38,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -52,13 +54,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientTestBase {
+public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackTestBase {
   @BeforeEach
   public void setUp() throws Exception {
     initPath();
     initSparkContexts();
-    //just generate tow partitions
-    dataGen = new HoodieTestDataGenerator(new String[]{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
     initFileSystem();
     initMetaClient();
   }
@@ -129,47 +129,18 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientTestBase 
         || HoodieTestUtils.doesDataFileExist(basePath, "2015/03/17", commitTime2, file22));
   }
 
-  private void twoUpsertCommitDataRollBack(boolean isUsingMarkers) throws IOException {
-    //1. prepare data
-    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).build();
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCopyOnWriteRollbackActionExecutor(boolean isUsingMarkers) throws IOException {
+    //1. prepare data and assert data result
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
-    HoodieWriteClient client = getHoodieWriteClient(cfg);
-    HoodieTestDataGenerator.writePartitionMetadata(fs, new String[]{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH}, basePath);
-    /**
-     * Write 1 (only inserts)
-     */
-    String newCommitTime = "001";
-    client.startCommitWithTime(newCommitTime);
-    List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-    assertNoWriteErrors(statuses);
-    /**
-     * Write 2 (updates)
-     */
-    newCommitTime = "002";
-    client.startCommitWithTime(newCommitTime);
-    records = dataGen.generateUpdates(newCommitTime, records);
-    statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-    assertNoWriteErrors(statuses);
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).build();
+    this.twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg);
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
 
-    //2. assert and get the first partition fileslice
-    List<HoodieFileGroup> firstPartitionCommit2FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
-    assertEquals(1, firstPartitionCommit2FileGroups.size());
-    firstPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList())
-        .forEach(fileSlice -> firstPartitionCommit2FileSlices.add(fileSlice));
-    assertEquals(2, firstPartitionCommit2FileSlices.size());
-    //assert and get the first partition fileslice
-    List<HoodieFileGroup> secondPartitionCommit2FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
-    assertEquals(1, secondPartitionCommit2FileGroups.size());
-    secondPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList())
-        .forEach(fileSlice -> secondPartitionCommit2FileSlices.add(fileSlice));
-    assertEquals(2, secondPartitionCommit2FileSlices.size());
-
-
-    //3.  rollback
+    //2. rollback
     List<HoodieInstant> commitInstants = table.getCompletedCommitTimeline().getInstants().collect(Collectors.toList());
     HoodieInstant commitInstant = commitInstants.get(commitInstants.size() - 1);
 
@@ -179,10 +150,9 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientTestBase 
     } else {
       assertTrue(copyOnWriteRollbackActionExecutor.getRollbackStrategy() instanceof MarkerBasedRollbackStrategy);
     }
-
     List<HoodieRollbackStat> hoodieRollbackStats = copyOnWriteRollbackActionExecutor.executeRollback();
 
-    //assert the rollback stat
+    //3. assert the rollback stat
     assertEquals(2, hoodieRollbackStats.size());
     HoodieRollbackStat rollBack1FirstPartitionStat = null;
     HoodieRollbackStat rollBack1SecondPartitionStat = null;
@@ -233,15 +203,5 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientTestBase 
       assertEquals(secondPartitionCommit2FileSlices.get(0).getBaseFile().get().getPath(),
           String.format("%s:%s/%s", this.fs.getScheme(), basePath, rollBack1SecondPartitionStat.getSuccessDeleteFiles().get(0)));
     }
-  }
-
-  @Test
-  public void testCopyOnWriteRollbackActionExecutorForFileListing() throws IOException {
-    twoUpsertCommitDataRollBack(false);
-  }
-
-  @Test
-  public void testCopyOnWriteRollbackActionExecutorForMarkFiles() throws IOException {
-    twoUpsertCommitDataRollBack(true);
   }
 }

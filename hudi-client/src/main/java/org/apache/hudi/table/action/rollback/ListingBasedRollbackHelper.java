@@ -69,9 +69,8 @@ public class ListingBasedRollbackHelper implements Serializable {
    * Performs all rollback actions that we have collected in parallel.
    */
   public List<HoodieRollbackStat> performRollback(JavaSparkContext jsc, HoodieInstant instantToRollback, List<ListingBasedRollbackRequest> rollbackRequests) {
-
     SerializablePathFilter filter = (path) -> {
-      if (path.toString().endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+      if (path.toString().endsWith(this.metaClient.getTableConfig().getBaseFileFormat().getFileExtension())) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
         return instantToRollback.getTimestamp().equals(fileCommitTime);
       } else if (FSUtils.isLogFile(path)) {

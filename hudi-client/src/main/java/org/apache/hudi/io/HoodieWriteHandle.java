@@ -100,7 +100,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
    */
   protected void createMarkerFile(String partitionPath, String dataFileName) {
     MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
-    markerFiles.createMarkerFile(partitionPath, dataFileName, getIOType());
+    markerFiles.create(partitionPath, dataFileName, getIOType());
   }
 
   public Schema getWriterSchema() {
@@ -149,7 +149,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
 
   public abstract WriteStatus getWriteStatus();
 
-  public abstract MarkerFiles.MarkerType getIOType();
+  public abstract MarkerFiles.IOType getIOType();
 
   @Override
   protected FileSystem getFileSystem() {

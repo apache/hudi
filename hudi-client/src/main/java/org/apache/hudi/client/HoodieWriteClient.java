@@ -335,6 +335,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   @Override
   protected void postCommit(HoodieTable<?> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
     try {
+      // TODO: delete markerfiles when clean
       if (!config.getRollBackUsingMarkers()) {
         new MarkerFiles(table, instantTime).deleteMarkerDir();
       }

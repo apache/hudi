@@ -55,9 +55,9 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
   }
 
   private void createSomeMarkerFiles() {
-    markerFiles.createMarkerFile("2020/06/01", "file1", MarkerFiles.MarkerType.MERGE);
-    markerFiles.createMarkerFile("2020/06/02", "file2", MarkerFiles.MarkerType.APPEND);
-    markerFiles.createMarkerFile("2020/06/03", "file3", MarkerFiles.MarkerType.CREATE);
+    markerFiles.create("2020/06/01", "file1", MarkerFiles.IOType.MERGE);
+    markerFiles.create("2020/06/02", "file2", MarkerFiles.IOType.APPEND);
+    markerFiles.create("2020/06/03", "file3", MarkerFiles.IOType.CREATE);
   }
 
   private void createInvalidFile(String partitionPath, String invalidFileName) {
@@ -92,7 +92,7 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
   @Test
   public void testDeletionWhenMarkerDirExists() throws IOException {
     //when
-    markerFiles.createMarkerFile("2020/06/01", "file1", MarkerFiles.MarkerType.MERGE);
+    markerFiles.create("2020/06/01", "file1", MarkerFiles.IOType.MERGE);
 
     // then
     assertTrue(markerFiles.doesMarkerDirExist());

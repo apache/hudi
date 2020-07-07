@@ -144,7 +144,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
         // Since the actual log file written to can be different based on when rollover happens, we use the
         // base file to denote some log appends happened on a slice. writeToken will still fence concurrent
         // writers.
-        createMarkerFile(partitionPath, FSUtils.makeDataFileName(baseInstantTime, writeToken, fileId));
+        createMarkerFile(partitionPath, FSUtils.makeDataFileName(baseInstantTime, writeToken, fileId, hoodieTable.getBaseFileExtension()));
 
         this.writer = createLogWriter(fileSlice, baseInstantTime);
         this.currentLogFile = writer.getLogFile();
@@ -287,8 +287,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   @Override
-  public MarkerFiles.MarkerType getIOType() {
-    return MarkerFiles.MarkerType.APPEND;
+  public MarkerFiles.IOType getIOType() {
+    return MarkerFiles.IOType.APPEND;
   }
 
   private Writer createLogWriter(Option<FileSlice> fileSlice, String baseCommitTime)

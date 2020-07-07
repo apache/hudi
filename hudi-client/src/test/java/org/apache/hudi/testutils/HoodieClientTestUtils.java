@@ -275,7 +275,7 @@ public class HoodieClientTestUtils {
         basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME + "/" + instantTime + "/" + partitionPath + "/";
     new File(folderPath).mkdirs();
     String markerFileName = String.format("%s_%s_%s%s.%s", fileID, DEFAULT_WRITE_TOKEN, instantTime,
-        HoodieTableMetaClient.MARKER_EXTN, MarkerFiles.MarkerType.MERGE);
+        HoodieTableMetaClient.MARKER_EXTN, MarkerFiles.IOType.MERGE);
     File f = new File(folderPath + markerFileName);
     f.createNewFile();
     return f.getAbsolutePath();

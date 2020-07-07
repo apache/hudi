@@ -980,9 +980,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .limit(1).map(status -> status.getPath().getParent().toString()).collect(Collectors.toList()).get(0);
 
     Path markerFilePath = new MarkerFiles(fs, basePath, metaClient.getMarkerFolderPath(instantTime), instantTime)
-        .createMarkerFile(partitionPath,
+        .create(partitionPath,
             FSUtils.makeDataFileName(instantTime, "1-0-1", UUID.randomUUID().toString()),
-            MarkerFiles.MarkerType.MERGE);
+            MarkerFiles.IOType.MERGE);
     LOG.info("Created a dummy marker path=" + markerFilePath);
 
     Exception e = assertThrows(HoodieCommitException.class, () -> {
