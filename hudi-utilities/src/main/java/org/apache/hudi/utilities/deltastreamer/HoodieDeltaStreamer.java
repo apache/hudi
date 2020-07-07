@@ -234,8 +234,15 @@ public class HoodieDeltaStreamer implements Serializable {
         description = "Should duplicate records from source be dropped/filtered out before insert/bulk-insert")
     public Boolean filterDupes = false;
 
+    //will abandon in the future version, recommended use --enable-sync
     @Parameter(names = {"--enable-hive-sync"}, description = "Enable syncing to hive")
     public Boolean enableHiveSync = false;
+
+    @Parameter(names = {"--enable-sync"}, description = "Enable syncing meta")
+    public Boolean enableMetaSync = false;
+
+    @Parameter(names = {"--hoodie-sync-client-tool-class"}, description = "Meta sync client tool, using comma to separate multi tools")
+    public String syncClientToolClass = "org.apache.hudi.hive.HiveSyncTool";
 
     @Parameter(names = {"--max-pending-compactions"},
         description = "Maximum number of outstanding inflight/requested compactions. Delta Sync will not happen unless"

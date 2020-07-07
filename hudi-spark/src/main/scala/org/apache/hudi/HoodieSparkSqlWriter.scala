@@ -18,9 +18,11 @@
 package org.apache.hudi
 
 import java.util
+import java.util.Properties
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
@@ -30,9 +32,11 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
+import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
@@ -209,7 +213,10 @@ private[hudi] object HoodieSparkSqlWriter {
       STREAMING_RETRY_CNT_OPT_KEY -> DEFAULT_STREAMING_RETRY_CNT_OPT_VAL,
       STREAMING_RETRY_INTERVAL_MS_OPT_KEY -> DEFAULT_STREAMING_RETRY_INTERVAL_MS_OPT_VAL,
       STREAMING_IGNORE_FAILED_BATCH_OPT_KEY -> DEFAULT_STREAMING_IGNORE_FAILED_BATCH_OPT_VAL,
+      SYNC_CLIENT_TOOL_CLASS -> DEFAULT_SYNC_CLIENT_TOOL_CLASS,
+      //just for backwards compatiblity
       HIVE_SYNC_ENABLED_OPT_KEY -> DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL,
+      HUDI_SYNC_ENABLED_OPT_KEY -> DEFAULT_HUDI_SYNC_ENABLED_OPT_VAL,
       HIVE_DATABASE_OPT_KEY -> DEFAULT_HIVE_DATABASE_OPT_VAL,
       HIVE_TABLE_OPT_KEY -> DEFAULT_HIVE_TABLE_OPT_VAL,
       HIVE_BASE_FILE_FORMAT_OPT_KEY -> DEFAULT_HIVE_BASE_FILE_FORMAT_OPT_VAL,
@@ -255,6 +262,43 @@ private[hudi] object HoodieSparkSqlWriter {
     hiveSyncConfig
   }
 
+  private def metaSync(parameters: Map[String, String],
+                       basePath: Path,
+                       hadoopConf: Configuration): Boolean = {
+    val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
+    var metaSyncEnabled = parameters.get(HUDI_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
+    var syncClientToolClass = parameters.get(SYNC_CLIENT_TOOL_CLASS).get
+    // for backward compatibility
+    if (hiveSyncEnabled) {
+      metaSyncEnabled = true
+      syncClientToolClass = DEFAULT_SYNC_CLIENT_TOOL_CLASS
+    }
+    var metaSyncSuccess = true
+    if (metaSyncEnabled) {
+      val impls = syncClientToolClass.split(",")
+      impls.foreach(impl => {
+        val syncSuccess = impl.trim match {
+          case DEFAULT_SYNC_CLIENT_TOOL_CLASS => {
+            log.info("Syncing to Hive Metastore (URL: " + parameters(HIVE_URL_OPT_KEY) + ")")
+            val fs = FSUtils.getFs(basePath.toString, hadoopConf)
+            syncHive(basePath, fs, parameters)
+          }
+          case _ => {
+            val fs = FSUtils.getFs(basePath.toString, hadoopConf)
+            val properties = new Properties();
+            properties.putAll(parameters)
+            properties.put("basePath", basePath.toString)
+            val syncHoodie = ReflectionUtils.loadClass(impl.trim, Array[Class[_]](classOf[Properties], classOf[FileSystem]), properties, fs).asInstanceOf[AbstractSyncTool]
+            syncHoodie.syncHoodieTable()
+            true
+          }
+        }
+        metaSyncSuccess = metaSyncSuccess && syncSuccess
+      })
+    }
+    metaSyncSuccess
+  }
+
   private def checkWriteStatus(writeStatuses: JavaRDD[WriteStatus],
                                parameters: Map[String, String],
                                client: HoodieWriteClient[_],
@@ -280,17 +324,9 @@ private[hudi] object HoodieSparkSqlWriter {
       else {
         log.info("Commit " + instantTime + " failed!")
       }
-
-      val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
-      val syncHiveSucess = if (hiveSyncEnabled) {
-        log.info("Syncing to Hive Metastore (URL: " + parameters(HIVE_URL_OPT_KEY) + ")")
-        val fs = FSUtils.getFs(basePath.toString, jsc.hadoopConfiguration)
-        syncHive(basePath, fs, parameters)
-      } else {
-        true
-      }
+      val metaSyncSuccess =  metaSync(parameters, basePath, jsc.hadoopConfiguration())
       client.close()
-      commitSuccess && syncHiveSucess
+      commitSuccess && metaSyncSuccess
     } else {
       log.error(s"$operation failed with $errorCount errors :")
       if (log.isTraceEnabled) {

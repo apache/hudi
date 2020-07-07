@@ -250,11 +250,14 @@ object DataSourceWriteOptions {
     */
   val STREAMING_IGNORE_FAILED_BATCH_OPT_KEY = "hoodie.datasource.write.streaming.ignore.failed.batch"
   val DEFAULT_STREAMING_IGNORE_FAILED_BATCH_OPT_VAL = "true"
+  val SYNC_CLIENT_TOOL_CLASS = "hoodie.sync.client.tool.class"
+  val DEFAULT_SYNC_CLIENT_TOOL_CLASS = "org.apache.hudi.hive.HiveSyncTool"
 
   // HIVE SYNC SPECIFIC CONFIGS
   //NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
   // unexpected issues with config getting reset
   val HIVE_SYNC_ENABLED_OPT_KEY = "hoodie.datasource.hive_sync.enable"
+  val HUDI_SYNC_ENABLED_OPT_KEY = "hoodie.datasource.sync.enable"
   val HIVE_DATABASE_OPT_KEY = "hoodie.datasource.hive_sync.database"
   val HIVE_TABLE_OPT_KEY = "hoodie.datasource.hive_sync.table"
   val HIVE_BASE_FILE_FORMAT_OPT_KEY = "hoodie.datasource.hive_sync.base_file_format"
@@ -269,6 +272,7 @@ object DataSourceWriteOptions {
 
   // DEFAULT FOR HIVE SPECIFIC CONFIGS
   val DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL = "false"
+  val DEFAULT_HUDI_SYNC_ENABLED_OPT_VAL = "false"
   val DEFAULT_HIVE_DATABASE_OPT_VAL = "default"
   val DEFAULT_HIVE_TABLE_OPT_VAL = "unknown"
   val DEFAULT_HIVE_BASE_FILE_FORMAT_OPT_VAL = "PARQUET"
