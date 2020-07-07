@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -166,8 +165,9 @@ public class ListingBasedRollbackHelper implements Serializable {
     final Map<FileStatus, Boolean> results = new HashMap<>();
     LOG.info("Cleaning path " + partitionPath);
     FileSystem fs = metaClient.getFs();
+    String basefileExtension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
     PathFilter filter = (path) -> {
-      if (path.toString().contains(HoodieFileFormat.PARQUET.getFileExtension())) {
+      if (path.toString().contains(basefileExtension)) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
         return commit.equals(fileCommitTime);
       }

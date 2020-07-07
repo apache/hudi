@@ -92,17 +92,13 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   private void setUp(IndexType indexType, boolean initializeIndex) throws Exception {
-    setUp(indexType, initializeIndex, false);
-  }
-
-  private void setUp(IndexType indexType, boolean initializeIndex, boolean isUsingMarkersRollBack) throws Exception {
     this.indexType = indexType;
     initResources();
     // We have some records to be tagged (two different partitions)
     schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
     schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
     if (initializeIndex) {
-      instantiateIndex(isUsingMarkersRollBack);
+      instantiateIndex();
     }
   }
 
@@ -280,8 +276,10 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     recordLocations.foreach(entry -> assertEquals(recordKeyToPartitionPathMap.get(entry._1.getRecordKey()), entry._1.getPartitionPath(), "PartitionPath mismatch"));
   }
 
-  private void testSimpleTagLocationAndUpdateWithRollback(IndexType indexType, boolean isUsingMarkersRollBack) throws Exception {
-    setUp(indexType, true, isUsingMarkersRollBack);
+  @ParameterizedTest
+  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE"})
+  public void testSimpleTagLocationAndUpdateWithRollback(IndexType indexType) throws Exception {
+    setUp(indexType);
     String newCommitTime = writeClient.startCommit();
     int totalRecords = 20 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
@@ -328,18 +326,6 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
     assert (javaRDD.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 0);
     assert (javaRDD.filter(record -> record.getCurrentLocation() != null).collect().size() == 0);
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE"})
-  public void testSimpleTagLocationAndUpdateWithRollbackUsingFileListRollBack(IndexType indexType) throws Exception {
-    testSimpleTagLocationAndUpdateWithRollback(indexType, false);
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE"})
-  public void testSimpleTagLocationAndUpdateWithRollbackUsingMarkersRollBack(IndexType indexType) throws Exception {
-    testSimpleTagLocationAndUpdateWithRollback(indexType, true);
   }
 
   @ParameterizedTest
@@ -550,10 +536,10 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
   }
 
-  private void instantiateIndex(boolean isUsingMarkersRollBack) {
+  private void instantiateIndex() {
     config = getConfigBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
-            .build()).withAutoCommit(false).withRollbackUsingMarkers(isUsingMarkersRollBack).build();
+            .build()).withAutoCommit(false).build();
     writeClient = getHoodieWriteClient(config);
     this.index = writeClient.getIndex();
   }

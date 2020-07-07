@@ -122,7 +122,8 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         "Multiple added fields with defauls are compatible");
   }
 
-  private void testMORTable(Boolean rollbackUsingMarkers) throws Exception {
+  @Test
+  public void testMORTable() throws Exception {
     tableType = HoodieTableType.MERGE_ON_READ;
 
     // Create the table
@@ -130,13 +131,13 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         HoodieTableType.MERGE_ON_READ, metaClient.getTableConfig().getTableName(),
         metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1);
 
-    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA, rollbackUsingMarkers);
+    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     // Initial inserts with TRIP_EXAMPLE_SCHEMA
     int numRecords = 10;
     insertFirstBatch(hoodieWriteConfig, client, "001", initCommitTime,
-        numRecords, HoodieWriteClient::insert, false, false, numRecords);
+                     numRecords, HoodieWriteClient::insert, false, false, numRecords);
     checkLatestDeltaCommit("001");
 
     // Compact once so we can incrementally read later
@@ -146,7 +147,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Updates with same schema is allowed
     final int numUpdateRecords = 5;
     updateBatch(hoodieWriteConfig, client, "003", "002", Option.empty(),
-        initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
+                initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
     checkLatestDeltaCommit("003");
     checkReadRecords("000", numRecords);
 
@@ -154,7 +155,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     final int numDeleteRecords = 2;
     numRecords -= numDeleteRecords;
     deleteBatch(hoodieWriteConfig, client, "004", "003", initCommitTime, numDeleteRecords,
-        HoodieWriteClient::delete, false, false, 0, 0);
+                HoodieWriteClient::delete, false, false, 0, 0);
     checkLatestDeltaCommit("004");
     checkReadRecords("000", numRecords);
 
@@ -178,7 +179,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Update with devolved schema is also not allowed
     try {
       updateBatch(hoodieDevolvedWriteConfig, client, "005", "004", Option.empty(),
-          initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
+                  initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
       fail("Update with devolved scheme should fail");
     } catch (HoodieUpsertException ex) {
       // no new commit
@@ -214,7 +215,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     client = getHoodieWriteClient(hoodieWriteConfig, false);
     try {
       updateBatch(hoodieWriteConfig, client, "007", "006", Option.empty(),
-          initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
+                  initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
       fail("Update with original scheme should fail");
     } catch (HoodieUpsertException ex) {
       // no new commit
@@ -256,7 +257,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Updates with original schema are now allowed
     client = getHoodieWriteClient(hoodieWriteConfig, false);
     updateBatch(hoodieWriteConfig, client, "008", "004", Option.empty(),
-        initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
+                initCommitTime, numUpdateRecords, HoodieWriteClient::upsert, false, false, 0, 0, 0);
     // new commit
     checkLatestDeltaCommit("008");
     checkReadRecords("000", 2 * numRecords);
@@ -269,22 +270,13 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   }
 
   @Test
-  public void testMORTableUsingFileListRollBack() throws Exception {
-    testMORTable(false);
-  }
-
-  @Test
-  public void testMORTableUsingMarkersRollBack() throws Exception {
-    testMORTable(true);
-  }
-
-  private void testCopyOnWriteTable(Boolean rollbackUsingMarkers) throws Exception {
+  public void testCopyOnWriteTable() throws Exception {
     // Create the table
     HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
         HoodieTableType.COPY_ON_WRITE, metaClient.getTableConfig().getTableName(),
         metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1);
 
-    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA, rollbackUsingMarkers);
+    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     // Initial inserts with TRIP_EXAMPLE_SCHEMA
@@ -416,16 +408,6 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     checkReadRecords("000", 2 * numRecords);
   }
 
-  @Test
-  public void testCopyOnWriteTableUsingFileListRollBack() throws Exception {
-    testCopyOnWriteTable(false);
-  }
-
-  @Test
-  public void testCopyOnWriteTableUsingMarkersRollBack() throws Exception {
-    testCopyOnWriteTable(true);
-  }
-
   private void checkReadRecords(String instantTime, int numExpectedRecords) throws IOException {
     if (tableType == HoodieTableType.COPY_ON_WRITE) {
       HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitTimeline();
@@ -485,14 +467,10 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   }
 
   private HoodieWriteConfig getWriteConfig(String schema) {
-    return getWriteConfig(schema, false);
-  }
-
-  private HoodieWriteConfig getWriteConfig(String schema, Boolean rollbackUsingMarkers) {
     return getConfigBuilder(schema)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.INMEMORY).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
-        .withAvroSchemaValidate(true).withRollbackUsingMarkers(rollbackUsingMarkers)
+        .withAvroSchemaValidate(true)
         .build();
   }
 
