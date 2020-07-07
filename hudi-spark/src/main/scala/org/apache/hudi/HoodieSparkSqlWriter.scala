@@ -52,10 +52,11 @@ private[hudi] object HoodieSparkSqlWriter {
 
     val sparkContext = sqlContext.sparkContext
     val path = parameters.get("path")
-    val tblName = parameters.get(HoodieWriteConfig.TABLE_NAME)
-    if (path.isEmpty || tblName.isEmpty) {
+    val tblNameOp = parameters.get(HoodieWriteConfig.TABLE_NAME)
+    if (path.isEmpty || tblNameOp.isEmpty) {
       throw new HoodieException(s"'${HoodieWriteConfig.TABLE_NAME}', 'path' must be set.")
     }
+    val tblName = tblNameOp.get.trim
     sparkContext.getConf.getOption("spark.serializer") match {
       case Some(ser) if ser.equals("org.apache.spark.serializer.KryoSerializer") =>
       case _ => throw new HoodieException("hoodie only support org.apache.spark.serializer.KryoSerializer as spark.serializer")
