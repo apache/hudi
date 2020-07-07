@@ -267,7 +267,7 @@
             <property name="regexp" value="true"/>
             <property name="illegalPkgs" value="org\.apache\.commons, com\.google\.common"/>
             <property name="illegalClasses"
-              value="^java\.util\.Optional, ^org\.junit\.(?!jupiter|platform|contrib|Rule)(.*)"/>
+              value="^java\.util\.Optional, ^org\.junit\.(?!jupiter|platform|contrib|Rule|runner)(.*)"/>
         </module>
 
         <module name="EmptyStatement" />

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hadoop.conf.Configurable;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -50,7 +51,7 @@ import java.util.stream.Collectors;
  * hadoopConf.setClass("mapreduce.input.pathFilter.class", org.apache.hudi.hadoop .HoodieROTablePathFilter.class,
  * org.apache.hadoop.fs.PathFilter.class)
  */
-public class HoodieROTablePathFilter implements PathFilter, Serializable {
+public class HoodieROTablePathFilter implements Configurable, PathFilter, Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieROTablePathFilter.class);
@@ -189,5 +190,15 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
       LOG.error(msg, e);
       throw new HoodieException(msg, e);
     }
+  }
+
+  @Override
+  public void setConf(Configuration conf) {
+    this.conf = new SerializableConfiguration(conf);
+  }
+
+  @Override
+  public Configuration getConf() {
+    return conf.get();
   }
 }

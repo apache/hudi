@@ -52,10 +52,9 @@
               <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
               </dependencyReducedPomLocation>
               <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer">
-                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer"></transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
-                    <addHeader>true</addHeader>
+                  <addHeader>true</addHeader>
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
                   <resource>META-INF/LICENSE</resource>
@@ -142,9 +141,13 @@
                   <pattern>org.apache.commons.codec.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>org.eclipse.jetty.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.jetty.</shadedPattern>
+                </relocation>
                 <!-- TODO: Revisit GH ISSUE #533 & PR#633-->
               </relocations>
-             <filters>
+              <filters>
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>
@@ -161,14 +164,14 @@
         </executions>
       </plugin>
     </plugins>
-     <resources>
-       <resource>
-         <directory>src/main/resources</directory>
-       </resource>
-       <resource>
-         <directory>src/test/resources</directory>
-       </resource>
-     </resources>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
+        <directory>src/test/resources</directory>
+      </resource>
+    </resources>
   </build>
 
   <dependencies>

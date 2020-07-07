@@ -45,7 +45,7 @@ public class HdfsTestService {
    * Configuration settings.
    */
   private Configuration hadoopConf;
-  private String workDir;
+  private final String workDir;
 
   /**
    * Embedded HDFS cluster.
@@ -53,7 +53,7 @@ public class HdfsTestService {
   private MiniDFSCluster miniDfsCluster;
 
   public HdfsTestService() throws IOException {
-    workDir = Files.createTempDirectory("temp").toFile().getAbsolutePath();
+    workDir = Files.createTempDirectory("temp").toAbsolutePath().toString();
   }
 
   public Configuration getHadoopConf() {
