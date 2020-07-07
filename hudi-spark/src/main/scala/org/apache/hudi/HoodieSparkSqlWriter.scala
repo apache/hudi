@@ -52,7 +52,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
     val sparkContext = sqlContext.sparkContext
     val path = parameters.get("path")
-    val tblName = parameters.get(HoodieWriteConfig.TABLE_NAME)
+    val tblName = parameters.get(HoodieWriteConfig.TABLE_NAME).get.trim
     if (path.isEmpty || tblName.isEmpty) {
       throw new HoodieException(s"'${HoodieWriteConfig.TABLE_NAME}', 'path' must be set.")
     }
