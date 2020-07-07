@@ -26,6 +26,13 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
+/**
+ * This class is essentially same as Create Handle but overrides two things
+ * 1) Schema : Metadata bootstrap writes only metadata fields as part of write. So, setup the writer schema accordingly.
+ * 2) canWrite is overridden to always return true so that skeleton file and source file is aligned and we don't end up
+ *    writing more than 1 skeleton file for the same source file.
+ * @param <T> HoodieRecordPayload
+ */
 public class HoodieBootstrapHandle<T extends HoodieRecordPayload> extends HoodieCreateHandle<T> {
 
   public HoodieBootstrapHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,

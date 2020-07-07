@@ -59,14 +59,15 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
       String partitionPath, String fileId, SparkTaskContextSupplier sparkTaskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, generateOriginalAndHoodieWriteSchema(config),
+    this(config, instantTime, hoodieTable, partitionPath, fileId, getWriterSchemaIncludingAndExcludingMetadataPair(config),
         sparkTaskContextSupplier);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
-      String partitionPath, String fileId, Pair<Schema, Schema> originalAndHoodieSchema,
+      String partitionPath, String fileId, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
       SparkTaskContextSupplier sparkTaskContextSupplier) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, originalAndHoodieSchema, sparkTaskContextSupplier);
+    super(config, instantTime, partitionPath, fileId, hoodieTable, writerSchemaIncludingAndExcludingMetadataPair,
+            sparkTaskContextSupplier);
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
 
@@ -78,7 +79,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
       partitionMetadata.trySave(getPartitionId());
       createMarkerFile(partitionPath);
       this.storageWriter =
-          HoodieStorageWriterFactory.getStorageWriter(instantTime, path, hoodieTable, config, writerSchema, this.sparkTaskContextSupplier);
+          HoodieStorageWriterFactory.getStorageWriter(instantTime, path, hoodieTable, config, writerSchemaWithMetafields, this.sparkTaskContextSupplier);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
@@ -141,9 +142,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
       while (recordIterator.hasNext()) {
         HoodieRecord<T> record = recordIterator.next();
         if (useWriterSchema) {
-          write(record, record.getData().getInsertValue(writerSchema));
+          write(record, record.getData().getInsertValue(writerSchemaWithMetafields));
         } else {
-          write(record, record.getData().getInsertValue(originalSchema));
+          write(record, record.getData().getInsertValue(writerSchema));
         }
       }
     } catch (IOException io) {

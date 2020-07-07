@@ -904,16 +904,20 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
       setDefaultOnCondition(props, !props.containsKey(TIMELINE_LAYOUT_VERSION), TIMELINE_LAYOUT_VERSION,
           String.valueOf(TimelineLayoutVersion.CURR_VERSION));
+    }
+
+    private void validate() {
       String layoutVersion = props.getProperty(TIMELINE_LAYOUT_VERSION);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
+      Objects.requireNonNull(props.getProperty(BASE_PATH_PROP));
     }
 
     public HoodieWriteConfig build() {
       setDefaults();
+      validate();
       // Build WriteConfig at the end
       HoodieWriteConfig config = new HoodieWriteConfig(props);
-      Objects.requireNonNull(config.getBasePath());
       return config;
     }
   }

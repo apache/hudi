@@ -163,7 +163,7 @@ public class ITTestHoodieDemo extends ITTestBase {
         + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
         + " --initial-checkpoint-provider"
         + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
-        + " --hoodie-conf hoodie.bootstrap.source.base.path=" + BOOTSTRAPPED_SRC_PATH
+        + " --hoodie-conf hoodie.bootstrap.base.path=" + BOOTSTRAPPED_SRC_PATH
         + " --hoodie-conf hoodie.bootstrap.recordkey.columns=key"
         + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
         + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
@@ -178,7 +178,7 @@ public class ITTestHoodieDemo extends ITTestBase {
         + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
         + " --initial-checkpoint-provider"
         + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
-        + " --hoodie-conf hoodie.bootstrap.source.base.path=" + BOOTSTRAPPED_SRC_PATH
+        + " --hoodie-conf hoodie.bootstrap.base.path=" + BOOTSTRAPPED_SRC_PATH
         + " --hoodie-conf hoodie.bootstrap.recordkey.columns=key"
         + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
         + " --hoodie-conf hoodie.bootstrap.parallelism=2 "

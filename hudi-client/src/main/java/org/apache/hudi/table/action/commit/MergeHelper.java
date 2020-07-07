@@ -76,11 +76,11 @@ public class MergeHelper {
       Schema lastWrittenSchema = new AvroSchemaConverter().convert(usedParquetSchema);
       AvroReadSupport.setAvroReadSchema(configForHudiFile, lastWrittenSchema);
       gWriter = new GenericDatumWriter<>(lastWrittenSchema);
-      gReader = new GenericDatumReader<>(lastWrittenSchema, upsertHandle.getWriterSchema());
+      gReader = new GenericDatumReader<>(lastWrittenSchema, upsertHandle.getWriterSchemaWithMetafields());
     } else {
       gReader = null;
       gWriter = null;
-      AvroReadSupport.setAvroReadSchema(configForHudiFile, upsertHandle.getWriterSchema());
+      AvroReadSupport.setAvroReadSchema(configForHudiFile, upsertHandle.getWriterSchemaWithMetafields());
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
@@ -174,7 +174,7 @@ public class MergeHelper {
     ParquetReader<GenericRecord> externalFileReader = AvroParquetReader.<GenericRecord>builder(externalFilePath).withConf(configForExternalFile).build();
     return new MergingParquetIterator<>(new ParquetReaderIterator<>(reader),
         new ParquetReaderIterator<>(externalFileReader), (inputRecordPair) -> HoodieAvroUtils.stitchRecords(
-        inputRecordPair.getLeft(), inputRecordPair.getRight(), upsertHandle.getWriterSchema()));
+        inputRecordPair.getLeft(), inputRecordPair.getRight(), upsertHandle.getWriterSchemaWithMetafields()));
   }
 
   /**

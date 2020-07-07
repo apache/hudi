@@ -33,7 +33,7 @@ import java.util.Properties;
  */
 public class HoodieBootstrapConfig extends DefaultHoodieConfig {
 
-  public static final String SOURCE_BASE_PATH_PROP = "hoodie.bootstrap.source.base.path";
+  public static final String SOURCE_BASE_PATH_PROP = "hoodie.bootstrap.base.path";
   public static final String BOOTSTRAP_MODE_SELECTOR = "hoodie.bootstrap.mode.selector";
   public static final String FULL_BOOTRAP_INPUT_PROVIDER = "hoodie.bootstrap.full.input.provider";
   public static final String BOOTSTRAP_KEYGEN_CLASS = "hoodie.bootstrap.keygen.class";

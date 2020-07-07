@@ -95,12 +95,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   }
 
   @Override
-  public Schema getWriterSchema() {
-    return writerSchema;
+  public Schema getWriterSchemaWithMetafields() {
+    return writerSchemaWithMetafields;
   }
 
   public Schema getOriginalSchema() {
-    return originalSchema;
+    return writerSchema;
   }
 
   /**
@@ -138,7 +138,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
       // Create the writer for writing the new version file
       storageWriter =
-          HoodieStorageWriterFactory.getStorageWriter(instantTime, newFilePath, hoodieTable, config, writerSchema, sparkTaskContextSupplier);
+          HoodieStorageWriterFactory.getStorageWriter(instantTime, newFilePath, hoodieTable, config, writerSchemaWithMetafields, sparkTaskContextSupplier);
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
@@ -156,7 +156,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       long memoryForMerge = SparkConfigUtils.getMaxMemoryPerPartitionMerge(config.getProps());
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(originalSchema));
+          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(writerSchema));
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
@@ -227,7 +227,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(key));
       try {
         Option<IndexedRecord> combinedAvroRecord =
-            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchema : originalSchema);
+            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchemaWithMetafields : writerSchema);
         if (writeUpdateRecord(hoodieRecord, combinedAvroRecord)) {
           /*
            * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully write the the combined new
@@ -252,7 +252,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
         storageWriter.writeAvro(key, oldRecord);
       } catch (ClassCastException e) {
         LOG.error("Schema mismatch when rewriting old record " + oldRecord + " from file " + getOldFilePath()
-            + " to file " + newFilePath + " with writerSchema " + writerSchema.toString(true));
+            + " to file " + newFilePath + " with writerSchema " + writerSchemaWithMetafields.toString(true));
         throw new HoodieUpsertException(errMsg, e);
       } catch (IOException e) {
         LOG.error("Failed to merge old record into new file for key " + key + " from old file " + getOldFilePath()
@@ -273,9 +273,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
         HoodieRecord<T> hoodieRecord = newRecordsItr.next();
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
           if (useWriterSchema) {
-            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchema));
+            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchemaWithMetafields));
           } else {
-            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(originalSchema));
+            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchema));
           }
           insertRecordsWritten++;
         }
