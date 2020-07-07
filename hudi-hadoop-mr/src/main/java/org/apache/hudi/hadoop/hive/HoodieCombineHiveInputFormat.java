@@ -20,7 +20,6 @@ package org.apache.hudi.hadoop.hive;
 
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieCombineRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
@@ -109,6 +108,18 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
   private static final int MAX_CHECK_NONCOMBINABLE_THREAD_NUM = 50;
   private static final int DEFAULT_NUM_PATH_PER_THREAD = 100;
 
+  protected String getParquetInputFormatClassName() {
+    return HoodieParquetInputFormat.class.getName();
+  }
+
+  protected String getParquetRealtimeInputFormatClassName() {
+    return HoodieParquetRealtimeInputFormat.class.getName();
+  }
+
+  protected HoodieCombineFileInputFormatShim createInputFormatShim() {
+    return new HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim<>();
+  }
+
   /**
    * Create Hive splits based on CombineFileSplit.
    */
@@ -118,8 +129,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     Map<Path, ArrayList<String>> pathToAliases = mrwork.getPathToAliases();
     Map<String, Operator<? extends OperatorDesc>> aliasToWork = mrwork.getAliasToWork();
     /* MOD - Initialize a custom combine input format shim that will call listStatus on the custom inputFormat **/
-    HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim combine =
-        new HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim<>();
+    HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim combine = createInputFormatShim();
 
     InputSplit[] splits;
 
@@ -151,9 +161,9 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       InputFormat inputFormat = getInputFormatFromCache(inputFormatClass, job);
       LOG.info("Input Format => " + inputFormatClass.getName());
       // **MOD** Set the hoodie filter in the combine
-      if (inputFormatClass.getName().equals(HoodieParquetInputFormat.class.getName())) {
+      if (inputFormatClass.getName().equals(getParquetInputFormatClassName())) {
         combine.setHoodieFilter(true);
-      } else if (inputFormatClass.getName().equals(HoodieParquetRealtimeInputFormat.class.getName())) {
+      } else if (inputFormatClass.getName().equals(getParquetRealtimeInputFormatClassName())) {
         LOG.info("Setting hoodie filter and realtime input format");
         combine.setHoodieFilter(true);
         combine.setRealTime(true);
@@ -540,16 +550,14 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
 
     pushProjectionsAndFilters(job, inputFormatClass, hsplit.getPath(0));
 
-    if (inputFormatClass.getName().equals(HoodieParquetInputFormat.class.getName())) {
-      return ShimLoader.getHadoopShims().getCombineFileInputFormat().getRecordReader(job, (CombineFileSplit) split,
-          reporter, CombineHiveRecordReader.class);
-    } else if (inputFormatClass.getName().equals(HoodieParquetRealtimeInputFormat.class.getName())) {
-      HoodieCombineFileInputFormatShim shims = new HoodieCombineFileInputFormatShim();
+    if (inputFormatClass.getName().equals(getParquetRealtimeInputFormatClassName())) {
+      HoodieCombineFileInputFormatShim shims = createInputFormatShim();
       IOContextMap.get(job).setInputPath(((CombineHiveInputSplit) split).getPath(0));
       return shims.getRecordReader(job, ((CombineHiveInputSplit) split).getInputSplitShim(),
           reporter, CombineHiveRecordReader.class);
     } else {
-      throw new HoodieException("Unexpected input format : " + inputFormatClassName);
+      return ShimLoader.getHadoopShims().getCombineFileInputFormat().getRecordReader(job, (CombineFileSplit) split,
+          reporter, CombineHiveRecordReader.class);
     }
   }
 
@@ -834,6 +842,14 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     private boolean hoodieFilter = false;
     private boolean isRealTime = false;
 
+    protected HoodieParquetInputFormat createParquetInputFormat() {
+      return new HoodieParquetInputFormat();
+    }
+
+    protected HoodieParquetRealtimeInputFormat createParquetRealtimeInputFormat() {
+      return new HoodieParquetRealtimeInputFormat();
+    }
+
     public HoodieCombineFileInputFormatShim() {
     }
 
@@ -864,10 +880,10 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         HoodieParquetInputFormat input;
         if (isRealTime) {
           LOG.info("Using HoodieRealtimeInputFormat");
-          input = new HoodieParquetRealtimeInputFormat();
+          input = createParquetRealtimeInputFormat();
         } else {
           LOG.info("Using HoodieInputFormat");
-          input = new HoodieParquetInputFormat();
+          input = createParquetInputFormat();
         }
         input.setConf(job.getConfiguration());
         result = new ArrayList<>(Arrays.asList(input.listStatus(new JobConf(job.getConfiguration()))));
@@ -901,7 +917,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         job.set("hudi.hive.realtime", "true");
         InputSplit[] splits;
         if (hoodieFilter) {
-          HoodieParquetInputFormat input = new HoodieParquetRealtimeInputFormat();
+          HoodieParquetInputFormat input = createParquetRealtimeInputFormat();
           input.setConf(job);
           splits = input.getSplits(job, numSplits);
         } else {
