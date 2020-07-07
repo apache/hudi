@@ -30,8 +30,10 @@ public class HoodieDeltaStreamerMetrics {
 
   public String overallTimerName = null;
   public String hiveSyncTimerName = null;
+  public String metaSyncTimerName = null;
   private Timer overallTimer = null;
   public Timer hiveSyncTimer = null;
+  public Timer metaSyncTimer = null;
 
   public HoodieDeltaStreamerMetrics(HoodieWriteConfig config) {
     this.config = config;
@@ -40,6 +42,7 @@ public class HoodieDeltaStreamerMetrics {
       Metrics.init(config);
       this.overallTimerName = getMetricsName("timer", "deltastreamer");
       this.hiveSyncTimerName = getMetricsName("timer", "deltastreamerHiveSync");
+      this.metaSyncTimerName = getMetricsName("timer", "deltastreamerMetaSync");
     }
   }
 
@@ -57,6 +60,13 @@ public class HoodieDeltaStreamerMetrics {
     return hiveSyncTimer == null ? null : hiveSyncTimer.time();
   }
 
+  public Timer.Context getMetaSyncTimerContext() {
+    if (config.isMetricsOn() && metaSyncTimer == null) {
+      metaSyncTimer = createTimer(metaSyncTimerName);
+    }
+    return metaSyncTimer == null ? null : metaSyncTimer.time();
+  }
+
   private Timer createTimer(String name) {
     return config.isMetricsOn() ? Metrics.getInstance().getRegistry().timer(name) : null;
   }
@@ -65,10 +75,15 @@ public class HoodieDeltaStreamerMetrics {
     return config == null ? null : String.format("%s.%s.%s", tableName, action, metric);
   }
 
-  public void updateDeltaStreamerMetrics(long durationInNs, long hiveSyncNs) {
+  public void updateDeltaStreamerMetrics(long durationInNs, long syncNs, boolean hiveSync) {
     if (config.isMetricsOn()) {
       Metrics.registerGauge(getMetricsName("deltastreamer", "duration"), getDurationInMs(durationInNs));
-      Metrics.registerGauge(getMetricsName("deltastreamer", "hiveSyncDuration"), getDurationInMs(hiveSyncNs));
+      if (hiveSync) {
+        Metrics.registerGauge(getMetricsName("deltastreamer", "hiveSyncDuration"), getDurationInMs(syncNs));
+      } else {
+        Metrics.registerGauge(getMetricsName("deltastreamer", "metaSyncDuration"), getDurationInMs(syncNs));
+      }
+
     }
   }
 

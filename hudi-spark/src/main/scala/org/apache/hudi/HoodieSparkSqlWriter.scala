@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import java.util
+import java.util.Properties
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
@@ -30,9 +31,11 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
+import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
@@ -288,6 +291,24 @@ private[hudi] object HoodieSparkSqlWriter {
         syncHive(basePath, fs, parameters)
       } else {
         true
+      }
+      val clientImpls = parameters.get(SYNC_CLIENT_TOOL_CLASS).getOrElse("")
+      log.info(s"impls is $clientImpls")
+      if (!clientImpls.isEmpty) {
+        val impls = clientImpls.split(",")
+        impls.foreach(impl => {
+          if (!impl.trim.contains(classOf[HiveSyncTool].getName)) {
+            val fs = FSUtils.getFs(basePath.toString, jsc.hadoopConfiguration)
+            val properties = new Properties();
+            properties.putAll(parameters)
+            properties.put("basePath", basePath.toString)
+            val syncHoodie = ReflectionUtils.loadClass(impl.trim, Array[Class[_]](classOf[Properties], classOf[FileSystem]), properties, fs).asInstanceOf[AbstractSyncTool]
+            syncHoodie.syncHoodieTable()
+            true
+          } else {
+            log.warn("please use hoodie.datasource.hive_sync.enable to sync to hive")
+          }
+        })
       }
       client.close()
       commitSuccess && syncHiveSucess

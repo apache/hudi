@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -30,6 +31,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -38,6 +41,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
@@ -63,10 +67,11 @@ import org.apache.spark.sql.SparkSession;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Objects;
+import java.util.Properties;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -389,6 +394,7 @@ public class DeltaSync implements Serializable {
     long totalRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
     boolean hasErrors = totalErrorRecords > 0;
     long hiveSyncTimeMs = 0;
+    long metaSyncTimeMs = 0;
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
@@ -415,6 +421,9 @@ public class DeltaSync implements Serializable {
           Timer.Context hiveSyncContext = metrics.getHiveSyncTimerContext();
           syncHive();
           hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
+          Timer.Context metaSyncContext = metrics.getMetaSyncTimerContext();
+          syncMeta();
+          metaSyncTimeMs = metaSyncContext != null ? metaSyncContext.stop() : 0;
         }
       } else {
         LOG.info("Commit " + instantTime + " failed!");
@@ -436,10 +445,31 @@ public class DeltaSync implements Serializable {
     long overallTimeMs = overallTimerContext != null ? overallTimerContext.stop() : 0;
 
     // Send DeltaStreamer Metrics
-    metrics.updateDeltaStreamerMetrics(overallTimeMs, hiveSyncTimeMs);
+    metrics.updateDeltaStreamerMetrics(overallTimeMs, hiveSyncTimeMs, true);
+    metrics.updateDeltaStreamerMetrics(overallTimeMs, metaSyncTimeMs, false);
 
     return scheduledCompactionInstant;
   }
+
+  private void syncMeta() {
+    if (!StringUtils.isNullOrEmpty(cfg.syncClientToolClass)) {
+      String[] impls = cfg.syncClientToolClass.split(",");
+      for (String impl : impls) {
+        impl = impl.trim();
+        if (HiveSyncTool.class.getName().equals(impl)) {
+          LOG.warn("please use hoodie.datasource.hive_sync.enable to sync to hive");
+          continue;
+        }
+        FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration());
+        Properties properties = new Properties();
+        properties.putAll(props);
+        properties.put("basePath", cfg.targetBasePath);
+        AbstractSyncTool tool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[]{Properties.class, FileSystem.class}, properties, fs);
+        tool.syncHoodieTable();
+      }
+    }
+  }
+
 
   /**
    * Try to start a new commit.

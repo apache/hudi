@@ -20,14 +20,9 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -43,6 +38,7 @@ import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hive.jdbc.HiveDriver;
+import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -62,7 +58,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class HoodieHiveClient {
+public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   private static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
   // Make sure we have the hive JDBC driver in classpath
@@ -78,8 +74,6 @@ public class HoodieHiveClient {
   }
 
   private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
-  private final HoodieTableMetaClient metaClient;
-  private final HoodieTableType tableType;
   private final PartitionValueExtractor partitionValueExtractor;
   private IMetaStoreClient client;
   private HiveSyncConfig syncConfig;
@@ -89,10 +83,9 @@ public class HoodieHiveClient {
   private HiveConf configuration;
 
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
+    super(cfg.basePath, cfg.assumeDatePartitioning, fs);
     this.syncConfig = cfg;
     this.fs = fs;
-    this.metaClient = new HoodieTableMetaClient(fs.getConf(), cfg.basePath, true);
-    this.tableType = metaClient.getTableType();
 
     this.configuration = configuration;
     // Support both JDBC and metastore based implementations for backwards compatiblity. Future users should
@@ -125,7 +118,8 @@ public class HoodieHiveClient {
   /**
    * Add the (NEW) partitions to the table.
    */
-  void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
+  @Override
+  public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
     if (partitionsToAdd.isEmpty()) {
       LOG.info("No partitions to add for " + tableName);
       return;
@@ -138,7 +132,8 @@ public class HoodieHiveClient {
   /**
    * Partition path has changed - update the path for te following partitions.
    */
-  void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
+  @Override
+  public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
     if (changedPartitions.isEmpty()) {
       LOG.info("No partitions to change for " + tableName);
       return;
@@ -258,7 +253,8 @@ public class HoodieHiveClient {
     }
   }
 
-  void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass) {
+  @Override
+  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass) {
     try {
       String createSQLQuery =
           HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, syncConfig, inputFormatClass, outputFormatClass, serdeClass);
@@ -272,6 +268,7 @@ public class HoodieHiveClient {
   /**
    * Get the table schema.
    */
+  //???? overwrite
   public Map<String, String> getTableSchema(String tableName) {
     if (syncConfig.useJdbc) {
       if (!doesTableExist(tableName)) {
@@ -328,23 +325,9 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Gets the schema for a hoodie table. Depending on the type of table, try to read schema from commit metadata if
-   * present, else fallback to reading from any file written in the latest commit. We will assume that the schema has
-   * not changed within a single atomic write.
-   *
-   * @return Parquet schema for this table
-   */
-  public MessageType getDataSchema() {
-    try {
-      return new TableSchemaResolver(metaClient).getTableParquetSchema();
-    } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to read data schema", e);
-    }
-  }
-
-  /**
    * @return true if the configured table exists
    */
+  @Override
   public boolean doesTableExist(String tableName) {
     try {
       return client.tableExists(syncConfig.databaseName, tableName);
@@ -455,36 +438,7 @@ public class HoodieHiveClient {
     return hiveJdbcUrl + (urlAppend == null ? "" : urlAppend);
   }
 
-  private static void closeQuietly(ResultSet resultSet, Statement stmt) {
-    try {
-      if (stmt != null) {
-        stmt.close();
-      }
-    } catch (SQLException e) {
-      LOG.error("Could not close the statement opened ", e);
-    }
-
-    try {
-      if (resultSet != null) {
-        resultSet.close();
-      }
-    } catch (SQLException e) {
-      LOG.error("Could not close the resultset opened ", e);
-    }
-  }
-
-  public String getBasePath() {
-    return metaClient.getBasePath();
-  }
-
-  HoodieTableType getTableType() {
-    return tableType;
-  }
-
-  public FileSystem getFs() {
-    return fs;
-  }
-
+  @Override
   public Option<String> getLastCommitTimeSynced(String tableName) {
     // Get the last commit time from the TBLproperties
     try {
@@ -509,33 +463,12 @@ public class HoodieHiveClient {
     }
   }
 
-  List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
-    if (!lastCommitTimeSynced.isPresent()) {
-      LOG.info("Last commit time synced is not known, listing all partitions in " + syncConfig.basePath + ",FS :" + fs);
-      try {
-        return FSUtils.getAllPartitionPaths(fs, syncConfig.basePath, syncConfig.assumeDatePartitioning);
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to list all partitions in " + syncConfig.basePath, e);
-      }
-    } else {
-      LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
-
-      HoodieTimeline timelineToSync = activeTimeline.findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE);
-      return timelineToSync.getInstants().map(s -> {
-        try {
-          return HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(s).get(), HoodieCommitMetadata.class);
-        } catch (IOException e) {
-          throw new HoodieIOException("Failed to get partitions written since " + lastCommitTimeSynced, e);
-        }
-      }).flatMap(s -> s.getPartitionToWriteStats().keySet().stream()).distinct().collect(Collectors.toList());
-    }
-  }
-
   List<String> getAllTables(String db) throws Exception {
     return client.getAllTables(db);
   }
 
-  void updateLastCommitTimeSynced(String tableName) {
+  @Override
+  public void updateLastCommitTimeSynced(String tableName) {
     // Set the last commit time from the TBLproperties
     String lastCommitSynced = activeTimeline.lastInstant().get().getTimestamp();
     try {
@@ -544,32 +477,6 @@ public class HoodieHiveClient {
       client.alter_table(syncConfig.databaseName, tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
-    }
-  }
-
-  /**
-   * Partition Event captures any partition that needs to be added or updated.
-   */
-  static class PartitionEvent {
-
-    public enum PartitionEventType {
-      ADD, UPDATE
-    }
-
-    PartitionEventType eventType;
-    String storagePartition;
-
-    PartitionEvent(PartitionEventType eventType, String storagePartition) {
-      this.eventType = eventType;
-      this.storagePartition = storagePartition;
-    }
-
-    static PartitionEvent newPartitionAddEvent(String storagePartition) {
-      return new PartitionEvent(PartitionEventType.ADD, storagePartition);
-    }
-
-    static PartitionEvent newPartitionUpdateEvent(String storagePartition) {
-      return new PartitionEvent(PartitionEventType.UPDATE, storagePartition);
     }
   }
 }

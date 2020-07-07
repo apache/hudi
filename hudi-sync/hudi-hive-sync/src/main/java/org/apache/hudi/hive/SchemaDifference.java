@@ -20,12 +20,14 @@ package org.apache.hudi.hive;
 
 import org.apache.parquet.schema.MessageType;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+
 
 /**
  * Represents the schema difference between the storage schema and hive table schema.
@@ -91,7 +93,7 @@ public class SchemaDifference {
       this.tableSchema = tableSchema;
       deleteColumns = new ArrayList<>();
       updateColumnTypes = new HashMap<>();
-      addColumnTypes = new HashMap<>();
+      addColumnTypes = new LinkedHashMap<>();
     }
 
     public Builder deleteTableColumn(String column) {
