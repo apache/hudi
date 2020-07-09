@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-public class TestHoodieAvroKafkaDeserializer {
+public class TestHoodieAvroKafkaDecoder {
 
   private static KafkaAvroSerializer avroSerializer;
   private static SchemaRegistryClient client;
@@ -61,13 +61,13 @@ public class TestHoodieAvroKafkaDeserializer {
   public void testKafkaDeserializer() {
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.setProperty(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "http://localhost:8081");
-    typedProperties.setProperty(HoodieAvroKafkaDeserializer.SCHEMA_PROVIDER_CLASS_PROP, DummySchemaProvider.class.getName());
+    typedProperties.setProperty(HoodieAvroKafkaDecoder.SCHEMA_PROVIDER_CLASS_PROP, DummySchemaProvider.class.getName());
     VerifiableProperties verifiableProperties = new VerifiableProperties(typedProperties);
     DummySchemaProvider schemaProvider = new DummySchemaProvider(typedProperties);
     byte[] bytes;
     GenericRecord record = createAvroRecord(schemaProvider.getSourceSchema());
     bytes = avroSerializer.serialize(topic, record);
-    HoodieAvroKafkaDeserializer kafkaAvroDecoder = new HoodieAvroKafkaDeserializer(client, verifiableProperties);
+    HoodieAvroKafkaDecoder kafkaAvroDecoder = new HoodieAvroKafkaDecoder(client, verifiableProperties);
     Assertions.assertEquals(record, avroDeserializer.deserialize(topic, bytes));
     Assertions.assertEquals(record, kafkaAvroDecoder.fromBytes(bytes));
   }

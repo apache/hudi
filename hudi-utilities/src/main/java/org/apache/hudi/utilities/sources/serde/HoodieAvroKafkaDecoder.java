@@ -38,12 +38,12 @@ import java.util.Properties;
  * This is a custom implementation of kafka.serializer.Decoder<T> which aims at deserializing all the incoming messages
  * with same schema (which is latest).
  */
-public class HoodieAvroKafkaDeserializer extends KafkaAvroDecoder {
+public class HoodieAvroKafkaDecoder extends KafkaAvroDecoder {
 
   private final Schema sourceSchema;
   public static final String SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class";
 
-  public HoodieAvroKafkaDeserializer(SchemaRegistryClient client, VerifiableProperties properties) {
+  public HoodieAvroKafkaDecoder(SchemaRegistryClient client, VerifiableProperties properties) {
     super(client);
     TypedProperties typedProperties = new TypedProperties();
     copyProperties(typedProperties, properties.props());
@@ -56,7 +56,7 @@ public class HoodieAvroKafkaDeserializer extends KafkaAvroDecoder {
     }
   }
 
-  public HoodieAvroKafkaDeserializer(VerifiableProperties properties) {
+  public HoodieAvroKafkaDecoder(VerifiableProperties properties) {
     super(properties);
     this.configure(new KafkaAvroDeserializerConfig(properties.props()));
     TypedProperties typedProperties = new TypedProperties();

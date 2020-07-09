@@ -23,7 +23,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
-import org.apache.hudi.utilities.sources.serde.HoodieAvroKafkaDeserializer;
+import org.apache.hudi.utilities.sources.serde.HoodieAvroKafkaDecoder;
 
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import org.apache.avro.generic.GenericRecord;
@@ -53,7 +53,7 @@ public class AvroKafkaSource extends AvroSource {
     super(props, sparkContext, sparkSession, schemaProvider);
     boolean useCustomDeserializer = props.getBoolean(USE_CUSTOM_DESERIALIZER_PROP, false);
     props.put("key.deserializer", StringDeserializer.class);
-    props.put("value.deserializer", useCustomDeserializer ? HoodieAvroKafkaDeserializer.class : KafkaAvroDeserializer.class);
+    props.put("value.deserializer", useCustomDeserializer ? HoodieAvroKafkaDecoder.class : KafkaAvroDeserializer.class);
     offsetGen = new KafkaOffsetGen(props);
   }
 
