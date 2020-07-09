@@ -18,6 +18,7 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
@@ -28,12 +29,15 @@ import org.apache.avro.generic.GenericRecord;
 /**
  * Simple Key generator for unpartitioned Hive Tables.
  */
-public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
+public class NonpartitionedKeyGenerator extends KeyGenerator {
 
   private static final String EMPTY_PARTITION = "";
 
+  protected final String recordKeyField;
+
   public NonpartitionedKeyGenerator(TypedProperties props) {
     super(props);
+    this.recordKeyField = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
   }
 
   @Override

@@ -28,6 +28,7 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Key generator for deletes using global indices. Global index deletes do not require partition value
@@ -43,15 +44,15 @@ public class GlobalDeleteKeyGenerator extends KeyGenerator {
 
   public GlobalDeleteKeyGenerator(TypedProperties config) {
     super(config);
-    this.recordKeyFields = Arrays.asList(config.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(","));
+    this.recordKeyFields = Arrays.stream(config.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(",")).map(String::trim).collect(Collectors.toList());
   }
 
   @Override
   public HoodieKey getKey(GenericRecord record) {
-    if (recordKeyFields == null) {
-      throw new HoodieKeyException("Unable to find field names for record key or partition path in cfg");
-    }
+    return new HoodieKey(getRecordKey(record), EMPTY_PARTITION);
+  }
 
+  String getRecordKey(GenericRecord record) {
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
     for (String recordKeyField : recordKeyFields) {
@@ -68,9 +69,9 @@ public class GlobalDeleteKeyGenerator extends KeyGenerator {
     recordKey.deleteCharAt(recordKey.length() - 1);
     if (keyIsNullEmpty) {
       throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
-          + recordKeyFields.toString() + " cannot be entirely null or empty.");
+        + recordKeyFields.toString() + " cannot be entirely null or empty.");
     }
 
-    return new HoodieKey(recordKey.toString(), EMPTY_PARTITION);
+    return recordKey.toString();
   }
 }
