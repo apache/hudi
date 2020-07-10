@@ -28,6 +28,58 @@ can be chosen/changed across each commit/deltacommit issued against the dataset.
  of initial load. However, this just does a best-effort job at sizing files vs guaranteeing file sizes like inserts/upserts do. 
 
 
+## Key Generation
+
+Hudi maintains hoodie keys (record key + partition path) for uniquely identifying a particular record. Hudi currently supports different combinations of record keys and partition paths as below - 
+ 
+ - Simple record key (consisting of only one field) and simple partition path (with optional hive style partitioning)
+ - Simple record key and custom timestamp based partition path (with optional hive style partitioning)
+ - Composite record keys (combination of multiple fields) and composite partition paths
+ - Composite record keys and timestamp based partition paths (composite also supported)
+ - Non partitioned table
+ 
+`CustomKeyGenerator.java` (part of hudi-spark module) class provides great support for generating hoodie keys of all the above listed types. All you need to do is supply values for the following properties properly to create your desired keys - 
+
+```Java
+hoodie.datasource.write.recordkey.field
+hoodie.datasource.write.partitionpath.field
+hoodie.datasource.write.keygenerator.class
+```
+
+For having composite record keys, you need to provide comma separated fields like
+```Java
+hoodie.datasource.write.recordkey.field=field1,field2
+```
+
+This will create your record key in the format `field1:value1,field2:value2` and so on, otherwise you can specify only one field in case of simple record keys. `CustomKeyGenerator` class defines an enum `PartitionKeyType` for configuring partition paths. It can take two possible values - SIMPLE and TIMESTAMP. 
+The value for `hoodie.datasource.write.partitionpath.field` property in case of partitioned tables needs to be provided in the format `field1:PartitionKeyType1,field2:PartitionKeyType2` and so on. For example, if you want to create partition path using 2 fields `country` and `date` where the latter has timestamp based values and needs to be customised in a given format, you can specify the following 
+
+```Java
+hoodie.datasource.write.partitionpath.field=country:SIMPLE,date:TIMESTAMP
+``` 
+This will create the partition path in the format `<country_name>/<date>` or `country=<country_name>/date=<date>` depending on whether you want hive style partitioning or not.
+
+`TimestampBasedKeyGenerator` class defines the following properties which can be used for doing the customizations for timestamp based partition paths
+
+```Java
+hoodie.deltastreamer.keygen.timebased.timestamp.type
+  This defines the type of the value that your field contains. It can be in string format or epoch format, for example
+hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit
+  This defines the granularity of your field, whether it contains the values in seconds or milliseconds
+hoodie.deltastreamer.keygen.timebased.input.dateformat
+  This defines the custom format in which the values are present in your field, for example yyyy/MM/dd
+hoodie.deltastreamer.keygen.timebased.output.dateformat
+  This defines the custom format in which you want the partition paths to be created, for example dt=yyyyMMdd
+hoodie.deltastreamer.keygen.timebased.timezone
+  This defines the timezone which the timestamp based values belong to
+```
+
+Finally, if you want to have non partitioned table, you can simply leave the property blank like
+```Java
+hoodie.datasource.write.partitionpath.field=
+```
+
+
 ## DeltaStreamer
 
 The `HoodieDeltaStreamer` utility (part of hudi-utilities-bundle) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.
