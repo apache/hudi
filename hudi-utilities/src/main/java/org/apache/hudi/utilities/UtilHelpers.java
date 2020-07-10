@@ -60,7 +60,6 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
 import java.sql.Connection;
@@ -265,12 +264,6 @@ public class UtilHelpers {
     }
     LOG.error(String.format("Import failed with %d errors.", errors.value()));
     return -1;
-  }
-
-  public static TypedProperties readConfig(InputStream in) throws IOException {
-    TypedProperties defaults = new TypedProperties();
-    defaults.load(in);
-    return defaults;
   }
 
   /**

@@ -38,6 +38,7 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.parser.HoodieDateTimeParser;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 
 import org.apache.avro.LogicalTypes;
@@ -152,6 +153,21 @@ public class DataSourceUtils {
       return (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
     } catch (Throwable e) {
       throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
+    }
+  }
+
+  /**
+   * Create a date time parser class for TimestampBasedKeyGenerator, passing in any configs needed.
+   * @param props
+   * @param parserClass
+   * @return
+   * @throws IOException
+   */
+  public static HoodieDateTimeParser createDateTimeParser(TypedProperties props, String parserClass) throws IOException {
+    try {
+      return (HoodieDateTimeParser) ReflectionUtils.loadClass(parserClass, props);
+    } catch (Throwable e) {
+      throw new IOException("Could not load date time parser class " + parserClass, e);
     }
   }
 

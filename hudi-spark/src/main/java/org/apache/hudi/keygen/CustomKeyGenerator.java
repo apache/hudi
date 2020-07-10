@@ -26,6 +26,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.exception.HoodieKeyException;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -103,7 +104,11 @@ public class CustomKeyGenerator extends KeyGenerator {
           partitionPath.append(new SimpleKeyGenerator(properties).getPartitionPath(record, partitionPathField));
           break;
         case TIMESTAMP:
-          partitionPath.append(new TimestampBasedKeyGenerator(properties).getPartitionPath(record, partitionPathField));
+          try {
+            partitionPath.append(new TimestampBasedKeyGenerator(properties).getPartitionPath(record, partitionPathField));
+          } catch (IOException ioe) {
+            throw new HoodieDeltaStreamerException("Unable to initialise TimestampBasedKeyGenerator class");
+          }
           break;
         default:
           throw new HoodieDeltaStreamerException("Please provide valid PartitionKeyType with fields! You provided: " + keyType);
