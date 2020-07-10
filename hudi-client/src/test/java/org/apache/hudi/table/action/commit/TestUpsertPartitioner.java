@@ -50,7 +50,7 @@ import java.util.List;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStat;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStats;
 import static org.apache.hudi.table.action.commit.UpsertPartitioner.averageBytesPerRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -104,7 +104,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
   }
 
   private static List<HoodieWriteStat> generateCommitStatWith(int totalRecordsWritten, int totalBytesWritten) {
-    List<HoodieWriteStat> writeStatsList = generateFakeHoodieWriteStat(5);
+    List<HoodieWriteStat> writeStatsList = generateFakeHoodieWriteStats(5);
     // clear all record and byte stats except for last entry.
     for (int i = 0; i < writeStatsList.size() - 1; i++) {
       HoodieWriteStat writeStat = writeStatsList.get(i);
@@ -172,7 +172,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
   @Test
   public void testUpsertPartitioner() throws Exception {
-    final String testPartitionPath = "2016/09/26";
+    final String testPartitionPath = "1/09/26";
     // Inserts + Updates... Check all updates go together & inserts subsplit
     UpsertPartitioner partitioner = getUpsertPartitioner(0, 200, 100, 1024, testPartitionPath, false);
     List<InsertBucket> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);

@@ -18,13 +18,13 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStats;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -37,7 +37,7 @@ public class TestHoodieCommitMetadata {
   @Test
   public void testPerfStatPresenceInHoodieMetadata() throws Exception {
 
-    List<HoodieWriteStat> fakeHoodieWriteStats = HoodieTestUtils.generateFakeHoodieWriteStat(100);
+    List<HoodieWriteStat> fakeHoodieWriteStats = generateFakeHoodieWriteStats(100);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     fakeHoodieWriteStats.forEach(stat -> commitMetadata.addWriteStat(stat.getPartitionPath(), stat));
     assertTrue(commitMetadata.getTotalCreateTime() > 0);

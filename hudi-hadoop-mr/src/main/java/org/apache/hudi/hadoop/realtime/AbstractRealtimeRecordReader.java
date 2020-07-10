@@ -18,12 +18,17 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.LogReaderUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
-import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -34,11 +39,14 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.table.log.LogReaderUtils.readLatestSchemaFromLogFiles;
+import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.addPartitionFields;
+import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.generateProjectionSchema;
+import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getNameToFieldMap;
+import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.orderFields;
+import static org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.readSchema;
 
 /**
  * Record Reader implementation to merge fresh avro data with base parquet data, to support real time queries.
@@ -46,7 +54,7 @@ import java.util.stream.Collectors;
 public abstract class AbstractRealtimeRecordReader {
   private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
 
-  protected final HoodieRealtimeFileSplit split;
+  private final String basePath;
   protected final JobConf jobConf;
   protected final boolean usesCustomPayload;
   // Schema handles
@@ -55,7 +63,7 @@ public abstract class AbstractRealtimeRecordReader {
   private Schema hiveSchema;
 
   public AbstractRealtimeRecordReader(HoodieRealtimeFileSplit split, JobConf job) {
-    this.split = split;
+    this.basePath = split.getBasePath();
     this.jobConf = job;
     LOG.info("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
     LOG.info("columnIds ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
@@ -63,14 +71,16 @@ public abstract class AbstractRealtimeRecordReader {
     try {
       this.usesCustomPayload = usesCustomPayload();
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
-      init();
+      String logMessage = "About to read compacted logs " + split.getDeltaLogPaths() + " for base split "
+          + split.getPath() + ", projecting cols %s";
+      init(split.getDeltaLogPaths(), logMessage, Option.of(split.getPath()));
     } catch (IOException e) {
-      throw new HoodieIOException("Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
+      throw new HoodieIOException("Could not create HoodieRealtimeRecordReader on path " + split.getPath(), e);
     }
   }
 
   private boolean usesCustomPayload() {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jobConf, split.getBasePath());
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jobConf, basePath);
     return !(metaClient.getTableConfig().getPayloadClass().contains(HoodieAvroPayload.class.getName())
         || metaClient.getTableConfig().getPayloadClass().contains("org.apache.hudi.OverwriteWithLatestAvroPayload"));
   }
@@ -80,11 +90,10 @@ public abstract class AbstractRealtimeRecordReader {
    * back to the schema from the latest parquet file. Finally, sets the partition column and projection fields into the
    * job conf.
    */
-  private void init() throws IOException {
-    Schema schemaFromLogFile =
-        LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaLogPaths(), jobConf);
-    if (schemaFromLogFile == null) {
-      writerSchema = HoodieRealtimeRecordReaderUtils.readSchema(jobConf, split.getPath());
+  private void init(List<String> deltaLogPaths, String logMessage, Option<Path> splitPath) throws IOException {
+    Schema schemaFromLogFile = readLatestSchemaFromLogFiles(basePath, deltaLogPaths, jobConf);
+    if (schemaFromLogFile == null && splitPath.isPresent()) {
+      writerSchema = readSchema(jobConf, splitPath.get());
       LOG.debug("Writer Schema From Parquet => " + writerSchema.getFields());
     } else {
       writerSchema = schemaFromLogFile;
@@ -95,18 +104,17 @@ public abstract class AbstractRealtimeRecordReader {
     List<String> partitioningFields =
         partitionFields.length() > 0 ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
             : new ArrayList<>();
-    writerSchema = HoodieRealtimeRecordReaderUtils.addPartitionFields(writerSchema, partitioningFields);
-    List<String> projectionFields = HoodieRealtimeRecordReaderUtils.orderFields(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
+    writerSchema = addPartitionFields(writerSchema, partitioningFields);
+    List<String> projectionFields = orderFields(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
         jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR), partitioningFields);
 
-    Map<String, Field> schemaFieldsMap = HoodieRealtimeRecordReaderUtils.getNameToFieldMap(writerSchema);
+    Map<String, Field> schemaFieldsMap = getNameToFieldMap(writerSchema);
     hiveSchema = constructHiveOrderedSchema(writerSchema, schemaFieldsMap);
     // TODO(vc): In the future, the reader schema should be updated based on log files & be able
     // to null out fields not present before
 
-    readerSchema = HoodieRealtimeRecordReaderUtils.generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
-    LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
-        split.getDeltaLogPaths(), split.getPath(), projectionFields));
+    readerSchema = generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
+    LOG.info(String.format(logMessage, projectionFields));
   }
 
   private Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap) {

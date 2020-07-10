@@ -505,24 +505,51 @@ public class HoodieTestUtils {
     return commits;
   }
 
-  public static List<HoodieWriteStat> generateFakeHoodieWriteStat(int limit) {
+  public static List<HoodieWriteStat> generateFakeHoodieWriteStats(int limit) {
+    return generateFakeHoodieWriteStats(limit, "/some/fake/path", "/some/fake/partition/path");
+  }
+
+  public static List<HoodieWriteStat> generateFakeHoodieWriteStats(int limit, String relFilePath, String relPartitionPath) {
     List<HoodieWriteStat> writeStatList = new ArrayList<>();
     for (int i = 0; i < limit; i++) {
-      HoodieWriteStat writeStat = new HoodieWriteStat();
-      writeStat.setFileId(UUID.randomUUID().toString());
-      writeStat.setNumDeletes(0);
-      writeStat.setNumUpdateWrites(100);
-      writeStat.setNumWrites(100);
-      writeStat.setPath("/some/fake/path" + i);
-      writeStat.setPartitionPath("/some/fake/partition/path" + i);
-      writeStat.setTotalLogFilesCompacted(100L);
-      RuntimeStats runtimeStats = new RuntimeStats();
-      runtimeStats.setTotalScanTime(100);
-      runtimeStats.setTotalCreateTime(100);
-      runtimeStats.setTotalUpsertTime(100);
-      writeStat.setRuntimeStats(runtimeStats);
-      writeStatList.add(writeStat);
+      writeStatList.add(generateFakeHoodieWriteStat(relFilePath + i, (relPartitionPath + i)));
     }
     return writeStatList;
+  }
+
+  public static HoodieWriteStat generateFakeHoodieWriteStat(String relFilePath, String relPartitionPath) {
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setFileId(UUID.randomUUID().toString());
+    writeStat.setNumDeletes(0);
+    writeStat.setNumUpdateWrites(100);
+    writeStat.setNumWrites(100);
+    writeStat.setPath(relFilePath);
+    writeStat.setPartitionPath(relPartitionPath);
+    writeStat.setTotalLogFilesCompacted(100L);
+    writeStat.setFileSizeInBytes(1024 * 10);
+    writeStat.setTotalWriteBytes(1024 * 10);
+    RuntimeStats runtimeStats = new RuntimeStats();
+    runtimeStats.setTotalScanTime(100);
+    runtimeStats.setTotalCreateTime(100);
+    runtimeStats.setTotalUpsertTime(100);
+    writeStat.setRuntimeStats(runtimeStats);
+    return writeStat;
+  }
+
+  public static HoodieWriteStat generateFakeHoodieWriteStats(java.nio.file.Path basePath, HoodieLogFile logFile) {
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setFileId(UUID.randomUUID().toString());
+    writeStat.setNumDeletes(0);
+    writeStat.setNumUpdateWrites(100);
+    writeStat.setNumWrites(100);
+    writeStat.setPath(logFile.getPath().toString().replaceFirst(basePath.toString() + "/", ""));
+    writeStat.setPartitionPath("/some/fake/partition/path");
+    writeStat.setTotalLogFilesCompacted(100L);
+    RuntimeStats runtimeStats = new RuntimeStats();
+    runtimeStats.setTotalScanTime(100);
+    runtimeStats.setTotalCreateTime(100);
+    runtimeStats.setTotalUpsertTime(100);
+    writeStat.setRuntimeStats(runtimeStats);
+    return writeStat;
   }
 }

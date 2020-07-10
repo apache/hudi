@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
@@ -52,6 +51,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStats;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.init;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -102,7 +103,7 @@ public class TestHoodieParquetInputFormat {
     instants.add(t4);
     instants.add(t5);
     instants.add(t6);
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.toString());
+    HoodieTableMetaClient metaClient = init(basePath.toString());
     HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
     timeline.setInstants(instants);
 
@@ -239,7 +240,7 @@ public class TestHoodieParquetInputFormat {
 
   private void createCommitFile(java.nio.file.Path basePath, String commitNumber, String partitionPath)
       throws IOException {
-    List<HoodieWriteStat> writeStats = HoodieTestUtils.generateFakeHoodieWriteStat(1);
+    List<HoodieWriteStat> writeStats = generateFakeHoodieWriteStats(1);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     writeStats.forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
     File file = basePath.resolve(".hoodie").resolve(commitNumber + ".commit").toFile();

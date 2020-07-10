@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
 
 public class InputFormatTestUtil {
 
-  private static String TEST_WRITE_TOKEN = "1-0-1";
+  public static String TEST_WRITE_TOKEN = "1-0-1";
 
   public static File prepareTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
                                   String commitNumber)

@@ -18,13 +18,14 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import java.util.List;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
@@ -40,6 +41,13 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Map;
 
+import static org.apache.hudi.hadoop.config.HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP;
+import static org.apache.hudi.hadoop.config.HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED;
+import static org.apache.hudi.hadoop.config.HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE;
+import static org.apache.hudi.hadoop.config.HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.hadoop.config.HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP;
+import static org.apache.hudi.hadoop.config.HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP;
+
 class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     implements RecordReader<NullWritable, ArrayWritable> {
 
@@ -52,28 +60,40 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
       RecordReader<NullWritable, ArrayWritable> realReader) throws IOException {
     super(split, job);
     this.parquetReader = realReader;
-    this.deltaRecordMap = getMergedLogRecordScanner().getRecords();
+    this.deltaRecordMap = getMergedLogRecordScanner(FSUtils.getFs(split.getPath().toString(), jobConf),
+        split.getBasePath(),
+        split.getDeltaLogPaths(),
+        usesCustomPayload,
+        split.getMaxCommitTime(),
+        jobConf
+        ).getRecords();
   }
 
   /**
    * Goes through the log files and populates a map with latest version of each key logged, since the base split was
    * written.
    */
-  private HoodieMergedLogRecordScanner getMergedLogRecordScanner() throws IOException {
+  public HoodieMergedLogRecordScanner getMergedLogRecordScanner(FileSystem fs,
+                                                                 String basePath,
+                                                                 List<String> deltaLogPaths,
+                                                                 boolean usesCustomPayload,
+                                                                 String maxCommitTime,
+                                                                 JobConf jobConf) throws IOException {
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
     return new HoodieMergedLogRecordScanner(
-        FSUtils.getFs(split.getPath().toString(), jobConf),
-        split.getBasePath(),
-        split.getDeltaLogPaths(),
+        fs,
+        basePath,
+        deltaLogPaths,
         usesCustomPayload ? getWriterSchema() : getReaderSchema(),
-        split.getMaxCommitTime(),
+        maxCommitTime,
         getMaxCompactionMemoryInBytes(),
-        Boolean.parseBoolean(jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
+        Boolean
+            .parseBoolean(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
         false,
-        jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
-        jobConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH));
+        jobConf.getInt(MAX_DFS_STREAM_BUFFER_SIZE_PROP, DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
+        jobConf.get(SPILLABLE_MAP_BASE_PATH_PROP, DEFAULT_SPILLABLE_MAP_BASE_PATH));
   }
 
   @Override
