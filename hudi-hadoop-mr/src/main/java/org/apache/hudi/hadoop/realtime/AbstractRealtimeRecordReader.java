@@ -79,6 +79,24 @@ public abstract class AbstractRealtimeRecordReader {
     }
   }
 
+  public AbstractRealtimeRecordReader(HoodieMORIncrementalFileSplit split, JobConf job) {
+    this.basePath = split.getBasePath();
+    this.jobConf = job;
+    LOG.info("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
+    LOG.info("columnIds ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+    LOG.info("partitioningColumns ==> " + job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
+    try {
+      this.usesCustomPayload = usesCustomPayload();
+      LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
+      String logMessage = "About to read compacted logs for fileGroupId: "
+          + split.getFileGroupId().toString() + ", projecting cols %s";
+      String latestBaseFilePath = split.getLatestBaseFilePath();
+      init(split.getLatestLogFilePaths(), logMessage, latestBaseFilePath != null ? Option.of(new Path(latestBaseFilePath)) : Option.empty());
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not create HoodieMORIncrementalRecordReader on file group Id " + split.getFileGroupId().toString(), e);
+    }
+  }
+
   private boolean usesCustomPayload() {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jobConf, basePath);
     return !(metaClient.getTableConfig().getPayloadClass().contains(HoodieAvroPayload.class.getName())

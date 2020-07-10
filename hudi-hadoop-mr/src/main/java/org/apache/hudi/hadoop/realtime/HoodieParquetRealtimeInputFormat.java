@@ -18,17 +18,33 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.InputPathHandler;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -42,8 +58,11 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.mortbay.log.Log;
+
+import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.getIncrementalTableNames;
 
 /**
  * Input Format, that provides a real-time view of data in a Hoodie table.
@@ -62,16 +81,93 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   @Override
   public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
 
+    // is this an incremental query
+    List<String> incrementalTables = getIncrementalTableNames(Job.getInstance(job));
+    if (!incrementalTables.isEmpty()) {
+      //TODO For now assuming the query can be either incremental or snapshot and NOT both.
+      return getSplitsForIncrementalQueries(job, incrementalTables);
+    }
+
     Stream<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits)).map(is -> (FileSplit) is);
 
     return HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits);
   }
 
-  @Override
-  public FileStatus[] listStatus(JobConf job) throws IOException {
-    // Call the HoodieInputFormat::listStatus to obtain all latest parquet files, based on commit
-    // timeline.
-    return super.listStatus(job);
+  protected InputSplit[] getSplitsForIncrementalQueries(JobConf job, List<String> incrementalTables) throws IOException {
+    InputPathHandler inputPathHandler = new InputPathHandler(conf, getInputPaths(job), incrementalTables);
+    Map<String, HoodieTableMetaClient> tableMetaClientMap = inputPathHandler.getTableMetaClientMap();
+    List<InputSplit> splits = new ArrayList<>();
+
+    for (String table : incrementalTables) {
+      HoodieTableMetaClient metaClient = tableMetaClientMap.get(table);
+      if (metaClient == null) {
+        /* This can happen when the INCREMENTAL mode is set for a table but there were no InputPaths
+         * in the jobConf
+         */
+        continue;
+      }
+      String tableName = metaClient.getTableConfig().getTableName();
+      Path basePath = new Path(metaClient.getBasePath());
+      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+      String lastIncrementalTs = HoodieHiveUtils.readStartCommitTime(Job.getInstance(job), tableName);
+      // Total number of commits to return in this batch. Set this to -1 to get all the commits.
+      Integer maxCommits = HoodieHiveUtils.readMaxCommits(Job.getInstance(job), tableName);
+      LOG.info("Last Incremental timestamp for table: " + table + ", was set as " + lastIncrementalTs);
+      List<HoodieInstant> commitsToCheck = timeline.findInstantsAfter(lastIncrementalTs, maxCommits)
+          .getInstants().collect(Collectors.toList());
+
+      Map<String, List<FileStatus>> partitionToFileStatusesMap = listStatusForAffectedPartitions(basePath, commitsToCheck, timeline);
+
+      List<FileStatus> fileStatuses = new ArrayList<>();
+      for (List<FileStatus> statuses: partitionToFileStatusesMap.values()) {
+        fileStatuses.addAll(statuses);
+      }
+      LOG.info("Stats after applying Hudi incremental filter: total_commits_to_check: " + commitsToCheck.size()
+          + ", total_partitions_touched: " + partitionToFileStatusesMap.size() + ", total_files_processed: "
+          + fileStatuses.size());
+      FileStatus[] statuses = fileStatuses.toArray(new FileStatus[0]);
+      List<String> commitsList = commitsToCheck.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, timeline, statuses);
+
+      // Iterate partitions to create splits
+      partitionToFileStatusesMap.keySet().forEach(path -> {
+        // create an Incremental Split for each file group.
+        fsView.getAllFileGroups(path)
+            .forEach(
+                fileGroup -> splits.add(
+                    new HoodieMORIncrementalFileSplit(fileGroup, basePath.toString(), commitsList.get(commitsList.size() - 1))
+            ));
+      });
+    }
+    Log.info("Total splits generated: " + splits.size());
+    return splits.toArray(new InputSplit[0]);
+  }
+
+  private Map<String, List<FileStatus>> listStatusForAffectedPartitions(
+      Path basePath, List<HoodieInstant> commitsToCheck, HoodieTimeline timeline) throws IOException {
+    // Extract files touched by these commits.
+    // TODO This might need to be done in parallel like listStatus parallelism ?
+    HashMap<String, List<FileStatus>> partitionToFileStatusesMap = new HashMap<>();
+    for (HoodieInstant commit: commitsToCheck) {
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get(),
+          HoodieCommitMetadata.class);
+      for (Map.Entry<String, List<HoodieWriteStat>> entry: commitMetadata.getPartitionToWriteStats().entrySet()) {
+        if (!partitionToFileStatusesMap.containsKey(entry.getKey())) {
+          partitionToFileStatusesMap.put(entry.getKey(), new ArrayList<>());
+        }
+        for (HoodieWriteStat stat : entry.getValue()) {
+          String relativeFilePath = stat.getPath();
+          Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
+          if (fullPath != null) {
+            //TODO Should the length of file be totalWriteBytes or fileSizeInBytes?
+            FileStatus fs = new FileStatus(stat.getTotalWriteBytes(), false, 0, 0,
+                0, fullPath);
+            partitionToFileStatusesMap.get(entry.getKey()).add(fs);
+          }
+        }
+      }
+    }
+    return partitionToFileStatusesMap;
   }
 
   @Override
@@ -165,11 +261,15 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
     // sanity check
-    ValidationUtils.checkArgument(split instanceof HoodieRealtimeFileSplit,
+    ValidationUtils.checkArgument(split instanceof HoodieRealtimeFileSplit || split instanceof HoodieMORIncrementalFileSplit,
         "HoodieRealtimeRecordReader can only work on HoodieRealtimeFileSplit and not with " + split);
 
-    return new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) split, jobConf,
-        super.getRecordReader(split, jobConf, reporter));
+    if (split instanceof HoodieRealtimeFileSplit) {
+      return new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) split, jobConf,
+          super.getRecordReader(split, jobConf, reporter));
+    }
+
+    return new HoodieMORIncrementalRecordReader((HoodieMORIncrementalFileSplit) split, jobConf, reporter);
   }
 
   @Override
