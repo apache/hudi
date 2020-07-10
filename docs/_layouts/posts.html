@@ -1,0 +1,27 @@
+---
+layout: default
+---
+
+<div id="main" role="main">
+  {% include sidebar.html %}
+
+  <div class="archive">
+    <h1 id="page-title" class="page__title">{{ page.title }}</h1>
+
+    {% assign postsByYear = site.posts | group_by_exp: 'post', 'post.date | date: "%Y"' %}
+    {% for year in postsByYear %}
+    <section id="{{ year.name }}" class="taxonomy__section">
+      <h2 class="archive__subtitle">{{ year.name }}</h2>
+      <div class="entries-{{ page.entries_layout | default: 'list' }}">
+        {% for post in year.items %}
+        {% include archive-single.html type=page.entries_layout %}
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+    <a href="#masthead__inner-wrap" class="back-to-top">{{ site.data.ui-text[site.locale].back_to_top | default: 'Back to Top' }} &uarr;</a>
+  </div>
+</div>
+
+
+

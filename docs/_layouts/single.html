@@ -1,0 +1,50 @@
+---
+layout: default
+---
+
+<div id="main" role="main">
+  {% include sidebar.html %}
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    {% assign author = site.data.authors[page.author] %}
+
+    <div class="page__inner-wrap">
+      {% unless page.header.overlay_color or page.header.overlay_image %}
+        <header>
+          {% if page.title %}<h1 id="page-title" class="page__title" itemprop="headline">{{ page.title | markdownify | remove: "<p>" | remove: "</p>" }}</h1>{% endif %}
+          <!-- Output author details if some exist. -->
+          {% if author %}<div class="page__author"><a href="{{ author.web }}">{{ author.name }}</a> posted on <time datetime="{{ page.date | date: "%Y-%m-%d" }}">{{ page.date | date: "%B %-d, %Y" }}</time></span>{% endif %}
+        </header>
+      {% endunless %}
+
+      <section class="page__content" itemprop="text">
+        {% if page.toc %}
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-{{ page.toc_icon | default: 'file-alt' }}"></i> {{ page.toc_label | default: site.data.ui-text[site.locale].toc_label | default: "On this page" }}</h4></header>
+            {% include toc.html sanitize=true html=content h_min=1 h_max=3 class="toc__menu" %}
+          </nav>
+        </aside>
+        {% else %}
+          <style>
+            .page {
+              padding-right: 0 !important;
+            }
+          </style>
+        {% endif %}
+        {{ content }}
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">{{ site.data.ui-text[site.locale].back_to_top | default: 'Back to Top' }} &uarr;</a>
+
+
+      {% if page.nation %}
+      {% include post_pagination.html %}
+      {% endif %}
+
+    </div>
+
+  </article>
+
+</div>

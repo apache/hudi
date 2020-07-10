@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Apache Hudi Support on Apache Zeppelin - Apache Hudi</title>
+<meta name="description" content="Integrating HUDI’s real-time and read-optimized query capabilities into Apache Zeppelin’s notebook">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Apache Hudi Support on Apache Zeppelin">
+<meta property="og:url" content="https://hudi.apache.org/blog/apache-hudi-apache-zepplin/">
+
+
+  <meta property="og:description" content="Integrating HUDI’s real-time and read-optimized query capabilities into Apache Zeppelin’s notebook">
+
+
+
+
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/blog.html" target="_self" >Blog</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+    <div itemscope itemtype="https://schema.org/Person">
+
+  <div class="author__content">
+    
+      <h3 class="author__name" itemprop="name">Quick Links</h3>
+    
+    
+      <div class="author__bio" itemprop="description">
+        <p>Hudi <em>ingests</em> &amp; <em>manages</em> storage of large analytical datasets over DFS.</p>
+
+      </div>
+    
+  </div>
+
+  <div class="author__urls-wrapper">
+    <ul class="author__urls social-icons">
+      
+        
+          <li><a href="/docs/quick-start-guide" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-book" aria-hidden="true"></i> Documentation</a></li>
+
+          
+        
+          <li><a href="https://cwiki.apache.org/confluence/display/HUDI" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-wikipedia-w" aria-hidden="true"></i> Technical Wiki</a></li>
+
+          
+        
+          <li><a href="/contributing" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-thumbs-o-up" aria-hidden="true"></i> Contribution Guide</a></li>
+
+          
+        
+          <li><a href="https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-slack" aria-hidden="true"></i> Join on Slack</a></li>
+
+          
+        
+          <li><a href="https://github.com/apache/hudi" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-github" aria-hidden="true"></i> Fork on GitHub</a></li>
+
+          
+        
+          <li><a href="https://issues.apache.org/jira/projects/HUDI/summary" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Issues</a></li>
+
+          
+        
+          <li><a href="/security" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Security Issues</a></li>
+
+          
+        
+      
+    </ul>
+  </div>
+</div>
+
+  
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Apache Hudi Support on Apache Zeppelin
+</h1>
+          <!-- Output author details if some exist. -->
+          <div class="page__author"><a href="https://cwiki.apache.org/confluence/display/~leesf">Shaofeng Li</a> posted on <time datetime="2020-04-27">April 27, 2020</time></span>
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+          <style>
+            .page {
+              padding-right: 0 !important;
+            }
+          </style>
+        
+        <h2 id="1-introduction">1. Introduction</h2>
+<p>Apache Zeppelin is a web-based notebook that provides interactive data analysis. It is convenient for you to make beautiful documents that can be data-driven, interactive, and collaborative, and supports multiple languages, including Scala (using Apache Spark), Python (Apache Spark), SparkSQL, Hive, Markdown, Shell, and so on. Hive and SparkSQL currently support querying Hudi’s read-optimized view and real-time view. So in theory, Zeppelin’s notebook should also have such query capabilities.</p>
+
+<h2 id="2-achieve-the-effect">2. Achieve the effect</h2>
+<h3 id="21-hive">2.1 Hive</h3>
+
+<h3 id="211-read-optimized-view">2.1.1 Read optimized view</h3>
+<p><img src="/assets/images/blog/read_optimized_view.png" alt="Read Optimized View" /></p>
+
+<h3 id="212-real-time-view">2.1.2 Real-time view</h3>
+<p><img src="/assets/images/blog/real_time_view.png" alt="Real-time View" /></p>
+
+<h3 id="22-spark-sql">2.2 Spark SQL</h3>
+
+<h3 id="221-read-optimized-view">2.2.1 Read optimized view</h3>
+<p><img src="/assets/images/blog/spark_read_optimized_view.png" alt="Read Optimized View" /></p>
+
+<h3 id="222-real-time-view">2.2.2 Real-time view</h3>
+<p><img src="/assets/images/blog/spark_real_time_view.png" alt="Real-time View" /></p>
+
+<h2 id="3-common-problems">3. Common problems</h2>
+
+<h3 id="31-hudi-package-adaptation">3.1 Hudi package adaptation</h3>
+<p>Zeppelin will load the packages under lib by default when starting. For external dependencies such as Hudi, it is suitable to be placed directly under zeppelin / lib to avoid Hive or Spark SQL not finding the corresponding Hudi dependency on the cluster.</p>
+
+<h3 id="32-parquet-jar-package-adaptation">3.2 Parquet jar package adaptation</h3>
+<p>The parquet version of the Hudi package is 1.10, and the current parquet version of the CDH cluster is 1.9, so when executing the Hudi table query, many jar package conflict errors will be reported.</p>
+
+<p><strong>Solution</strong>: upgrade the parquet package to 1.10 in the spark / jars directory of the node where zepeelin is located.
+<strong>Side effects</strong>: The tasks of saprk jobs other than zeppelin assigned to the cluster nodes of parquet 1.10 may fail.
+<strong>Suggestions</strong>: Clients other than zeppelin will also have jar conflicts. Therefore, it is recommended to fully upgrade the spark jar, parquet jar and related dependent jars of the cluster to better adapt to Hudi’s capabilities.</p>
+
+<h3 id="33-spark-interpreter-adaptation">3.3 Spark Interpreter adaptation</h3>
+
+<p>The same SQL using Spark SQL query on Zeppelin will have more records than the hive query.</p>
+
+<p><strong>Cause of the problem</strong>: When reading and writing Parquet tables to the Hive metastore, Spark SQL will use the Parquet SerDe (SerDe: Serialize / Deserilize for short) for Spark serialization and deserialization, not the Hive’s SerDe, because Spark SQL’s own SerDe has better performance.</p>
+
+<p>This causes Spark SQL to only query Hudi’s pipeline records, not the final merge result.</p>
+
+<p><strong>Solution</strong>: set <code class="highlighter-rouge">spark.sql.hive.convertMetastoreParquet=false</code></p>
+
+<ol>
+  <li><strong>Method 1</strong>: Edit properties directly on the page**
+<img src="/assets/images/blog/spark_edit_properties.png" alt="" /></li>
+  <li><strong>Method 2</strong>: Edit <code class="highlighter-rouge">zeppelin / conf / interpreter.json</code> and add**</li>
+</ol>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nl">"spark.sql.hive.convertMetastoreParquet"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+  </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"spark.sql.hive.convertMetastoreParquet"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"value"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"checkbox"</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+<h2 id="4-hudi-incremental-view">4. Hudi incremental view</h2>
+
+<p>For Hudi incremental view, currently only supports pulling by writing Spark code. Considering that Zeppelin has the ability to execute code and shell commands directly on the notebook, later consider packaging these notebooks to query Hudi incremental views in a way that supports SQL.</p>
+
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+
+  </body>
+</html>

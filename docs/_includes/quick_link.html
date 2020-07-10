@@ -1,0 +1,56 @@
+
+{%- if page.language == "cn" -%}
+  {%- assign author = site.cn_author -%}
+{%- else -%}
+  {%- assign author = site.author -%}
+{%- endif -%}
+
+{%- if page.version == "0.5.0" -%}
+  {%- assign author = site.0.5.0_author -%}
+{%- elsif page.version == "0.5.1" -%}
+  {%- assign author = site.0.5.1_author -%}
+{%- elsif page.version == "0.5.2" -%}
+  {%- assign author = site.0.5.2_author -%}
+{%- elsif page.version == "0.5.3" -%}
+  {%- assign author = site.0.5.3_author -%}
+{%- else -%}
+  {%- assign author = site.author -%}
+{%- endif -%}
+
+
+<div itemscope itemtype="https://schema.org/Person">
+
+  <div class="author__content">
+    {% if author.home %}
+      <a href="{{ author_link }}"><h3 class="author__name" itemprop="name">{{ author.name }}</h3></a>
+    {% else %}
+      <h3 class="author__name" itemprop="name">{{ author.name }}</h3>
+    {% endif %}
+    {% if author.bio %}
+      <div class="author__bio" itemprop="description">
+        {{ author.bio | markdownify }}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="author__urls-wrapper">
+    <ul class="author__urls social-icons">
+      {% if author.links %}
+        {% for link in author.links %}
+          {% if link.label and link.url %}
+
+            {%- if link.url contains '://' -%}
+              {%- assign url = link.url -%}
+              {%- assign target = "_blank" -%}
+            {%- else -%}
+              {%- assign url = link.url | relative_url -%}
+              {%- assign target = "_self" -%}
+            {%- endif -%}
+            <li><a href="{{ link.url }}" target="{{ target }}" rel="nofollow noopener noreferrer"><i class="{{ link.icon | default: 'fas fa-link' }}" aria-hidden="true"></i> {{ link.label }}</a></li>
+
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    </ul>
+  </div>
+</div>

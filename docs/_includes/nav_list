@@ -1,0 +1,92 @@
+
+{% assign navigation = site.data.navigation[include.nav] %}
+{% assign menu_label = "Toggle Menu" %}
+
+{% if page.language %}
+    {% if page.language == "cn" %}
+        {% assign navigation = site.data.navigation["cn_docs"] %}
+        {% assign menu_label = "文档菜单" %}
+    {% endif %}
+{% endif %}
+
+{% if page.version %}
+    {% if page.version == "0.5.0" %}
+        {% assign navigation = site.data.navigation["0.5.0_docs"] %}
+
+        {% if page.language == "cn" %}
+            {% assign navigation = site.data.navigation["0.5.0_cn_docs"] %}
+            {% assign menu_label = "文档菜单" %}
+        {% endif %}
+    {% elsif page.version == "0.5.1" %}
+        {% assign navigation = site.data.navigation["0.5.1_docs"] %}
+
+        {% if page.language == "cn" %}
+            {% assign navigation = site.data.navigation["0.5.1_cn_docs"] %}
+            {% assign menu_label = "文档菜单" %}
+        {% endif %}
+    {% elsif page.version == "0.5.2" %}
+        {% assign navigation = site.data.navigation["0.5.2_docs"] %}
+
+        {% if page.language == "cn" %}
+            {% assign navigation = site.data.navigation["0.5.2_cn_docs"] %}
+            {% assign menu_label = "文档菜单" %}
+        {% endif %}
+    {% elsif page.version == "0.5.3" %}
+        {% assign navigation = site.data.navigation["0.5.3_docs"] %}
+
+        {% if page.language == "cn" %}
+            {% assign navigation = site.data.navigation["0.5.3_cn_docs"] %}
+            {% assign menu_label = "文档菜单" %}
+        {% endif %}
+    {% endif %}
+{% endif %}
+
+<nav class="nav__list">
+  {% if page.sidebar.title %}<h3 class="nav__title" style="padding-left: 0;">{{ page.sidebar.title }}</h3>{% endif %}
+  <input id="ac-toc" name="accordion-toc" type="checkbox" />
+  <label for="ac-toc">{{ menu_label }}</label>
+  <ul class="nav__items">
+    {% for nav in navigation %}
+      <li>
+        {% if nav.url %}
+          {% if nav.url contains "://" %}
+            {% assign nav_url = nav.url %}
+          {% else %}
+            {% assign nav_url = nav.url | relative_url %}
+          {% endif %}
+          <a href="{{ nav_url }}"><span class="nav__sub-title">{{ nav.title }}</span></a>
+          <a href="{{ nav_url }}"><span class="nav__sub-title">{{ nav.title }}</span></a>
+        {% else %}
+          <span class="nav__sub-title">{{ nav.title }}</span>
+        {% endif %}
+
+        {% if nav.children != null %}
+        <ul>
+          {% for child in nav.children %}
+            {% comment %} internal/external URL check {% endcomment %}
+            {% if child.url contains "://" %}
+              {% assign child_url = child.url %}
+            {% else %}
+              {% assign child_url = child.url | relative_url %}
+            {% endif %}
+
+            {% comment %} set "active" class on current page {% endcomment %}
+            {% if child.url == page.url %}
+              {% assign active = "active" %}
+            {% else %}
+              {% assign active = "" %}
+            {% endif %}
+
+            {% if site.version contains "SNAPSHOT" %}
+              <li><a href="{{ child_url }}" class="{{ active }}">{{ child.title }}</a></li>
+            {% else %}
+              <li><a href="/versions/{{ site.version }}{{ child_url }}" class="{{ active }}">{{ child.title }}</a></li>
+            {% endif %}
+
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</nav>

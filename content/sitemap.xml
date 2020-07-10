@@ -1,299 +1,801 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  
-
-
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/events/2016-12-30-strata-talk-2017.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/events/2016-12-30-strata-talk-2017.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/events/2019-01-18-asf-incubation.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/events/2019-01-18-asf-incubation.html</loc>
-  </url>
-  
-  
-  
-  
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/admin_guide.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/admin_guide.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/community.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/community.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/comparison.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/comparison.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/concepts.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/concepts.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/configurations.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/configurations.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/contributing.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/contributing.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/docker_demo.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/docker_demo.html</loc>
-  </url>
-  
-  
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/gcs_hoodie.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/gcs_hoodie.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/index.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/index.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/migration_guide.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/migration_guide.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/js/mydoc_scroll.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/news.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/news.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/news_archive.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/news_archive.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/performance.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/performance.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/powered_by.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/powered_by.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/privacy.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/privacy.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/querying_data.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/querying_data.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/quickstart.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/quickstart.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/releases.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/releases.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/s3_hoodie.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/s3_hoodie.html</loc>
-  </url>
-  
-  
-  
-  
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/use_cases.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/use_cases.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/cn/writing_data.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/writing_data.html</loc>
-  </url>
-  
-  
+<urlset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd" xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-s3_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-s3_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-gcs_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-gcs_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-migration_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-migration_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-docker_demo.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-docker_demo.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-quick-start-guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-quick-start-guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-structure.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-use_cases.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-use_cases.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-powered_by.html</loc>
+<lastmod>2019-12-31T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-powered_by.html</loc>
+<lastmod>2019-12-31T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-comparison.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-comparison.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-concepts.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-concepts.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-writing_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-writing_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-querying_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-querying_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-configurations.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-configurations.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-performance.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-performance.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-admin_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-admin_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-privacy.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-privacy.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.0-docs-versions.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.0-docs-versions.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-s3_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-s3_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-gcs_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-gcs_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-migration_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-migration_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-docker_demo.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-docker_demo.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-quick-start-guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-quick-start-guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-structure.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-use_cases.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-use_cases.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-powered_by.html</loc>
+<lastmod>2019-12-31T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-powered_by.html</loc>
+<lastmod>2019-12-31T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-comparison.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-comparison.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-concepts.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-concepts.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-writing_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-writing_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-querying_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-querying_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-configurations.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-configurations.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-performance.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-performance.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-deployment.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-deployment.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-privacy.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-privacy.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.1-docs-versions.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.1-docs-versions.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-s3_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-s3_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-gcs_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-gcs_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-migration_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-migration_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-docker_demo.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-docker_demo.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-quick-start-guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-quick-start-guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-structure.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-use_cases.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-use_cases.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-powered_by.html</loc>
+<lastmod>2019-12-31T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-powered_by.html</loc>
+<lastmod>2019-12-31T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-comparison.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-comparison.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-concepts.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-concepts.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-writing_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-writing_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-querying_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-querying_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-configurations.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-configurations.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-performance.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-performance.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-deployment.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-deployment.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-privacy.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-privacy.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.2-docs-versions.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.2-docs-versions.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-s3_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-s3_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-gcs_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-gcs_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-migration_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-migration_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-docker_demo.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-docker_demo.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-oss_hoodie.html</loc>
+<lastmod>2020-04-21T18:50:50-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-oss_hoodie.html</loc>
+<lastmod>2020-04-21T17:38:24-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-azure_hoodie.html</loc>
+<lastmod>2020-05-25T19:00:57-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-azure_hoodie.html</loc>
+<lastmod>2020-05-25T19:00:57-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-quick-start-guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-quick-start-guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-structure.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-use_cases.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-use_cases.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-powered_by.html</loc>
+<lastmod>2019-12-31T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-powered_by.html</loc>
+<lastmod>2019-12-31T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-comparison.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-comparison.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-concepts.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-concepts.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-writing_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-writing_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-querying_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-querying_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-configurations.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-configurations.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-performance.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-performance.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-deployment.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-deployment.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-cloud.html</loc>
+<lastmod>2019-06-16T21:59:57-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-cloud.html</loc>
+<lastmod>2019-06-16T21:59:57-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-privacy.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-privacy.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/0.5.3-docs-versions.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/0.5.3-docs-versions.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/s3_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/s3_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/gcs_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/gcs_hoodie.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/migration_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/migration_guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/docker_demo.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/docker_demo.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/oss_hoodie.html</loc>
+<lastmod>2020-04-21T18:50:50-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/oss_hoodie.html</loc>
+<lastmod>2020-04-21T17:38:24-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/azure_hoodie.html</loc>
+<lastmod>2020-05-25T19:00:57-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/azure_hoodie.html</loc>
+<lastmod>2020-05-25T19:00:57-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/quick-start-guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/quick-start-guide.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/structure.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/use_cases.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/use_cases.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/powered_by.html</loc>
+<lastmod>2019-12-31T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/powered_by.html</loc>
+<lastmod>2019-12-31T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/comparison.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/comparison.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/concepts.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/concepts.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/writing_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/writing_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/querying_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/querying_data.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/configurations.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/configurations.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/performance.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/performance.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/deployment.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/deployment.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/cloud.html</loc>
+<lastmod>2019-06-16T21:59:57-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/cloud.html</loc>
+<lastmod>2019-06-16T21:59:57-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/privacy.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/privacy.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/docs/docs-versions.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/docs-versions.html</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog/strata-talk-2017/</loc>
+<lastmod>2016-12-30T00:00:00-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog/asf-incubation/</loc>
+<lastmod>2019-01-18T00:00:00-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog/batch-vs-incremental/</loc>
+<lastmod>2019-03-07T00:00:00-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog/registering-dataset-to-hive/</loc>
+<lastmod>2019-05-14T00:00:00-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog/ingesting-database-changes/</loc>
+<lastmod>2019-09-09T00:00:00-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog/delete-support-in-hudi/</loc>
+<lastmod>2020-01-15T00:00:00-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog/change-capture-using-aws/</loc>
+<lastmod>2020-01-20T00:00:00-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog/exporting-hudi-datasets/</loc>
+<lastmod>2020-03-22T00:00:00-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog/apache-hudi-apache-zepplin/</loc>
+<lastmod>2020-04-27T00:00:00-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog/monitoring-hudi-metrics-with-datadog/</loc>
+<lastmod>2020-05-28T00:00:00-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/activity</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/activity</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog</loc>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/community</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/community</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/contributing</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/contributing</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/</loc>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/releases</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/releases</loc>
+<lastmod>2020-05-28T11:40:00-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/roadmap</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/cn/security</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/security</loc>
+<lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
 </urlset>

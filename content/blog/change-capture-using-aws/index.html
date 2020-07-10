@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Change Capture Using AWS Database Migration Service and Hudi - Apache Hudi</title>
+<meta name="description" content="In this blog, we will build an end-end solution for capturing changes from a MySQL instance running on AWS RDS to a Hudi table on S3, using capabilities in the Hudi 0.5.1 release.">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Change Capture Using AWS Database Migration Service and Hudi">
+<meta property="og:url" content="https://hudi.apache.org/blog/change-capture-using-aws/">
+
+
+  <meta property="og:description" content="In this blog, we will build an end-end solution for capturing changes from a MySQL instance running on AWS RDS to a Hudi table on S3, using capabilities in the Hudi 0.5.1 release.">
+
+
+
+
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/blog.html" target="_self" >Blog</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+    <div itemscope itemtype="https://schema.org/Person">
+
+  <div class="author__content">
+    
+      <h3 class="author__name" itemprop="name">Quick Links</h3>
+    
+    
+      <div class="author__bio" itemprop="description">
+        <p>Hudi <em>ingests</em> &amp; <em>manages</em> storage of large analytical datasets over DFS.</p>
+
+      </div>
+    
+  </div>
+
+  <div class="author__urls-wrapper">
+    <ul class="author__urls social-icons">
+      
+        
+          <li><a href="/docs/quick-start-guide" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-book" aria-hidden="true"></i> Documentation</a></li>
+
+          
+        
+          <li><a href="https://cwiki.apache.org/confluence/display/HUDI" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-wikipedia-w" aria-hidden="true"></i> Technical Wiki</a></li>
+
+          
+        
+          <li><a href="/contributing" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-thumbs-o-up" aria-hidden="true"></i> Contribution Guide</a></li>
+
+          
+        
+          <li><a href="https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-slack" aria-hidden="true"></i> Join on Slack</a></li>
+
+          
+        
+          <li><a href="https://github.com/apache/hudi" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-github" aria-hidden="true"></i> Fork on GitHub</a></li>
+
+          
+        
+          <li><a href="https://issues.apache.org/jira/projects/HUDI/summary" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Issues</a></li>
+
+          
+        
+          <li><a href="/security" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Security Issues</a></li>
+
+          
+        
+      
+    </ul>
+  </div>
+</div>
+
+  
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Change Capture Using AWS Database Migration Service and Hudi
+</h1>
+          <!-- Output author details if some exist. -->
+          <div class="page__author"><a href="https://cwiki.apache.org/confluence/display/~vinoth">Vinoth Chandar</a> posted on <time datetime="2020-01-20">January 20, 2020</time></span>
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+          <style>
+            .page {
+              padding-right: 0 !important;
+            }
+          </style>
+        
+        <p>One of the core use-cases for Apache Hudi is enabling seamless, efficient database ingestion to your data lake. Even though a lot has been talked about and even users already adopting this model, content on how to go about this is sparse.</p>
+
+<p>In this blog, we will build an end-end solution for capturing changes from a MySQL instance running on AWS RDS to a Hudi table on S3, using capabilities in the Hudi  <strong>0.5.1 release</strong></p>
+
+<p>We can break up the problem into two pieces.</p>
+
+<ol>
+  <li><strong>Extracting change logs from MySQL</strong>  : Surprisingly, this is still a pretty tricky problem to solve and often Hudi users get stuck here. Thankfully, at-least for AWS users, there is a  <a href="https://aws.amazon.com/dms/">Database Migration service</a>  (DMS for short), that does this change capture and uploads them as parquet files on S3</li>
+  <li><strong>Applying these change logs to your data lake table</strong>  : Once there are change logs in some form, the next step is to apply them incrementally to your table. This mundane task can be fully automated using the Hudi  <a href="http://hudi.apache.org/docs/writing_data.html#deltastreamer">DeltaStreamer</a>  tool.</li>
+</ol>
+
+<p>The actual end-end architecture looks something like this.
+<img src="/assets/images/blog/change-capture-architecture.png" alt="enter image description here" /></p>
+
+<p>Let’s now illustrate how one can accomplish this using a simple <em>orders</em> table, stored in MySQL (these instructions should broadly apply to other database engines like Postgres, or Aurora as well, though SQL/Syntax may change)</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="no">CREATE</span> <span class="no">DATABASE</span> <span class="n">hudi_dms</span><span class="o">;</span>
+<span class="no">USE</span> <span class="n">hudi_dms</span><span class="o">;</span>
+     
+<span class="no">CREATE</span> <span class="no">TABLE</span> <span class="nf">orders</span><span class="o">(</span>
+   <span class="n">order_id</span> <span class="no">INTEGER</span><span class="o">,</span>
+   <span class="n">order_qty</span> <span class="no">INTEGER</span><span class="o">,</span>
+   <span class="n">customer_name</span> <span class="nf">VARCHAR</span><span class="o">(</span><span class="mi">100</span><span class="o">),</span>
+   <span class="n">updated_at</span> <span class="no">TIMESTAMP</span> <span class="no">DEFAULT</span> <span class="nf">NOW</span><span class="o">()</span> <span class="no">ON</span> <span class="no">UPDATE</span> <span class="nf">NOW</span><span class="o">(),</span>
+   <span class="n">created_at</span> <span class="no">TIMESTAMP</span> <span class="no">DEFAULT</span> <span class="nf">NOW</span><span class="o">(),</span>
+   <span class="no">CONSTRAINT</span> <span class="n">orders_pk</span> <span class="no">PRIMARY</span> <span class="nf">KEY</span><span class="o">(</span><span class="n">order_id</span><span class="o">)</span>
+<span class="o">);</span>
+ 
+<span class="no">INSERT</span> <span class="no">INTO</span> <span class="nf">orders</span><span class="o">(</span><span class="n">order_id</span><span class="o">,</span> <span class="n">order_qty</span><span class="o">,</span> <span class="n">customer_name</span><span class="o">)</span> <span class="no">VALUES</span><span class="o">(</span><span class="mi">1</span><span class="o">,</span> <span class="mi">10</span><span class="o">,</span> <span class="err">'</span><span class="n">victor</span><span class="err">'</span><span class="o">);</span>
+<span class="no">INSERT</span> <span class="no">INTO</span> <span class="nf">orders</span><span class="o">(</span><span class="n">order_id</span><span class="o">,</span> <span class="n">order_qty</span><span class="o">,</span> <span class="n">customer_name</span><span class="o">)</span> <span class="no">VALUES</span><span class="o">(</span><span class="mi">2</span><span class="o">,</span> <span class="mi">20</span><span class="o">,</span> <span class="err">'</span><span class="n">peter</span><span class="err">'</span><span class="o">);</span>
+</code></pre></div></div>
+
+<p>In the table, <em>order_id</em> is the primary key which will be enforced on the Hudi table as well. Since a batch of change records can contain changes to the same primary key, we also include <em>updated_at</em> and <em>created_at</em> fields, which are kept upto date as writes happen to the table.</p>
+
+<h3 id="extracting-change-logs-from-mysql">Extracting Change logs from MySQL</h3>
+
+<p>Before we can configure DMS, we first need to <a href="https://aws.amazon.com/premiumsupport/knowledge-center/enable-binary-logging-aurora/">prepare the MySQL instance</a>  for change capture, by ensuring backups are enabled and binlog is turned on.
+<img src="/assets/images/blog/change-logs-mysql.png" alt="" /></p>
+
+<p>Now, proceed to create endpoints in DMS that capture MySQL data and  <a href="https://docs.aws.amazon.com/dms/latest/userguide/CHAP_Target.S3.html">store in S3, as parquet files</a>.</p>
+
+<ul>
+  <li>Source <em>hudi-source-db</em> endpoint, points to the DB server and provides basic authentication details</li>
+  <li>Target <em>parquet-s3</em> endpoint, points to the bucket and folder on s3 to store the change logs records as parquet files
+<img src="/assets/images/blog/s3-endpoint-configuration-1.png" alt="" />
+<img src="/assets/images/blog/s3-endpoint-configuration-2.png" alt="" />
+<img src="/assets/images/blog/s3-endpoint-list.png" alt="" /></li>
+</ul>
+
+<p>Then proceed to create a migration task, as below. Give it a name, connect the source to the target and be sure to pick the right <em>Migration type</em> as shown below, to ensure ongoing changes are continuously replicated to S3. Also make sure to specify, the rules using which DMS decides which MySQL schema/tables to replicate. In this example, we simply whitelist <em>orders</em> table under the <em>hudi_dms</em> schema, as specified in the table SQL above.</p>
+
+<p><img src="/assets/images/blog/s3-migration-task-1.png" alt="" />
+<img src="/assets/images/blog/s3-migration-task-2.png" alt="" /></p>
+
+<p>Starting the DMS task and should result in an initial load, like below.</p>
+
+<p><img src="/assets/images/blog/dms-task.png" alt="" /></p>
+
+<p>Simply reading the raw initial load file, shoud give the same values as the upstream table</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">scala</span><span class="o">&gt;</span> <span class="nv">spark</span><span class="o">.</span><span class="py">read</span><span class="o">.</span><span class="py">parquet</span><span class="o">(</span><span class="s">"s3://hudi-dms-demo/orders/hudi_dms/orders/*"</span><span class="o">).</span><span class="py">sort</span><span class="o">(</span><span class="s">"updated_at"</span><span class="o">).</span><span class="py">show</span>
+ 
+<span class="o">+--------+---------+-------------+-------------------+-------------------+</span>
+<span class="o">|</span><span class="n">order_id</span><span class="o">|</span><span class="n">order_qty</span><span class="o">|</span><span class="n">customer_name</span><span class="o">|</span>         <span class="n">updated_at</span><span class="o">|</span>         <span class="n">created_at</span><span class="o">|</span>
+<span class="o">+--------+---------+-------------+-------------------+-------------------+</span>
+<span class="o">|</span>       <span class="mi">2</span><span class="o">|</span>       <span class="mi">10</span><span class="o">|</span>        <span class="n">peter</span><span class="o">|</span><span class="mi">2020</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">20</span> <span class="mi">20</span><span class="k">:</span><span class="err">12</span><span class="kt">:</span><span class="err">22</span><span class="kt">|</span><span class="err">2020</span><span class="kt">-</span><span class="err">01</span><span class="kt">-</span><span class="err">20</span> <span class="err">20</span><span class="kt">:</span><span class="err">12</span><span class="kt">:</span><span class="err">22</span><span class="kt">|</span>
+<span class="kt">|</span>       <span class="err">1</span><span class="kt">|</span>       <span class="err">10</span><span class="kt">|</span>       <span class="kt">victor|</span><span class="err">2020</span><span class="kt">-</span><span class="err">01</span><span class="kt">-</span><span class="err">20</span> <span class="err">20</span><span class="kt">:</span><span class="err">12</span><span class="kt">:</span><span class="err">31</span><span class="kt">|</span><span class="err">2020</span><span class="kt">-</span><span class="err">01</span><span class="kt">-</span><span class="err">20</span> <span class="err">20</span><span class="kt">:</span><span class="err">12</span><span class="kt">:</span><span class="err">31</span><span class="kt">|</span>
+<span class="kt">+--------+---------+-------------+-------------------+-------------------+</span>
+
+</code></pre></div></div>
+
+<h2 id="applying-change-logs-using-hudi-deltastreamer">Applying Change Logs using Hudi DeltaStreamer</h2>
+
+<p>Now, we are ready to start consuming the change logs. Hudi DeltaStreamer runs as Spark job on your favorite workflow scheduler (it also supports a continuous mode using <em>–continuous</em> flag, where it runs as a long running Spark job), that tails a given path on S3 (or any DFS implementation) for new files and can issue an <em>upsert</em> to a target hudi dataset. The tool automatically checkpoints itself and thus to repeatedly ingest, all one needs to do is to keep executing the DeltaStreamer periodically.</p>
+
+<p>With an initial load already on S3, we then run the following command (deltastreamer command, here on) to ingest the full load first and create a Hudi dataset on S3.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>spark-submit <span class="nt">--class</span> org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer  <span class="se">\</span>
+  <span class="nt">--packages</span> org.apache.spark:spark-avro_2.11:2.4.4 <span class="se">\</span>
+  <span class="nt">--master</span> yarn <span class="nt">--deploy-mode</span> client <span class="se">\</span>
+  hudi-utilities-bundle_2.11-0.5.1-SNAPSHOT.jar <span class="se">\</span>
+  <span class="nt">--table-type</span> COPY_ON_WRITE <span class="se">\</span>
+  <span class="nt">--source-ordering-field</span> updated_at <span class="se">\</span>
+  <span class="nt">--source-class</span> org.apache.hudi.utilities.sources.ParquetDFSSource <span class="se">\</span>
+  <span class="nt">--target-base-path</span> s3://hudi-dms-demo/hudi_orders <span class="nt">--target-table</span> hudi_orders <span class="se">\</span>
+  <span class="nt">--transformer-class</span> org.apache.hudi.utilities.transform.AWSDmsTransformer <span class="se">\</span>
+  <span class="nt">--payload-class</span> org.apache.hudi.payload.AWSDmsAvroPayload <span class="se">\</span>
+  <span class="nt">--hoodie-conf</span> hoodie.datasource.write.recordkey.field<span class="o">=</span>order_id,hoodie.datasource.write.partitionpath.field<span class="o">=</span>customer_name,hoodie.deltastreamer.source.dfs.root<span class="o">=</span>s3://hudi-dms-demo/orders/hudi_dms/orders
+</code></pre></div></div>
+
+<p>A few things are going on here</p>
+
+<ul>
+  <li>First, we specify the <em>–table-type</em> as COPY_ON_WRITE. Hudi also supports another _MERGE_ON_READ ty_pe you can use if you choose from.</li>
+  <li>To handle cases where the input parquet files contain multiple updates/deletes or insert/updates to the same record, we use <em>updated_at</em> as the ordering field. This ensures that the change record which has the latest timestamp will be reflected in Hudi.</li>
+  <li>We specify a target base path and a table table, all needed for creating and writing to the Hudi table</li>
+  <li>We use a special payload class - <em>AWSDMSAvroPayload</em> , to handle the different change operations correctly. The parquet files generated have an <em>Op</em> field, that indicates whether a given change record is an insert (I), delete (D) or update (U) and the payload implementation uses this field to decide how to handle a given change record.</li>
+  <li>You may also notice a special transformer class <em>AWSDmsTransformer</em> , being specified. The reason here is tactical, but important. The initial load file does not contain an <em>Op</em> field, so this adds one to Hudi table schema additionally.</li>
+  <li>Finally, we specify the record key for the Hudi table as same as the upstream table. Then we specify partitioning by <em>customer_name</em>  and also the root of the DMS output.</li>
+</ul>
+
+<p>Once the command is run, the Hudi table should be created and have same records as the upstream table (with all the _hoodie fields as well).</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">scala</span><span class="o">&gt;</span> <span class="nv">spark</span><span class="o">.</span><span class="py">read</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">).</span><span class="py">load</span><span class="o">(</span><span class="s">"s3://hudi-dms-demo/hudi_orders/*/*.parquet"</span><span class="o">).</span><span class="py">show</span>
+<span class="o">+-------------------+--------------------+------------------+----------------------+--------------------+--------+---------+-------------+-------------------+-------------------+---+</span>
+<span class="o">|</span><span class="nc">_hoodie_commit_time</span><span class="o">|</span><span class="nc">_hoodie_commit_seqno</span><span class="o">|</span><span class="nc">_hoodie_record_key</span><span class="o">|</span><span class="nc">_hoodie_partition_path</span><span class="o">|</span>   <span class="nc">_hoodie_file_name</span><span class="o">|</span><span class="n">order_id</span><span class="o">|</span><span class="n">order_qty</span><span class="o">|</span><span class="n">customer_name</span><span class="o">|</span>         <span class="n">updated_at</span><span class="o">|</span>         <span class="n">created_at</span><span class="o">|</span> <span class="nc">Op</span><span class="o">|</span>
+<span class="o">+-------------------+--------------------+------------------+----------------------+--------------------+--------+---------+-------------+-------------------+-------------------+---+</span>
+<span class="o">|</span>     <span class="mi">20200120205028</span><span class="o">|</span>  <span class="mi">20200120205028</span><span class="n">_0_1</span><span class="o">|</span>                 <span class="mi">2</span><span class="o">|</span>                 <span class="n">peter</span><span class="o">|</span><span class="n">af9a2525</span><span class="o">-</span><span class="n">a486</span><span class="o">-</span><span class="mi">40</span><span class="n">e</span><span class="o">...|</span>       <span class="mi">2</span><span class="o">|</span>       <span class="mi">10</span><span class="o">|</span>        <span class="n">peter</span><span class="o">|</span><span class="mi">2020</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">20</span> <span class="mi">20</span><span class="k">:</span><span class="err">12</span><span class="kt">:</span><span class="err">22</span><span class="kt">|</span><span class="err">2020</span><span class="kt">-</span><span class="err">01</span><span class="kt">-</span><span class="err">20</span> <span class="err">20</span><span class="kt">:</span><span class="err">12</span><span class="kt">:</span><span class="err">22</span><span class="kt">|</span>   <span class="kt">|</span>
+<span class="kt">|</span>     <span class="err">20200120205028</span><span class="kt">|</span>  <span class="err">20200120205028</span><span class="k">_</span><span class="err">1</span><span class="k">_</span><span class="err">1</span><span class="kt">|</span>                 <span class="err">1</span><span class="kt">|</span>                <span class="kt">victor|</span><span class="err">8</span><span class="kt">e431ece-d51c-</span><span class="err">4</span><span class="kt">c7...|</span>       <span class="err">1</span><span class="kt">|</span>       <span class="err">10</span><span class="kt">|</span>       <span class="kt">victor|</span><span class="err">2020</span><span class="kt">-</span><span class="err">01</span><span class="kt">-</span><span class="err">20</span> <span class="err">20</span><span class="kt">:</span><span class="err">12</span><span class="kt">:</span><span class="err">31</span><span class="kt">|</span><span class="err">2020</span><span class="kt">-</span><span class="err">01</span><span class="kt">-</span><span class="err">20</span> <span class="err">20</span><span class="kt">:</span><span class="err">12</span><span class="kt">:</span><span class="err">31</span><span class="kt">|</span>   <span class="kt">|</span>
+<span class="kt">+-------------------+--------------------+------------------+----------------------+--------------------+--------+---------+-------------+-------------------+-------------------+---+</span>
+</code></pre></div></div>
+
+<p>Now, let’s do an insert and an update</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="no">INSERT</span> <span class="no">INTO</span> <span class="nf">orders</span><span class="o">(</span><span class="n">order_id</span><span class="o">,</span> <span class="n">order_qty</span><span class="o">,</span> <span class="n">customer_name</span><span class="o">)</span> <span class="no">VALUES</span><span class="o">(</span><span class="mi">3</span><span class="o">,</span> <span class="mi">30</span><span class="o">,</span> <span class="err">'</span><span class="n">sandy</span><span class="err">'</span><span class="o">);</span>
+<span class="no">UPDATE</span> <span class="n">orders</span> <span class="n">set</span> <span class="n">order_qty</span> <span class="o">=</span> <span class="mi">20</span> <span class="n">where</span> <span class="n">order_id</span> <span class="o">=</span> <span class="mi">2</span><span class="o">;</span>
+</code></pre></div></div>
+
+<p>This will add a new parquet file to the DMS output folder and when the deltastreamer command is run again, it will go ahead and apply these to the Hudi table.</p>
+
+<p>So, querying the Hudi table now would yield 3 rows and the <em>hoodie_commit_time</em> accurately reflects when these writes happened. You can notice that order_qty for order_id=2, is updated from 10 to 20!</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>+-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+|_hoodie_commit_time|_hoodie_commit_seqno|_hoodie_record_key|_hoodie_partition_path|   _hoodie_file_name| Op|order_id|order_qty|customer_name|         updated_at|         created_at|
++-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+|     20200120211526|  20200120211526_0_1|                 2|                 peter|af9a2525-a486-40e...|  U|       2|       20|        peter|2020-01-20 21:11:47|2020-01-20 20:12:22|
+|     20200120211526|  20200120211526_1_1|                 3|                 sandy|566eb34a-e2c5-44b...|  I|       3|       30|        sandy|2020-01-20 21:11:24|2020-01-20 21:11:24|
+|     20200120205028|  20200120205028_1_1|                 1|                victor|8e431ece-d51c-4c7...|   |       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
++-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+</code></pre></div></div>
+
+<p>A nice debugging aid would be read all of the DMS output now and sort it by update_at, which should give us a sequence of changes that happened on the upstream table. As we can see, the Hudi table above is a compacted snapshot of this raw change log.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>+----+--------+---------+-------------+-------------------+-------------------+
+|  Op|order_id|order_qty|customer_name|         updated_at|         created_at|
++----+--------+---------+-------------+-------------------+-------------------+
+|null|       2|       10|        peter|2020-01-20 20:12:22|2020-01-20 20:12:22|
+|null|       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
+|   I|       3|       30|        sandy|2020-01-20 21:11:24|2020-01-20 21:11:24|
+|   U|       2|       20|        peter|2020-01-20 21:11:47|2020-01-20 20:12:22|
++----+--------+---------+-------------+-------------------+-------------------+
+</code></pre></div></div>
+
+<p>Initial load with no <em>Op</em> field value , followed by an insert and an update.</p>
+
+<p>Now, lets do deletes an inserts</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="no">DELETE</span> <span class="no">FROM</span> <span class="n">orders</span> <span class="no">WHERE</span> <span class="n">order_id</span> <span class="o">=</span> <span class="mi">2</span><span class="o">;</span>
+<span class="no">INSERT</span> <span class="no">INTO</span> <span class="nf">orders</span><span class="o">(</span><span class="n">order_id</span><span class="o">,</span> <span class="n">order_qty</span><span class="o">,</span> <span class="n">customer_name</span><span class="o">)</span> <span class="no">VALUES</span><span class="o">(</span><span class="mi">4</span><span class="o">,</span> <span class="mi">40</span><span class="o">,</span> <span class="err">'</span><span class="n">barry</span><span class="err">'</span><span class="o">);</span>
+<span class="no">INSERT</span> <span class="no">INTO</span> <span class="nf">orders</span><span class="o">(</span><span class="n">order_id</span><span class="o">,</span> <span class="n">order_qty</span><span class="o">,</span> <span class="n">customer_name</span><span class="o">)</span> <span class="no">VALUES</span><span class="o">(</span><span class="mi">5</span><span class="o">,</span> <span class="mi">50</span><span class="o">,</span> <span class="err">'</span><span class="n">nathan</span><span class="err">'</span><span class="o">);</span>
+</code></pre></div></div>
+
+<p>This should result in more files on S3, written by DMS , which the DeltaStreamer command will continue to process incrementally (i.e only the newly written files are read each time)</p>
+
+<p><img src="/assets/images/blog/dms-demo-files.png" alt="" /></p>
+
+<p>Running the deltastreamer command again, would result in the follow state for the Hudi table. You can notice the two new records and that the <em>order_id=2</em> is now gone</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>+-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+|_hoodie_commit_time|_hoodie_commit_seqno|_hoodie_record_key|_hoodie_partition_path|   _hoodie_file_name| Op|order_id|order_qty|customer_name|         updated_at|         created_at|
++-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+|     20200120212522|  20200120212522_1_1|                 5|                nathan|3da94b20-c70b-457...|  I|       5|       50|       nathan|2020-01-20 21:23:00|2020-01-20 21:23:00|
+|     20200120212522|  20200120212522_2_1|                 4|                 barry|8cc46715-8f0f-48a...|  I|       4|       40|        barry|2020-01-20 21:22:49|2020-01-20 21:22:49|
+|     20200120211526|  20200120211526_1_1|                 3|                 sandy|566eb34a-e2c5-44b...|  I|       3|       30|        sandy|2020-01-20 21:11:24|2020-01-20 21:11:24|
+|     20200120205028|  20200120205028_1_1|                 1|                victor|8e431ece-d51c-4c7...|   |       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
++-------------------+--------------------+------------------+----------------------+--------------------+---+--------+---------+-------------+-------------------+-------------------+
+</code></pre></div></div>
+
+<p>Our little informal change log query yields the following.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>+----+--------+---------+-------------+-------------------+-------------------+
+|  Op|order_id|order_qty|customer_name|         updated_at|         created_at|
++----+--------+---------+-------------+-------------------+-------------------+
+|null|       2|       10|        peter|2020-01-20 20:12:22|2020-01-20 20:12:22|
+|null|       1|       10|       victor|2020-01-20 20:12:31|2020-01-20 20:12:31|
+|   I|       3|       30|        sandy|2020-01-20 21:11:24|2020-01-20 21:11:24|
+|   U|       2|       20|        peter|2020-01-20 21:11:47|2020-01-20 20:12:22|
+|   D|       2|       20|        peter|2020-01-20 21:11:47|2020-01-20 20:12:22|
+|   I|       4|       40|        barry|2020-01-20 21:22:49|2020-01-20 21:22:49|
+|   I|       5|       50|       nathan|2020-01-20 21:23:00|2020-01-20 21:23:00|
++----+--------+---------+-------------+-------------------+-------------------+
+</code></pre></div></div>
+
+<p>Note that the delete and update have the same <em>updated_at,</em> value. thus it can very well order differently here.. In short this way of looking at the changelog has its caveats. For a true changelog of the Hudi table itself, you can issue an <a href="http://hudi.apache.org/docs/querying_data.html">incremental query</a>.</p>
+
+<p>And Life goes on ….. Hope this was useful to all the data engineers out there!</p>
+
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+
+  </body>
+</html>
