@@ -209,7 +209,7 @@ class DedupeSparkJob(basePath: String,
       val newFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}")
       LOG.info(" Skipping and writing new file for : " + fileName)
       SparkHelpers.skipKeysAndWriteNewFile(instantTime, fs, badFilePath, newFilePath, dupeFixPlan(fileName))
-      fs.delete(badFilePath, false)
+      fs.delete(badFilePath, true)
     }
 
     // 3. Check that there are no duplicates anymore.
