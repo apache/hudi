@@ -43,7 +43,7 @@ Hudi maintains hoodie keys (record key + partition path) for uniquely identifyin
 ```java
 hoodie.datasource.write.recordkey.field
 hoodie.datasource.write.partitionpath.field
-hoodie.datasource.write.keygenerator.class
+hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.CustomKeyGenerator
 ```
 
 For having composite record keys, you need to provide comma separated fields like
