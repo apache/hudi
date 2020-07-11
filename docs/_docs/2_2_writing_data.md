@@ -174,6 +174,42 @@ and then ingest it as follows.
 
 In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](/docs/migration_guide.html). 
 
+## MultiTableDeltaStreamer
+
+`HoodieMultiTableDeltaStreamer`, a wrapper on top of `HoodieDeltaStreamer`, enables one to ingest multiple tables at a go into hudi datasets. Currently it only supports sequential processing of tables to be ingested and COPY_ON_WRITE storage type. The command line options for `HoodieMultiTableDeltaStreamer` are pretty much similar to `HoodieDeltaStreamer` with the only exception that you are required to provide table wise configs in separate files in a dedicated config folder. The following command line options are introduced
+
+```java
+  * --config-folder
+    the path to the folder which contains all the table wise config files
+    --base-path-prefix
+    this is added to enable users to create all the hudi datasets for related tables under one path in FS. The datasets are then created under the path - <base_path_prefix>/<database>/<table_to_be_ingested>. However you can override the paths for every table by setting the property hoodie.deltastreamer.ingestion.targetBasePath
+```
+
+The following properties are needed to be set properly to ingest data using HoodieMultiTableDeltaStreamer. 
+
+```java
+hoodie.deltastreamer.ingestion.tablesToBeIngested
+  comma separated names of tables to be ingested in the format <database>.<table>, for example db1.table1,db1.table2
+hoodie.deltastreamer.ingestion.targetBasePath
+  if you wish to ingest a particular table in a separate path, you can mention that path here
+hoodie.deltastreamer.ingestion.<database>.<table>.configFile
+  path to the config file in dedicated config folder which contains table overridden properties for the particular table to be ingested.
+```
+
+Sample config files for table wise overridden properties can be found under `hudi-utilities/src/test/resources/delta-streamer-config`. The command to run HoodieMultiTableDeltaStreamer is also similar to how you run HoodieDeltaStreamer.
+
+```java
+[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieMultiTableDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
+  --props file://${PWD}/hudi-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \
+  --config-folder file://tmp/hudi-ingestion-config \
+  --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
+  --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
+  --source-ordering-field impresssiontime \
+  --base-path-prefix file:\/\/\/tmp/hudi-deltastreamer-op \ 
+  --target-table uber.impressions \
+  --op BULK_INSERT
+```
+
 ## Datasource Writer
 
 The `hudi-spark` module offers the DataSource API to write (and read) a Spark DataFrame into a Hudi table. There are a number of options available:
