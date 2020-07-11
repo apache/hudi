@@ -62,8 +62,8 @@ import java.util.List;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -508,13 +508,6 @@ public class TestHBaseIndex extends HoodieClientTestHarness {
     hoodieWriteStat.setNumUpdateWrites(numUpdateWrites);
     writeStatus.setStat(hoodieWriteStat);
     return writeStatus;
-  }
-
-  private void assertNoWriteErrors(List<WriteStatus> statuses) {
-    // Verify there are no errors
-    for (WriteStatus status : statuses) {
-      assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId());
-    }
   }
 
   private HoodieWriteConfig getConfig() {

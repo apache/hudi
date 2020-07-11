@@ -17,24 +17,25 @@
  * under the License.
  */
 
-package org.apache.hudi.utilities.transform;
+package org.apache.hudi.testutils;
 
-import org.junit.jupiter.api.Test;
+import org.apache.hudi.client.WriteStatus;
 
-import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.spark.sql.types.DataTypes.IntegerType;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
-public class TestChainedTransformer {
-  @Test
-  public void testGetTransformersNames() {
-    Transformer t1 = (jsc, sparkSession, dataset, properties) -> dataset.withColumnRenamed("foo", "bar");
-    Transformer t2 = (jsc, sparkSession, dataset, properties) -> dataset.withColumn("bar", dataset.col("bar").cast(IntegerType));
-    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(t1, t2));
-    List<String> classNames = transformer.getTransformersNames();
-    assertEquals(t1.getClass().getName(), classNames.get(0));
-    assertEquals(t2.getClass().getName(), classNames.get(1));
+/**
+ * Commonly used assertion functions.
+ */
+public class Assertions {
+
+  /**
+   * Assert no failures in writing hoodie files.
+   */
+  public static void assertNoWriteErrors(List<WriteStatus> statuses) {
+    assertAll(statuses.stream().map(status -> () ->
+        assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId())));
   }
 }
