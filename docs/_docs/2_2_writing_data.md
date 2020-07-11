@@ -185,7 +185,7 @@ In some cases, you may want to migrate your existing table into Hudi beforehand.
     this is added to enable users to create all the hudi datasets for related tables under one path in FS. The datasets are then created under the path - <base_path_prefix>/<database>/<table_to_be_ingested>. However you can override the paths for every table by setting the property hoodie.deltastreamer.ingestion.targetBasePath
 ```
 
-The following properties are needed to be set properly to ingest data using HoodieMultiTableDeltaStreamer. 
+The following properties are needed to be set properly to ingest data using `HoodieMultiTableDeltaStreamer`. 
 
 ```java
 hoodie.deltastreamer.ingestion.tablesToBeIngested
@@ -196,7 +196,7 @@ hoodie.deltastreamer.ingestion.<database>.<table>.configFile
   path to the config file in dedicated config folder which contains table overridden properties for the particular table to be ingested.
 ```
 
-Sample config files for table wise overridden properties can be found under `hudi-utilities/src/test/resources/delta-streamer-config`. The command to run HoodieMultiTableDeltaStreamer is also similar to how you run HoodieDeltaStreamer.
+Sample config files for table wise overridden properties can be found under `hudi-utilities/src/test/resources/delta-streamer-config`. The command to run `HoodieMultiTableDeltaStreamer` is also similar to how you run `HoodieDeltaStreamer`.
 
 ```java
 [hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieMultiTableDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
