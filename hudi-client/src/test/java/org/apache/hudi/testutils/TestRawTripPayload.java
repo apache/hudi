@@ -101,6 +101,11 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     }
   }
 
+  public IndexedRecord getRecordToInsert(Schema schema) throws IOException {
+    MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
+    return jsonConverter.convert(getJsonData(), schema);
+  }
+
   @Override
   public Option<Map<String, String>> getMetadata() {
     // Let's assume we want to count the number of input row change events

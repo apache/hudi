@@ -434,6 +434,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
           recordsInFirstBatch.addAll(dataGen.generateDeletesFromExistingRecords(fewRecordsForDelete));
           return recordsInFirstBatch;
         };
+
     writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime,
         -1, recordGenFunction, HoodieWriteClient::upsert, true, 150, 150, 1);
   }
