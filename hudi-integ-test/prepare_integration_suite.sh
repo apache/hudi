@@ -40,7 +40,7 @@ if [ -z "$scala" ]
 then
   scala="2.11"
 else
-  scala=$1
+  scala=$scala
 fi
 echo "spark-submit --packages org.apache.spark:spark-avro_${scala}:2.4.4 \
 --master $0 \
@@ -136,7 +136,6 @@ get_versions () {
    then
     base_command=$base_command
   else
-    hadoop=$1
     base_command+=' -Dhadoop.version='$hadoop
   fi
 
@@ -144,7 +143,6 @@ get_versions () {
   then
     base_command=$base_command
   else
-    hive=$2
     base_command+=' -Dhive.version='$hive
   fi
 
@@ -152,13 +150,12 @@ get_versions () {
   then
     base_command=$base_command
   else
-    scala=$3
     base_command+=' -Dscala-'$scala
   fi
   echo $base_command
 }
 
-versions=$(get_versions $hadoop $hive $scala)
+versions=$(get_versions)
 
 final_command='mvn clean install -DskipTests '$versions
 printf "Final command $final_command \n"
@@ -171,4 +168,4 @@ $move_to_root && $final_command
 cd $_CALLING_DIR
 
 printf "A sample spark command to start the integration suite \n"
-get_spark_command $scala
+get_spark_command
