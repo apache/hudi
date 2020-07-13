@@ -28,11 +28,11 @@ import io.prometheus.client.dropwizard.DropwizardExports;
 import io.prometheus.client.exporter.PushGateway;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.SparkEnv;
 import org.apache.spark.metrics.MetricsSystem;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -48,11 +48,6 @@ public class PushGatewayReporter extends MetricsReporter {
     // Check the serverHost and serverPort here
     String serverHost = config.getPrometheusPushGatewayHost();
     int serverPort = config.getPrometheusPushGatewayPort();
-    if (serverHost == null || serverPort == 0) {
-      throw new RuntimeException(
-          String.format("Prometheus cannot be initialized with serverHost[%s] and serverPort[%s].",
-              serverHost, serverPort));
-    }
     MetricsSystem.checkMinimalPollingPeriod(TimeUnit.SECONDS, 30);
     pushGateWayServer = new PushGateWayServer(serverHost, serverPort, registry);
   }
@@ -98,13 +93,13 @@ public class PushGatewayReporter extends MetricsReporter {
     private PushGateway pushGateway;
     private CollectorRegistry pushRegistry;
     private DropwizardExports sparkMetricExports;
-    private String sparkAppId;
+    private String jobName;
 
     public PushGateWayServer(String host, int port, MetricRegistry registry) {
       pushRegistry = new CollectorRegistry();
       sparkMetricExports = new DropwizardExports(registry);
       pushGateway = new PushGateway(host + ":" + port);
-      sparkAppId = SparkEnv.get().conf().getAppId();
+      jobName = getJobName();
     }
 
     public void start() {
@@ -113,11 +108,16 @@ public class PushGatewayReporter extends MetricsReporter {
 
     public void stop() throws IOException {
       pushRegistry.unregister(sparkMetricExports);
-      pushGateway.delete(sparkAppId);
+      pushGateway.delete(jobName);
     }
 
     public void report() throws IOException {
-      pushGateway.pushAdd(pushRegistry, sparkAppId);
+      pushGateway.pushAdd(pushRegistry, jobName);
+    }
+
+    private String getJobName() {
+      Random random = new Random();
+      return String.valueOf(random.nextLong());
     }
   }
 }

@@ -42,11 +42,6 @@ public class PrometheusReporter extends MetricsReporter {
     // Check the serverHost and serverPort here
     String serverHost = config.getPrometheusHost();
     int serverPort = config.getPrometheusPort();
-    if (serverHost == null || serverPort == 0) {
-      throw new RuntimeException(
-          String.format("Prometheus cannot be initialized with serverHost[%s] and serverPort[%s].",
-              serverHost, serverPort));
-    }
     try {
       httpServer = new HTTPServer(serverHost, serverPort);
     } catch (Exception e) {
@@ -62,7 +57,6 @@ public class PrometheusReporter extends MetricsReporter {
 
   @Override
   public void report() {
-
   }
 
   @Override
