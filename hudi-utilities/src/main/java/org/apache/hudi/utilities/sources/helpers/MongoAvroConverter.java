@@ -48,7 +48,7 @@ public class MongoAvroConverter extends KafkaAvroConverter {
     // Insert/Read operation has after field
     if (op.equals(Operation.CREATE) || op.equals(Operation.READ)) {
       BsonDocument after = BsonDocument.parse(valueJson.getString(AFTER_OPLOGFIELD));
-      SchemaUtils.extractAvroValues(after, genericRecord);
+      SchemaUtils.extractAvroValues(after, genericRecord, schema);
     }
 
     // Update operation has patch field

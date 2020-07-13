@@ -59,9 +59,10 @@ public class SchemaUtils {
    *
    * @param document Bson document
    * @param record   Generic record partially built
+   * @param schema   Current Avro schema
    */
-  public static void extractAvroValues(BsonDocument document, GenericRecord record) {
-    for (Schema.Field field : record.getSchema().getFields()) {
+  public static void extractAvroValues(BsonDocument document, GenericRecord record, Schema schema) {
+    for (Schema.Field field : schema.getFields()) {
       if (field.name().equals(SchemaUtils.ID_FIELD)) {
         continue;
       }
@@ -133,7 +134,7 @@ public class SchemaUtils {
     Schema.Field field = schema.getField(fieldName);
     if (field == null) {
       for (Schema.Field item : schema.getFields()) {
-        for (String aliasName : field.aliases()) {
+        for (String aliasName : item.aliases()) {
           if (aliasName.equals(fieldName)) {
             field = item;
             break;

@@ -80,7 +80,7 @@ public class MongoAvroPayload extends BaseAvroPayload implements
       }
 
       final Pair<GenericRecord, Operation> combinedValue = combineRecords(
-          (GenericRecord) oneValue.get(), (GenericRecord) anotherValue.get());
+          (GenericRecord) oneValue.get(), (GenericRecord) anotherValue.get(), schema);
       return new MongoAvroPayload(combinedValue.getKey(),
           (Long) combinedValue.getKey().get(SchemaUtils.TS_MS_FIELD));
     } catch (IOException e) {
@@ -99,7 +99,7 @@ public class MongoAvroPayload extends BaseAvroPayload implements
       return Option.empty();
     }
     final Pair<GenericRecord, Operation> combinedValue = combineRecords(
-        (GenericRecord) currentValue, (GenericRecord) newValue.get());
+        (GenericRecord) currentValue, (GenericRecord) newValue.get(), schema);
     // Return empty record for deletion operation
     if (combinedValue.getValue().equals(Operation.DELETE)) {
       return Option.empty();
@@ -117,7 +117,7 @@ public class MongoAvroPayload extends BaseAvroPayload implements
   /**
    * Patch current record value with updates.
    */
-  private static void patchRecord(GenericRecord curValue, BsonDocument patch) {
+  private static void patchRecord(GenericRecord curValue, BsonDocument patch, Schema schema) {
     // Merge $set and $unset
     BsonDocument updates = new BsonDocument();
     combineSetAndUnset(patch, updates);
@@ -126,7 +126,7 @@ public class MongoAvroPayload extends BaseAvroPayload implements
     for (Entry<String, BsonValue> entry : updates.entrySet()) {
       final String[] fieldPath = entry.getKey().split("\\.");
       // Ignore fields which are not in the schema.
-      Schema.Field field = SchemaUtils.getFieldByName(fieldPath[0], curValue.getSchema());
+      Schema.Field field = SchemaUtils.getFieldByName(fieldPath[0], schema);
       if (field == null) {
         continue;
       }
@@ -195,9 +195,9 @@ public class MongoAvroPayload extends BaseAvroPayload implements
   /**
    * Make a shallow copy of record.
    */
-  private static GenericRecord copyRecord(GenericRecord record) {
-    GenericRecord newRecord = new GenericData.Record(record.getSchema());
-    for (Schema.Field field : record.getSchema().getFields()) {
+  private static GenericRecord copyRecord(GenericRecord record, Schema schema) {
+    GenericRecord newRecord = new GenericData.Record(schema);
+    for (Schema.Field field : schema.getFields()) {
       Object value = record.get(field.pos());
       if (value != null) {
         newRecord.put(field.pos(), value);
@@ -210,7 +210,7 @@ public class MongoAvroPayload extends BaseAvroPayload implements
    * Combine current and new record values. Note current record may not be using latest schema.
    */
   private static Pair<GenericRecord, Operation> combineRecords(
-      GenericRecord curValue, GenericRecord newValue) {
+      GenericRecord curValue, GenericRecord newValue, Schema schema) {
     Operation newOp = Operation.forCode(newValue.get(SchemaUtils.OP_FIELD).toString());
     // Latest deletion/insert/read operations on documents win.
     if (newOp.equals(Operation.DELETE) || !newOp.equals(Operation.UPDATE)) {
@@ -226,12 +226,12 @@ public class MongoAvroPayload extends BaseAvroPayload implements
         LOG.error("_id field is expected for document replacement");
       }
       // Copy or overwrite fields to be CREATE OpLog.
-      GenericRecord mergedValue = new GenericData.Record(newValue.getSchema());
+      GenericRecord mergedValue = new GenericData.Record(schema);
       mergedValue.put(SchemaUtils.ID_FIELD, newValue.get(SchemaUtils.ID_FIELD));
       mergedValue.put(SchemaUtils.OP_FIELD, Operation.CREATE.code());
       mergedValue.put(SchemaUtils.TS_MS_FIELD, newValue.get(SchemaUtils.TS_MS_FIELD));
       // Extract user defined fields
-      SchemaUtils.extractAvroValues(newPatch, mergedValue);
+      SchemaUtils.extractAvroValues(newPatch, mergedValue, schema);
       return Pair.of(mergedValue, Operation.CREATE);
     }
 
@@ -244,13 +244,12 @@ public class MongoAvroPayload extends BaseAvroPayload implements
     Operation curOp = Operation.forCode(curValue.get(SchemaUtils.OP_FIELD).toString());
     if (curOp.equals(Operation.READ) || curOp.equals(Operation.CREATE)) {
       // Rewrite current value with latest schema
-      if (curValue.getSchema() != newValue.getSchema()) {
-        curValue = HoodieAvroUtils.rewriteRecordWithOnlyNewSchemaFields(
-            curValue, newValue.getSchema());
+      if (curValue.getSchema() != schema) {
+        curValue = HoodieAvroUtils.rewriteRecordWithOnlyNewSchemaFields(curValue, schema);
       } else {  // Make a shallow copy of current value
-        curValue = copyRecord(curValue);
+        curValue = copyRecord(curValue, schema);
       }
-      patchRecord(curValue, newPatch);
+      patchRecord(curValue, newPatch, schema);
       curValue.put(SchemaUtils.TS_MS_FIELD, newValue.get(SchemaUtils.TS_MS_FIELD));
       return Pair.of(curValue, curOp);
     } else if (curOp.equals(Operation.UPDATE)) {
