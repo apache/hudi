@@ -67,6 +67,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -218,6 +219,26 @@ public class HoodieClientTestUtils {
         }
       }
       return sqlContext.read().parquet(filteredPaths.toArray(new String[filteredPaths.size()]));
+    } catch (Exception e) {
+      throw new HoodieException("Error reading hoodie table as a dataframe", e);
+    }
+  }
+
+  /**
+   * Find total basefiles for passed in paths.
+   */
+  public static Map<String, Integer> getBaseFileCountForPaths(String basePath, FileSystem fs,
+      String... paths) {
+    Map<String, Integer> toReturn = new HashMap<>();
+    try {
+      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
+      for (String path : paths) {
+        BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
+            metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new Path(path)));
+        List<HoodieBaseFile> latestFiles = fileSystemView.getLatestBaseFiles().collect(Collectors.toList());
+        toReturn.put(path, latestFiles.size());
+      }
+      return toReturn;
     } catch (Exception e) {
       throw new HoodieException("Error reading hoodie table as a dataframe", e);
     }

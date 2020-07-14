@@ -130,10 +130,12 @@ public class HoodieGlobalSimpleIndex<T extends HoodieRecordPayload> extends Hood
             HoodieRecordLocation location = partitionPathLocationPair.get().getRight();
             if (config.getGlobalSimpleIndexUpdatePartitionPath() && !(inputRecord.getPartitionPath().equals(partitionPath))) {
               // Create an empty record to delete the record in the old partition
-              HoodieRecord<T> emptyRecord = new HoodieRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), new EmptyHoodieRecordPayload());
+              HoodieRecord<T> deleteRecord = new HoodieRecord(new HoodieKey(inputRecord.getRecordKey(), partitionPath), new EmptyHoodieRecordPayload());
+              deleteRecord.setCurrentLocation(location);
+              deleteRecord.seal();
               // Tag the incoming record for inserting to the new partition
-              HoodieRecord<T> taggedRecord = (HoodieRecord<T>) HoodieIndexUtils.getTaggedRecord(inputRecord, Option.empty());
-              taggedRecords = Arrays.asList(emptyRecord, taggedRecord);
+              HoodieRecord<T> insertRecord = (HoodieRecord<T>) HoodieIndexUtils.getTaggedRecord(inputRecord, Option.empty());
+              taggedRecords = Arrays.asList(deleteRecord, insertRecord);
             } else {
               // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
               // When it differs, the record will still be updated at its old partition.
