@@ -84,6 +84,7 @@ temp_query --sql "select Instant, NumInserts, NumWrites from satishkotha_debug w
  * Apache Hudi jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
 
 ### Migration Guide for this release
+ * Upgrade hudi readers (query engines) first with 0.5.1-incubating release before upgrading writer.
  * In 0.5.1, the community restructured the package of key generators. The key generator related classes have been moved from `org.apache.hudi` to `org.apache.hudi.keygen`. 
 
 ### Release Highlights

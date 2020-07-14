@@ -109,10 +109,17 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 12. ["Building a near real-time, high-performance data warehouse based on Apache Hudi and Apache Kylin"](https://drive.google.com/open?id=1Pk_WdFxfEZxMMfAOn0R8-m3ALkcN6G9e) - By ShaoFeng Shi March 2020, Apache Hudi & Apache Kylin Online Meetup, China
 
+13. ["Building large scale, transactional data lakes using Apache Hudi"](https://berlinbuzzwords.de/session/building-large-scale-transactional-data-lakes-using-apache-hudi) - By Nishith Agarwal, June 2020, Berlin Buzzwords 2020.
+
 ## Articles
 
 1. ["The Case for incremental processing on Hadoop"](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop) - O'reilly Ideas article by Vinoth Chandar
 2. ["Hoodie: Uber Engineering's Incremental Processing Framework on Hadoop"](https://eng.uber.com/hoodie/) - Engineering Blog By Prasanna Rajaperumal
+3. ["New – Insert, Update, Delete Data on S3 with Amazon EMR and Apache Hudi"](https://aws.amazon.com/blogs/aws/new-insert-update-delete-data-on-s3-with-amazon-emr-and-apache-hudi/) - AWS Blog by Danilo Poccia
+4. ["The Apache Software Foundation Announces Apache® Hudi™ as a Top-Level Project"](https://blogs.apache.org/foundation/entry/the-apache-software-foundation-announces64) - ASF Graduation announcement
+5. ["Apache Hudi grows cloud data lake maturity"](https://searchdatamanagement.techtarget.com/news/252484740/Apache-Hudi-grows-cloud-data-lake-maturity)
+6. ["Building a Large-scale Transactional Data Lake at Uber Using Apache Hudi"](https://eng.uber.com/apache-hudi-graduation/) - Uber eng blog by Nishith Agarwal
+7. ["Hudi On Hops"](https://www.diva-portal.org/smash/get/diva2:1413103/FULLTEXT01.pdf) - By NETSANET GEBRETSADKAN KIDANE
 
 ## Powered by
 
