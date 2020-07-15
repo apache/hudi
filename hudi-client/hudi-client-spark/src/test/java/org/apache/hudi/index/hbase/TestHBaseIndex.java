@@ -110,6 +110,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     hadoopConf = jsc().hadoopConfiguration();
+    hadoopConf.addResource(utility.getConfiguration());
     metaClient = getHoodieMetaClient(hadoopConf, basePath());
     dataGen = new HoodieTestDataGenerator();
   }
