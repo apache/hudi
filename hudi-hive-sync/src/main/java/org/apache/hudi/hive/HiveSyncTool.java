@@ -186,13 +186,13 @@ public class HiveSyncTool {
           hoodieHiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince);
       List<String> newPartitions = filterPartitions(partitionEvents, PartitionEventType.ADD);
       if (!newPartitions.isEmpty()) {
-        LOG.info("New Partitions " + newPartitions);
-        hoodieHiveClient.addPartitionsToTable(tableName, newPartitions);
+          LOG.info("New Partitions " + newPartitions);
+          hoodieHiveClient.addPartitionsToTable(tableName, newPartitions);
       }
       List<String> updatePartitions = filterPartitions(partitionEvents, PartitionEventType.UPDATE);
       if (!updatePartitions.isEmpty()) {
-        LOG.info("Changed Partitions " + updatePartitions);
-        hoodieHiveClient.updatePartitionsToTable(tableName, updatePartitions);
+          LOG.info("Changed Partitions " + updatePartitions);
+          hoodieHiveClient.updatePartitionsToTable(tableName, updatePartitions);
       }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to sync partitions for table " + tableName, e);
