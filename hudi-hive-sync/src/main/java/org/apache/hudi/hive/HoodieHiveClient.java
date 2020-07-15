@@ -126,10 +126,6 @@ public class HoodieHiveClient {
    * Add the (NEW) partitions to the table.
    */
   void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
-    if (partitionsToAdd.isEmpty()) {
-      LOG.info("No partitions to add for " + tableName);
-      return;
-    }
     LOG.info("Adding partitions " + partitionsToAdd.size() + " to table " + tableName);
     String sql = constructAddPartitions(tableName, partitionsToAdd);
     updateHiveSQL(sql);
@@ -139,10 +135,6 @@ public class HoodieHiveClient {
    * Partition path has changed - update the path for te following partitions.
    */
   void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
-    if (changedPartitions.isEmpty()) {
-      LOG.info("No partitions to change for " + tableName);
-      return;
-    }
     LOG.info("Changing partitions " + changedPartitions.size() + " on " + tableName);
     List<String> sqls = constructChangePartitions(tableName, changedPartitions);
     for (String sql : sqls) {
