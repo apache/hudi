@@ -33,5 +33,6 @@
   <modules>
       <module>hudi-sync-common</module>
       <module>hudi-hive-sync</module>
+      <module>hudi-dla-sync</module>
   </modules>
 </project>
