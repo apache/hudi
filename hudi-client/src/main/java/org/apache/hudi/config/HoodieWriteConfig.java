@@ -632,6 +632,17 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return clientSpecifiedViewStorageConfig;
   }
 
+  /**
+   * Commit call back configs.
+   */
+  public boolean writeCommitCallbackOn() {
+    return Boolean.parseBoolean(props.getProperty(HoodieWriteCommitCallbackConfig.CALLBACK_ON));
+  }
+
+  public String getCallbackClass() {
+    return props.getProperty(HoodieWriteCommitCallbackConfig.CALLBACK_CLASS_PROP);
+  }
+
   public static class Builder {
 
     private final Properties props = new Properties();
@@ -642,6 +653,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isMemoryConfigSet = false;
     private boolean isViewConfigSet = false;
     private boolean isConsistencyGuardSet = false;
+    private boolean isCallbackConfigSet = false;
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -783,6 +795,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withCallbackConfig(HoodieWriteCommitCallbackConfig callbackConfig) {
+      props.putAll(callbackConfig.getProps());
+      isCallbackConfigSet = true;
+      return this;
+    }
+
     public Builder withFinalizeWriteParallelism(int parallelism) {
       props.setProperty(FINALIZE_WRITE_PARALLELISM, String.valueOf(parallelism));
       return this;
@@ -848,6 +866,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           FileSystemViewStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isConsistencyGuardSet,
           ConsistencyGuardConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isCallbackConfigSet,
+          HoodieWriteCommitCallbackConfig.newBuilder().fromProperties(props).build());
 
       setDefaultOnCondition(props, !props.containsKey(TIMELINE_LAYOUT_VERSION), TIMELINE_LAYOUT_VERSION,
           String.valueOf(TimelineLayoutVersion.CURR_VERSION));
