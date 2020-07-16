@@ -129,6 +129,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/sql-transformer.properties", dfs,
         dfsBasePath + "/sql-transformer.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source.avsc", dfs, dfsBasePath + "/source.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source_evoluted.avsc", dfs, dfsBasePath + "/source_evoluted.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source-flattened.avsc", dfs, dfsBasePath + "/source-flattened.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target.avsc", dfs, dfsBasePath + "/target.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target-flattened.avsc", dfs, dfsBasePath + "/target-flattened.avsc");
@@ -469,6 +470,44 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     TestHelpers.assertCommitMetadata("00001", tableBasePath, dfs, 2);
     List<Row> counts = TestHelpers.countsPerCommit(tableBasePath + "/*/*.parquet", sqlContext);
     assertEquals(1950, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+  }
+
+  @Test
+  public void testSchemaEvolution() throws Exception {
+    String tableBasePath = dfsBasePath + "/test_table_schema_evolution";
+
+    // Insert data produced with Schema A, pass Schema A
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, Operation.INSERT, Collections.singletonList(IdentityTransformer.class.getName()));
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source.avsc");
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source.avsc");
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    TestHelpers.assertRecordCount(1000, tableBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, dfs, 1);
+
+    // Upsert data produced with Schema B, pass Schema B
+    cfg = TestHelpers.makeConfig(tableBasePath, Operation.UPSERT, Collections.singletonList(TripsWithEvolutedOptionalFieldTransformer.class.getName()));
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source_evoluted.avsc");
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source_evoluted.avsc");
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    TestHelpers.assertRecordCount(1450, tableBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertCommitMetadata("00001", tableBasePath, dfs, 2);
+    List<Row> counts = TestHelpers.countsPerCommit(tableBasePath + "/*/*.parquet", sqlContext);
+    assertEquals(1450, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+
+    // Upsert data produced with Schema A, pass Schema B
+    cfg = TestHelpers.makeConfig(tableBasePath, Operation.UPSERT, Collections.singletonList(IdentityTransformer.class.getName()));
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source_evoluted.avsc");
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source_evoluted.avsc");
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    TestHelpers.assertRecordCount(1900, tableBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertCommitMetadata("00002", tableBasePath, dfs, 3);
+    counts = TestHelpers.countsPerCommit(tableBasePath + "/*/*.parquet", sqlContext);
+    assertEquals(1900, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+
+    sqlContext.read().format("org.apache.hudi").load(tableBasePath + "/*/*.parquet").createOrReplaceTempView("tmp_trips");
+    long recordCount =
+        sqlContext.sparkSession().sql("select * from tmp_trips where evoluted_optional_union_field is not NULL").count();
+    assertEquals(450, recordCount);
   }
 
   @Test
@@ -956,6 +995,30 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       rowDataset.sqlContext().udf().register("distance_udf", new DistanceUDF(), DataTypes.DoubleType);
       return rowDataset.withColumn("haversine_distance", functions.callUDF("distance_udf", functions.col("begin_lat"),
           functions.col("end_lat"), functions.col("begin_lon"), functions.col("end_lat")));
+    }
+  }
+
+  /**
+   * Add new field evoluted_optional_union_field with value of the field rider.
+   */
+  public static class TripsWithEvolutedOptionalFieldTransformer implements Transformer {
+
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+                              TypedProperties properties) {
+      return rowDataset.withColumn("evoluted_optional_union_field", functions.col("rider"));
+    }
+  }
+
+  /**
+   * Applies no transformation.
+   */
+  public static class IdentityTransformer implements Transformer {
+
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+                              TypedProperties properties) {
+      return rowDataset;
     }
   }
 
