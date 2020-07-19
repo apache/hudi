@@ -17,18 +17,24 @@
  * under the License.
  */
 
-package org.apache.hudi.testutils;
+package org.apache.hudi.testutils.providers;
 
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 
-public interface DFSProvider {
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 
-  MiniDFSCluster dfsCluster();
+import java.io.IOException;
+import java.util.Properties;
 
-  DistributedFileSystem dfs();
+public interface HoodieMetaClientProvider {
 
-  Path dfsBasePath();
+  HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException;
 
+  default HoodieTableFileSystemView getHoodieTableFileSystemView(
+      HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline, FileStatus[] fileStatuses) {
+    return new HoodieTableFileSystemView(metaClient, visibleActiveTimeline, fileStatuses);
+  }
 }

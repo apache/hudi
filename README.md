@@ -92,6 +92,18 @@ spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
+## Running Tests
+
+All tests can be run with maven
+```
+mvn test
+```
+
+To run tests with spark event logging enabled, define the Spark event log directory. This allows visualizing test DAG and stages using Spark History Server UI.
+```
+mvn test -DSPARK_EVLOG_DIR=/path/for/spark/event/log
+```
+
 ## Quickstart
 
 Please visit [https://hudi.apache.org/docs/quick-start-guide.html](https://hudi.apache.org/docs/quick-start-guide.html) to quickly explore Hudi's capabilities using spark-shell. 

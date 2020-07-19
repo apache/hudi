@@ -85,6 +85,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
     if (plan.getOperations() != null) {
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
+      jsc.setJobGroup(this.getClass().getSimpleName(), "Validate compaction operations");
       return jsc.parallelize(ops, parallelism).map(op -> {
         try {
           return validateCompactionOperation(metaClient, compactionInstant, op, Option.of(fsView));
@@ -350,6 +351,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
     } else {
       LOG.info("The following compaction renaming operations needs to be performed to un-schedule");
       if (!dryRun) {
+        jsc.setJobGroup(this.getClass().getSimpleName(), "Execute unschedule operations");
         return jsc.parallelize(renameActions, parallelism).map(lfPair -> {
           try {
             LOG.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
@@ -392,6 +394,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
           "Number of Compaction Operations :" + plan.getOperations().size() + " for instant :" + compactionInstant);
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
+      jsc.setJobGroup(this.getClass().getSimpleName(), "Generate compaction unscheduling operations");
       return jsc.parallelize(ops, parallelism).flatMap(op -> {
         try {
           return getRenamingActionsForUnschedulingCompactionOperation(metaClient, compactionInstant, op,

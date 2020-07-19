@@ -40,6 +40,8 @@ import org.apache.hudi.index.HoodieIndex;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +57,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestHarness.class);
-
+  
+  private String testMethodName;
   protected transient JavaSparkContext jsc = null;
   protected transient Configuration hadoopConf = null;
   protected transient SQLContext sqlContext;
@@ -79,6 +82,15 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient HdfsTestService hdfsTestService;
   protected transient MiniDFSCluster dfsCluster;
   protected transient DistributedFileSystem dfs;
+
+  @BeforeEach
+  public void setTestMethodName(TestInfo testInfo) {
+    if (testInfo.getTestMethod().isPresent()) {
+      testMethodName = testInfo.getTestMethod().get().getName();
+    } else {
+      testMethodName = "Unknown";
+    }
+  }
 
   /**
    * Initializes resource group for the subclasses of {@link HoodieClientTestBase}.
@@ -111,7 +123,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    */
   protected void initSparkContexts(String appName) {
     // Initialize a local spark env
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName));
+    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName + "#" + testMethodName));
     jsc.setLogLevel("ERROR");
     hadoopConf = jsc.hadoopConfiguration();
 
@@ -120,11 +132,11 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   /**
-   * Initializes the Spark contexts ({@link JavaSparkContext} and {@link SQLContext}) with a default name
-   * <b>TestHoodieClient</b>.
+   * Initializes the Spark contexts ({@link JavaSparkContext} and {@link SQLContext}) 
+   * with a default name matching the name of the class.
    */
   protected void initSparkContexts() {
-    initSparkContexts("TestHoodieClient");
+    initSparkContexts(this.getClass().getSimpleName());
   }
 
   /**

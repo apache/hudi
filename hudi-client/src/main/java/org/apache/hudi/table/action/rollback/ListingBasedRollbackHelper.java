@@ -81,6 +81,7 @@ public class ListingBasedRollbackHelper implements Serializable {
     };
 
     int sparkPartitions = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Perform rollback actions");
     return jsc.parallelize(rollbackRequests, sparkPartitions).mapToPair(rollbackRequest -> {
       switch (rollbackRequest.getType()) {
         case DELETE_DATA_FILES_ONLY: {

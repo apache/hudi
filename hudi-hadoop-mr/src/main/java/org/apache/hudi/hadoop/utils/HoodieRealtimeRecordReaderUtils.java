@@ -33,6 +33,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
+import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.HiveDecimalUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.BytesWritable;
@@ -210,9 +212,8 @@ public class HoodieRealtimeRecordReaderUtils {
           LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) LogicalTypes.fromSchema(schema);
           HiveDecimalWritable writable = new HiveDecimalWritable(((GenericFixed) value).bytes(),
               decimal.getScale());
-          return HiveDecimalWritable.enforcePrecisionScale(writable,
-              decimal.getPrecision(),
-              decimal.getScale());
+          return HiveDecimalUtils.enforcePrecisionScale(writable,
+              new DecimalTypeInfo(decimal.getPrecision(), decimal.getScale()));
         }
         return new BytesWritable(((GenericFixed) value).bytes());
       default:

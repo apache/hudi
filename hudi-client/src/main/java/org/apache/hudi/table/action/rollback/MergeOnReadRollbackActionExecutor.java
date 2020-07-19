@@ -127,6 +127,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
     List<String> partitions = FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
         config.shouldAssumeDatePartitioning());
     int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Generate all rollback requests");
     return jsc.parallelize(partitions, Math.min(partitions.size(), sparkPartitions)).flatMap(partitionPath -> {
       HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
       List<ListingBasedRollbackRequest> partitionRollbackRequests = new ArrayList<>();

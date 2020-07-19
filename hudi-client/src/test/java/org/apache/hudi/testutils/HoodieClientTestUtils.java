@@ -68,6 +68,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -169,9 +170,30 @@ public class HoodieClientTestUtils {
     new RandomAccessFile(path, "rw").setLength(length);
   }
 
+  /**
+   * Returns a Spark config for this test.
+   *
+   * The following properties may be set to customize the Spark context:
+   *   SPARK_EVLOG_DIR: Local directory where event logs should be saved. This
+   *                    allows viewing the logs with spark-history-server.
+   *
+   * @note When running the tests using maven, use the following syntax to set
+   *       a property:
+   *          mvn -DSPARK_XXX=yyy ...
+   *
+   * @param appName A name for the Spark application. Shown in the Spark web UI.
+   * @return A Spark config
+   */
   public static SparkConf getSparkConfForTest(String appName) {
     SparkConf sparkConf = new SparkConf().setAppName(appName)
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").setMaster("local[8]");
+
+    String evlogDir = System.getProperty("SPARK_EVLOG_DIR");
+    if (evlogDir != null) {
+      sparkConf.set("spark.eventLog.enabled", "true");
+      sparkConf.set("spark.eventLog.dir", evlogDir);
+    }
+
     return HoodieReadClient.addHoodieSupport(sparkConf);
   }
 
@@ -242,6 +264,26 @@ public class HoodieClientTestUtils {
         }
       }
       return sqlContext.read().parquet(filteredPaths.toArray(new String[filteredPaths.size()]));
+    } catch (Exception e) {
+      throw new HoodieException("Error reading hoodie table as a dataframe", e);
+    }
+  }
+
+  /**
+   * Find total basefiles for passed in paths.
+   */
+  public static Map<String, Integer> getBaseFileCountForPaths(String basePath, FileSystem fs,
+      String... paths) {
+    Map<String, Integer> toReturn = new HashMap<>();
+    try {
+      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
+      for (String path : paths) {
+        BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
+            metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new Path(path)));
+        List<HoodieBaseFile> latestFiles = fileSystemView.getLatestBaseFiles().collect(Collectors.toList());
+        toReturn.put(path, latestFiles.size());
+      }
+      return toReturn;
     } catch (Exception e) {
       throw new HoodieException("Error reading hoodie table as a dataframe", e);
     }

@@ -49,15 +49,12 @@ public class SimpleKeyGenerator extends KeyGenerator {
 
   @Override
   public HoodieKey getKey(GenericRecord record) {
-    if (recordKeyField == null || partitionPathField == null) {
-      throw new HoodieKeyException("Unable to find field names for record key or partition path in cfg");
-    }
+    String recordKey = getRecordKey(record);
+    String partitionPath = getPartitionPath(record, partitionPathField);
+    return new HoodieKey(recordKey, partitionPath);
+  }
 
-    String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
-    if (recordKey == null || recordKey.isEmpty()) {
-      throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
-    }
-
+  String getPartitionPath(GenericRecord record, String partitionPathField) {
     String partitionPath = DataSourceUtils.getNestedFieldValAsString(record, partitionPathField, true);
     if (partitionPath == null || partitionPath.isEmpty()) {
       partitionPath = DEFAULT_PARTITION_PATH;
@@ -66,6 +63,14 @@ public class SimpleKeyGenerator extends KeyGenerator {
       partitionPath = partitionPathField + "=" + partitionPath;
     }
 
-    return new HoodieKey(recordKey, partitionPath);
+    return partitionPath;
+  }
+
+  String getRecordKey(GenericRecord record) {
+    String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
+    if (recordKey == null || recordKey.isEmpty()) {
+      throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
+    }
+    return recordKey;
   }
 }

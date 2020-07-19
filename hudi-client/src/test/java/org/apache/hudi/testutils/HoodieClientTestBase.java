@@ -60,6 +60,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -140,18 +141,6 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
     ((SyncableFileSystemView) (table.getSliceView())).reset();
     return table;
-  }
-
-  /**
-   * Assert no failures in writing hoodie files.
-   *
-   * @param statuses List of Write Status
-   */
-  public static void assertNoWriteErrors(List<WriteStatus> statuses) {
-    // Verify there are no errors
-    for (WriteStatus status : statuses) {
-      assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId());
-    }
   }
 
   public void assertPartitionMetadataForRecords(List<HoodieRecord> inputRecords, FileSystem fs) throws IOException {

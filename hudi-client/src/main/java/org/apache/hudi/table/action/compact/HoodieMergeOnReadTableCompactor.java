@@ -94,6 +94,7 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
         .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
     LOG.info("Compactor compacting " + operations + " files");
 
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Compacting file slices");
     return jsc.parallelize(operations, operations.size())
         .map(s -> compact(table, metaClient, config, s, compactionInstantTime)).flatMap(List::iterator);
   }
@@ -192,6 +193,7 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
 
     SliceView fileSystemView = hoodieTable.getSliceView();
     LOG.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Looking for files to compact");
     List<HoodieCompactionOperation> operations = jsc.parallelize(partitionPaths, partitionPaths.size())
         .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> fileSystemView
             .getLatestFileSlices(partitionPath)

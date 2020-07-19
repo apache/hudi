@@ -47,8 +47,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -57,7 +57,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
-    initSparkContexts("TestHoodieMergeHandle");
+    initSparkContexts();
     initPath();
     initFileSystem();
     initTestDataGenerator();
@@ -304,18 +304,6 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
     }
     Dataset<Row> dataSet = HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths);
     return dataSet;
-  }
-
-  /**
-   * Assert no failures in writing hoodie files.
-   *
-   * @param statuses List of Write Status
-   */
-  void assertNoWriteErrors(List<WriteStatus> statuses) {
-    // Verify there are no errors
-    for (WriteStatus status : statuses) {
-      assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId());
-    }
   }
 
   HoodieWriteConfig.Builder getConfigBuilder() {
