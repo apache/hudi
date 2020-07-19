@@ -27,6 +27,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.IOType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -55,9 +56,9 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
   }
 
   private void createSomeMarkerFiles() {
-    markerFiles.create("2020/06/01", "file1", MarkerFiles.IOType.MERGE);
-    markerFiles.create("2020/06/02", "file2", MarkerFiles.IOType.APPEND);
-    markerFiles.create("2020/06/03", "file3", MarkerFiles.IOType.CREATE);
+    markerFiles.create("2020/06/01", "file1", IOType.MERGE);
+    markerFiles.create("2020/06/02", "file2", IOType.APPEND);
+    markerFiles.create("2020/06/03", "file3", IOType.CREATE);
   }
 
   private void createInvalidFile(String partitionPath, String invalidFileName) {
@@ -77,7 +78,7 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
 
     // then
     assertTrue(fs.exists(markerFolderPath));
-    List<FileStatus> markerFiles = FileSystemTestUtils.listPathRecursively(fs, markerFolderPath)
+    List<FileStatus> markerFiles = FileSystemTestUtils.listRecursive(fs, markerFolderPath)
         .stream().filter(status -> status.getPath().getName().contains(".marker"))
         .sorted().collect(Collectors.toList());
     assertEquals(3, markerFiles.size());
@@ -92,7 +93,7 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
   @Test
   public void testDeletionWhenMarkerDirExists() throws IOException {
     //when
-    markerFiles.create("2020/06/01", "file1", MarkerFiles.IOType.MERGE);
+    markerFiles.create("2020/06/01", "file1", IOType.MERGE);
 
     // then
     assertTrue(markerFiles.doesMarkerDirExist());
@@ -113,26 +114,25 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
     createSomeMarkerFiles();
     // add invalid file
     createInvalidFile("2020/06/01", "invalid_file3");
-    int fileSize = FileSystemTestUtils.listPathRecursively(fs, markerFolderPath).size();
+    int fileSize = FileSystemTestUtils.listRecursive(fs, markerFolderPath).size();
     assertEquals(fileSize,4);
 
     // then
     assertIterableEquals(CollectionUtils.createImmutableList(
-        metaClient.getBasePath() + "/2020/06/01/file1",
-        metaClient.getBasePath() + "/2020/06/03/file3"),
-        markerFiles.getCreatedOrMergedDataPaths().stream().sorted().collect(Collectors.toList())
+        "2020/06/01/file1", "2020/06/03/file3"),
+        markerFiles.createdAndMergedDataPaths().stream().sorted().collect(Collectors.toList())
     );
   }
 
   @Test
-  public void testRelativeMarkerPaths() throws IOException {
+  public void testAllMarkerPaths() throws IOException {
     // given
     createSomeMarkerFiles();
 
     // then
     assertIterableEquals(CollectionUtils.createImmutableList("2020/06/01/file1.marker.MERGE",
         "2020/06/02/file2.marker.APPEND", "2020/06/03/file3.marker.CREATE"),
-        markerFiles.relativeMarkerFilePaths().stream().sorted().collect(Collectors.toList())
+        markerFiles.allMarkerFilePaths().stream().sorted().collect(Collectors.toList())
     );
   }
 

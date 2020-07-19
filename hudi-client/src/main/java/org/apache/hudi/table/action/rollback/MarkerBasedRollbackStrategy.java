@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.io.IOType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
 import org.apache.log4j.LogManager;
@@ -133,12 +134,12 @@ public class MarkerBasedRollbackStrategy implements BaseRollbackActionExecutor.R
   public List<HoodieRollbackStat> execute(HoodieInstant instantToRollback) {
     try {
       MarkerFiles markerFiles = new MarkerFiles(table, instantToRollback.getTimestamp());
-      List<String> markerFilePaths = markerFiles.relativeMarkerFilePaths();
+      List<String> markerFilePaths = markerFiles.allMarkerFilePaths();
       int parallelism = Math.max(Math.min(markerFilePaths.size(), config.getRollbackParallelism()), 1);
       return jsc.parallelize(markerFilePaths, parallelism)
           .map(markerFilePath -> {
             String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
-            MarkerFiles.IOType type = MarkerFiles.IOType.valueOf(typeStr);
+            IOType type = IOType.valueOf(typeStr);
             switch (type) {
               case MERGE:
                 return undoMerge(MarkerFiles.stripMarkerSuffix(markerFilePath));

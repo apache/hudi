@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.IOType;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -63,6 +64,14 @@ public class MarkerFiles {
         instantTime);
   }
 
+  public void quietDeleteMarkerDir() {
+    try {
+      deleteMarkerDir();
+    } catch (HoodieIOException ioe) {
+      LOG.warn("Error deleting marker directory for instant " + instantTime, ioe);
+    }
+  }
+
   /**
    * Delete Marker directory corresponding to an instant.
    */
@@ -84,12 +93,11 @@ public class MarkerFiles {
     return fs.exists(markerDirPath);
   }
 
-  public List<String> getCreatedOrMergedDataPaths() throws IOException {
+  public List<String> createdAndMergedDataPaths() throws IOException {
     List<String> dataFiles = new LinkedList<>();
     FSUtils.processFiles(fs, markerDirPath.toString(), (status) -> {
       String pathStr = status.getPath().toString();
-      if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN)
-          && !pathStr.endsWith(IOType.APPEND.name())) {
+      if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
         dataFiles.add(translateMarkerToDataPath(pathStr));
       }
       return true;
@@ -99,10 +107,10 @@ public class MarkerFiles {
 
   private String translateMarkerToDataPath(String markerPath) {
     String rPath = stripMarkerFolderPrefix(markerPath);
-    return String.format("%s/%s", basePath, MarkerFiles.stripMarkerSuffix(rPath));
+    return MarkerFiles.stripMarkerSuffix(rPath);
   }
 
-  public List<String> relativeMarkerFilePaths() throws IOException {
+  public List<String> allMarkerFilePaths() throws IOException {
     List<String> markerFiles = new ArrayList<>();
     FSUtils.processFiles(fs, markerDirPath.toString(), fileStatus -> {
       markerFiles.add(stripMarkerFolderPrefix(fileStatus.getPath().toString()));
@@ -124,9 +132,7 @@ public class MarkerFiles {
   /**
    * The marker path will be <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename.marker.writeIOType.
    */
-  public Path create(String partitionPath,
-                               String dataFileName,
-                               IOType type) {
+  public Path create(String partitionPath, String dataFileName, IOType type) {
     Path path = FSUtils.getPartitionPath(markerDirPath, partitionPath);
     try {
       fs.mkdirs(path); // create a new partition as needed.
@@ -144,9 +150,4 @@ public class MarkerFiles {
     return markerPath;
   }
 
-  public enum IOType {
-    MERGE,
-    CREATE,
-    APPEND
-  }
 }

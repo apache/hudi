@@ -43,6 +43,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.io.IOType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.commit.WriteHelper;
@@ -982,7 +983,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     Path markerFilePath = new MarkerFiles(fs, basePath, metaClient.getMarkerFolderPath(instantTime), instantTime)
         .create(partitionPath,
             FSUtils.makeDataFileName(instantTime, "1-0-1", UUID.randomUUID().toString()),
-            MarkerFiles.IOType.MERGE);
+            IOType.MERGE);
     LOG.info("Created a dummy marker path=" + markerFilePath);
 
     Exception e = assertThrows(HoodieCommitException.class, () -> {

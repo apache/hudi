@@ -74,7 +74,7 @@ public class FileSystemTestUtils {
     }
   }
 
-  public static List<FileStatus> listPathRecursively(FileSystem fs, Path path) throws IOException {
+  public static List<FileStatus> listRecursive(FileSystem fs, Path path) throws IOException {
     RemoteIterator<LocatedFileStatus> itr = fs.listFiles(path, true);
     List<FileStatus> statuses = new ArrayList<>();
     while (itr.hasNext()) {

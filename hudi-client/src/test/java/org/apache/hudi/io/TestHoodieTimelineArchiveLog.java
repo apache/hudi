@@ -51,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
+public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
   private Configuration hadoopConf;
   private HoodieTableMetaClient metaClient;
@@ -385,6 +385,8 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     HoodieTestDataGenerator.createCommitFile(basePath, "1", dfs.getConf());
     HoodieInstant instant1 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "1");
     HoodieTestDataGenerator.createCommitFile(basePath, "2", dfs.getConf());
+    Path markerPath = new Path(metaClient.getMarkerFolderPath("2"));
+    dfs.mkdirs(markerPath);
     HoodieInstant instant2 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "2");
     HoodieTestDataGenerator.createCommitFile(basePath, "3", dfs.getConf());
     HoodieInstant instant3 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "3");
@@ -392,14 +394,15 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     //add 2 more instants to pass filter criteria set in compaction config above
     HoodieTestDataGenerator.createCommitFile(basePath, "4", dfs.getConf());
     HoodieTestDataGenerator.createCommitFile(basePath, "5", dfs.getConf());
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, dfs.getConf());
 
+
+    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, dfs.getConf());
     boolean result = archiveLog.archiveIfRequired();
     assertTrue(result);
-
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
     List<HoodieInstant> archivedInstants = Arrays.asList(instant1, instant2, instant3);
     assertEquals(new HashSet<>(archivedInstants), archivedTimeline.getInstants().collect(Collectors.toSet()));
+    assertFalse(dfs.exists(markerPath));
   }
 
   private void verifyInflightInstants(HoodieTableMetaClient metaClient, int expectedTotalInstants) {

@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
@@ -80,6 +81,10 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
     this.deleteInstants = deleteInstants;
     this.skipTimelinePublish = skipTimelinePublish;
     this.useMarkerBasedStrategy = useMarkerBasedStrategy;
+    if (useMarkerBasedStrategy) {
+      ValidationUtils.checkArgument(!instantToRollback.isCompleted(),
+              "Cannot use marker based rollback strategy on completed instant:" + instantToRollback);
+    }
   }
 
   protected RollbackStrategy getRollbackStrategy() {
@@ -97,17 +102,18 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
   @Override
   public HoodieRollbackMetadata execute() {
     HoodieTimer rollbackTimer = new HoodieTimer().startTimer();
+    List<HoodieRollbackStat> stats = doRollbackAndGetStats();
     HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.convertRollbackMetadata(
         instantTime,
         Option.of(rollbackTimer.endTimer()),
         Collections.singletonList(instantToRollback.getTimestamp()),
-        doRollbackAndGetStats());
+        stats);
     if (!skipTimelinePublish) {
       finishRollback(rollbackMetadata);
     }
 
     // Finally, remove the marker files post rollback.
-    new MarkerFiles(table, instantToRollback.getTimestamp()).deleteMarkerDir();
+    new MarkerFiles(table, instantToRollback.getTimestamp()).quietDeleteMarkerDir();
 
     return rollbackMetadata;
   }

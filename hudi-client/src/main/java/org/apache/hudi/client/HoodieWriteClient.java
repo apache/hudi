@@ -335,10 +335,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   @Override
   protected void postCommit(HoodieTable<?> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
     try {
-      // TODO: delete markerfiles when clean
-      if (!config.getRollBackUsingMarkers()) {
-        new MarkerFiles(table, instantTime).deleteMarkerDir();
-      }
+
+      // Delete the marker directory for the instant.
+      new MarkerFiles(table, instantTime).quietDeleteMarkerDir();
+
       // Do an inline compaction if enabled
       if (config.isInlineCompaction()) {
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");

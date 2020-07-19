@@ -275,6 +275,7 @@ public class HoodieTimelineArchiveLog {
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         try {
+          deleteAnyLeftOverMarkerFiles(hoodieInstant);
           records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
           if (records.size() >= this.config.getCommitArchivalBatchSize()) {
             writeToFile(wrapperSchema, records);
@@ -292,8 +293,11 @@ public class HoodieTimelineArchiveLog {
     }
   }
 
-  public Path getArchiveFilePath() {
-    return archiveFilePath;
+  private void deleteAnyLeftOverMarkerFiles(HoodieInstant instant) {
+    MarkerFiles markerFiles = new MarkerFiles(table, instant.getTimestamp());
+    if (markerFiles.deleteMarkerDir()) {
+      LOG.info("Cleaned up left over marker directory for instant :" + instant);
+    }
   }
 
   private void writeToFile(Schema wrapperSchema, List<IndexedRecord> records) throws Exception {

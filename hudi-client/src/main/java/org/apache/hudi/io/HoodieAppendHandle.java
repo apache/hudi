@@ -48,7 +48,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.table.MarkerFiles;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.util.SizeEstimator;
@@ -287,8 +286,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   @Override
-  public MarkerFiles.IOType getIOType() {
-    return MarkerFiles.IOType.APPEND;
+  public IOType getIOType() {
+    return IOType.APPEND;
   }
 
   private Writer createLogWriter(Option<FileSlice> fileSlice, String baseCommitTime)

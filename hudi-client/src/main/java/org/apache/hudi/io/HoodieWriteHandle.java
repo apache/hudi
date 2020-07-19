@@ -149,7 +149,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
 
   public abstract WriteStatus getWriteStatus();
 
-  public abstract MarkerFiles.IOType getIOType();
+  public abstract IOType getIOType();
 
   @Override
   protected FileSystem getFileSystem() {

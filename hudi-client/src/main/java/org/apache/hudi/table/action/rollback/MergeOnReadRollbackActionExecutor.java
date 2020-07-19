@@ -71,7 +71,7 @@ public class MergeOnReadRollbackActionExecutor extends BaseRollbackActionExecuto
     HoodieTimer rollbackTimer = new HoodieTimer();
     rollbackTimer.startTimer();
 
-    LOG.error("Rolling back instant " + instantToRollback.getTimestamp());
+    LOG.info("Rolling back instant " + instantToRollback);
 
     HoodieInstant resolvedInstant = instantToRollback;
     // Atomically un-publish all non-inflight commits

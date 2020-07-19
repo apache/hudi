@@ -43,7 +43,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.table.MarkerFiles;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -310,7 +309,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   }
 
   @Override
-  public MarkerFiles.IOType getIOType() {
-    return MarkerFiles.IOType.MERGE;
+  public IOType getIOType() {
+    return IOType.MERGE;
   }
 }

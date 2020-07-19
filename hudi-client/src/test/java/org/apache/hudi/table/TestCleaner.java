@@ -1140,7 +1140,7 @@ public class TestCleaner extends HoodieClientTestBase {
    * @throws IOException in case of error
    */
   private int getTotalTempFiles() throws IOException {
-    return FileSystemTestUtils.listPathRecursively(fs, new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME))
+    return FileSystemTestUtils.listRecursive(fs, new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME))
         .size();
   }
 

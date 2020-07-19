@@ -141,7 +141,7 @@ public class ListingBasedRollbackHelper implements Serializable {
 
 
   /**
-   * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits.
+   * Common method used for cleaning out base files under a partition path during rollback of a set of commits.
    */
   private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
                                                       String partitionPath, PathFilter filter) throws IOException {
@@ -158,7 +158,7 @@ public class ListingBasedRollbackHelper implements Serializable {
   }
 
   /**
-   * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits.
+   * Common method used for cleaning out base files under a partition path during rollback of a set of commits.
    */
   private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
                                                       String commit, String partitionPath) throws IOException {

@@ -37,7 +37,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.table.MarkerFiles;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -149,8 +148,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   @Override
-  public MarkerFiles.IOType getIOType() {
-    return MarkerFiles.IOType.CREATE;
+  public IOType getIOType() {
+    return IOType.CREATE;
   }
 
   /**

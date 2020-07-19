@@ -449,7 +449,7 @@ public class HoodieTestUtils {
 
   // TODO: should be removed
   public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath) throws IOException {
-    return listAllDataFilesInPath(fs, basePath, ".parquet");
+    return listAllDataFilesInPath(fs, basePath, HoodieFileFormat.PARQUET.getFileExtension());
   }
 
   public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath, String datafileExtension)
@@ -465,17 +465,22 @@ public class HoodieTestUtils {
     return returns.toArray(new FileStatus[returns.size()]);
   }
 
-  public static FileStatus[] listAllLogFilesInPath(FileSystem fs, String basePath, String logfileExtension)
+  public static FileStatus[] listAllLogFilesInPath(FileSystem fs, String basePath)
       throws IOException {
     RemoteIterator<LocatedFileStatus> itr = fs.listFiles(new Path(basePath), true);
     List<FileStatus> returns = new ArrayList<>();
     while (itr.hasNext()) {
       LocatedFileStatus status = itr.next();
-      if (status.getPath().getName().contains(logfileExtension)) {
+      if (status.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
         returns.add(status);
       }
     }
     return returns.toArray(new FileStatus[returns.size()]);
+  }
+
+  public static FileStatus[] listAllDataFilesAndLogFilesInPath(FileSystem fs, String basePath) throws IOException {
+    return Stream.concat(Arrays.stream(listAllDataFilesInPath(fs, basePath)), Arrays.stream(listAllLogFilesInPath(fs, basePath)))
+            .toArray(FileStatus[]::new);
   }
 
   public static List<String> monotonicIncreasingCommitTimestamps(int numTimestamps, int startSecsDelta) {

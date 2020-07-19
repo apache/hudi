@@ -18,8 +18,7 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hudi.common.HoodieRollbackStat;
-
+import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -28,15 +27,19 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.testutils.HoodieTestDataGenerator;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
@@ -72,8 +75,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     //1. prepare data and assert data result
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
-    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).build();
-    this.twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg);
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).withAutoCommit(false).build();
+    twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers);
     List<HoodieLogFile> firstPartitionCommit2LogFiles = new ArrayList<>();
     List<HoodieLogFile> secondPartitionCommit2LogFiles = new ArrayList<>();
     firstPartitionCommit2FileSlices.get(0).getLogFiles().collect(Collectors.toList()).forEach(logFile -> firstPartitionCommit2LogFiles.add(logFile));
@@ -83,7 +86,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
 
     //2. rollback
-    HoodieInstant rollBackInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
+    HoodieInstant rollBackInstant = new HoodieInstant(isUsingMarkers, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
     MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         jsc,
         cfg,
@@ -99,29 +102,13 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     }
 
     //3. assert the rollback stat
-    List<HoodieRollbackStat> hoodieRollbackStats = mergeOnReadRollbackActionExecutor.executeRollback();
-    assertEquals(2, hoodieRollbackStats.size());
-    HoodieRollbackStat rollBack1FirstPartitionStat = null;
-    HoodieRollbackStat rollBack1SecondPartitionStat = null;
-    for (int i = 0; i < hoodieRollbackStats.size(); i++) {
-      HoodieRollbackStat hoodieRollbackStat = hoodieRollbackStats.get(i);
+    Map<String, HoodieRollbackPartitionMetadata> rollbackMetadata = mergeOnReadRollbackActionExecutor.execute().getPartitionMetadata();
+    assertEquals(2, rollbackMetadata.size());
 
-      if (!isUsingMarkers) {
-        assertTrue(hoodieRollbackStat.getCommandBlocksCount() == null
-            || hoodieRollbackStat.getCommandBlocksCount().size() == 1);
-      } else {
-        assertTrue(hoodieRollbackStat.getCommandBlocksCount() == null
-            || hoodieRollbackStat.getCommandBlocksCount().size() == 0);
-      }
-      assertTrue(hoodieRollbackStat.getFailedDeleteFiles() == null
-          || hoodieRollbackStat.getFailedDeleteFiles().size() == 0);
-      assertTrue(hoodieRollbackStat.getSuccessDeleteFiles() == null
-          || hoodieRollbackStat.getSuccessDeleteFiles().size() == 0);
-      if (hoodieRollbackStat.getPartitionPath().equals(DEFAULT_FIRST_PARTITION_PATH)) {
-        rollBack1FirstPartitionStat = hoodieRollbackStat;
-      } else if (hoodieRollbackStat.getPartitionPath().equals(DEFAULT_SECOND_PARTITION_PATH)) {
-        rollBack1SecondPartitionStat = hoodieRollbackStat;
-      }
+    for (Map.Entry<String, HoodieRollbackPartitionMetadata> entry : rollbackMetadata.entrySet()) {
+      HoodieRollbackPartitionMetadata meta = entry.getValue();
+      assertTrue(meta.getFailedDeleteFiles() == null || meta.getFailedDeleteFiles().size() == 0);
+      assertTrue(meta.getSuccessDeleteFiles() == null || meta.getSuccessDeleteFiles().size() == 0);
     }
 
     //4. assert filegroup after rollback, and compare to the rollbackstat
@@ -135,15 +122,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     assertEquals(2, firstPartitionRollBackLogFiles.size());
 
     firstPartitionRollBackLogFiles.removeAll(firstPartitionCommit2LogFiles);
-    if (!isUsingMarkers) {
-      // assert the first partition new log file equals the hoodieRollbackStat append log file
-      assertEquals(1, firstPartitionRollBackLogFiles.size());
-      assertEquals(rollBack1FirstPartitionStat.getCommandBlocksCount().keySet().iterator().next(),
-          firstPartitionRollBackLogFiles.get(0).getFileStatus());
-    } else {
-      // assert the add log files
-      assertEquals(1, firstPartitionRollBackLogFiles.size());
-    }
+    assertEquals(1, firstPartitionRollBackLogFiles.size());
 
     // assert the second partition data and log file size
     List<HoodieFileGroup> secondPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
@@ -155,14 +134,24 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     assertEquals(2, secondPartitionRollBackLogFiles.size());
 
     secondPartitionRollBackLogFiles.removeAll(secondPartitionCommit2LogFiles);
-    if (!isUsingMarkers) {
-      // assert the second partition new log file equals the hoodieRollbackStat append log file
-      assertEquals(1, secondPartitionRollBackLogFiles.size());
-      assertEquals(rollBack1SecondPartitionStat.getCommandBlocksCount().keySet().iterator().next(),
-          secondPartitionRollBackLogFiles.get(0).getFileStatus());
-    } else {
-      // assert the add log files
-      assertEquals(1, secondPartitionRollBackLogFiles.size());
-    }
+    assertEquals(1, secondPartitionRollBackLogFiles.size());
+
+    assertFalse(new MarkerFiles(table, "002").doesMarkerDirExist());
+  }
+
+  @Test
+  public void testFailForCompletedInstants() {
+    Assertions.assertThrows(IllegalArgumentException.class, () -> {
+      HoodieInstant rollBackInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
+      new MergeOnReadRollbackActionExecutor(
+              jsc,
+              getConfigBuilder().build(),
+              getHoodieTable(metaClient, getConfigBuilder().build()),
+              "003",
+              rollBackInstant,
+              true,
+              true,
+              true);
+    });
   }
 }
