@@ -97,6 +97,7 @@ public class HoodieSnapshotCopier implements Serializable {
         fs.delete(new Path(outputDir), true);
       }
 
+      jsc.setJobGroup(this.getClass().getSimpleName(), "Creating a snapshot");
       jsc.parallelize(partitions, partitions.size()).flatMap(partition -> {
         // Only take latest version files <= latestCommit.
         FileSystem fs1 = FSUtils.getFs(baseDir, serConf.newCopy());

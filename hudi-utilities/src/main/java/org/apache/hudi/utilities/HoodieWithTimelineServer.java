@@ -86,6 +86,7 @@ public class HoodieWithTimelineServer implements Serializable {
     System.out.println("Driver Hostname is :" + driverHost);
     List<String> messages = new ArrayList<>();
     IntStream.range(0, cfg.numPartitions).forEach(i -> messages.add("Hello World"));
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Sending requests to driver host");
     List<String> gotMessages = jsc.parallelize(messages).map(msg -> sendRequest(driverHost, cfg.serverPort)).collect();
     System.out.println("Got Messages :" + gotMessages);
     ValidationUtils.checkArgument(gotMessages.equals(messages), "Got expected reply from Server");

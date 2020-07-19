@@ -146,9 +146,30 @@ public class HoodieClientTestUtils {
     new RandomAccessFile(path, "rw").setLength(length);
   }
 
+  /**
+   * Returns a Spark config for this test.
+   *
+   * The following properties may be set to customize the Spark context:
+   *   SPARK_EVLOG_DIR: Local directory where event logs should be saved. This
+   *                    allows viewing the logs with spark-history-server.
+   *
+   * @note When running the tests using maven, use the following syntax to set
+   *       a property:
+   *          mvn -DSPARK_XXX=yyy ...
+   *
+   * @param appName A name for the Spark application. Shown in the Spark web UI.
+   * @return A Spark config
+   */
   public static SparkConf getSparkConfForTest(String appName) {
     SparkConf sparkConf = new SparkConf().setAppName(appName)
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer").setMaster("local[8]");
+
+    String evlogDir = System.getProperty("SPARK_EVLOG_DIR");
+    if (evlogDir != null) {
+      sparkConf.set("spark.eventLog.enabled", "true");
+      sparkConf.set("spark.eventLog.dir", evlogDir);
+    }
+
     return HoodieReadClient.addHoodieSupport(sparkConf);
   }
 
