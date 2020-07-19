@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.Assertions;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieTestDataGenerator;
 import org.apache.spark.api.java.JavaRDD;
@@ -57,7 +58,7 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    assertNoWriteErrors(statuses.collect());
+    Assertions.assertNoWriteErrors(statuses.collect());
     client.commit(newCommitTime, statuses);
 
     /**
@@ -67,7 +68,7 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     client.startCommitWithTime(newCommitTime);
     records = dataGen.generateUpdates(newCommitTime, records);
     statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
-    assertNoWriteErrors(statuses.collect());
+    Assertions.assertNoWriteErrors(statuses.collect());
     if (commitSecondUpsert) {
       client.commit(newCommitTime, statuses);
     }
