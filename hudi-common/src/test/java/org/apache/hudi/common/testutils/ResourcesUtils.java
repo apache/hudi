@@ -17,17 +17,23 @@
  * under the License.
  */
 
-package org.apache.hudi.testutils.providers;
-
-import org.apache.hudi.client.HoodieWriteClient;
-import org.apache.hudi.config.HoodieWriteConfig;
+package org.apache.hudi.common.testutils;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Properties;
 
-public interface HoodieWriteClientProvider {
+public final class ResourcesUtils {
 
-  HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws IOException;
-
-  HoodieWriteConfig getHoodieWriteConfig(Properties overwritingProps) throws IOException;
+  public static Properties getPropsForClass(Class<?> cls) {
+    Properties props = new Properties();
+    try {
+      String propsFileName = String.format("/%s.properties", cls.getName().replaceAll("\\.", "/"));
+      InputStream inputStream = cls.getResourceAsStream(propsFileName);
+      props.load(inputStream);
+    } catch (IOException e) {
+      throw new RuntimeException("Properties file not found in resources/ for class: " + cls.getName(), e);
+    }
+    return props;
+  }
 }

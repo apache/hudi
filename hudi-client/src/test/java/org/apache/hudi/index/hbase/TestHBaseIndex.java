@@ -24,12 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieHBaseIndexConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.FunctionalTestHarness;
 import org.apache.hudi.testutils.HoodieTestDataGenerator;
@@ -56,6 +51,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -86,6 +82,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   private Configuration hadoopConf;
   private HoodieTestDataGenerator dataGen;
   private HoodieTableMetaClient metaClient;
+  private Properties props;
 
   @AfterAll
   public static void clean() throws Exception {
@@ -113,6 +110,13 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     hadoopConf.addResource(utility.getConfiguration());
     metaClient = getHoodieMetaClient(hadoopConf, basePath());
     dataGen = new HoodieTestDataGenerator();
+    props = new Properties();
+    props.put("hoodie.base.path", basePath());
+    props.put("hoodie.avro.schema", HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    props.put("hoodie.index.hbase.table", TABLE_NAME);
+    props.put("hoodie.index.hbase.zkquorum", hbaseConfig.get("hbase.zookeeper.quorum"));
+    props.put("hoodie.index.hbase.zknode.path", hbaseConfig.get("zookeeper.znode.parent"));
+    props.put("hoodie.index.hbase.zkport", hbaseConfig.get("hbase.zookeeper.property.clientPort"));
   }
 
   @Test
@@ -123,7 +127,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
 
     // Load to memory
-    HoodieWriteConfig config = getConfig();
+    HoodieWriteConfig config = getHoodieWriteConfig(props);
     HBaseIndex index = new HBaseIndex(config);
     try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -164,7 +168,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
 
     // Load to memory
-    HoodieWriteConfig config = getConfig();
+    HoodieWriteConfig config = getHoodieWriteConfig(props);
     HBaseIndex index = new HBaseIndex(config);
     HoodieWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(newCommitTime);
@@ -198,7 +202,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   @Test
   public void testSimpleTagLocationAndUpdateWithRollback() throws Exception {
     // Load to memory
-    HoodieWriteConfig config = getConfig();
+    HoodieWriteConfig config = getHoodieWriteConfig(props);
     HBaseIndex index = new HBaseIndex(config);
     HoodieWriteClient writeClient = getHoodieWriteClient(config);
 
@@ -239,7 +243,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
 
   @Test
   public void testTotalGetsBatching() throws Exception {
-    HoodieWriteConfig config = getConfig();
+    HoodieWriteConfig config = getHoodieWriteConfig(props);
     HBaseIndex index = new HBaseIndex(config);
 
     // Mock hbaseConnection and related entities
@@ -274,7 +278,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
 
   @Test
   public void testTotalPutsBatching() throws Exception {
-    HoodieWriteConfig config = getConfig();
+    HoodieWriteConfig config = getHoodieWriteConfig(props);
     HBaseIndex index = new HBaseIndex(config);
     HoodieWriteClient writeClient = getHoodieWriteClient(config);
 
@@ -311,7 +315,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
 
   @Test
   public void testsHBasePutAccessParallelism() {
-    HoodieWriteConfig config = getConfig();
+    HoodieWriteConfig config = getHoodieWriteConfig(props);
     HBaseIndex index = new HBaseIndex(config);
     final JavaRDD<WriteStatus> writeStatusRDD = jsc().parallelize(
         Arrays.asList(getSampleWriteStatus(1, 2), getSampleWriteStatus(0, 3), getSampleWriteStatus(10, 0)), 10);
@@ -325,7 +329,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
 
   @Test
   public void testsHBasePutAccessParallelismWithNoInserts() {
-    HoodieWriteConfig config = getConfig();
+    HoodieWriteConfig config = getHoodieWriteConfig(props);
     HBaseIndex index = new HBaseIndex(config);
     final JavaRDD<WriteStatus> writeStatusRDD =
         jsc().parallelize(Arrays.asList(getSampleWriteStatus(0, 2), getSampleWriteStatus(0, 1)), 10);
@@ -345,7 +349,8 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
 
     // Load to memory
-    HoodieWriteConfig config = getConfig(2);
+    props.put("hoodie.index.hbase.get.batch.size", "2");
+    HoodieWriteConfig config = getHoodieWriteConfig(props);
     HBaseIndex index = new HBaseIndex(config);
     try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -385,7 +390,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
 
     // Load to memory
-    HoodieWriteConfig config = getConfig();
+    HoodieWriteConfig config = getHoodieWriteConfig(props);
     HBaseIndex index = new HBaseIndex(config);
     try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -439,30 +444,5 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     hoodieWriteStat.setNumUpdateWrites(numUpdateWrites);
     writeStatus.setStat(hoodieWriteStat);
     return writeStatus;
-  }
-
-  private HoodieWriteConfig getConfig() {
-    return getConfigBuilder(100).build();
-  }
-
-  private HoodieWriteConfig getConfig(int hbaseIndexBatchSize) {
-    return getConfigBuilder(hbaseIndexBatchSize).build();
-  }
-
-  private HoodieWriteConfig.Builder getConfigBuilder(int hbaseIndexBatchSize) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(1, 1)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
-            .withInlineCompaction(false).build())
-        .withAutoCommit(false).withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
-        .forTable("test-trip-table")
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.HBASE)
-            .withHBaseIndexConfig(new HoodieHBaseIndexConfig.Builder()
-                .hbaseZkPort(Integer.parseInt(hbaseConfig.get("hbase.zookeeper.property.clientPort")))
-                .hbaseIndexPutBatchSizeAutoCompute(true)
-                .hbaseZkZnodeParent(hbaseConfig.get("zookeeper.znode.parent", ""))
-                .hbaseZkQuorum(hbaseConfig.get("hbase.zookeeper.quorum")).hbaseTableName(TABLE_NAME)
-                .hbaseIndexGetBatchSize(hbaseIndexBatchSize).build())
-            .build());
   }
 }

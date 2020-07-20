@@ -24,6 +24,7 @@ import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.ResourcesUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -120,6 +121,17 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
   @Override
   public HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws IOException {
     return new HoodieWriteClient(jsc, cfg, false, HoodieIndex.createIndex(cfg));
+  }
+
+  public HoodieWriteConfig getHoodieWriteConfig() {
+    return getHoodieWriteConfig(new Properties());
+  }
+
+  @Override
+  public HoodieWriteConfig getHoodieWriteConfig(Properties overwritingProps) {
+    Properties props = ResourcesUtils.getPropsForClass(getClass());
+    props.putAll(overwritingProps);
+    return new HoodieWriteConfig.Builder().withProps(props).build();
   }
 
   @BeforeEach

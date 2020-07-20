@@ -81,7 +81,6 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String HBASE_TABLENAME_PROP = "hoodie.index.hbase.table";
   public static final String HBASE_GET_BATCH_SIZE_PROP = "hoodie.index.hbase.get.batch.size";
   public static final String HBASE_PUT_BATCH_SIZE_PROP = "hoodie.index.hbase.put.batch.size";
-  public static final String DEFAULT_HBASE_BATCH_SIZE = "100";
 
 
   public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL = "hoodie.bloom.index.input.storage.level";
@@ -114,6 +113,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static class Builder {
 
     private final Properties props = new Properties();
+    private boolean isHBaseIndexConfigSet = false;
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -139,6 +139,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
     public Builder withHBaseIndexConfig(HoodieHBaseIndexConfig hBaseIndexConfig) {
       props.putAll(hBaseIndexConfig.getProps());
+      isHBaseIndexConfigSet = true;
       return this;
     }
 
@@ -274,6 +275,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           DEFAULT_GLOBAL_SIMPLE_INDEX_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(SIMPLE_INDEX_UPDATE_PARTITION_PATH),
           SIMPLE_INDEX_UPDATE_PARTITION_PATH, DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH);
+      setDefaultOnCondition(props, !isHBaseIndexConfigSet, HoodieHBaseIndexConfig.newBuilder().fromProperties(props).build());
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;
