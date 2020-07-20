@@ -18,11 +18,8 @@
 
 package org.apache.hudi.internal;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -43,6 +40,10 @@ import org.apache.spark.sql.sources.v2.writer.DataSourceWriter;
 import org.apache.spark.sql.sources.v2.writer.DataWriterFactory;
 import org.apache.spark.sql.sources.v2.writer.WriterCommitMessage;
 import org.apache.spark.sql.types.StructType;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of {@link DataSourceWriter} for datasource "hudi.internal" to be used in datasource implementation
@@ -102,7 +103,8 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
             .flatMap(m -> m.getWriteStatuses().stream().map(m2 -> m2.getStat())).collect(Collectors.toList());
 
     try {
-      writeClient.commitStats(instantTime, writeStatList, Option.empty());
+      writeClient.commitStats(instantTime, writeStatList, Option.empty(),
+          DataSourceUtils.getCommitActionType(operationType, metaClient.getTableType()));
     } catch (Exception ioe) {
       throw new HoodieException(ioe.getMessage(), ioe);
     } finally {

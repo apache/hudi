@@ -142,6 +142,7 @@ object DataSourceWriteOptions {
   val UPSERT_OPERATION_OPT_VAL = WriteOperationType.UPSERT.value
   val DELETE_OPERATION_OPT_VAL = WriteOperationType.DELETE.value
   val BOOTSTRAP_OPERATION_OPT_VAL = WriteOperationType.BOOTSTRAP.value
+  val INSERT_OVERWRITE_OPERATION_OPT_VAL = WriteOperationType.INSERT_OVERWRITE.value
   val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL
 
   /**

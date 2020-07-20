@@ -18,13 +18,12 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hadoop.conf.Configuration;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -32,6 +31,7 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -275,6 +276,11 @@ public class HoodieTimelineArchiveLog {
       LOG.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
+        boolean deleteSuccess = deleteReplacedFileGroups(jsc, hoodieInstant);
+        if (!deleteSuccess) {
+          // throw error and stop archival if deleting replaced file groups failed.
+          throw new HoodieCommitException("Unable to delete file(s) for " + hoodieInstant.getFileName());
+        }
         try {
           deleteAnyLeftOverMarkerFiles(jsc, hoodieInstant);
           records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
@@ -298,6 +304,29 @@ public class HoodieTimelineArchiveLog {
     MarkerFiles markerFiles = new MarkerFiles(table, instant.getTimestamp());
     if (markerFiles.deleteMarkerDir(jsc, config.getMarkersDeleteParallelism())) {
       LOG.info("Cleaned up left over marker directory for instant :" + instant);
+    }
+  }
+
+  private boolean deleteReplacedFileGroups(JavaSparkContext jsc, HoodieInstant instant) {
+    if (!instant.isCompleted() || !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
+      // only delete files for completed replace instants
+      return true;
+    }
+
+    TableFileSystemView fileSystemView = this.table.getFileSystemView();
+    List<String> replacedPartitions = getReplacedPartitions(instant);
+    return ReplaceArchivalHelper.deleteReplacedFileGroups(jsc, metaClient, fileSystemView, instant, replacedPartitions);
+  }
+
+  private List<String> getReplacedPartitions(HoodieInstant instant) {
+    try {
+      HoodieReplaceCommitMetadata metadata = HoodieReplaceCommitMetadata.fromBytes(
+          metaClient.getActiveTimeline().getInstantDetails(instant).get(),
+          HoodieReplaceCommitMetadata.class);
+
+      return new ArrayList<>(metadata.getPartitionToReplaceFileIds().keySet());
+    } catch (IOException e) {
+      throw new HoodieCommitException("Failed to archive because cannot delete replace files", e);
     }
   }
 
@@ -332,6 +361,13 @@ public class HoodieTimelineArchiveLog {
             .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
         archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
+        break;
+      }
+      case HoodieTimeline.REPLACE_COMMIT_ACTION: {
+        HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
+            .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
+        archivedMetaWrapper.setHoodieReplaceCommitMetadata(ReplaceArchivalHelper.convertReplaceCommitMetadata(replaceCommitMetadata));
+        archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
         break;
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
