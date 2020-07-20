@@ -53,7 +53,7 @@ public class MetricsReporterFactory {
         break;
       case USER_DEFINED:
         reporter = (MetricsReporter) ReflectionUtils
-                .loadClass(config.getUserDefinedMetricClassName(), new Class<?>[] {Properties.class}, config.getProps());
+                .loadClass(config.getUserDefinedMetricClassName(), new Class<?>[] {Properties.class, MetricRegistry.class}, config.getProps(), registry);
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");

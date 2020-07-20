@@ -60,10 +60,10 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
   public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_PREFIX + ".metric.prefix";
 
   // User defined
-  public static final String USER_DEFINED_PREFIX = METRIC_PREFIX + ".user.defined";
-  public static final String USER_DEFINED_CLASS = USER_DEFINED_PREFIX + ".class";
+  public static final String USER_DEFINED_REPORTER_PREFIX = METRIC_PREFIX + ".user.defined";
+  public static final String USER_DEFINED_REPORTER_CLASS = USER_DEFINED_REPORTER_PREFIX + ".class";
 
-  public static final String DEFAULT_USER_DEFINED_CLASS = DefaultUserDefinedMetricsReporter.class.getName();
+  public static final String DEFAULT_USER_DEFINED_REPORTER_CLASS = DefaultUserDefinedMetricsReporter.class.getName();
 
   private HoodieMetricsConfig(Properties props) {
     super(props);
@@ -124,8 +124,8 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withUserDefinedClass(String className) {
-      props.setProperty(USER_DEFINED_CLASS, className);
+    public Builder withUserDefinedReporterClass(String className) {
+      props.setProperty(USER_DEFINED_REPORTER_CLASS, className);
       return this;
     }
 
@@ -147,7 +147,7 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
           HoodieMetricsDatadogConfig.newBuilder().fromProperties(props).build());
 
       setDefaultOnCondition(props, reporterType == MetricsReporterType.USER_DEFINED,
-          USER_DEFINED_CLASS, DEFAULT_USER_DEFINED_CLASS);
+              USER_DEFINED_REPORTER_CLASS, DEFAULT_USER_DEFINED_REPORTER_CLASS);
 
       return config;
     }

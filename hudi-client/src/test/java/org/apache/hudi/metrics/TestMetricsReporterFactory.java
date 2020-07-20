@@ -19,7 +19,6 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.MetricRegistry;
@@ -30,7 +29,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.io.Closeable;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -66,6 +64,6 @@ public class TestMetricsReporterFactory {
     assertTrue(reporter instanceof AbstractUserDefinedMetricsReporter);
 
     assertEquals(props, ((DefaultUserDefinedMetricsReporter) reporter).getProps());
-
+    assertEquals(registry, ((DefaultUserDefinedMetricsReporter) reporter).getRegistry());
   }
 }
