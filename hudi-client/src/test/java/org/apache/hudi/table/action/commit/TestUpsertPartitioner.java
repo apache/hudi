@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
@@ -216,9 +216,10 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     assertEquals(200.0 / 2400, insertBuckets.get(0).weight, 0.01, "First insert bucket should have weight 0.5");
   }
 
-  private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() throws Exception {
+  private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
     // Prepare the AvroParquetIO
-    String schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr);
+    return HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withSchema(SchemaTestUtil
+            .getSchemaFromResource(getClass(), "/exampleSchema.txt").toString());
   }
 }

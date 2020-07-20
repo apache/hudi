@@ -18,26 +18,27 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.TestHoodieIndex;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.FunctionalTestHarness;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.TestRawTripPayload;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -62,31 +63,22 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
+@Tag("functional")
+public class TestHoodieGlobalBloomIndex extends FunctionalTestHarness {
 
-  private Schema schema;
-
-  public TestHoodieGlobalBloomIndex() {
-  }
+  private static final Schema SCHEMA = SchemaTestUtil.getSchemaFromResource(TestHoodieIndex.class, "/exampleSchema.txt", true);
+  private HoodieTableMetaClient metaClient;
+  private Configuration hadoopConf;
 
   @BeforeEach
   public void setUp() throws Exception {
-    initSparkContexts();
-    initPath();
-    // We have some records to be tagged (two different partitions)
-    String schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
-    schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
-    initMetaClient();
-  }
-
-  @AfterEach
-  public void tearDown() throws IOException {
-    cleanupResources();
+    hadoopConf = jsc().hadoopConfiguration();
+    metaClient = getHoodieMetaClient(hadoopConf, basePath());
   }
 
   @Test
   public void testLoadInvolvedFiles() throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath()).build();
     HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config);
 
     // Create some partitions, and put some files, along with the meta file
@@ -94,11 +86,11 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     // "2016/04/01": 1 file (2_0_20160401010101.parquet)
     // "2015/03/12": 3 files (1_0_20150312101010.parquet, 3_0_20150312101010.parquet,
     // 4_0_20150312101010.parquet)
-    Path dir1 = Files.createDirectories(Paths.get(basePath, "2016", "01", "21"));
+    Path dir1 = Files.createDirectories(Paths.get(basePath(), "2016", "01", "21"));
     Files.createFile(dir1.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
-    Path dir2 = Files.createDirectories(Paths.get(basePath, "2016", "04", "01"));
+    Path dir2 = Files.createDirectories(Paths.get(basePath(), "2016", "04", "01"));
     Files.createFile(dir2.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
-    Path dir3 = Files.createDirectories(Paths.get(basePath, "2015", "03", "12"));
+    Path dir3 = Files.createDirectories(Paths.get(basePath(), "2015", "03", "12"));
     Files.createFile(dir3.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
 
     TestRawTripPayload rowChange1 =
@@ -118,31 +110,31 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     HoodieRecord record4 =
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
-    HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", "2_0_20160401010101.parquet", new ArrayList<>(),
-        schema, null, false);
-    HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", "1_0_20150312101010.parquet", new ArrayList<>(),
-        schema, null, false);
-    HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", "3_0_20150312101010.parquet", Collections.singletonList(record1),
-        schema, null, false);
-    HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", "4_0_20150312101010.parquet",
-        Arrays.asList(record2, record3, record4), schema, null, false);
+    HoodieClientTestUtils.writeParquetFile(basePath(), "2016/04/01", "2_0_20160401010101.parquet", new ArrayList<>(),
+        SCHEMA, null, false);
+    HoodieClientTestUtils.writeParquetFile(basePath(), "2015/03/12", "1_0_20150312101010.parquet", new ArrayList<>(),
+        SCHEMA, null, false);
+    HoodieClientTestUtils.writeParquetFile(basePath(), "2015/03/12", "3_0_20150312101010.parquet", Collections.singletonList(record1),
+        SCHEMA, null, false);
+    HoodieClientTestUtils.writeParquetFile(basePath(), "2015/03/12", "4_0_20150312101010.parquet",
+        Arrays.asList(record2, record3, record4), SCHEMA, null, false);
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01");
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
-    List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, jsc, table);
+    List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, jsc(), table);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
     // Add some commits
-    Path hoodieDir = Files.createDirectories(Paths.get(basePath, ".hoodie"));
+    Path hoodieDir = Files.createDirectories(Paths.get(basePath(), ".hoodie"));
     Files.createFile(hoodieDir.resolve("20160401010101.commit"));
     Files.createFile(hoodieDir.resolve("20150312101010.commit"));
 
     table = HoodieTable.create(metaClient, config, hadoopConf);
-    filesList = index.loadInvolvedFiles(partitions, jsc, table);
+    filesList = index.loadInvolvedFiles(partitions, jsc(), table);
     assertEquals(4, filesList.size());
 
     Map<String, BloomIndexFileInfo> filesMap = toFileMap(filesList);
@@ -166,7 +158,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   @Test
   public void testExplodeRecordRDDWithFileComparisons() {
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath()).build();
     HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config);
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
@@ -178,7 +170,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
     // the partition of the key of the incoming records will be ignored
     JavaPairRDD<String, String> partitionRecordKeyPairRDD =
-        jsc.parallelize(Arrays.asList(new Tuple2<>("2017/10/21", "003"), new Tuple2<>("2017/10/22", "002"),
+        jsc().parallelize(Arrays.asList(new Tuple2<>("2017/10/21", "003"), new Tuple2<>("2017/10/22", "002"),
             new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/23", "004"))).mapToPair(t -> t);
 
     List<Tuple2<String, HoodieKey>> comparisonKeyList =
@@ -206,7 +198,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
   @Test
   public void testTagLocation() throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath()).build();
     HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config);
 
     // Create some partitions, and put some files, along with the meta file
@@ -214,11 +206,11 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     // "2016/04/01": 1 file (2_0_20160401010101.parquet)
     // "2015/03/12": 3 files (1_0_20150312101010.parquet, 3_0_20150312101010.parquet,
     // 4_0_20150312101010.parquet)
-    Path dir1 = Files.createDirectories(Paths.get(basePath, "2016", "01", "21"));
+    Path dir1 = Files.createDirectories(Paths.get(basePath(), "2016", "01", "21"));
     Files.createFile(dir1.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
-    Path dir2 = Files.createDirectories(Paths.get(basePath, "2016", "04", "01"));
+    Path dir2 = Files.createDirectories(Paths.get(basePath(), "2016", "04", "01"));
     Files.createFile(dir2.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
-    Path dir3 = Files.createDirectories(Paths.get(basePath, "2015", "03", "12"));
+    Path dir3 = Files.createDirectories(Paths.get(basePath(), "2015", "03", "12"));
     Files.createFile(dir3.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
 
     TestRawTripPayload rowChange1 =
@@ -247,26 +239,26 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     HoodieRecord record5 =
         new HoodieRecord(new HoodieKey(rowChange5.getRowKey(), rowChange5.getPartitionPath()), rowChange5);
 
-    JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record5));
+    JavaRDD<HoodieRecord> recordRDD = jsc().parallelize(Arrays.asList(record1, record2, record3, record5));
 
     String filename0 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", Collections.singletonList(record1), schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath(), "2016/04/01", Collections.singletonList(record1), SCHEMA, null, false);
     String filename1 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", new ArrayList<>(), schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath(), "2015/03/12", new ArrayList<>(), SCHEMA, null, false);
     String filename2 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record2), schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath(), "2015/03/12", Collections.singletonList(record2), SCHEMA, null, false);
     String filename3 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record4), schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath(), "2015/03/12", Collections.singletonList(record4), SCHEMA, null, false);
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
 
     // Add some commits
-    Files.createDirectories(Paths.get(basePath, ".hoodie"));
+    Files.createDirectories(Paths.get(basePath(), ".hoodie"));
 
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
-    JavaRDD<HoodieRecord> taggedRecordRDD = index.tagLocation(recordRDD, jsc, table);
+    JavaRDD<HoodieRecord> taggedRecordRDD = index.tagLocation(recordRDD, jsc(), table);
 
     for (HoodieRecord record : taggedRecordRDD.collect()) {
       switch (record.getRecordKey()) {
@@ -299,14 +291,14 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   @Test
   public void testTagLocationWhenShouldUpdatePartitionPath() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
+        .withPath(basePath())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withBloomIndexUpdatePartitionPath(true).build())
         .build();
     HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config);
 
     // Create the original partition, and put a record, along with the meta file
     // "2016/01/31": 1 file (1_0_20160131101010.parquet)
-    Path dir = Files.createDirectories(Paths.get(basePath, "2016", "01", "31"));
+    Path dir = Files.createDirectories(Paths.get(basePath(), "2016", "01", "31"));
     Files.createFile(dir.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
 
     // this record will be saved in table and will be tagged to an empty record
@@ -342,17 +334,17 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
             incomingPayloadSamePartition);
 
     HoodieClientTestUtils
-        .writeParquetFile(basePath, "2016/01/31", Collections.singletonList(originalRecord), schema, null, false);
+        .writeParquetFile(basePath(), "2016/01/31", Collections.singletonList(originalRecord), SCHEMA, null, false);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
 
     // Add some commits
-    Files.createDirectories(Paths.get(basePath, ".hoodie"));
+    Files.createDirectories(Paths.get(basePath(), ".hoodie"));
 
     // test against incoming record with a different partition
-    JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Collections.singletonList(incomingRecord));
-    JavaRDD<HoodieRecord> taggedRecordRDD = index.tagLocation(recordRDD, jsc, table);
+    JavaRDD<HoodieRecord> recordRDD = jsc().parallelize(Collections.singletonList(incomingRecord));
+    JavaRDD<HoodieRecord> taggedRecordRDD = index.tagLocation(recordRDD, jsc(), table);
 
     assertEquals(2, taggedRecordRDD.count());
     for (HoodieRecord record : taggedRecordRDD.collect()) {
@@ -371,9 +363,9 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     }
 
     // test against incoming record with the same partition
-    JavaRDD<HoodieRecord> recordRDDSamePartition = jsc
+    JavaRDD<HoodieRecord> recordRDDSamePartition = jsc()
         .parallelize(Collections.singletonList(incomingRecordSamePartition));
-    JavaRDD<HoodieRecord> taggedRecordRDDSamePartition = index.tagLocation(recordRDDSamePartition, jsc, table);
+    JavaRDD<HoodieRecord> taggedRecordRDDSamePartition = index.tagLocation(recordRDDSamePartition, jsc(), table);
 
     assertEquals(1, taggedRecordRDDSamePartition.count());
     HoodieRecord record = taggedRecordRDDSamePartition.first();

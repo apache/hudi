@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -52,7 +53,7 @@ import java.util.stream.Stream;
 /**
  * A utility class for testing schema.
  */
-public class SchemaTestUtil {
+public final class SchemaTestUtil {
 
   public static Schema getSimpleSchema() throws IOException {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));
@@ -180,5 +181,19 @@ public class SchemaTestUtil {
     SampleTestRecord record = new SampleTestRecord(instantTime, recordNumber, fileId);
     MercifulJsonConverter converter = new MercifulJsonConverter();
     return converter.convert(record.toJsonString(), schema);
+  }
+
+  public static Schema getSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
+    try {
+      String schemaStr = FileIOUtils.readAsUTFString(clazz.getResourceAsStream(name));
+      Schema schema = new Schema.Parser().parse(schemaStr);
+      return withHoodieMetadata ? HoodieAvroUtils.addMetadataFields(schema) : schema;
+    } catch (IOException e) {
+      throw new RuntimeException(String.format("Failed to get schema from resource `%s` for class `%s`", name, clazz.getName()));
+    }
+  }
+
+  public static Schema getSchemaFromResource(Class<?> clazz, String name) {
+    return getSchemaFromResource(clazz, name, false);
   }
 }

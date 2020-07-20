@@ -27,13 +27,13 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;
 import org.apache.hudi.table.HoodieTable;
@@ -42,6 +42,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.TestRawTripPayload;
 import org.apache.hudi.testutils.TestRawTripPayload.MetadataMergeWriteStatus;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -70,9 +71,10 @@ import static org.mockito.Mockito.when;
 public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
   private static final Logger LOG = LogManager.getLogger(TestCopyOnWriteActionExecutor.class);
+  private static final Schema SCHEMA = SchemaTestUtil.getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/exampleSchema.txt");
 
   @Test
-  public void testMakeNewPath() throws Exception {
+  public void testMakeNewPath() {
     String fileName = UUID.randomUUID().toString();
     String partitionPath = "2016/05/04";
 
@@ -94,14 +96,13 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
         FSUtils.makeDataFileName(instantTime, newPathWithWriteToken.getRight(), fileName)).toString());
   }
 
-  private HoodieWriteConfig makeHoodieClientConfig() throws Exception {
+  private HoodieWriteConfig makeHoodieClientConfig() {
     return makeHoodieClientConfigBuilder().build();
   }
 
-  private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() throws Exception {
+  private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
     // Prepare the AvroParquetIO
-    String schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr);
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString());
   }
 
   // TODO (weiy): Add testcases for crossing file writing.
