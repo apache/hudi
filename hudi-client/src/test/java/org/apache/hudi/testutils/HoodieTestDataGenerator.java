@@ -365,6 +365,14 @@ public class HoodieTestDataGenerator {
     createEmptyFile(basePath, commitFile, configuration);
   }
 
+  public static void createDataFile(String basePath, String partitionPath, String instantTime, String fileID, Configuration configuration)
+      throws IOException {
+
+    Path dataFilePath = new Path(basePath + "/" + partitionPath + "/"
+        + FSUtils.makeDataFileName(instantTime, "1_0_1", fileID));
+    createEmptyFile(basePath, dataFilePath, configuration);
+  }
+
   private static void createEmptyFile(String basePath, Path filePath, Configuration configuration) throws IOException {
     FileSystem fs = FSUtils.getFs(basePath, configuration);
     FSDataOutputStream os = fs.create(filePath, true);

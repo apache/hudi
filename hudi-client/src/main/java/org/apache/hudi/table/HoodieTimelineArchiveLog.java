@@ -18,11 +18,19 @@
 
 package org.apache.hudi.table;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -46,12 +54,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -62,8 +64,10 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -263,6 +267,7 @@ public class HoodieTimelineArchiveLog {
       LOG.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
+        deleteReplacedFiles(hoodieInstant);
         try {
           records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
           if (records.size() >= this.config.getCommitArchivalBatchSize()) {
@@ -283,6 +288,43 @@ public class HoodieTimelineArchiveLog {
 
   public Path getArchiveFilePath() {
     return archiveFilePath;
+  }
+
+  private void deleteReplacedFiles(HoodieInstant instant) {
+    if (!instant.isCompleted() || !HoodieTimeline.COMMIT_ACTION.equals(instant.getAction())) {
+      // only delete files for completed instants
+      return;
+    }
+    Option<HoodieInstant> replaceInstantOption = metaClient.getActiveTimeline().getCompletedAndReplaceTimeline()
+        .filter(replaceInstant -> replaceInstant.getTimestamp().equals(instant.getTimestamp())).firstInstant();
+
+    replaceInstantOption.ifPresent(replaceInstant -> {
+      try {
+        HoodieReplaceMetadata metadata = TimelineMetadataUtils.deserializeHoodieReplaceMetadata(
+            metaClient.getActiveTimeline().getInstantDetails(replaceInstant).get());
+
+        metadata.getPartitionMetadata().entrySet().stream().forEach(entry ->
+            deleteFileGroups(entry.getKey(), new HashSet<>(entry.getValue()), instant)
+        );
+      } catch (IOException e) {
+        throw new HoodieCommitException("Failed to archive because cannot delete replace files", e);
+      }
+    });
+  }
+
+  private void deleteFileGroups(String partitionPath, Set<String> fileIdsToDelete, HoodieInstant instant) {
+    try {
+      FileStatus[] statuses = metaClient.getFs().listStatus(FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPath));
+      for (FileStatus status : statuses) {
+        String fileId = FSUtils.getFileIdFromFilePath(status.getPath());
+        if (fileIdsToDelete.contains(fileId)) {
+          LOG.info("Delete " + status.getPath() + " to archive " + instant);
+          metaClient.getFs().delete(status.getPath());
+        }
+      }
+    } catch (IOException e) {
+      LOG.error("unable to delete file groups that are replaced", e);
+    }
   }
 
   private void writeToFile(Schema wrapperSchema, List<IndexedRecord> records) throws Exception {

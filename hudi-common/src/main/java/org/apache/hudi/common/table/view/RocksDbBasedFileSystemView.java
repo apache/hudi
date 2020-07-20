@@ -38,10 +38,13 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -68,10 +71,13 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   private boolean closed = false;
 
+  protected Map<String, Set<String>> partitionToExcludeFileGroupsMap;
+
   public RocksDbBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       FileSystemViewStorageConfig config) {
     super(config.isIncrementalTimelineSyncEnabled());
     this.config = config;
+    this.partitionToExcludeFileGroupsMap = new ConcurrentHashMap<>();
     this.schemaHelper = new RocksDBSchemaHelper(metaClient);
     this.rocksDB = new RocksDBDAO(metaClient.getBasePath(), config.getRocksdbBasePath());
     init(metaClient, visibleActiveTimeline);
@@ -185,6 +191,25 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     rocksDB.put(schemaHelper.getColFamilyForStoredPartitions(), lookupKey, Boolean.TRUE);
     LOG.info("Finished adding new partition (" + partitionPath + ") to ROCKSDB based file-system view at "
         + config.getRocksdbBasePath() + ", Total file-groups=" + fileGroups.size());
+  }
+
+  @Override
+  protected void storePartitionExcludedFiles(final String partition, final Set<String> fileIdsToExclude) {
+    //TODO: should we change this to store info in rocksdb instead of in-memory representation?
+    // this is expected to be small size, so probably not needed.
+    LOG.info("Ignore file-ids for partition :" + partition + ", #FileGroups=" + fileIdsToExclude.size());
+    partitionToExcludeFileGroupsMap.put(partition, fileIdsToExclude);
+
+  }
+
+  @Override
+  public boolean isExcludeFileGroup(String partitionPath, String fileId) {
+    return partitionToExcludeFileGroupsMap.getOrDefault(partitionPath, Collections.emptySet()).contains(fileId);
+  }
+
+  @Override
+  public Stream<String> getAllExcludeFileGroups(String partitionPath) {
+    return partitionToExcludeFileGroupsMap.getOrDefault(partitionPath, Collections.emptySet()).stream();
   }
 
   @Override

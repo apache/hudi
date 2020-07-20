@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -51,6 +52,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -1161,6 +1163,150 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       timeline.transitionRequestedToInflight(requested, Option.empty());
       timeline.saveAsComplete(inflight, data);
     }
+  }
+
+  @Test
+  public void testReplaceWithTimeTravel() throws IOException {
+    String partitionPath1 = "2020/06/27";
+    new File(basePath + "/" + partitionPath1).mkdirs();
+
+    // create 2 fileId in partition1 - fileId1 is replaced later on.
+    String fileId1 = UUID.randomUUID().toString();
+    String fileId2 = UUID.randomUUID().toString();
+
+    assertFalse(roView.getLatestBaseFiles(partitionPath1)
+            .anyMatch(dfile -> dfile.getFileId().equals(fileId1) || dfile.getFileId().equals(fileId2)),
+        "No commit, should not find any data file");
+    // Only one commit
+    String commitTime1 = "1";
+    String fileName1 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
+    String fileName2 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
+    new File(basePath + "/" + partitionPath1 + "/" + fileName1).createNewFile();
+    new File(basePath + "/" + partitionPath1 + "/" + fileName2).createNewFile();
+
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime1);
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    refreshFsView();
+    assertEquals(1, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
+    assertEquals(1, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId2)).count());
+
+    // create commit2 - fileId1 is replaced by fileId3,fileId4
+    String fileId3 = UUID.randomUUID().toString();
+    String fileId4 = UUID.randomUUID().toString();
+    String fileName3 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId3);
+    String fileName4 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId4);
+    new File(basePath + "/" + partitionPath1 + "/" + fileName3).createNewFile();
+    new File(basePath + "/" + partitionPath1 + "/" + fileName4).createNewFile();
+
+    String commitTime2 = "2";
+    Map<String, List<String>> partitionToReplaceFiles = new HashMap<>();
+    partitionToReplaceFiles.putIfAbsent(partitionPath1, new ArrayList<>());
+    partitionToReplaceFiles.get(partitionPath1).add(fileId1);
+    HoodieTestUtils.createReplaceInstant(partitionToReplaceFiles, commitTime2, metaClient);
+    commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime2);
+    saveAsComplete(commitTimeline, instant2, Option.empty());
+
+    //make sure view doesnt include fileId1
+    refreshFsView();
+    assertEquals(0, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
+    assertEquals(1, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId2)).count());
+    assertEquals(1, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId3)).count());
+    assertEquals(1, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId4)).count());
+
+    //exclude commit 2 and make sure fileId1 shows up in view.
+    BaseFileOnlyView filteredView = getFileSystemView(metaClient.getActiveTimeline().findInstantsBefore("2"));
+    assertEquals(1, filteredView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
+    assertEquals(1, filteredView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId2)).count());
+    assertEquals(1, filteredView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId3)).count());
+    assertEquals(1, filteredView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId4)).count());
+  }
+
+  @Test
+  public void testReplaceFileIdIsExcludedInView() throws IOException {
+    String partitionPath1 = "2020/06/27";
+    String partitionPath2 = "2020/07/14";
+    new File(basePath + "/" + partitionPath1).mkdirs();
+    new File(basePath + "/" + partitionPath2).mkdirs();
+
+    // create 2 fileId in partition1 - fileId1 is replaced later on.
+    String fileId1 = UUID.randomUUID().toString();
+    String fileId2 = UUID.randomUUID().toString();
+
+    // create 2 fileId in partition2 - fileId3, fileId4 is replaced later on.
+    String fileId3 = UUID.randomUUID().toString();
+    String fileId4 = UUID.randomUUID().toString();
+
+    assertFalse(roView.getLatestBaseFiles(partitionPath1)
+            .anyMatch(dfile -> dfile.getFileId().equals(fileId1) || dfile.getFileId().equals(fileId2)),
+        "No commit, should not find any data file");
+    assertFalse(roView.getLatestBaseFiles(partitionPath2)
+            .anyMatch(dfile -> dfile.getFileId().equals(fileId3) || dfile.getFileId().equals(fileId4)),
+        "No commit, should not find any data file");
+
+    // Only one commit
+    String commitTime1 = "1";
+    String fileName1 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
+    String fileName2 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
+    String fileName3 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId3);
+    String fileName4 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId4);
+    new File(basePath + "/" + partitionPath1 + "/" + fileName1).createNewFile();
+    new File(basePath + "/" + partitionPath1 + "/" + fileName2).createNewFile();
+    new File(basePath + "/" + partitionPath2 + "/" + fileName3).createNewFile();
+    new File(basePath + "/" + partitionPath2 + "/" + fileName4).createNewFile();
+
+    Map<String, List<String>> partitionToReplaceFiles = new HashMap<>();
+    partitionToReplaceFiles.putIfAbsent(partitionPath1, new ArrayList<>());
+    partitionToReplaceFiles.putIfAbsent(partitionPath2, new ArrayList<>());
+    partitionToReplaceFiles.get(partitionPath1).add(fileId1);
+    partitionToReplaceFiles.get(partitionPath2).add(fileId3);
+    partitionToReplaceFiles.get(partitionPath2).add(fileId4);
+    HoodieTestUtils.createReplaceInstant(partitionToReplaceFiles, commitTime1, metaClient);
+
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime1);
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    refreshFsView();
+    assertEquals(0, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
+    assertEquals(fileName2, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId2)).findFirst().get().getFileName());
+    assertEquals(0, roView.getLatestBaseFiles(partitionPath2)
+        .filter(dfile -> dfile.getFileId().equals(fileId3)).count());
+    assertEquals(0, roView.getLatestBaseFiles(partitionPath2)
+        .filter(dfile -> dfile.getFileId().equals(fileId4)).count());
+
+    assertEquals(1, fsView.getAllExcludeFileGroups(partitionPath1).count());
+    assertEquals(fileId1, fsView.getAllExcludeFileGroups(partitionPath1).findFirst().get());
+    assertEquals(2, fsView.getAllExcludeFileGroups(partitionPath2).count());
+
+    //remove replace instant
+    HoodieInstant replaceInstant = metaClient.getActiveTimeline().getCompletedAndReplaceTimeline().firstInstant().get();
+    assertTrue(new File(metaClient.getMetaPath() + "/" + replaceInstant.getFileName()).delete());
+    refreshFsView();
+    // verify fileId1 shows up in timeline
+    assertEquals(fileName1, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId1)).findFirst().get().getFileName());
+    assertEquals(fileName2, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId2)).findFirst().get().getFileName());
+    assertEquals(fileName3, roView.getLatestBaseFiles(partitionPath2)
+        .filter(dfile -> dfile.getFileId().equals(fileId3)).findFirst().get().getFileName());
+    assertEquals(fileName4, roView.getLatestBaseFiles(partitionPath2)
+        .filter(dfile -> dfile.getFileId().equals(fileId4)).findFirst().get().getFileName());
+
+    assertEquals(0, fsView.getAllExcludeFileGroups(partitionPath1).count());
+    assertEquals(0, fsView.getAllExcludeFileGroups(partitionPath2).count());
   }
 
   @Override

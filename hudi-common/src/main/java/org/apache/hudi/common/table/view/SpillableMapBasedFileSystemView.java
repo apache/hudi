@@ -35,6 +35,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -74,6 +75,13 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  @Override
+  protected Map<String, Set<String>> createPartitionToExcludeFileGroups() {
+    // TODO should we create another spillable directory under baseStoreDir?
+    // the exclude file group is expected to be small, so use parent class in-memory representation
+    return super.createPartitionToExcludeFileGroups();
   }
 
   @Override

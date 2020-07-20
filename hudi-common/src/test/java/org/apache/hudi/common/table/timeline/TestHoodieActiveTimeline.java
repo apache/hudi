@@ -399,6 +399,43 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         .forEach(i -> assertFalse(t2.containsInstant(i)));
   }
 
+  @Test
+  public void testReplaceActionsTimeline() {
+    int instantTime = 1;
+    List<HoodieInstant> allInstants = new ArrayList<>();
+    HoodieInstant instant = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, String.format("%03d", instantTime++));
+    allInstants.add(instant);
+    instant = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, String.format("%03d", instantTime++));
+    allInstants.add(instant);
+    instant = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, String.format("%03d", instantTime++));
+    allInstants.add(instant);
+
+    // create replace instant with maching commit instant
+    String replaceInstant = instant.getTimestamp();
+    instant = new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_ACTION, replaceInstant);
+    allInstants.add(instant);
+
+    //replace instant with no matching commit
+    instant = new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_ACTION, "999");
+    allInstants.add(instant);
+
+    HoodieInstant inflightCommitInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, String.format("%03d", instantTime++));
+    allInstants.add(instant);
+
+    // replace instant with matching commit but inflight
+    instant = new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_ACTION, inflightCommitInstant.getTimestamp());
+    allInstants.add(instant);
+
+    timeline = new HoodieActiveTimeline(metaClient);
+    timeline.setInstants(allInstants);
+    List<HoodieInstant> validReplaceInstants =
+        timeline.getCompletedAndReplaceTimeline().getInstants().collect(Collectors.toList());
+
+    assertEquals(1, validReplaceInstants.size());
+    assertEquals(replaceInstant, validReplaceInstants.get(0).getTimestamp());
+    assertEquals(HoodieTimeline.REPLACE_ACTION, validReplaceInstants.get(0).getAction());
+  }
+
   /**
    * Returns an exhaustive list of all possible HoodieInstant.
    * @return list of HoodieInstant
@@ -416,7 +453,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         // not be generating them.
         if (state == State.REQUESTED) {
           if (action.equals(HoodieTimeline.SAVEPOINT_ACTION) || action.equals(HoodieTimeline.RESTORE_ACTION)
-              || action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
+              || action.equals(HoodieTimeline.ROLLBACK_ACTION) || action.equals(HoodieTimeline.REPLACE_ACTION)) {
             continue;
           }
         }

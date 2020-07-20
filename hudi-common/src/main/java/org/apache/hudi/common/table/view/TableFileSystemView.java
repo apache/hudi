@@ -148,6 +148,9 @@ public interface TableFileSystemView {
    */
   Stream<HoodieFileGroup> getAllFileGroups(String partitionPath);
 
+  Stream<String> getAllExcludeFileGroups(String partitionPath);
+
+
   /**
    * Return Pending Compaction Operations.
    *

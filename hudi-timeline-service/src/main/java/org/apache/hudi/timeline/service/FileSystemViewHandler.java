@@ -284,6 +284,13 @@ public class FileSystemViewHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
+    app.get(RemoteHoodieTableFileSystemView.ALL_EXCLUDE_FILEGROUPS_FOR_PARTITION_URL, new ViewHandler(ctx -> {
+      List<String> excludeFileGroups = sliceHandler.getExcludeFileGroups(
+          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+      writeValueAsString(ctx, excludeFileGroups);
+    }, true));
+
     app.post(RemoteHoodieTableFileSystemView.REFRESH_TABLE, new ViewHandler(ctx -> {
       boolean success = sliceHandler
           .refreshTable(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());

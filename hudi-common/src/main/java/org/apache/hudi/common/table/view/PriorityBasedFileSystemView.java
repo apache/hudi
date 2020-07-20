@@ -194,6 +194,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Stream<String> getAllExcludeFileGroups(final String partitionPath) {
+    return execute(partitionPath, preferredView::getAllExcludeFileGroups, secondaryView::getAllExcludeFileGroups);
+  }
+
+  @Override
   public Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations() {
     return execute(preferredView::getPendingCompactionOperations, secondaryView::getPendingCompactionOperations);
   }

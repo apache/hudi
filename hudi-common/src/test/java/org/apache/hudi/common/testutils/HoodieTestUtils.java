@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieReplaceMetadata;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -203,6 +204,21 @@ public class HoodieTestUtils {
       new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeInflightCommitFileName(
           instantTime)).createNewFile();
     }
+  }
+
+  public static void createReplaceInstant(Map<String, List<String>> partitionToReplaceFiles,
+                                          String instantTime,
+                                          HoodieTableMetaClient metaClient) throws IOException {
+    HoodieReplaceMetadata replaceMetadata = new HoodieReplaceMetadata();
+    replaceMetadata.setVersion(1);
+    replaceMetadata.setPartitionMetadata(partitionToReplaceFiles);
+    replaceMetadata.setTotalFileGroupsReplaced(1);
+    replaceMetadata.setCommand("test");
+
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant replaceInstant = new HoodieInstant(true, HoodieTimeline.REPLACE_ACTION, instantTime);
+    commitTimeline.createNewInstant(replaceInstant);
+    commitTimeline.transitionReplaceInflightToComplete(replaceInstant, TimelineMetadataUtils.serializeReplaceMetadata(replaceMetadata));
   }
 
   public static void createPendingCleanFiles(HoodieTableMetaClient metaClient, String... instantTimes) {

@@ -89,6 +89,10 @@ public class FileSliceHandler extends Handler {
         .collect(Collectors.toList());
   }
 
+  public List<String> getExcludeFileGroups(String basePath, String partitionPath) {
+    return viewManager.getFileSystemView(basePath).getAllExcludeFileGroups(partitionPath).collect(Collectors.toList());
+  }
+
   public boolean refreshTable(String basePath) {
     viewManager.clearFileSystemView(basePath);
     return true;
