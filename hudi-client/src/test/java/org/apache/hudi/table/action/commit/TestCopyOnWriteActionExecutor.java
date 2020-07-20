@@ -407,7 +407,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     metaClient.getFs().create(new Path(Paths.get(basePath, ".hoodie", "000.commit").toString())).close();
     final List<HoodieRecord> updates = dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts);
 
-    String partitionPath = updates.get(0).getPartitionPath();
+    String partitionPath = writeStatus.getPartitionPath();
     long numRecordsInPartition = updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
     CommitActionExecutor newActionExecutor = new UpsertCommitActionExecutor(jsc, config, table,
         instantTime, jsc.parallelize(updates));
