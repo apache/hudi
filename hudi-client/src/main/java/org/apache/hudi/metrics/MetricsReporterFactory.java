@@ -18,12 +18,15 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.util.Properties;
 
 /**
  * Factory class for creating MetricsReporter.
@@ -47,6 +50,10 @@ public class MetricsReporterFactory {
         break;
       case DATADOG:
         reporter = new DatadogMetricsReporter(config, registry);
+        break;
+      case USER_DEFINED:
+        reporter = (MetricsReporter) ReflectionUtils
+                .loadClass(config.getUserDefinedMetricClassName(), new Class<?>[] {Properties.class}, config.getProps());
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");

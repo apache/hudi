@@ -20,6 +20,7 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.metrics.userdefined.DefaultUserDefinedMetricsReporter;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -57,6 +58,12 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
   public static final int DEFAULT_JMX_PORT = 9889;
 
   public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_PREFIX + ".metric.prefix";
+
+  // User defined
+  public static final String USER_DEFINED_PREFIX = METRIC_PREFIX + ".user.defined";
+  public static final String USER_DEFINED_CLASS = USER_DEFINED_PREFIX + ".class";
+
+  public static final String DEFAULT_USER_DEFINED_CLASS = DefaultUserDefinedMetricsReporter.class.getName();
 
   private HoodieMetricsConfig(Properties props) {
     super(props);
@@ -117,6 +124,11 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withUserDefinedClass(String className) {
+      props.setProperty(USER_DEFINED_CLASS, className);
+      return this;
+    }
+
     public HoodieMetricsConfig build() {
       HoodieMetricsConfig config = new HoodieMetricsConfig(props);
       setDefaultOnCondition(props, !props.containsKey(METRICS_ON), METRICS_ON, String.valueOf(DEFAULT_METRICS_ON));
@@ -133,6 +145,10 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       MetricsReporterType reporterType = MetricsReporterType.valueOf(props.getProperty(METRICS_REPORTER_TYPE));
       setDefaultOnCondition(props, reporterType == MetricsReporterType.DATADOG,
           HoodieMetricsDatadogConfig.newBuilder().fromProperties(props).build());
+
+      setDefaultOnCondition(props, reporterType == MetricsReporterType.USER_DEFINED,
+          USER_DEFINED_CLASS, DEFAULT_USER_DEFINED_CLASS);
+
       return config;
     }
   }

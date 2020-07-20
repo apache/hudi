@@ -19,14 +19,21 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.MetricRegistry;
+import org.apache.hudi.metrics.userdefined.AbstractUserDefinedMetricsReporter;
+import org.apache.hudi.metrics.userdefined.DefaultUserDefinedMetricsReporter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.Closeable;
+import java.util.Properties;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -44,5 +51,21 @@ public class TestMetricsReporterFactory {
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
     MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry);
     assertTrue(reporter instanceof InMemoryMetricsReporter);
+  }
+
+  @Test
+  public void metricsReporterFactoryShouldReturnUserDefinedReporter() {
+    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.USER_DEFINED);
+    when(config.getUserDefinedMetricClassName()).thenReturn(DefaultUserDefinedMetricsReporter.class.getName());
+
+    Properties props = new Properties();
+    props.setProperty("testKey", "testValue");
+
+    when(config.getProps()).thenReturn(props);
+    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry);
+    assertTrue(reporter instanceof AbstractUserDefinedMetricsReporter);
+
+    assertEquals(props, ((DefaultUserDefinedMetricsReporter) reporter).getProps());
+
   }
 }
