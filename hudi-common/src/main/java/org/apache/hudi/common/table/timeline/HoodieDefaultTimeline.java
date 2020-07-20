@@ -114,6 +114,18 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline getCompletedAndReplaceTimeline() {
+    Set<String> commitActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION);
+    Set<String> validCommitTimes = instants.stream().filter(s -> s.isCompleted())
+        .filter(s -> commitActions.contains(s.getAction()))
+        .map(s -> s.getTimestamp()).collect(Collectors.toSet());
+
+    return new HoodieDefaultTimeline(instants.stream().filter(s -> s.getAction().equals(REPLACE_ACTION))
+        .filter(s -> s.isCompleted())
+        .filter(instant -> validCommitTimes.contains(instant.getTimestamp())), details);
+  }
+
+  @Override
   public HoodieTimeline filterPendingCompactionTimeline() {
     return new HoodieDefaultTimeline(
         instants.stream().filter(s -> s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)), details);

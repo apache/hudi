@@ -19,12 +19,23 @@
 package org.apache.hudi.common.util;
 
 import org.apache.avro.util.Utf8;
+import org.apache.hudi.avro.model.HoodieReplaceMetadata;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.junit.jupiter.api.Test;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -50,6 +61,38 @@ public class TestSerializationUtils {
     verifyObject(new Utf8("test-key"));
     // Verify serialization of list.
     verifyObject(new LinkedList<>(Arrays.asList(2, 3, 5)));
+  }
+
+  @Test
+  public void testSerDeserReplaceMetadata() throws Exception {
+    Random  r = new Random();
+    int numPartitions = 1;
+    HoodieReplaceMetadata replaceMetadata = new HoodieReplaceMetadata();
+    int numFiles = 30;
+    Map<String, List<String>> partitionToReplaceFileId = new HashMap<>();
+
+    for (int i = 0; i < numFiles; i++) {
+      int partition = r.nextInt(numPartitions);
+      String partitionStr = "2020/07/0" + partition;
+      partitionToReplaceFileId.putIfAbsent(partitionStr, new ArrayList<>());
+      partitionToReplaceFileId.get(partitionStr).add(FSUtils.createNewFileIdPfx());
+    }
+    String command = "clustering";
+    replaceMetadata.setVersion(1);
+    replaceMetadata.setTotalFilesReplaced(numFiles);
+    replaceMetadata.setCommand(command);
+    replaceMetadata.setPartitionMetadata(partitionToReplaceFileId);
+    String filePath = "/tmp/myreplacetest";
+    byte[] data = TimelineMetadataUtils.serializeReplaceMetadata(replaceMetadata).get();
+    FileOutputStream fos = new FileOutputStream(filePath);
+    fos.write(data);
+    fos.close();
+
+    data = Files.readAllBytes(Paths.get(filePath));
+    HoodieReplaceMetadata replaceMetadataD = TimelineMetadataUtils.deserializeHoodieReplaceMetadata(data);
+    assertEquals(replaceMetadataD.getTotalFilesReplaced(), numFiles);
+    assertEquals(command, replaceMetadataD.getCommand());
+    assertEquals(partitionToReplaceFileId, replaceMetadataD.getPartitionMetadata());
   }
 
   private <T> void verifyObject(T expectedValue) throws IOException {
