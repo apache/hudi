@@ -102,6 +102,17 @@ public class SparkTempViewProvider implements TempViewProvider {
   }
 
   @Override
+  public void showAllViews() {
+    try {
+      sqlContext.sql("SHOW TABLES").show(Integer.MAX_VALUE, false);
+    } catch (Throwable ex) {
+      // log full stack trace and rethrow. Without this its difficult to debug failures, if any
+      LOG.error("unable to initialize spark context ", ex);
+      throw new HoodieException(ex);
+    }
+  }
+
+  @Override
   public void deleteTable(String tableName) {
     try {
       sqlContext.sql("DROP TABLE IF EXISTS " + tableName);
@@ -109,6 +120,13 @@ public class SparkTempViewProvider implements TempViewProvider {
       // log full stack trace and rethrow. Without this its difficult to debug failures, if any
       LOG.error("unable to initialize spark context ", ex);
       throw new HoodieException(ex);
+    }
+  }
+
+  @Override
+  public void close() {
+    if (sqlContext != null) {
+      sqlContext.sparkSession().stop();
     }
   }
 
