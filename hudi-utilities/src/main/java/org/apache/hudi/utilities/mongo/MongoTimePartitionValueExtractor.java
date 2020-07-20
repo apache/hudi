@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.mongo;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.hive.PartitionValueExtractor;
@@ -27,21 +27,28 @@ import org.apache.hudi.hive.PartitionValueExtractor;
  * HDFS or S3 file paths contain hive partition values for the keys it is partitioned on. This class
  * extracts the partition value from the file path.
  */
-public class MongoPartitionValueExtractor implements PartitionValueExtractor {
+public class MongoTimePartitionValueExtractor implements PartitionValueExtractor {
 
-  public MongoPartitionValueExtractor() {
+  public MongoTimePartitionValueExtractor() {
+  }
+
+  static private String partValue(String origVal) {
+    String[] parts = origVal.split("=");
+    return (parts.length > 1) ? parts[1] : parts[0];
   }
 
   @Override
   public List<String> extractPartitionValuesInPath(String partitionPath) {
-    // Partition path is not expected to contain "/"
-    if (partitionPath.contains("/")) {
+    // Partition path is expected to contain "/"
+    String[] splits = partitionPath.split("/");
+    if (splits.length != 2) {
       throw new HoodieKeyException(
-          "Mongo partition path " + partitionPath + " should not contain backslash");
+          "Mongo hourly partition path " + partitionPath + " should contain a backslash");
     }
-    // Get the partition part
-    String[] splits = partitionPath.split("=");
-    String shard = (splits.length > 1) ? splits[1] : splits[0];
-    return Collections.singletonList(shard);
+    // Get the partition key values
+    ArrayList<String> values = new ArrayList<>(2);
+    values.add(partValue(splits[0]));
+    values.add(partValue(splits[1]));
+    return values;
   }
 }

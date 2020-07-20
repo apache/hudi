@@ -18,9 +18,9 @@
 
 package org.apache.hudi.utilities.keygen;
 
-import java.util.Collections;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.util.hash.Hash;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.model.HoodieKey;
@@ -28,39 +28,25 @@ import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.utilities.mongo.SchemaUtils;
+import org.bson.types.ObjectId;
 
-/* Key generator which takes the name of the key field to be used for recordKey,  computes
- murmur hash of the key value, modulo number-of-partitions as partition value.
+/* Key generator which takes the name of the key field to be used for recordKey, computes
+ hourly partition values.
  */
-public class MongoKeyGenerator extends KeyGenerator {
+public class MongoTimeKeyGenerator extends KeyGenerator {
 
+  private static final String DATE_FORMAT = "yyyy-MM-dd/HH";
+  private static final String HIVE_DATE_FORMAT = "'dt='yyyy-MM-dd'/hr='HH";
   private static final String RECORD_KEY = SchemaUtils.ID_FIELD;
-  private static final String PARTITION_KEY = "shard";
   private final boolean hiveStylePartitioning;
-  private final int numberOfPartitions;
+  private final SimpleDateFormat dateFormat;
 
-  /**
-   * Supported configs.
-   */
-  static class Config {
-
-    // Number of hash partitions for Mongo tables
-    private static final String NUMBER_OF_PARTITION_PROP =
-        "hoodie.deltastreamer.keygen.mongo.number_partitions";
-  }
-
-  public MongoKeyGenerator(TypedProperties props) {
+  public MongoTimeKeyGenerator(TypedProperties props) {
     super(props);
-    DataSourceUtils.checkRequiredProperties(config,
-        Collections.singletonList(Config.NUMBER_OF_PARTITION_PROP));
-    this.hiveStylePartitioning = props.getBoolean(
+    hiveStylePartitioning = props.getBoolean(
         DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
         Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
-    this.numberOfPartitions = props.getInteger(Config.NUMBER_OF_PARTITION_PROP);
-    if (this.numberOfPartitions <= 0) {
-      throw new HoodieKeyException(
-          "number_partitions value " + this.numberOfPartitions + " must be positive");
-    }
+    dateFormat = new SimpleDateFormat(hiveStylePartitioning ? HIVE_DATE_FORMAT : DATE_FORMAT);
   }
 
   @Override
@@ -69,11 +55,8 @@ public class MongoKeyGenerator extends KeyGenerator {
     if (recordKey == null) {
       throw new HoodieKeyException(SchemaUtils.ID_FIELD + " field value cannot be null");
     }
-    int hashValue = Hash.getInstance(Hash.MURMUR_HASH).hash(recordKey.getBytes());
-    String partitionPath = Integer.toString(hashValue % numberOfPartitions);
-    if (hiveStylePartitioning) {
-      partitionPath = PARTITION_KEY + "=" + partitionPath;
-    }
+    Date date = new ObjectId(recordKey).getDate();
+    String partitionPath = dateFormat.format(date);
     return new HoodieKey(recordKey, partitionPath);
   }
 }
