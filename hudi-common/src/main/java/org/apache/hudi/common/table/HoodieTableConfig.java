@@ -41,9 +41,8 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 /**
- * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are
- * loaded from hoodie.properties, these properties are usually set during initializing a path as hoodie base path and
- * never changes during the lifetime of a hoodie table.
+ * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are loaded from hoodie.properties, these properties are usually set during
+ * initializing a path as hoodie base path and never changes during the lifetime of a hoodie table.
  *
  * @see HoodieTableMetaClient
  * @since 0.3.0
@@ -55,6 +54,7 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_TABLE_NAME_PROP_NAME = "hoodie.table.name";
   public static final String HOODIE_TABLE_TYPE_PROP_NAME = "hoodie.table.type";
+  public static final String HOODIE_TABLE_VERSION_PROP_NAME = "hoodie.table.version";
   @Deprecated
   public static final String HOODIE_RO_FILE_FORMAT_PROP_NAME = "hoodie.table.ro.file.format";
   @Deprecated
@@ -68,6 +68,7 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_BOOTSTRAP_BASE_PATH = "hoodie.bootstrap.base.path";
 
   public static final HoodieTableType DEFAULT_TABLE_TYPE = HoodieTableType.COPY_ON_WRITE;
+  public static final HoodieTableVersion DEFAULT_TABLE_VERSION = HoodieTableVersion.ZERO;
   public static final HoodieFileFormat DEFAULT_BASE_FILE_FORMAT = HoodieFileFormat.PARQUET;
   public static final HoodieFileFormat DEFAULT_LOG_FILE_FORMAT = HoodieFileFormat.HOODIE_LOG;
   public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
@@ -75,6 +76,8 @@ public class HoodieTableConfig implements Serializable {
 
   public static final Integer DEFAULT_TIMELINE_LAYOUT_VERSION = TimelineLayoutVersion.VERSION_0;
   public static final String DEFAULT_ARCHIVELOG_FOLDER = "";
+  public static final HoodieTableVersion CUR_TABLE_VERSION = HoodieTableVersion.ONE;
+
   private Properties props;
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
@@ -107,7 +110,8 @@ public class HoodieTableConfig implements Serializable {
    *
    * @deprecated
    */
-  public HoodieTableConfig() {}
+  public HoodieTableConfig() {
+  }
 
   /**
    * Initialize the hoodie meta directory and any necessary files inside the meta (including the hoodie.properties).
@@ -158,6 +162,47 @@ public class HoodieTableConfig implements Serializable {
     return props.containsKey(HOODIE_TIMELINE_LAYOUT_VERSION)
         ? Option.of(new TimelineLayoutVersion(Integer.valueOf(props.getProperty(HOODIE_TIMELINE_LAYOUT_VERSION))))
         : Option.empty();
+  }
+
+  /**
+   * @return the hoodie.table.version from hoodie.properties file.
+   */
+  public HoodieTableVersion getHoodieTableVersionFromPropertyFile() {
+    String versionFromFile = props.getProperty(HOODIE_TABLE_VERSION_PROP_NAME);
+    if (versionFromFile != null) {
+      try {
+        String propValue = props.getProperty(HOODIE_TABLE_VERSION_PROP_NAME);
+        if (Integer.parseInt(propValue) == HoodieTableVersion.ONE.version) {
+          return HoodieTableVersion.ONE;
+        }
+      } catch (Exception e) {
+        LOG.warn("Hoodie table version parsing exception " + e.getCause());
+      }
+    }
+    return DEFAULT_TABLE_VERSION;
+  }
+
+  /**
+   * Updates hoodie.table.version in properties and in property file.
+   * @param hoodieTableVersion hoodie table version to be updated to.
+   * @param fs instance of {@link FileSystem} to use.
+   * @param metaPath meta path to be used.
+   */
+  public void setHoodieTableVersion(HoodieTableVersion hoodieTableVersion, FileSystem fs, String metaPath) {
+    props.put(HOODIE_TABLE_VERSION_PROP_NAME, Integer.toString(hoodieTableVersion.version));
+    Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
+    try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
+      props.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to update hoodie.properties file with hoodie.table.version " + propertyPath, e);
+    }
+  }
+
+  /**
+   * @return the current hoodie table version.
+   */
+  public HoodieTableVersion getCurrentHoodieTableVersion() {
+    return CUR_TABLE_VERSION;
   }
 
   /**

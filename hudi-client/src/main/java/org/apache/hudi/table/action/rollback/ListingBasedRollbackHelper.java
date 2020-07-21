@@ -37,6 +37,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
@@ -68,34 +69,48 @@ public class ListingBasedRollbackHelper implements Serializable {
    * Performs all rollback actions that we have collected in parallel.
    */
   public List<HoodieRollbackStat> performRollback(JavaSparkContext jsc, HoodieInstant instantToRollback, List<ListingBasedRollbackRequest> rollbackRequests) {
-    SerializablePathFilter filter = (path) -> {
-      if (path.toString().endsWith(this.metaClient.getTableConfig().getBaseFileFormat().getFileExtension())) {
-        String fileCommitTime = FSUtils.getCommitTime(path.getName());
-        return instantToRollback.getTimestamp().equals(fileCommitTime);
-      } else if (FSUtils.isLogFile(path)) {
-        // Since the baseCommitTime is the only commit for new log files, it's okay here
-        String fileCommitTime = FSUtils.getBaseCommitTimeFromLogPath(path);
-        return instantToRollback.getTimestamp().equals(fileCommitTime);
-      }
-      return false;
-    };
-
     int sparkPartitions = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
     jsc.setJobGroup(this.getClass().getSimpleName(), "Perform rollback actions");
+    JavaPairRDD<String, HoodieRollbackStat> partitionPathRollbackStatsPairRDD = maybeDeleteAndCollectStatsOrCollectStats(jsc, instantToRollback, rollbackRequests, sparkPartitions, true);
+    return partitionPathRollbackStatsPairRDD.reduceByKey(RollbackUtils::mergeRollbackStat).map(Tuple2::_2).collect();
+  }
+
+  /**
+   * Collect all file info that needs to be rollbacked.
+   */
+  public List<HoodieRollbackStat> collectRollbackStats(JavaSparkContext jsc, HoodieInstant instantToRollback, List<ListingBasedRollbackRequest> rollbackRequests) {
+    int sparkPartitions = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Collect rollback stats for upgrade/downgrade");
+    JavaPairRDD<String, HoodieRollbackStat> partitionPathRollbackStatsPairRDD = maybeDeleteAndCollectStatsOrCollectStats(jsc, instantToRollback, rollbackRequests, sparkPartitions, false);
+    return partitionPathRollbackStatsPairRDD.map(Tuple2::_2).collect();
+  }
+
+  /**
+   * May be delete interested files and collect stats or collect stats only.
+   *
+   * @param jsc instance of {@link JavaSparkContext} to use.
+   * @param instantToRollback {@link HoodieInstant} of interest for which deletion or collect stats is requested.
+   * @param rollbackRequests List of {@link ListingBasedRollbackRequest} to be operated on.
+   * @param sparkPartitions number of spark partitions to use for parallelism.
+   * @param doDelete {@code true} if deletion has to be done. {@code false} if only stats are to be collected w/o performing any deletes.
+   * @return stats collected with or w/o actual deletions.
+   */
+  JavaPairRDD<String, HoodieRollbackStat> maybeDeleteAndCollectStatsOrCollectStats(JavaSparkContext jsc, HoodieInstant instantToRollback, List<ListingBasedRollbackRequest> rollbackRequests,
+      int sparkPartitions, boolean doDelete) {
     return jsc.parallelize(rollbackRequests, sparkPartitions).mapToPair(rollbackRequest -> {
       switch (rollbackRequest.getType()) {
         case DELETE_DATA_FILES_ONLY: {
-          final Map<FileStatus, Boolean> filesToDeletedStatus = deleteCleanedFiles(metaClient, config, instantToRollback.getTimestamp(),
-              rollbackRequest.getPartitionPath());
+          final Map<FileStatus, Boolean> filesToDeletedStatus = deleteBaseFiles(metaClient, config, instantToRollback.getTimestamp(),
+              rollbackRequest.getPartitionPath(), doDelete);
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
-                  HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                          .withDeletedFileResults(filesToDeletedStatus).build());
+              HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
+                  .withDeletedFileResults(filesToDeletedStatus).build());
         }
         case DELETE_DATA_AND_LOG_FILES: {
-          final Map<FileStatus, Boolean> filesToDeletedStatus = deleteCleanedFiles(metaClient, config, rollbackRequest.getPartitionPath(), filter);
+          final Map<FileStatus, Boolean> filesToDeletedStatus = deleteBaseAndLogFiles(metaClient, config, instantToRollback.getTimestamp(), rollbackRequest.getPartitionPath(), doDelete);
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
-                  HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                          .withDeletedFileResults(filesToDeletedStatus).build());
+              HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
+                  .withDeletedFileResults(filesToDeletedStatus).build());
         }
         case APPEND_ROLLBACK_BLOCK: {
           Writer writer = null;
@@ -107,9 +122,11 @@ public class ListingBasedRollbackHelper implements Serializable {
                 .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 
             // generate metadata
-            Map<HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
-            // if update belongs to an existing log file
-            writer = writer.appendBlock(new HoodieCommandBlock(header));
+            if (doDelete) {
+              Map<HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
+              // if update belongs to an existing log file
+              writer = writer.appendBlock(new HoodieCommandBlock(header));
+            }
           } catch (IOException | InterruptedException io) {
             throw new HoodieRollbackException("Failed to rollback for instant " + instantToRollback, io);
           } finally {
@@ -130,30 +147,46 @@ public class ListingBasedRollbackHelper implements Serializable {
               1L
           );
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
-                  HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                          .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
+              HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
+                  .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
         }
         default:
           throw new IllegalStateException("Unknown Rollback action " + rollbackRequest);
       }
-    }).reduceByKey(RollbackUtils::mergeRollbackStat).map(Tuple2::_2).collect();
+    });
   }
-
 
 
   /**
    * Common method used for cleaning out base files under a partition path during rollback of a set of commits.
    */
-  private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
-                                                      String partitionPath, PathFilter filter) throws IOException {
+  private Map<FileStatus, Boolean> deleteBaseAndLogFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
+      String commit, String partitionPath, boolean doDelete) throws IOException {
     LOG.info("Cleaning path " + partitionPath);
+    String basefileExtension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
+    SerializablePathFilter filter = (path) -> {
+      if (path.toString().endsWith(basefileExtension)) {
+        String fileCommitTime = FSUtils.getCommitTime(path.getName());
+        return commit.equals(fileCommitTime);
+      } else if (FSUtils.isLogFile(path)) {
+        // Since the baseCommitTime is the only commit for new log files, it's okay here
+        String fileCommitTime = FSUtils.getBaseCommitTimeFromLogPath(path);
+        return commit.equals(fileCommitTime);
+      }
+      return false;
+    };
+
     final Map<FileStatus, Boolean> results = new HashMap<>();
     FileSystem fs = metaClient.getFs();
     FileStatus[] toBeDeleted = fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
     for (FileStatus file : toBeDeleted) {
-      boolean success = fs.delete(file.getPath(), false);
-      results.put(file, success);
-      LOG.info("Delete file " + file.getPath() + "\t" + success);
+      if (doDelete) {
+        boolean success = fs.delete(file.getPath(), false);
+        results.put(file, success);
+        LOG.info("Delete file " + file.getPath() + "\t" + success);
+      } else {
+        results.put(file, true);
+      }
     }
     return results;
   }
@@ -161,8 +194,8 @@ public class ListingBasedRollbackHelper implements Serializable {
   /**
    * Common method used for cleaning out base files under a partition path during rollback of a set of commits.
    */
-  private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
-                                                      String commit, String partitionPath) throws IOException {
+  private Map<FileStatus, Boolean> deleteBaseFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
+      String commit, String partitionPath, boolean doDelete) throws IOException {
     final Map<FileStatus, Boolean> results = new HashMap<>();
     LOG.info("Cleaning path " + partitionPath);
     FileSystem fs = metaClient.getFs();
@@ -176,9 +209,13 @@ public class ListingBasedRollbackHelper implements Serializable {
     };
     FileStatus[] toBeDeleted = fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
     for (FileStatus file : toBeDeleted) {
-      boolean success = fs.delete(file.getPath(), false);
-      results.put(file, success);
-      LOG.info("Delete file " + file.getPath() + "\t" + success);
+      if (doDelete) {
+        boolean success = fs.delete(file.getPath(), false);
+        results.put(file, success);
+        LOG.info("Delete file " + file.getPath() + "\t" + success);
+      } else {
+        results.put(file, true);
+      }
     }
     return results;
   }
@@ -194,5 +231,6 @@ public class ListingBasedRollbackHelper implements Serializable {
   }
 
   public interface SerializablePathFilter extends PathFilter, Serializable {
+
   }
 }

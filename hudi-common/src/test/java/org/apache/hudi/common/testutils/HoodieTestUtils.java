@@ -198,6 +198,14 @@ public class HoodieTestUtils {
     new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME).mkdirs();
   }
 
+  public static void createTempFolderForMarkerFiles(String basePath) {
+    new File(basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME).mkdirs();
+  }
+
+  public static String getTempFolderName(String basePath) {
+    return basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME;
+  }
+
   public static void createInflightCommitFiles(String basePath, String... instantTimes) throws IOException {
 
     for (String instantTime : instantTimes) {
@@ -277,6 +285,23 @@ public class HoodieTestUtils {
     new File(folderPath).mkdirs();
     new File(folderPath + FSUtils.makeDataFileName(instantTime, DEFAULT_WRITE_TOKEN, fileID)).createNewFile();
     return fileID;
+  }
+
+  public static void createMarkerFile(String basePath, String partitionPath, String instantTime, String dataFileName) throws IOException {
+    createTempFolderForMarkerFiles(basePath);
+    String folderPath = getTempFolderName(basePath);
+    // create dir for this instant
+    new File(folderPath + "/" + instantTime + "/" + partitionPath).mkdirs();
+    new File(folderPath + "/" + instantTime + "/" + partitionPath + "/" + dataFileName + ".marker.MERGE").createNewFile();
+  }
+
+  public static int getTotalMarkerFileCount(String basePath, String partitionPath, String instantTime) {
+    String folderPath = getTempFolderName(basePath);
+    File markerDir = new File(folderPath + "/" + instantTime + "/" + partitionPath);
+    if (markerDir.exists()) {
+      return markerDir.listFiles((dir, name) -> name.contains(".marker.MERGE")).length;
+    }
+    return 0;
   }
 
   public static String createDataFileFixLength(String basePath, String partitionPath, String instantTime, String fileID,

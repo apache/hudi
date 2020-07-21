@@ -38,6 +38,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.upgrade.UpgradeDowngradeUtil;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -198,10 +200,23 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
    * Get HoodieTable and init {@link Timer.Context}.
    *
    * @param operationType write operation type
+   * @param instantTime current inflight instant time
    * @return HoodieTable
    */
+  protected HoodieTable getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    if (config.shouldRollbackUsingMarkers()) {
+      mayBeUpgrade(metaClient, instantTime);
+    }
+    return getTableAndInitCtx(operationType);
+  }
+
   protected HoodieTable getTableAndInitCtx(WriteOperationType operationType) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
+    return getTableAndInitCtx(metaClient, operationType);
+  }
+
+  private HoodieTable getTableAndInitCtx(HoodieTableMetaClient metaClient, WriteOperationType operationType) {
     if (operationType == WriteOperationType.DELETE) {
       setWriteSchemaForDeletes(metaClient);
     }
@@ -213,6 +228,20 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       writeContext = metrics.getDeltaCommitCtx();
     }
     return table;
+  }
+
+  /**
+   * Execute upgrade steps when there is a change in hoodie table version.
+   * @param metaClient instance of {@link HoodieTableMetaClient} of interest
+   * @param instantTime current instant time that should not be touched
+   * @throws IOException
+   */
+  public void mayBeUpgrade(HoodieTableMetaClient metaClient, String instantTime) {
+    try {
+      UpgradeDowngradeUtil.doUpgradeOrDowngrade(metaClient, metaClient.getTableConfig().getCurrentHoodieTableVersion(), config, jsc, instantTime);
+    } catch (IOException e) {
+      throw new HoodieIOException("IOException thrown while upgrading/downgrading hoodie ", e);
+    }
   }
 
   /**
