@@ -38,7 +38,7 @@ import java.util.Map;
 public class BulkInsertMapFunctionForNonSortedRecords<T extends HoodieRecordPayload>
     extends BulkInsertMapFunction<T> {
 
-  Map<String, CopyOnWriteInsertHandler> parallelWritersMap;
+  private Map<String, CopyOnWriteInsertHandler> parallelWritersMap;
 
   public BulkInsertMapFunctionForNonSortedRecords(String commitTime,
       HoodieWriteConfig config,

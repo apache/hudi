@@ -38,8 +38,7 @@ import java.util.Map;
  * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles.
  */
 public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
-    extends
-    BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
+    extends BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
   protected HoodieWriteConfig config;
   protected String instantTime;
@@ -77,10 +76,7 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
       handles.put(partitionPath, handle);
     }
 
-    if (handle.canWrite(payload.record)) {
-      // write the payload, if the handle has capacity
-      handle.write(insertPayload, payload.insertValue, payload.exception);
-    } else {
+    if (!handle.canWrite(payload.record)) {
       // handle is full.
       statuses.add(handle.close());
       // Need to handle the rejected payload & open new handle
@@ -88,9 +84,8 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
           config, instantTime, hoodieTable, insertPayload.getPartitionPath(),
           idPrefix, sparkTaskContextSupplier);
       handles.put(partitionPath, handle);
-      handle.write(insertPayload, payload.insertValue,
-          payload.exception); // we should be able to write 1 payload.
     }
+    handle.write(insertPayload, payload.insertValue, payload.exception);
   }
 
   @Override

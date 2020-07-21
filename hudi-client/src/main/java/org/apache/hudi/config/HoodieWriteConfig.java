@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitioner.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -258,12 +257,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public BulkInsertSortMode getBulkInsertSortMode() {
     String sortMode = props.getProperty(BULKINSERT_SORT_MODE);
-    try {
-      return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
-    } catch (IllegalArgumentException e) {
-      throw new HoodieException(
-          "Invalid bulk insert sort mode: \"" + sortMode + "\".");
-    }
+    return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
   }
 
   /**

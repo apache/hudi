@@ -54,55 +54,32 @@ public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
 
     if (performDedupe) {
       dedupedRecords = WriteHelper.combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
-          config.getInsertShuffleParallelism(), ((HoodieTable<T>)table));
+          config.getInsertShuffleParallelism(), ((HoodieTable<T>) table));
     }
 
     final JavaRDD<HoodieRecord<T>> repartitionedRecords;
     final int parallelism = config.getBulkInsertShuffleParallelism();
-    boolean arePartitionRecordsSorted = true;
-    if (bulkInsertPartitioner.isPresent()) {
-      repartitionedRecords = bulkInsertPartitioner.get()
-          .repartitionRecords(dedupedRecords, parallelism);
-      arePartitionRecordsSorted = bulkInsertPartitioner.get().arePartitionRecordsSorted();
-    } else {
-      BulkInsertInternalPartitioner partitioner =
-          BulkInsertInternalPartitioner.get(config.getBulkInsertSortMode());
-      repartitionedRecords = partitioner.repartitionRecords(dedupedRecords, parallelism);
-      arePartitionRecordsSorted = partitioner.arePartitionRecordsSorted();
-    }
+    UserDefinedBulkInsertPartitioner partitioner = bulkInsertPartitioner.isPresent()
+        ? bulkInsertPartitioner.get()
+        : BulkInsertInternalPartitioner.get(config.getBulkInsertSortMode());
+    repartitionedRecords = partitioner.repartitionRecords(dedupedRecords, parallelism);
 
     // generate new file ID prefixes for each output partition
     final List<String> fileIDPrefixes =
-        IntStream.range(0, parallelism).mapToObj(i -> FSUtils.createNewFileIdPfx())
-            .collect(Collectors.toList());
+        IntStream.range(0, parallelism).mapToObj(i -> FSUtils.createNewFileIdPfx()).collect(Collectors.toList());
 
     table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
-        table.getMetaClient().getCommitActionType(), instantTime), Option.empty(),
+            table.getMetaClient().getCommitActionType(), instantTime), Option.empty(),
         config.shouldAllowMultiWriteOnSameInstant());
 
-    /*
-    BulkInsertMapFunction<T> bulkInsertMapFunction = getBulkInsertMapFunction(
-        arePartitionRecordsSorted, commitTime, config, table, fileIDPrefixes);
-     */
-    BulkInsertMapFunction<T> func = new BulkInsertMapFunctionForSortedRecords(
-        instantTime, config, table, fileIDPrefixes);
+    BulkInsertMapFunction<T> bulkInsertMapFunction = partitioner.arePartitionRecordsSorted()
+        ? new BulkInsertMapFunctionForSortedRecords(instantTime, config, table, fileIDPrefixes)
+        : new BulkInsertMapFunctionForNonSortedRecords(instantTime, config, table, fileIDPrefixes);
     JavaRDD<WriteStatus> writeStatusRDD = repartitionedRecords
-        .mapPartitionsWithIndex(func, true)
+        .mapPartitionsWithIndex(bulkInsertMapFunction, true)
         .flatMap(List::iterator);
 
     executor.updateIndexAndCommitIfNeeded(writeStatusRDD, result);
     return result;
   }
-
-  private BulkInsertMapFunction<T> getBulkInsertMapFunction(
-      boolean isSorted, String commitTime, HoodieWriteConfig config, HoodieTable<T> hoodieTable,
-      List<String> fileIDPrefixes) {
-    if (isSorted) {
-      return new BulkInsertMapFunctionForSortedRecords(
-          commitTime, config, hoodieTable, fileIDPrefixes);
-    }
-    return new BulkInsertMapFunctionForNonSortedRecords(
-        commitTime, config, hoodieTable, fileIDPrefixes);
-  }
-
 }
