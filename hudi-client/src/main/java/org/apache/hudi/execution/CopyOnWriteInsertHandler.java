@@ -95,12 +95,6 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
 
   @Override
   public void finish() {
-    /*
-    if (handle != null) {
-      statuses.add(handle.close());
-    }
-    handle = null;
-     */
     for (HoodieWriteHandle handle : handles.values()) {
       statuses.add(handle.close());
     }

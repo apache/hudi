@@ -66,8 +66,7 @@ public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
       arePartitionRecordsSorted = bulkInsertPartitioner.get().arePartitionRecordsSorted();
     } else {
       BulkInsertInternalPartitioner partitioner =
-          BulkInsertInternalPartitioner.get(config.getBulkInsertSortMode(),
-              config.getStringFormation());
+          BulkInsertInternalPartitioner.get(config.getBulkInsertSortMode());
       repartitionedRecords = partitioner.repartitionRecords(dedupedRecords, parallelism);
       arePartitionRecordsSorted = partitioner.arePartitionRecordsSorted();
     }

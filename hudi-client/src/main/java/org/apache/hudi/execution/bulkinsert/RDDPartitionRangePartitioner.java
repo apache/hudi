@@ -36,25 +36,16 @@ import scala.reflect.ClassTag$;
 
 public class RDDPartitionRangePartitioner<T extends HoodieRecordPayload>
     extends BulkInsertInternalPartitioner<T> implements Serializable {
-
-  boolean useFormat = true;
-
-  public RDDPartitionRangePartitioner(boolean useFormat) {
-    this.useFormat = useFormat;
-  }
-
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
       int outputSparkPartitions) {
     JavaPairRDD<String, HoodieRecord<T>> pairRDD = records.mapToPair(record ->
         new Tuple2(
-            useFormat
-                ? String.format("%s+%s", record.getPartitionPath(), record.getRecordKey())
-                : new StringBuilder()
-                    .append(record.getPartitionPath())
-                    .append("+")
-                    .append(record.getRecordKey())
-                    .toString(), record));
+            new StringBuilder()
+                .append(record.getPartitionPath())
+                .append("+")
+                .append(record.getRecordKey())
+                .toString(), record));
     Ordering<String> ordering = Ordering$.MODULE$
         .comparatorToOrdering(Comparator.<String>naturalOrder());
     ClassTag<String> classTag = ClassTag$.MODULE$.apply(String.class);

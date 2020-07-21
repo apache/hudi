@@ -657,10 +657,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return clientSpecifiedViewStorageConfig;
   }
 
-  public boolean getStringFormation() {
-    return Boolean.parseBoolean(props.getProperty("hoodie.tmp.string.format"));
-  }
-
   /**
    * Commit call back configs.
    */

@@ -25,10 +25,7 @@ import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 public abstract class BulkInsertInternalPartitioner<T extends HoodieRecordPayload> implements
     UserDefinedBulkInsertPartitioner<T> {
 
-  public static final String SORT_TYPE_LOCAL = "local";
-
-  public static BulkInsertInternalPartitioner get(
-      BulkInsertSortMode sortMode, boolean useFormat) {
+  public static BulkInsertInternalPartitioner get(BulkInsertSortMode sortMode) {
     switch (sortMode) {
       case NONE:
         return new NonSortPartitioner();
@@ -37,7 +34,7 @@ public abstract class BulkInsertInternalPartitioner<T extends HoodieRecordPayloa
       case PARTITION_SORTED:
         return new RDDPartitionLocalSortPartitioner();
       case PARTITION_RANGE_SORTED:
-        return new RDDPartitionRangePartitioner(useFormat);
+        return new RDDPartitionRangePartitioner();
       default:
         throw new HoodieException(
             "The bulk insert mode \"" + sortMode.name() + "\" is not supported.");
