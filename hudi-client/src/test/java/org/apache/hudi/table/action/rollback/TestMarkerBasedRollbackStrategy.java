@@ -18,9 +18,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -31,6 +28,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -83,15 +82,6 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     }
   }
 
-  private void printRollingStats(String label, List<HoodieRollbackStat> stats) {
-    stats.forEach(stat -> System.out.println(label
-        + ", pp:" + stat.getPartitionPath()
-        + ", failed:" + stat.getFailedDeleteFiles()
-        + ", success:" + stat.getSuccessDeleteFiles()
-        + ", cmdBlocks:" + stat.getCommandBlocksCount()
-    ));
-  }
-
   @Test
   public void testCopyOnWriteRollback() throws Exception {
     // given: wrote some base files and corresponding markers
@@ -102,14 +92,11 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     List<HoodieRollbackStat> stats = new MarkerBasedRollbackStrategy(HoodieTable.create(metaClient, getConfig(), hadoopConf), jsc, getConfig(), "002")
         .execute(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"));
 
-    printRollingStats("COW", stats);
     // then: ensure files are deleted correctly, non-existent files reported as failed deletes
     assertEquals(2, stats.size());
 
     List<FileStatus> partAFiles = FileSystemTestUtils.listRecursive(fs, new Path(basePath + "/partA"));
     List<FileStatus> partBFiles = FileSystemTestUtils.listRecursive(fs, new Path(basePath + "/partB"));
-    System.out.println(">>> COW A :" + partAFiles);
-    System.out.println(">>> COW B :" + partBFiles);
 
     assertEquals(0, partBFiles.size());
     assertEquals(1, partAFiles.size());
@@ -126,19 +113,16 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     // when
     List<HoodieRollbackStat> stats = new MarkerBasedRollbackStrategy(HoodieTable.create(metaClient, getConfig(), hadoopConf), jsc, getConfig(), "002")
         .execute(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"));
-    printRollingStats("MOR", stats);
 
     // then: ensure files are deleted, rollback block is appended (even if append does not exist)
     assertEquals(2, stats.size());
     // will have the log file
     List<FileStatus> partBFiles = FileSystemTestUtils.listRecursive(fs, new Path(basePath + "/partB"));
-    System.out.println(">>> MOR B :" + partBFiles);
     assertEquals(1, partBFiles.size());
     assertTrue(partBFiles.get(0).getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
     assertTrue(partBFiles.get(0).getLen() > 0);
 
     List<FileStatus> partAFiles = FileSystemTestUtils.listRecursive(fs, new Path(basePath + "/partA"));
-    System.out.println(">>> MOR A :" + partAFiles);
     assertEquals(3, partAFiles.size());
     assertEquals(2, partAFiles.stream().filter(s -> s.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())).count());
     assertEquals(1, partAFiles.stream().filter(s -> s.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())).filter(f -> f.getLen() > 0).count());

@@ -345,11 +345,10 @@ public class HoodieClientTestUtils {
 
   public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileID, IOType ioType)
           throws IOException {
-    String folderPath =
-            basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME + "/" + instantTime + "/" + partitionPath + "/";
+    String folderPath = basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME + "/" + instantTime + "/" + partitionPath + "/";
     new File(folderPath).mkdirs();
-    String markerFileName = String.format("%s_%s_%s.%s%s.%s", fileID, DEFAULT_WRITE_TOKEN, instantTime,
-            HoodieFileFormat.PARQUET, HoodieTableMetaClient.MARKER_EXTN, ioType);
+    String markerFileName = String.format("%s_%s_%s%s%s.%s", fileID, DEFAULT_WRITE_TOKEN, instantTime,
+        HoodieFileFormat.PARQUET.getFileExtension(), HoodieTableMetaClient.MARKER_EXTN, ioType);
     File f = new File(folderPath + markerFileName);
     f.createNewFile();
     return f.getAbsolutePath();
