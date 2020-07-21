@@ -44,7 +44,9 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.io.IOType;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.commit.WriteHelper;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
@@ -1063,11 +1065,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
   }
 
-  @Test
-  public void testRollbackAfterConsistencyCheckFailure() throws Exception {
+  private void testRollbackAfterConsistencyCheckFailureUsingFileList(boolean rollbackUsingMarkers) throws Exception {
     String instantTime = "000";
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers).withAutoCommit(false).build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
     testConsistencyCheck(metaClient, instantTime);
 
@@ -1077,6 +1078,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         "After explicit rollback, commit file should not be present");
     // Marker directory must be removed after rollback
     assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
+  }
+
+  @Test
+  public void testRollbackAfterConsistencyCheckFailureUsingFileList() throws Exception {
+    testRollbackAfterConsistencyCheckFailureUsingFileList(false);
+  }
+
+  @Test
+  public void testRollbackAfterConsistencyCheckFailureUsingMarkers() throws Exception {
+    testRollbackAfterConsistencyCheckFailureUsingFileList(true);
   }
 
   private Pair<Path, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String instantTime)
@@ -1096,11 +1107,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // This should fail the commit
     String partitionPath = Arrays
         .stream(fs.globStatus(new Path(String.format("%s/*/*/*/*", metaClient.getMarkerFolderPath(instantTime))),
-            path -> path.toString().endsWith(HoodieTableMetaClient.MARKER_EXTN)))
+            path -> path.toString().contains(HoodieTableMetaClient.MARKER_EXTN)))
         .limit(1).map(status -> status.getPath().getParent().toString()).collect(Collectors.toList()).get(0);
-    Path markerFilePath = new Path(String.format("%s/%s", partitionPath,
-        FSUtils.makeMarkerFile(instantTime, "1-0-1", UUID.randomUUID().toString())));
-    metaClient.getFs().create(markerFilePath);
+
+    Path markerFilePath = new MarkerFiles(fs, basePath, metaClient.getMarkerFolderPath(instantTime), instantTime)
+        .create(partitionPath,
+            FSUtils.makeDataFileName(instantTime, "1-0-1", UUID.randomUUID().toString()),
+            IOType.MERGE);
     LOG.info("Created a dummy marker path=" + markerFilePath);
 
     Exception e = assertThrows(HoodieCommitException.class, () -> {

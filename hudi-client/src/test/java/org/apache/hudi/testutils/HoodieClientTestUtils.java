@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.IOType;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.io.storage.HoodieParquetWriter;
 
@@ -80,6 +81,7 @@ public class HoodieClientTestUtils {
 
   private static final Logger LOG = LogManager.getLogger(HoodieClientTestUtils.class);
   private static final Random RANDOM = new Random();
+  public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
 
   public static List<WriteStatus> collectStatuses(Iterator<List<WriteStatus>> statusListItr) {
     List<WriteStatus> statuses = new ArrayList<>();
@@ -124,11 +126,19 @@ public class HoodieClientTestUtils {
     new File(parentPath + "/" + instantTime + suffix).createNewFile();
   }
 
-  public static void fakeCommitFile(String basePath, String instantTime) throws IOException {
+  public static void fakeCommit(String basePath, String instantTime) throws IOException {
     fakeMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
   }
 
-  public static void fakeInFlightFile(String basePath, String instantTime) throws IOException {
+  public static void fakeDeltaCommit(String basePath, String instantTime) throws IOException {
+    fakeMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION);
+  }
+
+  public static void fakeInflightDeltaCommit(String basePath, String instantTime) throws IOException {
+    fakeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
+  }
+
+  public static void fakeInFlightCommit(String basePath, String instantTime) throws IOException {
     fakeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_EXTENSION);
   }
 
@@ -142,6 +152,20 @@ public class HoodieClientTestUtils {
     String parentPath = String.format("%s/%s", basePath, partitionPath);
     new File(parentPath).mkdirs();
     String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(instantTime, "1-0-1", fileId));
+    new File(path).createNewFile();
+    new RandomAccessFile(path, "rw").setLength(length);
+  }
+
+  public static void fakeLogFile(String basePath, String partitionPath, String baseInstantTime, String fileId, int version)
+          throws Exception {
+    fakeLogFile(basePath, partitionPath, baseInstantTime, fileId, version, 0);
+  }
+
+  public static void fakeLogFile(String basePath, String partitionPath, String baseInstantTime, String fileId, int version, int length)
+          throws Exception {
+    String parentPath = String.format("%s/%s", basePath, partitionPath);
+    new File(parentPath).mkdirs();
+    String path = String.format("%s/%s", parentPath, FSUtils.makeLogFileName(fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseInstantTime, version, "1-0-1"));
     new File(path).createNewFile();
     new RandomAccessFile(path, "rw").setLength(length);
   }
@@ -307,5 +331,26 @@ public class HoodieClientTestUtils {
     HoodieTestUtils.createCommitFiles(basePath, instantTime);
     return HoodieClientTestUtils.writeParquetFile(basePath, partitionPath, filename, records, schema, filter,
         createCommitTime);
+  }
+
+  public static String createNewMarkerFile(String basePath, String partitionPath, String instantTime)
+      throws IOException {
+    return createMarkerFile(basePath, partitionPath, instantTime);
+  }
+
+  public static String createMarkerFile(String basePath, String partitionPath, String instantTime)
+          throws IOException {
+    return createMarkerFile(basePath, partitionPath, instantTime, UUID.randomUUID().toString(), IOType.MERGE);
+  }
+
+  public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileID, IOType ioType)
+          throws IOException {
+    String folderPath = basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME + "/" + instantTime + "/" + partitionPath + "/";
+    new File(folderPath).mkdirs();
+    String markerFileName = String.format("%s_%s_%s%s%s.%s", fileID, DEFAULT_WRITE_TOKEN, instantTime,
+        HoodieFileFormat.PARQUET.getFileExtension(), HoodieTableMetaClient.MARKER_EXTN, ioType);
+    File f = new File(folderPath + markerFileName);
+    f.createNewFile();
+    return f.getAbsolutePath();
   }
 }

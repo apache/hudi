@@ -28,7 +28,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
@@ -39,6 +38,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.table.MarkerFiles;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -50,6 +50,7 @@ import java.io.IOException;
 public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends HoodieIOHandle {
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
+
   protected final Schema originalSchema;
   protected final Schema writerSchema;
   protected HoodieTimer timer;
@@ -97,28 +98,9 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
    *
    * @param partitionPath Partition path
    */
-  protected void createMarkerFile(String partitionPath) {
-    Path markerPath = makeNewMarkerPath(partitionPath);
-    try {
-      LOG.info("Creating Marker Path=" + markerPath);
-      fs.create(markerPath, false).close();
-    } catch (IOException e) {
-      throw new HoodieException("Failed to create marker file " + markerPath, e);
-    }
-  }
-
-  /**
-   * THe marker path will be <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename.
-   */
-  private Path makeNewMarkerPath(String partitionPath) {
-    Path markerRootPath = new Path(hoodieTable.getMetaClient().getMarkerFolderPath(instantTime));
-    Path path = FSUtils.getPartitionPath(markerRootPath, partitionPath);
-    try {
-      fs.mkdirs(path); // create a new partition as needed.
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to make dir " + path, e);
-    }
-    return new Path(path.toString(), FSUtils.makeMarkerFile(instantTime, writeToken, fileId));
+  protected void createMarkerFile(String partitionPath, String dataFileName) {
+    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
+    markerFiles.create(partitionPath, dataFileName, getIOType());
   }
 
   public Schema getWriterSchema() {
@@ -166,6 +148,8 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
   public abstract WriteStatus close();
 
   public abstract WriteStatus getWriteStatus();
+
+  public abstract IOType getIOType();
 
   @Override
   protected FileSystem getFileSystem() {

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.functional;
 
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -35,9 +37,7 @@ import org.apache.hudi.utilities.HoodieSnapshotExporter.Partitioner;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -92,7 +92,6 @@ public class TestHoodieSnapshotExporter extends FunctionalTestHarness {
     JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
     hdfsWriteClient.bulkInsert(recordsRDD, COMMIT_TIME);
     hdfsWriteClient.close();
-
     RemoteIterator<LocatedFileStatus> itr = dfs().listFiles(new Path(sourcePath), true);
     while (itr.hasNext()) {
       LOG.info(">>> Prepared test file: " + itr.next().getPath());

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkConfigUtils;
@@ -88,10 +87,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     init(fileId, this.partitionPath, dataFileToBeMerged);
   }
 
-  public static Schema createHoodieWriteSchema(Schema originalSchema) {
-    return HoodieAvroUtils.addMetadataFields(originalSchema);
-  }
-
   @Override
   public Schema getWriterSchema() {
     return writerSchema;
@@ -113,8 +108,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       partitionMetadata.trySave(getPartitionId());
 
       oldFilePath = new Path(config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
+      String newFileName = FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
       String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
-          + FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension())).toString();
+          + newFileName).toString();
       newFilePath = new Path(config.getBasePath(), relativePath);
 
       LOG.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFilePath.toString(),
@@ -127,7 +123,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       writeStatus.getStat().setPath(new Path(config.getBasePath()), newFilePath);
 
       // Create Marker file
-      createMarkerFile(partitionPath);
+      createMarkerFile(partitionPath, newFileName);
 
       // Create the writer for writing the new version file
       fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, writerSchema, sparkTaskContextSupplier);
@@ -310,5 +306,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   @Override
   public WriteStatus getWriteStatus() {
     return writeStatus;
+  }
+
+  @Override
+  public IOType getIOType() {
+    return IOType.MERGE;
   }
 }

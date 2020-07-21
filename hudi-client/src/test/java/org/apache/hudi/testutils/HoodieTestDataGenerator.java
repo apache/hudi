@@ -427,15 +427,33 @@ public class HoodieTestDataGenerator {
     return generateInsertsStream(commitTime, n, false, schemaStr);
   }
 
+  public List<HoodieRecord> generateInsertsContainsAllPartitions(String instantTime, Integer n) {
+    if (n < partitionPaths.length) {
+      throw new HoodieIOException("n must greater then partitionPaths length");
+    }
+    return generateInsertsStream(
+             instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true).collect(Collectors.toList());
+  }
+
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
   public Stream<HoodieRecord> generateInsertsStream(
-      String instantTime, Integer n, boolean isFlattened, String schemaStr) {
-    int currSize = getNumExistingKeys(schemaStr);
+          String instantTime, Integer n, boolean isFlattened, String schemaStr) {
+    return generateInsertsStream(instantTime, n, isFlattened, schemaStr, false);
+  }
 
+  /**
+   * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
+   */
+  public Stream<HoodieRecord> generateInsertsStream(
+      String instantTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
+    int currSize = getNumExistingKeys(schemaStr);
     return IntStream.range(0, n).boxed().map(i -> {
       String partitionPath = partitionPaths[RAND.nextInt(partitionPaths.length)];
+      if (containsAllPartitions && i < partitionPaths.length) {
+        partitionPath = partitionPaths[i];
+      }
       HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
       KeyPartition kp = new KeyPartition();
       kp.key = key;

@@ -387,15 +387,12 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @MethodSource("argumentsProvider")
-  public void testCOWToMORConvertedTableRollback(HoodieFileFormat baseFileFormat) throws Exception {
+  private void testCOWToMORConvertedTableRollback(HoodieFileFormat baseFileFormat, Boolean rollbackUsingMarkers) throws Exception {
     init(baseFileFormat);
-
     // Set TableType to COW
     HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, baseFileFormat);
 
-    HoodieWriteConfig cfg = getConfig(true);
+    HoodieWriteConfig cfg = getConfig(false, rollbackUsingMarkers);
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
 
       /**
@@ -410,6 +407,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       // verify there are no errors
       assertNoWriteErrors(statuses);
+      client.commit(newCommitTime, jsc.parallelize(statuses));
 
       metaClient = getHoodieMetaClient(hadoopConf, cfg.getBasePath());
       Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
@@ -446,10 +444,20 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
 
   @ParameterizedTest
   @MethodSource("argumentsProvider")
-  public void testRollbackWithDeltaAndCompactionCommit(HoodieFileFormat baseFileFormat) throws Exception {
+  public void testCOWToMORConvertedTableRollbackUsingFileList(HoodieFileFormat baseFileFormat) throws Exception {
+    testCOWToMORConvertedTableRollback(baseFileFormat, false);
+  }
+
+  @ParameterizedTest
+  @MethodSource("argumentsProvider")
+  public void testCOWToMORConvertedTableRollbackUsingMarkers(HoodieFileFormat baseFileFormat) throws Exception {
+    testCOWToMORConvertedTableRollback(baseFileFormat, true);
+  }
+
+  private void testRollbackWithDeltaAndCompactionCommit(HoodieFileFormat baseFileFormat, Boolean rollbackUsingMarkers) throws Exception {
     init(baseFileFormat);
 
-    HoodieWriteConfig cfg = getConfig(false);
+    HoodieWriteConfig cfg = getConfig(false, rollbackUsingMarkers);
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
 
       // Test delta commit rollback
@@ -538,7 +546,6 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
 
         writeRecords = jsc.parallelize(copyOfRecords, 1);
         writeStatusJavaRDD = thirdClient.upsert(writeRecords, commitTime2);
-        thirdClient.commit(commitTime2, writeStatusJavaRDD);
         statuses = writeStatusJavaRDD.collect();
         // Verify there are no errors
         assertNoWriteErrors(statuses);
@@ -574,20 +581,17 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
         metaClient = HoodieTableMetaClient.reload(metaClient);
 
         String compactionInstantTime = thirdClient.scheduleCompaction(Option.empty()).get().toString();
-        JavaRDD<WriteStatus> ws = thirdClient.compact(compactionInstantTime);
-        thirdClient.commitCompaction(compactionInstantTime, ws, Option.empty());
+        thirdClient.compact(compactionInstantTime);
 
         allFiles = listAllDataFilesInPath(hoodieTable, cfg.getBasePath());
         metaClient = HoodieTableMetaClient.reload(metaClient);
         tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitsTimeline(), allFiles);
 
-        final String compactedCommitTime =
-            metaClient.getActiveTimeline().reload().getCommitsTimeline().lastInstant().get().getTimestamp();
-
-        assertTrue(tableView.getLatestBaseFiles().anyMatch(file -> compactedCommitTime.equals(file.getCommitTime())));
-
-        thirdClient.rollback(compactedCommitTime);
-
+        final String compactedCommitTime = metaClient.getActiveTimeline().reload().lastInstant().get().getTimestamp();
+        assertTrue(Arrays.stream(listAllDataFilesInPath(hoodieTable, cfg.getBasePath()))
+                .anyMatch(file -> compactedCommitTime.equals(new HoodieBaseFile(file).getCommitTime())));
+        thirdClient.rollbackInflightCompaction(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactedCommitTime),
+                hoodieTable);
         allFiles = listAllDataFilesInPath(hoodieTable, cfg.getBasePath());
         metaClient = HoodieTableMetaClient.reload(metaClient);
         tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitsTimeline(), allFiles);
@@ -595,6 +599,18 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
         assertFalse(tableView.getLatestBaseFiles().anyMatch(file -> compactedCommitTime.equals(file.getCommitTime())));
       }
     }
+  }
+
+  @ParameterizedTest
+  @MethodSource("argumentsProvider")
+  public void testRollbackWithDeltaAndCompactionCommitUsingFileList(HoodieFileFormat baseFileFormat) throws Exception {
+    testRollbackWithDeltaAndCompactionCommit(baseFileFormat, false);
+  }
+
+  @ParameterizedTest
+  @MethodSource("argumentsProvider")
+  public void testRollbackWithDeltaAndCompactionCommitUsingMarkers(HoodieFileFormat baseFileFormat) throws Exception {
+    testRollbackWithDeltaAndCompactionCommit(baseFileFormat, true);
   }
 
   @ParameterizedTest
@@ -960,15 +976,14 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @MethodSource("argumentsProvider")
-  public void testInsertsGeneratedIntoLogFilesRollback(HoodieFileFormat baseFileFormat) throws Exception {
+  private void testInsertsGeneratedIntoLogFilesRollback(HoodieFileFormat baseFileFormat,
+                                                        Boolean rollbackUsingMarkers) throws Exception {
     init(baseFileFormat);
 
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
-    HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
-    try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
+    HoodieWriteConfig config = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY).build();
+    try (HoodieWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
 
@@ -987,14 +1002,13 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       // rollback a failed commit
       boolean rollback = writeClient.rollback(newCommitTime);
       assertTrue(rollback);
-      newCommitTime = "101";
-      writeClient.startCommitWithTime(newCommitTime);
 
       // insert 100 records
+      newCommitTime = "101";
+      writeClient.startCommitWithTime(newCommitTime);
       records = dataGen.generateInserts(newCommitTime, 100);
       recordsRDD = jsc.parallelize(records, 1);
-      statuses = writeClient.insert(recordsRDD, newCommitTime);
-      writeClient.commit(newCommitTime, statuses);
+      writeClient.insert(recordsRDD, newCommitTime).collect();
 
       // Sleep for small interval (at least 1 second) to force a new rollback start time.
       Thread.sleep(1000);
@@ -1003,19 +1017,27 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       // and calling rollback twice
       final String lastCommitTime = newCommitTime;
       metaClient = getHoodieMetaClient(hadoopConf, basePath);
-      HoodieInstant last = metaClient.getCommitsTimeline().getInstants()
-          .filter(instant -> instant.getTimestamp().equals(lastCommitTime)).findFirst().get();
-      String fileName = last.getFileName();
+
       // Save the .commit file to local directory.
       // Rollback will be called twice to test the case where rollback failed first time and retried.
       // We got the "BaseCommitTime cannot be null" exception before the fix
-      File file = Files.createTempFile(tempFolder, null, null).toFile();
-      metaClient.getFs().copyToLocalFile(new Path(metaClient.getMetaPath(), fileName),
-          new Path(file.getAbsolutePath()));
-      writeClient.rollback(newCommitTime);
+      Map<String, String> fileNameMap = new HashMap<>();
+      for (State state : Arrays.asList(State.REQUESTED, State.INFLIGHT)) {
+        HoodieInstant toCopy = new HoodieInstant(state, HoodieTimeline.DELTA_COMMIT_ACTION, lastCommitTime);
+        File file = Files.createTempFile(tempFolder, null, null).toFile();
+        metaClient.getFs().copyToLocalFile(new Path(metaClient.getMetaPath(), toCopy.getFileName()),
+                new Path(file.getAbsolutePath()));
+        fileNameMap.put(file.getAbsolutePath(), toCopy.getFileName());
+      }
+      Path markerDir = new Path(Files.createTempDirectory(tempFolder,null).toAbsolutePath().toString());
+      if (rollbackUsingMarkers) {
+        metaClient.getFs().copyToLocalFile(new Path(metaClient.getMarkerFolderPath(lastCommitTime)),
+            markerDir);
+      }
 
+      writeClient.rollback(newCommitTime);
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
+      HoodieTable table = HoodieTable.create(config, hadoopConf);
       SliceView tableRTFileSystemView = table.getSliceView();
 
       long numLogFiles = 0;
@@ -1026,22 +1048,43 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
             .filter(fileSlice -> fileSlice.getLogFiles().count() > 0).count();
       }
       assertEquals(0, numLogFiles);
-      metaClient.getFs().copyFromLocalFile(new Path(file.getAbsolutePath()),
-          new Path(metaClient.getMetaPath(), fileName));
+      fileNameMap.forEach((key, value) -> {
+        try {
+          metaClient.getFs().copyFromLocalFile(new Path(key),
+                  new Path(metaClient.getMetaPath(), value));
+        } catch (IOException e) {
+          throw new HoodieIOException("Error copying state from local disk.", e);
+        }
+      });
+      if (rollbackUsingMarkers) {
+        metaClient.getFs().copyFromLocalFile(markerDir,
+            new Path(metaClient.getMarkerFolderPath(lastCommitTime)));
+      }
       Thread.sleep(1000);
-      // Rollback again to pretend the first rollback failed partially. This should not error our
+      // Rollback again to pretend the first rollback failed partially. This should not error out
       writeClient.rollback(newCommitTime);
     }
   }
 
   @ParameterizedTest
   @MethodSource("argumentsProvider")
-  public void testInsertsGeneratedIntoLogFilesRollbackAfterCompaction(HoodieFileFormat baseFileFormat) throws Exception {
+  public void testInsertsGeneratedIntoLogFilesRollbackUsingFileList(HoodieFileFormat baseFileFormat) throws Exception {
+    testInsertsGeneratedIntoLogFilesRollback(baseFileFormat, false);
+  }
+
+  @ParameterizedTest
+  @MethodSource("argumentsProvider")
+  public void testInsertsGeneratedIntoLogFilesRollbackUsingMarkers(HoodieFileFormat baseFileFormat) throws Exception {
+    testInsertsGeneratedIntoLogFilesRollback(baseFileFormat, true);
+  }
+
+  private void testInsertsGeneratedIntoLogFilesRollbackAfterCompaction(HoodieFileFormat baseFileFormat,
+                                                                       Boolean rollbackUsingMarkers) throws Exception {
     init(baseFileFormat);
 
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
-    HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
+    HoodieWriteConfig config = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY).build();
     try (HoodieWriteClient writeClient = getHoodieWriteClient(config);) {
       String newCommitTime = "100";
       writeClient.startCommitWithTime(newCommitTime);
@@ -1053,8 +1096,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       // trigger an action
       statuses.collect();
 
-      HoodieTable table =
-          HoodieTable.create(getHoodieMetaClient(hadoopConf, basePath), config, hadoopConf);
+      HoodieTable table = HoodieTable.create(getHoodieMetaClient(hadoopConf, basePath), config, hadoopConf);
       SliceView tableRTFileSystemView = table.getSliceView();
 
       long numLogFiles = 0;
@@ -1072,30 +1114,43 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       // Ensure all log files have been compacted into parquet files
       assertEquals(statuses.map(status -> status.getStat().getPath().contains("parquet")).count(), numLogFiles);
       assertEquals(statuses.count(), numLogFiles);
-      writeClient.commitCompaction(newCommitTime, statuses, Option.empty());
+      //writeClient.commitCompaction(newCommitTime, statuses, Option.empty());
       // Trigger a rollback of compaction
-      writeClient.rollback(newCommitTime);
+      table.getActiveTimeline().reload();
+      writeClient.rollbackInflightCompaction(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newCommitTime), table);
+
       table = HoodieTable.create(getHoodieMetaClient(hadoopConf, basePath), config, hadoopConf);
       tableRTFileSystemView = table.getSliceView();
       ((SyncableFileSystemView) tableRTFileSystemView).reset();
-      Option<HoodieInstant> lastInstant = ((SyncableFileSystemView) tableRTFileSystemView).getLastInstant();
-      System.out.println("Last Instant =" + lastInstant);
+
       for (String partitionPath : dataGen.getPartitionPaths()) {
-        assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).noneMatch(fileSlice -> fileSlice.getBaseFile().isPresent()));
-        assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).anyMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));
+        List<FileSlice> fileSlices =  getFileSystemViewWithUnCommittedSlices(getHoodieMetaClient(hadoopConf, basePath))
+                .getAllFileSlices(partitionPath).filter(fs -> fs.getBaseInstantTime().equals("100")).collect(Collectors.toList());
+        assertTrue(fileSlices.stream().noneMatch(fileSlice -> fileSlice.getBaseFile().isPresent()));
+        assertTrue(fileSlices.stream().anyMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));
       }
     }
+  }
+
+  @ParameterizedTest
+  @MethodSource("argumentsProvider")
+  public void testInsertsGeneratedIntoLogFilesRollbackAfterCompactionUsingFileList(HoodieFileFormat baseFileFormat) throws Exception {
+    testInsertsGeneratedIntoLogFilesRollbackAfterCompaction(baseFileFormat, false);
+  }
+
+  @ParameterizedTest
+  @MethodSource("argumentsProvider")
+  public void testInsertsGeneratedIntoLogFilesRollbackAfterCompactionUsingMarkers(HoodieFileFormat baseFileFormat) throws Exception {
+    testInsertsGeneratedIntoLogFilesRollbackAfterCompaction(baseFileFormat, true);
   }
 
   /**
    * Test to ensure metadata stats are correctly written to metadata file.
    */
-  @ParameterizedTest
-  @MethodSource("argumentsProvider")
-  public void testMetadataStatsOnCommit(HoodieFileFormat baseFileFormat) throws Exception {
+  public void testMetadataStatsOnCommit(HoodieFileFormat baseFileFormat, Boolean rollbackUsingMarkers) throws Exception {
     init(baseFileFormat);
-
-    HoodieWriteConfig cfg = getConfigBuilder(false, IndexType.INMEMORY).withAutoCommit(false).build();
+    HoodieWriteConfig cfg = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY)
+        .withAutoCommit(false).build();
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
       metaClient = getHoodieMetaClient(hadoopConf, basePath);
       HoodieTable table = HoodieTable.create(metaClient, cfg, hadoopConf);
@@ -1136,24 +1191,16 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       records = dataGen.generateUpdates(instantTime, records);
       writeRecords = jsc.parallelize(records, 1);
       statuses = client.upsert(writeRecords, instantTime);
-      assertTrue(client.commit(instantTime, statuses), "Commit should succeed");
-
-      // Read from commit file
-      table = HoodieTable.create(cfg, hadoopConf);
-      metadata = HoodieCommitMetadata.fromBytes(
-          table.getActiveTimeline()
-              .getInstantDetails(table.getActiveTimeline().getDeltaCommitTimeline().lastInstant().get()).get(),
-          HoodieCommitMetadata.class);
-      
+      //assertTrue(client.commit(instantTime, statuses), "Commit should succeed");
       inserts = 0;
       int upserts = 0;
-      for (Map.Entry<String, List<HoodieWriteStat>> pstat : metadata.getPartitionToWriteStats().entrySet()) {
-        for (HoodieWriteStat stat : pstat.getValue()) {
-          inserts += stat.getNumInserts();
-          upserts += stat.getNumUpdateWrites();
-        }
+      List<WriteStatus> writeStatusList = statuses.collect();
+      for (WriteStatus ws: writeStatusList) {
+        inserts += ws.getStat().getNumInserts();
+        upserts += ws.getStat().getNumUpdateWrites();
       }
 
+      // Read from commit file
       assertEquals(0, inserts);
       assertEquals(200, upserts);
 
@@ -1179,7 +1226,22 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   }
 
   /**
-   * Test to ensure metadata stats are correctly written to the metadata file, identifies small files and corrects them.
+   * Test to ensure rolling stats are correctly written to metadata file.
+   */
+  @ParameterizedTest
+  @MethodSource("argumentsProvider")
+  public void testMetadataStatsOnCommitUsingFileList(HoodieFileFormat baseFileFormat) throws Exception {
+    testMetadataStatsOnCommit(baseFileFormat, false);
+  }
+
+  @ParameterizedTest
+  @MethodSource("argumentsProvider")
+  public void testMetadataStatsOnCommitUsingMarkers(HoodieFileFormat baseFileFormat) throws Exception {
+    testMetadataStatsOnCommit(baseFileFormat, true);
+  }
+
+  /**
+   * Test to ensure rolling stats are correctly written to the metadata file, identifies small files and corrects them.
    */
   @ParameterizedTest
   @MethodSource("argumentsProvider")
@@ -1385,11 +1447,19 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     return getConfigBuilder(autoCommit).build();
   }
 
+  private HoodieWriteConfig getConfig(Boolean autoCommit, Boolean rollbackUsingMarkers) {
+    return getConfigBuilder(autoCommit, rollbackUsingMarkers, IndexType.BLOOM).build();
+  }
+
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit) {
     return getConfigBuilder(autoCommit, IndexType.BLOOM);
   }
 
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, HoodieIndex.IndexType indexType) {
+    return getConfigBuilder(autoCommit, false, indexType);
+  }
+
+  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withAutoCommit(autoCommit).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
@@ -1398,7 +1468,8 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
         .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
             .withEnableBackupForRemoteFileSystemView(false).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build());
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
+        .withRollbackUsingMarkers(rollbackUsingMarkers);
   }
 
   private FileStatus[] insertAndGetFilePaths(List<HoodieRecord> records, HoodieWriteClient client,
