@@ -453,7 +453,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         // not be generating them.
         if (state == State.REQUESTED) {
           if (action.equals(HoodieTimeline.SAVEPOINT_ACTION) || action.equals(HoodieTimeline.RESTORE_ACTION)
-              || action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
+              || action.equals(HoodieTimeline.ROLLBACK_ACTION) || action.equals(HoodieTimeline.REPLACE_ACTION)) {
             continue;
           }
         }
