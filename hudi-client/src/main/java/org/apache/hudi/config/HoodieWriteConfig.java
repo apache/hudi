@@ -594,7 +594,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public String getUserDefinedMetricClassName() {
-    return props.getProperty(HoodieMetricsConfig.USER_DEFINED_REPORTER_CLASS, HoodieMetricsConfig.DEFAULT_USER_DEFINED_REPORTER_CLASS);
+    return props.getProperty(HoodieMetricsConfig.USER_DEFINED_REPORTER_CLASS);
   }
 
   /**

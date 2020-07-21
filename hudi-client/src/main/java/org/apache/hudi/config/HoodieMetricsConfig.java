@@ -145,8 +145,7 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       MetricsReporterType reporterType = MetricsReporterType.valueOf(props.getProperty(METRICS_REPORTER_TYPE));
       setDefaultOnCondition(props, reporterType == MetricsReporterType.DATADOG,
           HoodieMetricsDatadogConfig.newBuilder().fromProperties(props).build());
-
-      setDefaultOnCondition(props, reporterType == MetricsReporterType.USER_DEFINED,
+      setDefaultOnCondition(props, !props.containsKey(USER_DEFINED_REPORTER_CLASS),
               USER_DEFINED_REPORTER_CLASS, DEFAULT_USER_DEFINED_REPORTER_CLASS);
 
       return config;
