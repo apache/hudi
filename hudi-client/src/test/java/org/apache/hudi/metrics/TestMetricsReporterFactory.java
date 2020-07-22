@@ -22,13 +22,14 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.MetricRegistry;
-import org.apache.hudi.exception.HoodieMetricsException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.userdefined.AbstractUserDefinedMetricsReporter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.Closeable;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -70,7 +71,33 @@ public class TestMetricsReporterFactory {
   public void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
     when(config.getMetricReporterClassName()).thenReturn(TestIllegalMetricReporter.class.getName());
     when(config.getProps()).thenReturn(new Properties());
-    assertThrows(HoodieMetricsException.class, () -> MetricsReporterFactory.createReporter(config, registry));
+    assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(config, registry));
+  }
+
+  public static class TestMetricReporter extends AbstractUserDefinedMetricsReporter {
+
+    public TestMetricReporter(Properties props, MetricRegistry registry) {
+      super(props, registry);
+    }
+
+    @Override
+    public void start() {}
+
+    @Override
+    public void report() {}
+
+    @Override
+    public Closeable getReporter() {
+      return null;
+    }
+
+    @Override
+    public void stop() {}
+  }
+
+  public static class TestIllegalMetricReporter {
+
+    public TestIllegalMetricReporter(Properties props, MetricRegistry registry) {}
   }
 }
 

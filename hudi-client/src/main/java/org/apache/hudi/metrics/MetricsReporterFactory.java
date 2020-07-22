@@ -21,7 +21,7 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieMetricsException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
@@ -47,7 +47,7 @@ public class MetricsReporterFactory {
               .loadClass(config.getMetricReporterClassName(),
                       new Class<?>[] {Properties.class, MetricRegistry.class}, config.getProps(), registry);
       if (!(instance instanceof AbstractUserDefinedMetricsReporter)) {
-        throw new HoodieMetricsException(config.getMetricReporterClassName()
+        throw new HoodieException(config.getMetricReporterClassName()
                 + " is not a subclass of AbstractUserDefinedMetricsReporter");
       }
       return (MetricsReporter) instance;
