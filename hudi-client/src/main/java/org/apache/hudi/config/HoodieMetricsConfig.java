@@ -20,7 +20,6 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.metrics.MetricsReporterType;
-import org.apache.hudi.metrics.userdefined.DefaultUserDefinedMetricsReporter;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -60,10 +59,8 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
   public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_PREFIX + ".metric.prefix";
 
   // User defined
-  public static final String USER_DEFINED_REPORTER_PREFIX = METRIC_PREFIX + ".user.defined";
-  public static final String USER_DEFINED_REPORTER_CLASS = USER_DEFINED_REPORTER_PREFIX + ".class";
-
-  public static final String DEFAULT_USER_DEFINED_REPORTER_CLASS = DefaultUserDefinedMetricsReporter.class.getName();
+  public static final String METRICS_REPORTER_CLASS = METRIC_PREFIX + ".reporter.class";
+  public static final String DEFAULT_METRICS_REPORTER_CLASS = "";
 
   private HoodieMetricsConfig(Properties props) {
     super(props);
@@ -124,8 +121,8 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withUserDefinedReporterClass(String className) {
-      props.setProperty(USER_DEFINED_REPORTER_CLASS, className);
+    public Builder withReporterClass(String className) {
+      props.setProperty(METRICS_REPORTER_CLASS, className);
       return this;
     }
 
@@ -145,8 +142,8 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       MetricsReporterType reporterType = MetricsReporterType.valueOf(props.getProperty(METRICS_REPORTER_TYPE));
       setDefaultOnCondition(props, reporterType == MetricsReporterType.DATADOG,
           HoodieMetricsDatadogConfig.newBuilder().fromProperties(props).build());
-      setDefaultOnCondition(props, !props.containsKey(USER_DEFINED_REPORTER_CLASS),
-              USER_DEFINED_REPORTER_CLASS, DEFAULT_USER_DEFINED_REPORTER_CLASS);
+      setDefaultOnCondition(props, !props.containsKey(METRICS_REPORTER_CLASS),
+              METRICS_REPORTER_CLASS, DEFAULT_METRICS_REPORTER_CLASS);
 
       return config;
     }

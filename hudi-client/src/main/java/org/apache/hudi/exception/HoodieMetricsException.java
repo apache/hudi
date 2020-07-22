@@ -16,11 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.metrics;
+package org.apache.hudi.exception;
 
 /**
- * Types of the reporter. Right now we only support Graphite. We can include JMX and CSV in the future.
+ * <p>
+ * Exception thrown when error happens on metrics process
+ * </p>
  */
-public enum MetricsReporterType {
-  GRAPHITE, INMEMORY, JMX, DATADOG
+public class HoodieMetricsException extends HoodieException {
+
+  public HoodieMetricsException(String msg) {
+    super(msg);
+  }
 }
