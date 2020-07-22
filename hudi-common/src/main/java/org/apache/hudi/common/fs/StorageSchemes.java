@@ -47,7 +47,9 @@ public enum StorageSchemes {
   // View FS for federated setups. If federating across cloud stores, then append support is false
   VIEWFS("viewfs", true),
   //ALLUXIO
-  ALLUXIO("alluxio", false);
+  ALLUXIO("alluxio", false),
+  // Tencent Cloud Object Storage
+  COSN("cosn", false);
 
   private String scheme;
   private boolean supportsAppend;
