@@ -107,7 +107,7 @@ public class SparkTempViewProvider implements TempViewProvider {
       sqlContext.sql("SHOW TABLES").show(Integer.MAX_VALUE, false);
     } catch (Throwable ex) {
       // log full stack trace and rethrow. Without this its difficult to debug failures, if any
-      LOG.error("unable to initialize spark context ", ex);
+      LOG.error("unable to get all views ", ex);
       throw new HoodieException(ex);
     }
   }
