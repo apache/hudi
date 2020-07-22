@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.avro.generic.GenericRecord
+import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
 import org.apache.hudi.common.model.HoodieKey
 import org.apache.avro.Schema
 import org.apache.spark.rdd.RDD
@@ -26,6 +26,7 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 
+import scala.collection.JavaConverters._
 
 object AvroConversionUtils {
 
@@ -77,5 +78,16 @@ object AvroConversionUtils {
 
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
     SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
+  }
+
+  def buildAvroRecordBySchema(record: IndexedRecord,
+                              requiredSchema: Schema,
+                              requiredPos: List[Int],
+                              recordBuilder: GenericRecordBuilder): GenericRecord = {
+    val requiredFields = requiredSchema.getFields.asScala
+    assert(requiredFields.length == requiredPos.length)
+    val positionIterator = requiredPos.iterator
+    requiredFields.foreach(f => recordBuilder.set(f, record.get(positionIterator.next())))
+    recordBuilder.build()
   }
 }

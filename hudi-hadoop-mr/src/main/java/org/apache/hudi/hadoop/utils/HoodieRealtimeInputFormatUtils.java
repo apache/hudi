@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.utils;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -34,7 +35,6 @@ import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.RealtimeBootstrapBaseFileSplit;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
@@ -119,15 +119,15 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
   }
 
   // Return parquet file with a list of log files in the same file group.
-  public static Map<String, List<String>> groupLogsByBaseFile(Configuration conf, Stream<FileStatus> fileStatuses) {
-    Map<Path, List<FileStatus>> partitionsToParquetSplits =
-        fileStatuses.collect(Collectors.groupingBy(file -> file.getPath().getParent()));
+  public static Map<HoodieBaseFile, List<String>> groupLogsByBaseFile(Configuration conf, List<HoodieBaseFile> fileStatuses) {
+    Map<Path, List<HoodieBaseFile>> partitionsToParquetSplits =
+        fileStatuses.stream().collect(Collectors.groupingBy(file -> file.getFileStatus().getPath().getParent()));
     // TODO(vc): Should we handle also non-hoodie splits here?
     Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByBasePath(conf, partitionsToParquetSplits.keySet());
 
     // for all unique split parents, obtain all delta files based on delta commit timeline,
     // grouped on file id
-    Map<String, List<String>> resultMap = new HashMap<>();
+    Map<HoodieBaseFile, List<String>> resultMap = new HashMap<>();
     partitionsToParquetSplits.keySet().forEach(partitionPath -> {
       // for each partition path obtain the data & log file groupings, then map back to inputsplits
       HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionPath);
@@ -144,15 +144,15 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
             .orElse(Stream.empty());
 
         // subgroup splits again by file id & match with log files.
-        Map<String, List<FileStatus>> groupedInputSplits = partitionsToParquetSplits.get(partitionPath).stream()
-            .collect(Collectors.groupingBy(file -> FSUtils.getFileId(file.getPath().getName())));
+        Map<String, List<HoodieBaseFile>> groupedInputSplits = partitionsToParquetSplits.get(partitionPath).stream()
+            .collect(Collectors.groupingBy(file -> FSUtils.getFileId(file.getFileStatus().getPath().getName())));
         latestFileSlices.forEach(fileSlice -> {
-          List<FileStatus> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
+          List<HoodieBaseFile> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
           dataFileSplits.forEach(split -> {
             try {
               List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
                   .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
-              resultMap.put(split.getPath().toString(), logFilePaths);
+              resultMap.put(split, logFilePaths);
             } catch (Exception e) {
               throw new HoodieException("Error creating hoodie real time split ", e);
             }

@@ -92,7 +92,7 @@ private[hudi] object HoodieSparkSqlWriter {
       }
     }
 
-    val (writeStatuses, writeClient: HoodieWriteClient[HoodieRecordPayload[Nothing]]) =
+    val writeSuccessful =
       if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
       // register classes & schemas
       val structName = s"${tblName}_record"
@@ -155,7 +155,8 @@ private[hudi] object HoodieSparkSqlWriter {
       }
       client.startCommitWithTime(instantTime)
       val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation)
-      (writeStatuses, client)
+      val writeSuccessful = checkWriteStatus(writeStatuses, parameters, client, instantTime, basePath, operation, jsc)
+      writeSuccessful
     } else {
 
       // Handle save modes
@@ -187,11 +188,11 @@ private[hudi] object HoodieSparkSqlWriter {
       // Issue deletes
       client.startCommitWithTime(instantTime)
       val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, instantTime)
-      (writeStatuses, client)
+      val writeSuccessful = checkWriteStatus(writeStatuses, parameters, client, instantTime, basePath, operation, jsc)
+      writeSuccessful
     }
 
     // Check for errors and commit the write.
-    val writeSuccessful = checkWriteStatus(writeStatuses, parameters, writeClient, instantTime, basePath, operation, jsc)
     (writeSuccessful, common.util.Option.ofNullable(instantTime))
   }
 

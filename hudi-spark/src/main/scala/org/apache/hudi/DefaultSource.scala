@@ -18,6 +18,9 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions._
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.log4j.LogManager
@@ -58,26 +61,20 @@ class DefaultSource extends RelationProvider
       throw new HoodieException("'path' must be specified.")
     }
 
+    val fs = FSUtils.getFs(path.get, sqlContext.sparkContext.hadoopConfiguration)
+    val globPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(Seq(path.get), fs)
+    val tablePath = DataSourceUtils.getTablePath(fs, globPaths.toArray)
     if (parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_SNAPSHOT_OPT_VAL)) {
-      // this is just effectively RO view only, where `path` can contain a mix of
-      // non-hoodie/hoodie path files. set the path filter up
-      sqlContext.sparkContext.hadoopConfiguration.setClass(
-        "mapreduce.input.pathFilter.class",
-        classOf[HoodieROTablePathFilter],
-        classOf[org.apache.hadoop.fs.PathFilter])
-
-      log.info("Constructing hoodie (as parquet) data source with options :" + parameters)
-      log.warn("Snapshot view not supported yet via data source, for MERGE_ON_READ tables. " +
-        "Please query the Hive table registered using Spark SQL.")
-      // simply return as a regular parquet relation
-      DataSource.apply(
-        sparkSession = sqlContext.sparkSession,
-        userSpecifiedSchema = Option(schema),
-        className = "parquet",
-        options = parameters)
-        .resolveRelation()
+      val metaClient = new HoodieTableMetaClient(fs.getConf, tablePath)
+      if (metaClient.getTableType.equals(HoodieTableType.MERGE_ON_READ)) {
+        new MergeOnReadSnapshotRelation(sqlContext, optParams, schema, globPaths, metaClient)
+      } else {
+        getBaseFileOnlyView(sqlContext, parameters, schema)
+      }
+    } else if(parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)) {
+      getBaseFileOnlyView(sqlContext, parameters, schema)
     } else if (parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
-      new IncrementalRelation(sqlContext, path.get, optParams, schema)
+      new IncrementalRelation(sqlContext, tablePath, optParams, schema)
     } else {
       throw new HoodieException("Invalid query type :" + parameters(QUERY_TYPE_OPT_KEY))
     }
@@ -107,7 +104,7 @@ class DefaultSource extends RelationProvider
     val parameters = HoodieSparkSqlWriter.parametersWithWriteDefaults(optParams)
     HoodieSparkSqlWriter.write(sqlContext, mode, parameters, df)
 
-    new HudiEmptyRelation(sqlContext, df.schema)
+    new HoodieEmptyRelation(sqlContext, df.schema)
   }
 
   override def createSink(sqlContext: SQLContext,
@@ -123,4 +120,25 @@ class DefaultSource extends RelationProvider
   }
 
   override def shortName(): String = "hudi"
+
+  private def getBaseFileOnlyView(sqlContext: SQLContext,
+                                   optParams: Map[String, String],
+                                   schema: StructType): BaseRelation = {
+    log.warn("Loading Base File Only View.")
+    // this is just effectively RO view only, where `path` can contain a mix of
+    // non-hoodie/hoodie path files. set the path filter up
+    sqlContext.sparkContext.hadoopConfiguration.setClass(
+      "mapreduce.input.pathFilter.class",
+      classOf[HoodieROTablePathFilter],
+      classOf[org.apache.hadoop.fs.PathFilter])
+
+    log.info("Constructing hoodie (as parquet) data source with options :" + optParams)
+    // simply return as a regular parquet relation
+    DataSource.apply(
+      sparkSession = sqlContext.sparkSession,
+      userSpecifiedSchema = Option(schema),
+      className = "parquet",
+      options = optParams)
+      .resolveRelation()
+  }
 }
