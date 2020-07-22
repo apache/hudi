@@ -20,7 +20,7 @@ package org.apache.hudi.exception;
 
 /**
  * <p>
- * Exception thrown when error happens on metrics process
+ * Exception thrown when error happens on metrics process.
  * </p>
  */
 public class HoodieMetricsException extends HoodieException {
