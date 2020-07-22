@@ -86,7 +86,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
-    initSparkContexts("TestHoodieBloomIndex");
+    initSparkContexts();
     initPath();
     initFileSystem();
     // We have some records to be tagged (two different partitions)

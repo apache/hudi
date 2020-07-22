@@ -43,6 +43,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -54,10 +55,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -1128,7 +1129,7 @@ public class TestCleaner extends HoodieClientTestBase {
   private List<String> createMarkerFiles(String instantTime, int numFiles) throws IOException {
     List<String> files = new ArrayList<>();
     for (int i = 0; i < numFiles; i++) {
-      files.add(HoodieTestUtils.createNewMarkerFile(basePath, "2019/03/29", instantTime));
+      files.add(HoodieClientTestUtils.createNewMarkerFile(basePath, "2019/03/29", instantTime));
     }
     return files;
   }
@@ -1140,13 +1141,8 @@ public class TestCleaner extends HoodieClientTestBase {
    * @throws IOException in case of error
    */
   private int getTotalTempFiles() throws IOException {
-    RemoteIterator<?> itr = fs.listFiles(new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME), true);
-    int count = 0;
-    while (itr.hasNext()) {
-      count++;
-      itr.next();
-    }
-    return count;
+    return FileSystemTestUtils.listRecursive(fs, new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME))
+        .size();
   }
 
   private Stream<Pair<String, String>> convertPathToFileIdWithCommitTime(final HoodieTableMetaClient metaClient,

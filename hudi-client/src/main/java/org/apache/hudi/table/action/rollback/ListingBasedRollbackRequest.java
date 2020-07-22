@@ -18,18 +18,17 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 
 /**
  * Request for performing one rollback action.
  */
-public class RollbackRequest {
+public class ListingBasedRollbackRequest {
 
   /**
-   * Rollback Action Types.
+   * Rollback commands, that trigger a specific handling for rollback.
    */
-  public enum RollbackAction {
+  public enum Type {
     DELETE_DATA_FILES_ONLY,
     DELETE_DATA_AND_LOG_FILES,
     APPEND_ROLLBACK_BLOCK
@@ -41,11 +40,6 @@ public class RollbackRequest {
   private final String partitionPath;
 
   /**
-   * Rollback Instant.
-   */
-  private final HoodieInstant rollbackInstant;
-
-  /**
    * FileId in case of appending rollback block.
    */
   private final Option<String> fileId;
@@ -55,44 +49,36 @@ public class RollbackRequest {
    */
   private final Option<String> latestBaseInstant;
 
-  /**
-   * Rollback Action.
-   */
-  private final RollbackAction rollbackAction;
+  private final Type type;
 
-  public RollbackRequest(String partitionPath, HoodieInstant rollbackInstant, Option<String> fileId,
-      Option<String> latestBaseInstant, RollbackAction rollbackAction) {
+  public ListingBasedRollbackRequest(String partitionPath,
+                                     Option<String> fileId,
+                                     Option<String> latestBaseInstant,
+                                     Type type) {
     this.partitionPath = partitionPath;
-    this.rollbackInstant = rollbackInstant;
     this.fileId = fileId;
     this.latestBaseInstant = latestBaseInstant;
-    this.rollbackAction = rollbackAction;
+    this.type = type;
   }
 
-  public static RollbackRequest createRollbackRequestWithDeleteDataFilesOnlyAction(String partitionPath,
-      HoodieInstant rollbackInstant) {
-    return new RollbackRequest(partitionPath, rollbackInstant, Option.empty(), Option.empty(),
-        RollbackAction.DELETE_DATA_FILES_ONLY);
+  public static ListingBasedRollbackRequest createRollbackRequestWithDeleteDataFilesOnlyAction(String partitionPath) {
+    return new ListingBasedRollbackRequest(partitionPath, Option.empty(), Option.empty(),
+        Type.DELETE_DATA_FILES_ONLY);
   }
 
-  public static RollbackRequest createRollbackRequestWithDeleteDataAndLogFilesAction(String partitionPath,
-      HoodieInstant rollbackInstant) {
-    return new RollbackRequest(partitionPath, rollbackInstant, Option.empty(), Option.empty(),
-        RollbackAction.DELETE_DATA_AND_LOG_FILES);
+  public static ListingBasedRollbackRequest createRollbackRequestWithDeleteDataAndLogFilesAction(String partitionPath) {
+    return new ListingBasedRollbackRequest(partitionPath, Option.empty(), Option.empty(),
+        Type.DELETE_DATA_AND_LOG_FILES);
   }
 
-  public static RollbackRequest createRollbackRequestWithAppendRollbackBlockAction(String partitionPath, String fileId,
-      String baseInstant, HoodieInstant rollbackInstant) {
-    return new RollbackRequest(partitionPath, rollbackInstant, Option.of(fileId), Option.of(baseInstant),
-        RollbackAction.APPEND_ROLLBACK_BLOCK);
+  public static ListingBasedRollbackRequest createRollbackRequestWithAppendRollbackBlockAction(String partitionPath, String fileId,
+                                                                                               String baseInstant) {
+    return new ListingBasedRollbackRequest(partitionPath, Option.of(fileId), Option.of(baseInstant),
+        Type.APPEND_ROLLBACK_BLOCK);
   }
 
   public String getPartitionPath() {
     return partitionPath;
-  }
-
-  public HoodieInstant getRollbackInstant() {
-    return rollbackInstant;
   }
 
   public Option<String> getFileId() {
@@ -103,7 +89,7 @@ public class RollbackRequest {
     return latestBaseInstant;
   }
 
-  public RollbackAction getRollbackAction() {
-    return rollbackAction;
+  public Type getType() {
+    return type;
   }
 }

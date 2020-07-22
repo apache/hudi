@@ -32,7 +32,6 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -378,26 +377,29 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
   public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats) throws HoodieIOException {
-    cleanFailedWrites(jsc, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled());
+    reconcileAgainstMarkers(jsc, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled());
   }
 
-  /**
-   * Delete Marker directory corresponding to an instant.
-   *
-   * @param instantTs Instant Time
-   */
-  public void deleteMarkerDir(String instantTs) {
-    try {
-      FileSystem fs = getMetaClient().getFs();
-      Path markerDir = new Path(metaClient.getMarkerFolderPath(instantTs));
-      if (fs.exists(markerDir)) {
-        // For append only case, we do not write to marker dir. Hence, the above check
-        LOG.info("Removing marker directory=" + markerDir);
-        fs.delete(markerDir, true);
-      }
-    } catch (IOException ioe) {
-      throw new HoodieIOException(ioe.getMessage(), ioe);
-    }
+  private void deleteInvalidFilesByPartitions(JavaSparkContext jsc, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
+    // Now delete partially written files
+    jsc.parallelize(new ArrayList<>(invalidFilesByPartition.values()), config.getFinalizeWriteParallelism())
+        .map(partitionWithFileList -> {
+          final FileSystem fileSystem = metaClient.getFs();
+          LOG.info("Deleting invalid data files=" + partitionWithFileList);
+          if (partitionWithFileList.isEmpty()) {
+            return true;
+          }
+          // Delete
+          partitionWithFileList.stream().map(Pair::getValue).forEach(file -> {
+            try {
+              fileSystem.delete(new Path(file), false);
+            } catch (IOException e) {
+              throw new HoodieIOException(e.getMessage(), e);
+            }
+          });
+
+          return true;
+        }).collect();
   }
 
   /**
@@ -410,71 +412,54 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param consistencyCheckEnabled Consistency Check Enabled
    * @throws HoodieIOException
    */
-  protected void cleanFailedWrites(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats,
-      boolean consistencyCheckEnabled) throws HoodieIOException {
+  protected void reconcileAgainstMarkers(JavaSparkContext jsc,
+                                         String instantTs,
+                                         List<HoodieWriteStat> stats,
+                                         boolean consistencyCheckEnabled) throws HoodieIOException {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
       String basePath = getMetaClient().getBasePath();
-      FileSystem fs = getMetaClient().getFs();
-      Path markerDir = new Path(metaClient.getMarkerFolderPath(instantTs));
+      MarkerFiles markers = new MarkerFiles(this, instantTs);
 
-      if (!fs.exists(markerDir)) {
-        // Happens when all writes are appends
+      if (!markers.doesMarkerDirExist()) {
+        // can happen if it was an empty write say.
         return;
       }
 
-      final String baseFileExtension = getBaseFileFormat().getFileExtension();
-      List<String> invalidDataPaths = FSUtils.getAllDataFilesForMarkers(fs, basePath, instantTs, markerDir.toString(),
-          baseFileExtension);
-      List<String> validDataPaths = stats.stream().map(w -> String.format("%s/%s", basePath, w.getPath()))
-          .filter(p -> p.endsWith(baseFileExtension)).collect(Collectors.toList());
+      // we are not including log appends here, since they are already fail-safe.
+      List<String> invalidDataPaths = markers.createdAndMergedDataPaths();
+      List<String> validDataPaths = stats.stream()
+          .map(HoodieWriteStat::getPath)
+          .filter(p -> p.endsWith(this.getBaseFileExtension()))
+          .collect(Collectors.toList());
       // Contains list of partially created files. These needs to be cleaned up.
       invalidDataPaths.removeAll(validDataPaths);
       if (!invalidDataPaths.isEmpty()) {
-        LOG.info(
-            "Removing duplicate data files created due to spark retries before committing. Paths=" + invalidDataPaths);
+        LOG.info("Removing duplicate data files created due to spark retries before committing. Paths=" + invalidDataPaths);
       }
+      Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
+          .map(dp -> Pair.of(new Path(dp).getParent().toString(), new Path(basePath, dp).toString()))
+          .collect(Collectors.groupingBy(Pair::getKey));
 
-      Map<String, List<Pair<String, String>>> groupByPartition = invalidDataPaths.stream()
-          .map(dp -> Pair.of(new Path(dp).getParent().toString(), dp)).collect(Collectors.groupingBy(Pair::getKey));
-
-      if (!groupByPartition.isEmpty()) {
+      if (!invalidPathsByPartition.isEmpty()) {
         // Ensure all files in delete list is actually present. This is mandatory for an eventually consistent FS.
         // Otherwise, we may miss deleting such files. If files are not found even after retries, fail the commit
         if (consistencyCheckEnabled) {
           // This will either ensure all files to be deleted are present.
-          waitForAllFiles(jsc, groupByPartition, FileVisibility.APPEAR);
+          waitForAllFiles(jsc, invalidPathsByPartition, FileVisibility.APPEAR);
         }
 
         // Now delete partially written files
-        jsc.parallelize(new ArrayList<>(groupByPartition.values()), config.getFinalizeWriteParallelism())
-            .map(partitionWithFileList -> {
-              final FileSystem fileSystem = metaClient.getFs();
-              LOG.info("Deleting invalid data files=" + partitionWithFileList);
-              if (partitionWithFileList.isEmpty()) {
-                return true;
-              }
-              // Delete
-              partitionWithFileList.stream().map(Pair::getValue).forEach(file -> {
-                try {
-                  fileSystem.delete(new Path(file), false);
-                } catch (IOException e) {
-                  throw new HoodieIOException(e.getMessage(), e);
-                }
-              });
-
-              return true;
-            }).collect();
+        jsc.setJobGroup(this.getClass().getSimpleName(), "Delete all partially written files");
+        deleteInvalidFilesByPartitions(jsc, invalidPathsByPartition);
 
         // Now ensure the deleted files disappear
         if (consistencyCheckEnabled) {
           // This will either ensure all files to be deleted are absent.
-          waitForAllFiles(jsc, groupByPartition, FileVisibility.DISAPPEAR);
+          waitForAllFiles(jsc, invalidPathsByPartition, FileVisibility.DISAPPEAR);
         }
       }
-      // Now delete the marker directory
-      deleteMarkerDir(instantTs);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
@@ -489,6 +474,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    */
   private void waitForAllFiles(JavaSparkContext jsc, Map<String, List<Pair<String, String>>> groupByPartition, FileVisibility visibility) {
     // This will either ensure all files to be deleted are present.
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Wait for all files to appear/disappear");
     boolean checkPassed =
         jsc.parallelize(new ArrayList<>(groupByPartition.entrySet()), config.getFinalizeWriteParallelism())
             .map(partitionWithFileList -> waitForCondition(partitionWithFileList.getKey(),
