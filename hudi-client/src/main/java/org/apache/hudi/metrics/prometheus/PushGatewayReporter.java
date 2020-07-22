@@ -18,106 +18,74 @@
 
 package org.apache.hudi.metrics.prometheus;
 
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metrics.MetricsReporter;
-
-import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.*;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.dropwizard.DropwizardExports;
 import io.prometheus.client.exporter.PushGateway;
+
+
+import java.io.IOException;
+import java.util.SortedMap;
+import java.util.concurrent.TimeUnit;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.metrics.MetricsSystem;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
+public class PushGatewayReporter extends ScheduledReporter {
 
-/**
- * Implementation of Prometheus PushGateWay reporter, which connects to the Prometheus server, and send metrics
- * to that server.
- */
-public class PushGatewayReporter extends MetricsReporter {
+    private static final Logger LOG = LogManager.getLogger(PushGatewayReporter.class);
 
-  private static final Logger LOG = LogManager.getLogger(PushGatewayReporter.class);
-  private PushGateWayServer pushGateWayServer;
+    private final PushGateway pushGateway;
+    private final DropwizardExports sparkMetricExports;
+    private final CollectorRegistry pushRegistry;
+    private final String jobName;
+    private final boolean deleteShutdown;
 
-  public PushGatewayReporter(HoodieWriteConfig config, MetricRegistry registry) {
-    // Check the serverHost and serverPort here
-    String serverHost = config.getPrometheusPushGatewayHost();
-    int serverPort = config.getPrometheusPushGatewayPort();
-    MetricsSystem.checkMinimalPollingPeriod(TimeUnit.SECONDS, 30);
-    pushGateWayServer = new PushGateWayServer(serverHost, serverPort, registry);
-  }
 
-  @Override
-  public void start() {
-    if (pushGateWayServer != null) {
-      pushGateWayServer.start();
-    } else {
-      LOG.error("Cannot start as the PushGatewayReporter is null.");
-    }
-  }
-
-  @Override
-  public void report() {
-    try {
-      if (pushGateWayServer != null) {
-        pushGateWayServer.report();
-      }
-    } catch (Exception e) {
-      throw new HoodieException("PushGateWayServer report failed: ", e);
-    }
-  }
-
-  @Override
-  public Closeable getReporter() {
-    return null;
-  }
-
-  @Override
-  public void stop() {
-    if (pushGateWayServer != null) {
-      try {
-        pushGateWayServer.stop();
-      } catch (IOException e) {
-        LOG.error("Failed to stop PushGateWay server.", e);
-      }
-    }
-  }
-
-  private static class PushGateWayServer {
-
-    private PushGateway pushGateway;
-    private CollectorRegistry pushRegistry;
-    private DropwizardExports sparkMetricExports;
-    private String jobName;
-
-    public PushGateWayServer(String host, int port, MetricRegistry registry) {
-      pushRegistry = new CollectorRegistry();
-      sparkMetricExports = new DropwizardExports(registry);
-      pushGateway = new PushGateway(host + ":" + port);
-      jobName = getJobName();
+    protected PushGatewayReporter(MetricRegistry registry,
+                                  MetricFilter filter,
+                                  TimeUnit rateUnit,
+                                  TimeUnit durationUnit,
+                                  String jobName,
+                                  String address,
+                                  boolean deleteShutdown) {
+        super(registry, "hudi-push-gateway-reporter", filter, rateUnit, durationUnit);
+        this.jobName = jobName;
+        this.deleteShutdown = deleteShutdown;
+        pushRegistry = new CollectorRegistry();
+        sparkMetricExports = new DropwizardExports(registry);
+        pushGateway = new PushGateway(address);
+        sparkMetricExports.register(pushRegistry);
     }
 
-    public void start() {
-      sparkMetricExports.register(pushRegistry);
+
+    @Override
+    public void report(SortedMap<String, Gauge> gauges,
+                       SortedMap<String, Counter> counters,
+                       SortedMap<String, Histogram> histograms,
+                       SortedMap<String, Meter> meters,
+                       SortedMap<String, Timer> timers) {
+        try {
+            pushGateway.pushAdd(pushRegistry, jobName);
+        } catch (IOException e) {
+            LOG.warn("Can't push monitoring information to pushGateway", e);
+        }
     }
 
-    public void stop() throws IOException {
-      pushRegistry.unregister(sparkMetricExports);
-      pushGateway.delete(jobName);
+    @Override
+    public void start(long period, TimeUnit unit) {
+        super.start(period, unit);
     }
 
-    public void report() throws IOException {
-      pushGateway.pushAdd(pushRegistry, jobName);
+    @Override
+    public void stop() {
+        super.stop();
+        try {
+            if(deleteShutdown) {
+                pushRegistry.unregister(sparkMetricExports);
+                pushGateway.delete(jobName);
+            }
+        } catch (IOException e) {
+            LOG.warn("Failed to delete metrics from pushGateway with jobName {" + jobName + "}", e);
+        }
     }
-
-    private String getJobName() {
-      Random random = new Random();
-      return String.valueOf(random.nextLong());
-    }
-  }
 }

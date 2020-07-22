@@ -539,19 +539,35 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public String getPrometheusHost() {
-    return props.getProperty(HoodieMetricsConfig.PROMETHEUS_HOST);
+    return props.getProperty(HoodieMetricsPrometheusConfig.PROMETHEUS_HOST);
   }
 
   public int getPrometheusPort() {
-    return Integer.parseInt(props.getProperty(HoodieMetricsConfig.PROMETHEUS_PORT));
+    return Integer.parseInt(props.getProperty(HoodieMetricsPrometheusConfig.PROMETHEUS_PORT));
   }
 
-  public String getPrometheusPushGatewayHost() {
-    return props.getProperty(HoodieMetricsConfig.PROMETHEUS_PUSHGATEWAY_HOST);
+  public String getPushGatewayHost() {
+    return props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_HOST);
   }
 
-  public int getPrometheusPushGatewayPort() {
-    return Integer.parseInt(props.getProperty(HoodieMetricsConfig.PROMETHEUS_PUSHGATEWAY_PORT));
+  public int getPushGatewayPort() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_PORT));
+  }
+
+  public int getPushGatewayReportPeriodSeconds() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_REPORT_PERIOD_SECONDS));
+  }
+
+  public boolean getPushGatewayDeleteShutdown() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_DELETE_ON_SHUTDOWN));
+  }
+
+  public String getPushGatewayJobName() {
+    return props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_JOB_NAME);
+  }
+
+  public boolean getPushGatewayRandomJobNameSuffix() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX));
   }
 
   public String getGraphiteMetricPrefix() {

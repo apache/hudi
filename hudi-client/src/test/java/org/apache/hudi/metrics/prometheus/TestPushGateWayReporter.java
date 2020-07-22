@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics.prometheus;
 
+import org.apache.hudi.config.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
@@ -37,8 +38,8 @@ public class TestPushGateWayReporter {
   public void testRegisterGauge() {
     when(config.isMetricsOn()).thenReturn(true);
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
-    when(config.getPrometheusPushGatewayHost()).thenReturn("localhost");
-    when(config.getPrometheusPushGatewayPort()).thenReturn(9091);
+    when(config.getPushGatewayHost()).thenReturn("localhost");
+    when(config.getPushGatewayPort()).thenReturn(9091);
     new HoodieMetrics(config, "raw_table");
     registerGauge("pushGateWayReporter_metric", 123L);
     assertEquals("123", Metrics.getInstance().getRegistry().getGauges()

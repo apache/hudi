@@ -58,20 +58,6 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
 
   public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_PREFIX + ".metric.prefix";
 
-  // Prometheus PushGateWay
-  public static final String PROMETHEUS_PUSHGATEWAY_PREFIX = METRIC_PREFIX + ".pushgateway";
-  public static final String PROMETHEUS_PUSHGATEWAY_HOST = PROMETHEUS_PUSHGATEWAY_PREFIX + ".host";
-  public static final String DEFAULT_PROMETHEUS_PUSHGATEWAY_HOST = "localhost";
-  public static final String PROMETHEUS_PUSHGATEWAY_PORT = PROMETHEUS_PUSHGATEWAY_PREFIX + ".port";
-  public static final int DEFAULT_PROMETHEUS_PUSHGATEWAY_PORT = 9091;
-
-  // Prometheus HttpServer
-  public static final String PROMETHEUS_PREFIX = METRIC_PREFIX + ".prometheus";
-  public static final String PROMETHEUS_HOST = PROMETHEUS_PREFIX + ".host";
-  public static final String DEFAULT_PROMETHEUS_HOST = "localhost";
-  public static final String PROMETHEUS_PORT = PROMETHEUS_PREFIX + ".port";
-  public static final int DEFAULT_PROMETHEUS_PORT = 9090;
-
   private HoodieMetricsConfig(Properties props) {
     super(props);
   }
@@ -147,19 +133,7 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       MetricsReporterType reporterType = MetricsReporterType.valueOf(props.getProperty(METRICS_REPORTER_TYPE));
       setDefaultOnCondition(props, reporterType == MetricsReporterType.DATADOG,
           HoodieMetricsDatadogConfig.newBuilder().fromProperties(props).build());
-      setDefaultOnCondition(props, !props.containsKey(PROMETHEUS_HOST), PROMETHEUS_HOST,
-          DEFAULT_PROMETHEUS_HOST);
-      setDefaultOnCondition(props, !props.containsKey(PROMETHEUS_PORT), PROMETHEUS_PORT,
-          String.valueOf(DEFAULT_PROMETHEUS_PORT));
-      setDefaultOnCondition(props, !props.containsKey(PROMETHEUS_PUSHGATEWAY_HOST),
-          PROMETHEUS_PUSHGATEWAY_HOST,
-          DEFAULT_PROMETHEUS_PUSHGATEWAY_HOST);
-      setDefaultOnCondition(props, !props.containsKey(PROMETHEUS_PUSHGATEWAY_PORT),
-          PROMETHEUS_PUSHGATEWAY_PORT,
-          String.valueOf(DEFAULT_PROMETHEUS_PUSHGATEWAY_PORT));
-
       return config;
     }
   }
-
 }
