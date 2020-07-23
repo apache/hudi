@@ -19,6 +19,9 @@
 package org.apache.hudi.client;
 
 import com.codahale.metrics.Timer;
+import org.apache.hudi.callback.HoodieWriteCommitCallback;
+import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
+import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -60,6 +63,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
 
   private transient Timer.Context writeContext = null;
   private transient WriteOperationType operationType;
+  private transient HoodieWriteCommitCallback commitCallback;
 
   public void setOperationType(WriteOperationType operationType) {
     this.operationType = operationType;
@@ -123,6 +127,14 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
+    }
+
+    // callback if needed.
+    if (config.writeCommitCallbackOn()) {
+      if (null == commitCallback) {
+        commitCallback = HoodieCommitCallbackFactory.create(config);
+      }
+      commitCallback.call(new HoodieWriteCommitCallbackMessage(instantTime, config.getTableName(), config.getBasePath()));
     }
     return true;
   }
