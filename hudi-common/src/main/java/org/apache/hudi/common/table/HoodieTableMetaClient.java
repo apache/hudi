@@ -71,8 +71,8 @@ public class HoodieTableMetaClient implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetaClient.class);
   public static final String METAFOLDER_NAME = ".hoodie";
-  public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + "/" + ".temp";
-  public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + "/" + ".aux";
+  public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
+  public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
   public static final String MARKER_EXTN = ".marker";
 
   private String basePath;
@@ -187,7 +187,7 @@ public class HoodieTableMetaClient implements Serializable {
    * @return Temp Folder path
    */
   public String getTempFolderPath() {
-    return basePath + "/" + TEMPFOLDER_NAME;
+    return basePath + File.separator + TEMPFOLDER_NAME;
   }
 
   /**
@@ -197,14 +197,14 @@ public class HoodieTableMetaClient implements Serializable {
    * @return
    */
   public String getMarkerFolderPath(String instantTs) {
-    return String.format("%s%s%s", getTempFolderPath(), "/", instantTs);
+    return String.format("%s%s%s", getTempFolderPath(), File.separator, instantTs);
   }
 
   /**
    * @return Auxiliary Meta path
    */
   public String getMetaAuxiliaryPath() {
-    return basePath + "/" + AUXILIARYFOLDER_NAME;
+    return basePath + File.separator + AUXILIARYFOLDER_NAME;
   }
 
   /**
