@@ -341,6 +341,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
       // Do an inline compaction if enabled
       if (config.isInlineCompaction()) {
+        runAnyPendingCompactions(table);
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
         inlineCompact(extraMetadata);
       } else {
@@ -353,6 +354,14 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
+  }
+
+  private void runAnyPendingCompactions(HoodieTable<?> table) {
+    table.getActiveTimeline().getCommitsAndCompactionTimeline().filterPendingCompactionTimeline().getInstants()
+        .forEach(instant -> {
+          LOG.info("Running previously failed inflight compaction at instant " + instant);
+          compact(instant.getTimestamp(), true);
+        });
   }
 
   /**
