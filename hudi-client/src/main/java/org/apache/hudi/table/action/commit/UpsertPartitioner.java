@@ -67,9 +67,9 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
    */
   private int totalBuckets = 0;
   /**
-   * Stat for the current workload. Helps in determining total inserts, upserts etc.
+   * Stat for the current workload. Helps in determining inserts, upserts etc.
    */
-  private WorkloadStat globalStat;
+  private WorkloadProfile profile;
   /**
    * Helps decide which bucket an incoming update should go to.
    */
@@ -92,7 +92,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     updateLocationToBucket = new HashMap<>();
     partitionPathToInsertBuckets = new HashMap<>();
     bucketInfoMap = new HashMap<>();
-    globalStat = profile.getGlobalStat();
+    this.profile = profile;
     this.table = table;
     this.config = config;
     assignUpdates(profile);
@@ -269,10 +269,11 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
       HoodieRecordLocation location = keyLocation._2().get();
       return updateLocationToBucket.get(location.getFileId());
     } else {
-      List<InsertBucket> targetBuckets = partitionPathToInsertBuckets.get(keyLocation._1().getPartitionPath());
+      String partitionPath = keyLocation._1().getPartitionPath();
+      List<InsertBucket> targetBuckets = partitionPathToInsertBuckets.get(partitionPath);
       // pick the target bucket to use based on the weights.
       double totalWeight = 0.0;
-      final long totalInserts = Math.max(1, globalStat.getNumInserts());
+      final long totalInserts = Math.max(1, profile.getWorkloadStat(partitionPath).getNumInserts());
       final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", keyLocation._1().getRecordKey());
       final double r = 1.0 * Math.floorMod(hashOfKey, totalInserts) / totalInserts;
       for (InsertBucket insertBucket : targetBuckets) {
