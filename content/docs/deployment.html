@@ -288,6 +288,17 @@
             
 
           
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/metrics.html" class="">Metrics</a></li>
+            
+
+          
         </ul>
         
       </li>
@@ -376,7 +387,6 @@
       <li><a href="#repair-compaction">Repair Compaction</a></li>
     </ul>
   </li>
-  <li><a href="#metrics">Metrics</a></li>
   <li><a href="#troubleshooting">Troubleshooting</a>
     <ul>
       <li><a href="#missing-records">Missing records</a></li>
@@ -880,24 +890,6 @@ consistent with the compaction plan</p>
 <span class="nc">Compaction</span> <span class="n">successfully</span> <span class="n">repaired</span>
 <span class="o">.....</span>
 </code></pre></div></div>
-
-<h2 id="metrics"><a href="docs/configurations.html#metrics-configs">Metrics</a></h2>
-
-<p>Once the Hudi writer is configured with the right table and environment for metrics, it produces the following graphite metrics, that aid in debugging hudi tables</p>
-
-<ul>
-  <li><strong>Commit Duration</strong> - This is amount of time it took to successfully commit a batch of records</li>
-  <li><strong>Rollback Duration</strong> - Similarly, amount of time taken to undo partial data left over by a failed commit (happens everytime automatically after a failing write)</li>
-  <li><strong>File Level metrics</strong> - Shows the amount of new files added, versions, deleted (cleaned) in each commit</li>
-  <li><strong>Record Level Metrics</strong> - Total records inserted/updated etc per commit</li>
-  <li><strong>Partition Level metrics</strong> - number of partitions upserted (super useful to understand sudden spikes in commit duration)</li>
-</ul>
-
-<p>These metrics can then be plotted on a standard tool like grafana. Below is a sample commit duration chart.</p>
-
-<figure>
-    <img class="docimage" src="/assets/images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 100%" />
-</figure>
 
 <h2 id="troubleshooting">Troubleshooting</h2>
 

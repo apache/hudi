@@ -864,6 +864,11 @@ var store = [{
         "tags": [],
         "url": "https://hudi.apache.org/docs/cloud.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "HoodieMetrics Guide",
+        "excerpt":"In this section, we will introduce the MetricsReporter and HoodieMetrics in Hudi. You can view the metrics-related configurations here. MetricsReporter MetricsReporter provides APIs for reporting HoodieMetrics to user-specified backends. Currently, the implementations include InMemoryMetricsReporter, JmxMetricsReporter, MetricsGraphiteReporter and DatadogMetricsReporter. Since InMemoryMetricsReporter is only used for testing, we will introduce the other...","categories": [],
+        "tags": [],
+        "url": "https://hudi.apache.org/docs/metrics.html",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Privacy Policy",
         "excerpt":"Information about your use of this website is collected using server access logs and a tracking cookie. The collected information consists of the following: The IP address from which you access the website; The type of browser and operating system you use to access our site; The date and time...","categories": [],
         "tags": [],
