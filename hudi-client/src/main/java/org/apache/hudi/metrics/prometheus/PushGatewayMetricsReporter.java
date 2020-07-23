@@ -45,40 +45,40 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
     randomSuffix = config.getPushGatewayRandomJobNameSuffix();
 
     pushGatewayReporter = new PushGatewayReporter(
-            registry,
-            MetricFilter.ALL,
-            TimeUnit.SECONDS,
-            TimeUnit.SECONDS,
-            getJobName(),
-            serverHost + ":" + serverPort,
-            deleteShutdown);
-    }
+        registry,
+        MetricFilter.ALL,
+        TimeUnit.SECONDS,
+        TimeUnit.SECONDS,
+        getJobName(),
+        serverHost + ":" + serverPort,
+        deleteShutdown);
+  }
 
-    @Override
-    public void start() {
-        pushGatewayReporter.start(periodSeconds, TimeUnit.SECONDS);
-    }
+  @Override
+  public void start() {
+    pushGatewayReporter.start(periodSeconds, TimeUnit.SECONDS);
+  }
 
-    @Override
-    public void report() {
-        pushGatewayReporter.report(null,null,null,null,null);
-    }
+  @Override
+  public void report() {
+    pushGatewayReporter.report(null, null, null, null, null);
+  }
 
-    @Override
-    public Closeable getReporter() {
-        return pushGatewayReporter;
-    }
+  @Override
+  public Closeable getReporter() {
+    return pushGatewayReporter;
+  }
 
-    @Override
-    public void stop() {
-        pushGatewayReporter.stop();
-    }
+  @Override
+  public void stop() {
+    pushGatewayReporter.stop();
+  }
 
-    private String getJobName() {
-        if(randomSuffix) {
-            Random random = new Random();
-            return configuredJobName + random.nextLong();
-        }
-        return configuredJobName;
+  private String getJobName() {
+    if (randomSuffix) {
+      Random random = new Random();
+      return configuredJobName + random.nextLong();
     }
+    return configuredJobName;
+  }
 }

@@ -23,69 +23,67 @@ import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.dropwizard.DropwizardExports;
 import io.prometheus.client.exporter.PushGateway;
 
-
 import java.io.IOException;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 public class PushGatewayReporter extends ScheduledReporter {
 
-    private static final Logger LOG = LogManager.getLogger(PushGatewayReporter.class);
+  private static final Logger LOG = LogManager.getLogger(PushGatewayReporter.class);
 
-    private final PushGateway pushGateway;
-    private final DropwizardExports sparkMetricExports;
-    private final CollectorRegistry pushRegistry;
-    private final String jobName;
-    private final boolean deleteShutdown;
+  private final PushGateway pushGateway;
+  private final DropwizardExports sparkMetricExports;
+  private final CollectorRegistry pushRegistry;
+  private final String jobName;
+  private final boolean deleteShutdown;
 
+  protected PushGatewayReporter(MetricRegistry registry,
+                                MetricFilter filter,
+                                TimeUnit rateUnit,
+                                TimeUnit durationUnit,
+                                String jobName,
+                                String address,
+                                boolean deleteShutdown) {
+    super(registry, "hudi-push-gateway-reporter", filter, rateUnit, durationUnit);
+    this.jobName = jobName;
+    this.deleteShutdown = deleteShutdown;
+    pushRegistry = new CollectorRegistry();
+    sparkMetricExports = new DropwizardExports(registry);
+    pushGateway = new PushGateway(address);
+    sparkMetricExports.register(pushRegistry);
+  }
 
-    protected PushGatewayReporter(MetricRegistry registry,
-                                  MetricFilter filter,
-                                  TimeUnit rateUnit,
-                                  TimeUnit durationUnit,
-                                  String jobName,
-                                  String address,
-                                  boolean deleteShutdown) {
-        super(registry, "hudi-push-gateway-reporter", filter, rateUnit, durationUnit);
-        this.jobName = jobName;
-        this.deleteShutdown = deleteShutdown;
-        pushRegistry = new CollectorRegistry();
-        sparkMetricExports = new DropwizardExports(registry);
-        pushGateway = new PushGateway(address);
-        sparkMetricExports.register(pushRegistry);
+  @Override
+  public void report(SortedMap<String, Gauge> gauges,
+                     SortedMap<String, Counter> counters,
+                     SortedMap<String, Histogram> histograms,
+                     SortedMap<String, Meter> meters,
+                     SortedMap<String, Timer> timers) {
+    try {
+      pushGateway.pushAdd(pushRegistry, jobName);
+    } catch (IOException e) {
+      LOG.warn("Can't push monitoring information to pushGateway", e);
     }
+  }
 
+  @Override
+  public void start(long period, TimeUnit unit) {
+    super.start(period, unit);
+  }
 
-    @Override
-    public void report(SortedMap<String, Gauge> gauges,
-                       SortedMap<String, Counter> counters,
-                       SortedMap<String, Histogram> histograms,
-                       SortedMap<String, Meter> meters,
-                       SortedMap<String, Timer> timers) {
-        try {
-            pushGateway.pushAdd(pushRegistry, jobName);
-        } catch (IOException e) {
-            LOG.warn("Can't push monitoring information to pushGateway", e);
-        }
+  @Override
+  public void stop() {
+    super.stop();
+    try {
+      if (deleteShutdown) {
+        pushRegistry.unregister(sparkMetricExports);
+        pushGateway.delete(jobName);
+      }
+    } catch (IOException e) {
+      LOG.warn("Failed to delete metrics from pushGateway with jobName {" + jobName + "}", e);
     }
-
-    @Override
-    public void start(long period, TimeUnit unit) {
-        super.start(period, unit);
-    }
-
-    @Override
-    public void stop() {
-        super.stop();
-        try {
-            if(deleteShutdown) {
-                pushRegistry.unregister(sparkMetricExports);
-                pushGateway.delete(jobName);
-            }
-        } catch (IOException e) {
-            LOG.warn("Failed to delete metrics from pushGateway with jobName {" + jobName + "}", e);
-        }
-    }
+  }
 }

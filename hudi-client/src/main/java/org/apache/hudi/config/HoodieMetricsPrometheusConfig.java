@@ -25,71 +25,69 @@ import static org.apache.hudi.config.HoodieMetricsConfig.METRIC_PREFIX;
 
 public class HoodieMetricsPrometheusConfig extends DefaultHoodieConfig {
 
+  // Prometheus PushGateWay
+  public static final String PUSHGATEWAY_PREFIX = METRIC_PREFIX + ".pushgateway";
 
-    // Prometheus PushGateWay
-    public static final String PUSHGATEWAY_PREFIX = METRIC_PREFIX + ".pushgateway";
+  public static final String PUSHGATEWAY_HOST = PUSHGATEWAY_PREFIX + ".host";
+  public static final String DEFAULT_PUSHGATEWAY_HOST = "localhost";
 
-    public static final String PUSHGATEWAY_HOST =PUSHGATEWAY_PREFIX + ".host";
-    public static final String DEFAULT_PUSHGATEWAY_HOST = "localhost";
+  public static final String PUSHGATEWAY_PORT = PUSHGATEWAY_PREFIX + ".port";
+  public static final int DEFAULT_PUSHGATEWAY_PORT = 9091;
 
-    public static final String PUSHGATEWAY_PORT = PUSHGATEWAY_PREFIX + ".port";
-    public static final int DEFAULT_PUSHGATEWAY_PORT = 9091;
+  public static final String PUSHGATEWAY_REPORT_PERIOD_SECONDS = PUSHGATEWAY_PREFIX + ".reportPeriodSeconds";
+  public static final int DEFAULT_PUSHGATEWAY_REPORT_PERIOD_SECONDS = 30;
 
-    public static final String PUSHGATEWAY_REPORT_PERIOD_SECONDS = PUSHGATEWAY_PREFIX + ".reportPeriodSeconds";
-    public static final int DEFAULT_PUSHGATEWAY_REPORT_PERIOD_SECONDS = 30;
+  public static final String PUSHGATEWAY_DELETE_ON_SHUTDOWN = PUSHGATEWAY_PREFIX + "deleteOnShutdown";
+  public static final boolean DEFAULT_PUSHGATEWAY_DELETE_ON_SHUTDOWN = true;
 
-    public static final String PUSHGATEWAY_DELETE_ON_SHUTDOWN = PUSHGATEWAY_PREFIX + "deleteOnShutdown";
-    public static final boolean DEFAULT_PUSHGATEWAY_DELETE_ON_SHUTDOWN = true;
+  public static final String PUSHGATEWAY_JOB_NAME = PUSHGATEWAY_PREFIX + "jobName";
 
-    public static final String PUSHGATEWAY_JOB_NAME = PUSHGATEWAY_PREFIX + "jobName";
-
-    public static final String PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = PUSHGATEWAY_PREFIX + "randomJobNameSuffix";
-    public static final boolean DEFAULT_PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = true;
-
-
-    // Prometheus HttpServer
-    public static final String PROMETHEUS_PREFIX = METRIC_PREFIX + ".prometheus";
-    public static final String PROMETHEUS_HOST = PROMETHEUS_PREFIX + ".host";
-    public static final String DEFAULT_PROMETHEUS_HOST = "localhost";
-    public static final String PROMETHEUS_PORT = PROMETHEUS_PREFIX + ".port";
-    public static final int DEFAULT_PROMETHEUS_PORT = 9090;
+  public static final String PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = PUSHGATEWAY_PREFIX + "randomJobNameSuffix";
+  public static final boolean DEFAULT_PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = true;
 
 
-    public HoodieMetricsPrometheusConfig(Properties props) {
-        super(props);
+  // Prometheus HttpServer
+  public static final String PROMETHEUS_PREFIX = METRIC_PREFIX + ".prometheus";
+  public static final String PROMETHEUS_HOST = PROMETHEUS_PREFIX + ".host";
+  public static final String DEFAULT_PROMETHEUS_HOST = "localhost";
+  public static final String PROMETHEUS_PORT = PROMETHEUS_PREFIX + ".port";
+  public static final int DEFAULT_PROMETHEUS_PORT = 9090;
+
+  public HoodieMetricsPrometheusConfig(Properties props) {
+    super(props);
+  }
+
+  @Override
+  public Properties getProps() {
+    return super.getProps();
+  }
+
+  public static class Builder {
+    private Properties props = new Properties();
+    public HoodieMetricsPrometheusConfig build() {
+      HoodieMetricsPrometheusConfig config = new HoodieMetricsPrometheusConfig(props);
+      setDefaultOnCondition(props, !props.containsKey(PROMETHEUS_HOST), PROMETHEUS_HOST,
+              DEFAULT_PROMETHEUS_HOST);
+      setDefaultOnCondition(props, !props.containsKey(PROMETHEUS_PORT), PROMETHEUS_PORT,
+              String.valueOf(DEFAULT_PROMETHEUS_PORT));
+      setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_HOST),
+              PUSHGATEWAY_HOST,
+              DEFAULT_PUSHGATEWAY_HOST);
+      setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_PORT),
+              PUSHGATEWAY_PORT,
+              String.valueOf(DEFAULT_PUSHGATEWAY_PORT));
+      setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_REPORT_PERIOD_SECONDS),
+              PUSHGATEWAY_REPORT_PERIOD_SECONDS,
+              String.valueOf(DEFAULT_PUSHGATEWAY_REPORT_PERIOD_SECONDS));
+      setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_DELETE_ON_SHUTDOWN),
+              PUSHGATEWAY_DELETE_ON_SHUTDOWN,
+              String.valueOf(DEFAULT_PUSHGATEWAY_DELETE_ON_SHUTDOWN));
+      setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_JOB_NAME),
+              PUSHGATEWAY_JOB_NAME, "");
+      setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX),
+              PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX,
+              String.valueOf(DEFAULT_PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX));
+      return config;
     }
-
-    @Override
-    public Properties getProps() {
-        return super.getProps();
-    }
-
-    public static class Builder {
-        private Properties props = new Properties();
-        public HoodieMetricsPrometheusConfig build() {
-            HoodieMetricsPrometheusConfig config = new HoodieMetricsPrometheusConfig(props);
-            setDefaultOnCondition(props, !props.containsKey(PROMETHEUS_HOST), PROMETHEUS_HOST,
-                    DEFAULT_PROMETHEUS_HOST);
-            setDefaultOnCondition(props, !props.containsKey(PROMETHEUS_PORT), PROMETHEUS_PORT,
-                    String.valueOf(DEFAULT_PROMETHEUS_PORT));
-            setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_HOST),
-                    PUSHGATEWAY_HOST,
-                    DEFAULT_PUSHGATEWAY_HOST);
-            setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_PORT),
-                    PUSHGATEWAY_PORT,
-                    String.valueOf(DEFAULT_PUSHGATEWAY_PORT));
-            setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_REPORT_PERIOD_SECONDS),
-                    PUSHGATEWAY_REPORT_PERIOD_SECONDS,
-                    String.valueOf(DEFAULT_PUSHGATEWAY_REPORT_PERIOD_SECONDS));
-            setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_DELETE_ON_SHUTDOWN),
-                    PUSHGATEWAY_DELETE_ON_SHUTDOWN,
-                    String.valueOf(DEFAULT_PUSHGATEWAY_DELETE_ON_SHUTDOWN));
-            setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_JOB_NAME),
-                    PUSHGATEWAY_JOB_NAME, "");
-            setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX),
-                    PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX,
-                    String.valueOf(DEFAULT_PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX));
-            return config;
-        }
-    }
+  }
 }
