@@ -79,6 +79,14 @@ Finally, if you want to have non partitioned table, you can simply leave the pro
 hoodie.datasource.write.partitionpath.field=
 ```
 
+For those not on the latest master, you can use the following key generator classes for fulfilling your use cases - 
+
+ - Simple record key (consisting of only one field) and simple partition path (with optional hive style partitioning) - `SimpleKeyGenerator.java`
+ - Simple record key and custom timestamp based partition path (with optional hive style partitioning) - `TimestampBasedKeyGenerator.java`
+ - Composite record keys (combination of multiple fields) and composite partition paths - `ComplexKeyGenerator.java`
+ - Composite record keys and timestamp based partition paths (composite also supported) - You need to pull latest code from master branch and use `CustomKeyGenerator.java` class
+ - Non partitioned table - `NonPartitionedKeyGenerator.java`
+
 
 ## DeltaStreamer
 
