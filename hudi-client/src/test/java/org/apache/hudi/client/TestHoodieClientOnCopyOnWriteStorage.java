@@ -445,8 +445,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @EnumSource(value = IndexType.class, names = {"GLOBAL_BLOOM", "GLOBAL_SIMPLE"})
   public void testUpsertsUpdatePartitionPathGlobalBloom(IndexType indexType) throws Exception {
-    testUpsertsUpdatePartitionPath(indexType, getConfig(),
-        HoodieWriteClient::upsert);
+    testUpsertsUpdatePartitionPath(indexType, getConfig(), HoodieWriteClient::upsert);
   }
 
   /**
@@ -494,14 +493,15 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> result = writeFn.apply(client, writeRecords, newCommitTime);
-    List<WriteStatus> statuses = result.collect();
+    result.collect();
 
     // Check the entire dataset has all records
     String[] fullPartitionPaths = getFullPartitionPaths();
     assertPartitionPathRecordKeys(expectedPartitionPathRecKeyPairs, fullPartitionPaths);
 
     // verify one basefile per partition
-    Map<String, Integer> baseFileCounts = getBaseFileCounts(fullPartitionPaths);
+    String[] fullExpectedPartitionPaths = getFullPartitionPaths(expectedPartitionPathRecKeyPairs.stream().map(Pair::getLeft).toArray(String[]::new));
+    Map<String, Integer> baseFileCounts = getBaseFileCounts(fullExpectedPartitionPaths);
     for (Map.Entry<String, Integer> entry : baseFileCounts.entrySet()) {
       assertEquals(1, entry.getValue());
     }
@@ -560,7 +560,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     writeRecords = jsc.parallelize(recordsToUpsert, 1);
     result = writeFn.apply(client, writeRecords, newCommitTime);
-    statuses = result.collect();
+    result.collect();
 
     // Check the entire dataset has all records
     fullPartitionPaths = getFullPartitionPaths();
@@ -589,9 +589,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   private String[] getFullPartitionPaths() {
-    String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+   return getFullPartitionPaths(dataGen.getPartitionPaths());
+  }
+
+  private String[] getFullPartitionPaths(String[] relativePartitionPaths) {
+    String[] fullPartitionPaths = new String[relativePartitionPaths.length];
     for (int i = 0; i < fullPartitionPaths.length; i++) {
-      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, relativePartitionPaths[i]);
     }
     return fullPartitionPaths;
   }
