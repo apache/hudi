@@ -18,23 +18,53 @@
 
 package org.apache.hudi.cli.testutils;
 
+import org.apache.hudi.testutils.HoodieClientTestHarness;
+
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.shell.Bootstrap;
+import org.springframework.shell.core.JLineShellComponent;
 
 /**
- * Class to initial resources for shell.
+ * Class to start Bootstrap and JLineShellComponent.
  */
-public abstract class AbstractShellIntegrationTest extends AbstractShellBaseIntegrationTest {
+public class AbstractShellBaseIntegrationTest extends HoodieClientTestHarness {
 
-  @Override
-  @BeforeEach
-  public void setup() throws Exception {
-    initResources();
+  private static JLineShellComponent shell;
+
+  @BeforeAll
+  public static void startup() {
+    Bootstrap bootstrap = new Bootstrap();
+    shell = bootstrap.getJLineShellComponent();
   }
 
-  @Override
+  @AfterAll
+  public static void shutdown() {
+    shell.stop();
+  }
+
+  @BeforeEach
+  public void setup() throws Exception {
+    initPath();
+  }
+
   @AfterEach
   public void teardown() throws Exception {
-    cleanupResources();
+    System.gc();
+  }
+
+  protected static JLineShellComponent getShell() {
+    return shell;
+  }
+
+  /**
+   * Helper to prepare string for matching.
+   * @param str Input string.
+   * @return pruned string with non word characters removed.
+   */
+  protected String removeNonWordAndStripSpace(String str) {
+    return str.replaceAll("[\\s]+", ",").replaceAll("[\\W]+", ",");
   }
 }
