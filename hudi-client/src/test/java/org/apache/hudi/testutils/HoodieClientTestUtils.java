@@ -35,10 +35,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.testutils.FilesTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.IOType;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.io.storage.HoodieParquetWriter;
 
@@ -57,9 +57,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -74,57 +72,6 @@ import java.util.stream.Collectors;
 public class HoodieClientTestUtils {
 
   private static final Logger LOG = LogManager.getLogger(HoodieClientTestUtils.class);
-  public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
-
-  private static void fakeMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    String parentPath = basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME;
-    new File(parentPath).mkdirs();
-    new File(parentPath + "/" + instantTime + suffix).createNewFile();
-  }
-
-  public static void fakeCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
-  }
-
-  public static void fakeDeltaCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION);
-  }
-
-  public static void fakeInflightDeltaCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
-  }
-
-  public static void fakeInFlightCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_EXTENSION);
-  }
-
-  public static void fakeDataFile(String basePath, String partitionPath, String instantTime, String fileId)
-      throws Exception {
-    fakeDataFile(basePath, partitionPath, instantTime, fileId, 0);
-  }
-
-  public static void fakeDataFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
-      throws Exception {
-    String parentPath = String.format("%s/%s", basePath, partitionPath);
-    new File(parentPath).mkdirs();
-    String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(instantTime, "1-0-1", fileId));
-    new File(path).createNewFile();
-    new RandomAccessFile(path, "rw").setLength(length);
-  }
-
-  public static void fakeLogFile(String basePath, String partitionPath, String baseInstantTime, String fileId, int version)
-          throws Exception {
-    fakeLogFile(basePath, partitionPath, baseInstantTime, fileId, version, 0);
-  }
-
-  public static void fakeLogFile(String basePath, String partitionPath, String baseInstantTime, String fileId, int version, int length)
-          throws Exception {
-    String parentPath = String.format("%s/%s", basePath, partitionPath);
-    new File(parentPath).mkdirs();
-    String path = String.format("%s/%s", parentPath, FSUtils.makeLogFileName(fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseInstantTime, version, "1-0-1"));
-    new File(path).createNewFile();
-    new RandomAccessFile(path, "rw").setLength(length);
-  }
 
   /**
    * Returns a Spark config for this test.
@@ -153,8 +100,8 @@ public class HoodieClientTestUtils {
     return HoodieReadClient.addHoodieSupport(sparkConf);
   }
 
-  public static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,
-                                                                   List<HoodieInstant> commitsToReturn) throws IOException {
+  private static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,
+                                                                    List<HoodieInstant> commitsToReturn) throws IOException {
     HashMap<String, String> fileIdToFullPath = new HashMap<>();
     for (HoodieInstant commit : commitsToReturn) {
       HoodieCommitMetadata metadata =
@@ -227,6 +174,8 @@ public class HoodieClientTestUtils {
 
   /**
    * Find total basefiles for passed in paths.
+   * <p>
+   * TODO move to {@link FilesTestUtils}.
    */
   public static Map<String, Integer> getBaseFileCountForPaths(String basePath, FileSystem fs,
       String... paths) {
@@ -245,6 +194,9 @@ public class HoodieClientTestUtils {
     }
   }
 
+  /**
+   * TODO Incorporate into {@link org.apache.hudi.common.testutils.HoodieTestTable}.
+   */
   public static String writeParquetFile(String basePath, String partitionPath, String filename,
                                         List<HoodieRecord> records, Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException {
 
@@ -260,7 +212,7 @@ public class HoodieClientTestUtils {
         HoodieTestUtils.getDefaultHadoopConf(), Double.valueOf(HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO));
     HoodieParquetWriter writer =
         new HoodieParquetWriter(instantTime, new Path(basePath + "/" + partitionPath + "/" + filename), config,
-                schema, new SparkTaskContextSupplier());
+            schema, new SparkTaskContextSupplier());
     int seqId = 1;
     for (HoodieRecord record : records) {
       GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
@@ -278,6 +230,9 @@ public class HoodieClientTestUtils {
     return filename;
   }
 
+  /**
+   * TODO Incorporate into {@link org.apache.hudi.common.testutils.HoodieTestTable}.
+   */
   public static String writeParquetFile(String basePath, String partitionPath, List<HoodieRecord> records,
                                         Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException, InterruptedException {
     Thread.sleep(1000);
@@ -287,27 +242,6 @@ public class HoodieClientTestUtils {
     HoodieTestUtils.createCommitFiles(basePath, instantTime);
     return HoodieClientTestUtils.writeParquetFile(basePath, partitionPath, filename, records, schema, filter,
         createCommitTime);
-  }
-
-  public static String createNewMarkerFile(String basePath, String partitionPath, String instantTime)
-      throws IOException {
-    return createMarkerFile(basePath, partitionPath, instantTime);
-  }
-
-  public static String createMarkerFile(String basePath, String partitionPath, String instantTime)
-          throws IOException {
-    return createMarkerFile(basePath, partitionPath, instantTime, UUID.randomUUID().toString(), IOType.MERGE);
-  }
-
-  public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileID, IOType ioType)
-          throws IOException {
-    String folderPath = basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME + "/" + instantTime + "/" + partitionPath + "/";
-    new File(folderPath).mkdirs();
-    String markerFileName = String.format("%s_%s_%s%s%s.%s", fileID, DEFAULT_WRITE_TOKEN, instantTime,
-        HoodieFileFormat.PARQUET.getFileExtension(), HoodieTableMetaClient.MARKER_EXTN, ioType);
-    File f = new File(folderPath + markerFileName);
-    f.createNewFile();
-    return f.getAbsolutePath();
   }
 
   public static void createMarkerFile(String basePath, String partitionPath, String instantTime, String dataFileName) throws IOException {
