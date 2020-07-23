@@ -55,7 +55,7 @@ public class TestMetricsReporterFactory {
 
   @Test
   public void metricsReporterFactoryShouldReturnUserDefinedReporter() {
-    when(config.getMetricReporterClassName()).thenReturn(TestMetricReporter.class.getName());
+    when(config.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
 
     Properties props = new Properties();
     props.setProperty("testKey", "testValue");
@@ -63,20 +63,20 @@ public class TestMetricsReporterFactory {
     when(config.getProps()).thenReturn(props);
     MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry);
     assertTrue(reporter instanceof AbstractUserDefinedMetricsReporter);
-    assertEquals(props, ((TestMetricReporter) reporter).getProps());
-    assertEquals(registry, ((TestMetricReporter) reporter).getRegistry());
+    assertEquals(props, ((DummyMetricsReporter) reporter).getProps());
+    assertEquals(registry, ((DummyMetricsReporter) reporter).getRegistry());
   }
 
   @Test
   public void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
-    when(config.getMetricReporterClassName()).thenReturn(TestIllegalMetricReporter.class.getName());
+    when(config.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
     when(config.getProps()).thenReturn(new Properties());
     assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(config, registry));
   }
 
-  public static class TestMetricReporter extends AbstractUserDefinedMetricsReporter {
+  public static class DummyMetricsReporter extends AbstractUserDefinedMetricsReporter {
 
-    public TestMetricReporter(Properties props, MetricRegistry registry) {
+    public DummyMetricsReporter(Properties props, MetricRegistry registry) {
       super(props, registry);
     }
 
@@ -95,9 +95,9 @@ public class TestMetricsReporterFactory {
     public void stop() {}
   }
 
-  public static class TestIllegalMetricReporter {
+  public static class IllegalTestMetricsReporter {
 
-    public TestIllegalMetricReporter(Properties props, MetricRegistry registry) {}
+    public IllegalTestMetricsReporter(Properties props, MetricRegistry registry) {}
   }
 }
 
