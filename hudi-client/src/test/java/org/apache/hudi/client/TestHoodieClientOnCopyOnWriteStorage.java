@@ -589,7 +589,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   private String[] getFullPartitionPaths() {
-   return getFullPartitionPaths(dataGen.getPartitionPaths());
+    return getFullPartitionPaths(dataGen.getPartitionPaths());
   }
 
   private String[] getFullPartitionPaths(String[] relativePartitionPaths) {
