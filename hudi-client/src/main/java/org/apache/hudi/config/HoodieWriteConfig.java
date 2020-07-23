@@ -89,7 +89,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String FINALIZE_WRITE_PARALLELISM = "hoodie.finalize.write.parallelism";
   public static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = DEFAULT_PARALLELISM;
   public static final String BULKINSERT_SORT_MODE = "hoodie.bulkinsert.sort.mode";
-  public static final String DEFAULT_BULKINSERT_SORT_MODE = BulkInsertSortMode.GLOBALLY_SORTED
+  public static final String DEFAULT_BULKINSERT_SORT_MODE = BulkInsertSortMode.GLOBAL_SORT
       .toString();
 
   public static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";

@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieStorageConfig;
@@ -52,12 +53,14 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.TaskContext;
+import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -290,21 +293,19 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     assertEquals("6", allWriteStatusMergedMetadataMap.get("InputRecordCount_1506582000"));
   }
 
-  private int getStatusIndex(List<WriteStatus> statuses, String partitionPath) {
-    for (int i = 0; i < statuses.size(); i++) {
-      if (statuses.get(i).getPartitionPath().equals(partitionPath)) {
-        return i;
-      }
-    }
-    return -1;
-  }
+  private void verifyStatusResult(List<WriteStatus> statuses, Map<String, Long> expectedPartitionNumRecords) {
+    Map<String, Long> actualPartitionNumRecords = new HashMap<>();
 
-  private void verifyStatusResult(List<WriteStatus> statuses, String partitionPath,
-      int numRecords) {
-    int partitionIndex = getStatusIndex(statuses, partitionPath);
-    assertTrue(partitionIndex >= 0);
-    assertEquals(0, statuses.get(partitionIndex).getFailedRecords().size());
-    assertEquals(numRecords, statuses.get(partitionIndex).getTotalRecords());
+    for (int i = 0; i < statuses.size(); i++) {
+      WriteStatus writeStatus = statuses.get(i);
+      String partitionPath = writeStatus.getPartitionPath();
+      actualPartitionNumRecords.put(
+          partitionPath,
+          actualPartitionNumRecords.getOrDefault(partitionPath, 0L) + writeStatus.getTotalRecords());
+      assertEquals(0, writeStatus.getFailedRecords().size());
+    }
+
+    assertEquals(actualPartitionNumRecords, expectedPartitionNumRecords);
   }
 
   @Test
@@ -329,8 +330,10 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
     // TODO: check the actual files and make sure 11 records, total were written.
     assertEquals(2, returnedStatuses.size());
-    verifyStatusResult(returnedStatuses, "2016/01/31", 10);
-    verifyStatusResult(returnedStatuses, "2016/02/01", 1);
+    Map<String, Long> expectedPartitionNumRecords = new HashMap<>();
+    expectedPartitionNumRecords.put("2016/01/31", 10L);
+    expectedPartitionNumRecords.put("2016/02/01", 1L);
+    verifyStatusResult(returnedStatuses, expectedPartitionNumRecords);
 
     // Case 2:
     // 1 record for partition 1, 5 record for partition 2, 1 records for partition 3.
@@ -347,9 +350,11 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     }).flatMap(x -> HoodieClientTestUtils.collectStatuses(x).iterator()).collect();
 
     assertEquals(3, returnedStatuses.size());
-    verifyStatusResult(returnedStatuses, "2016/01/31", 1);
-    verifyStatusResult(returnedStatuses, "2016/02/01", 5);
-    verifyStatusResult(returnedStatuses, "2016/02/02", 1);
+    expectedPartitionNumRecords.clear();
+    expectedPartitionNumRecords.put("2016/01/31", 1L);
+    expectedPartitionNumRecords.put("2016/02/01", 5L);
+    expectedPartitionNumRecords.put("2016/02/02", 1L);
+    verifyStatusResult(returnedStatuses, expectedPartitionNumRecords);
   }
 
   @Test
@@ -415,5 +420,60 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
       return newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator());
     }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
+  }
+
+  public JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert() throws Exception {
+    List<HoodieRecord> records1 = newHoodieRecords(8, "2020-07-31T03:16:41.415Z");
+    records1.addAll(newHoodieRecords(2, "2020-08-01T03:16:41.415Z"));
+    List<HoodieRecord> records2 = newHoodieRecords(1, "2020-07-31T03:16:22.415Z");
+    records2.addAll(newHoodieRecords(5, "2020-08-01T06:16:41.415Z"));
+    records2.addAll(newHoodieRecords(4, "2020-08-02T03:16:41.415Z"));
+    return jsc.parallelize(records1, 1).union(jsc.parallelize(records2, 1));
+  }
+
+  public Map<String, Long> generateExpectedPartitionNumRecords() {
+    Map<String, Long> expectedPartitionNumRecords = new HashMap<>();
+    expectedPartitionNumRecords.put("2020/07/31", 9L);
+    expectedPartitionNumRecords.put("2020/08/01", 7L);
+    expectedPartitionNumRecords.put("2020/08/02", 4L);
+    return expectedPartitionNumRecords;
+  }
+
+  public void testBulkInsertRecords(
+      String bulkInsertMode, int expectedStatuses,
+      Map<String, Long> expectedPartitionNumRecords) throws Exception {
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+        .withBulkInsertParallelism(2).withBulkInsertSortMode(bulkInsertMode).build();
+    String instantTime = HoodieTestUtils.makeNewCommitTime();
+    HoodieWriteClient writeClient = getHoodieWriteClient(config);
+    writeClient.startCommitWithTime(instantTime);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, hadoopConf);
+
+    // Insert new records
+    final JavaRDD<HoodieRecord> inputRecords2 = generateTestRecordsForBulkInsert();
+    BulkInsertCommitActionExecutor bulkInsertExecutor = new BulkInsertCommitActionExecutor(
+        jsc, config, table, instantTime, inputRecords2, Option.empty());
+    List<WriteStatus> returnedStatuses = bulkInsertExecutor.execute().getWriteStatuses().collect();
+
+    if (expectedStatuses >= 0) {
+      assertEquals(expectedStatuses, returnedStatuses.size());
+    }
+    verifyStatusResult(returnedStatuses, expectedPartitionNumRecords);
+  }
+
+  @Test
+  public void testBulkInsertRecordsWithGlobalSort() throws Exception {
+    testBulkInsertRecords("global_sort", 4, generateExpectedPartitionNumRecords());
+  }
+
+  @Test
+  public void testBulkInsertRecordsWithPartitionSort() throws Exception {
+    testBulkInsertRecords("partition_sort", -1, generateExpectedPartitionNumRecords());
+  }
+
+  @Test
+  public void testBulkInsertRecordsWithoutSort() throws Exception {
+    testBulkInsertRecords("none", 5, generateExpectedPartitionNumRecords());
   }
 }

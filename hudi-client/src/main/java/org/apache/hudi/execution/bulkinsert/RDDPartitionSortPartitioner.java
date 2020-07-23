@@ -21,41 +21,30 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 
-import org.apache.spark.RangePartitioner;
-import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.HashPartitioner;
 import org.apache.spark.api.java.JavaRDD;
 
-import java.io.Serializable;
-import java.util.Comparator;
-
 import scala.Tuple2;
-import scala.math.Ordering;
-import scala.math.Ordering$;
-import scala.reflect.ClassTag;
-import scala.reflect.ClassTag$;
 
-public class RDDPartitionRangePartitioner<T extends HoodieRecordPayload>
-    extends BulkInsertInternalPartitioner<T> implements Serializable {
+public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
+    extends BulkInsertInternalPartitioner<T> {
+
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
       int outputSparkPartitions) {
-    JavaPairRDD<String, HoodieRecord<T>> pairRDD = records.mapToPair(record ->
-        new Tuple2(
+    return records.mapToPair(record ->
+        new Tuple2<>(
             new StringBuilder()
                 .append(record.getPartitionPath())
                 .append("+")
                 .append(record.getRecordKey())
-                .toString(), record));
-    Ordering<String> ordering = Ordering$.MODULE$
-        .comparatorToOrdering(Comparator.<String>naturalOrder());
-    ClassTag<String> classTag = ClassTag$.MODULE$.apply(String.class);
-    return pairRDD.partitionBy(new RangePartitioner<String, HoodieRecord<T>>(
-        outputSparkPartitions, pairRDD.rdd(), true,
-        ordering, classTag)).map(pair -> pair._2);
+                .toString(), record))
+        .repartitionAndSortWithinPartitions(new HashPartitioner(outputSparkPartitions))
+        .values();
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
-    return false;
+    return true;
   }
 }

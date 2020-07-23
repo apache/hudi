@@ -29,7 +29,7 @@ public class NonSortPartitioner<T extends HoodieRecordPayload>
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
       int outputSparkPartitions) {
-    return records.coalesce(outputSparkPartitions, true);
+    return records.coalesce(outputSparkPartitions);
   }
 
   @Override

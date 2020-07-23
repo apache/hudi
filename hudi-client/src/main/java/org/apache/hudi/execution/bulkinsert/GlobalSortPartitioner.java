@@ -34,7 +34,11 @@ public class GlobalSortPartitioner<T extends HoodieRecordPayload>
       // Let's use "partitionPath + key" as the sort key. Spark, will ensure
       // the records split evenly across RDD partitions, such that small partitions fit
       // into 1 RDD partition, while big ones spread evenly across multiple RDD partitions
-      return String.format("%s+%s", record.getPartitionPath(), record.getRecordKey());
+      return new StringBuilder()
+          .append(record.getPartitionPath())
+          .append("+")
+          .append(record.getRecordKey())
+          .toString();
     }, true, outputSparkPartitions);
   }
 

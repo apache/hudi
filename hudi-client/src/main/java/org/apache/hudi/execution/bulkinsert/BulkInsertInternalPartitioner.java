@@ -29,12 +29,10 @@ public abstract class BulkInsertInternalPartitioner<T extends HoodieRecordPayloa
     switch (sortMode) {
       case NONE:
         return new NonSortPartitioner();
-      case GLOBALLY_SORTED:
+      case GLOBAL_SORT:
         return new GlobalSortPartitioner();
-      case PARTITION_SORTED:
-        return new RDDPartitionLocalSortPartitioner();
-      case PARTITION_RANGE_SORTED:
-        return new RDDPartitionRangePartitioner();
+      case PARTITION_SORT:
+        return new RDDPartitionSortPartitioner();
       default:
         throw new HoodieException(
             "The bulk insert mode \"" + sortMode.name() + "\" is not supported.");
@@ -43,8 +41,7 @@ public abstract class BulkInsertInternalPartitioner<T extends HoodieRecordPayloa
 
   public enum BulkInsertSortMode {
     NONE,
-    GLOBALLY_SORTED,
-    PARTITION_SORTED,
-    PARTITION_RANGE_SORTED
+    GLOBAL_SORT,
+    PARTITION_SORT
   }
 }
