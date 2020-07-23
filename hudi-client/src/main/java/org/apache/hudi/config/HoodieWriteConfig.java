@@ -599,6 +599,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
         HoodieMetricsDatadogConfig.DATADOG_METRIC_TAGS).split("\\s*,\\s*")).collect(Collectors.toList());
   }
 
+  public String getMetricReporterClassName() {
+    return props.getProperty(HoodieMetricsConfig.METRICS_REPORTER_CLASS);
+  }
+
   /**
    * memory configs.
    */

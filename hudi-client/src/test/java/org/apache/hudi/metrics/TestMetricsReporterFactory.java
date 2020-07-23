@@ -22,11 +22,18 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.MetricRegistry;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.userdefined.AbstractUserDefinedMetricsReporter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.Closeable;
+import java.util.Properties;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -45,4 +52,53 @@ public class TestMetricsReporterFactory {
     MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry);
     assertTrue(reporter instanceof InMemoryMetricsReporter);
   }
+
+  @Test
+  public void metricsReporterFactoryShouldReturnUserDefinedReporter() {
+    when(config.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
+
+    Properties props = new Properties();
+    props.setProperty("testKey", "testValue");
+
+    when(config.getProps()).thenReturn(props);
+    MetricsReporter reporter = MetricsReporterFactory.createReporter(config, registry);
+    assertTrue(reporter instanceof AbstractUserDefinedMetricsReporter);
+    assertEquals(props, ((DummyMetricsReporter) reporter).getProps());
+    assertEquals(registry, ((DummyMetricsReporter) reporter).getRegistry());
+  }
+
+  @Test
+  public void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
+    when(config.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
+    when(config.getProps()).thenReturn(new Properties());
+    assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(config, registry));
+  }
+
+  public static class DummyMetricsReporter extends AbstractUserDefinedMetricsReporter {
+
+    public DummyMetricsReporter(Properties props, MetricRegistry registry) {
+      super(props, registry);
+    }
+
+    @Override
+    public void start() {}
+
+    @Override
+    public void report() {}
+
+    @Override
+    public Closeable getReporter() {
+      return null;
+    }
+
+    @Override
+    public void stop() {}
+  }
+
+  public static class IllegalTestMetricsReporter {
+
+    public IllegalTestMetricsReporter(Properties props, MetricRegistry registry) {}
+  }
 }
+
+
