@@ -43,6 +43,8 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
+import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
+import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -535,6 +537,11 @@ public class DeltaSync implements Serializable {
     }
     HoodieWriteConfig config = builder.build();
 
+    // set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.
+    if (config.writeCommitCallbackOn() && HoodieWriteCommitKafkaCallback.class.getName().equals(config.getCallbackClass())) {
+      HoodieWriteCommitKafkaCallbackConfig.setCallbackKafkaConfigIfNeeded(config.getProps());
+    }
+
     // Validate what deltastreamer assumes of write-config to be really safe
     ValidationUtils.checkArgument(config.isInlineCompaction() == cfg.isInlineCompactionEnabled(),
         String.format("%s should be set to %s", INLINE_COMPACT_PROP, cfg.isInlineCompactionEnabled()));
@@ -593,4 +600,3 @@ public class DeltaSync implements Serializable {
     return commitTimelineOpt;
   }
 }
-
