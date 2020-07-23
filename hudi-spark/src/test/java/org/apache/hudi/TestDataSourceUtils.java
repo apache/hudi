@@ -20,10 +20,11 @@ package org.apache.hudi;
 
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.DataSourceTestUtils;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -127,23 +128,36 @@ public class TestDataSourceUtils {
 
   @Test
   public void testDoWriteOperationWithUserDefinedBulkInsertPartitioner() throws HoodieException {
-    setAndVerifyHoodieWriteClientWith(DataSourceTestUtils.NoOpBulkInsertPartitioner.class.getName());
+    setAndVerifyHoodieWriteClientWith(NoOpBulkInsertPartitioner.class.getName());
 
     DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
-            DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+        DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
 
     verify(hoodieWriteClient, times(1)).bulkInsert(any(hoodieRecords.getClass()), anyString(),
-            optionCaptor.capture());
-    assertThat(optionCaptor.getValue().get(), is(instanceOf(DataSourceTestUtils.NoOpBulkInsertPartitioner.class)));
+        optionCaptor.capture());
+    assertThat(optionCaptor.getValue().get(), is(instanceOf(NoOpBulkInsertPartitioner.class)));
   }
 
   private void setAndVerifyHoodieWriteClientWith(final String partitionerClassName) {
     config = HoodieWriteConfig.newBuilder().withPath(config.getBasePath())
-            .withUserDefinedBulkInsertPartitionerClass(partitionerClassName)
-            .build();
+        .withUserDefinedBulkInsertPartitionerClass(partitionerClassName)
+        .build();
     when(hoodieWriteClient.getConfig()).thenReturn(config);
 
     assertThat(config.getUserDefinedBulkInsertPartitionerClass(), is(equalTo(partitionerClassName)));
   }
 
+  public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>
+      implements BulkInsertPartitioner<T> {
+
+    @Override
+    public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
+      return records;
+    }
+
+    @Override
+    public boolean arePartitionRecordsSorted() {
+      return false;
+    }
+  }
 }

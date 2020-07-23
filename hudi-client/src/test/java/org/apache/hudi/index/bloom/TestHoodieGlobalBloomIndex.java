@@ -18,7 +18,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -26,7 +25,6 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -55,6 +53,7 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -64,18 +63,12 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
-  private Schema schema;
-
-  public TestHoodieGlobalBloomIndex() {
-  }
+  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieGlobalBloomIndex.class, "/exampleSchema.txt", true);
 
   @BeforeEach
   public void setUp() throws Exception {
     initSparkContexts();
     initPath();
-    // We have some records to be tagged (two different partitions)
-    String schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
-    schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
     initMetaClient();
   }
 
@@ -119,13 +112,13 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", "2_0_20160401010101.parquet", new ArrayList<>(),
-        schema, null, false);
+        SCHEMA, null, false);
     HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", "1_0_20150312101010.parquet", new ArrayList<>(),
-        schema, null, false);
+        SCHEMA, null, false);
     HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", "3_0_20150312101010.parquet", Collections.singletonList(record1),
-        schema, null, false);
+        SCHEMA, null, false);
     HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", "4_0_20150312101010.parquet",
-        Arrays.asList(record2, record3, record4), schema, null, false);
+        Arrays.asList(record2, record3, record4), SCHEMA, null, false);
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01");
@@ -250,13 +243,13 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record5));
 
     String filename0 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", Collections.singletonList(record1), schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/04/01", Collections.singletonList(record1), SCHEMA, null, false);
     String filename1 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", new ArrayList<>(), schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", new ArrayList<>(), SCHEMA, null, false);
     String filename2 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record2), schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record2), SCHEMA, null, false);
     String filename3 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record4), schema, null, false);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Collections.singletonList(record4), SCHEMA, null, false);
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -342,7 +335,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
             incomingPayloadSamePartition);
 
     HoodieClientTestUtils
-        .writeParquetFile(basePath, "2016/01/31", Collections.singletonList(originalRecord), schema, null, false);
+        .writeParquetFile(basePath, "2016/01/31", Collections.singletonList(originalRecord), SCHEMA, null, false);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);

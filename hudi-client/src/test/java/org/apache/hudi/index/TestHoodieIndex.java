@@ -18,7 +18,6 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -31,7 +30,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -64,6 +62,7 @@ import java.util.UUID;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -71,18 +70,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieIndex extends HoodieClientTestHarness {
 
+  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieIndex.class, "/exampleSchema.txt", true);
   private final Random random = new Random();
   private IndexType indexType;
   private HoodieIndex index;
   private HoodieWriteConfig config;
-  private Schema schema;
 
   private void setUp(IndexType indexType) throws Exception {
     this.indexType = indexType;
     initResources();
-    // We have some records to be tagged (two different partitions)
-    String schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
-    schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
     config = getConfigBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
             .build()).withAutoCommit(false).build();
@@ -284,11 +280,11 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
 
     // We create three parquet file, each having one record. (two different partitions)
     String filename1 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Collections.singletonList(record1), schema, null, true);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Collections.singletonList(record1), SCHEMA, null, true);
     String filename2 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Collections.singletonList(record2), schema, null, true);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Collections.singletonList(record2), SCHEMA, null, true);
     String filename3 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Collections.singletonList(record4), schema, null, true);
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Collections.singletonList(record4), SCHEMA, null, true);
 
     // We do the tag again
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -380,11 +376,8 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
             incomingPayloadSamePartition);
 
     // We have some records to be tagged (two different partitions)
-    String schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
-    Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
-
     HoodieClientTestUtils
-        .writeParquetFile(basePath, "2016/01/31", Collections.singletonList(originalRecord), schema, null, false);
+        .writeParquetFile(basePath, "2016/01/31", Collections.singletonList(originalRecord), SCHEMA, null, false);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, jsc.hadoopConfiguration());
