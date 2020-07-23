@@ -337,7 +337,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     try {
 
       // Delete the marker directory for the instant.
-      new MarkerFiles(table, instantTime).quietDeleteMarkerDir();
+      new MarkerFiles(table, instantTime).quietDeleteMarkerDir(jsc, config.getMarkersDeleteParallelism());
 
       // Do an inline compaction if enabled
       if (config.isInlineCompaction()) {
@@ -349,7 +349,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       }
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, hadoopConf);
-      archiveLog.archiveIfRequired();
+      archiveLog.archiveIfRequired(jsc);
       autoCleanOnCommit(instantTime);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);

@@ -70,6 +70,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -428,21 +429,21 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       }
 
       // we are not including log appends here, since they are already fail-safe.
-      List<String> invalidDataPaths = markers.createdAndMergedDataPaths();
-      List<String> validDataPaths = stats.stream()
+      Set<String> invalidDataPaths = markers.createdAndMergedDataPaths(jsc, config.getFinalizeWriteParallelism());
+      Set<String> validDataPaths = stats.stream()
           .map(HoodieWriteStat::getPath)
           .filter(p -> p.endsWith(this.getBaseFileExtension()))
-          .collect(Collectors.toList());
+          .collect(Collectors.toSet());
+
       // Contains list of partially created files. These needs to be cleaned up.
       invalidDataPaths.removeAll(validDataPaths);
+
       if (!invalidDataPaths.isEmpty()) {
         LOG.info("Removing duplicate data files created due to spark retries before committing. Paths=" + invalidDataPaths);
-      }
-      Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
-          .map(dp -> Pair.of(new Path(dp).getParent().toString(), new Path(basePath, dp).toString()))
-          .collect(Collectors.groupingBy(Pair::getKey));
+        Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
+            .map(dp -> Pair.of(new Path(dp).getParent().toString(), new Path(basePath, dp).toString()))
+            .collect(Collectors.groupingBy(Pair::getKey));
 
-      if (!invalidPathsByPartition.isEmpty()) {
         // Ensure all files in delete list is actually present. This is mandatory for an eventually consistent FS.
         // Otherwise, we may miss deleting such files. If files are not found even after retries, fail the commit
         if (consistencyCheckEnabled) {

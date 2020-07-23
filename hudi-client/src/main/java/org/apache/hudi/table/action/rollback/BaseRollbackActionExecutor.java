@@ -113,7 +113,7 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
     }
 
     // Finally, remove the marker files post rollback.
-    new MarkerFiles(table, instantToRollback.getTimestamp()).quietDeleteMarkerDir();
+    new MarkerFiles(table, instantToRollback.getTimestamp()).quietDeleteMarkerDir(jsc, config.getMarkersDeleteParallelism());
 
     return rollbackMetadata;
   }
