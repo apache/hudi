@@ -27,8 +27,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +42,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import static org.hamcrest.CoreMatchers.containsString;
@@ -82,7 +86,9 @@ public class TestDataSourceUtils {
         + "{\"name\": \"event_date2\", \"type\" : {\"type\": \"int\", \"logicalType\" : \"date\"}},"
         + "{\"name\": \"event_date3\", \"type\" : [\"null\", {\"type\" : \"int\", \"logicalType\" : \"date\"}]},"
         + "{\"name\": \"event_name\", \"type\": \"string\"},"
-        + "{\"name\": \"event_organizer\", \"type\": \"string\"}"
+        + "{\"name\": \"event_organizer\", \"type\": \"string\"},"
+        + "{\"name\": \"event_cost\", \"type\": "
+        + "{\"type\": \"fixed\", \"name\": \"dc\", \"size\": 5, \"logicalType\": \"decimal\", \"precision\": 10, \"scale\": 6}}"
         + "]}";
 
     Schema avroSchema = new Schema.Parser().parse(avroSchemaString);
@@ -93,6 +99,12 @@ public class TestDataSourceUtils {
     record.put("event_name", "Hudi Meetup");
     record.put("event_organizer", "Hudi PMC");
 
+    BigDecimal bigDecimal = new BigDecimal("0.184331");
+    Schema decimalSchema = avroSchema.getField("event_cost").schema();
+    Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
+    GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
+    record.put("event_cost", genericFixed);
+
     assertEquals(LocalDate.ofEpochDay(18000).toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_date1",
         true));
     assertEquals(LocalDate.ofEpochDay(18001).toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_date2",
@@ -101,6 +113,7 @@ public class TestDataSourceUtils {
         true));
     assertEquals("Hudi Meetup", HoodieAvroUtils.getNestedFieldValAsString(record, "event_name", true));
     assertEquals("Hudi PMC", HoodieAvroUtils.getNestedFieldValAsString(record, "event_organizer", true));
+    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost", true));
   }
 
   @Test

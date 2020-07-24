@@ -42,9 +42,12 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.LogicalTypes;
+import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -54,6 +57,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -134,23 +138,26 @@ public class DataSourceUtils {
       return fieldValue;
     }
 
-    if (isLogicalTypeDate(fieldSchema)) {
+    if (fieldSchema.getType() == Schema.Type.UNION) {
+      for (Schema schema : fieldSchema.getTypes()) {
+        if (schema.getLogicalType() == LogicalTypes.date() || schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          return convertValueForSpecificDataTypes(schema, fieldValue);
+        }
+      }
+    } else if (fieldSchema.getLogicalType() == LogicalTypes.date()) {
+      // special handle for Logical Date type
       return LocalDate.ofEpochDay(Long.parseLong(fieldValue.toString()));
+    } else if (fieldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+      // special handle for Logical Decimal type
+      Decimal dc = (Decimal) fieldSchema.getLogicalType();
+      DecimalConversion decimalConversion = new DecimalConversion();
+      if (fieldSchema.getType() == Schema.Type.FIXED) {
+        return decimalConversion.fromFixed((GenericFixed) fieldValue, fieldSchema, LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+      } else if (fieldSchema.getType() == Schema.Type.BYTES) {
+        return decimalConversion.fromBytes((ByteBuffer) fieldValue, fieldSchema, LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+      }
     }
     return fieldValue;
-  }
-
-  /**
-   * Given an Avro field schema checks whether the field is of Logical Date Type or not.
-   *
-   * @param fieldSchema avro field schema
-   * @return boolean indicating whether fieldSchema is of Avro's Date Logical Type
-   */
-  private static boolean isLogicalTypeDate(Schema fieldSchema) {
-    if (fieldSchema.getType() == Schema.Type.UNION) {
-      return fieldSchema.getTypes().stream().anyMatch(schema -> schema.getLogicalType() == LogicalTypes.date());
-    }
-    return fieldSchema.getLogicalType() == LogicalTypes.date();
   }
 
   /**
