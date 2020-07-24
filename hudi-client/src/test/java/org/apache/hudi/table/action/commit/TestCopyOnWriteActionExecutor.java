@@ -65,6 +65,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.newHoodieRecords;
+import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateExpectedPartitionNumRecords;
+import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateTestRecordsForBulkInsert;
+import static org.apache.hudi.testutils.HoodieTestDataGenerator.newHoodieRecords;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -240,17 +244,6 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     jobConf.setInt(maxCommitPulls, numberOfCommitsToPull);
   }
 
-  private List<HoodieRecord> newHoodieRecords(int n, String time) throws Exception {
-    List<HoodieRecord> records = new ArrayList<>();
-    for (int i = 0; i < n; i++) {
-      String recordStr =
-          String.format("{\"_row_key\":\"%s\",\"time\":\"%s\",\"number\":%d}", UUID.randomUUID().toString(), time, i);
-      RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
-      records.add(new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
-    }
-    return records;
-  }
-
   // Check if record level metadata is aggregated properly at the end of write.
   @Test
   public void testMetadataAggregateFromWriteStatus() throws Exception {
@@ -305,7 +298,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
       assertEquals(0, writeStatus.getFailedRecords().size());
     }
 
-    assertEquals(actualPartitionNumRecords, expectedPartitionNumRecords);
+    assertEquals(expectedPartitionNumRecords, actualPartitionNumRecords);
   }
 
   @Test
@@ -422,23 +415,6 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
 
-  public JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert() throws Exception {
-    List<HoodieRecord> records1 = newHoodieRecords(8, "2020-07-31T03:16:41.415Z");
-    records1.addAll(newHoodieRecords(2, "2020-08-01T03:16:41.415Z"));
-    List<HoodieRecord> records2 = newHoodieRecords(1, "2020-07-31T03:16:22.415Z");
-    records2.addAll(newHoodieRecords(5, "2020-08-01T06:16:41.415Z"));
-    records2.addAll(newHoodieRecords(4, "2020-08-02T03:16:41.415Z"));
-    return jsc.parallelize(records1, 1).union(jsc.parallelize(records2, 1));
-  }
-
-  public Map<String, Long> generateExpectedPartitionNumRecords() {
-    Map<String, Long> expectedPartitionNumRecords = new HashMap<>();
-    expectedPartitionNumRecords.put("2020/07/31", 9L);
-    expectedPartitionNumRecords.put("2020/08/01", 7L);
-    expectedPartitionNumRecords.put("2020/08/02", 4L);
-    return expectedPartitionNumRecords;
-  }
-
   public void testBulkInsertRecords(
       String bulkInsertMode, int expectedStatuses,
       Map<String, Long> expectedPartitionNumRecords) throws Exception {
@@ -451,7 +427,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, hadoopConf);
 
     // Insert new records
-    final JavaRDD<HoodieRecord> inputRecords2 = generateTestRecordsForBulkInsert();
+    final JavaRDD<HoodieRecord> inputRecords2 = generateTestRecordsForBulkInsert(jsc);
     BulkInsertCommitActionExecutor bulkInsertExecutor = new BulkInsertCommitActionExecutor(
         jsc, config, table, instantTime, inputRecords2, Option.empty());
     List<WriteStatus> returnedStatuses = bulkInsertExecutor.execute().getWriteStatuses().collect();
