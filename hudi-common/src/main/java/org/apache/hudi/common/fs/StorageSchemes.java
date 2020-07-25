@@ -49,7 +49,9 @@ public enum StorageSchemes {
   //ALLUXIO
   ALLUXIO("alluxio", false),
   // Tencent Cloud Object Storage
-  COSN("cosn", false);
+  COSN("cosn", false),
+  // Databricks file system
+  DBFS("dbfs", false);
 
   private String scheme;
   private boolean supportsAppend;
