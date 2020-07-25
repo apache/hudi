@@ -42,6 +42,7 @@ public class TestStorageSchemes {
     assertTrue(StorageSchemes.isAppendSupported("viewfs"));
     assertFalse(StorageSchemes.isAppendSupported("alluxio"));
     assertFalse(StorageSchemes.isAppendSupported("cosn"));
+    assertFalse(StorageSchemes.isAppendSupported("dbfs"));
     assertThrows(IllegalArgumentException.class, () -> {
       StorageSchemes.isAppendSupported("s2");
     }, "Should throw exception for unsupported schemes");
