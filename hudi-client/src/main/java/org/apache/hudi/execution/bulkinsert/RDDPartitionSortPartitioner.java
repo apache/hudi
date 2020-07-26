@@ -21,26 +21,44 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 
-import org.apache.spark.HashPartitioner;
 import org.apache.spark.api.java.JavaRDD;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import scala.Tuple2;
 
+/**
+ * A built-in partitioner that does local sorting for each RDD partition
+ * after coalesce for bulk insert operation, corresponding to the
+ * {@code BulkInsertSortMode.PARTITION_SORT} mode.
+ *
+ * @param <T> HoodieRecordPayload type
+ */
 public class RDDPartitionSortPartitioner<T extends HoodieRecordPayload>
     extends BulkInsertInternalPartitioner<T> {
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
       int outputSparkPartitions) {
-    return records.mapToPair(record ->
-        new Tuple2<>(
-            new StringBuilder()
-                .append(record.getPartitionPath())
-                .append("+")
-                .append(record.getRecordKey())
-                .toString(), record))
-        .repartitionAndSortWithinPartitions(new HashPartitioner(outputSparkPartitions))
-        .values();
+    return records.coalesce(outputSparkPartitions)
+        .mapToPair(record ->
+            new Tuple2<>(
+                new StringBuilder()
+                    .append(record.getPartitionPath())
+                    .append("+")
+                    .append(record.getRecordKey())
+                    .toString(), record))
+        .mapPartitions(partition -> {
+          // Sort locally in partition
+          List<Tuple2<String, HoodieRecord<T>>> recordList = new ArrayList<>();
+          for (; partition.hasNext(); ) {
+            recordList.add(partition.next());
+          }
+          Collections.sort(recordList, (o1, o2) -> o1._1.compareTo(o2._1));
+          return recordList.stream().map(e -> e._2).iterator();
+        });
   }
 
   @Override

@@ -55,6 +55,9 @@ import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.nio.file.Paths;
@@ -64,6 +67,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.newHoodieRecords;
 import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateExpectedPartitionNumRecords;
@@ -427,9 +431,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, hadoopConf);
 
     // Insert new records
-    final JavaRDD<HoodieRecord> inputRecords2 = generateTestRecordsForBulkInsert(jsc);
+    final JavaRDD<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert(jsc);
     BulkInsertCommitActionExecutor bulkInsertExecutor = new BulkInsertCommitActionExecutor(
-        jsc, config, table, instantTime, inputRecords2, Option.empty());
+        jsc, config, table, instantTime, inputRecords, Option.empty());
     List<WriteStatus> returnedStatuses = bulkInsertExecutor.execute().getWriteStatuses().collect();
 
     if (expectedStatuses >= 0) {
@@ -438,18 +442,15 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     verifyStatusResult(returnedStatuses, expectedPartitionNumRecords);
   }
 
-  @Test
-  public void testBulkInsertRecordsWithGlobalSort() throws Exception {
-    testBulkInsertRecords("global_sort", 4, generateExpectedPartitionNumRecords());
+  private static Stream<Arguments> configParams() {
+    Object[][] data = new Object[][] {{"global_sort", 4}, {"partition_sort", 5}, {"none", 5}};
+    return Stream.of(data).map(Arguments::of);
   }
 
-  @Test
-  public void testBulkInsertRecordsWithPartitionSort() throws Exception {
-    testBulkInsertRecords("partition_sort", -1, generateExpectedPartitionNumRecords());
-  }
-
-  @Test
-  public void testBulkInsertRecordsWithoutSort() throws Exception {
-    testBulkInsertRecords("none", 5, generateExpectedPartitionNumRecords());
+  @ParameterizedTest(name = "[{index}] {0}")
+  @MethodSource("configParams")
+  public void testBulkInsertRecordsWithGlobalSort(String bulkInsertMode,
+                                                  int expectedStatuses) throws Exception {
+    testBulkInsertRecords(bulkInsertMode, expectedStatuses, generateExpectedPartitionNumRecords());
   }
 }

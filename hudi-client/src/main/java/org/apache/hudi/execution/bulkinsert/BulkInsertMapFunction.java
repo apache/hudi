@@ -33,26 +33,27 @@ import java.util.List;
 /**
  * Map function that handles a stream of HoodieRecords.
  */
-public abstract class BulkInsertMapFunction<T extends HoodieRecordPayload>
+public class BulkInsertMapFunction<T extends HoodieRecordPayload>
     implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
 
-  protected String instantTime;
-  protected HoodieWriteConfig config;
-  protected HoodieTable<T> hoodieTable;
-  protected List<String> fileIDPrefixes;
+  private String instantTime;
+  private boolean areRecordsSorted;
+  private HoodieWriteConfig config;
+  private HoodieTable<T> hoodieTable;
+  private List<String> fileIDPrefixes;
 
-  public BulkInsertMapFunction(String instantTime, HoodieWriteConfig config,
-      HoodieTable<T> hoodieTable, List<String> fileIDPrefixes) {
+  public BulkInsertMapFunction(String instantTime, boolean areRecordsSorted,
+      HoodieWriteConfig config, HoodieTable<T> hoodieTable, List<String> fileIDPrefixes) {
     this.instantTime = instantTime;
+    this.areRecordsSorted = areRecordsSorted;
     this.config = config;
     this.hoodieTable = hoodieTable;
     this.fileIDPrefixes = fileIDPrefixes;
   }
 
   @Override
-  public Iterator<List<WriteStatus>> call(Integer partition,
-      Iterator<HoodieRecord<T>> sortedRecordItr) {
-    return new LazyInsertIterable<>(sortedRecordItr, config, instantTime, hoodieTable,
+  public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> recordItr) {
+    return new LazyInsertIterable<>(recordItr, areRecordsSorted, config, instantTime, hoodieTable,
         fileIDPrefixes.get(partition), hoodieTable.getSparkTaskContextSupplier());
   }
 }

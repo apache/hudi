@@ -23,6 +23,13 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 
 import org.apache.spark.api.java.JavaRDD;
 
+/**
+ * A built-in partitioner that does global sorting for the input records across partitions
+ * after repartition for bulk insert operation, corresponding to the
+ * {@code BulkInsertSortMode.GLOBAL_SORT} mode.
+ *
+ * @param <T> HoodieRecordPayload type
+ */
 public class GlobalSortPartitioner<T extends HoodieRecordPayload>
     extends BulkInsertInternalPartitioner<T> {
 

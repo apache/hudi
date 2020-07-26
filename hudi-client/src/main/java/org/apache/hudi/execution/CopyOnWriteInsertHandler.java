@@ -40,25 +40,28 @@ import java.util.Map;
 public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
     extends BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
-  protected HoodieWriteConfig config;
-  protected String instantTime;
-  protected HoodieTable<T> hoodieTable;
-  protected String idPrefix;
-  protected int numFilesWritten;
-  protected SparkTaskContextSupplier sparkTaskContextSupplier;
-  protected WriteHandleFactory<T> writeHandleFactory;
+  private HoodieWriteConfig config;
+  private String instantTime;
+  private boolean areRecordsSorted;
+  private HoodieTable<T> hoodieTable;
+  private String idPrefix;
+  private SparkTaskContextSupplier sparkTaskContextSupplier;
+  private WriteHandleFactory<T> writeHandleFactory;
 
-  protected final List<WriteStatus> statuses = new ArrayList<>();
-  protected Map<String, HoodieWriteHandle> handles = new HashMap<>();
+  private final List<WriteStatus> statuses = new ArrayList<>();
+  // Stores the open HoodieWriteHandle for each table partition path
+  // If the records are consumed in order, there should be only one open handle in this mapping.
+  // Otherwise, there may be multiple handles.
+  private Map<String, HoodieWriteHandle> handles = new HashMap<>();
 
-  public CopyOnWriteInsertHandler(
-      HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable, String idPrefix,
+  public CopyOnWriteInsertHandler(HoodieWriteConfig config, String instantTime,
+      boolean areRecordsSorted, HoodieTable<T> hoodieTable, String idPrefix,
       SparkTaskContextSupplier sparkTaskContextSupplier, WriteHandleFactory<T> writeHandleFactory) {
     this.config = config;
     this.instantTime = instantTime;
+    this.areRecordsSorted = areRecordsSorted;
     this.hoodieTable = hoodieTable;
     this.idPrefix = idPrefix;
-    this.numFilesWritten = 0;
     this.sparkTaskContextSupplier = sparkTaskContextSupplier;
     this.writeHandleFactory = writeHandleFactory;
   }
@@ -68,21 +71,25 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
     final HoodieRecord insertPayload = payload.record;
     String partitionPath = insertPayload.getPartitionPath();
     HoodieWriteHandle handle = handles.get(partitionPath);
-    // lazily initialize the handle, for the first time
     if (handle == null) {
-      handle = writeHandleFactory.create(
-          config, instantTime, hoodieTable, insertPayload.getPartitionPath(),
-          idPrefix, sparkTaskContextSupplier);
+      // If the records are sorted, this means that we encounter a new partition path
+      // and the records for the previous partition path are all written,
+      // so we can safely closely existing open handle to reduce memory footprint.
+      if (areRecordsSorted) {
+        closeOpenHandles();
+      }
+      // Lazily initialize the handle, for the first time
+      handle = writeHandleFactory.create(config, instantTime, hoodieTable,
+          insertPayload.getPartitionPath(), idPrefix, sparkTaskContextSupplier);
       handles.put(partitionPath, handle);
     }
 
     if (!handle.canWrite(payload.record)) {
-      // handle is full.
+      // Handle is full. Close the handle and add the WriteStatus
       statuses.add(handle.close());
-      // Need to handle the rejected payload & open new handle
-      handle = writeHandleFactory.create(
-          config, instantTime, hoodieTable, insertPayload.getPartitionPath(),
-          idPrefix, sparkTaskContextSupplier);
+      // Open new handle
+      handle = writeHandleFactory.create(config, instantTime, hoodieTable,
+          insertPayload.getPartitionPath(), idPrefix, sparkTaskContextSupplier);
       handles.put(partitionPath, handle);
     }
     handle.write(insertPayload, payload.insertValue, payload.exception);
@@ -90,15 +97,19 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
 
   @Override
   public void finish() {
-    for (HoodieWriteHandle handle : handles.values()) {
-      statuses.add(handle.close());
-    }
-    handles.clear();
+    closeOpenHandles();
     assert statuses.size() > 0;
   }
 
   @Override
   public List<WriteStatus> getResult() {
     return statuses;
+  }
+
+  private void closeOpenHandles() {
+    for (HoodieWriteHandle handle : handles.values()) {
+      statuses.add(handle.close());
+    }
+    handles.clear();
   }
 }

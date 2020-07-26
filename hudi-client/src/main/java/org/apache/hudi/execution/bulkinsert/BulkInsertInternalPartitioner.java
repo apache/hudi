@@ -22,6 +22,12 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 
+/**
+ * Built-in partitioner to repartition input records into at least expected number of
+ * output spark partitions for bulk insert operation.
+ *
+ * @param <T> HoodieRecordPayload type
+ */
 public abstract class BulkInsertInternalPartitioner<T extends HoodieRecordPayload> implements
     UserDefinedBulkInsertPartitioner<T> {
 
@@ -34,8 +40,7 @@ public abstract class BulkInsertInternalPartitioner<T extends HoodieRecordPayloa
       case PARTITION_SORT:
         return new RDDPartitionSortPartitioner();
       default:
-        throw new HoodieException(
-            "The bulk insert mode \"" + sortMode.name() + "\" is not supported.");
+        throw new HoodieException("The bulk insert mode \"" + sortMode.name() + "\" is not supported.");
     }
   }
 

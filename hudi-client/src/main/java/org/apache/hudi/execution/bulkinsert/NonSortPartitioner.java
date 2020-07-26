@@ -23,6 +23,12 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 
 import org.apache.spark.api.java.JavaRDD;
 
+/**
+ * A built-in partitioner that only does coalesce for input records for bulk insert operation,
+ * corresponding to the {@code BulkInsertSortMode.NONE} mode.
+ *
+ * @param <T> HoodieRecordPayload type
+ */
 public class NonSortPartitioner<T extends HoodieRecordPayload>
     extends BulkInsertInternalPartitioner<T> {
 

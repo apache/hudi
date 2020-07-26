@@ -28,12 +28,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitioner;
 import org.apache.hudi.execution.bulkinsert.BulkInsertMapFunction;
-import org.apache.hudi.execution.bulkinsert.BulkInsertMapFunctionForNonSortedRecords;
-import org.apache.hudi.execution.bulkinsert.BulkInsertMapFunctionForSortedRecords;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-
 import org.apache.spark.api.java.JavaRDD;
 
 import java.util.List;
@@ -54,7 +51,7 @@ public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
 
     if (performDedupe) {
       dedupedRecords = WriteHelper.combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
-          config.getInsertShuffleParallelism(), ((HoodieTable<T>) table));
+          config.getInsertShuffleParallelism(), ((HoodieTable<T>)table));
     }
 
     final JavaRDD<HoodieRecord<T>> repartitionedRecords;
@@ -69,14 +66,12 @@ public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
         IntStream.range(0, parallelism).mapToObj(i -> FSUtils.createNewFileIdPfx()).collect(Collectors.toList());
 
     table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
-            table.getMetaClient().getCommitActionType(), instantTime), Option.empty(),
+        table.getMetaClient().getCommitActionType(), instantTime), Option.empty(),
         config.shouldAllowMultiWriteOnSameInstant());
 
-    BulkInsertMapFunction<T> bulkInsertMapFunction = partitioner.arePartitionRecordsSorted()
-        ? new BulkInsertMapFunctionForSortedRecords(instantTime, config, table, fileIDPrefixes)
-        : new BulkInsertMapFunctionForNonSortedRecords(instantTime, config, table, fileIDPrefixes);
     JavaRDD<WriteStatus> writeStatusRDD = repartitionedRecords
-        .mapPartitionsWithIndex(bulkInsertMapFunction, true)
+        .mapPartitionsWithIndex(new BulkInsertMapFunction<>(instantTime,
+            partitioner.arePartitionRecordsSorted(), config, table, fileIDPrefixes), true)
         .flatMap(List::iterator);
 
     executor.updateIndexAndCommitIfNeeded(writeStatusRDD, result);

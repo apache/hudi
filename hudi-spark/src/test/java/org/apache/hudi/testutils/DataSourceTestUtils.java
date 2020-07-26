@@ -63,8 +63,7 @@ public class DataSourceTestUtils {
       implements UserDefinedBulkInsertPartitioner<T> {
 
     @Override
-    public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
-        int outputSparkPartitions) {
+    public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
       return records;
     }
 
