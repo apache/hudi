@@ -90,6 +90,59 @@ In this demo, we ran a `HoodieDeltaStreamer` job with `HoodieMetrics` turned on 
 
  * `<prefix>.<table name>.deltastreamer.duration`
  * `<prefix>.<table name>.deltastreamer.hiveSyncDuration`
+ 
+### UserDefinedMetricsReporter
+
+UserDefinedMetricsReporter allow user to define process of metrics reporter.
+
+#### Configurations
+The following is an example of `UserDefinedMetricsReporter`. More detailed configurations can be referenced [here](configurations.html#user-defined-reporter).
+
+```properties
+hoodie.metrics.on=true
+hoodie.metrics.reporter.class=test.TestUserDefinedMetricsReporter
+```
+
+#### Demo
+In this simple demo, TestMetricsReporter will print all gauges every 10 seconds
+
+```java
+public static class TestUserDefinedMetricsReporter 
+    extends AbstractUserDefinedMetricsReporter {
+  private static final Logger log = LogManager.getLogger(DummyMetricsReporter.class);
+
+  private ScheduledExecutorService exec = Executors.newScheduledThreadPool(1, r -> {
+      Thread t = Executors.defaultThreadFactory().newThread(r);
+      t.setDaemon(true);
+      return t;
+  });
+
+  public TestUserDefinedMetricsReporter(Properties props, MetricRegistry registry) {
+    super(props, registry);
+  }
+
+  @Override
+  public void start() {
+    exec.schedule(this::report, 10, TimeUnit.SECONDS);
+  }
+
+  @Override
+  public void report() {
+    this.getRegistry().getGauges().forEach((key, value) -> 
+      log.info("key: " + key + " value: " + value.getValue().toString()));
+  }
+
+  @Override
+  public Closeable getReporter() {
+    return null;
+  }
+
+  @Override
+  public void stop() {
+    exec.shutdown();
+  }
+}
+```
 
 ## HoodieMetrics
 
