@@ -491,7 +491,7 @@ Property: `hoodie.metrics.datadog.metric.tags` <br/>
 
 ##### withReporterClass(className = "") {#withReporterClass}
 Property: `hoodie.metrics.reporter.class` <br/>
-<span style="color:grey">User-defined class used to report metrics, must be a subclass of AbstractUserDefinedMetricsReporter class.</span>
+<span style="color:grey">User-defined class used to report metrics, must be a subclass of AbstractUserDefinedMetricsReporter.</span>
 
 
 ### Memory configs

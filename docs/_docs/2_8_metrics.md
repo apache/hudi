@@ -93,7 +93,7 @@ In this demo, we ran a `HoodieDeltaStreamer` job with `HoodieMetrics` turned on 
  
 ### UserDefinedMetricsReporter
 
-UserDefinedMetricsReporter allow user to define process of metrics reporter.
+Allows users to define a custom metrics reporter.
 
 #### Configurations
 The following is an example of `UserDefinedMetricsReporter`. More detailed configurations can be referenced [here](configurations.html#user-defined-reporter).
