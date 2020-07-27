@@ -31,7 +31,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
@@ -50,8 +52,6 @@ import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.commit.WriteHelper;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.testutils.TestRawTripPayload;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
@@ -78,13 +78,13 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NULL_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.NULL_SCHEMA;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -208,7 +208,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     String recordKey = UUID.randomUUID().toString();
     HoodieKey keyOne = new HoodieKey(recordKey, "2018-01-01");
-    HoodieRecord<TestRawTripPayload> recordOne =
+    HoodieRecord<RawTripTestPayload> recordOne =
         new HoodieRecord(keyOne, dataGen.generateRandomValue(keyOne, newCommitTime));
 
     HoodieKey keyTwo = new HoodieKey(recordKey, "2018-02-01");
@@ -219,13 +219,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieRecord recordThree =
         new HoodieRecord(keyTwo, dataGen.generateRandomValue(keyTwo, newCommitTime));
 
-    JavaRDD<HoodieRecord<TestRawTripPayload>> records =
+    JavaRDD<HoodieRecord<RawTripTestPayload>> records =
         jsc.parallelize(Arrays.asList(recordOne, recordTwo, recordThree), 1);
 
     // Global dedup should be done based on recordKey only
     HoodieIndex index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(true);
-    List<HoodieRecord<TestRawTripPayload>> dedupedRecs = WriteHelper.deduplicateRecords(records, index, 1).collect();
+    List<HoodieRecord<RawTripTestPayload>> dedupedRecs = WriteHelper.deduplicateRecords(records, index, 1).collect();
     assertEquals(1, dedupedRecs.size());
     assertNodupesWithinPartition(dedupedRecs);
 

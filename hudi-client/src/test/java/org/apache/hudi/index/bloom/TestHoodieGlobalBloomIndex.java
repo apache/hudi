@@ -25,13 +25,13 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
-import org.apache.hudi.testutils.TestRawTripPayload;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -101,20 +101,20 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     Path dir3 = Files.createDirectories(Paths.get(basePath, "2015", "03", "12"));
     Files.createFile(dir3.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
 
-    TestRawTripPayload rowChange1 =
-        new TestRawTripPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange1 =
+        new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record1 =
         new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    TestRawTripPayload rowChange2 =
-        new TestRawTripPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange2 =
+        new RawTripTestPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record2 =
         new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
-    TestRawTripPayload rowChange3 =
-        new TestRawTripPayload("{\"_row_key\":\"002\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange3 =
+        new RawTripTestPayload("{\"_row_key\":\"002\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record3 =
         new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
-    TestRawTripPayload rowChange4 =
-        new TestRawTripPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange4 =
+        new RawTripTestPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record4 =
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
@@ -221,29 +221,29 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     Path dir3 = Files.createDirectories(Paths.get(basePath, "2015", "03", "12"));
     Files.createFile(dir3.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
 
-    TestRawTripPayload rowChange1 =
-        new TestRawTripPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange1 =
+        new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record1 =
         new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    TestRawTripPayload rowChange2 =
-        new TestRawTripPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange2 =
+        new RawTripTestPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record2 =
         new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
-    TestRawTripPayload rowChange3 =
-        new TestRawTripPayload("{\"_row_key\":\"002\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange3 =
+        new RawTripTestPayload("{\"_row_key\":\"002\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record3 =
         new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
 
     // this record will be saved in table and will be tagged to the incoming record5
-    TestRawTripPayload rowChange4 =
-        new TestRawTripPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange4 =
+        new RawTripTestPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record4 =
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     // this has the same record key as record4 but different time so different partition, but globalbloomIndex should
     // tag the original partition of the saved record4
-    TestRawTripPayload rowChange5 =
-        new TestRawTripPayload("{\"_row_key\":\"003\",\"time\":\"2016-02-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange5 =
+        new RawTripTestPayload("{\"_row_key\":\"003\",\"time\":\"2016-02-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record5 =
         new HoodieRecord(new HoodieKey(rowChange5.getRowKey(), rowChange5.getPartitionPath()), rowChange5);
 
@@ -272,23 +272,23 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
       switch (record.getRecordKey()) {
         case "000":
           assertEquals(record.getCurrentLocation().getFileId(), FSUtils.getFileId(filename0));
-          assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange1.getJsonData());
+          assertEquals(((RawTripTestPayload) record.getData()).getJsonData(), rowChange1.getJsonData());
           break;
         case "001":
           assertEquals(record.getCurrentLocation().getFileId(), FSUtils.getFileId(filename2));
-          assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange2.getJsonData());
+          assertEquals(((RawTripTestPayload) record.getData()).getJsonData(), rowChange2.getJsonData());
           break;
         case "002":
           assertFalse(record.isCurrentLocationKnown());
-          assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange3.getJsonData());
+          assertEquals(((RawTripTestPayload) record.getData()).getJsonData(), rowChange3.getJsonData());
           break;
         case "003":
           assertEquals(record.getCurrentLocation().getFileId(), FSUtils.getFileId(filename3));
-          assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange5.getJsonData());
+          assertEquals(((RawTripTestPayload) record.getData()).getJsonData(), rowChange5.getJsonData());
           break;
         case "004":
           assertEquals(record.getCurrentLocation().getFileId(), FSUtils.getFileId(filename3));
-          assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange4.getJsonData());
+          assertEquals(((RawTripTestPayload) record.getData()).getJsonData(), rowChange4.getJsonData());
           break;
         default:
           throw new IllegalArgumentException("Unknown Key: " + record.getRecordKey());
@@ -310,8 +310,8 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     Files.createFile(dir.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
 
     // this record will be saved in table and will be tagged to an empty record
-    TestRawTripPayload originalPayload =
-        new TestRawTripPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload originalPayload =
+        new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord originalRecord =
         new HoodieRecord(new HoodieKey(originalPayload.getRowKey(), originalPayload.getPartitionPath()),
             originalPayload);
@@ -323,8 +323,8 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
      - tag the original partition of the originalRecord to an empty record for deletion, and
      - tag the new partition of the incomingRecord
     */
-    TestRawTripPayload incomingPayload =
-        new TestRawTripPayload("{\"_row_key\":\"000\",\"time\":\"2016-02-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload incomingPayload =
+        new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-02-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord incomingRecord =
         new HoodieRecord(new HoodieKey(incomingPayload.getRowKey(), incomingPayload.getPartitionPath()),
             incomingPayload);
@@ -334,8 +334,8 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     Though GLOBAL_BLOOM_INDEX_SHOULD_UPDATE_PARTITION_PATH = true,
     globalBloomIndex should just tag the original partition
     */
-    TestRawTripPayload incomingPayloadSamePartition =
-        new TestRawTripPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T04:16:41.415Z\",\"number\":15}");
+    RawTripTestPayload incomingPayloadSamePartition =
+        new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T04:16:41.415Z\",\"number\":15}");
     HoodieRecord incomingRecordSamePartition =
         new HoodieRecord(
             new HoodieKey(incomingPayloadSamePartition.getRowKey(), incomingPayloadSamePartition.getPartitionPath()),
@@ -363,7 +363,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
           break;
         case "2016/02/31":
           assertEquals("000", record.getRecordKey());
-          assertEquals(incomingPayload.getJsonData(), ((TestRawTripPayload) record.getData()).getJsonData());
+          assertEquals(incomingPayload.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
           break;
         default:
           fail(String.format("Should not get partition path: %s", record.getPartitionPath()));
@@ -379,7 +379,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     HoodieRecord record = taggedRecordRDDSamePartition.first();
     assertEquals("000", record.getRecordKey());
     assertEquals("2016/01/31", record.getPartitionPath());
-    assertEquals(incomingPayloadSamePartition.getJsonData(), ((TestRawTripPayload) record.getData()).getJsonData());
+    assertEquals(incomingPayloadSamePartition.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
   }
 
   // convert list to map to avoid sorting order dependencies

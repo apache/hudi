@@ -18,18 +18,16 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.testutils.FunctionalTestHarness;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.utilities.HoodieSnapshotExporter;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.Config;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.OutputFormatValidator;
@@ -37,7 +35,9 @@ import org.apache.hudi.utilities.HoodieSnapshotExporter.Partitioner;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
 
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;

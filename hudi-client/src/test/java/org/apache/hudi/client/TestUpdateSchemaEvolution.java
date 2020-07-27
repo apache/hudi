@@ -18,13 +18,13 @@
 
 package org.apache.hudi.client;
 
-import java.io.IOException;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -32,7 +32,6 @@ import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-import org.apache.hudi.testutils.TestRawTripPayload;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -42,6 +41,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -78,13 +78,13 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
       String recordStr3 = "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
           + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
       List<HoodieRecord> insertRecords = new ArrayList<>();
-      TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
+      RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
       insertRecords
           .add(new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
-      TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
+      RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
       insertRecords
           .add(new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
-      TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
+      RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
       insertRecords
           .add(new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
@@ -109,7 +109,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
       String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
           + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
       List<HoodieRecord> updateRecords = new ArrayList<>();
-      TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
+      RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
       HoodieRecord record1 =
           new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
       record1.unseal();

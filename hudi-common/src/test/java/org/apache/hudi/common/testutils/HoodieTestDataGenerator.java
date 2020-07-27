@@ -7,20 +7,18 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.testutils;
+package org.apache.hudi.common.testutils;
 
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.generic.GenericFixed;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
@@ -36,9 +34,12 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -164,7 +165,7 @@ public class HoodieTestDataGenerator {
     return numOfRecords * BYTES_PER_RECORD + BLOOM_FILTER_BYTES;
   }
 
-  public TestRawTripPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
+  public RawTripTestPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
     if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
       return generateRandomValue(key, commitTime, isFlattened);
     } else if (TRIP_SCHEMA.equals(schemaStr)) {
@@ -180,12 +181,11 @@ public class HoodieTestDataGenerator {
    * Generates a new avro record of the above nested schema format,
    * retaining the key if optionally provided.
    *
-   * @param key  Hoodie key.
-   * @param instantTime  Instant time to use.
-   * @return  Raw paylaod of a test record.
-   * @throws IOException
+   * @param key Hoodie key.
+   * @param instantTime Instant time to use.
+   * @return Raw paylaod of a test record.
    */
-  public static TestRawTripPayload generateRandomValue(HoodieKey key, String instantTime) throws IOException {
+  public static RawTripTestPayload generateRandomValue(HoodieKey key, String instantTime) throws IOException {
     return generateRandomValue(key, instantTime, false);
   }
 
@@ -196,37 +196,37 @@ public class HoodieTestDataGenerator {
    * @param key  Hoodie key.
    * @param instantTime  Commit time to use.
    * @param isFlattened  whether the schema of the record should be flattened.
-   * @return  Raw paylaod of a test record.
+   * @return Raw paylaod of a test record.
    * @throws IOException
    */
-  public static TestRawTripPayload generateRandomValue(
+  public static RawTripTestPayload generateRandomValue(
       HoodieKey key, String instantTime, boolean isFlattened) throws IOException {
     GenericRecord rec = generateGenericRecord(
         key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0.0,
         false, isFlattened);
-    return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
 
   /**
    * Generates a new avro record with TRIP_SCHEMA, retaining the key if optionally provided.
    */
-  public TestRawTripPayload generatePayloadForTripSchema(HoodieKey key, String commitTime) throws IOException {
+  public RawTripTestPayload generatePayloadForTripSchema(HoodieKey key, String commitTime) throws IOException {
     GenericRecord rec = generateRecordForTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
-    return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_SCHEMA);
+    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_SCHEMA);
   }
 
-  public TestRawTripPayload generatePayloadForShortTripSchema(HoodieKey key, String commitTime) throws IOException {
+  public RawTripTestPayload generatePayloadForShortTripSchema(HoodieKey key, String commitTime) throws IOException {
     GenericRecord rec = generateRecordForShortTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
-    return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), SHORT_TRIP_SCHEMA);
+    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), SHORT_TRIP_SCHEMA);
   }
 
   /**
    * Generates a new avro record of the above schema format for a delete.
    */
-  public static TestRawTripPayload generateRandomDeleteValue(HoodieKey key, String instantTime) throws IOException {
+  public static RawTripTestPayload generateRandomDeleteValue(HoodieKey key, String instantTime) throws IOException {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0.0,
         true, false);
-    return new TestRawTripPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true);
+    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true);
   }
 
   /**
@@ -545,8 +545,8 @@ public class HoodieTestDataGenerator {
   }
 
   public HoodieRecord generateDeleteRecord(HoodieKey key) throws IOException {
-    TestRawTripPayload payload =
-        new TestRawTripPayload(Option.empty(), key.getRecordKey(), key.getPartitionPath(), null, true);
+    RawTripTestPayload payload =
+        new RawTripTestPayload(Option.empty(), key.getRecordKey(), key.getPartitionPath(), null, true);
     return new HoodieRecord(key, payload);
   }
 
