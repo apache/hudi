@@ -22,10 +22,11 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.DataSource
-import org.apache.spark.sql.execution.datasources.SaveIntoDataSourceCommand
-import org.apache.spark.sql.execution.streaming.Sink
+
+import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
+import org.apache.spark.sql.structured.datasource.HoodieSparkStructuredSource
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 
@@ -38,6 +39,7 @@ class DefaultSource extends RelationProvider
   with CreatableRelationProvider
   with DataSourceRegister
   with StreamSinkProvider
+  with StreamSourceProvider
   with Serializable {
 
   private val log = LogManager.getLogger(classOf[DefaultSource])
@@ -123,4 +125,27 @@ class DefaultSource extends RelationProvider
   }
 
   override def shortName(): String = "hudi"
+
+
+  override def sourceSchema(sqlContext: SQLContext,
+                            schemaOpt: Option[StructType],
+                            providerName: String,
+                            parameters: Map[String, String]): (String, StructType) = {
+    (shortName(), schemaOpt.get)
+  }
+
+
+
+  override def createSource(sqlContext: SQLContext,
+                            metadataPath: String,
+                            schemaOpt: Option[StructType],
+                            providerName: String,
+                            parameters: Map[String, String]): Source = {
+    new HoodieSparkStructuredSource(sqlContext,
+      metadataPath,
+      schemaOpt,
+      providerName,
+      parameters)
+  }
 }
+
