@@ -55,8 +55,9 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
   private Map<String, HoodieWriteHandle> handles = new HashMap<>();
 
   public CopyOnWriteInsertHandler(HoodieWriteConfig config, String instantTime,
-      boolean areRecordsSorted, HoodieTable<T> hoodieTable, String idPrefix,
-      SparkTaskContextSupplier sparkTaskContextSupplier, WriteHandleFactory<T> writeHandleFactory) {
+                                  boolean areRecordsSorted, HoodieTable<T> hoodieTable, String idPrefix,
+                                  SparkTaskContextSupplier sparkTaskContextSupplier,
+                                  WriteHandleFactory<T> writeHandleFactory) {
     this.config = config;
     this.instantTime = instantTime;
     this.areRecordsSorted = areRecordsSorted;

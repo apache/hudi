@@ -100,8 +100,9 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
   }
 
   private void testBulkInsertInternalPartitioner(BulkInsertInternalPartitioner partitioner,
-      JavaRDD<HoodieRecord> records, boolean isGloballySorted, boolean isLocallySorted,
-      Map<String, Long> expectedPartitionNumRecords) {
+                                                 JavaRDD<HoodieRecord> records,
+                                                 boolean isGloballySorted, boolean isLocallySorted,
+                                                 Map<String, Long> expectedPartitionNumRecords) {
     int numPartitions = 2;
     JavaRDD<HoodieRecord> actualRecords = partitioner.repartitionRecords(records, numPartitions);
     assertEquals(numPartitions, actualRecords.getNumPartitions());
@@ -130,7 +131,8 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
   @ParameterizedTest(name = "[{index}] {0}")
   @MethodSource("configParams")
   public void testBulkInsertInternalPartitioner(BulkInsertInternalPartitioner.BulkInsertSortMode sortMode,
-                                                boolean isGloballySorted, boolean isLocallySorted) throws Exception {
+                                                boolean isGloballySorted, boolean isLocallySorted)
+      throws Exception {
     testBulkInsertInternalPartitioner(BulkInsertInternalPartitioner.get(sortMode),
         generateTestRecordsForBulkInsert(jsc), isGloballySorted, isLocallySorted,
         generateExpectedPartitionNumRecords());

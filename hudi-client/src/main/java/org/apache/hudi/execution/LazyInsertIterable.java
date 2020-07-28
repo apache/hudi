@@ -53,23 +53,22 @@ public class LazyInsertIterable<T extends HoodieRecordPayload>
   protected WriteHandleFactory<T> writeHandleFactory;
 
   public LazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
-      String instantTime, HoodieTable<T> hoodieTable, String idPrefix,
-      SparkTaskContextSupplier sparkTaskContextSupplier) {
+                            String instantTime, HoodieTable<T> hoodieTable, String idPrefix,
+                            SparkTaskContextSupplier sparkTaskContextSupplier) {
     this(sortedRecordItr, true, config, instantTime, hoodieTable, idPrefix, sparkTaskContextSupplier);
   }
 
   public LazyInsertIterable(Iterator<HoodieRecord<T>> recordItr, boolean areRecordsSorted,
-      HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
-      String idPrefix, SparkTaskContextSupplier sparkTaskContextSupplier) {
+                            HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
+                            String idPrefix, SparkTaskContextSupplier sparkTaskContextSupplier) {
     this(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, sparkTaskContextSupplier,
         new CreateHandleFactory<>());
   }
 
   public LazyInsertIterable(Iterator<HoodieRecord<T>> recordItr, boolean areRecordsSorted,
-      HoodieWriteConfig config,
-      String instantTime, HoodieTable<T> hoodieTable, String idPrefix,
-      SparkTaskContextSupplier sparkTaskContextSupplier,
-      WriteHandleFactory<T> writeHandleFactory) {
+                            HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
+                            String idPrefix, SparkTaskContextSupplier sparkTaskContextSupplier,
+                            WriteHandleFactory<T> writeHandleFactory) {
     super(recordItr);
     this.areRecordsSorted = areRecordsSorted;
     this.hoodieConfig = config;

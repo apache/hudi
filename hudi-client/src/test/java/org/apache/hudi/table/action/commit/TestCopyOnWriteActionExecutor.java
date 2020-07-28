@@ -419,9 +419,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
 
-  public void testBulkInsertRecords(
-      String bulkInsertMode, int expectedStatuses,
-      Map<String, Long> expectedPartitionNumRecords) throws Exception {
+  public void testBulkInsertRecords(String bulkInsertMode, int expectedStatuses,
+                                    Map<String, Long> expectedPartitionNumRecords) throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
         .withBulkInsertParallelism(2).withBulkInsertSortMode(bulkInsertMode).build();
     String instantTime = HoodieTestUtils.makeNewCommitTime();

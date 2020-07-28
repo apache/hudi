@@ -43,7 +43,8 @@ public class BulkInsertMapFunction<T extends HoodieRecordPayload>
   private List<String> fileIDPrefixes;
 
   public BulkInsertMapFunction(String instantTime, boolean areRecordsSorted,
-      HoodieWriteConfig config, HoodieTable<T> hoodieTable, List<String> fileIDPrefixes) {
+                               HoodieWriteConfig config, HoodieTable<T> hoodieTable,
+                               List<String> fileIDPrefixes) {
     this.instantTime = instantTime;
     this.areRecordsSorted = areRecordsSorted;
     this.config = config;
