@@ -126,15 +126,12 @@ class DefaultSource extends RelationProvider
 
   override def shortName(): String = "hudi"
 
-
   override def sourceSchema(sqlContext: SQLContext,
                             schemaOpt: Option[StructType],
                             providerName: String,
                             parameters: Map[String, String]): (String, StructType) = {
     (shortName(), schemaOpt.get)
   }
-
-
 
   override def createSource(sqlContext: SQLContext,
                             metadataPath: String,

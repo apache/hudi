@@ -27,17 +27,6 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.json4s.jackson.Serialization
 import org.json4s.{Formats, NoTypeHints}
 
-/**
- * we need call internalCreateDataFrame()
- * sqlContext#private[sql] internalCreateDataFrame
- * so,we package as org.apache.spark.sql.structured.datasource.HoodieSparkStructuredSource
- *
- * @param sqlContext
- * @param metadataPath
- * @param schemaOpt
- * @param providerName
- * @param parameters
- */
 class HoodieSparkStructuredSource (sqlContext: SQLContext,
                                    metadataPath: String,
                                    schemaOpt: Option[StructType],
@@ -70,7 +59,6 @@ class HoodieSparkStructuredSource (sqlContext: SQLContext,
     sqlContext.internalCreateDataFrame(
       sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty"), schema,  true)
   }
-
 
   override def stop(): Unit = {
   }
