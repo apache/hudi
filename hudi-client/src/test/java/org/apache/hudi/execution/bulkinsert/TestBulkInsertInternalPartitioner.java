@@ -34,7 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.newHoodieRecords;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.newHoodieRecords;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
