@@ -857,6 +857,16 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p>Property: <code class="highlighter-rouge">hoodie.metrics.datadog.metric.tags</code> <br />
 <span style="color:grey">Datadog metric tags (comma-delimited) to be sent along with metrics data.</span></p>
 
+<h4 id="user-defined-reporter">USER DEFINED REPORTER</h4>
+
+<h5 id="on">on(metricsOn = false)</h5>
+<p><code class="highlighter-rouge">hoodie.metrics.on</code> <br />
+<span style="color:grey">Turn on/off metrics reporting. off by default.</span></p>
+
+<h5 id="withReporterClass">withReporterClass(className = “”)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.metrics.reporter.class</code> <br />
+<span style="color:grey">User-defined class used to report metrics, must be a subclass of AbstractUserDefinedMetricsReporter.</span></p>
+
 <h3 id="memory-configs">Memory configs</h3>
 <p>Controls memory usage for compaction and merges, performed internally by Hudi
 <a href="#withMemoryConfig">withMemoryConfig</a> (HoodieMemoryConfig) <br />
