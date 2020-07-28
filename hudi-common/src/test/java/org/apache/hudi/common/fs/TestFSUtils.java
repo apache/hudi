@@ -37,7 +37,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -46,6 +45,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.COMMIT_FORMATTER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -72,14 +72,14 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testMakeDataFileName() {
-    String instantTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    String instantTime = COMMIT_FORMATTER.format(new Date());
     String fileName = UUID.randomUUID().toString();
     assertEquals(FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + ".parquet");
   }
 
   @Test
   public void testMaskFileName() {
-    String instantTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    String instantTime = COMMIT_FORMATTER.format(new Date());
     int taskPartitionId = 2;
     assertEquals(FSUtils.maskWithoutFileId(instantTime, taskPartitionId), "*_" + taskPartitionId + "_" + instantTime + ".parquet");
   }
@@ -144,7 +144,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testGetCommitTime() {
-    String instantTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    String instantTime = COMMIT_FORMATTER.format(new Date());
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
@@ -152,7 +152,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testGetFileNameWithoutMeta() {
-    String instantTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    String instantTime = COMMIT_FORMATTER.format(new Date());
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName);
     assertEquals(fileName, FSUtils.getFileId(fullFileName));

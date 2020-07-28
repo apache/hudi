@@ -59,24 +59,28 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
-
-    Option<IndexedRecord> recordOption = getInsertValue(schema);
-    if (!recordOption.isPresent()) {
-      return Option.empty();
-    }
-
-    GenericRecord genericRecord = (GenericRecord) recordOption.get();
-    // combining strategy here trivially ignores currentValue on disk and writes this record
-    Object deleteMarker = genericRecord.get("_hoodie_is_deleted");
-    if (deleteMarker instanceof Boolean && (boolean) deleteMarker) {
-      return Option.empty();
-    } else {
-      return Option.of(genericRecord);
-    }
+    return getInsertValue(schema);
   }
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    return recordBytes.length == 0 ? Option.empty() : Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    if (recordBytes.length == 0) {
+      return Option.empty();
+    }
+    IndexedRecord indexedRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    if (isDeleteRecord((GenericRecord) indexedRecord)) {
+      return Option.empty();
+    } else {
+      return Option.of(indexedRecord);
+    }
+  }
+
+  /**
+   * @param genericRecord instance of {@link GenericRecord} of interest.
+   * @returns {@code true} if record represents a delete record. {@code false} otherwise.
+   */
+  private boolean isDeleteRecord(GenericRecord genericRecord) {
+    Object deleteMarker = genericRecord.get("_hoodie_is_deleted");
+    return (deleteMarker instanceof Boolean && (boolean) deleteMarker);
   }
 }

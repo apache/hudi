@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.testutils.FunctionalTestHarness;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.utilities.HoodieSnapshotCopier;
 
 import org.apache.hadoop.conf.Configuration;

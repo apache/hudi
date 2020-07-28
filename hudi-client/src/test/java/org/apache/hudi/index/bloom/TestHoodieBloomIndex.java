@@ -26,6 +26,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -35,7 +36,6 @@ import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
-import org.apache.hudi.testutils.TestRawTripPayload;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
@@ -123,20 +123,20 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     Files.createDirectories(Paths.get(basePath, "2016", "04", "01"));
     Files.createDirectories(Paths.get(basePath, "2015", "03", "12"));
 
-    TestRawTripPayload rowChange1 =
-        new TestRawTripPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange1 =
+        new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record1 =
         new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    TestRawTripPayload rowChange2 =
-        new TestRawTripPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange2 =
+        new RawTripTestPayload("{\"_row_key\":\"001\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record2 =
         new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
-    TestRawTripPayload rowChange3 =
-        new TestRawTripPayload("{\"_row_key\":\"002\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange3 =
+        new RawTripTestPayload("{\"_row_key\":\"002\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record3 =
         new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
-    TestRawTripPayload rowChange4 =
-        new TestRawTripPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
+    RawTripTestPayload rowChange4 =
+        new RawTripTestPayload("{\"_row_key\":\"003\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record4 =
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
@@ -227,16 +227,16 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
     String recordStr4 = "{\"_row_key\":\"4eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":32}";
-    TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
+    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieRecord record1 =
         new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
+    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieRecord record2 =
         new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
-    TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
+    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
     HoodieRecord record3 =
         new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
-    TestRawTripPayload rowChange4 = new TestRawTripPayload(recordStr4);
+    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
     HoodieRecord record4 =
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
@@ -303,16 +303,16 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
     // place same row key under a different partition.
     String recordStr4 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
-    TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
+    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieRecord record1 =
         new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
+    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieRecord record2 =
         new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
-    TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
+    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
     HoodieRecord record3 =
         new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3);
-    TestRawTripPayload rowChange4 = new TestRawTripPayload(recordStr4);
+    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
     HoodieRecord record4 =
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
@@ -375,15 +375,15 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     // record key same as recordStr2
     String recordStr4 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
-    TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
+    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieKey key1 = new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath());
     HoodieRecord record1 = new HoodieRecord(key1, rowChange1);
-    TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
+    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieKey key2 = new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath());
     HoodieRecord record2 = new HoodieRecord(key2, rowChange2);
-    TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
+    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
     HoodieKey key3 = new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath());
-    TestRawTripPayload rowChange4 = new TestRawTripPayload(recordStr4);
+    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
     HoodieKey key4 = new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath());
     HoodieRecord record4 = new HoodieRecord(key4, rowChange4);
     JavaRDD<HoodieKey> keysRDD = jsc.parallelize(Arrays.asList(key1, key2, key3, key4));
@@ -444,10 +444,10 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
 
     // We write record1 to a parquet file, using a bloom filter having both records
-    TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
+    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieRecord record1 =
         new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
-    TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
+    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
     HoodieRecord record2 =
         new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
 

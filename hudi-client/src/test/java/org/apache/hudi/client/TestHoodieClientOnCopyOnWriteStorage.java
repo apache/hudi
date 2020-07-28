@@ -31,7 +31,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
@@ -50,8 +52,6 @@ import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.commit.WriteHelper;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.testutils.TestRawTripPayload;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
@@ -78,13 +78,13 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NULL_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.NULL_SCHEMA;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -208,7 +208,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     String recordKey = UUID.randomUUID().toString();
     HoodieKey keyOne = new HoodieKey(recordKey, "2018-01-01");
-    HoodieRecord<TestRawTripPayload> recordOne =
+    HoodieRecord<RawTripTestPayload> recordOne =
         new HoodieRecord(keyOne, dataGen.generateRandomValue(keyOne, newCommitTime));
 
     HoodieKey keyTwo = new HoodieKey(recordKey, "2018-02-01");
@@ -219,13 +219,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieRecord recordThree =
         new HoodieRecord(keyTwo, dataGen.generateRandomValue(keyTwo, newCommitTime));
 
-    JavaRDD<HoodieRecord<TestRawTripPayload>> records =
+    JavaRDD<HoodieRecord<RawTripTestPayload>> records =
         jsc.parallelize(Arrays.asList(recordOne, recordTwo, recordThree), 1);
 
     // Global dedup should be done based on recordKey only
     HoodieIndex index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(true);
-    List<HoodieRecord<TestRawTripPayload>> dedupedRecs = WriteHelper.deduplicateRecords(records, index, 1).collect();
+    List<HoodieRecord<RawTripTestPayload>> dedupedRecs = WriteHelper.deduplicateRecords(records, index, 1).collect();
     assertEquals(1, dedupedRecs.size());
     assertNodupesWithinPartition(dedupedRecs);
 
@@ -410,13 +410,42 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Tests when update partition path is set in global bloom, existing record in old partition is deleted appropriately.
+   * When records getting inserted are deleted in the same write batch, hudi should have deleted those records and
+   * not be available in read path.
+   * @throws Exception
+   */
+  @Test
+  public void testDeletesForInsertsInSameBatch() throws Exception {
+    HoodieWriteClient client = getHoodieWriteClient(getConfig(), false);
+
+    /**
+     * Write 200 inserts and issue deletes to a subset(50) of inserts.
+     */
+    String initCommitTime = "000";
+    String newCommitTime = "001";
+
+    final List<HoodieRecord> recordsInFirstBatch = new ArrayList<>();
+    Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
+        (String instantTime, Integer numRecordsInThisCommit) -> {
+          List<HoodieRecord> fewRecordsForInsert = dataGen.generateInserts(instantTime, 200);
+          List<HoodieRecord> fewRecordsForDelete = fewRecordsForInsert.subList(40, 90);
+
+          recordsInFirstBatch.addAll(fewRecordsForInsert);
+          recordsInFirstBatch.addAll(dataGen.generateDeletesFromExistingRecords(fewRecordsForDelete));
+          return recordsInFirstBatch;
+        };
+
+    writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime,
+        -1, recordGenFunction, HoodieWriteClient::upsert, true, 150, 150, 1);
+  }
+
+  /**
+   * Test update of a record to different partition with Global Index.
    */
   @ParameterizedTest
   @EnumSource(value = IndexType.class, names = {"GLOBAL_BLOOM", "GLOBAL_SIMPLE"})
   public void testUpsertsUpdatePartitionPathGlobalBloom(IndexType indexType) throws Exception {
-    testUpsertsUpdatePartitionPath(indexType, getConfig(),
-        HoodieWriteClient::upsert);
+    testUpsertsUpdatePartitionPath(indexType, getConfig(), HoodieWriteClient::upsert);
   }
 
   /**
@@ -464,14 +493,15 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> result = writeFn.apply(client, writeRecords, newCommitTime);
-    List<WriteStatus> statuses = result.collect();
+    result.collect();
 
     // Check the entire dataset has all records
     String[] fullPartitionPaths = getFullPartitionPaths();
     assertPartitionPathRecordKeys(expectedPartitionPathRecKeyPairs, fullPartitionPaths);
 
     // verify one basefile per partition
-    Map<String, Integer> baseFileCounts = getBaseFileCounts(fullPartitionPaths);
+    String[] fullExpectedPartitionPaths = getFullPartitionPaths(expectedPartitionPathRecKeyPairs.stream().map(Pair::getLeft).toArray(String[]::new));
+    Map<String, Integer> baseFileCounts = getBaseFileCounts(fullExpectedPartitionPaths);
     for (Map.Entry<String, Integer> entry : baseFileCounts.entrySet()) {
       assertEquals(1, entry.getValue());
     }
@@ -530,7 +560,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     writeRecords = jsc.parallelize(recordsToUpsert, 1);
     result = writeFn.apply(client, writeRecords, newCommitTime);
-    statuses = result.collect();
+    result.collect();
 
     // Check the entire dataset has all records
     fullPartitionPaths = getFullPartitionPaths();
@@ -559,9 +589,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   private String[] getFullPartitionPaths() {
-    String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+    return getFullPartitionPaths(dataGen.getPartitionPaths());
+  }
+
+  private String[] getFullPartitionPaths(String[] relativePartitionPaths) {
+    String[] fullPartitionPaths = new String[relativePartitionPaths.length];
     for (int i = 0; i < fullPartitionPaths.length; i++) {
-      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, relativePartitionPaths[i]);
     }
     return fullPartitionPaths;
   }

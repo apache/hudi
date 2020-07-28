@@ -7,20 +7,19 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.testutils;
+package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -33,9 +32,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -44,7 +41,7 @@ import java.util.zip.InflaterInputStream;
  * Example row change event based on some example data used by testcases. The data avro schema is
  * src/test/resources/schema1.
  */
-public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayload> {
+public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayload> {
 
   private static final transient ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private String partitionPath;
@@ -53,7 +50,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
   private int dataSize;
   private boolean isDeleted;
 
-  public TestRawTripPayload(Option<String> jsonData, String rowKey, String partitionPath, String schemaStr,
+  public RawTripTestPayload(Option<String> jsonData, String rowKey, String partitionPath, String schemaStr,
       Boolean isDeleted) throws IOException {
     if (jsonData.isPresent()) {
       this.jsonDataCompressed = compressData(jsonData.get());
@@ -64,11 +61,11 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     this.isDeleted = isDeleted;
   }
 
-  public TestRawTripPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
+  public RawTripTestPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
     this(Option.of(jsonData), rowKey, partitionPath, schemaStr, false);
   }
 
-  public TestRawTripPayload(String jsonData) throws IOException {
+  public RawTripTestPayload(String jsonData) throws IOException {
     this.jsonDataCompressed = compressData(jsonData);
     this.dataSize = jsonData.length();
     Map<String, Object> jsonRecordMap = OBJECT_MAPPER.readValue(jsonData, Map.class);
@@ -82,7 +79,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
   }
 
   @Override
-  public TestRawTripPayload preCombine(TestRawTripPayload another) {
+  public RawTripTestPayload preCombine(RawTripTestPayload another) {
     return another;
   }
 
@@ -99,6 +96,11 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
       MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
       return Option.of(jsonConverter.convert(getJsonData(), schema));
     }
+  }
+
+  public IndexedRecord getRecordToInsert(Schema schema) throws IOException {
+    MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
+    return jsonConverter.convert(getJsonData(), schema);
   }
 
   @Override
@@ -136,59 +138,4 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     }
   }
 
-  /**
-   * A custom {@link WriteStatus} that merges passed metadata key value map to {@code WriteStatus.markSuccess()} and
-   * {@code WriteStatus.markFailure()}.
-   */
-  public static class MetadataMergeWriteStatus extends WriteStatus {
-
-    private Map<String, String> mergedMetadataMap = new HashMap<>();
-
-    public MetadataMergeWriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
-      super(trackSuccessRecords, failureFraction);
-    }
-
-    public static Map<String, String> mergeMetadataForWriteStatuses(List<WriteStatus> writeStatuses) {
-      Map<String, String> allWriteStatusMergedMetadataMap = new HashMap<>();
-      for (WriteStatus writeStatus : writeStatuses) {
-        MetadataMergeWriteStatus.mergeMetadataMaps(((MetadataMergeWriteStatus) writeStatus).getMergedMetadataMap(),
-            allWriteStatusMergedMetadataMap);
-      }
-      return allWriteStatusMergedMetadataMap;
-    }
-
-    private static void mergeMetadataMaps(Map<String, String> mergeFromMap, Map<String, String> mergeToMap) {
-      for (Entry<String, String> entry : mergeFromMap.entrySet()) {
-        String key = entry.getKey();
-        if (!mergeToMap.containsKey(key)) {
-          mergeToMap.put(key, "0");
-        }
-        mergeToMap.put(key, addStrsAsInt(entry.getValue(), mergeToMap.get(key)));
-      }
-    }
-
-    private static String addStrsAsInt(String a, String b) {
-      return String.valueOf(Integer.parseInt(a) + Integer.parseInt(b));
-    }
-
-    @Override
-    public void markSuccess(HoodieRecord record, Option<Map<String, String>> recordMetadata) {
-      super.markSuccess(record, recordMetadata);
-      if (recordMetadata.isPresent()) {
-        mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
-      }
-    }
-
-    @Override
-    public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> recordMetadata) {
-      super.markFailure(record, t, recordMetadata);
-      if (recordMetadata.isPresent()) {
-        mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
-      }
-    }
-
-    private Map<String, String> getMergedMetadataMap() {
-      return mergedMetadataMap;
-    }
-  }
 }

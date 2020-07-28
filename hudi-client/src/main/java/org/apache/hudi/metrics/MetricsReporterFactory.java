@@ -18,12 +18,18 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
+import org.apache.hudi.metrics.userdefined.AbstractUserDefinedMetricsReporter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.util.Properties;
 
 /**
  * Factory class for creating MetricsReporter.
@@ -35,6 +41,18 @@ public class MetricsReporterFactory {
   public static MetricsReporter createReporter(HoodieWriteConfig config, MetricRegistry registry) {
     MetricsReporterType type = config.getMetricsReporterType();
     MetricsReporter reporter = null;
+
+    if (!StringUtils.isNullOrEmpty(config.getMetricReporterClassName())) {
+      Object instance = ReflectionUtils
+              .loadClass(config.getMetricReporterClassName(),
+                      new Class<?>[] {Properties.class, MetricRegistry.class}, config.getProps(), registry);
+      if (!(instance instanceof AbstractUserDefinedMetricsReporter)) {
+        throw new HoodieException(config.getMetricReporterClassName()
+                + " is not a subclass of AbstractUserDefinedMetricsReporter");
+      }
+      return (MetricsReporter) instance;
+    }
+
     switch (type) {
       case GRAPHITE:
         reporter = new MetricsGraphiteReporter(config, registry);

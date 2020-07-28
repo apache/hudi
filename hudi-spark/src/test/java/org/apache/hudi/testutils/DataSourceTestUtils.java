@@ -21,6 +21,7 @@ package org.apache.hudi.testutils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 
@@ -37,7 +38,7 @@ public class DataSourceTestUtils {
 
   public static Option<String> convertToString(HoodieRecord record) {
     try {
-      String str = ((TestRawTripPayload) record.getData()).getJsonData();
+      String str = ((RawTripTestPayload) record.getData()).getJsonData();
       str = "{" + str.substring(str.indexOf("\"timestamp\":"));
       // Remove the last } bracket
       str = str.substring(0, str.length() - 1);
