@@ -30,7 +30,7 @@ import org.apache.hudi.hive.NonPartitionedExtractor;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.testutils.DataSourceTestUtils;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
