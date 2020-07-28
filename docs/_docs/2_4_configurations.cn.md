@@ -519,6 +519,16 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 属性： `hoodie.metrics.datadog.metric.tags` <br/>
 <span style="color:grey">Datadog指标标签（逗号分隔），将和指标数据一并发送。</span>
 
+#### 用户自定义发送器
+
+##### on(metricsOn = false) {#on}
+属性： `hoodie.metrics.on` <br/>
+<span style="color:grey">打开或关闭发送指标。默认情况下处于关闭状态。</span>
+
+##### withReporterClass(className = "") {#withReporterClass}
+属性： `hoodie.metrics.reporter.class` <br/>
+<span style="color:grey">用于处理发送指标的用户自定义类，必须是AbstractUserDefinedMetricsReporter类的子类.</span>
+
 ### 内存配置
 控制由Hudi内部执行的压缩和合并的内存使用情况
 [withMemoryConfig](#withMemoryConfig) (HoodieMemoryConfig) <br/>

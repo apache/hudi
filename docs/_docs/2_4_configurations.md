@@ -483,6 +483,17 @@ Property: `hoodie.metrics.datadog.metric.host` <br/>
 Property: `hoodie.metrics.datadog.metric.tags` <br/>
 <span style="color:grey">Datadog metric tags (comma-delimited) to be sent along with metrics data.</span>
 
+#### USER DEFINED REPORTER
+
+##### on(metricsOn = false) {#on}
+`hoodie.metrics.on` <br/>
+<span style="color:grey">Turn on/off metrics reporting. off by default.</span>
+
+##### withReporterClass(className = "") {#withReporterClass}
+Property: `hoodie.metrics.reporter.class` <br/>
+<span style="color:grey">User-defined class used to report metrics, must be a subclass of AbstractUserDefinedMetricsReporter.</span>
+
+
 ### Memory configs
 Controls memory usage for compaction and merges, performed internally by Hudi
 [withMemoryConfig](#withMemoryConfig) (HoodieMemoryConfig) <br/>
