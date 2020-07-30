@@ -34,15 +34,15 @@ public class HoodieMetricsPrometheusConfig extends DefaultHoodieConfig {
   public static final String PUSHGATEWAY_PORT = PUSHGATEWAY_PREFIX + ".port";
   public static final int DEFAULT_PUSHGATEWAY_PORT = 9091;
 
-  public static final String PUSHGATEWAY_REPORT_PERIOD_SECONDS = PUSHGATEWAY_PREFIX + ".reportPeriodSeconds";
+  public static final String PUSHGATEWAY_REPORT_PERIOD_SECONDS = PUSHGATEWAY_PREFIX + ".report.period.seconds";
   public static final int DEFAULT_PUSHGATEWAY_REPORT_PERIOD_SECONDS = 30;
 
-  public static final String PUSHGATEWAY_DELETE_ON_SHUTDOWN = PUSHGATEWAY_PREFIX + "deleteOnShutdown";
+  public static final String PUSHGATEWAY_DELETE_ON_SHUTDOWN = PUSHGATEWAY_PREFIX + ".delete.on.shutdown";
   public static final boolean DEFAULT_PUSHGATEWAY_DELETE_ON_SHUTDOWN = true;
 
-  public static final String PUSHGATEWAY_JOB_NAME = PUSHGATEWAY_PREFIX + "jobName";
+  public static final String PUSHGATEWAY_JOB_NAME = PUSHGATEWAY_PREFIX + ".job.name";
 
-  public static final String PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = PUSHGATEWAY_PREFIX + "randomJobNameSuffix";
+  public static final String PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = PUSHGATEWAY_PREFIX + ".random.job.name.suffix";
   public static final boolean DEFAULT_PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = true;
 
 
@@ -57,13 +57,24 @@ public class HoodieMetricsPrometheusConfig extends DefaultHoodieConfig {
     super(props);
   }
 
+  public static HoodieMetricsPrometheusConfig.Builder newBuilder() {
+    return new HoodieMetricsPrometheusConfig.Builder();
+  }
+
   @Override
   public Properties getProps() {
     return super.getProps();
   }
 
   public static class Builder {
+
     private Properties props = new Properties();
+
+    public Builder fromProperties(Properties props) {
+      this.props.putAll(props);
+      return this;
+    }
+
     public HoodieMetricsPrometheusConfig build() {
       HoodieMetricsPrometheusConfig config = new HoodieMetricsPrometheusConfig(props);
       setDefaultOnCondition(props, !props.containsKey(PROMETHEUS_HOST), PROMETHEUS_HOST,
