@@ -136,7 +136,7 @@ object AvroConversionHelper {
         case (struct: StructType, RECORD) =>
           val length = struct.fields.length
           val converters = new Array[AnyRef => AnyRef](length)
-          val avroFieldIndexes = new Array[Int](length)
+          val avroFieldNames = new Array[String](length)
           var i = 0
           while (i < length) {
             val sqlField = struct.fields(i)
@@ -145,7 +145,7 @@ object AvroConversionHelper {
               val converter = createConverter(avroField.schema(), sqlField.dataType,
                 path :+ sqlField.name)
               converters(i) = converter
-              avroFieldIndexes(i) = avroField.pos()
+              avroFieldNames(i) = avroField.name()
             } else if (!sqlField.nullable) {
               throw new IncompatibleSchemaException(
                 s"Cannot find non-nullable field ${sqlField.name} at path ${path.mkString(".")} " +
@@ -167,7 +167,7 @@ object AvroConversionHelper {
               while (i < converters.length) {
                 if (converters(i) != null) {
                   val converter = converters(i)
-                  result(i) = converter(record.get(avroFieldIndexes(i)))
+                  result(i) = converter(record.get(avroFieldNames(i)))
                 }
                 i += 1
               }
