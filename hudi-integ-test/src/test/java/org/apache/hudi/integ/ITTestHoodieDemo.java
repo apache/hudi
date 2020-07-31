@@ -125,7 +125,9 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void ingestFirstBatchAndHiveSync() throws Exception {
     List<String> cmds = CollectionUtils.createImmutableList(
-        "spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+        "spark-submit"
+            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
+            + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
             + " --base-file-format " + baseFileFormat.toString()
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
@@ -141,7 +143,9 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --pass hive"
             + " --jdbc-url jdbc:hive2://hiveserver:10000"
             + " --partitioned-by dt",
-        ("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+        ("spark-submit"
+            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
+            + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --base-file-format " + baseFileFormat.toString()
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
@@ -187,14 +191,18 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void ingestSecondBatchAndHiveSync() throws Exception {
     List<String> cmds = CollectionUtils.createImmutableList(
             ("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH2 + " " + HDFS_BATCH_PATH2),
-            ("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+            ("spark-submit"
+            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
+            + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties"
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
             + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME)),
-            ("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+            ("spark-submit"
+            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
+            + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
             + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
