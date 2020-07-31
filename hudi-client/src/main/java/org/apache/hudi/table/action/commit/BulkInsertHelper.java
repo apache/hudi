@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitioner;
+import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerFactory;
 import org.apache.hudi.execution.bulkinsert.BulkInsertMapFunction;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
@@ -58,7 +58,7 @@ public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
     final int parallelism = config.getBulkInsertShuffleParallelism();
     UserDefinedBulkInsertPartitioner partitioner = bulkInsertPartitioner.isPresent()
         ? bulkInsertPartitioner.get()
-        : BulkInsertInternalPartitioner.get(config.getBulkInsertSortMode());
+        : BulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode());
     repartitionedRecords = partitioner.repartitionRecords(dedupedRecords, parallelism);
 
     // generate new file ID prefixes for each output partition

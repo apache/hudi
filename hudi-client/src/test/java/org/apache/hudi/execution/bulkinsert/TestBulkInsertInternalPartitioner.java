@@ -19,6 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -78,9 +79,9 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
 
   private static Stream<Arguments> configParams() {
     Object[][] data = new Object[][] {
-        {BulkInsertInternalPartitioner.BulkInsertSortMode.GLOBAL_SORT, true, true},
-        {BulkInsertInternalPartitioner.BulkInsertSortMode.PARTITION_SORT, false, true},
-        {BulkInsertInternalPartitioner.BulkInsertSortMode.NONE, false, false}
+        {BulkInsertInternalPartitionerFactory.BulkInsertSortMode.GLOBAL_SORT, true, true},
+        {BulkInsertInternalPartitionerFactory.BulkInsertSortMode.PARTITION_SORT, false, true},
+        {BulkInsertInternalPartitionerFactory.BulkInsertSortMode.NONE, false, false}
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -99,7 +100,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
     }
   }
 
-  private void testBulkInsertInternalPartitioner(BulkInsertInternalPartitioner partitioner,
+  private void testBulkInsertInternalPartitioner(UserDefinedBulkInsertPartitioner partitioner,
                                                  JavaRDD<HoodieRecord> records,
                                                  boolean isGloballySorted, boolean isLocallySorted,
                                                  Map<String, Long> expectedPartitionNumRecords) {
@@ -130,13 +131,13 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
 
   @ParameterizedTest(name = "[{index}] {0}")
   @MethodSource("configParams")
-  public void testBulkInsertInternalPartitioner(BulkInsertInternalPartitioner.BulkInsertSortMode sortMode,
+  public void testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.BulkInsertSortMode sortMode,
                                                 boolean isGloballySorted, boolean isLocallySorted)
       throws Exception {
-    testBulkInsertInternalPartitioner(BulkInsertInternalPartitioner.get(sortMode),
+    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode),
         generateTestRecordsForBulkInsert(jsc), isGloballySorted, isLocallySorted,
         generateExpectedPartitionNumRecords());
-    testBulkInsertInternalPartitioner(BulkInsertInternalPartitioner.get(sortMode),
+    testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode),
         generateTripleTestRecordsForBulkInsert(jsc), isGloballySorted, isLocallySorted,
         generateExpectedPartitionNumRecordsTriple());
   }

@@ -18,20 +18,16 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 
 /**
- * Built-in partitioner to repartition input records into at least expected number of
- * output spark partitions for bulk insert operation.
- *
- * @param <T> HoodieRecordPayload type
+ * A factory to generate built-in partitioner to repartition input records into at least
+ * expected number of output spark partitions for bulk insert operation.
  */
-public abstract class BulkInsertInternalPartitioner<T extends HoodieRecordPayload> implements
-    UserDefinedBulkInsertPartitioner<T> {
+public abstract class BulkInsertInternalPartitionerFactory {
 
-  public static BulkInsertInternalPartitioner get(BulkInsertSortMode sortMode) {
+  public static UserDefinedBulkInsertPartitioner get(BulkInsertSortMode sortMode) {
     switch (sortMode) {
       case NONE:
         return new NonSortPartitioner();
