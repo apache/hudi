@@ -56,8 +56,7 @@ import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.nio.file.Paths;
@@ -67,9 +66,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.newHoodieRecords;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateExpectedPartitionNumRecords;
 import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateTestRecordsForBulkInsert;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -247,6 +245,17 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     jobConf.setInt(maxCommitPulls, numberOfCommitsToPull);
   }
 
+  private List<HoodieRecord> newHoodieRecords(int n, String time) throws Exception {
+    List<HoodieRecord> records = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      String recordStr =
+          String.format("{\"_row_key\":\"%s\",\"time\":\"%s\",\"number\":%d}", UUID.randomUUID().toString(), time, i);
+      RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
+      records.add(new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
+    }
+    return records;
+  }
+
   // Check if record level metadata is aggregated properly at the end of write.
   @Test
   public void testMetadataAggregateFromWriteStatus() throws Exception {
@@ -418,9 +427,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
 
-  public void testBulkInsertRecords(String bulkInsertMode, int expectedStatuses,
-                                    Map<String, Long> expectedPartitionNumRecords) throws Exception {
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+  public void testBulkInsertRecords(String bulkInsertMode) throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withBulkInsertParallelism(2).withBulkInsertSortMode(bulkInsertMode).build();
     String instantTime = HoodieTestUtils.makeNewCommitTime();
     HoodieWriteClient writeClient = getHoodieWriteClient(config);
@@ -433,22 +442,12 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     BulkInsertCommitActionExecutor bulkInsertExecutor = new BulkInsertCommitActionExecutor(
         jsc, config, table, instantTime, inputRecords, Option.empty());
     List<WriteStatus> returnedStatuses = bulkInsertExecutor.execute().getWriteStatuses().collect();
-
-    if (expectedStatuses >= 0) {
-      assertEquals(expectedStatuses, returnedStatuses.size());
-    }
-    verifyStatusResult(returnedStatuses, expectedPartitionNumRecords);
-  }
-
-  private static Stream<Arguments> configParams() {
-    Object[][] data = new Object[][] {{"global_sort", 4}, {"partition_sort", 5}, {"none", 5}};
-    return Stream.of(data).map(Arguments::of);
+    verifyStatusResult(returnedStatuses, generateExpectedPartitionNumRecords(inputRecords));
   }
 
   @ParameterizedTest(name = "[{index}] {0}")
-  @MethodSource("configParams")
-  public void testBulkInsertRecordsWithGlobalSort(String bulkInsertMode,
-                                                  int expectedStatuses) throws Exception {
-    testBulkInsertRecords(bulkInsertMode, expectedStatuses, generateExpectedPartitionNumRecords());
+  @ValueSource(strings = {"global_sort", "partition_sort", "none"})
+  public void testBulkInsertRecordsWithGlobalSort(String bulkInsertMode) throws Exception {
+    testBulkInsertRecords(bulkInsertMode);
   }
 }

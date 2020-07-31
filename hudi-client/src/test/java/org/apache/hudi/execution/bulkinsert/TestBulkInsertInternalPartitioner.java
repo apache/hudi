@@ -19,6 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -28,53 +29,35 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.newHoodieRecords;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
 
-  public static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc)
-      throws Exception {
+  public static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc) {
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     // RDD partition 1
-    List<HoodieRecord> records1 = newHoodieRecords(3, "2020-07-31T03:16:41.415Z");
-    records1.addAll(newHoodieRecords(2, "2020-08-01T03:16:41.415Z"));
-    records1.addAll(newHoodieRecords(5, "2020-07-31T03:16:41.415Z"));
+    List<HoodieRecord> records1 = dataGenerator.generateInserts("0", 100);
     // RDD partition 2
-    List<HoodieRecord> records2 = newHoodieRecords(4, "2020-08-02T03:16:22.415Z");
-    records2.addAll(newHoodieRecords(1, "2020-07-31T03:16:41.415Z"));
-    records2.addAll(newHoodieRecords(5, "2020-08-01T06:16:41.415Z"));
+    List<HoodieRecord> records2 = dataGenerator.generateInserts("0", 150);
     return jsc.parallelize(records1, 1).union(jsc.parallelize(records2, 1));
   }
 
-  public static Map<String, Long> generateExpectedPartitionNumRecords() {
-    Map<String, Long> expectedPartitionNumRecords = new HashMap<>();
-    expectedPartitionNumRecords.put("2020/07/31", 9L);
-    expectedPartitionNumRecords.put("2020/08/01", 7L);
-    expectedPartitionNumRecords.put("2020/08/02", 4L);
-    return expectedPartitionNumRecords;
+  public static Map<String, Long> generateExpectedPartitionNumRecords(JavaRDD<HoodieRecord> records) {
+    return records.map(record -> record.getPartitionPath()).countByValue();
   }
 
   private static JavaRDD<HoodieRecord> generateTripleTestRecordsForBulkInsert(JavaSparkContext jsc)
       throws Exception {
     return generateTestRecordsForBulkInsert(jsc).union(generateTestRecordsForBulkInsert(jsc))
         .union(generateTestRecordsForBulkInsert(jsc));
-  }
-
-  public static Map<String, Long> generateExpectedPartitionNumRecordsTriple() {
-    Map<String, Long> expectedPartitionNumRecords = generateExpectedPartitionNumRecords();
-    for (String partitionPath : expectedPartitionNumRecords.keySet()) {
-      expectedPartitionNumRecords.put(partitionPath,
-          expectedPartitionNumRecords.get(partitionPath) * 3);
-    }
-    return expectedPartitionNumRecords;
   }
 
   private static Stream<Arguments> configParams() {
@@ -86,18 +69,10 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
     return Stream.of(data).map(Arguments::of);
   }
 
-  private void verifyRecordAscendingOrder(Iterator<HoodieRecord> records) {
-    HoodieRecord prevRecord = null;
-
-    for (Iterator<HoodieRecord> it = records; it.hasNext(); ) {
-      HoodieRecord record = it.next();
-      if (prevRecord != null) {
-        assertTrue(record.getPartitionPath().compareTo(prevRecord.getPartitionPath()) > 0
-            || (record.getPartitionPath().equals(prevRecord.getPartitionPath())
-            && record.getRecordKey().compareTo(prevRecord.getRecordKey()) >= 0));
-      }
-      prevRecord = record;
-    }
+  private void verifyRecordAscendingOrder(List<HoodieRecord> records) {
+    List<HoodieRecord> expectedRecords = new ArrayList<>(records);
+    Collections.sort(expectedRecords, Comparator.comparing(o -> (o.getPartitionPath() + "+" + o.getRecordKey())));
+    assertEquals(expectedRecords, records);
   }
 
   private void testBulkInsertInternalPartitioner(UserDefinedBulkInsertPartitioner partitioner,
@@ -110,11 +85,13 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
     List<HoodieRecord> collectedActualRecords = actualRecords.collect();
     if (isGloballySorted) {
       // Verify global order
-      verifyRecordAscendingOrder(collectedActualRecords.iterator());
+      verifyRecordAscendingOrder(collectedActualRecords);
     } else if (isLocallySorted) {
       // Verify local order
       actualRecords.mapPartitions(partition -> {
-        verifyRecordAscendingOrder(partition);
+        List<HoodieRecord> partitionRecords = new ArrayList<>();
+        partition.forEachRemaining(partitionRecords::add);
+        verifyRecordAscendingOrder(partitionRecords);
         return Collections.emptyList().iterator();
       }).collect();
     }
@@ -134,11 +111,11 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
   public void testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.BulkInsertSortMode sortMode,
                                                 boolean isGloballySorted, boolean isLocallySorted)
       throws Exception {
+    JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
+    JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
     testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode),
-        generateTestRecordsForBulkInsert(jsc), isGloballySorted, isLocallySorted,
-        generateExpectedPartitionNumRecords());
+        records1, isGloballySorted, isLocallySorted, generateExpectedPartitionNumRecords(records1));
     testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.get(sortMode),
-        generateTripleTestRecordsForBulkInsert(jsc), isGloballySorted, isLocallySorted,
-        generateExpectedPartitionNumRecordsTriple());
+        records2, isGloballySorted, isLocallySorted, generateExpectedPartitionNumRecords(records2));
   }
 }

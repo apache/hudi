@@ -161,17 +161,6 @@ public class HoodieTestDataGenerator {
     }
   }
 
-  public static List<HoodieRecord> newHoodieRecords(int n, String time) throws Exception {
-    List<HoodieRecord> records = new ArrayList<>();
-    for (int i = 0; i < n; i++) {
-      String recordStr =
-          String.format("{\"_row_key\":\"%s\",\"time\":\"%s\",\"number\":%d}", UUID.randomUUID().toString(), time, i);
-      RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
-      records.add(new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
-    }
-    return records;
-  }
-
   public int getEstimatedFileSizeInBytes(int numOfRecords) {
     return numOfRecords * BYTES_PER_RECORD + BLOOM_FILTER_BYTES;
   }
