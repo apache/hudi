@@ -20,6 +20,10 @@ package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
+/**
+ * Represents a clean node in the DAG of operations for a workflow. Clean up any stale/old files/data lying around
+ * (either on file storage or index storage) based on configurations and CleaningPolicy used.
+ */
 public class CleanNode extends DagNode<Boolean> {
 
   public CleanNode() {
