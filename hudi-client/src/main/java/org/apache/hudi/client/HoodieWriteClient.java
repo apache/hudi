@@ -48,7 +48,7 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.table.MarkerFiles;
-import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
+import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
@@ -247,21 +247,21 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and attempts to control
    * the numbers of files with less memory compared to the {@link HoodieWriteClient#insert(JavaRDD, String)}. Optionally
    * it allows users to specify their own partitioner. If specified then it will be used for repartitioning records. See
-   * {@link UserDefinedBulkInsertPartitioner}.
+   * {@link BulkInsertPartitioner}.
    *
    * @param records HoodieRecords to insert
    * @param instantTime Instant time of the commit
-   * @param bulkInsertPartitioner If specified then it will be used to partition input records before they are inserted
+   * @param userDefinedBulkInsertPartitioner If specified then it will be used to partition input records before they are inserted
    * into hoodie.
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String instantTime,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT);
     this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
-    HoodieWriteMetadata result = table.bulkInsert(jsc,instantTime, records, bulkInsertPartitioner);
+    HoodieWriteMetadata result = table.bulkInsert(jsc,instantTime, records, userDefinedBulkInsertPartitioner);
     return postWrite(result, instantTime, table);
   }
 
@@ -273,7 +273,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and attempts to control
    * the numbers of files with less memory compared to the {@link HoodieWriteClient#insert(JavaRDD, String)}. Optionally
    * it allows users to specify their own partitioner. If specified then it will be used for repartitioning records. See
-   * {@link UserDefinedBulkInsertPartitioner}.
+   * {@link BulkInsertPartitioner}.
    *
    * @param preppedRecords HoodieRecords to insert
    * @param instantTime Instant time of the commit
@@ -282,7 +282,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String instantTime,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT_PREPPED);

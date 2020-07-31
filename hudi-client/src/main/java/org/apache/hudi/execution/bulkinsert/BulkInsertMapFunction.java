@@ -16,12 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.execution;
+package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.execution.LazyInsertIterable;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.function.Function2;
@@ -30,27 +31,30 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Map function that handles a sorted stream of HoodieRecords.
+ * Map function that handles a stream of HoodieRecords.
  */
 public class BulkInsertMapFunction<T extends HoodieRecordPayload>
     implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
 
   private String instantTime;
+  private boolean areRecordsSorted;
   private HoodieWriteConfig config;
   private HoodieTable<T> hoodieTable;
   private List<String> fileIDPrefixes;
 
-  public BulkInsertMapFunction(String instantTime, HoodieWriteConfig config, HoodieTable<T> hoodieTable,
+  public BulkInsertMapFunction(String instantTime, boolean areRecordsSorted,
+                               HoodieWriteConfig config, HoodieTable<T> hoodieTable,
                                List<String> fileIDPrefixes) {
     this.instantTime = instantTime;
+    this.areRecordsSorted = areRecordsSorted;
     this.config = config;
     this.hoodieTable = hoodieTable;
     this.fileIDPrefixes = fileIDPrefixes;
   }
 
   @Override
-  public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> sortedRecordItr) {
-    return new LazyInsertIterable<>(sortedRecordItr, config, instantTime, hoodieTable,
+  public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> recordItr) {
+    return new LazyInsertIterable<>(recordItr, areRecordsSorted, config, instantTime, hoodieTable,
         fileIDPrefixes.get(partition), hoodieTable.getSparkTaskContextSupplier());
   }
 }

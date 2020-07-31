@@ -28,7 +28,19 @@ import org.apache.spark.api.java.JavaRDD;
  * Output spark partition will have records from only one hoodie partition. - Average records per output spark
  * partitions should be almost equal to (#inputRecords / #outputSparkPartitions) to avoid possible skews.
  */
-public interface UserDefinedBulkInsertPartitioner<T extends HoodieRecordPayload> {
+public interface BulkInsertPartitioner<T extends HoodieRecordPayload> {
 
+  /**
+   * Repartitions the input records into at least expected number of output spark partitions.
+   *
+   * @param records               Input Hoodie records in RDD
+   * @param outputSparkPartitions Expected number of output RDD partitions
+   * @return
+   */
   JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions);
+
+  /**
+   * @return {@code true} if the records within a RDD partition are sorted; {@code false} otherwise.
+   */
+  boolean arePartitionRecordsSorted();
 }
