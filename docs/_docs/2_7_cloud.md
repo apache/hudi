@@ -20,3 +20,5 @@ to cloud stores.
    Configurations required for OSS and Hudi co-operability.
  * [Microsoft Azure](/docs/azure_hoodie.html) <br/>
    Configurations required for Azure and Hudi co-operability.
+* [Tencent Cloud Object Storage](/docs/cos_hoodie.html) <br/>
+   Configurations required for COS and Hudi co-operability.

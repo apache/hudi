@@ -20,3 +20,5 @@ language: cn
    阿里云和Hudi协同工作所需的配置。
  * [Microsoft Azure](/cn/docs/azure_hoodie.html) <br/>
    Azure和Hudi协同工作所需的配置。
+ * [Tencent Cloud Object Storage](/cn/docs/cos_hoodie.html) <br/>
+   Azure和Hudi协同工作所需的配置。
