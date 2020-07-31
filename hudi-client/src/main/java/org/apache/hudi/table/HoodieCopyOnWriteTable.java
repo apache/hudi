@@ -96,9 +96,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
   @Override
   public HoodieWriteMetadata bulkInsert(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieRecord<T>> records,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     return new BulkInsertCommitActionExecutor<>(jsc, config,
-        this, instantTime, records, bulkInsertPartitioner).execute();
+        this, instantTime, records, userDefinedBulkInsertPartitioner).execute();
   }
 
   @Override
@@ -120,9 +120,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
   @Override
   public HoodieWriteMetadata bulkInsertPrepped(JavaSparkContext jsc, String instantTime,
-      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     return new BulkInsertPreppedCommitActionExecutor<>(jsc, config,
-        this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
+        this, instantTime, preppedRecords, userDefinedBulkInsertPartitioner).execute();
   }
 
   @Override

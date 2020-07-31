@@ -20,7 +20,7 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
+import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -75,7 +75,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
     assertEquals(expectedRecords, records);
   }
 
-  private void testBulkInsertInternalPartitioner(UserDefinedBulkInsertPartitioner partitioner,
+  private void testBulkInsertInternalPartitioner(BulkInsertPartitioner partitioner,
                                                  JavaRDD<HoodieRecord> records,
                                                  boolean isGloballySorted, boolean isLocallySorted,
                                                  Map<String, Long> expectedPartitionNumRecords) {

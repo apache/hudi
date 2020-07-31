@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
 
@@ -60,7 +60,7 @@ public class DataSourceTestUtils {
   }
 
   public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>
-      implements UserDefinedBulkInsertPartitioner<T> {
+      implements BulkInsertPartitioner<T> {
 
     @Override
     public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {

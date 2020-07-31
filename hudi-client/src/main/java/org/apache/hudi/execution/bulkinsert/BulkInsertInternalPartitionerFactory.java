@@ -19,7 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 /**
  * A factory to generate built-in partitioner to repartition input records into at least
@@ -27,7 +27,7 @@ import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
  */
 public abstract class BulkInsertInternalPartitionerFactory {
 
-  public static UserDefinedBulkInsertPartitioner get(BulkInsertSortMode sortMode) {
+  public static BulkInsertPartitioner get(BulkInsertSortMode sortMode) {
     switch (sortMode) {
       case NONE:
         return new NonSortPartitioner();

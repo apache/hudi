@@ -29,7 +29,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerFactory;
 import org.apache.hudi.execution.bulkinsert.BulkInsertMapFunction;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
+import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.spark.api.java.JavaRDD;
 
@@ -43,7 +43,7 @@ public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
       JavaRDD<HoodieRecord<T>> inputRecords, String instantTime,
       HoodieTable<T> table, HoodieWriteConfig config,
       CommitActionExecutor<T> executor, boolean performDedupe,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
     // De-dupe/merge if needed
@@ -56,8 +56,8 @@ public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
 
     final JavaRDD<HoodieRecord<T>> repartitionedRecords;
     final int parallelism = config.getBulkInsertShuffleParallelism();
-    UserDefinedBulkInsertPartitioner partitioner = bulkInsertPartitioner.isPresent()
-        ? bulkInsertPartitioner.get()
+    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.isPresent()
+        ? userDefinedBulkInsertPartitioner.get()
         : BulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode());
     repartitionedRecords = partitioner.repartitionRecords(dedupedRecords, parallelism);
 
