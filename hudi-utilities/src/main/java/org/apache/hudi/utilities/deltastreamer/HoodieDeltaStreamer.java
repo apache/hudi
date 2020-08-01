@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.async.AbstractAsyncService;
 import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.async.AbstractAsyncService;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -60,6 +61,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -217,12 +219,14 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
         + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
-        + "to individual classes, for supported properties.")
+        + "to individual classes, for supported properties."
+        + " Properties in this file can be overridden by \"--hoodie-conf\"")
     public String propsFilePath =
         "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter")
+        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
+            splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
 
     @Parameter(names = {"--source-class"},
@@ -343,16 +347,106 @@ public class HoodieDeltaStreamer implements Serializable {
       return !continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
     }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      Config config = (Config) o;
+      return sourceLimit == config.sourceLimit
+              && Objects.equals(targetBasePath, config.targetBasePath)
+              && Objects.equals(targetTableName, config.targetTableName)
+              && Objects.equals(tableType, config.tableType)
+              && Objects.equals(baseFileFormat, config.baseFileFormat)
+              && Objects.equals(propsFilePath, config.propsFilePath)
+              && Objects.equals(configs, config.configs)
+              && Objects.equals(sourceClassName, config.sourceClassName)
+              && Objects.equals(sourceOrderingField, config.sourceOrderingField)
+              && Objects.equals(payloadClassName, config.payloadClassName)
+              && Objects.equals(schemaProviderClassName, config.schemaProviderClassName)
+              && Objects.equals(transformerClassNames, config.transformerClassNames)
+              && operation == config.operation
+              && Objects.equals(filterDupes, config.filterDupes)
+              && Objects.equals(enableHiveSync, config.enableHiveSync)
+              && Objects.equals(maxPendingCompactions, config.maxPendingCompactions)
+              && Objects.equals(continuousMode, config.continuousMode)
+              && Objects.equals(minSyncIntervalSeconds, config.minSyncIntervalSeconds)
+              && Objects.equals(sparkMaster, config.sparkMaster)
+              && Objects.equals(commitOnErrors, config.commitOnErrors)
+              && Objects.equals(deltaSyncSchedulingWeight, config.deltaSyncSchedulingWeight)
+              && Objects.equals(compactSchedulingWeight, config.compactSchedulingWeight)
+              && Objects.equals(deltaSyncSchedulingMinShare, config.deltaSyncSchedulingMinShare)
+              && Objects.equals(compactSchedulingMinShare, config.compactSchedulingMinShare)
+              && Objects.equals(forceDisableCompaction, config.forceDisableCompaction)
+              && Objects.equals(checkpoint, config.checkpoint)
+              && Objects.equals(initialCheckpointProvider, config.initialCheckpointProvider)
+              && Objects.equals(help, config.help);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(targetBasePath, targetTableName, tableType,
+              baseFileFormat, propsFilePath, configs, sourceClassName,
+              sourceOrderingField, payloadClassName, schemaProviderClassName,
+              transformerClassNames, sourceLimit, operation, filterDupes,
+              enableHiveSync, maxPendingCompactions, continuousMode,
+              minSyncIntervalSeconds, sparkMaster, commitOnErrors,
+              deltaSyncSchedulingWeight, compactSchedulingWeight, deltaSyncSchedulingMinShare,
+              compactSchedulingMinShare, forceDisableCompaction, checkpoint,
+              initialCheckpointProvider, help);
+    }
+  
+    @Override
+    public String toString() {
+      return "Config{"
+              + "targetBasePath='" + targetBasePath + '\''
+              + ", targetTableName='" + targetTableName + '\''
+              + ", tableType='" + tableType + '\''
+              + ", baseFileFormat='" + baseFileFormat + '\''
+              + ", propsFilePath='" + propsFilePath + '\''
+              + ", configs=" + configs
+              + ", sourceClassName='" + sourceClassName + '\''
+              + ", sourceOrderingField='" + sourceOrderingField + '\''
+              + ", payloadClassName='" + payloadClassName + '\''
+              + ", schemaProviderClassName='" + schemaProviderClassName + '\''
+              + ", transformerClassNames=" + transformerClassNames
+              + ", sourceLimit=" + sourceLimit
+              + ", operation=" + operation
+              + ", filterDupes=" + filterDupes
+              + ", enableHiveSync=" + enableHiveSync
+              + ", maxPendingCompactions=" + maxPendingCompactions
+              + ", continuousMode=" + continuousMode
+              + ", minSyncIntervalSeconds=" + minSyncIntervalSeconds
+              + ", sparkMaster='" + sparkMaster + '\''
+              + ", commitOnErrors=" + commitOnErrors
+              + ", deltaSyncSchedulingWeight=" + deltaSyncSchedulingWeight
+              + ", compactSchedulingWeight=" + compactSchedulingWeight
+              + ", deltaSyncSchedulingMinShare=" + deltaSyncSchedulingMinShare
+              + ", compactSchedulingMinShare=" + compactSchedulingMinShare
+              + ", forceDisableCompaction=" + forceDisableCompaction
+              + ", checkpoint='" + checkpoint + '\''
+              + ", initialCheckpointProvider='" + initialCheckpointProvider + '\''
+              + ", help=" + help
+              + '}';
+    }
   }
 
-  public static void main(String[] args) throws Exception {
-    final Config cfg = new Config();
+  public static final Config getConfig(String[] args) {
+    Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
     if (cfg.help || args.length == 0) {
       cmd.usage();
       System.exit(1);
     }
+    return cfg;
+  }
 
+  public static void main(String[] args) throws Exception {
+    final Config cfg = getConfig(args);
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     JavaSparkContext jssc =
         UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
