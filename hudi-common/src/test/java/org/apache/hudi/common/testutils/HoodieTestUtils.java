@@ -83,7 +83,6 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -93,7 +92,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.COMMIT_FORMATTER;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -386,15 +384,6 @@ public class HoodieTestUtils {
       // Write empty clean metadata
       os.write(TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata).get());
     }
-  }
-
-  public static void assertStreamEquals(String message, Stream<?> expected, Stream<?> actual) {
-    Iterator<?> iter1 = expected.iterator();
-    Iterator<?> iter2 = actual.iterator();
-    while (iter1.hasNext() && iter2.hasNext()) {
-      assertEquals(iter1.next(), iter2.next(), message);
-    }
-    assert !iter1.hasNext() && !iter2.hasNext();
   }
 
   public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {

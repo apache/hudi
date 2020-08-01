@@ -28,8 +28,6 @@ import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
-import org.apache.hudi.testutils.DataSourceTestUtils;
-import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -45,6 +43,10 @@ import org.apache.spark.sql.SparkSession;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
+import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 
 /**
  * Sample program that writes & reads hoodie tables via the Spark datasource.
@@ -123,7 +125,7 @@ public class HoodieJavaApp {
      */
     // Generate some input..
     List<HoodieRecord> recordsSoFar = new ArrayList<>(dataGen.generateInserts("001"/* ignore */, 100));
-    List<String> records1 = DataSourceTestUtils.convertToStringList(recordsSoFar);
+    List<String> records1 = recordsToStrings(recordsSoFar);
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));
 
     // Save as hoodie dataset (copy on write)
@@ -163,7 +165,7 @@ public class HoodieJavaApp {
      */
     List<HoodieRecord> recordsToBeUpdated = dataGen.generateUpdates("002"/* ignore */, 100);
     recordsSoFar.addAll(recordsToBeUpdated);
-    List<String> records2 = DataSourceTestUtils.convertToStringList(recordsToBeUpdated);
+    List<String> records2 = recordsToStrings(recordsToBeUpdated);
     Dataset<Row> inputDF2 = spark.read().json(jssc.parallelize(records2, 2));
     writer = inputDF2.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
@@ -185,9 +187,9 @@ public class HoodieJavaApp {
     /**
      * Commit that Deletes some records
      */
-    List<String> deletes = DataSourceTestUtils.convertKeysToStringList(
-        HoodieClientTestUtils
-            .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(recordsSoFar), 20));
+    List<String> deletes = randomSelectAsHoodieKeys(recordsSoFar, 20).stream()
+        .map(hr -> "{\"_row_key\":\"" + hr.getRecordKey() + "\",\"partition\":\"" + hr.getPartitionPath() + "\"}")
+        .collect(Collectors.toList());
     Dataset<Row> inputDF3 = spark.read().json(jssc.parallelize(deletes, 2));
     writer = inputDF3.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")

@@ -42,6 +42,7 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapreduce.Job;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -52,6 +53,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -316,10 +318,11 @@ public class TestHoodieParquetInputFormat {
     ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 200 commit", files, "200", 1);
   }
 
-  // TODO enable this after enabling predicate pushdown
+  @Disabled("enable this after enabling predicate pushdown")
+  @Test
   public void testPredicatePushDown() throws IOException {
     // initial commit
-    Schema schema = InputFormatTestUtil.readSchema("/sample1.avsc");
+    Schema schema = getSchemaFromResource(getClass(), "/sample1.avsc");
     String commit1 = "20160628071126";
     File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 10, commit1);
     InputFormatTestUtil.commit(basePath, commit1);

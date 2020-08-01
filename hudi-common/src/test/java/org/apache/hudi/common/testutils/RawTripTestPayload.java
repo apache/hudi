@@ -20,6 +20,7 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -32,7 +33,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -72,6 +75,23 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.rowKey = jsonRecordMap.get("_row_key").toString();
     this.partitionPath = jsonRecordMap.get("time").toString().split("T")[0].replace("-", "/");
     this.isDeleted = false;
+  }
+
+  public static List<String> recordsToStrings(List<HoodieRecord> records) {
+    return records.stream().map(RawTripTestPayload::recordToString).filter(Option::isPresent).map(Option::get)
+        .collect(Collectors.toList());
+  }
+
+  public static Option<String> recordToString(HoodieRecord record) {
+    try {
+      String str = ((RawTripTestPayload) record.getData()).getJsonData();
+      str = "{" + str.substring(str.indexOf("\"timestamp\":"));
+      // Remove the last } bracket
+      str = str.substring(0, str.length() - 1);
+      return Option.of(str + ", \"partition\": \"" + record.getPartitionPath() + "\"}");
+    } catch (IOException e) {
+      return Option.empty();
+    }
   }
 
   public String getPartitionPath() {
