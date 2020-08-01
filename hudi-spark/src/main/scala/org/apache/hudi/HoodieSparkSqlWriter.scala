@@ -110,7 +110,9 @@ private[hudi] object HoodieSparkSqlWriter {
         val orderingVal = DataSourceUtils.getNestedFieldVal(gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false)
             .asInstanceOf[Comparable[_]]
         DataSourceUtils.createHoodieRecord(gr,
-          orderingVal, keyGenerator.getKey(gr), parameters(PAYLOAD_CLASS_OPT_KEY))
+          orderingVal, keyGenerator.getKey(gr),
+          parameters(PAYLOAD_CLASS_OPT_KEY),
+          parameters(DELETE_FIELD_OPT_KEY))
       }).toJavaRDD()
 
       // Handle various save modes
@@ -202,6 +204,7 @@ private[hudi] object HoodieSparkSqlWriter {
       TABLE_TYPE_OPT_KEY -> DEFAULT_TABLE_TYPE_OPT_VAL,
       PRECOMBINE_FIELD_OPT_KEY -> DEFAULT_PRECOMBINE_FIELD_OPT_VAL,
       PAYLOAD_CLASS_OPT_KEY -> DEFAULT_PAYLOAD_OPT_VAL,
+      DELETE_FIELD_OPT_KEY -> DEFAULT_DELETE_FIELD_OPT_VAL,
       RECORDKEY_FIELD_OPT_KEY -> DEFAULT_RECORDKEY_FIELD_OPT_VAL,
       PARTITIONPATH_FIELD_OPT_KEY -> DEFAULT_PARTITIONPATH_FIELD_OPT_VAL,
       KEYGENERATOR_CLASS_OPT_KEY -> DEFAULT_KEYGENERATOR_CLASS_OPT_VAL,

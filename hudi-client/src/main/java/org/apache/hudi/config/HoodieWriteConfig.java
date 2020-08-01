@@ -93,6 +93,9 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String BULKINSERT_SORT_MODE = "hoodie.bulkinsert.sort.mode";
   public static final String DEFAULT_BULKINSERT_SORT_MODE = BulkInsertSortMode.GLOBAL_SORT
       .toString();
+  public static final String DELETE_MARKER_FIELD_PROP = "hoodie.write.delete.marker.field";
+  public static final String DEFAULT_DELETE_MARKER_FIELD = "_hoodie_is_deleted";
+
 
   public static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";
   public static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "true";
@@ -264,6 +267,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public BulkInsertSortMode getBulkInsertSortMode() {
     String sortMode = props.getProperty(BULKINSERT_SORT_MODE);
     return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
+  }
+
+  public String getDeleteMarkerField() {
+    return props.getProperty(DELETE_MARKER_FIELD_PROP);
   }
 
   /**
@@ -900,6 +907,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(AVRO_SCHEMA_VALIDATE), AVRO_SCHEMA_VALIDATE, DEFAULT_AVRO_SCHEMA_VALIDATE);
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_SORT_MODE),
           BULKINSERT_SORT_MODE, DEFAULT_BULKINSERT_SORT_MODE);
+      setDefaultOnCondition(props, !props.containsKey(DELETE_MARKER_FIELD_PROP),
+          DELETE_MARKER_FIELD_PROP, DEFAULT_DELETE_MARKER_FIELD);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());

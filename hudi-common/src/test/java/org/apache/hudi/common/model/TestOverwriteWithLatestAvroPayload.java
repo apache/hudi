@@ -37,6 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 public class TestOverwriteWithLatestAvroPayload {
 
   private Schema schema;
+  String defaultDeleteMarkerField = "_hoodie_is_deleted";
+  String deleteMarkerField = "delete_marker_field";
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -44,26 +46,56 @@ public class TestOverwriteWithLatestAvroPayload {
         new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
         new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", null),
         new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
-        new Schema.Field("_hoodie_is_deleted", Schema.create(Type.BOOLEAN), "", false)
+        new Schema.Field(defaultDeleteMarkerField, Schema.create(Type.BOOLEAN), "", false),
+        new Schema.Field(deleteMarkerField, Schema.create(Type.BOOLEAN), "", false)
     ));
   }
 
   @Test
-  public void testActiveRecords() throws IOException {
+  public void testOverwriteWithLatestAvroPayload() throws IOException {
     GenericRecord record1 = new GenericData.Record(schema);
     record1.put("id", "1");
     record1.put("partition", "partition0");
     record1.put("ts", 0L);
-    record1.put("_hoodie_is_deleted", false);
+    record1.put(defaultDeleteMarkerField, false);
+    record1.put(deleteMarkerField, false);
 
+    // test1: set default marker field value to true and user defined to false
     GenericRecord record2 = new GenericData.Record(schema);
     record2.put("id", "2");
     record2.put("partition", "partition1");
     record2.put("ts", 1L);
-    record2.put("_hoodie_is_deleted", false);
+    record2.put(defaultDeleteMarkerField, true);
+    record2.put(deleteMarkerField, false);
 
-    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1);
-    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(record2, 2);
+    // set to user defined marker field with false, the record should be considered active.
+    assertActiveRecord(record1, record2, deleteMarkerField);
+
+    // set to default marker field with true, the record should be considered delete.
+    assertDeletedRecord(record1, record2, defaultDeleteMarkerField);
+
+    // test2: set default marker field value to false and user defined to true
+    GenericRecord record3 = new GenericData.Record(schema);
+    record3.put("id", "2");
+    record3.put("partition", "partition1");
+    record3.put("ts", 1L);
+    record3.put(defaultDeleteMarkerField, false);
+    record3.put(deleteMarkerField, true);
+
+    // set to user defined marker field with true, the record should be considered delete.
+    assertDeletedRecord(record1, record3, deleteMarkerField);
+
+    // set to default marker field with false, the record should be considered active.
+    assertActiveRecord(record1, record3, defaultDeleteMarkerField);
+  }
+
+  private void assertActiveRecord(GenericRecord record1,
+                                  GenericRecord record2, String field) throws IOException {
+    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(
+        record1, 1, field);
+    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(
+        record2, 2, field);
+
     assertEquals(payload1.preCombine(payload2), payload2);
     assertEquals(payload2.preCombine(payload1), payload2);
 
@@ -74,22 +106,12 @@ public class TestOverwriteWithLatestAvroPayload {
     assertEquals(payload2.combineAndGetUpdateValue(record1, schema).get(), record2);
   }
 
-  @Test
-  public void testDeletedRecord() throws IOException {
-    GenericRecord record1 = new GenericData.Record(schema);
-    record1.put("id", "1");
-    record1.put("partition", "partition0");
-    record1.put("ts", 0L);
-    record1.put("_hoodie_is_deleted", false);
-
-    GenericRecord delRecord1 = new GenericData.Record(schema);
-    delRecord1.put("id", "2");
-    delRecord1.put("partition", "partition1");
-    delRecord1.put("ts", 1L);
-    delRecord1.put("_hoodie_is_deleted", true);
-
-    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1);
-    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(delRecord1, 2);
+  private void assertDeletedRecord(GenericRecord record1,
+                                   GenericRecord delRecord1, String field) throws IOException {
+    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(
+        record1, 1, field);
+    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(
+        delRecord1, 2, field);
     assertEquals(payload1.preCombine(payload2), payload2);
     assertEquals(payload2.preCombine(payload1), payload2);
 
@@ -99,5 +121,4 @@ public class TestOverwriteWithLatestAvroPayload {
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), record1);
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema).isPresent());
   }
-
 }
