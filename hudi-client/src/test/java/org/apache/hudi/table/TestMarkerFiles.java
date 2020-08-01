@@ -28,6 +28,9 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.IOType;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,14 +48,21 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
   private MarkerFiles markerFiles;
   private FileSystem fs;
   private Path markerFolderPath;
+  private JavaSparkContext jsc;
 
   @BeforeEach
   public void setup() throws IOException {
     initPath();
     initMetaClient();
+    this.jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(TestMarkerFiles.class.getName()));
     this.fs = FSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
     this.markerFolderPath =  new Path(metaClient.getMarkerFolderPath("000"));
     this.markerFiles = new MarkerFiles(fs, metaClient.getBasePath(), markerFolderPath.toString(), "000");
+  }
+
+  @AfterEach
+  public void cleanup() {
+    jsc.stop();
   }
 
   private void createSomeMarkerFiles() {
@@ -97,7 +107,7 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
 
     // then
     assertTrue(markerFiles.doesMarkerDirExist());
-    assertTrue(markerFiles.deleteMarkerDir());
+    assertTrue(markerFiles.deleteMarkerDir(jsc, 2));
     assertFalse(markerFiles.doesMarkerDirExist());
   }
 
@@ -105,7 +115,7 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
   public void testDeletionWhenMarkerDirNotExists() throws IOException {
     // then
     assertFalse(markerFiles.doesMarkerDirExist());
-    assertFalse(markerFiles.deleteMarkerDir());
+    assertFalse(markerFiles.deleteMarkerDir(jsc, 2));
   }
 
   @Test
@@ -120,7 +130,7 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
     // then
     assertIterableEquals(CollectionUtils.createImmutableList(
         "2020/06/01/file1", "2020/06/03/file3"),
-        markerFiles.createdAndMergedDataPaths().stream().sorted().collect(Collectors.toList())
+        markerFiles.createdAndMergedDataPaths(jsc, 2).stream().sorted().collect(Collectors.toList())
     );
   }
 
