@@ -52,6 +52,8 @@ import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.service.server.HiveServer2;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter.Mode;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -90,6 +92,10 @@ public class UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
+    // Set log level to WARN for spark logs to avoid exceeding log limit in travis
+    Logger rootLogger = Logger.getRootLogger();
+    rootLogger.setLevel(Level.ERROR);
+    Logger.getLogger("org.apache.spark").setLevel(Level.WARN);
     initClass(false);
   }
 
