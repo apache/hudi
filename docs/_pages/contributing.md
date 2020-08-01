@@ -24,11 +24,23 @@ To contribute code, you need
 
 To contribute, you would need to do the following
  
- - Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [quickstart](/docs/quick-start-guide.html)
- - [Recommended] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please setup your IDE with style files from [here](https://github.com/apache/hudi/tree/master/style).
-These instructions have been tested on IntelliJ. 
- - [Recommended] Set up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.
- - [Optional] If needed, add spark jars to the classpath of your module in Intellij by following the steps from [here](https://stackoverflow.com/questions/1051640/correct-way-to-add-external-jars-lib-jar-to-an-intellij-idea-project). 
+- Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [quickstart](/docs/quick-start-guide.html)
+
+- \[Recommended\] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please setup your IDE with style files from [\<project root\>/style/](https://github.com/apache/hudi/tree/master/style). These instructions have been tested on IntelliJ.
+
+- \[Recommended\] Set up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.
+
+- \[Recommended\] As it is required to add [Apache License header](https://www.apache.org/legal/src-headers.html#headers) to all source files, configuring "Copyright" settings as shown below will come in handy.
+
+![IDE setup copyright 1](/assets/images/contributing/IDE_setup_copyright_1.png)
+![IDE setup copyright 2](/assets/images/contributing/IDE_setup_copyright_2.png)
+
+- \[Optional\] If needed, add spark jars to the classpath of your module in Intellij by following the steps from [here](https://stackoverflow.com/questions/1051640/correct-way-to-add-external-jars-lib-jar-to-an-intellij-idea-project). 
+
+- \[Optional\] You may configure IntelliJ to respect mvn CLI and pom.xml settings.
+
+![IDE setup maven 1](/assets/images/contributing/IDE_setup_maven_1.png)
+![IDE setup maven 2](/assets/images/contributing/IDE_setup_maven_2.png)
 
 ## Accounts and Permissions
 
