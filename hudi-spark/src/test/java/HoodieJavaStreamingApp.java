@@ -20,10 +20,9 @@ import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
-import org.apache.hudi.testutils.DataSourceTestUtils;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -44,6 +43,8 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+
+import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 
 /**
  * Sample program that writes & reads hoodie tables via the Spark datasource streaming.
@@ -128,10 +129,10 @@ public class HoodieJavaStreamingApp {
     // Generator of some records to be loaded in.
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
-    List<String> records1 = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("001", 100));
+    List<String> records1 = recordsToStrings(dataGen.generateInserts("001", 100));
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));
 
-    List<String> records2 = DataSourceTestUtils.convertToStringList(dataGen.generateUpdates("002", 100));
+    List<String> records2 = recordsToStrings(dataGen.generateUpdates("002", 100));
 
     Dataset<Row> inputDF2 = spark.read().json(jssc.parallelize(records2, 2));
 

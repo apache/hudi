@@ -51,6 +51,7 @@
     <module>packaging/hudi-timeline-server-bundle</module>
     <module>docker/hoodie/hadoop</module>
     <module>hudi-integ-test</module>
+    <module>packaging/hudi-integ-test-bundle</module>
     <module>hudi-examples</module>
   </modules>
 
@@ -89,7 +90,7 @@
     <junit.platform.version>1.7.0-M1</junit.platform.version>
     <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
     <log4j.version>1.2.17</log4j.version>
-    <slf4j.version>1.7.5</slf4j.version>
+    <slf4j.version>1.7.15</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.7.3</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
@@ -995,6 +996,7 @@
               <excludes>
                 <exclude>**/*FunctionalTestSuite.java</exclude>
                 <exclude>**/IT*.java</exclude>
+                <exclude>**/testsuite/**/Test*.java</exclude>
               </excludes>
             </configuration>
           </plugin>
@@ -1096,6 +1098,7 @@
             <configuration combine.self="override">
               <skip>${skipITs}</skip>
               <includes>
+                <include>**/testsuite/**/Test*.java</include>
                 <include>**/IT*.java</include>
               </includes>
             </configuration>

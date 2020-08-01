@@ -19,6 +19,9 @@
 package org.apache.hudi.client;
 
 import com.codahale.metrics.Timer;
+import org.apache.hudi.callback.HoodieWriteCommitCallback;
+import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
+import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -60,6 +63,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
 
   private transient Timer.Context writeContext = null;
   private transient WriteOperationType operationType;
+  private transient HoodieWriteCommitCallback commitCallback;
 
   public void setOperationType(WriteOperationType operationType) {
     this.operationType = operationType;
@@ -117,12 +121,20 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     try {
       activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-      postCommit(metadata, instantTime, extraMetadata);
+      postCommit(table, metadata, instantTime, extraMetadata);
       emitCommitMetrics(instantTime, metadata, actionType);
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
+    }
+
+    // callback if needed.
+    if (config.writeCommitCallbackOn()) {
+      if (null == commitCallback) {
+        commitCallback = HoodieCommitCallbackFactory.create(config);
+      }
+      commitCallback.call(new HoodieWriteCommitCallbackMessage(instantTime, config.getTableName(), config.getBasePath()));
     }
     return true;
   }
@@ -144,11 +156,13 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
 
   /**
    * Post Commit Hook. Derived classes use this method to perform post-commit processing
+   *
+   * @param table         table to commit on
    * @param metadata      Commit Metadata corresponding to committed instant
    * @param instantTime   Instant Time
    * @param extraMetadata Additional Metadata passed by user
    */
-  protected abstract void postCommit(HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata);
+  protected abstract void postCommit(HoodieTable<?> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata);
 
   /**
    * Finalize Write operation.

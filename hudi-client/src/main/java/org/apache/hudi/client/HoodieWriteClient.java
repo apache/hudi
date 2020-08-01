@@ -47,7 +47,8 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
-import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
+import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
@@ -246,21 +247,21 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and attempts to control
    * the numbers of files with less memory compared to the {@link HoodieWriteClient#insert(JavaRDD, String)}. Optionally
    * it allows users to specify their own partitioner. If specified then it will be used for repartitioning records. See
-   * {@link UserDefinedBulkInsertPartitioner}.
+   * {@link BulkInsertPartitioner}.
    *
    * @param records HoodieRecords to insert
    * @param instantTime Instant time of the commit
-   * @param bulkInsertPartitioner If specified then it will be used to partition input records before they are inserted
+   * @param userDefinedBulkInsertPartitioner If specified then it will be used to partition input records before they are inserted
    * into hoodie.
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String instantTime,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT);
     this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
-    HoodieWriteMetadata result = table.bulkInsert(jsc,instantTime, records, bulkInsertPartitioner);
+    HoodieWriteMetadata result = table.bulkInsert(jsc,instantTime, records, userDefinedBulkInsertPartitioner);
     return postWrite(result, instantTime, table);
   }
 
@@ -272,7 +273,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and attempts to control
    * the numbers of files with less memory compared to the {@link HoodieWriteClient#insert(JavaRDD, String)}. Optionally
    * it allows users to specify their own partitioner. If specified then it will be used for repartitioning records. See
-   * {@link UserDefinedBulkInsertPartitioner}.
+   * {@link BulkInsertPartitioner}.
    *
    * @param preppedRecords HoodieRecords to insert
    * @param instantTime Instant time of the commit
@@ -281,7 +282,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String instantTime,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT_PREPPED);
@@ -323,7 +324,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
             result.getWriteStats().get().size());
       }
 
-      postCommit(result.getCommitMetadata().get(), instantTime, Option.empty());
+      postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
 
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(),
           hoodieTable.getMetaClient().getCommitActionType());
@@ -332,23 +333,35 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   @Override
-  protected void postCommit(HoodieCommitMetadata metadata, String instantTime,
-      Option<Map<String, String>> extraMetadata) {
+  protected void postCommit(HoodieTable<?> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
     try {
+
+      // Delete the marker directory for the instant.
+      new MarkerFiles(table, instantTime).quietDeleteMarkerDir(jsc, config.getMarkersDeleteParallelism());
+
       // Do an inline compaction if enabled
       if (config.isInlineCompaction()) {
+        runAnyPendingCompactions(table);
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
         inlineCompact(extraMetadata);
       } else {
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
       }
       // We cannot have unbounded commit files. Archive commits if we have to archive
-      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, createMetaClient(true));
-      archiveLog.archiveIfRequired(hadoopConf);
+      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, hadoopConf);
+      archiveLog.archiveIfRequired(jsc);
       autoCleanOnCommit(instantTime);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
+  }
+
+  private void runAnyPendingCompactions(HoodieTable<?> table) {
+    table.getActiveTimeline().getCommitsAndCompactionTimeline().filterPendingCompactionTimeline().getInstants()
+        .forEach(instant -> {
+          LOG.info("Running previously failed inflight compaction at instant " + instant);
+          compact(instant.getTimestamp(), true);
+        });
   }
 
   /**

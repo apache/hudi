@@ -23,11 +23,11 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.testutils.FunctionalTestHarness;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.utilities.HoodieSnapshotExporter;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.Config;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.OutputFormatValidator;
@@ -92,7 +92,6 @@ public class TestHoodieSnapshotExporter extends FunctionalTestHarness {
     JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
     hdfsWriteClient.bulkInsert(recordsRDD, COMMIT_TIME);
     hdfsWriteClient.close();
-
     RemoteIterator<LocatedFileStatus> itr = dfs().listFiles(new Path(sourcePath), true);
     while (itr.hasNext()) {
       LOG.info(">>> Prepared test file: " + itr.next().getPath());

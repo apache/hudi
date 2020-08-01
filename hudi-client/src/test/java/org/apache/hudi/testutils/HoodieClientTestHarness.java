@@ -25,8 +25,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -35,12 +38,10 @@ import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.table.HoodieTable;
-
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +57,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestHarness.class);
-
+  
+  private String testMethodName;
   protected transient JavaSparkContext jsc = null;
   protected transient Configuration hadoopConf = null;
   protected transient SQLContext sqlContext;
@@ -68,7 +70,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient HoodieWriteClient writeClient;
   protected transient HoodieReadClient readClient;
   protected transient HoodieTableFileSystemView tableView;
-  protected transient HoodieTable hoodieTable;
 
   protected final SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
 
@@ -81,6 +82,15 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient HdfsTestService hdfsTestService;
   protected transient MiniDFSCluster dfsCluster;
   protected transient DistributedFileSystem dfs;
+
+  @BeforeEach
+  public void setTestMethodName(TestInfo testInfo) {
+    if (testInfo.getTestMethod().isPresent()) {
+      testMethodName = testInfo.getTestMethod().get().getName();
+    } else {
+      testMethodName = "Unknown";
+    }
+  }
 
   /**
    * Initializes resource group for the subclasses of {@link HoodieClientTestBase}.
@@ -113,7 +123,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    */
   protected void initSparkContexts(String appName) {
     // Initialize a local spark env
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName));
+    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName + "#" + testMethodName));
     jsc.setLogLevel("ERROR");
     hadoopConf = jsc.hadoopConfiguration();
 
@@ -122,11 +132,11 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   /**
-   * Initializes the Spark contexts ({@link JavaSparkContext} and {@link SQLContext}) with a default name
-   * <b>TestHoodieClient</b>.
+   * Initializes the Spark contexts ({@link JavaSparkContext} and {@link SQLContext}) 
+   * with a default name matching the name of the class.
    */
   protected void initSparkContexts() {
-    initSparkContexts("TestHoodieClient");
+    initSparkContexts(this.getClass().getSimpleName());
   }
 
   /**

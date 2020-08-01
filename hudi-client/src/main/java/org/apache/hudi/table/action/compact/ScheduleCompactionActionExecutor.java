@@ -65,7 +65,7 @@ public class ScheduleCompactionActionExecutor extends BaseActionExecutor<Option<
     int deltaCommitsSinceLastCompaction = table.getActiveTimeline().getDeltaCommitTimeline()
         .findInstantsAfter(deltaCommitsSinceTs, Integer.MAX_VALUE).countInstants();
     if (config.getInlineCompactDeltaCommitMax() > deltaCommitsSinceLastCompaction) {
-      LOG.info("Not running compaction as only " + deltaCommitsSinceLastCompaction
+      LOG.info("Not scheduling compaction as only " + deltaCommitsSinceLastCompaction
           + " delta commits was found since last compaction " + deltaCommitsSinceTs + ". Waiting for "
           + config.getInlineCompactDeltaCommitMax());
       return new HoodieCompactionPlan();

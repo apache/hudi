@@ -41,7 +41,6 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -78,14 +77,12 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -94,7 +91,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.COMMIT_FORMATTER;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -160,7 +157,7 @@ public class HoodieTestUtils {
   }
 
   public static String makeNewCommitTime() {
-    return new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    return COMMIT_FORMATTER.format(new Date());
   }
 
   public static void createCommitFiles(String basePath, String... instantTimes) throws IOException {
@@ -268,12 +265,6 @@ public class HoodieTestUtils {
     return createDataFileFixLength(basePath, partitionPath, instantTime, fileID, length);
   }
 
-  public static String createNewMarkerFile(String basePath, String partitionPath, String instantTime)
-      throws IOException {
-    String fileID = UUID.randomUUID().toString();
-    return createMarkerFile(basePath, partitionPath, instantTime, fileID);
-  }
-
   public static String createDataFile(String basePath, String partitionPath, String instantTime, String fileID)
       throws IOException {
     String folderPath = basePath + "/" + partitionPath + "/";
@@ -292,16 +283,6 @@ public class HoodieTestUtils {
       output.write(ByteBuffer.allocate(1), length - 1);
     }
     return fileID;
-  }
-
-  public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileID)
-      throws IOException {
-    String folderPath =
-        basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME + "/" + instantTime + "/" + partitionPath + "/";
-    new File(folderPath).mkdirs();
-    File f = new File(folderPath + FSUtils.makeMarkerFile(instantTime, DEFAULT_WRITE_TOKEN, fileID));
-    f.createNewFile();
-    return f.getAbsolutePath();
   }
 
   public static String createNewLogFile(FileSystem fs, String basePath, String partitionPath, String instantTime,
@@ -405,15 +386,6 @@ public class HoodieTestUtils {
     }
   }
 
-  public static void assertStreamEquals(String message, Stream<?> expected, Stream<?> actual) {
-    Iterator<?> iter1 = expected.iterator();
-    Iterator<?> iter2 = actual.iterator();
-    while (iter1.hasNext() && iter2.hasNext()) {
-      assertEquals(iter1.next(), iter2.next(), message);
-    }
-    assert !iter1.hasNext() && !iter2.hasNext();
-  }
-
   public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {
     // Using Kyro as the default serializer in Spark Jobs
     Kryo kryo = new Kryo();
@@ -465,7 +437,7 @@ public class HoodieTestUtils {
 
   // TODO: should be removed
   public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath) throws IOException {
-    return listAllDataFilesInPath(fs, basePath, ".parquet");
+    return listAllDataFilesInPath(fs, basePath, HoodieFileFormat.PARQUET.getFileExtension());
   }
 
   public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath, String datafileExtension)
@@ -474,24 +446,29 @@ public class HoodieTestUtils {
     List<FileStatus> returns = new ArrayList<>();
     while (itr.hasNext()) {
       LocatedFileStatus status = itr.next();
-      if (status.getPath().getName().contains(datafileExtension)) {
+      if (status.getPath().getName().contains(datafileExtension) && !status.getPath().getName().contains(".marker")) {
         returns.add(status);
       }
     }
     return returns.toArray(new FileStatus[returns.size()]);
   }
 
-  public static FileStatus[] listAllLogFilesInPath(FileSystem fs, String basePath, String logfileExtension)
+  public static FileStatus[] listAllLogFilesInPath(FileSystem fs, String basePath)
       throws IOException {
     RemoteIterator<LocatedFileStatus> itr = fs.listFiles(new Path(basePath), true);
     List<FileStatus> returns = new ArrayList<>();
     while (itr.hasNext()) {
       LocatedFileStatus status = itr.next();
-      if (status.getPath().getName().contains(logfileExtension)) {
+      if (status.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
         returns.add(status);
       }
     }
     return returns.toArray(new FileStatus[returns.size()]);
+  }
+
+  public static FileStatus[] listAllDataFilesAndLogFilesInPath(FileSystem fs, String basePath) throws IOException {
+    return Stream.concat(Arrays.stream(listAllDataFilesInPath(fs, basePath)), Arrays.stream(listAllLogFilesInPath(fs, basePath)))
+            .toArray(FileStatus[]::new);
   }
 
   public static List<String> monotonicIncreasingCommitTimestamps(int numTimestamps, int startSecsDelta) {
@@ -499,7 +476,7 @@ public class HoodieTestUtils {
     cal.add(Calendar.SECOND, startSecsDelta);
     List<String> commits = new ArrayList<>();
     for (int i = 0; i < numTimestamps; i++) {
-      commits.add(HoodieActiveTimeline.COMMIT_FORMATTER.format(cal.getTime()));
+      commits.add(COMMIT_FORMATTER.format(cal.getTime()));
       cal.add(Calendar.SECOND, 1);
     }
     return commits;

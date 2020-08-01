@@ -37,6 +37,7 @@ public class ComplexKeyGenerator extends KeyGenerator {
 
   private static final String DEFAULT_PARTITION_PATH = "default";
   private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+  public static final String DEFAULT_RECORD_KEY_SEPARATOR = ":";
 
   protected static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
   protected static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
@@ -49,21 +50,39 @@ public class ComplexKeyGenerator extends KeyGenerator {
 
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.asList(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(","))
-            .stream().map(String::trim).collect(Collectors.toList());
+    this.recordKeyFields = Arrays.stream(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(",")).map(String::trim).collect(Collectors.toList());
     this.partitionPathFields =
-        Arrays.asList(props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()).split(","))
-                .stream().map(String::trim).collect(Collectors.toList());
+        Arrays.stream(props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()).split(",")).map(String::trim).collect(Collectors.toList());
     this.hiveStylePartitioning = props.getBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
         Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
   }
 
   @Override
   public HoodieKey getKey(GenericRecord record) {
-    if (recordKeyFields == null || partitionPathFields == null) {
-      throw new HoodieKeyException("Unable to find field names for record key or partition path in cfg");
+    String recordKey = getRecordKey(record);
+    StringBuilder partitionPath = new StringBuilder();
+    for (String partitionPathField : partitionPathFields) {
+      partitionPath.append(getPartitionPath(record, partitionPathField));
+      partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
     }
+    partitionPath.deleteCharAt(partitionPath.length() - 1);
 
+    return new HoodieKey(recordKey, partitionPath.toString());
+  }
+
+  String getPartitionPath(GenericRecord record, String partitionPathField) {
+    StringBuilder partitionPath = new StringBuilder();
+    String fieldVal = DataSourceUtils.getNestedFieldValAsString(record, partitionPathField, true);
+    if (fieldVal == null || fieldVal.isEmpty()) {
+      partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + DEFAULT_PARTITION_PATH
+          : DEFAULT_PARTITION_PATH);
+    } else {
+      partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + fieldVal : fieldVal);
+    }
+    return partitionPath.toString();
+  }
+
+  String getRecordKey(GenericRecord record) {
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
     for (String recordKeyField : recordKeyFields) {
@@ -82,21 +101,7 @@ public class ComplexKeyGenerator extends KeyGenerator {
       throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
           + recordKeyFields.toString() + " cannot be entirely null or empty.");
     }
-
-    StringBuilder partitionPath = new StringBuilder();
-    for (String partitionPathField : partitionPathFields) {
-      String fieldVal = DataSourceUtils.getNestedFieldValAsString(record, partitionPathField, true);
-      if (fieldVal == null || fieldVal.isEmpty()) {
-        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + DEFAULT_PARTITION_PATH
-                : DEFAULT_PARTITION_PATH);
-      } else {
-        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + fieldVal : fieldVal);
-      }
-      partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
-    }
-    partitionPath.deleteCharAt(partitionPath.length() - 1);
-
-    return new HoodieKey(recordKey.toString(), partitionPath.toString());
+    return recordKey.toString();
   }
 
   public List<String> getRecordKeyFields() {

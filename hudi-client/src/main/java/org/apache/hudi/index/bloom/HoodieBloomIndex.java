@@ -199,6 +199,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
     if (config.getBloomIndexPruneByRanges()) {
       // also obtain file ranges, if range pruning is enabled
+      jsc.setJobDescription("Obtain key ranges for file slices (range pruning=on)");
       return jsc.parallelize(partitionPathFileIDList, Math.max(partitionPathFileIDList.size(), 1)).mapToPair(pf -> {
         try {
           HoodieRangeInfoHandle<T> rangeInfoHandle = new HoodieRangeInfoHandle<T>(config, hoodieTable, pf);

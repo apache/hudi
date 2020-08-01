@@ -97,7 +97,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   private Integer multiPutBatchSize;
   private Integer numRegionServersForTable;
   private final String tableName;
-  private HbasePutBatchSizeCalculator putBatchSizeCalculator;
+  private HBasePutBatchSizeCalculator putBatchSizeCalculator;
 
   public HBaseIndex(HoodieWriteConfig config) {
     super(config);
@@ -110,7 +110,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     this.multiPutBatchSize = config.getHbaseIndexGetBatchSize();
     this.qpsFraction = config.getHbaseIndexQPSFraction();
     this.maxQpsPerRegionServer = config.getHbaseIndexMaxQPSPerRegionServer();
-    this.putBatchSizeCalculator = new HbasePutBatchSizeCalculator();
+    this.putBatchSizeCalculator = new HBasePutBatchSizeCalculator();
     this.hBaseIndexQPSResourceAllocator = createQPSResourceAllocator(this.config);
   }
 
@@ -392,10 +392,10 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     return insertOnlyWriteStatusRDD.fold(new Tuple2<>(0L, 0), (w, c) -> new Tuple2<>(w._1 + c._1, w._2 + c._2));
   }
 
-  public static class HbasePutBatchSizeCalculator implements Serializable {
+  public static class HBasePutBatchSizeCalculator implements Serializable {
 
     private static final int MILLI_SECONDS_IN_A_SECOND = 1000;
-    private static final Logger LOG = LogManager.getLogger(HbasePutBatchSizeCalculator.class);
+    private static final Logger LOG = LogManager.getLogger(HBasePutBatchSizeCalculator.class);
 
     /**
      * Calculate putBatch size so that sum of requests across multiple jobs in a second does not exceed

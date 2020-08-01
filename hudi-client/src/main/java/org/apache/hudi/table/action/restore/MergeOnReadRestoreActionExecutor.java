@@ -47,7 +47,8 @@ public class MergeOnReadRestoreActionExecutor extends BaseRestoreActionExecutor 
         HoodieActiveTimeline.createNewInstantTime(),
         instantToRollback,
         true,
-        true);
+        true,
+        false);
 
     switch (instantToRollback.getAction()) {
       case HoodieTimeline.COMMIT_ACTION:

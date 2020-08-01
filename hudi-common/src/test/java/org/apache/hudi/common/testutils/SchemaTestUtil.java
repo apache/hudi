@@ -52,7 +52,9 @@ import java.util.stream.Stream;
 /**
  * A utility class for testing schema.
  */
-public class SchemaTestUtil {
+public final class SchemaTestUtil {
+
+  private static final String RESOURCE_SAMPLE_DATA = "/sample.data";
 
   public static Schema getSimpleSchema() throws IOException {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));
@@ -66,12 +68,12 @@ public class SchemaTestUtil {
       throws IOException, URISyntaxException {
     GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     // Required to register the necessary JAR:// file system
-    URI resource = SchemaTestUtil.class.getClass().getResource("/sample.data").toURI();
+    URI resource = SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI();
     Path dataPath;
     if (resource.toString().contains("!")) {
       dataPath = uriToPath(resource);
     } else {
-      dataPath = Paths.get(SchemaTestUtil.class.getClass().getResource("/sample.data").toURI());
+      dataPath = Paths.get(SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI());
     }
 
     try (Stream<String> stream = Files.lines(dataPath)) {
@@ -79,11 +81,11 @@ public class SchemaTestUtil {
         try {
           return reader.read(null, DecoderFactory.get().jsonDecoder(writerSchema, s));
         } catch (IOException e) {
-          throw new HoodieIOException("Could not read data from simple_data.json", e);
+          throw new HoodieIOException("Could not read data from " + RESOURCE_SAMPLE_DATA, e);
         }
       }).collect(Collectors.toList());
     } catch (IOException e) {
-      throw new HoodieIOException("Could not read data from simple_data.json", e);
+      throw new HoodieIOException("Could not read data from " + RESOURCE_SAMPLE_DATA, e);
     }
   }
 
@@ -180,5 +182,18 @@ public class SchemaTestUtil {
     SampleTestRecord record = new SampleTestRecord(instantTime, recordNumber, fileId);
     MercifulJsonConverter converter = new MercifulJsonConverter();
     return converter.convert(record.toJsonString(), schema);
+  }
+
+  public static Schema getSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
+    try {
+      Schema schema = new Schema.Parser().parse(clazz.getResourceAsStream(name));
+      return withHoodieMetadata ? HoodieAvroUtils.addMetadataFields(schema) : schema;
+    } catch (IOException e) {
+      throw new RuntimeException(String.format("Failed to get schema from resource `%s` for class `%s`", name, clazz.getName()));
+    }
+  }
+
+  public static Schema getSchemaFromResource(Class<?> clazz, String name) {
+    return getSchemaFromResource(clazz, name, false);
   }
 }

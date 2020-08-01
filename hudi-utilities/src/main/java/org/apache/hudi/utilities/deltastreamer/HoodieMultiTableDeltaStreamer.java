@@ -260,7 +260,7 @@ public class HoodieMultiTableDeltaStreamer {
     public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
-        + "Default: No limit For e.g: DFS-Source => max bytes to read, Kafka-Source => max events to read")
+        + "Default: No limit, e.g: DFS-Source => max bytes to read, Kafka-Source => max events to read")
     public long sourceLimit = Long.MAX_VALUE;
 
     @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "

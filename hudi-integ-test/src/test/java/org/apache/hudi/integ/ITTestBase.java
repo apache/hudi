@@ -180,7 +180,7 @@ public abstract class ITTestBase {
     }
   }
 
-  TestExecStartResultCallback executeCommandStringInDocker(String containerName, String cmd, boolean expectedToSucceed)
+  protected TestExecStartResultCallback executeCommandStringInDocker(String containerName, String cmd, boolean expectedToSucceed)
       throws Exception {
     LOG.info("\n\n#################################################################################################");
     LOG.info("Container : " + containerName + ", Running command :" + cmd);
@@ -190,7 +190,7 @@ public abstract class ITTestBase {
     return executeCommandInDocker(containerName, cmdSplits, expectedToSucceed);
   }
 
-  Pair<String, String> executeHiveCommand(String hiveCommand) throws Exception {
+  protected Pair<String, String> executeHiveCommand(String hiveCommand) throws Exception {
 
     LOG.info("\n\n#################################################################################################");
     LOG.info("Running hive command :" + hiveCommand);

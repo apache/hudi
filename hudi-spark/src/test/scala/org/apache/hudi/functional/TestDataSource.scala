@@ -19,8 +19,9 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieTestDataGenerator}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.col
@@ -65,7 +66,7 @@ class TestDataSource {
 
   @Test def testShortNameStorage() {
     // Insert Operation
-    val records = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records, 2))
     inputDF.write.format("hudi")
       .options(commonOpts)
@@ -78,7 +79,7 @@ class TestDataSource {
 
   @Test def testCopyOnWriteStorage() {
     // Insert Operation
-    val records1 = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -94,7 +95,7 @@ class TestDataSource {
       .load(basePath + "/*/*/*/*");
     assertEquals(100, hoodieROViewDF1.count())
 
-    val records2 = DataSourceTestUtils.convertToStringList(dataGen.generateUpdates("001", 100)).toList
+    val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     val uniqueKeyCnt = inputDF2.select("_row_key").distinct().count()
 
@@ -126,7 +127,7 @@ class TestDataSource {
     assertEquals(firstCommit, countsPerCommit(0).get(0))
 
     // Upsert an empty dataFrame
-    val emptyRecords = DataSourceTestUtils.convertToStringList(dataGen.generateUpdates("002", 0)).toList
+    val emptyRecords = recordsToStrings(dataGen.generateUpdates("002", 0)).toList
     val emptyDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(emptyRecords, 1))
     emptyDF.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -155,7 +156,7 @@ class TestDataSource {
 
   @Test def testMergeOnReadStorage() {
     // Bulk Insert Operation
-    val records1 = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("001", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -183,7 +184,7 @@ class TestDataSource {
     val inserts2New = dataGen.generateSameKeyInserts("002", allRecords.subList(insert1Cnt, insert1Cnt + insert2NewKeyCnt))
     val inserts2Dup = dataGen.generateSameKeyInserts("002", inserts1.subList(0, insert2DupKeyCnt))
 
-    val records1 = DataSourceTestUtils.convertToStringList(inserts1).toList
+    val records1 = recordsToStrings(inserts1).toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -195,9 +196,7 @@ class TestDataSource {
     assertEquals(insert1Cnt, hoodieROViewDF1.count())
 
     val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val records2 = DataSourceTestUtils
-      .convertToStringList(inserts2Dup ++ inserts2New)
-      .toList
+    val records2 = recordsToStrings(inserts2Dup ++ inserts2New).toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -223,11 +222,11 @@ class TestDataSource {
     fs.mkdirs(new Path(sourcePath))
 
     // First chunk of data
-    val records1 = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
 
     // Second chunk of data
-    val records2 = DataSourceTestUtils.convertToStringList(dataGen.generateUpdates("001", 100)).toList
+    val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     val uniqueKeyCnt = inputDF2.select("_row_key").distinct().count()
 

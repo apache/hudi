@@ -132,7 +132,7 @@ public abstract class AbstractRealtimeRecordReader {
     Schema hiveSchema = Schema.createRecord(writerSchema.getName(), writerSchema.getDoc(), writerSchema.getNamespace(),
         writerSchema.isError());
     hiveSchema.setFields(hiveSchemaFields);
-    LOG.info("HIVE Schema is :" + hiveSchema.toString(true));
+    LOG.debug("HIVE Schema is :" + hiveSchema.toString(true));
     return hiveSchema;
   }
 

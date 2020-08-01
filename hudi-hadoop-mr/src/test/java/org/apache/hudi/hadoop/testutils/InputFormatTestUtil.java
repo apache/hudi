@@ -123,10 +123,6 @@ public class InputFormatTestUtil {
     jobConf.setInt(maxCommitPulls, numberOfCommitsToPull);
   }
 
-  public static Schema readSchema(String location) throws IOException {
-    return new Schema.Parser().parse(InputFormatTestUtil.class.getResourceAsStream(location));
-  }
-
   public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws IOException {
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());

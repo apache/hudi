@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.GenericRecord;
@@ -66,9 +67,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(getPartitionId());
-      createMarkerFile(partitionPath);
-      this.fileWriter = createNewFileWriter(instantTime, path, hoodieTable, config, writerSchema,
-          this.sparkTaskContextSupplier);
+      createMarkerFile(partitionPath, FSUtils.makeDataFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
+      this.fileWriter =
+          HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, writerSchema, this.sparkTaskContextSupplier);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
@@ -144,6 +145,11 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
   @Override
   public WriteStatus getWriteStatus() {
     return writeStatus;
+  }
+
+  @Override
+  public IOType getIOType() {
+    return IOType.CREATE;
   }
 
   /**

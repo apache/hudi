@@ -59,9 +59,7 @@
                 <copy file="${project.basedir}/../../../../packaging/hudi-hadoop-mr-bundle/target/hudi-hadoop-mr-bundle-${project.version}.jar" tofile="target/hoodie-hadoop-mr-bundle.jar" />
                 <copy file="${project.basedir}/../../../../packaging/hudi-hive-sync-bundle/target/hudi-hive-sync-bundle-${project.version}.jar" tofile="target/hoodie-hive-sync-bundle.jar" />
                 <copy file="${project.basedir}/../../../../packaging/hudi-spark-bundle/target/hudi-spark-bundle_${scala.binary.version}-${project.version}.jar" tofile="target/hoodie-spark-bundle.jar" />
-                <copy
-                  file="${project.basedir}/../../../../packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_${scala.binary.version}-${project.version}.jar"
-                  tofile="target/hoodie-utilities.jar"/>
+                <copy file="${project.basedir}/../../../../packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_${scala.binary.version}-${project.version}.jar" tofile="target/hoodie-utilities.jar"/>
               </tasks>
             </configuration>
             <goals>

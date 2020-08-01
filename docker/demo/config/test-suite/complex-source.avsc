@@ -1,0 +1,466 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+{
+    "name": "COMPLEX",
+    "fields": [
+        {
+            "default": null,
+            "type": [
+                "null",
+                {
+                    "items": "string",
+                    "type": "array"
+                }
+            ],
+            "name": "array_of_string_fields1"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field1"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field2"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field3"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field4"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field5"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "boolean"
+            ],
+            "name": "boolean_field1"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field6"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field7"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field8"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field9"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field10"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field11"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field12"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "double"
+            ],
+            "name": "double_field1"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field13"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "long"
+            ],
+            "name": "long_field1"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field14"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "long"
+            ],
+            "name": "long_field2"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                {
+                    "items": {
+                        "fields": [
+                            {
+                                "default": null,
+                                "type": [
+                                    "null",
+                                    "string"
+                                ],
+                                "name": "string_field15"
+                            },
+                            {
+                                "default": null,
+                                "type": [
+                                    "null",
+                                    "string"
+                                ],
+                                "name": "string_field16"
+                            },
+                            {
+                                "default": null,
+                                "type": [
+                                    "null",
+                                    "string"
+                                ],
+                                "name": "string_field17"
+                            },
+                            {
+                                "default": null,
+                                "type": [
+                                    "null",
+                                    "long"
+                                ],
+                                "name": "long_field3"
+                            },
+                            {
+                                "default": null,
+                                "type": [
+                                    "null",
+                                    "long"
+                                ],
+                                "name": "long_field4"
+                            },
+                            {
+                                "default": null,
+                                "type": [
+                                    "null",
+                                    "double"
+                                ],
+                                "name": "double_field2"
+                            },
+                            {
+                                "default": null,
+                                "type": [
+                                    "null",
+                                    "double"
+                                ],
+                                "name": "double_field3"
+                            }
+                        ],
+                        "type": "record",
+                        "name": "record_field1"
+                    },
+                    "type": "array"
+                }
+            ],
+            "name": "record_name1"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field18"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "long"
+            ],
+            "name": "long_field5"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "double"
+            ],
+            "name": "double_field4"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "double"
+            ],
+            "name": "double_field5"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field19"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "long"
+            ],
+            "name": "long_field6"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field20"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "long"
+            ],
+            "name": "long_field7"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "double"
+            ],
+            "name": "double_field6"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field21"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field22"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field23"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "long"
+            ],
+            "name": "long_field8"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "double"
+            ],
+            "name": "double_field7"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field24"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "long"
+            ],
+            "name": "long_field10"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field25"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field26"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "long"
+            ],
+            "name": "long_field11"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "boolean"
+            ],
+            "name": "boolean_field3"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "long"
+            ],
+            "name": "long_field12"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "double"
+            ],
+            "name": "double_field8"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "long"
+            ],
+            "name": "long_field13"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field27"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field28"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field29"
+        },
+        {
+            "default": null,
+            "type": [
+                "null",
+                "string"
+            ],
+            "name": "string_field30"
+        }
+    ],
+    "type": "record"
+}

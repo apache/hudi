@@ -23,7 +23,9 @@ import org.apache.hudi.metrics.Metrics;
 
 import com.codahale.metrics.Timer;
 
-public class HoodieDeltaStreamerMetrics {
+import java.io.Serializable;
+
+public class HoodieDeltaStreamerMetrics implements Serializable {
 
   private HoodieWriteConfig config;
   private String tableName;

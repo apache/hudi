@@ -33,6 +33,8 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -41,7 +43,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.TestRawTripPayload.MetadataMergeWriteStatus;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -60,6 +61,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -142,18 +144,6 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     return table;
   }
 
-  /**
-   * Assert no failures in writing hoodie files.
-   *
-   * @param statuses List of Write Status
-   */
-  public static void assertNoWriteErrors(List<WriteStatus> statuses) {
-    // Verify there are no errors
-    for (WriteStatus status : statuses) {
-      assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId());
-    }
-  }
-
   public void assertPartitionMetadataForRecords(List<HoodieRecord> inputRecords, FileSystem fs) throws IOException {
     Set<String> partitionPathSet = inputRecords.stream()
         .map(HoodieRecord::getPartitionPath)
@@ -203,7 +193,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    *
    * @param records List of Hoodie records
    */
-  public void assertNodupesWithinPartition(List<HoodieRecord<TestRawTripPayload>> records) {
+  public void assertNodupesWithinPartition(List<HoodieRecord<RawTripTestPayload>> records) {
     Map<String, Set<String>> partitionToKeys = new HashMap<>();
     for (HoodieRecord r : records) {
       String key = r.getRecordKey();

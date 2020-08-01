@@ -95,7 +95,7 @@ public class QuickstartUtils {
     }
 
     public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
-                                                      double timestamp) {
+        double timestamp) {
       GenericRecord rec = new GenericData.Record(avroSchema);
       rec.put("uuid", rowKey);
       rec.put("ts", timestamp);
@@ -179,7 +179,7 @@ public class QuickstartUtils {
      */
     public List<String> generateDeletes(List<Row> rows) {
       return rows.stream().map(row ->
-          convertToString(row.getAs("uuid"), row.getAs("partitionPath"))).filter(os -> os.isPresent()).map(os -> os.get())
+          convertToString(row.getAs("uuid"), row.getAs("partitionpath"))).filter(os -> os.isPresent()).map(os -> os.get())
           .collect(Collectors.toList());
     }
 

@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -42,7 +43,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
@@ -66,7 +66,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     // Initialize a local spark env
-    initSparkContexts("TestHoodieCompactor");
+    initSparkContexts();
 
     // Create a temp folder as the base path
     initPath();
