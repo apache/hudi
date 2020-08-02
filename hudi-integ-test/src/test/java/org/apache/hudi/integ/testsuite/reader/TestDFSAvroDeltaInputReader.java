@@ -29,7 +29,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.integ.testsuite.utils.TestUtils;
-import org.apache.hudi.integ.testsuite.utils.TestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
