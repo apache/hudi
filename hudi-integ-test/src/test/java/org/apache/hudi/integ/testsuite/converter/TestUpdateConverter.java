@@ -26,7 +26,6 @@ import java.util.Map;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.integ.testsuite.utils.TestUtils;
-import org.apache.hudi.integ.testsuite.utils.TestUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;

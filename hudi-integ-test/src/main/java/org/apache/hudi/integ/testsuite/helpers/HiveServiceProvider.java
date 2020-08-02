@@ -19,15 +19,11 @@
 package org.apache.hudi.integ.testsuite.helpers;
 
 import java.io.IOException;
-import java.net.BindException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.thrift.transport.TTransportException;
 
 /**
  * Hive Service provider.
@@ -37,8 +33,6 @@ public class HiveServiceProvider {
   private HiveTestService hiveService;
   private HiveServer2 hiveServer;
   private Config config;
-
-  private static final Logger LOG = LogManager.getLogger(HiveServiceProvider.class);
 
   public HiveServiceProvider(Config config) {
     this.config = config;

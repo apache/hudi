@@ -27,11 +27,7 @@ import java.util.List;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.UpsertNode;
-import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
-import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
-import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
-import org.apache.hudi.integ.testsuite.dag.nodes.UpsertNode;
 import org.junit.jupiter.api.Test;
 
 public class TestWorkflowBuilder {
