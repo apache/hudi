@@ -28,6 +28,9 @@ import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.nodes.HiveQueryNode;
 
+/**
+ * An implementation of {@link WorkflowDagGenerator}, helps to generate a workflowDag with two hive nodes as child node.
+ */
 public class HiveSyncDagGenerator implements WorkflowDagGenerator {
 
   @Override

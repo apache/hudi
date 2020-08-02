@@ -29,15 +29,20 @@ import org.apache.hudi.integ.testsuite.dag.nodes.ValidateNode;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.spark.api.java.JavaRDD;
 
+/**
+ * An implementation of {@link WorkflowDagGenerator}, that generates complex workflowDag.
+ */
 public class ComplexDagGenerator implements WorkflowDagGenerator {
 
   @Override
   public WorkflowDag build() {
+    // root node
     DagNode root = new InsertNode(Config.newBuilder()
         .withNumRecordsToInsert(1000)
         .withNumInsertPartitions(3)
         .withRecordSize(1000).build());
 
+    // child node1
     DagNode child1 = new UpsertNode(Config.newBuilder()
         .withNumRecordsToUpdate(999)
         .withNumRecordsToInsert(1000)
@@ -46,6 +51,7 @@ public class ComplexDagGenerator implements WorkflowDagGenerator {
         .withNumInsertPartitions(1)
         .withRecordSize(10000).build());
 
+    // function to build ValidateNode with
     Function<List<DagNode<JavaRDD<WriteStatus>>>, Boolean> function = (dagNodes) -> {
       DagNode<JavaRDD<WriteStatus>> parent1 = dagNodes.get(0);
       List<WriteStatus> statuses = parent1.getResult().collect();
@@ -63,8 +69,11 @@ public class ComplexDagGenerator implements WorkflowDagGenerator {
           * parent2.getConfig().getNumInsertPartitions() + parent2.getConfig().getNumRecordsUpsert();
       return b1 & b2 & b3;
     };
+
+    // child node2
     DagNode child2 = new ValidateNode(Config.newBuilder().build(), function);
 
+    // create relationship between nodes
     root.addChildNode(child1);
     // child1.addParentNode(root);
     child1.addChildNode(child2);

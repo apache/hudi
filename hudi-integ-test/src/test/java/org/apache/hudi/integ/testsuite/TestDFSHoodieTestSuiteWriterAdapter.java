@@ -52,6 +52,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+/**
+ * {@link HoodieTestSuiteWriter}. Helps to test writing a DFS file.
+ */
 public class TestDFSHoodieTestSuiteWriterAdapter extends UtilitiesTestBase {
 
   private FilebasedSchemaProvider schemaProvider;

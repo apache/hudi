@@ -49,6 +49,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+/**
+ * Unit tests against {@link HoodieTestSuiteJob}.
+ */
 public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
 
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with useDeltaStreamer={0}, tableType={1}";

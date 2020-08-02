@@ -36,6 +36,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Unit test for {@link DFSAvroDeltaInputReader} by issuing analyzeSingleFile and read from it.
+ */
 public class TestDFSAvroDeltaInputReader extends UtilitiesTestBase {
 
   @BeforeAll
