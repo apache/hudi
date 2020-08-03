@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -215,11 +216,20 @@ public class DataSourceUtils {
   /**
    * Create a payload class via reflection, passing in an ordering/precombine value.
    */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
-      throws IOException {
+  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record,
+                                                  Comparable orderingVal,
+                                                  String deleteMarkerField) throws IOException {
     try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
+      HoodieRecordPayload payload = null;
+      if (payloadClass.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+        payload = (OverwriteWithLatestAvroPayload) ReflectionUtils.loadClass(payloadClass,
+                new Class<?>[]{GenericRecord.class, Comparable.class, String.class},
+                record, orderingVal, deleteMarkerField);
+      } else {
+        payload = (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
+                new Class<?>[]{GenericRecord.class, Comparable.class}, record, orderingVal);
+      }
+      return payload;
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
@@ -275,8 +285,9 @@ public class DataSourceUtils {
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
-                                                String payloadClass) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
+                                                String payloadClass,
+                                                String deleteMarkerField) throws IOException {
+    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal, deleteMarkerField);
     return new HoodieRecord<>(hKey, payload);
   }
 

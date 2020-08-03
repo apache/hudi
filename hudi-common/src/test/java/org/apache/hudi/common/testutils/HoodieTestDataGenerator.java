@@ -105,6 +105,7 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"seconds_since_epoch\", \"type\": \"long\"},"
       + "{\"name\": \"weight\", \"type\": \"float\"},"
       + "{\"name\": \"nation\", \"type\": \"bytes\"},"
+      + "{\"name\": \"user_defined_delete_marker_field\", \"type\": \"boolean\", \"default\": false},"
       + "{\"name\":\"current_date\",\"type\": {\"type\": \"int\", \"logicalType\": \"date\"}},"
       + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\", \"logicalType\": \"timestamp-micros\"}},"
       + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
@@ -122,7 +123,7 @@ public class HoodieTestDataGenerator {
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
 
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
-  public static final String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
+  public static final String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,int,bigint,float,binary,boolean,int,bigint,decimal(10,6),"
       + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
 
   public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
@@ -175,6 +176,18 @@ public class HoodieTestDataGenerator {
     }
 
     return null;
+  }
+
+  public static List<GenericRecord> generateGenericRecords(int n, boolean isDeleteRecord, int instantTime) {
+    return IntStream.range(0, n).boxed().map(i -> {
+      String partitionPath = DEFAULT_FIRST_PARTITION_PATH;
+      HoodieKey key = new HoodieKey("id_" + i, partitionPath);
+      HoodieTestDataGenerator.KeyPartition kp = new HoodieTestDataGenerator.KeyPartition();
+      kp.key = key;
+      kp.partitionPath = partitionPath;
+      return HoodieTestDataGenerator.generateGenericRecord(
+              key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, instantTime, isDeleteRecord, false);
+    }).collect(Collectors.toList());
   }
 
   /**
@@ -263,11 +276,11 @@ public class HoodieTestDataGenerator {
       rec.put("weight", RAND.nextFloat());
       byte[] bytes = "Canada".getBytes();
       rec.put("nation", ByteBuffer.wrap(bytes));
+      rec.put("user_defined_delete_marker_field", isDeleteRecord);
       long currentTimeMillis = System.currentTimeMillis();
       Date date = new Date(currentTimeMillis);
       rec.put("current_date", (int) date.toLocalDate().toEpochDay());
       rec.put("current_ts", currentTimeMillis);
-
       BigDecimal bigDecimal = new BigDecimal(String.format("%5f", RAND.nextFloat()));
       Schema decimalSchema = AVRO_SCHEMA.getField("height").schema();
       Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
@@ -290,11 +303,7 @@ public class HoodieTestDataGenerator {
       rec.put("tip_history", tipHistoryArray);
     }
 
-    if (isDeleteRecord) {
-      rec.put("_hoodie_is_deleted", true);
-    } else {
-      rec.put("_hoodie_is_deleted", false);
-    }
+    rec.put("_hoodie_is_deleted", isDeleteRecord);
     return rec;
   }
 
@@ -761,8 +770,8 @@ public class HoodieTestDataGenerator {
 
   public static class KeyPartition implements Serializable {
 
-    HoodieKey key;
-    String partitionPath;
+    public HoodieKey key;
+    public String partitionPath;
   }
 
   public void close() {

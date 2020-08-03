@@ -338,9 +338,12 @@ public class DeltaSync implements Serializable {
     }
 
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
+    String deleteMakrerField = props.getString(HoodieWriteConfig.DELETE_MARKER_FIELD_PROP,
+        HoodieWriteConfig.DEFAULT_DELETE_MARKER_FIELD);
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
       HoodieRecordPayload payload = DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-          (Comparable) DataSourceUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false));
+          (Comparable) DataSourceUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false),
+          deleteMakrerField);
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 
