@@ -37,7 +37,7 @@ To contribute, you would need to do the following
 
 - \[Optional\] If needed, add spark jars to the classpath of your module in Intellij by following the steps from [here](https://stackoverflow.com/questions/1051640/correct-way-to-add-external-jars-lib-jar-to-an-intellij-idea-project). 
 
-- \[Optional\] You may configure IntelliJ to respect mvn CLI and pom.xml settings.
+- \[Optional\] You may configure IntelliJ to respect maven CLI and pom.xml settings.
 
 ![IDE setup maven 1](/assets/images/contributing/IDE_setup_maven_1.png)
 ![IDE setup maven 2](/assets/images/contributing/IDE_setup_maven_2.png)
