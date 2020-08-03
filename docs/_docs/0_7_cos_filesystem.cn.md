@@ -19,33 +19,35 @@ language: cn
 
 新增下面的配置到你的Hudi能访问的core-site.xml文件。使用你的COS bucket name替换掉`fs.defaultFS`，使用COS的key和secret分别替换`fs.cosn.userinfo.secretKey`和`fs.cosn.userinfo.secretId`。主要Hudi就能读写相应的bucket。
 
+
 ```xml
     <property>
         <name>fs.defaultFS</name>
-        <value>cosn://examplebucket-1250000000</value>
+        <value>cosn://bucketname</value>
+        <description>COS bucket name</description>
     </property>
 
     <property>
         <name>fs.cosn.userinfo.secretId</name>
-        <value>xxxxxxxxxxxxxxxxxxxxxxxxx</value>
+        <value>cos-secretId</value>
         <description>Tencent Cloud Secret Id</description>
     </property>
 
     <property>
         <name>fs.cosn.userinfo.secretKey</name>
-        <value>xxxxxxxxxxxxxxxxxxxxxxxx</value>
+        <value>cos-secretkey</value>
         <description>Tencent Cloud Secret Key</description>
     </property>
 
     <property>
         <name>fs.cosn.bucket.region</name>
-        <value>ap-xxx</value>
+        <value>ap-region</value>
         <description>The region where the bucket is located.</description>
     </property>
 
     <property>
         <name>fs.cosn.bucket.endpoint_suffix</name>
-        <value>cos.ap-xxx.myqcloud.com</value>
+        <value>cos.endpoint.suffix</value>
         <description>
           COS endpoint to connect to.
           For public cloud users, it is recommended not to set this option, and only the correct area field is required.
@@ -65,7 +67,6 @@ language: cn
     </property>
 
 ```
-
 
 ### Tencent Cloud COS Libs
 添加COS依赖jar包到classpath

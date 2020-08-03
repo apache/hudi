@@ -21,30 +21,31 @@ Add the required configs in your core-site.xml from where Hudi can fetch them. R
 ```xml
     <property>
         <name>fs.defaultFS</name>
-        <value>cosn://examplebucket-1250000000</value>
+        <value>cosn://bucketname</value>
+        <description>COS bucket name</description>
     </property>
 
     <property>
         <name>fs.cosn.userinfo.secretId</name>
-        <value>xxxxxxxxxxxxxxxxxxxxxxxxx</value>
+        <value>cos-secretId</value>
         <description>Tencent Cloud Secret Id</description>
     </property>
 
     <property>
         <name>fs.cosn.userinfo.secretKey</name>
-        <value>xxxxxxxxxxxxxxxxxxxxxxxx</value>
+        <value>cos-secretkey</value>
         <description>Tencent Cloud Secret Key</description>
     </property>
 
     <property>
         <name>fs.cosn.bucket.region</name>
-        <value>ap-xxx</value>
+        <value>ap-region</value>
         <description>The region where the bucket is located.</description>
     </property>
 
     <property>
         <name>fs.cosn.bucket.endpoint_suffix</name>
-        <value>cos.ap-xxx.myqcloud.com</value>
+        <value>cos.endpoint.suffix</value>
         <description>
           COS endpoint to connect to. 
           For public cloud users, it is recommended not to set this option, and only the correct area field is required.
