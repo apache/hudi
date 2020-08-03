@@ -3,23 +3,23 @@
   <head>
     <meta charset="utf-8">
 
-<!-- begin _includes/seo.html --><title>Cloud Storage - Apache Hudi</title>
-<meta name="description" content="Talking to Cloud Storage">
+<!-- begin _includes/seo.html --><title>COS Filesystem - Apache Hudi</title>
+<meta name="description" content="In this page, we explain how to get your Hudi spark job to store into Tencent Cloud COS.">
 
 <meta property="og:type" content="article">
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="">
-<meta property="og:title" content="Cloud Storage">
-<meta property="og:url" content="https://hudi.apache.org/docs/cloud.html">
+<meta property="og:title" content="COS Filesystem">
+<meta property="og:url" content="https://hudi.apache.org/docs/cos_hoodie.html">
 
 
-  <meta property="og:description" content="Talking to Cloud Storage">
+  <meta property="og:description" content="In this page, we explain how to get your Hudi spark job to store into Tencent Cloud COS.">
 
 
 
 
 
-  <meta property="article:modified_time" content="2019-06-16T21:59:57-04:00">
+  <meta property="article:modified_time" content="2020-04-21T17:38:24-04:00">
 
 
 
@@ -284,7 +284,7 @@
             
 
             
-              <li><a href="/docs/cloud.html" class="active">Cloud Storage</a></li>
+              <li><a href="/docs/cloud.html" class="">Cloud Storage</a></li>
             
 
           
@@ -353,7 +353,7 @@
     <div class="page__inner-wrap">
       
         <header>
-          <h1 id="page-title" class="page__title" itemprop="headline">Cloud Storage
+          <h1 id="page-title" class="page__title" itemprop="headline">COS Filesystem
 </h1>
           <!-- Output author details if some exist. -->
           
@@ -362,31 +362,79 @@
 
       <section class="page__content" itemprop="text">
         
-        <aside class="sidebar__right sticky">
-          <nav class="toc">
-            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
-            <ul class="toc__menu">
-  <li><a href="#talking-to-cloud-storage">Talking to Cloud Storage</a></li>
-</ul>
-          </nav>
-        </aside>
+          <style>
+            .page {
+              padding-right: 0 !important;
+            }
+          </style>
         
-        <h2 id="talking-to-cloud-storage">Talking to Cloud Storage</h2>
+        <p>In this page, we explain how to get your Hudi spark job to store into Tencent Cloud COS.</p>
 
-<p>Immaterial of whether RDD/WriteClient APIs or Datasource is used, the following information helps configure access
-to cloud stores.</p>
+<h2 id="tencent-cloud-cos-configs">Tencent Cloud COS configs</h2>
+
+<p>There are two configurations required for Hudi-COS compatibility:</p>
 
 <ul>
-  <li><a href="/docs/s3_hoodie">AWS S3</a> <br />
-Configurations required for S3 and Hudi co-operability.</li>
-  <li><a href="/docs/gcs_hoodie">Google Cloud Storage</a> <br />
-Configurations required for GCS and Hudi co-operability.</li>
-  <li><a href="/docs/oss_hoodie.html">Alibaba Cloud OSS</a> <br />
-Configurations required for OSS and Hudi co-operability.</li>
-  <li><a href="/docs/azure_hoodie.html">Microsoft Azure</a> <br />
-Configurations required for Azure and Hudi co-operability.</li>
-  <li><a href="/docs/cos_hoodie.html">Tencent Cloud Object Storage</a> <br />
- Configurations required for COS and Hudi co-operability.</li>
+  <li>Adding Tencent Cloud COS Credentials for Hudi</li>
+  <li>Adding required Jars to classpath</li>
+</ul>
+
+<h3 id="tencent-cloud-cos-credentials">Tencent Cloud COS Credentials</h3>
+
+<p>Add the required configs in your core-site.xml from where Hudi can fetch them. Replace the <code class="highlighter-rouge">fs.defaultFS</code> with your COS bucket name, replace <code class="highlighter-rouge">fs.cosn.userinfo.secretId</code> with your COS secret Id, replace <code class="highlighter-rouge">fs.cosn.userinfo.secretKey</code> with your COS key. Hudi should be able to read/write from the bucket.</p>
+
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.defaultFS<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>cosn://bucketname<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>COS bucket name<span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.cosn.userinfo.secretId<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>cos-secretId<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>Tencent Cloud Secret Id<span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.cosn.userinfo.secretKey<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>cos-secretkey<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>Tencent Cloud Secret Key<span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.cosn.bucket.region<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>ap-region<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>The region where the bucket is located.<span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.cosn.bucket.endpoint_suffix<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>cos.endpoint.suffix<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>
+          COS endpoint to connect to. 
+          For public cloud users, it is recommended not to set this option, and only the correct area field is required.
+        <span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.cosn.impl<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>org.apache.hadoop.fs.CosFileSystem<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>The implementation class of the CosN Filesystem.<span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.AbstractFileSystem.cosn.impl<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>org.apache.hadoop.fs.CosN<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>The implementation class of the CosN AbstractFileSystem.<span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+</code></pre></div></div>
+
+<h3 id="tencent-cloud-cos-libs">Tencent Cloud COS Libs</h3>
+<p>COS hadoop libraries to add to our classpath</p>
+
+<ul>
+  <li>org.apache.hadoop:hadoop-cos:2.8.5</li>
 </ul>
 
       </section>

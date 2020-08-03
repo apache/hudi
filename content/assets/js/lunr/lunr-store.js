@@ -749,6 +749,16 @@ var store = [{
         "tags": [],
         "url": "https://hudi.apache.org/docs/azure_hoodie.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "COS Filesystem",
+        "excerpt":"这个页面描述了如何让你的Hudi spark任务使用Tencent Cloud COS存储。 Tencent Cloud COS 部署 为了让Hudi使用COS，需要增加两部分的配置: 为Hidi增加Tencent Cloud COS的相关配置 增加Jar包的MVN依赖 Tencent Cloud COS 相关的配置 新增下面的配置到你的Hudi能访问的core-site.xml文件。使用你的COS bucket name替换掉fs.defaultFS，使用COS的key和secret分别替换fs.cosn.userinfo.secretKey和fs.cosn.userinfo.secretId。主要Hudi就能读写相应的bucket。 &lt;property&gt; &lt;name&gt;fs.defaultFS&lt;/name&gt; &lt;value&gt;cosn://bucketname&lt;/value&gt; &lt;description&gt;COS bucket name&lt;/description&gt; &lt;/property&gt; &lt;property&gt; &lt;name&gt;fs.cosn.userinfo.secretId&lt;/name&gt; &lt;value&gt;cos-secretId&lt;/value&gt; &lt;description&gt;Tencent Cloud Secret Id&lt;/description&gt; &lt;/property&gt; &lt;property&gt; &lt;name&gt;fs.cosn.userinfo.secretKey&lt;/name&gt; &lt;value&gt;cos-secretkey&lt;/value&gt; &lt;description&gt;Tencent Cloud Secret Key&lt;/description&gt; &lt;/property&gt; &lt;property&gt; &lt;name&gt;fs.cosn.bucket.region&lt;/name&gt; &lt;value&gt;ap-region&lt;/value&gt; &lt;description&gt;The region where the...","categories": [],
+        "tags": [],
+        "url": "https://hudi.apache.org/cn/docs/cos_hoodie.html",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "COS Filesystem",
+        "excerpt":"In this page, we explain how to get your Hudi spark job to store into Tencent Cloud COS. Tencent Cloud COS configs There are two configurations required for Hudi-COS compatibility: Adding Tencent Cloud COS Credentials for Hudi Adding required Jars to classpath Tencent Cloud COS Credentials Add the required configs...","categories": [],
+        "tags": [],
+        "url": "https://hudi.apache.org/docs/cos_hoodie.html",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Quick-Start Guide",
         "excerpt":"本指南通过使用spark-shell简要介绍了Hudi功能。使用Spark数据源，我们将通过代码段展示如何插入和更新Hudi的默认存储类型数据集： 写时复制。每次写操作之后，我们还将展示如何读取快照和增量数据。 设置spark-shell Hudi适用于Spark-2.x版本。您可以按照此处的说明设置spark。 在提取的目录中，使用spark-shell运行Hudi： bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' 设置表名、基本路径和数据生成器来为本指南生成记录。 import org.apache.hudi.QuickstartUtils._ import scala.collection.JavaConversions._ import org.apache.spark.sql.SaveMode._ import org.apache.hudi.DataSourceReadOptions._ import org.apache.hudi.DataSourceWriteOptions._ import org.apache.hudi.config.HoodieWriteConfig._ val tableName = \"hudi_cow_table\" val basePath = \"file:///tmp/hudi_cow_table\" val dataGen = new DataGenerator 数据生成器 可以基于行程样本模式 生成插入和更新的样本。 插入数据 生成一些新的行程样本，将其加载到DataFrame中，然后将DataFrame写入Hudi数据集中，如下所示。 val inserts = convertToStringList(dataGen.generateInserts(10)) val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))...","categories": [],
         "tags": [],
@@ -855,7 +865,7 @@ var store = [{
         "url": "https://hudi.apache.org/docs/deployment.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "云储存",
-        "excerpt":"与云存储连接   无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。      AWS S3   S3和Hudi协同工作所需的配置。   Google Cloud Storage   GCS和Hudi协同工作所需的配置。   Alibaba Cloud OSS   阿里云和Hudi协同工作所需的配置。   Microsoft Azure   Azure和Hudi协同工作所需的配置。  ","categories": [],
+        "excerpt":"与云存储连接   无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。      AWS S3   S3和Hudi协同工作所需的配置。   Google Cloud Storage   GCS和Hudi协同工作所需的配置。   Alibaba Cloud OSS   阿里云和Hudi协同工作所需的配置。   Microsoft Azure   Azure和Hudi协同工作所需的配置。   Tencent Cloud Object Storage   COS和Hudi协同工作所需的配置。  ","categories": [],
         "tags": [],
         "url": "https://hudi.apache.org/cn/docs/cloud.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
