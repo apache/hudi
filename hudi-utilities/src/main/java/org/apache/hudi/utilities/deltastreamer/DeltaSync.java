@@ -70,11 +70,15 @@ import org.apache.spark.sql.SparkSession;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.function.Function;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.function.Function;
+import java.util.Set;
+
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
@@ -422,12 +426,7 @@ public class DeltaSync implements Serializable {
         }
 
         if (!isEmpty) {
-          // Sync to hive if enabled
-          Timer.Context hiveSyncContext = metrics.getHiveSyncTimerContext();
-          Timer.Context metaSyncContext = metrics.getMetaSyncTimerContext();
-          syncMeta();
-          hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
-          metaSyncTimeMs = metaSyncContext != null ? metaSyncContext.stop() : 0;
+          syncMeta(metrics);
         }
       } else {
         LOG.info("Commit " + instantTime + " failed!");
@@ -449,9 +448,7 @@ public class DeltaSync implements Serializable {
     long overallTimeMs = overallTimerContext != null ? overallTimerContext.stop() : 0;
 
     // Send DeltaStreamer Metrics
-    metrics.updateDeltaStreamerMetrics(overallTimeMs, hiveSyncTimeMs, true);
-    metrics.updateDeltaStreamerMetrics(overallTimeMs, metaSyncTimeMs, false);
-
+    metrics.updateDeltaStreamerMetrics(overallTimeMs);
     return Pair.of(scheduledCompactionInstant, writeStatusRDD);
   }
 
@@ -483,16 +480,21 @@ public class DeltaSync implements Serializable {
     throw lastException;
   }
 
-  private void syncMeta() {
+  private String getSyncClassShortName(String syncClassName) {
+    return syncClassName.substring(syncClassName.lastIndexOf(".") + 1);
+  }
+
+  private void syncMeta(HoodieDeltaStreamerMetrics metrics) {
+    Set<String> syncClientToolClasses = new HashSet<>(Arrays.asList(cfg.syncClientToolClass.split(",")));
     // for backward compatibility
     if (cfg.enableHiveSync) {
       cfg.enableMetaSync = true;
-      cfg.syncClientToolClass = "org.apache.hudi.hive.HiveSyncTool";
+      syncClientToolClasses.add(HiveSyncTool.class.getName());
       LOG.info("When set --enable-hive-sync will use HiveSyncTool for backward compatibility");
     }
     if (cfg.enableMetaSync) {
-      String[] impls = cfg.syncClientToolClass.split(",");
-      for (String impl : impls) {
+      for (String impl : syncClientToolClasses) {
+        Timer.Context syncContext = metrics.getMetaSyncTimerContext();
         impl = impl.trim();
         AbstractSyncTool syncTool = null;
         switch (impl) {
@@ -510,6 +512,8 @@ public class DeltaSync implements Serializable {
             syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[]{Properties.class, FileSystem.class}, properties, fs);
         }
         syncTool.syncHoodieTable();
+        long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
+        metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
       }
     }
   }

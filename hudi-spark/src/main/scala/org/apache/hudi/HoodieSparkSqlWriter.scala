@@ -219,10 +219,10 @@ private[hudi] object HoodieSparkSqlWriter {
       STREAMING_RETRY_CNT_OPT_KEY -> DEFAULT_STREAMING_RETRY_CNT_OPT_VAL,
       STREAMING_RETRY_INTERVAL_MS_OPT_KEY -> DEFAULT_STREAMING_RETRY_INTERVAL_MS_OPT_VAL,
       STREAMING_IGNORE_FAILED_BATCH_OPT_KEY -> DEFAULT_STREAMING_IGNORE_FAILED_BATCH_OPT_VAL,
-      SYNC_CLIENT_TOOL_CLASS -> DEFAULT_SYNC_CLIENT_TOOL_CLASS,
+      META_SYNC_CLIENT_TOOL_CLASS -> DEFAULT_META_SYNC_CLIENT_TOOL_CLASS,
       //just for backwards compatiblity
       HIVE_SYNC_ENABLED_OPT_KEY -> DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL,
-      HUDI_SYNC_ENABLED_OPT_KEY -> DEFAULT_HUDI_SYNC_ENABLED_OPT_VAL,
+      META_SYNC_ENABLED_OPT_KEY -> DEFAULT_META_SYNC_ENABLED_OPT_VAL,
       HIVE_DATABASE_OPT_KEY -> DEFAULT_HIVE_DATABASE_OPT_VAL,
       HIVE_TABLE_OPT_KEY -> DEFAULT_HIVE_TABLE_OPT_VAL,
       HIVE_BASE_FILE_FORMAT_OPT_KEY -> DEFAULT_HIVE_BASE_FILE_FORMAT_OPT_VAL,
@@ -272,23 +272,22 @@ private[hudi] object HoodieSparkSqlWriter {
                        basePath: Path,
                        hadoopConf: Configuration): Boolean = {
     val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
-    var metaSyncEnabled = parameters.get(HUDI_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
-    var syncClientToolClass = parameters(SYNC_CLIENT_TOOL_CLASS)
+    var metaSyncEnabled = parameters.get(META_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
+    val syncClientToolClassSet = parameters(META_SYNC_CLIENT_TOOL_CLASS).split(",").toSet
     // for backward compatibility
     if (hiveSyncEnabled) {
       metaSyncEnabled = true
-      syncClientToolClass = DEFAULT_SYNC_CLIENT_TOOL_CLASS
+      syncClientToolClassSet.add(classOf[HiveSyncTool].getName)
     }
     var metaSyncSuccess = true
     if (metaSyncEnabled) {
-      val impls = syncClientToolClass.split(",")
-      val fs = FSUtils.getFs(basePath.toString, hadoopConf)
-
-      impls.foreach(impl => {
+      val fs = basePath.getFileSystem(hadoopConf)
+      syncClientToolClassSet.foreach(impl => {
         val syncSuccess = impl.trim match {
           case "org.apache.hudi.hive.HiveSyncTool" => {
             log.info("Syncing to Hive Metastore (URL: " + parameters(HIVE_URL_OPT_KEY) + ")")
             syncHive(basePath, fs, parameters)
+            true
           }
           case _ => {
             val properties = new Properties();

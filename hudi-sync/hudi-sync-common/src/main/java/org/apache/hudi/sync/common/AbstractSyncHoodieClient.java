@@ -97,7 +97,7 @@ public abstract class AbstractSyncHoodieClient {
         stmt.close();
       }
     } catch (SQLException e) {
-      LOG.error("Could not close the statement opened ", e);
+      LOG.warn("Could not close the statement opened ", e);
     }
 
     try {
@@ -105,7 +105,7 @@ public abstract class AbstractSyncHoodieClient {
         resultSet.close();
       }
     } catch (SQLException e) {
-      LOG.error("Could not close the resultset opened ", e);
+      LOG.warn("Could not close the resultset opened ", e);
     }
   }
 

@@ -118,6 +118,7 @@ public class DLASyncTool extends AbstractSyncTool {
 
     LOG.info("Schema sync complete. Syncing partitions for " + tableName);
     // Get the last time we successfully synced partitions
+    // TODO : once DLA supports alter table properties
     Option<String> lastCommitTimeSynced = Option.empty();
     /*if (tableExists) {
       lastCommitTimeSynced = hoodieDLAClient.getLastCommitTimeSynced(tableName);

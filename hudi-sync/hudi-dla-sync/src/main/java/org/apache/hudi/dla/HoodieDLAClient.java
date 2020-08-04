@@ -274,7 +274,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
 
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
-    // dla do not support update tblproperties, so do nothing.
+    // TODO : dla do not support update tblproperties, so do nothing.
   }
 
   @Override

@@ -77,15 +77,15 @@ public class HoodieDeltaStreamerMetrics implements Serializable {
     return config == null ? null : String.format("%s.%s.%s", tableName, action, metric);
   }
 
-  public void updateDeltaStreamerMetrics(long durationInNs, long syncNs, boolean hiveSync) {
+  public void updateDeltaStreamerMetrics(long durationInNs) {
     if (config.isMetricsOn()) {
       Metrics.registerGauge(getMetricsName("deltastreamer", "duration"), getDurationInMs(durationInNs));
-      if (hiveSync) {
-        Metrics.registerGauge(getMetricsName("deltastreamer", "hiveSyncDuration"), getDurationInMs(syncNs));
-      } else {
-        Metrics.registerGauge(getMetricsName("deltastreamer", "metaSyncDuration"), getDurationInMs(syncNs));
-      }
+    }
+  }
 
+  public void updateDeltaStreamerMetaSyncMetrics(String syncClassShortName, long syncNs) {
+    if (config.isMetricsOn()) {
+      Metrics.registerGauge(getMetricsName("deltastreamer", syncClassShortName), getDurationInMs(syncNs));
     }
   }
 
