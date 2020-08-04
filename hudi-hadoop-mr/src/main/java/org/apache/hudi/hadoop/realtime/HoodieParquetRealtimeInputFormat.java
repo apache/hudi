@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop.realtime;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
@@ -42,7 +43,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Stream;
 
 /**
@@ -110,10 +113,20 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   }
 
   private static void addRequiredProjectionFields(Configuration configuration) {
-    // Need this to do merge records in HoodieRealtimeRecordReader
-    addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
-    addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS);
-    addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_PARTITION_PATH_COL_POS);
+    List<Integer> projectedIds = new ArrayList<>(HoodieColumnProjectionUtils.getReadColumnIDs(configuration));
+    List<String> projectedNames = new ArrayList<>(Arrays.asList(HoodieColumnProjectionUtils.getReadColumnNames(configuration)));
+    projectedIds.addAll(Arrays.asList(
+        HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS,
+        HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS,
+        HoodieInputFormatUtils.HOODIE_PARTITION_PATH_COL_POS)
+    );
+    projectedNames.addAll(Arrays.asList(
+        HoodieRecord.RECORD_KEY_METADATA_FIELD,
+        HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+        HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+    );
+
+    HoodieColumnProjectionUtils.setReadColumns(configuration, projectedIds, projectedNames);
   }
 
   /**
@@ -134,7 +147,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
   @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf jobConf,
-      final Reporter reporter) throws IOException {
+                                                                   final Reporter reporter) throws IOException {
     // Hive on Spark invokes multiple getRecordReaders from different threads in the same spark task (and hence the
     // same JVM) unlike Hive on MR. Due to this, accesses to JobConf, which is shared across all threads, is at the
     // risk of experiencing race conditions. Hence, we synchronize on the JobConf object here. There is negligible
@@ -164,11 +177,12 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
     LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-    // sanity check
-    ValidationUtils.checkArgument(split instanceof HoodieRealtimeFileSplit,
-        "HoodieRealtimeRecordReader can only work on HoodieRealtimeFileSplit and not with " + split);
 
-    return new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) split, jobConf,
+    // sanity check
+    ValidationUtils.checkArgument(split instanceof RealtimeSplit,
+        "HoodieRealtimeRecordReader can only work on RealtimeSplit and not with " + split);
+
+    return new HoodieRealtimeRecordReader((RealtimeSplit) split, jobConf,
         super.getRecordReader(split, jobConf, reporter));
   }
 

@@ -36,12 +36,12 @@ public class BulkInsertPreppedDeltaCommitActionExecutor<T extends HoodieRecordPa
     extends DeltaCommitActionExecutor<T> {
 
   private final JavaRDD<HoodieRecord<T>> preppedInputRecordRdd;
-  private final Option<BulkInsertPartitioner> bulkInsertPartitioner;
+  private final Option<BulkInsertPartitioner<T>> bulkInsertPartitioner;
 
   public BulkInsertPreppedDeltaCommitActionExecutor(JavaSparkContext jsc,
       HoodieWriteConfig config, HoodieTable table,
       String instantTime, JavaRDD<HoodieRecord<T>> preppedInputRecordRdd,
-      Option<BulkInsertPartitioner> bulkInsertPartitioner) {
+      Option<BulkInsertPartitioner<T>> bulkInsertPartitioner) {
     super(jsc, config, table, instantTime, WriteOperationType.BULK_INSERT);
     this.preppedInputRecordRdd = preppedInputRecordRdd;
     this.bulkInsertPartitioner = bulkInsertPartitioner;

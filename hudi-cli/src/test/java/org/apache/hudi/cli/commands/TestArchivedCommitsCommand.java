@@ -62,6 +62,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     // Create table and connect
     String tableName = "test_table";
     tablePath = basePath + File.separator + tableName;
+
     new TableCommand().createTable(
         tablePath, tableName,
         "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");

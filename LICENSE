@@ -206,6 +206,7 @@
 This product includes code from Apache Hive.
 
 * org.apache.hadoop.hive.ql.io.CombineHiveInputFormat copied to org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat
+* org.apache.hadoop.hive.serde2.ColumnProjectionUtils copied and modified to org.apache.hudi.hadoop.HoodieColumnProjectionUtils
 
 Copyright: 2011-2019 The Apache Software Foundation
 Home page: http://hive.apache.org/

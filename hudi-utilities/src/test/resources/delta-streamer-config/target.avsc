@@ -68,8 +68,7 @@
   },{
     "name" : "current_ts",
     "type" : {
-      "type" : "long",
-      "logicalType" : "timestamp-micros"
+      "type" : "long"
       }
   }, {
     "name" : "height",

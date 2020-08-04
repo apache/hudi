@@ -20,12 +20,14 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -73,6 +75,8 @@ import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
 
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_PROP;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT_PROP;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT_PROP;
@@ -87,8 +91,6 @@ public class DeltaSync implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
-  public static final String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
-  public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
   /**
    * Delta Sync Config.
@@ -206,14 +208,14 @@ public class DeltaSync implements Serializable {
     } else {
       this.commitTimelineOpt = Option.empty();
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
-          cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat);
+          HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat);
     }
   }
 
   /**
    * Run one round of delta sync and return new compaction instant if one got scheduled.
    */
-  public Pair<Option<String>, JavaRDD<WriteStatus>> syncOnce() throws Exception {
+  public Pair<Option<String>, JavaRDD<WriteStatus>> syncOnce() throws IOException {
     Pair<Option<String>, JavaRDD<WriteStatus>> result = null;
     HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(schemaProvider));
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
@@ -249,8 +251,7 @@ public class DeltaSync implements Serializable {
    * of schemaProvider, checkpointStr and hoodieRecord
    * @throws Exception in case of any Exception
    */
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(
-      Option<HoodieTimeline> commitTimelineOpt) throws Exception {
+  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(Option<HoodieTimeline> commitTimelineOpt) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitTimelineOpt.isPresent()) {
@@ -265,7 +266,8 @@ public class DeltaSync implements Serializable {
           if (!commitMetadata.getMetadata(CHECKPOINT_KEY).isEmpty()) {
             resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
           }
-        } else {
+        }  else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
+            HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
           throw new HoodieDeltaStreamerException(
               "Unable to find previous checkpoint. Please double check if this table "
                   + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
@@ -275,7 +277,7 @@ public class DeltaSync implements Serializable {
       }
     } else {
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
-          cfg.tableType, cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat);
+          HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat);
     }
 
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
@@ -338,12 +340,12 @@ public class DeltaSync implements Serializable {
     }
 
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
-    String deleteMakrerField = props.getString(HoodieWriteConfig.DELETE_MARKER_FIELD_PROP,
+    String deleteMarkerField = props.getString(HoodieWriteConfig.DELETE_MARKER_FIELD_PROP,
         HoodieWriteConfig.DEFAULT_DELETE_MARKER_FIELD);
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
       HoodieRecordPayload payload = DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-          (Comparable) DataSourceUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false),
-          deleteMakrerField);
+          (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false),
+          deleteMarkerField);
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 
@@ -360,8 +362,8 @@ public class DeltaSync implements Serializable {
    * @return Option Compaction instant if one is scheduled
    */
   private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
-      HoodieDeltaStreamerMetrics metrics, Timer.Context overallTimerContext) throws Exception {
-
+                                                                 HoodieDeltaStreamerMetrics metrics,
+                                                                 Timer.Context overallTimerContext) {
     Option<String> scheduledCompactionInstant = Option.empty();
     // filter dupes if needed
     if (cfg.filterDupes) {
@@ -476,7 +478,7 @@ public class DeltaSync implements Serializable {
   /**
    * Sync to Hive.
    */
-  public void syncHiveIfNeeded() throws ClassNotFoundException {
+  public void syncHiveIfNeeded() {
     if (cfg.enableHiveSync) {
       syncHive();
     }
@@ -591,3 +593,4 @@ public class DeltaSync implements Serializable {
     return commitTimelineOpt;
   }
 }
+

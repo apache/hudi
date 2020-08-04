@@ -35,12 +35,12 @@ public class BulkInsertPreppedCommitActionExecutor<T extends HoodieRecordPayload
     extends CommitActionExecutor<T> {
 
   private final JavaRDD<HoodieRecord<T>> preppedInputRecordRdd;
-  private final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner;
+  private final Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner;
 
   public BulkInsertPreppedCommitActionExecutor(JavaSparkContext jsc,
       HoodieWriteConfig config, HoodieTable table,
       String instantTime, JavaRDD<HoodieRecord<T>> preppedInputRecordRdd,
-      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+      Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner) {
     super(jsc, config, table, instantTime, WriteOperationType.BULK_INSERT);
     this.preppedInputRecordRdd = preppedInputRecordRdd;
     this.userDefinedBulkInsertPartitioner = userDefinedBulkInsertPartitioner;

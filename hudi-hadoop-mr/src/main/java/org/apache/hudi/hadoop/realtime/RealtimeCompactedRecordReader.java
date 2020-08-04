@@ -48,7 +48,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   protected final RecordReader<NullWritable, ArrayWritable> parquetReader;
   private final Map<String, HoodieRecord<? extends HoodieRecordPayload>> deltaRecordMap;
 
-  public RealtimeCompactedRecordReader(HoodieRealtimeFileSplit split, JobConf job,
+  public RealtimeCompactedRecordReader(RealtimeSplit split, JobConf job,
       RecordReader<NullWritable, ArrayWritable> realReader) throws IOException {
     super(split, job);
     this.parquetReader = realReader;
@@ -120,7 +120,10 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         }
         Writable[] originalValue = arrayWritable.get();
         try {
-          System.arraycopy(replaceValue, 0, originalValue, 0, originalValue.length);
+          // Sometime originalValue.length > replaceValue.length.
+          // This can happen when hive query is looking for pseudo parquet columns like BLOCK_OFFSET_INSIDE_FILE
+          System.arraycopy(replaceValue, 0, originalValue, 0,
+              Math.min(originalValue.length, replaceValue.length));
           arrayWritable.set(originalValue);
         } catch (RuntimeException re) {
           LOG.error("Got exception when doing array copy", re);

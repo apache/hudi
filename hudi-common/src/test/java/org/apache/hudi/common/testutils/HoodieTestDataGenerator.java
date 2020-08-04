@@ -19,6 +19,9 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
@@ -34,12 +37,9 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -64,6 +64,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -107,7 +108,7 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"nation\", \"type\": \"bytes\"},"
       + "{\"name\": \"user_defined_delete_marker_field\", \"type\": \"boolean\", \"default\": false},"
       + "{\"name\":\"current_date\",\"type\": {\"type\": \"int\", \"logicalType\": \"date\"}},"
-      + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\", \"logicalType\": \"timestamp-micros\"}},"
+      + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\"}},"
       + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
 
   public static final String TRIP_EXAMPLE_SCHEMA =
@@ -125,6 +126,7 @@ public class HoodieTestDataGenerator {
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
   public static final String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,int,bigint,float,binary,boolean,int,bigint,decimal(10,6),"
       + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
+
 
   public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_METADATA_FIELDS =
@@ -404,7 +406,7 @@ public class HoodieTestDataGenerator {
   }
 
   public List<HoodieRecord> generateInsertsAsPerSchema(String commitTime, Integer n, String schemaStr) {
-    return generateInsertsStream(commitTime, n, schemaStr).collect(Collectors.toList());
+    return generateInsertsStream(commitTime, n, false, schemaStr).collect(Collectors.toList());
   }
 
   /**
@@ -431,38 +433,35 @@ public class HoodieTestDataGenerator {
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
-  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, String schemaStr) {
-    return generateInsertsStream(commitTime, n, false, schemaStr);
+  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr) {
+    return generateInsertsStream(commitTime, n, isFlattened, schemaStr, false);
   }
 
   public List<HoodieRecord> generateInsertsContainsAllPartitions(String instantTime, Integer n) {
     if (n < partitionPaths.length) {
       throw new HoodieIOException("n must greater then partitionPaths length");
     }
-    return generateInsertsStream(
-             instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true).collect(Collectors.toList());
+    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true).collect(Collectors.toList());
+  }
+
+  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
+    return generateInsertsStream(commitTime, n, isFlattened, schemaStr, containsAllPartitions,
+        () -> partitionPaths[RAND.nextInt(partitionPaths.length)],
+        () -> UUID.randomUUID().toString());
   }
 
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
-  public Stream<HoodieRecord> generateInsertsStream(
-          String instantTime, Integer n, boolean isFlattened, String schemaStr) {
-    return generateInsertsStream(instantTime, n, isFlattened, schemaStr, false);
-  }
-
-  /**
-   * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
-   */
-  public Stream<HoodieRecord> generateInsertsStream(
-      String instantTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
+  public Stream<HoodieRecord> generateInsertsStream(String instantTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions,
+                                                    Supplier<String> partitionPathSupplier, Supplier<String> recordKeySupplier) {
     int currSize = getNumExistingKeys(schemaStr);
     return IntStream.range(0, n).boxed().map(i -> {
-      String partitionPath = partitionPaths[RAND.nextInt(partitionPaths.length)];
+      String partitionPath = partitionPathSupplier.get();
       if (containsAllPartitions && i < partitionPaths.length) {
         partitionPath = partitionPaths[i];
       }
-      HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
+      HoodieKey key = new HoodieKey(recordKeySupplier.get(), partitionPath);
       KeyPartition kp = new KeyPartition();
       kp.key = key;
       kp.partitionPath = partitionPath;
