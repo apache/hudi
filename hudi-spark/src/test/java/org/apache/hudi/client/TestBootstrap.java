@@ -348,8 +348,9 @@ public class TestBootstrap extends HoodieClientTestBase {
     assertEquals(instant, metaClient.getActiveTimeline()
         .getCommitsTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
 
-    Dataset<Row> bootstrapped = sqlContext.read().format("parquet").load(basePath);
-    Dataset<Row> original = sqlContext.read().format("parquet").load(bootstrapBasePath);
+    sqlContext.clearCache();
+    Dataset<Row> bootstrapped = sqlContext.read().format("parquet").load(basePath).cache();
+    Dataset<Row> original = sqlContext.read().format("parquet").load(bootstrapBasePath).cache();
     bootstrapped.registerTempTable("bootstrapped");
     original.registerTempTable("original");
     if (checkNumRawFiles) {
@@ -357,7 +358,7 @@ public class TestBootstrap extends HoodieClientTestBase {
           (status) -> status.getName().endsWith(".parquet"))
           .stream().flatMap(x -> x.getValue().stream()).collect(Collectors.toList());
       assertEquals(files.size() * numVersions,
-          sqlContext.sql("select distinct _hoodie_file_name from bootstrapped").count());
+          bootstrapped.select("_hoodie_file_name").distinct().count());
     }
 
     if (!isDeltaCommit) {
