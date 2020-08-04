@@ -71,7 +71,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class HoodieClientTestBase extends HoodieClientTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieClientTestBase.class);
+  protected static final Logger LOG = LogManager.getLogger(HoodieClientTestBase.class);
 
   @BeforeEach
   public void setUp() throws Exception {

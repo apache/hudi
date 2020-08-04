@@ -181,12 +181,16 @@ public class TestBootstrap extends HoodieClientTestBase {
 
   @Test
   public void testMetadataBootstrapUnpartitionedCOW() throws Exception {
+    LOG.error("testMetadataBootstrapUnpartitionedCOW started. Paths :" + basePath + ", " + bootstrapBasePath);
     testBootstrapCommon(false, false, EffectiveMode.METADATA_BOOTSTRAP_MODE);
+    LOG.error("testMetadataBootstrapUnpartitionedCOW ended");
   }
 
   @Test
   public void testMetadataBootstrapWithUpdatesCOW() throws Exception {
+    LOG.error("testMetadataBootstrapWithUpdatesCOW started. Paths :" + basePath + ", " + bootstrapBasePath);
     testBootstrapCommon(true, false, EffectiveMode.METADATA_BOOTSTRAP_MODE);
+    LOG.error("testMetadataBootstrapWithUpdatesCOW ended");
   }
 
   private enum EffectiveMode {
@@ -311,27 +315,37 @@ public class TestBootstrap extends HoodieClientTestBase {
 
   @Test
   public void testMetadataBootstrapWithUpdatesMOR() throws Exception {
+    LOG.error("testMetadataBootstrapWithUpdatesMOR started. Paths :" + basePath + ", " + bootstrapBasePath);
     testBootstrapCommon(true, true, EffectiveMode.METADATA_BOOTSTRAP_MODE);
+    LOG.error("testMetadataBootstrapWithUpdatesMOR ended");
   }
 
   @Test
   public void testFullBoostrapOnlyCOW() throws Exception {
+    LOG.error("testFullBoostrapOnlyCOW started. Paths :" + basePath + ", " + bootstrapBasePath);
     testBootstrapCommon(true, false, EffectiveMode.FULL_BOOTSTRAP_MODE);
+    LOG.error("testFullBoostrapOnlyCOW ended");
   }
 
   @Test
   public void testFullBootstrapWithUpdatesMOR() throws Exception {
+    LOG.error("testFullBootstrapWithUpdatesMOR started. Paths :" + basePath + ", " + bootstrapBasePath);
     testBootstrapCommon(true, true, EffectiveMode.FULL_BOOTSTRAP_MODE);
+    LOG.error("testFullBootstrapWithUpdatesMOR ended");
   }
 
   @Test
   public void testMetaAndFullBoostrapCOW() throws Exception {
+    LOG.error("testMetaAndFullBoostrapCOW started. Paths :" + basePath + ", " + bootstrapBasePath);
     testBootstrapCommon(true, false, EffectiveMode.MIXED_BOOTSTRAP_MODE);
+    LOG.error("testMetaAndFullBoostrapCOW ended");
   }
 
   @Test
   public void testMetadataAndFullBootstrapWithUpdatesMOR() throws Exception {
+    LOG.error("testMetadataAndFullBootstrapWithUpdatesMOR started. Paths :" + basePath + ", " + bootstrapBasePath);
     testBootstrapCommon(true, true, EffectiveMode.MIXED_BOOTSTRAP_MODE);
+    LOG.error("testMetadataAndFullBootstrapWithUpdatesMOR ended");
   }
 
   private void checkBootstrapResults(int totalRecords, Schema schema, String maxInstant, boolean checkNumRawFiles,
@@ -357,8 +371,12 @@ public class TestBootstrap extends HoodieClientTestBase {
       List<HoodieFileStatus> files = BootstrapUtils.getAllLeafFoldersWithFiles(metaClient.getFs(), bootstrapBasePath,
           (status) -> status.getName().endsWith(".parquet"))
           .stream().flatMap(x -> x.getValue().stream()).collect(Collectors.toList());
-      assertEquals(files.size() * numVersions,
-          bootstrapped.select("_hoodie_file_name").distinct().count());
+      LOG.error(("List of file obtained from listing bootstrap base path (" + bootstrapBasePath + ") is : "
+          + files.stream().map(f -> f.getPath().getUri()).collect(Collectors.joining(","))));
+      List<Row> rows = sqlContext.sql("select distinct _hoodie_file_name from bootstrapped").collectAsList();
+      LOG.error(("File List from sql query on base path (" + basePath + ") is : "
+          + rows.stream().map(r -> r.getString(0)).collect(Collectors.joining(","))));
+      assertEquals(files.size() * numVersions, rows.size());
     }
 
     if (!isDeltaCommit) {
