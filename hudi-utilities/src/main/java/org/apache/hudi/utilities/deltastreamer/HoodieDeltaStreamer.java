@@ -274,7 +274,7 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--enable-sync"}, description = "Enable syncing meta")
     public Boolean enableMetaSync = false;
 
-    @Parameter(names = {"--hoodie-sync-client-tool-class"}, description = "Meta sync client tool, using comma to separate multi tools")
+    @Parameter(names = {"--sync-tool-classes"}, description = "Meta sync client tool, using comma to separate multi tools")
     public String syncClientToolClass = "org.apache.hudi.hive.HiveSyncTool";
 
     @Parameter(names = {"--max-pending-compactions"},
@@ -363,6 +363,11 @@ public class HoodieDeltaStreamer implements Serializable {
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     JavaSparkContext jssc =
         UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
+
+    if (cfg.enableHiveSync) {
+      LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
+    }
+
     try {
       new HoodieDeltaStreamer(cfg, jssc).sync();
     } finally {

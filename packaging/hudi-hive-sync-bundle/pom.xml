@@ -67,7 +67,7 @@
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
-		  <include>org.apache.hudi:hudi-hive-sync</include>
+		          <include>org.apache.hudi:hudi-hive-sync</include>
 
                   <include>com.beust:jcommander</include>
                   <include>org.apache.avro:avro</include>

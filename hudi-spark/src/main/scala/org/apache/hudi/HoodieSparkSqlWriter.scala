@@ -273,7 +273,7 @@ private[hudi] object HoodieSparkSqlWriter {
                        hadoopConf: Configuration): Boolean = {
     val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
     var metaSyncEnabled = parameters.get(HUDI_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
-    var syncClientToolClass = parameters.get(SYNC_CLIENT_TOOL_CLASS).get
+    var syncClientToolClass = parameters(SYNC_CLIENT_TOOL_CLASS)
     // for backward compatibility
     if (hiveSyncEnabled) {
       metaSyncEnabled = true
@@ -282,15 +282,15 @@ private[hudi] object HoodieSparkSqlWriter {
     var metaSyncSuccess = true
     if (metaSyncEnabled) {
       val impls = syncClientToolClass.split(",")
+      val fs = FSUtils.getFs(basePath.toString, hadoopConf)
+
       impls.foreach(impl => {
         val syncSuccess = impl.trim match {
-          case DEFAULT_SYNC_CLIENT_TOOL_CLASS => {
+          case "org.apache.hudi.hive.HiveSyncTool" => {
             log.info("Syncing to Hive Metastore (URL: " + parameters(HIVE_URL_OPT_KEY) + ")")
-            val fs = FSUtils.getFs(basePath.toString, hadoopConf)
             syncHive(basePath, fs, parameters)
           }
           case _ => {
-            val fs = FSUtils.getFs(basePath.toString, hadoopConf)
             val properties = new Properties();
             properties.putAll(parameters)
             properties.put("basePath", basePath.toString)
