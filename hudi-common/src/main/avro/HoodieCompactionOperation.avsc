@@ -61,6 +61,11 @@
                         "values":"double"
                      }],
                      "default": null
+                  },
+                  {
+                     "name":"bootstrapFilePath",
+                     "type":["null", "string"],
+                     "default": null
                   }
                ]
             }

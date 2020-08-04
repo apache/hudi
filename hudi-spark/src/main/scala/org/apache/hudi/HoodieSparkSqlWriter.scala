@@ -26,10 +26,11 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{HoodieWriteClient, WriteStatus}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecordPayload
+import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.ReflectionUtils
@@ -111,10 +112,12 @@ private[hudi] object HoodieSparkSqlWriter {
       val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
       val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
       val hoodieAllIncomingRecords = genericRecords.map(gr => {
-        val orderingVal = DataSourceUtils.getNestedFieldVal(gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false)
+        val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false)
             .asInstanceOf[Comparable[_]]
         DataSourceUtils.createHoodieRecord(gr,
-          orderingVal, keyGenerator.getKey(gr), parameters(PAYLOAD_CLASS_OPT_KEY))
+          orderingVal, keyGenerator.getKey(gr),
+          parameters(PAYLOAD_CLASS_OPT_KEY),
+          parameters(DELETE_FIELD_OPT_KEY))
       }).toJavaRDD()
 
       // Handle various save modes
@@ -133,8 +136,9 @@ private[hudi] object HoodieSparkSqlWriter {
 
       // Create the table if not present
       if (!exists) {
-        HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get, tableType,
-          tblName, "archived", parameters(PAYLOAD_CLASS_OPT_KEY))
+        //FIXME(bootstrap): bootstrapIndexClass needs to be set when bootstrap index class is integrated.
+        HoodieTableMetaClient.initTableTypeWithBootstrap(sparkContext.hadoopConfiguration, path.get, HoodieTableType.valueOf(tableType),
+          tblName, "archived", parameters(PAYLOAD_CLASS_OPT_KEY), null, null, null)
       }
 
       // Create a HoodieWriteClient & issue the write.
@@ -206,6 +210,7 @@ private[hudi] object HoodieSparkSqlWriter {
       TABLE_TYPE_OPT_KEY -> DEFAULT_TABLE_TYPE_OPT_VAL,
       PRECOMBINE_FIELD_OPT_KEY -> DEFAULT_PRECOMBINE_FIELD_OPT_VAL,
       PAYLOAD_CLASS_OPT_KEY -> DEFAULT_PAYLOAD_OPT_VAL,
+      DELETE_FIELD_OPT_KEY -> DEFAULT_DELETE_FIELD_OPT_VAL,
       RECORDKEY_FIELD_OPT_KEY -> DEFAULT_RECORDKEY_FIELD_OPT_VAL,
       PARTITIONPATH_FIELD_OPT_KEY -> DEFAULT_PARTITIONPATH_FIELD_OPT_VAL,
       KEYGENERATOR_CLASS_OPT_KEY -> DEFAULT_KEYGENERATOR_CLASS_OPT_VAL,

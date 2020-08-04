@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline.dto;
 
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -35,6 +36,8 @@ public class BaseFileDTO {
   private String fullPath;
   @JsonProperty("fileLen")
   private long fileLen;
+  @JsonProperty("bootstrapBaseFile")
+  private BaseFileDTO bootstrapBaseFile;
 
   public static HoodieBaseFile toHoodieBaseFile(BaseFileDTO dto) {
     if (null == dto) {
@@ -48,18 +51,39 @@ public class BaseFileDTO {
       baseFile = new HoodieBaseFile(dto.fullPath);
       baseFile.setFileLen(dto.fileLen);
     }
+
+    baseFile.setBootstrapBaseFile(toBaseFile(dto.bootstrapBaseFile));
     return baseFile;
   }
 
-  public static BaseFileDTO fromHoodieBaseFile(HoodieBaseFile dataFile) {
-    if (null == dataFile) {
+  private static BaseFile toBaseFile(BaseFileDTO dto) {
+    if (null == dto) {
+      return null;
+    }
+
+    BaseFile baseFile;
+    if (null != dto.fileStatus) {
+      baseFile = new BaseFile(FileStatusDTO.toFileStatus(dto.fileStatus));
+    } else {
+      baseFile = new BaseFile(dto.fullPath);
+      baseFile.setFileLen(dto.fileLen);
+    }
+    return baseFile;
+  }
+
+  public static BaseFileDTO fromHoodieBaseFile(BaseFile baseFile) {
+    if (null == baseFile) {
       return null;
     }
 
     BaseFileDTO dto = new BaseFileDTO();
-    dto.fileStatus = FileStatusDTO.fromFileStatus(dataFile.getFileStatus());
-    dto.fullPath = dataFile.getPath();
-    dto.fileLen = dataFile.getFileLen();
+    dto.fileStatus = FileStatusDTO.fromFileStatus(baseFile.getFileStatus());
+    dto.fullPath = baseFile.getPath();
+    dto.fileLen = baseFile.getFileLen();
+    if (baseFile instanceof HoodieBaseFile) {
+      dto.bootstrapBaseFile = ((HoodieBaseFile)baseFile).getBootstrapBaseFile()
+          .map(BaseFileDTO::fromHoodieBaseFile).orElse(null);
+    }
     return dto;
   }
 

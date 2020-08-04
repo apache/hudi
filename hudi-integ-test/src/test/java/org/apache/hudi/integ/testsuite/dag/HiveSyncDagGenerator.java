@@ -26,10 +26,7 @@ import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.HiveSyncNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
-import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.HiveQueryNode;
-import org.apache.hudi.integ.testsuite.dag.nodes.HiveSyncNode;
-import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
 
 public class HiveSyncDagGenerator implements WorkflowDagGenerator {
 

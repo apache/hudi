@@ -23,6 +23,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.deltastreamer.DeltaSync;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.spark.api.java.JavaRDD;
@@ -39,14 +40,9 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
     super(cfg, jssc);
   }
 
-  public HoodieDeltaStreamerWrapper(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf conf) throws Exception {
-    super(cfg, jssc, fs, conf);
-  }
-
-  public JavaRDD<WriteStatus> upsert(Operation operation) throws
-      Exception {
+  public JavaRDD<WriteStatus> upsert(Operation operation) throws Exception {
     cfg.operation = operation;
-    return deltaSyncService.getDeltaSync().syncOnce().getRight();
+    return deltaSyncService.get().getDeltaSync().syncOnce().getRight();
   }
 
   public JavaRDD<WriteStatus> insert() throws Exception {
@@ -71,7 +67,8 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
   }
 
   public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
-    return deltaSyncService.getDeltaSync().readFromSource(deltaSyncService.getDeltaSync().getCommitTimelineOpt());
+    DeltaSync service = deltaSyncService.get().getDeltaSync();
+    return service.readFromSource(service.getCommitTimelineOpt());
   }
 
 }

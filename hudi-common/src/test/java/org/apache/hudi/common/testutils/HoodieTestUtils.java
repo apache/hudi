@@ -118,6 +118,12 @@ public class HoodieTestUtils {
     return init(getDefaultHadoopConf(), basePath, tableType);
   }
 
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath) throws IOException {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH, bootstrapBasePath);
+    return init(getDefaultHadoopConf(), basePath, tableType, props);
+  }
+
   public static HoodieTableMetaClient init(String basePath, HoodieFileFormat baseFileFormat) throws IOException {
     return init(getDefaultHadoopConf(), basePath, HoodieTableType.COPY_ON_WRITE, baseFileFormat);
   }

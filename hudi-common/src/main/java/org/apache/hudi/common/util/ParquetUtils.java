@@ -190,7 +190,7 @@ public class ParquetUtils {
   }
 
   public static Schema readAvroSchema(Configuration configuration, Path parquetFilePath) {
-    return new AvroSchemaConverter().convert(readSchema(configuration, parquetFilePath));
+    return new AvroSchemaConverter(configuration).convert(readSchema(configuration, parquetFilePath));
   }
 
   /**

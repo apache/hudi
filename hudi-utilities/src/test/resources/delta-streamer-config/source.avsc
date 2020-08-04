@@ -56,6 +56,10 @@
     "name" : "nation",
     "type" : "bytes"
   },{
+    "name" : "user_defined_delete_marker_field",
+    "type" : "boolean",
+    "default" : false
+  },{
     "name" : "current_date",
     "type" : {
       "type" : "int",
@@ -64,8 +68,7 @@
   },{
     "name" : "current_ts",
     "type" : {
-      "type" : "long",
-      "logicalType" : "timestamp-micros"
+      "type" : "long"
       }
   },{
     "name" : "height",

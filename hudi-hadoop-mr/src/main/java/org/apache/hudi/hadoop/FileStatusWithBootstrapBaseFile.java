@@ -16,28 +16,27 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.keygen;
+package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 
-import org.apache.avro.generic.GenericRecord;
-
-import java.io.Serializable;
+import java.io.IOException;
 
 /**
- * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record.
+ * Sub-Type of File Status tracking both skeleton and bootstrap base file's status.
  */
-public abstract class KeyGenerator implements Serializable {
+public class FileStatusWithBootstrapBaseFile extends FileStatus {
 
-  protected transient TypedProperties config;
+  private final FileStatus bootstrapBaseFileStatus;
 
-  protected KeyGenerator(TypedProperties config) {
-    this.config = config;
+  public FileStatusWithBootstrapBaseFile(FileStatus fileStatus, FileStatus bootstrapBaseFileStatus) throws IOException {
+    super(fileStatus);
+    this.bootstrapBaseFileStatus = bootstrapBaseFileStatus;
   }
 
-  /**
-   * Generate a Hoodie Key out of provided generic record.
-   */
-  public abstract HoodieKey getKey(GenericRecord record);
+  @Override
+  public Path getPath() {
+    return new PathWithBootstrapFileStatus(super.getPath(), bootstrapBaseFileStatus);
+  }
 }

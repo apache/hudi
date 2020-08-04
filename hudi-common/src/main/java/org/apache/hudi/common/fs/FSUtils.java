@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -45,6 +46,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -52,6 +54,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -112,6 +115,10 @@ public class FSUtils {
 
   public static String makeDataFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
     return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, fileExtension);
+  }
+
+  public static String makeBootstrapIndexFileName(String instantTime, String fileId, String ext) {
+    return String.format("%s_%s_%s%s", fileId, "1-0-1", instantTime, ext);
   }
 
   public static String maskWithoutFileId(String instantTime, int taskPartitionId) {
@@ -225,18 +232,14 @@ public class FSUtils {
 
   public static String getFileExtension(String fullName) {
     Objects.requireNonNull(fullName);
-    String fileName = (new File(fullName)).getName();
-    int dotIndex = fileName.indexOf('.');
+    String fileName = new File(fullName).getName();
+    int dotIndex = fileName.lastIndexOf('.');
     return dotIndex == -1 ? "" : fileName.substring(dotIndex);
   }
 
   private static PathFilter getExcludeMetaPathFilter() {
     // Avoid listing and including any folders under the metafolder
     return (path) -> !path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME);
-  }
-
-  public static String getInstantTime(String name) {
-    return name.replace(getFileExtension(name), "");
   }
 
   /**
@@ -516,4 +519,33 @@ public class FSUtils {
     return returnConf;
   }
 
+  /**
+   * Get the FS implementation for this table.
+   * @param path  Path String
+   * @param hadoopConf  Serializable Hadoop Configuration
+   * @param consistencyGuardConfig Consistency Guard Config
+   * @return HoodieWrapperFileSystem
+   */
+  public static HoodieWrapperFileSystem getFs(String path, SerializableConfiguration hadoopConf,
+      ConsistencyGuardConfig consistencyGuardConfig) {
+    FileSystem fileSystem = FSUtils.getFs(path, hadoopConf.newCopy());
+    return new HoodieWrapperFileSystem(fileSystem,
+        consistencyGuardConfig.isConsistencyCheckEnabled()
+            ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig)
+            : new NoOpConsistencyGuard());
+  }
+
+  /**
+   * Helper to filter out paths under metadata folder when running fs.globStatus.
+   * @param fs  File System
+   * @param globPath Glob Path
+   * @return
+   * @throws IOException
+   */
+  public static List<FileStatus> getGlobStatusExcludingMetaFolder(FileSystem fs, Path globPath) throws IOException {
+    FileStatus[] statuses = fs.globStatus(globPath);
+    return Arrays.stream(statuses)
+        .filter(fileStatus -> !fileStatus.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME))
+        .collect(Collectors.toList());
+  }
 }

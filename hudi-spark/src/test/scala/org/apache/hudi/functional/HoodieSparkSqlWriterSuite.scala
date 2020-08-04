@@ -100,6 +100,52 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     }
   }
 
+  test("test OverwriteWithLatestAvroPayload with user defined delete field") {
+    val session = SparkSession.builder()
+      .appName("test_append_mode")
+      .master("local[2]")
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .getOrCreate()
+    val path = java.nio.file.Files.createTempDirectory("hoodie_test_path1")
+
+    try {
+      val sqlContext = session.sqlContext
+      val hoodieFooTableName = "hoodie_foo_tbl"
+
+      val keyField = "id"
+      val deleteMarkerField = "delete_field"
+
+      //create a new table
+      val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
+        HoodieWriteConfig.TABLE_NAME -> hoodieFooTableName,
+        "hoodie.insert.shuffle.parallelism" -> "2",
+        "hoodie.upsert.shuffle.parallelism" -> "2",
+        DELETE_FIELD_OPT_KEY -> deleteMarkerField,
+        RECORDKEY_FIELD_OPT_KEY -> keyField)
+      val fooTableParams = HoodieSparkSqlWriter.parametersWithWriteDefaults(fooTableModifier)
+
+      val id1 = UUID.randomUUID().toString
+      val dataFrame = session.createDataFrame(Seq(
+        (id1, 1, false)
+      )) toDF(keyField, "ts", deleteMarkerField)
+
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, dataFrame)
+      val recordCount1 = sqlContext.read.format("org.apache.hudi").load(path.toString + "/*/*.parquet").count
+      assert(recordCount1 == 1, "result should be 1, but get " + recordCount1)
+
+      val dataFrame2 = session.createDataFrame(Seq(
+        (id1, 2, true)
+      )) toDF(keyField, "ts", deleteMarkerField)
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, dataFrame2)
+
+      val recordCount2 = sqlContext.read.format("org.apache.hudi").load(path.toString + "/*/*.parquet").count()
+      assert(recordCount2 == 0, "result should be 0, but get " + recordCount2)
+    } finally {
+      session.stop()
+      FileUtils.deleteDirectory(path.toFile)
+    }
+  }
+
   case class Test(uuid: String, ts: Long)
 
 }

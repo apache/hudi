@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.async.AbstractAsyncService;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -83,11 +84,16 @@ public class HoodieDeltaStreamer implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
 
-  public static String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
+  public static final String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
+  public static final String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
   protected final transient Config cfg;
 
-  protected transient DeltaSyncService deltaSyncService;
+  private final TypedProperties properties;
+
+  protected transient Option<DeltaSyncService> deltaSyncService;
+
+  private final Option<BootstrapExecutor> bootstrapExecutor;
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
@@ -104,19 +110,27 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
-                             TypedProperties properties) throws IOException {
+                             TypedProperties props) throws IOException {
+    // Resolving the properties first in a consistent way
+    this.properties = props != null ? props : UtilHelpers.readConfig(
+        FSUtils.getFs(cfg.propsFilePath, jssc.hadoopConfiguration()),
+        new Path(cfg.propsFilePath), cfg.configs).getConfig();
+
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
-          UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, properties);
+          UtilHelpers.createInitialCheckpointProvider(cfg.initialCheckpointProvider, this.properties);
       checkPointProvider.init(conf);
       cfg.checkpoint = checkPointProvider.getCheckpoint();
     }
     this.cfg = cfg;
-    this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, conf, properties);
+    this.bootstrapExecutor = Option.ofNullable(
+        cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, this.properties) : null);
+    this.deltaSyncService = Option.ofNullable(
+        cfg.runBootstrap ? null : new DeltaSyncService(cfg, jssc, fs, conf, this.properties));
   }
 
   public void shutdownGracefully() {
-    deltaSyncService.shutdown(false);
+    deltaSyncService.ifPresent(ds -> ds.shutdown(false));
   }
 
   /**
@@ -125,20 +139,37 @@ public class HoodieDeltaStreamer implements Serializable {
    * @throws Exception
    */
   public void sync() throws Exception {
-    if (cfg.continuousMode) {
-      deltaSyncService.start(this::onDeltaSyncShutdown);
-      deltaSyncService.waitForShutdown();
-      LOG.info("Delta Sync shutting down");
+    if (bootstrapExecutor.isPresent()) {
+      LOG.info("Performing bootstrap. Source=" + bootstrapExecutor.get().getBootstrapConfig().getBootstrapSourceBasePath());
+      bootstrapExecutor.get().execute();
     } else {
-      LOG.info("Delta Streamer running only single round");
-      try {
-        deltaSyncService.getDeltaSync().syncOnce();
-      } catch (Exception ex) {
-        LOG.error("Got error running delta sync once. Shutting down", ex);
-        throw ex;
-      } finally {
-        deltaSyncService.close();
-        LOG.info("Shut down delta streamer");
+      if (cfg.continuousMode) {
+        deltaSyncService.ifPresent(ds -> {
+          ds.start(this::onDeltaSyncShutdown);
+          try {
+            ds.waitForShutdown();
+          } catch (Exception e) {
+            throw new HoodieException(e.getMessage(), e);
+          }
+        });
+        LOG.info("Delta Sync shutting down");
+      } else {
+        LOG.info("Delta Streamer running only single round");
+        try {
+          deltaSyncService.ifPresent(ds -> {
+            try {
+              ds.getDeltaSync().syncOnce();
+            } catch (IOException e) {
+              throw new HoodieIOException(e.getMessage(), e);
+            }
+          });
+        } catch (Exception ex) {
+          LOG.error("Got error running delta sync once. Shutting down", ex);
+          throw ex;
+        } finally {
+          deltaSyncService.ifPresent(DeltaSyncService::close);
+          LOG.info("Shut down delta streamer");
+        }
       }
     }
   }
@@ -149,7 +180,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
   private boolean onDeltaSyncShutdown(boolean error) {
     LOG.info("DeltaSync shutdown. Closing write client. Error?" + error);
-    deltaSyncService.close();
+    deltaSyncService.ifPresent(DeltaSyncService::close);
     return true;
   }
 
@@ -181,7 +212,7 @@ public class HoodieDeltaStreamer implements Serializable {
     public String tableType;
 
     @Parameter(names = {"--base-file-format"}, description = "File format for the base files. PARQUET (or) HFILE", required = false)
-    public String baseFileFormat;
+    public String baseFileFormat = "PARQUET";
 
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
@@ -301,6 +332,12 @@ public class HoodieDeltaStreamer implements Serializable {
         + "Use this field only when switching source, for example, from DFS source to Kafka Source.")
     public String initialCheckpointProvider = null;
 
+    @Parameter(names = {"--run-bootstrap"}, description = "Run bootstrap if bootstrap index is not found")
+    public Boolean runBootstrap = false;
+
+    @Parameter(names = {"--bootstrap-index-class"}, description = "subclass of BootstrapIndex")
+    public String bootstrapIndexClass = HFileBootstrapIndex.class.getName();
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
@@ -411,9 +448,7 @@ public class HoodieDeltaStreamer implements Serializable {
       ValidationUtils.checkArgument(!cfg.filterDupes || cfg.operation != Operation.UPSERT,
           "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
 
-      this.props = properties != null ? properties : UtilHelpers.readConfig(
-          FSUtils.getFs(cfg.propsFilePath, jssc.hadoopConfiguration()),
-          new Path(cfg.propsFilePath), cfg.configs).getConfig();
+      this.props = properties;
       LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
 
@@ -634,6 +669,6 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public DeltaSyncService getDeltaSyncService() {
-    return deltaSyncService;
+    return deltaSyncService.get();
   }
 }

@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -222,6 +223,13 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
       LOG.info("Deleted pending commit " + instantToBeDeleted);
     } else {
       LOG.warn("Rollback finished without deleting inflight instant file. Instant=" + instantToBeDeleted);
+    }
+  }
+
+  protected void dropBootstrapIndexIfNeeded(HoodieInstant instantToRollback) {
+    if (HoodieTimeline.compareTimestamps(instantToRollback.getTimestamp(), HoodieTimeline.EQUALS, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS)) {
+      LOG.info("Dropping bootstrap index as metadata bootstrap commit is getting rolled back !!");
+      BootstrapIndex.getBootstrapIndex(table.getMetaClient()).dropIndex();
     }
   }
 }

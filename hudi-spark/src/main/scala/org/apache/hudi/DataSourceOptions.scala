@@ -185,6 +185,13 @@ object DataSourceWriteOptions {
   val DEFAULT_PAYLOAD_OPT_VAL = classOf[OverwriteWithLatestAvroPayload].getName
 
   /**
+   * Field used in OverwriteWithLatestAvroPayload combineAndGetUpdateValue, When two records have the same
+   * key value, we will check if the new record is deleted by the delete field.
+   */
+  val DELETE_FIELD_OPT_KEY = "hoodie.datasource.write.delete.field"
+  val DEFAULT_DELETE_FIELD_OPT_VAL = "_hoodie_is_deleted"
+
+  /**
     * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value
     * will be obtained by invoking .toString() on the field value. Nested fields can be specified using
     * the dot notation eg: `a.b.c`
@@ -207,7 +214,8 @@ object DataSourceWriteOptions {
     */
   val HIVE_STYLE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.hive_style_partitioning"
   val DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = "false"
-
+  val URL_ENCODE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.partitionpath.urlencode"
+  val DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL = "false"
   /**
     * Key generator class, that implements will extract the key out of incoming record
     *
