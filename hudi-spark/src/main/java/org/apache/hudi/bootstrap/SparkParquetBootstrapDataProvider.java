@@ -70,7 +70,7 @@ public class SparkParquetBootstrapDataProvider extends FullRecordBootstrapDataPr
             gr, props.getString("hoodie.datasource.write.precombine.field"), false);
         try {
           return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr),
-              props.getString("hoodie.datasource.write.payload.class"), "_hoodie_is_deleted");
+              props.getString("hoodie.datasource.write.payload.class"));
         } catch (IOException ioe) {
           throw new HoodieIOException(ioe.getMessage(), ioe);
         }
