@@ -18,6 +18,8 @@
 
 package org.apache.hudi.integ;
 
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -158,8 +160,21 @@ public abstract class ITTestBase {
     ExecCreateCmdResponse createCmdResponse = cmd.exec();
     TestExecStartResultCallback callback =
         new TestExecStartResultCallback(new ByteArrayOutputStream(), new ByteArrayOutputStream());
-    dockerClient.execStartCmd(createCmdResponse.getId()).withDetach(false).withTty(false).exec(callback)
-        .awaitCompletion();
+    // Each execution of command(s) in docker should not be more than 15 mins. Otherwise, it is deemed stuck. We will
+    // try to capture stdout and stderr of the stuck process.
+
+    boolean completed =
+      dockerClient.execStartCmd(createCmdResponse.getId()).withDetach(false).withTty(false).exec(callback)
+        .awaitCompletion(900, SECONDS);
+    if (!completed) {
+      callback.getStderr().flush();
+      callback.getStdout().flush();
+      LOG.error("\n\n ###### Timed Out Command : " +  Arrays.asList(command));
+      LOG.error("\n\n ###### Stderr of timed-out command #######\n" + callback.getStderr().toString());
+      LOG.error("\n\n ###### stdout of timed-out command #######\n" + callback.getStderr().toString());
+      throw new TimeoutException("Command " + command +  " has been running for more than 15 minutes. "
+        + "Killing and failing !!");
+    }
     int exitCode = dockerClient.inspectExecCmd(createCmdResponse.getId()).exec().getExitCode();
     LOG.info("Exit code for command : " + exitCode);
     if (exitCode != 0) {
