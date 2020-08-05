@@ -167,7 +167,7 @@ public class TestHiveSyncTool {
     assertTrue(hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName),
         "Table " + HiveTestUtil.hiveSyncConfig.tableName + " should exist after sync completes");
     assertEquals(hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).size(),
-        hiveClient.getDataSchema().getColumns().size() + 1,
+        hiveClient.getDataSchema(false).getColumns().size() + 1,
         "Hive Schema should match the table schema + partition field");
     assertEquals(5, hiveClient.scanTablePartitions(HiveTestUtil.hiveSyncConfig.tableName).size(),
         "Table partitions should match the number of partitions we wrote");
@@ -213,6 +213,27 @@ public class TestHiveSyncTool {
     assertEquals(6, tablePartitions.size(), "The one partition we wrote should be added to hive");
     assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.hiveSyncConfig.tableName).get(),
         "The last commit that was sycned should be 100");
+  }
+
+  @Test
+  public void testBasicSyncHideMetadataColumns() throws Exception {
+    HiveTestUtil.hiveSyncConfig.skipMetadataColumns = true;
+    String commitTime = "100";
+    HiveTestUtil.createCOWTable(commitTime, 5, true);
+    HoodieHiveClient hiveClient =
+        new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    assertFalse(hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName), "Table " + HiveTestUtil.hiveSyncConfig.tableName + " should not exist initially");
+
+    // Lets do the sync
+    HiveSyncTool tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+    assertTrue(hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName), "Table " + HiveTestUtil.hiveSyncConfig.tableName + " should exist after sync completes");
+    assertEquals(hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).size(),
+        hiveClient.getDataSchema(true).getColumns().size() + 1,
+        "Hive Schema should match the table schema + partition field");
+    assertEquals(SchemaTestUtil.getSimpleSchema().getFields().size(),
+        hiveClient.getDataSchema(true).getColumns().size(),
+        "Columns should match original data w/o metadata columns");
   }
 
   @ParameterizedTest
@@ -449,7 +470,7 @@ public class TestHiveSyncTool {
     assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName),
         "Table " + hiveSyncConfig.tableName + " should exist after sync completes");
     assertEquals(hiveClient.getTableSchema(hiveSyncConfig.tableName).size(),
-        hiveClient.getDataSchema().getColumns().size() + 3,
+        hiveClient.getDataSchema(false).getColumns().size() + 3,
         "Hive Schema should match the table schema + partition fields");
     assertEquals(5, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
         "Table partitions should match the number of partitions we wrote");
@@ -480,7 +501,7 @@ public class TestHiveSyncTool {
     assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName),
             "Table " + hiveSyncConfig.tableName + " should exist after sync completes");
     assertEquals(hiveClient.getTableSchema(hiveSyncConfig.tableName).size(),
-            hiveClient.getDataSchema().getColumns().size(),
+            hiveClient.getDataSchema(false).getColumns().size(),
             "Hive Schema should match the table schema，ignoring the partition fields");
     assertEquals(0, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
             "Table should not have partitions because of the NonPartitionedExtractor");

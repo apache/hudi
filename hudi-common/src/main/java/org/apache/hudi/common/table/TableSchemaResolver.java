@@ -20,6 +20,8 @@ package org.apache.hudi.common.table;
 
 import java.io.IOException;
 
+import java.util.List;
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.SchemaCompatibility;
@@ -29,6 +31,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -48,6 +51,7 @@ import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.Type;
 
 /**
  * Helper class to read schema from data files and log files and to convert it between different formats.
@@ -166,6 +170,24 @@ public class TableSchemaResolver {
     Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(true);
     return schemaFromCommitMetadata.isPresent() ? convertAvroSchemaToParquet(schemaFromCommitMetadata.get()) :
            getTableParquetSchemaFromDataFile();
+  }
+
+  /**
+   * Gets users data schema for a hoodie table in Parquet format.
+   *
+   * @return Parquet schema for the table
+   * @throws Exception
+   */
+  public MessageType getTableParquetSchemaWithoutMetadataFields() throws Exception {
+    return removeMetadataFields(getTableParquetSchema());
+  }
+
+  private MessageType removeMetadataFields(MessageType schema) {
+    List<Type> fields = schema.getFields()
+        .stream()
+        .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS.contains(field.getName()))
+        .collect(Collectors.toList());
+    return new MessageType(schema.getName(), fields);
   }
 
   /**

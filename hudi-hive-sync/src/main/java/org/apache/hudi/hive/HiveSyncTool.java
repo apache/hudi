@@ -122,7 +122,8 @@ public class HiveSyncTool {
     }
 
     // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = hoodieHiveClient.getDataSchema();
+    boolean skipMetadataColumns = cfg.skipMetadataColumns != null && cfg.skipMetadataColumns && !useRealtimeInputFormat;
+    MessageType schema = hoodieHiveClient.getDataSchema(skipMetadataColumns);
     // Sync schema if needed
     syncSchema(tableName, tableExists, useRealtimeInputFormat, schema);
 

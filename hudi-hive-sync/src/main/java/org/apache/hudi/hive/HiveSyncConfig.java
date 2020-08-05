@@ -71,6 +71,9 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
   public Boolean useJdbc = true;
 
+  @Parameter(names = {"--skip-metadata-columns"}, description = "Skips syncing Hudi metadata columns from Hive for COW/RO tables")
+  public Boolean skipMetadataColumns = false;
+
   @Parameter(names = {"--skip-ro-suffix"}, description = "Skip the `_ro` suffix for Read optimized table, when registering")
   public Boolean skipROSuffix = false;
 
@@ -87,6 +90,7 @@ public class HiveSyncConfig implements Serializable {
     newConfig.partitionFields = cfg.partitionFields;
     newConfig.partitionValueExtractorClass = cfg.partitionValueExtractorClass;
     newConfig.jdbcUrl = cfg.jdbcUrl;
+    newConfig.skipMetadataColumns = cfg.skipMetadataColumns;
     newConfig.tableName = cfg.tableName;
     newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
     return newConfig;

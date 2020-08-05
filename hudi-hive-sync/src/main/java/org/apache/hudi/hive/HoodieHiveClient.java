@@ -334,9 +334,13 @@ public class HoodieHiveClient {
    *
    * @return Parquet schema for this table
    */
-  public MessageType getDataSchema() {
+  public MessageType getDataSchema(boolean skipMetadataColumns) {
     try {
-      return new TableSchemaResolver(metaClient).getTableParquetSchema();
+      if (skipMetadataColumns) {
+        return new TableSchemaResolver(metaClient).getTableParquetSchemaWithoutMetadataFields();
+      } else {
+        return new TableSchemaResolver(metaClient).getTableParquetSchema();
+      }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to read data schema", e);
     }
