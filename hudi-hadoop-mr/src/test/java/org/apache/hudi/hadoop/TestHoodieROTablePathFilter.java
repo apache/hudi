@@ -31,6 +31,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -55,9 +56,9 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
 
     HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f1");
     HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f2");
-    HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f3");
+    HoodieTestUtils.createDataFile(basePath, "2017/01/02", "001", "f3");
     HoodieTestUtils.createDataFile(basePath, "2017/01/01", "002", "f2");
-    HoodieTestUtils.createDataFile(basePath, "2017/01/01", "003", "f3");
+    HoodieTestUtils.createDataFile(basePath, "2017/01/02", "003", "f3");
 
     HoodieROTablePathFilter pathFilter = new HoodieROTablePathFilter();
     Path partitionPath = new Path("file://" + basePath + File.separator + "2017/01/01");
@@ -68,11 +69,11 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     assertFalse(
         pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f2"))));
     assertTrue(
-        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f3"))));
+        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/02", "001", "f3"))));
     assertTrue(
         pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "002", "f2"))));
     assertFalse(
-        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
+        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/02", "003", "f3"))));
     assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getCommitFilePath(basePath, "001"))));
     assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getCommitFilePath(basePath, "002"))));
     assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getInflightCommitFilePath(basePath, "003"))));
@@ -83,7 +84,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
 
     assertFalse(
         pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
-
+    assertEquals(1, pathFilter.metaClientCache.size());
   }
 
   @Test
