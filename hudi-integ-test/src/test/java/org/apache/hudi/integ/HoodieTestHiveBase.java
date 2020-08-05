@@ -72,8 +72,8 @@ public class HoodieTestHiveBase extends ITTestBase {
     }
 
     // Run Hoodie Java App
-    String cmd = String.format("%s %s --hive-sync --table-path %s  --hive-url %s  --table-type %s  --hive-table %s" +
-        " --commit-type %s  --table-name %s", HOODIE_JAVA_APP, "HoodieJavaGenerateApp", hdfsUrl, HIVE_SERVER_JDBC_URL,
+    String cmd = String.format("%s --hive-sync --table-path %s  --hive-url %s  --table-type %s  --hive-table %s" +
+        " --commit-type %s  --table-name %s", HOODIE_GENERATE_APP, hdfsUrl, HIVE_SERVER_JDBC_URL,
         tableType, hiveTableName, commitType, hoodieTableName);
     if (partitionType == PartitionType.MULTI_KEYS_PARTITIONED) {
       cmd = cmd + " --use-multi-partition-keys";

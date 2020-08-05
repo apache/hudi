@@ -48,9 +48,16 @@ public abstract class AbstractAsyncService implements Serializable {
   private transient ExecutorService executor;
   // Future tracking delta-sync/compaction
   private transient CompletableFuture future;
+  // Run in daemon mode
+  private final boolean runInDaemonMode;
 
   protected AbstractAsyncService() {
+    this(false);
+  }
+
+  protected AbstractAsyncService(boolean runInDaemonMode) {
     shutdownRequested = false;
+    this.runInDaemonMode = runInDaemonMode;
   }
 
   protected boolean isShutdownRequested() {
@@ -129,7 +136,11 @@ public abstract class AbstractAsyncService implements Serializable {
    */
   private void monitorThreads(Function<Boolean, Boolean> onShutdownCallback) {
     LOG.info("Submitting monitor thread !!");
-    Executors.newSingleThreadExecutor().submit(() -> {
+    Executors.newSingleThreadExecutor(r -> {
+      Thread t = new Thread(r, "Monitor Thread");
+      t.setDaemon(isRunInDaemonMode());
+      return t;
+    }).submit(() -> {
       boolean error = false;
       try {
         LOG.info("Monitoring thread(s) !!");
@@ -137,18 +148,21 @@ public abstract class AbstractAsyncService implements Serializable {
       } catch (ExecutionException ex) {
         LOG.error("Monitor noticed one or more threads failed. Requesting graceful shutdown of other threads", ex);
         error = true;
-        shutdown(false);
       } catch (InterruptedException ie) {
         LOG.error("Got interrupted Monitoring threads", ie);
         error = true;
-        shutdown(false);
       } finally {
         // Mark as shutdown
         shutdown = true;
         if (null != onShutdownCallback) {
           onShutdownCallback.apply(error);
         }
+        shutdown(false);
       }
     });
+  }
+
+  public boolean isRunInDaemonMode() {
+    return runInDaemonMode;
   }
 }
