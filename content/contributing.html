@@ -233,12 +233,34 @@ Software Foundation (ASF).</li>
 <p>To contribute, you would need to do the following</p>
 
 <ul>
-  <li>Fork the Hudi code on Github &amp; then clone your own fork locally. Once cloned, we recommend building as per instructions on <a href="/docs/quick-start-guide.html">quickstart</a></li>
-  <li>[Recommended] We have embraced the code style largely based on <a href="https://google.github.io/styleguide/javaguide.html">google format</a>. Please setup your IDE with style files from <a href="https://github.com/apache/hudi/tree/master/style">here</a>.
-These instructions have been tested on IntelliJ.</li>
-  <li>[Recommended] Set up the <a href="https://plugins.jetbrains.com/plugin/7642-save-actions">Save Action Plugin</a> to auto format &amp; organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.</li>
-  <li>[Optional] If needed, add spark jars to the classpath of your module in Intellij by following the steps from <a href="https://stackoverflow.com/questions/1051640/correct-way-to-add-external-jars-lib-jar-to-an-intellij-idea-project">here</a>.</li>
+  <li>
+    <p>Fork the Hudi code on Github &amp; then clone your own fork locally. Once cloned, we recommend building as per instructions on <a href="/docs/quick-start-guide.html">quickstart</a></p>
+  </li>
+  <li>
+    <p>[Recommended] We have embraced the code style largely based on <a href="https://google.github.io/styleguide/javaguide.html">google format</a>. Please setup your IDE with style files from <a href="https://github.com/apache/hudi/tree/master/style">&lt;project root&gt;/style/</a>. These instructions have been tested on IntelliJ.</p>
+  </li>
+  <li>
+    <p>[Recommended] Set up the <a href="https://plugins.jetbrains.com/plugin/7642-save-actions">Save Action Plugin</a> to auto format &amp; organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.</p>
+  </li>
+  <li>
+    <p>[Recommended] As it is required to add <a href="https://www.apache.org/legal/src-headers.html#headers">Apache License header</a> to all source files, configuring “Copyright” settings as shown below will come in handy.</p>
+  </li>
 </ul>
+
+<p><img src="/assets/images/contributing/IDE_setup_copyright_1.png" alt="IDE setup copyright 1" />
+<img src="/assets/images/contributing/IDE_setup_copyright_2.png" alt="IDE setup copyright 2" /></p>
+
+<ul>
+  <li>
+    <p>[Optional] If needed, add spark jars to the classpath of your module in Intellij by following the steps from <a href="https://stackoverflow.com/questions/1051640/correct-way-to-add-external-jars-lib-jar-to-an-intellij-idea-project">here</a>.</p>
+  </li>
+  <li>
+    <p>[Optional] You may configure IntelliJ to respect maven CLI and pom.xml settings.</p>
+  </li>
+</ul>
+
+<p><img src="/assets/images/contributing/IDE_setup_maven_1.png" alt="IDE setup maven 1" />
+<img src="/assets/images/contributing/IDE_setup_maven_2.png" alt="IDE setup maven 2" /></p>
 
 <h2 id="accounts-and-permissions">Accounts and Permissions</h2>
 
