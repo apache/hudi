@@ -27,7 +27,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -208,20 +207,11 @@ public class DataSourceUtils {
   /**
    * Create a payload class via reflection, passing in an ordering/precombine value.
    */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record,
-                                                  Comparable orderingVal,
-                                                  String deleteMarkerField) throws IOException {
+  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
+      throws IOException {
     try {
-      HoodieRecordPayload payload = null;
-      if (payloadClass.equals(OverwriteWithLatestAvroPayload.class.getName())) {
-        payload = (OverwriteWithLatestAvroPayload) ReflectionUtils.loadClass(payloadClass,
-                new Class<?>[]{GenericRecord.class, Comparable.class, String.class},
-                record, orderingVal, deleteMarkerField);
-      } else {
-        payload = (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-                new Class<?>[]{GenericRecord.class, Comparable.class}, record, orderingVal);
-      }
-      return payload;
+      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
+          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
@@ -236,11 +226,16 @@ public class DataSourceUtils {
   }
 
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
-                                                     String tblName, Map<String, String> parameters) {
-
+      String tblName, Map<String, String> parameters) {
+    boolean asyncCompact = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_KEY()));
     // inline compaction is on by default for MOR
-    boolean inlineCompact = parameters.get(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY())
+    boolean inlineCompact = !asyncCompact && parameters.get(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY())
         .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
+    return createHoodieClient(jssc, schemaStr, basePath, tblName, parameters, inlineCompact);
+  }
+
+  public static HoodieWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
+      String tblName, Map<String, String> parameters, boolean inlineCompact) {
 
     // insert/bulk-insert combining to be true, if filtering for duplicates
     boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS_OPT_KEY()));
@@ -277,9 +272,8 @@ public class DataSourceUtils {
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
-                                                String payloadClass,
-                                                String deleteMarkerField) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal, deleteMarkerField);
+                                                String payloadClass) throws IOException {
+    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
     return new HoodieRecord<>(hKey, payload);
   }
 

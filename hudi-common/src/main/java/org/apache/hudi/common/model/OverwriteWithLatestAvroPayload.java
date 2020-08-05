@@ -36,8 +36,6 @@ import java.io.IOException;
 public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
-  private String deleteMarkerField = "_hoodie_is_deleted";
-
   /**
    *
    */
@@ -47,12 +45,6 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
     this(record.isPresent() ? record.get() : null, (record1) -> 0); // natural order
-  }
-
-  public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal,
-                                        String deleteMarkerField) {
-    this(record, orderingVal);
-    this.deleteMarkerField = deleteMarkerField;
   }
 
   @Override
@@ -88,7 +80,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */
   private boolean isDeleteRecord(GenericRecord genericRecord) {
-    Object deleteMarker = genericRecord.get(deleteMarkerField);
+    Object deleteMarker = genericRecord.get("_hoodie_is_deleted");
     return (deleteMarker instanceof Boolean && (boolean) deleteMarker);
   }
 }

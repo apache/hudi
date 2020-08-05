@@ -78,9 +78,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -90,6 +94,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -113,6 +118,21 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static String PARQUET_SOURCE_ROOT;
   private static final int PARQUET_NUM_RECORDS = 5;
   private static final int CSV_NUM_RECORDS = 3;
+  // Required fields
+  private static final String TGT_BASE_PATH_PARAM = "--target-base-path";
+  private static final String TGT_BASE_PATH_VALUE = "s3://mybucket/blah";
+  private static final String TABLE_TYPE_PARAM = "--table-type";
+  private static final String TABLE_TYPE_VALUE = "COPY_ON_WRITE";
+  private static final String TARGET_TABLE_PARAM = "--target-table";
+  private static final String TARGET_TABLE_VALUE = "test";
+  private static final String BASE_FILE_FORMAT_PARAM = "--base-file-format";
+  private static final String BASE_FILE_FORMAT_VALUE = "PARQUET";
+  private static final String SOURCE_LIMIT_PARAM = "--source-limit";
+  private static final String SOURCE_LIMIT_VALUE = "500";
+  private static final String ENABLE_HIVE_SYNC_PARAM = "--enable-hive-sync";
+  private static final String HOODIE_CONF_PARAM = "--hoodie-conf";
+  private static final String HOODIE_CONF_VALUE1 = "hoodie.datasource.hive_sync.table=test_table";
+  private static final String HOODIE_CONF_VALUE2 = "hoodie.datasource.write.recordkey.field=Field1,Field2,Field3";
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
   public static KafkaTestUtils testUtils;
 
@@ -394,6 +414,93 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     assertEquals("_row_key", props.getString("hoodie.datasource.write.recordkey.field"));
     assertEquals("org.apache.hudi.utilities.functional.TestHoodieDeltaStreamer$TestGenerator",
         props.getString("hoodie.datasource.write.keygenerator.class"));
+  }
+
+  private static HoodieDeltaStreamer.Config getBaseConfig() {
+    // Base config with all required fields
+    HoodieDeltaStreamer.Config base = new HoodieDeltaStreamer.Config();
+    base.targetBasePath = TGT_BASE_PATH_VALUE;
+    base.tableType = TABLE_TYPE_VALUE;
+    base.targetTableName = TARGET_TABLE_VALUE;
+    return base;
+  }
+
+  private static Stream<Arguments> provideValidCliArgs() {
+
+    HoodieDeltaStreamer.Config base = getBaseConfig();
+    // String parameter
+    HoodieDeltaStreamer.Config conf1 = getBaseConfig();
+    conf1.baseFileFormat = BASE_FILE_FORMAT_VALUE;
+
+    // Integer parameter
+    HoodieDeltaStreamer.Config conf2 = getBaseConfig();
+    conf2.sourceLimit = Long.parseLong(SOURCE_LIMIT_VALUE);
+
+    // Boolean Parameter
+    HoodieDeltaStreamer.Config conf3 = getBaseConfig();
+    conf3.enableHiveSync = true;
+
+    // ArrayList Parameter with 1 value
+    HoodieDeltaStreamer.Config conf4 = getBaseConfig();
+    conf4.configs = Arrays.asList(HOODIE_CONF_VALUE1);
+
+    // ArrayList Parameter with comma separated values
+    HoodieDeltaStreamer.Config conf5 = getBaseConfig();
+    conf5.configs = Arrays.asList(HOODIE_CONF_VALUE2);
+
+    // Multiple ArrayList values
+    HoodieDeltaStreamer.Config conf6 = getBaseConfig();
+    conf6.configs = Arrays.asList(HOODIE_CONF_VALUE1, HOODIE_CONF_VALUE2);
+
+    // Super set of all cases
+    HoodieDeltaStreamer.Config conf = getBaseConfig();
+    conf.baseFileFormat = BASE_FILE_FORMAT_VALUE;
+    conf.sourceLimit = Long.parseLong(SOURCE_LIMIT_VALUE);
+    conf.enableHiveSync = true;
+    conf.configs = Arrays.asList(HOODIE_CONF_VALUE1, HOODIE_CONF_VALUE2);
+
+    String[] allConfig = new String[]{TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE, SOURCE_LIMIT_PARAM,
+        SOURCE_LIMIT_VALUE, TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+        BASE_FILE_FORMAT_PARAM, BASE_FILE_FORMAT_VALUE, ENABLE_HIVE_SYNC_PARAM, HOODIE_CONF_PARAM, HOODIE_CONF_VALUE1,
+        HOODIE_CONF_PARAM, HOODIE_CONF_VALUE2};
+
+    return Stream.of(
+            // Base
+            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE}, base),
+            // String
+            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+                BASE_FILE_FORMAT_PARAM, BASE_FILE_FORMAT_VALUE}, conf1),
+            // Integer
+            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+                SOURCE_LIMIT_PARAM, SOURCE_LIMIT_VALUE}, conf2),
+            // Boolean
+            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+                ENABLE_HIVE_SYNC_PARAM}, conf3),
+            // Array List 1
+            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+                HOODIE_CONF_PARAM, HOODIE_CONF_VALUE1}, conf4),
+            // Array List with comma
+            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+                HOODIE_CONF_PARAM, HOODIE_CONF_VALUE2}, conf5),
+            // Array list with multiple values
+            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+                HOODIE_CONF_PARAM, HOODIE_CONF_VALUE1, HOODIE_CONF_PARAM, HOODIE_CONF_VALUE2}, conf6),
+            // All
+            Arguments.of(allConfig, conf)
+    );
+  }
+  
+  @ParameterizedTest
+  @MethodSource("provideValidCliArgs")
+  public void testValidCommandLineArgs(String[] args, HoodieDeltaStreamer.Config expected) {
+    assertEquals(expected, HoodieDeltaStreamer.getConfig(args));
   }
 
   @Test

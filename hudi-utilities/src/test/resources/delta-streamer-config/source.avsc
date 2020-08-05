@@ -56,10 +56,6 @@
     "name" : "nation",
     "type" : "bytes"
   },{
-    "name" : "user_defined_delete_marker_field",
-    "type" : "boolean",
-    "default" : false
-  },{
     "name" : "current_date",
     "type" : {
       "type" : "int",

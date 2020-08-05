@@ -50,7 +50,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     try {
       val sqlContext = session.sqlContext
       val options = Map("path" -> "hoodie/test/path", HoodieWriteConfig.TABLE_NAME -> "hoodie_test_tbl")
-      val e = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.ErrorIfExists, options, session.emptyDataFrame))
+      val e = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.ErrorIfExists, options,
+        session.emptyDataFrame))
       assert(e.getMessage.contains("spark.serializer"))
     } finally {
       session.stop()
@@ -94,52 +95,6 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       val deleteTableParams = barTableParams ++ Map(OPERATION_OPT_KEY -> "delete")
       val deleteCmdException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, deleteTableParams, dataFrame2))
       assert(deleteCmdException.getMessage.contains("hoodie table with name " + hoodieFooTableName + " already exist"))
-    } finally {
-      session.stop()
-      FileUtils.deleteDirectory(path.toFile)
-    }
-  }
-
-  test("test OverwriteWithLatestAvroPayload with user defined delete field") {
-    val session = SparkSession.builder()
-      .appName("test_append_mode")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .getOrCreate()
-    val path = java.nio.file.Files.createTempDirectory("hoodie_test_path1")
-
-    try {
-      val sqlContext = session.sqlContext
-      val hoodieFooTableName = "hoodie_foo_tbl"
-
-      val keyField = "id"
-      val deleteMarkerField = "delete_field"
-
-      //create a new table
-      val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
-        HoodieWriteConfig.TABLE_NAME -> hoodieFooTableName,
-        "hoodie.insert.shuffle.parallelism" -> "2",
-        "hoodie.upsert.shuffle.parallelism" -> "2",
-        DELETE_FIELD_OPT_KEY -> deleteMarkerField,
-        RECORDKEY_FIELD_OPT_KEY -> keyField)
-      val fooTableParams = HoodieSparkSqlWriter.parametersWithWriteDefaults(fooTableModifier)
-
-      val id1 = UUID.randomUUID().toString
-      val dataFrame = session.createDataFrame(Seq(
-        (id1, 1, false)
-      )) toDF(keyField, "ts", deleteMarkerField)
-
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, dataFrame)
-      val recordCount1 = sqlContext.read.format("org.apache.hudi").load(path.toString + "/*/*.parquet").count
-      assert(recordCount1 == 1, "result should be 1, but get " + recordCount1)
-
-      val dataFrame2 = session.createDataFrame(Seq(
-        (id1, 2, true)
-      )) toDF(keyField, "ts", deleteMarkerField)
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, dataFrame2)
-
-      val recordCount2 = sqlContext.read.format("org.apache.hudi").load(path.toString + "/*/*.parquet").count()
-      assert(recordCount2 == 0, "result should be 0, but get " + recordCount2)
     } finally {
       session.stop()
       FileUtils.deleteDirectory(path.toFile)
