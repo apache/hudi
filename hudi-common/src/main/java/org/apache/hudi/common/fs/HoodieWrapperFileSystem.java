@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -64,10 +65,15 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   public static final String HOODIE_SCHEME_PREFIX = "hoodie-";
 
+  private enum MetricNames {
+    create, rename, delete, listStatus, mkdirs, getFileStatus, globStatus, listFiles
+  }
+
   private ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams = new ConcurrentHashMap<>();
   private FileSystem fileSystem;
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
+  private Registry metricsRegistry = Registry.getRegistry(this.getClass().getSimpleName());
 
   public HoodieWrapperFileSystem() {}
 
@@ -140,6 +146,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize,
       short replication, long blockSize, Progressable progress) throws IOException {
+    this.metricsRegistry.increment(MetricNames.create.name());
     final Path translatedPath = convertToDefaultPath(f);
     return wrapOutputStream(f,
         fileSystem.create(translatedPath, permission, overwrite, bufferSize, replication, blockSize, progress));
@@ -159,43 +166,51 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite) throws IOException {
+    this.metricsRegistry.increment(MetricNames.create.name());
     return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite));
   }
 
   @Override
   public FSDataOutputStream create(Path f) throws IOException {
+    this.metricsRegistry.increment(MetricNames.create.name());
     return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f)));
   }
 
   @Override
   public FSDataOutputStream create(Path f, Progressable progress) throws IOException {
+    this.metricsRegistry.increment(MetricNames.create.name());
     return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), progress));
   }
 
   @Override
   public FSDataOutputStream create(Path f, short replication) throws IOException {
+    this.metricsRegistry.increment(MetricNames.create.name());
     return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), replication));
   }
 
   @Override
   public FSDataOutputStream create(Path f, short replication, Progressable progress) throws IOException {
+    this.metricsRegistry.increment(MetricNames.create.name());
     return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), replication, progress));
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize) throws IOException {
+    this.metricsRegistry.increment(MetricNames.create.name());
     return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize));
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, Progressable progress)
       throws IOException {
+    this.metricsRegistry.increment(MetricNames.create.name());
     return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, progress));
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication, long blockSize,
       Progressable progress) throws IOException {
+    this.metricsRegistry.increment(MetricNames.create.name());
     return wrapOutputStream(f,
         fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize, progress));
   }
@@ -203,6 +218,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags, int bufferSize,
       short replication, long blockSize, Progressable progress) throws IOException {
+    this.metricsRegistry.increment(MetricNames.create.name());
     return wrapOutputStream(f,
         fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication, blockSize, progress));
   }
@@ -210,6 +226,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags, int bufferSize,
       short replication, long blockSize, Progressable progress, Options.ChecksumOpt checksumOpt) throws IOException {
+    this.metricsRegistry.increment(MetricNames.create.name());
     return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication,
         blockSize, progress, checksumOpt));
   }
@@ -217,6 +234,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication, long blockSize)
       throws IOException {
+    this.metricsRegistry.increment(MetricNames.create.name());
     return wrapOutputStream(f,
         fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize));
   }
@@ -228,6 +246,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
+    this.metricsRegistry.increment(MetricNames.rename.name());
     try {
       consistencyGuard.waitTillFileAppears(convertToDefaultPath(src));
     } catch (TimeoutException e) {
@@ -254,6 +273,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean delete(Path f, boolean recursive) throws IOException {
+    this.metricsRegistry.increment(MetricNames.delete.name());
     boolean success = fileSystem.delete(convertToDefaultPath(f), recursive);
 
     if (success) {
@@ -268,6 +288,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path f) throws IOException {
+    this.metricsRegistry.increment(MetricNames.listStatus.name());
     return fileSystem.listStatus(convertToDefaultPath(f));
   }
 
@@ -283,6 +304,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean mkdirs(Path f, FsPermission permission) throws IOException {
+    this.metricsRegistry.increment(MetricNames.mkdirs.name());
     boolean success = fileSystem.mkdirs(convertToDefaultPath(f), permission);
     if (success) {
       try {
@@ -296,6 +318,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FileStatus getFileStatus(Path f) throws IOException {
+    this.metricsRegistry.increment(MetricNames.getFileStatus.name());
     try {
       consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
     } catch (TimeoutException e) {
@@ -439,6 +462,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean delete(Path f) throws IOException {
+    this.metricsRegistry.increment(MetricNames.delete.name());
     return delete(f, true);
   }
 
@@ -484,26 +508,31 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path f, PathFilter filter) throws IOException {
+    this.metricsRegistry.increment(MetricNames.listStatus.name());
     return fileSystem.listStatus(convertToDefaultPath(f), filter);
   }
 
   @Override
   public FileStatus[] listStatus(Path[] files) throws IOException {
+    this.metricsRegistry.increment(MetricNames.listStatus.name());
     return fileSystem.listStatus(convertDefaults(files));
   }
 
   @Override
   public FileStatus[] listStatus(Path[] files, PathFilter filter) throws IOException {
+    this.metricsRegistry.increment(MetricNames.listStatus.name());
     return fileSystem.listStatus(convertDefaults(files), filter);
   }
 
   @Override
   public FileStatus[] globStatus(Path pathPattern) throws IOException {
+    this.metricsRegistry.increment(MetricNames.globStatus.name());
     return fileSystem.globStatus(convertToDefaultPath(pathPattern));
   }
 
   @Override
   public FileStatus[] globStatus(Path pathPattern, PathFilter filter) throws IOException {
+    this.metricsRegistry.increment(MetricNames.globStatus.name());
     return fileSystem.globStatus(convertToDefaultPath(pathPattern), filter);
   }
 
@@ -514,6 +543,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public RemoteIterator<LocatedFileStatus> listFiles(Path f, boolean recursive) throws IOException {
+    this.metricsRegistry.increment(MetricNames.listFiles.name());
     return fileSystem.listFiles(convertToDefaultPath(f), recursive);
   }
 
@@ -524,6 +554,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean mkdirs(Path f) throws IOException {
+    this.metricsRegistry.increment(MetricNames.mkdirs.name());
     boolean success = fileSystem.mkdirs(convertToDefaultPath(f));
     if (success) {
       try {
