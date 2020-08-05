@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 
-class TestHudiSparkUtils {
+class TestHoodieSparkUtils {
 
   @Test
   def testGlobPaths(@TempDir tempDir: File): Unit = {
@@ -48,29 +48,29 @@ class TestHudiSparkUtils {
     files.foreach(file => new File(file.toUri).createNewFile())
 
     var paths = Seq(tempDir.getAbsolutePath + "/*")
-    var globbedPaths = HudiSparkUtils.checkAndGlobPathIfNecessary(paths,
+    var globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
     assertEquals(folders.sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/*/*")
-    globbedPaths = HudiSparkUtils.checkAndGlobPathIfNecessary(paths,
+    globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
     assertEquals(files.sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/folder1/*")
-    globbedPaths = HudiSparkUtils.checkAndGlobPathIfNecessary(paths,
+    globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
     assertEquals(Seq(files(0), files(1)).sortWith(_.toString < _.toString),
       globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/folder2/*")
-    globbedPaths = HudiSparkUtils.checkAndGlobPathIfNecessary(paths,
+    globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
     assertEquals(Seq(files(2), files(3)).sortWith(_.toString < _.toString),
       globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/folder1/*", tempDir.getAbsolutePath + "/folder2/*")
-    globbedPaths = HudiSparkUtils.checkAndGlobPathIfNecessary(paths,
+    globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
     assertEquals(files.sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
   }
@@ -98,7 +98,7 @@ class TestHudiSparkUtils {
     folders.foreach(folder => new File(folder.toUri).mkdir())
     files.foreach(file => new File(file.toUri).createNewFile())
 
-    val index = HudiSparkUtils.createInMemoryFileIndex(spark, Seq(folders(0), folders(1)))
+    val index = HoodieSparkUtils.createInMemoryFileIndex(spark, Seq(folders(0), folders(1)))
     val indexedFilePaths = index.allFiles().map(fs => fs.getPath)
     assertEquals(files.sortWith(_.toString < _.toString), indexedFilePaths.sortWith(_.toString < _.toString))
   }
