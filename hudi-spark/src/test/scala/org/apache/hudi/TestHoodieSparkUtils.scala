@@ -101,5 +101,6 @@ class TestHoodieSparkUtils {
     val index = HoodieSparkUtils.createInMemoryFileIndex(spark, Seq(folders(0), folders(1)))
     val indexedFilePaths = index.allFiles().map(fs => fs.getPath)
     assertEquals(files.sortWith(_.toString < _.toString), indexedFilePaths.sortWith(_.toString < _.toString))
+    spark.stop()
   }
 }

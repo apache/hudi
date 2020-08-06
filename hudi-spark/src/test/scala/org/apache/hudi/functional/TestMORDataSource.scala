@@ -17,28 +17,25 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
-import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.io.TempDir
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.JavaConversions._
 
 /**
  * Tests on Spark DataSource for MOR table.
  */
-class TestMORDataSource {
+class TestMORDataSource extends HoodieClientTestBase {
 
   var spark: SparkSession = null
-  var dataGen: HoodieTestDataGenerator = null
   private val log = LogManager.getLogger(classOf[TestMORDataSource])
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -48,18 +45,19 @@ class TestMORDataSource {
     DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY -> "timestamp",
     HoodieWriteConfig.TABLE_NAME -> "hoodie_test"
   )
-  var basePath: String = null
-  var fs: FileSystem = null
 
-  @BeforeEach def initialize(@TempDir tempDir: java.nio.file.Path) {
-    spark = SparkSession.builder
-      .appName("Hoodie Datasource test")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .getOrCreate
-    dataGen = new HoodieTestDataGenerator()
-    basePath = tempDir.toAbsolutePath.toString
-    fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
+  @BeforeEach override def setUp() {
+    initPath()
+    initSparkContexts()
+    spark = sqlContext.sparkSession
+    initTestDataGenerator()
+    initFileSystem()
+  }
+
+  @AfterEach override def tearDown() = {
+    cleanupSparkContexts()
+    cleanupTestDataGenerator()
+    cleanupFileSystem()
   }
 
   @Test def testMergeOnReadStorage() {

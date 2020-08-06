@@ -132,11 +132,15 @@ class DefaultSource extends RelationProvider
 
     log.info("Constructing hoodie (as parquet) data source with options :" + optParams)
     // simply return as a regular parquet relation
-    DataSource.apply(
+    val relation =  DataSource.apply(
       sparkSession = sqlContext.sparkSession,
       userSpecifiedSchema = Option(schema),
       className = "parquet",
       options = optParams)
       .resolveRelation()
+
+    sqlContext.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class")
+
+    relation
   }
 }

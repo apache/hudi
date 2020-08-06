@@ -130,14 +130,7 @@ public class TestBootstrap extends HoodieClientTestBase {
   public void setUp() throws Exception {
     bootstrapBasePath = tmpFolder.toAbsolutePath().toString() + "/data";
     initPath();
-    spark = SparkSession.builder()
-        .appName("Bootstrap test")
-        .master("local[2]")
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-        .getOrCreate();
-    jsc = new JavaSparkContext(spark.sparkContext());
-    sqlContext = spark.sqlContext();
-    hadoopConf = spark.sparkContext().hadoopConfiguration();
+    initSparkContexts();
     initTestDataGenerator();
     initMetaClient();
     // initialize parquet input format
@@ -146,6 +139,7 @@ public class TestBootstrap extends HoodieClientTestBase {
 
   @AfterEach
   public void tearDown() throws IOException {
+    cleanupSparkContexts();
     cleanupClients();
     cleanupTestDataGenerator();
   }
