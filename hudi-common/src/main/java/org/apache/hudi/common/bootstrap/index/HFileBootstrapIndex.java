@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -57,6 +58,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -79,6 +81,13 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
   public static final String BOOTSTRAP_INDEX_FILE_ID = "00000000-0000-0000-0000-000000000000-0";
 
+  private static final String PARTITION_KEY_PREFIX = "part";
+  private static final String FILE_ID_KEY_PREFIX = "fileid";
+  private static final String KEY_VALUE_SEPARATOR = "=";
+  private static final String KEY_PARTS_SEPARATOR = ";";
+  // This is part of the suffix that HFIle appends to every key
+  private static final String HFILE_CELL_KEY_SUFFIX_PART = "//LATEST_TIMESTAMP/Put/vlen";
+
   // Additional Metadata written to HFiles.
   public static final byte[] INDEX_INFO_KEY = Bytes.toBytes("INDEX_INFO");
 
@@ -96,12 +105,44 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     }
   }
 
+  /**
+   * Returns partition-key to be used in HFile.
+   * @param partition Partition-Path
+   * @return
+   */
   private static String getPartitionKey(String partition) {
-    return "part=" + partition;
+    return getKeyValueString(PARTITION_KEY_PREFIX, partition);
   }
 
+  /**
+   * Returns file group key to be used in HFile.
+   * @param fileGroupId File Group Id.
+   * @return
+   */
   private static String getFileGroupKey(HoodieFileGroupId fileGroupId) {
-    return "part=" + fileGroupId.getPartitionPath() + ";fileid=" + fileGroupId.getFileId();
+    return getPartitionKey(fileGroupId.getPartitionPath()) + KEY_PARTS_SEPARATOR
+        + getKeyValueString(FILE_ID_KEY_PREFIX, fileGroupId.getFileId());
+  }
+
+  private static String getPartitionFromKey(String key) {
+    String[] parts = key.split("=", 2);
+    ValidationUtils.checkArgument(parts[0].equals(PARTITION_KEY_PREFIX));
+    return parts[1];
+  }
+
+  private static String getFileIdFromKey(String key) {
+    String[] parts = key.split("=", 2);
+    ValidationUtils.checkArgument(parts[0].equals(FILE_ID_KEY_PREFIX));
+    return parts[1];
+  }
+
+  private static HoodieFileGroupId getFileGroupFromKey(String key) {
+    String[] parts = key.split(KEY_PARTS_SEPARATOR, 2);
+    return new HoodieFileGroupId(getPartitionFromKey(parts[0]), getFileIdFromKey(parts[1]));
+  }
+
+  private static String getKeyValueString(String key, String value) {
+    return key + KEY_VALUE_SEPARATOR + value;
   }
 
   private static Path partitionIndexPath(HoodieTableMetaClient metaClient) {
@@ -114,6 +155,17 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     return new Path(metaClient.getBootstrapIndexByFileIdFolderNameFolderPath(),
         FSUtils.makeBootstrapIndexFileName(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, BOOTSTRAP_INDEX_FILE_ID,
             HoodieFileFormat.HFILE.getFileExtension()));
+  }
+
+  /**
+   * HFile stores cell key in the format example : "2020/03/18//LATEST_TIMESTAMP/Put/vlen=3692/seqid=0".
+   * This API returns only the user key part from it.
+   * @param cellKey HFIle Cell Key
+   * @return
+   */
+  private static String getUserKeyFromCellKey(String cellKey) {
+    int hfileSuffixBeginIndex = cellKey.lastIndexOf(HFILE_CELL_KEY_SUFFIX_PART);
+    return cellKey.substring(0, hfileSuffixBeginIndex);
   }
 
   /**
@@ -240,21 +292,21 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     @Override
     public List<String> getIndexedPartitionPaths() {
       HFileScanner scanner = partitionIndexReader().getScanner(true, true);
-      return getAllKeys(scanner);
+      return getAllKeys(scanner, HFileBootstrapIndex::getPartitionFromKey);
     }
 
     @Override
-    public List<String> getIndexedFileIds() {
+    public List<HoodieFileGroupId> getIndexedFileGroupIds() {
       HFileScanner scanner = fileIdIndexReader().getScanner(true, true);
-      return getAllKeys(scanner);
+      return getAllKeys(scanner, HFileBootstrapIndex::getFileGroupFromKey);
     }
 
-    private List<String> getAllKeys(HFileScanner scanner) {
-      List<String> keys = new ArrayList<>();
+    private <T> List<T> getAllKeys(HFileScanner scanner, Function<String, T> converter) {
+      List<T> keys = new ArrayList<>();
       try {
         boolean available = scanner.seekTo();
         while (available) {
-          keys.add(CellUtil.getCellKeyAsString(scanner.getKeyValue()));
+          keys.add(converter.apply(getUserKeyFromCellKey(CellUtil.getCellKeyAsString(scanner.getKeyValue()))));
           available = scanner.next();
         }
       } catch (IOException ioe) {

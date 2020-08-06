@@ -102,7 +102,7 @@ public abstract class BootstrapIndex implements Serializable {
      * Return list file-ids indexed.
      * @return
      */
-    public abstract List<String> getIndexedFileIds();
+    public abstract List<HoodieFileGroupId> getIndexedFileGroupIds();
 
     /**
      * Lookup bootstrap index by partition.
