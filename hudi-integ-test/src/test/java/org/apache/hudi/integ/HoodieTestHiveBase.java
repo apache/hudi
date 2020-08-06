@@ -27,7 +27,6 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Base class to run cmd and generate data in hive.
@@ -38,8 +37,8 @@ public class HoodieTestHiveBase extends ITTestBase {
     SINGLE_KEY_PARTITIONED, MULTI_KEYS_PARTITIONED, NON_PARTITIONED,
   }
 
-  private final static int DEFAULT_TIME_WAIT = 5000;
-  private final static String OVERWRITE_COMMIT_TYPE = "overwrite";
+  private static final int DEFAULT_TIME_WAIT = 5000;
+  private static final String OVERWRITE_COMMIT_TYPE = "overwrite";
 
   /**
    * A basic integration test that runs HoodieJavaApp to create a sample Hoodie data-set and performs upserts on it.
@@ -73,8 +72,8 @@ public class HoodieTestHiveBase extends ITTestBase {
     }
 
     // Run Hoodie Java App
-    String cmd = String.format("%s %s --hive-sync --table-path %s  --hive-url %s  --table-type %s  --hive-table %s" +
-        " --commit-type %s  --table-name %s", HOODIE_JAVA_APP, "HoodieJavaGenerateApp", hdfsUrl, HIVE_SERVER_JDBC_URL,
+    String cmd = String.format("%s --hive-sync --table-path %s  --hive-url %s  --table-type %s  --hive-table %s" +
+        " --commit-type %s  --table-name %s", HOODIE_GENERATE_APP, hdfsUrl, HIVE_SERVER_JDBC_URL,
         tableType, hiveTableName, commitType, hoodieTableName);
     if (partitionType == PartitionType.MULTI_KEYS_PARTITIONED) {
       cmd = cmd + " --use-multi-partition-keys";

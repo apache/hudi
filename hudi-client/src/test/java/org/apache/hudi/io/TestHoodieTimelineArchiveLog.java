@@ -79,7 +79,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
             .withParallelism(2, 2).forTable("test-trip-table").build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, hadoopConf);
-    boolean result = archiveLog.archiveIfRequired();
+    boolean result = archiveLog.archiveIfRequired(jsc);
     assertTrue(result);
   }
 
@@ -157,7 +157,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, hadoopConf);
-    assertTrue(archiveLog.archiveIfRequired());
+    assertTrue(archiveLog.archiveIfRequired(jsc));
 
     // reload the timeline and remove the remaining commits
     timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
@@ -246,7 +246,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals(4, timeline.countInstants(), "Loaded 4 commits and the count should match");
-    boolean result = archiveLog.archiveIfRequired();
+    boolean result = archiveLog.archiveIfRequired(jsc);
     assertTrue(result);
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
     assertEquals(4, timeline.countInstants(), "Should not archive commits when maxCommitsToKeep is 5");
@@ -289,7 +289,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
-    boolean result = archiveLog.archiveIfRequired();
+    boolean result = archiveLog.archiveIfRequired(jsc);
     assertTrue(result);
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
     assertTrue(timeline.containsOrBeforeTimelineStarts("100"), "Archived commits should always be safe");
@@ -315,7 +315,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
-    assertTrue(archiveLog.archiveIfRequired());
+    assertTrue(archiveLog.archiveIfRequired(jsc));
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
     assertEquals(5, timeline.countInstants(),
         "Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)");
@@ -349,7 +349,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline();
     assertEquals(8, timeline.countInstants(), "Loaded 6 commits and the count should match");
-    boolean result = archiveLog.archiveIfRequired();
+    boolean result = archiveLog.archiveIfRequired(jsc);
     assertTrue(result);
     timeline = metaClient.getActiveTimeline().reload().getCommitsAndCompactionTimeline();
     assertFalse(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "100")),
@@ -397,7 +397,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
 
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, dfs.getConf());
-    boolean result = archiveLog.archiveIfRequired();
+    boolean result = archiveLog.archiveIfRequired(jsc);
     assertTrue(result);
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
     List<HoodieInstant> archivedInstants = Arrays.asList(instant1, instant2, instant3);

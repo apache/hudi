@@ -278,7 +278,8 @@ public class HDFSParquetImporter implements Serializable {
         + "hoodie client for importing")
     public String propsFilePath = null;
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-        + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
+        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
+            splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;

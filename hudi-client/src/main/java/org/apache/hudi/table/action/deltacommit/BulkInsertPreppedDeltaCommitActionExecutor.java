@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.hudi.table.action.commit.BulkInsertHelper;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -36,12 +36,12 @@ public class BulkInsertPreppedDeltaCommitActionExecutor<T extends HoodieRecordPa
     extends DeltaCommitActionExecutor<T> {
 
   private final JavaRDD<HoodieRecord<T>> preppedInputRecordRdd;
-  private final Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner;
+  private final Option<BulkInsertPartitioner<T>> bulkInsertPartitioner;
 
   public BulkInsertPreppedDeltaCommitActionExecutor(JavaSparkContext jsc,
       HoodieWriteConfig config, HoodieTable table,
       String instantTime, JavaRDD<HoodieRecord<T>> preppedInputRecordRdd,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+      Option<BulkInsertPartitioner<T>> bulkInsertPartitioner) {
     super(jsc, config, table, instantTime, WriteOperationType.BULK_INSERT);
     this.preppedInputRecordRdd = preppedInputRecordRdd;
     this.bulkInsertPartitioner = bulkInsertPartitioner;

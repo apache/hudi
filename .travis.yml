@@ -27,7 +27,7 @@ jobs:
     - name: "Functional tests"
       env: MODE=functional HUDI_QUIETER_LOGGING=1
     - name: "Integration tests"
-      env: MODE=integration
+      env: MODE=integration HUDI_QUIETER_LOGGING=1
 install: true
 services:
   - docker

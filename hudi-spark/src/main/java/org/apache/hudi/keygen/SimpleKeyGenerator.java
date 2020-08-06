@@ -18,20 +18,18 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
-public class SimpleKeyGenerator extends KeyGenerator {
-
-  private static final String DEFAULT_PARTITION_PATH = "default";
+public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   protected final String recordKeyField;
 
@@ -39,38 +37,39 @@ public class SimpleKeyGenerator extends KeyGenerator {
 
   protected final boolean hiveStylePartitioning;
 
+  protected final boolean encodePartitionPath;
+
   public SimpleKeyGenerator(TypedProperties props) {
+    this(props, props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()));
+  }
+
+  public SimpleKeyGenerator(TypedProperties props, String partitionPathField) {
     super(props);
     this.recordKeyField = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
-    this.partitionPathField = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY());
+    this.partitionPathField = partitionPathField;
     this.hiveStylePartitioning = props.getBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
         Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
+    this.encodePartitionPath = props.getBoolean(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY(),
+        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL()));
   }
 
   @Override
-  public HoodieKey getKey(GenericRecord record) {
-    String recordKey = getRecordKey(record);
-    String partitionPath = getPartitionPath(record, partitionPathField);
-    return new HoodieKey(recordKey, partitionPath);
+  public String getRecordKey(GenericRecord record) {
+    return KeyGenUtils.getRecordKey(record, recordKeyField);
   }
 
-  String getPartitionPath(GenericRecord record, String partitionPathField) {
-    String partitionPath = DataSourceUtils.getNestedFieldValAsString(record, partitionPathField, true);
-    if (partitionPath == null || partitionPath.isEmpty()) {
-      partitionPath = DEFAULT_PARTITION_PATH;
-    }
-    if (hiveStylePartitioning) {
-      partitionPath = partitionPathField + "=" + partitionPath;
-    }
-
-    return partitionPath;
+  @Override
+  public String getPartitionPath(GenericRecord record) {
+    return KeyGenUtils.getPartitionPath(record, partitionPathField, hiveStylePartitioning, encodePartitionPath);
   }
 
-  String getRecordKey(GenericRecord record) {
-    String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
-    if (recordKey == null || recordKey.isEmpty()) {
-      throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
-    }
-    return recordKey;
+  @Override
+  public List<String> getRecordKeyFields() {
+    return Arrays.asList(recordKeyField);
+  }
+
+  @Override
+  public List<String> getPartitionPathFields() {
+    return Arrays.asList(partitionPathField);
   }
 }

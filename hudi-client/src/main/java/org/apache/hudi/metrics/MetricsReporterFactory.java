@@ -66,6 +66,9 @@ public class MetricsReporterFactory {
       case DATADOG:
         reporter = new DatadogMetricsReporter(config, registry);
         break;
+      case CONSOLE:
+        reporter = new ConsoleMetricsReporter(registry);
+        break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");
         break;

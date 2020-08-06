@@ -60,6 +60,7 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -70,6 +71,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -159,7 +161,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata bulkInsert(JavaSparkContext jsc, String instantTime,
-      JavaRDD<HoodieRecord<T>> records, Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
+      JavaRDD<HoodieRecord<T>> records, Option<BulkInsertPartitioner> bulkInsertPartitioner);
 
   /**
    * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
@@ -207,7 +209,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata bulkInsertPrepped(JavaSparkContext jsc, String instantTime,
-      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner);
+      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<BulkInsertPartitioner> bulkInsertPartitioner);
 
   public HoodieWriteConfig getConfig() {
     return config;
@@ -331,6 +333,20 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
                                               String compactionInstantTime);
 
   /**
+   * Perform metadata/full bootstrap of a Hudi table.
+   * @param jsc JavaSparkContext
+   * @param extraMetadata Additional Metadata for storing in commit file.
+   * @return HoodieBootstrapWriteMetadata
+   */
+  public abstract HoodieBootstrapWriteMetadata bootstrap(JavaSparkContext jsc, Option<Map<String, String>> extraMetadata);
+
+  /**
+   * Perform rollback of bootstrap of a Hudi table.
+   * @param jsc JavaSparkContext
+   */
+  public abstract void rollbackBootstrap(JavaSparkContext jsc, String instantTime);
+
+  /**
    * Executes a new clean action.
    *
    * @return information on cleaned file slices
@@ -428,21 +444,21 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       }
 
       // we are not including log appends here, since they are already fail-safe.
-      List<String> invalidDataPaths = markers.createdAndMergedDataPaths();
-      List<String> validDataPaths = stats.stream()
+      Set<String> invalidDataPaths = markers.createdAndMergedDataPaths(jsc, config.getFinalizeWriteParallelism());
+      Set<String> validDataPaths = stats.stream()
           .map(HoodieWriteStat::getPath)
           .filter(p -> p.endsWith(this.getBaseFileExtension()))
-          .collect(Collectors.toList());
+          .collect(Collectors.toSet());
+
       // Contains list of partially created files. These needs to be cleaned up.
       invalidDataPaths.removeAll(validDataPaths);
+
       if (!invalidDataPaths.isEmpty()) {
         LOG.info("Removing duplicate data files created due to spark retries before committing. Paths=" + invalidDataPaths);
-      }
-      Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
-          .map(dp -> Pair.of(new Path(dp).getParent().toString(), new Path(basePath, dp).toString()))
-          .collect(Collectors.groupingBy(Pair::getKey));
+        Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
+            .map(dp -> Pair.of(new Path(dp).getParent().toString(), new Path(basePath, dp).toString()))
+            .collect(Collectors.groupingBy(Pair::getKey));
 
-      if (!invalidPathsByPartition.isEmpty()) {
         // Ensure all files in delete list is actually present. This is mandatory for an eventually consistent FS.
         // Otherwise, we may miss deleting such files. If files are not found even after retries, fail the commit
         if (consistencyCheckEnabled) {

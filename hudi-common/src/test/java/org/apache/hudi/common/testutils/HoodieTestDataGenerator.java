@@ -19,6 +19,9 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
@@ -34,12 +37,9 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -64,10 +64,10 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-
 
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
@@ -98,7 +98,8 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"amount\",\"type\": \"double\"},{\"name\": \"currency\", \"type\": \"string\"}]}},";
   public static final String FARE_FLATTENED_SCHEMA = "{\"name\": \"fare\", \"type\": \"double\"},"
       + "{\"name\": \"currency\", \"type\": \"string\"},";
-  public static final String TIP_NESTED_SCHEMA = "{\"name\": \"tip_history\", \"type\": {\"type\": \"array\", \"items\": {\"type\": \"record\", \"name\": \"tip_history\", \"fields\": ["
+  public static final String TIP_NESTED_SCHEMA = "{\"name\": \"tip_history\", \"default\": null, \"type\": {\"type\": "
+      + "\"array\", \"items\": {\"type\": \"record\", \"default\": null, \"name\": \"tip_history\", \"fields\": ["
       + "{\"name\": \"amount\", \"type\": \"double\"}, {\"name\": \"currency\", \"type\": \"string\"}]}}},";
   public static final String MAP_TYPE_SCHEMA = "{\"name\": \"city_to_state\", \"type\": {\"type\": \"map\", \"values\": \"string\"}},";
   public static final String EXTRA_TYPE_SCHEMA = "{\"name\": \"distance_in_meters\", \"type\": \"int\"},"
@@ -106,7 +107,7 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"weight\", \"type\": \"float\"},"
       + "{\"name\": \"nation\", \"type\": \"bytes\"},"
       + "{\"name\":\"current_date\",\"type\": {\"type\": \"int\", \"logicalType\": \"date\"}},"
-      + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\", \"logicalType\": \"timestamp-micros\"}},"
+      + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\"}},"
       + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
 
   public static final String TRIP_EXAMPLE_SCHEMA =
@@ -124,6 +125,7 @@ public class HoodieTestDataGenerator {
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
   public static final String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
       + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
+
 
   public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_METADATA_FIELDS =
@@ -254,7 +256,6 @@ public class HoodieTestDataGenerator {
     rec.put("begin_lon", RAND.nextDouble());
     rec.put("end_lat", RAND.nextDouble());
     rec.put("end_lon", RAND.nextDouble());
-
     if (isFlattened) {
       rec.put("fare", RAND.nextDouble() * 100);
       rec.put("currency", "USD");
@@ -396,7 +397,7 @@ public class HoodieTestDataGenerator {
   }
 
   public List<HoodieRecord> generateInsertsAsPerSchema(String commitTime, Integer n, String schemaStr) {
-    return generateInsertsStream(commitTime, n, schemaStr).collect(Collectors.toList());
+    return generateInsertsStream(commitTime, n, false, schemaStr).collect(Collectors.toList());
   }
 
   /**
@@ -423,38 +424,35 @@ public class HoodieTestDataGenerator {
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
-  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, String schemaStr) {
-    return generateInsertsStream(commitTime, n, false, schemaStr);
+  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr) {
+    return generateInsertsStream(commitTime, n, isFlattened, schemaStr, false);
   }
 
   public List<HoodieRecord> generateInsertsContainsAllPartitions(String instantTime, Integer n) {
     if (n < partitionPaths.length) {
       throw new HoodieIOException("n must greater then partitionPaths length");
     }
-    return generateInsertsStream(
-             instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true).collect(Collectors.toList());
+    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true).collect(Collectors.toList());
+  }
+
+  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
+    return generateInsertsStream(commitTime, n, isFlattened, schemaStr, containsAllPartitions,
+        () -> partitionPaths[RAND.nextInt(partitionPaths.length)],
+        () -> UUID.randomUUID().toString());
   }
 
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
-  public Stream<HoodieRecord> generateInsertsStream(
-          String instantTime, Integer n, boolean isFlattened, String schemaStr) {
-    return generateInsertsStream(instantTime, n, isFlattened, schemaStr, false);
-  }
-
-  /**
-   * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
-   */
-  public Stream<HoodieRecord> generateInsertsStream(
-      String instantTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
+  public Stream<HoodieRecord> generateInsertsStream(String instantTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions,
+                                                    Supplier<String> partitionPathSupplier, Supplier<String> recordKeySupplier) {
     int currSize = getNumExistingKeys(schemaStr);
     return IntStream.range(0, n).boxed().map(i -> {
-      String partitionPath = partitionPaths[RAND.nextInt(partitionPaths.length)];
+      String partitionPath = partitionPathSupplier.get();
       if (containsAllPartitions && i < partitionPaths.length) {
         partitionPath = partitionPaths[i];
       }
-      HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
+      HoodieKey key = new HoodieKey(recordKeySupplier.get(), partitionPath);
       KeyPartition kp = new KeyPartition();
       kp.key = key;
       kp.partitionPath = partitionPath;
@@ -601,6 +599,26 @@ public class HoodieTestDataGenerator {
     return updates;
   }
 
+  /**
+   * Generate update for each record in the dataset.
+   * @param instantTime
+   * @return
+   * @throws IOException
+   */
+  public List<HoodieRecord> generateUpdatesForAllRecords(String instantTime) {
+    List<HoodieRecord> updates = new ArrayList<>();
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    existingKeys.values().forEach(kp -> {
+      try {
+        HoodieRecord record = generateUpdateRecord(kp.key, instantTime);
+        updates.add(record);
+      } catch (IOException ioe) {
+        throw new HoodieIOException(ioe.getMessage(), ioe);
+      }
+    });
+    return updates;
+  }
+
   public List<HoodieRecord> generateUpdatesAsPerSchema(String commitTime, Integer n, String schemaStr) {
     return generateUniqueUpdatesStream(commitTime, n, schemaStr).collect(Collectors.toList());
   }
@@ -730,7 +748,7 @@ public class HoodieTestDataGenerator {
   public boolean deleteExistingKeyIfPresent(HoodieKey key) {
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
     Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-    for (Map.Entry<Integer, KeyPartition> entry: existingKeys.entrySet()) {
+    for (Map.Entry<Integer, KeyPartition> entry : existingKeys.entrySet()) {
       if (entry.getValue().key.equals(key)) {
         int index = entry.getKey();
         existingKeys.put(index, existingKeys.get(numExistingKeys - 1));
@@ -740,8 +758,16 @@ public class HoodieTestDataGenerator {
         return true;
       }
     }
-
     return false;
+  }
+
+  public List<GenericRecord> generateGenericRecords(int numRecords) {
+    List<GenericRecord> list = new ArrayList<>();
+    IntStream.range(0, numRecords).forEach(i -> {
+      list.add(generateGenericRecord(UUID.randomUUID().toString(), UUID.randomUUID().toString(), UUID.randomUUID()
+          .toString(), RAND.nextDouble()));
+    });
+    return list;
   }
 
   public String[] getPartitionPaths() {

@@ -54,6 +54,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -121,7 +122,7 @@ public class HoodieTimelineArchiveLog {
   /**
    * Check if commits need to be archived. If yes, archive commits.
    */
-  public boolean archiveIfRequired() throws IOException {
+  public boolean archiveIfRequired(JavaSparkContext jsc) throws IOException {
     try {
       List<HoodieInstant> instantsToArchive = getInstantsToArchive().collect(Collectors.toList());
 
@@ -129,7 +130,7 @@ public class HoodieTimelineArchiveLog {
       if (!instantsToArchive.isEmpty()) {
         this.writer = openWriter();
         LOG.info("Archiving instants " + instantsToArchive);
-        archive(instantsToArchive);
+        archive(jsc, instantsToArchive);
         LOG.info("Deleting archived instants " + instantsToArchive);
         success = deleteArchivedInstants(instantsToArchive);
       } else {
@@ -267,7 +268,7 @@ public class HoodieTimelineArchiveLog {
     return success;
   }
 
-  public void archive(List<HoodieInstant> instants) throws HoodieCommitException {
+  public void archive(JavaSparkContext jsc, List<HoodieInstant> instants) throws HoodieCommitException {
     try {
       HoodieTimeline commitTimeline = metaClient.getActiveTimeline().getAllCommitsTimeline().filterCompletedInstants();
       Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
@@ -275,7 +276,7 @@ public class HoodieTimelineArchiveLog {
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         try {
-          deleteAnyLeftOverMarkerFiles(hoodieInstant);
+          deleteAnyLeftOverMarkerFiles(jsc, hoodieInstant);
           records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
           if (records.size() >= this.config.getCommitArchivalBatchSize()) {
             writeToFile(wrapperSchema, records);
@@ -293,9 +294,9 @@ public class HoodieTimelineArchiveLog {
     }
   }
 
-  private void deleteAnyLeftOverMarkerFiles(HoodieInstant instant) {
+  private void deleteAnyLeftOverMarkerFiles(JavaSparkContext jsc, HoodieInstant instant) {
     MarkerFiles markerFiles = new MarkerFiles(table, instant.getTimestamp());
-    if (markerFiles.deleteMarkerDir()) {
+    if (markerFiles.deleteMarkerDir(jsc, config.getMarkersDeleteParallelism())) {
       LOG.info("Cleaned up left over marker directory for instant :" + instant);
     }
   }

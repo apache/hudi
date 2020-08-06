@@ -16,21 +16,21 @@
  * limitations under the License.
  */
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
-import org.apache.hudi.testutils.DataSourceTestUtils;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -42,6 +42,8 @@ import org.apache.spark.sql.SparkSession;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 
 public class HoodieJavaGenerateApp {
   @Parameter(names = {"--table-path", "-p"}, description = "Path for Hoodie sample table")
@@ -152,7 +154,7 @@ public class HoodieJavaGenerateApp {
     // Generate some input..
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     List<HoodieRecord> recordsSoFar = new ArrayList<>(dataGen.generateInserts(instantTime/* ignore */, 100));
-    List<String> records1 = DataSourceTestUtils.convertToStringList(recordsSoFar);
+    List<String> records1 = recordsToStrings(recordsSoFar);
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));
 
     // Save as hoodie dataset (copy on write)

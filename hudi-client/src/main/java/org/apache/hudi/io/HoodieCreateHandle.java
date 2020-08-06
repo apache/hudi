@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
@@ -56,8 +58,16 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
   private boolean useWriterSchema = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
-      String partitionPath, String fileId, SparkTaskContextSupplier sparkTaskContextSupplier) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, sparkTaskContextSupplier);
+                            String partitionPath, String fileId, SparkTaskContextSupplier sparkTaskContextSupplier) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, getWriterSchemaIncludingAndExcludingMetadataPair(config),
+        sparkTaskContextSupplier);
+  }
+
+  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
+                            String partitionPath, String fileId, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
+                            SparkTaskContextSupplier sparkTaskContextSupplier) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, writerSchemaIncludingAndExcludingMetadataPair,
+            sparkTaskContextSupplier);
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
 
@@ -68,8 +78,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(getPartitionId());
       createMarkerFile(partitionPath, FSUtils.makeDataFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
-      this.fileWriter =
-          HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, writerSchema, this.sparkTaskContextSupplier);
+      this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, writerSchemaWithMetafields, this.sparkTaskContextSupplier);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
@@ -132,9 +141,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
       while (recordIterator.hasNext()) {
         HoodieRecord<T> record = recordIterator.next();
         if (useWriterSchema) {
-          write(record, record.getData().getInsertValue(writerSchema));
+          write(record, record.getData().getInsertValue(writerSchemaWithMetafields));
         } else {
-          write(record, record.getData().getInsertValue(originalSchema));
+          write(record, record.getData().getInsertValue(writerSchema));
         }
       }
     } catch (IOException io) {

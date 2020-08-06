@@ -83,6 +83,8 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_S
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NULL_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
+import static org.apache.hudi.common.testutils.Transformations.recordsToRecordKeySet;
 import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -475,8 +477,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             .withBloomIndexUpdatePartitionPath(true)
             .withGlobalSimpleIndexUpdatePartitionPath(true)
             .build()).withTimelineLayoutVersion(VERSION_0).build();
-    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(), metaClient.getTableType(),
-        metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
+    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
+        metaClient.getTableType(), metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
         metaClient.getTableConfig().getPayloadClass(), VERSION_0);
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
@@ -634,7 +636,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String commitTime1 = "001";
     client.startCommitWithTime(commitTime1);
     List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, insertSplitLimit); // this writes ~500kb
-    Set<String> keys1 = HoodieClientTestUtils.getRecordKeys(inserts1);
+    Set<String> keys1 = recordsToRecordKeySet(inserts1);
 
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
     List<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime1).collect();
@@ -651,7 +653,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String commitTime2 = "002";
     client.startCommitWithTime(commitTime2);
     List<HoodieRecord> inserts2 = dataGen.generateInserts(commitTime2, 40);
-    Set<String> keys2 = HoodieClientTestUtils.getRecordKeys(inserts2);
+    Set<String> keys2 = recordsToRecordKeySet(inserts2);
     List<HoodieRecord> insertsAndUpdates2 = new ArrayList<>();
     insertsAndUpdates2.addAll(inserts2);
     insertsAndUpdates2.addAll(dataGen.generateUpdates(commitTime2, inserts1));
@@ -678,7 +680,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String commitTime3 = "003";
     client.startCommitWithTime(commitTime3);
     List<HoodieRecord> insertsAndUpdates3 = dataGen.generateInserts(commitTime3, 200);
-    Set<String> keys3 = HoodieClientTestUtils.getRecordKeys(insertsAndUpdates3);
+    Set<String> keys3 = recordsToRecordKeySet(insertsAndUpdates3);
     List<HoodieRecord> updates3 = dataGen.generateUpdates(commitTime3, inserts2);
     insertsAndUpdates3.addAll(updates3);
 
@@ -745,7 +747,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String commitTime1 = "001";
     client.startCommitWithTime(commitTime1);
     List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, insertSplitLimit); // this writes ~500kb
-    Set<String> keys1 = HoodieClientTestUtils.getRecordKeys(inserts1);
+    Set<String> keys1 = recordsToRecordKeySet(inserts1);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
     List<WriteStatus> statuses = client.insert(insertRecordsRDD1, commitTime1).collect();
 
@@ -762,7 +764,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String commitTime2 = "002";
     client.startCommitWithTime(commitTime2);
     List<HoodieRecord> inserts2 = dataGen.generateInserts(commitTime2, 40);
-    Set<String> keys2 = HoodieClientTestUtils.getRecordKeys(inserts2);
+    Set<String> keys2 = recordsToRecordKeySet(inserts2);
     JavaRDD<HoodieRecord> insertRecordsRDD2 = jsc.parallelize(inserts2, 1);
     statuses = client.insert(insertRecordsRDD2, commitTime2).collect();
     assertNoWriteErrors(statuses);
@@ -826,7 +828,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String commitTime1 = "001";
     client.startCommitWithTime(commitTime1);
     List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, insertSplitLimit); // this writes ~500kb
-    Set<String> keys1 = HoodieClientTestUtils.getRecordKeys(inserts1);
+    Set<String> keys1 = recordsToRecordKeySet(inserts1);
     List<String> keysSoFar = new ArrayList<>(keys1);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
     List<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime1).collect();
@@ -858,8 +860,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     client.startCommitWithTime(commitTime6);
 
     List<HoodieRecord> dummyInserts3 = dataGen.generateInserts(commitTime6, 20);
-    List<HoodieKey> hoodieKeysToDelete3 = HoodieClientTestUtils
-        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(dummyInserts3), 20);
+    List<HoodieKey> hoodieKeysToDelete3 = randomSelectAsHoodieKeys(dummyInserts3, 20);
     JavaRDD<HoodieKey> deleteKeys3 = jsc.parallelize(hoodieKeysToDelete3, 1);
     statuses = client.delete(deleteKeys3, commitTime6).collect();
     assertNoWriteErrors(statuses);
@@ -884,7 +885,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       throws IOException {
     client.startCommitWithTime(instantTime);
     List<HoodieRecord> inserts = dataGen.generateInserts(instantTime, sizeToInsertAndUpdate);
-    Set<String> keys = HoodieClientTestUtils.getRecordKeys(inserts);
+    Set<String> keys = recordsToRecordKeySet(inserts);
     List<HoodieRecord> insertsAndUpdates = new ArrayList<>();
     insertsAndUpdates.addAll(inserts);
     insertsAndUpdates.addAll(dataGen.generateUpdates(instantTime, inserts));
@@ -908,8 +909,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       String existingFile, String instantTime, int exepctedRecords, List<String> keys) {
     client.startCommitWithTime(instantTime);
 
-    List<HoodieKey> hoodieKeysToDelete = HoodieClientTestUtils
-        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(previousRecords), sizeToDelete);
+    List<HoodieKey> hoodieKeysToDelete = randomSelectAsHoodieKeys(previousRecords, sizeToDelete);
     JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(hoodieKeysToDelete, 1);
     List<WriteStatus> statuses = client.delete(deleteKeys, instantTime).collect();
 
@@ -958,8 +958,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     client.startCommitWithTime(commitTime1);
 
     List<HoodieRecord> dummyInserts = dataGen.generateInserts(commitTime1, 20);
-    List<HoodieKey> hoodieKeysToDelete = HoodieClientTestUtils
-        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(dummyInserts), 20);
+    List<HoodieKey> hoodieKeysToDelete = randomSelectAsHoodieKeys(dummyInserts, 20);
     JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(hoodieKeysToDelete, 1);
     assertThrows(HoodieIOException.class, () -> {
       client.delete(deleteKeys, commitTime1).collect();

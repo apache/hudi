@@ -51,6 +51,7 @@
     <module>packaging/hudi-timeline-server-bundle</module>
     <module>docker/hoodie/hadoop</module>
     <module>hudi-integ-test</module>
+    <module>packaging/hudi-integ-test-bundle</module>
     <module>hudi-examples</module>
   </modules>
 
@@ -89,7 +90,7 @@
     <junit.platform.version>1.7.0-M1</junit.platform.version>
     <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
     <log4j.version>1.2.17</log4j.version>
-    <slf4j.version>1.7.5</slf4j.version>
+    <slf4j.version>1.7.15</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.7.3</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
@@ -106,6 +107,7 @@
     <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
     <jetty.version>9.4.15.v20190215</jetty.version>
+    <htrace.version>3.1.0-incubating</htrace.version>
     <hbase.version>1.2.3</hbase.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
     <h2.version>1.4.199</h2.version>
@@ -995,6 +997,7 @@
               <excludes>
                 <exclude>**/*FunctionalTestSuite.java</exclude>
                 <exclude>**/IT*.java</exclude>
+                <exclude>**/testsuite/**/Test*.java</exclude>
               </excludes>
             </configuration>
           </plugin>
@@ -1096,6 +1099,7 @@
             <configuration combine.self="override">
               <skip>${skipITs}</skip>
               <includes>
+                <include>**/testsuite/**/Test*.java</include>
                 <include>**/IT*.java</include>
               </includes>
             </configuration>

@@ -22,6 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -239,7 +240,7 @@ public class FileSystemViewCommand implements CommandMarker {
         new HoodieTableMetaClient(client.getHadoopConf(), client.getBasePath(), true);
     FileSystem fs = HoodieCLI.fs;
     String globPath = String.format("%s/%s/*", client.getBasePath(), globRegex);
-    FileStatus[] statuses = fs.globStatus(new Path(globPath));
+    List<FileStatus> statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath));
     Stream<HoodieInstant> instantsStream;
 
     HoodieTimeline timeline;
@@ -269,6 +270,6 @@ public class FileSystemViewCommand implements CommandMarker {
 
     HoodieTimeline filteredTimeline = new HoodieDefaultTimeline(instantsStream,
         (Function<HoodieInstant, Option<byte[]>> & Serializable) metaClient.getActiveTimeline()::getInstantDetails);
-    return new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses);
+    return new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new FileStatus[0]));
   }
 }

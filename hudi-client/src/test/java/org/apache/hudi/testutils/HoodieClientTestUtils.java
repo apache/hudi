@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -30,7 +29,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -65,12 +63,8 @@ import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -80,45 +74,7 @@ import java.util.stream.Collectors;
 public class HoodieClientTestUtils {
 
   private static final Logger LOG = LogManager.getLogger(HoodieClientTestUtils.class);
-  private static final Random RANDOM = new Random();
   public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
-
-  public static List<WriteStatus> collectStatuses(Iterator<List<WriteStatus>> statusListItr) {
-    List<WriteStatus> statuses = new ArrayList<>();
-    while (statusListItr.hasNext()) {
-      statuses.addAll(statusListItr.next());
-    }
-    return statuses;
-  }
-
-  public static Set<String> getRecordKeys(List<HoodieRecord> hoodieRecords) {
-    Set<String> keys = new HashSet<>();
-    for (HoodieRecord rec : hoodieRecords) {
-      keys.add(rec.getRecordKey());
-    }
-    return keys;
-  }
-
-  public static List<HoodieKey> getHoodieKeys(List<HoodieRecord> hoodieRecords) {
-    List<HoodieKey> keys = new ArrayList<>();
-    for (HoodieRecord rec : hoodieRecords) {
-      keys.add(rec.getKey());
-    }
-    return keys;
-  }
-
-  public static List<HoodieKey> getKeysToDelete(List<HoodieKey> keys, int size) {
-    List<HoodieKey> toReturn = new ArrayList<>();
-    int counter = 0;
-    while (counter < size) {
-      int index = RANDOM.nextInt(keys.size());
-      if (!toReturn.contains(keys.get(index))) {
-        toReturn.add(keys.get(index));
-        counter++;
-      }
-    }
-    return toReturn;
-  }
 
   private static void fakeMetaFile(String basePath, String instantTime, String suffix) throws IOException {
     String parentPath = basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME;

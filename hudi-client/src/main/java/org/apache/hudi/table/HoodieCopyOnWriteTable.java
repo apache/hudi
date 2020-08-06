@@ -18,9 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -33,30 +30,32 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
-import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.bootstrap.BootstrapCommitActionExecutor;
+import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
+import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.commit.BulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.BulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.DeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.InsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.InsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.MergeHelper;
 import org.apache.hudi.table.action.commit.UpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.UpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -96,9 +95,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
   @Override
   public HoodieWriteMetadata bulkInsert(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieRecord<T>> records,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    return new BulkInsertCommitActionExecutor<>(jsc, config,
-        this, instantTime, records, bulkInsertPartitioner).execute();
+      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+    return new BulkInsertCommitActionExecutor(jsc, config,
+        this, instantTime, records, userDefinedBulkInsertPartitioner).execute();
   }
 
   @Override
@@ -120,9 +119,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
   @Override
   public HoodieWriteMetadata bulkInsertPrepped(JavaSparkContext jsc, String instantTime,
-      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    return new BulkInsertPreppedCommitActionExecutor<>(jsc, config,
-        this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
+      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+    return new BulkInsertPreppedCommitActionExecutor(jsc, config,
+        this, instantTime, preppedRecords, userDefinedBulkInsertPartitioner).execute();
   }
 
   @Override
@@ -133,6 +132,16 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   @Override
   public HoodieWriteMetadata compact(JavaSparkContext jsc, String compactionInstantTime) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
+  }
+
+  @Override
+  public HoodieBootstrapWriteMetadata bootstrap(JavaSparkContext jsc, Option<Map<String, String>> extraMetadata) {
+    return new BootstrapCommitActionExecutor(jsc, config, this, extraMetadata).execute();
+  }
+
+  @Override
+  public void rollbackBootstrap(JavaSparkContext jsc, String instantTime) {
+    new CopyOnWriteRestoreActionExecutor(jsc, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
   }
 
   public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
@@ -148,24 +157,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-      HoodieFileReader<IndexedRecord> storageReader =
-          HoodieFileReaderFactory.getFileReader(getHadoopConf(), upsertHandle.getOldFilePath());
-
-      try {
-        wrapper =
-            new SparkBoundedInMemoryExecutor(config, storageReader.getRecordIterator(upsertHandle.getWriterSchema()),
-            new UpdateHandler(upsertHandle), x -> x);
-        wrapper.execute();
-      } catch (Exception e) {
-        throw new HoodieException(e);
-      } finally {
-        upsertHandle.close();
-        if (null != wrapper) {
-          wrapper.shutdownNow();
-        }
-      }
+      MergeHelper.runMerge(this, upsertHandle);
     }
+
 
     // TODO(vc): This needs to be revisited
     if (upsertHandle.getWriteStatus().getPartitionPath() == null) {

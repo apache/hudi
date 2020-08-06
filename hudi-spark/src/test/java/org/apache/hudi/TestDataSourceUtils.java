@@ -18,12 +18,14 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.DataSourceTestUtils;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -91,14 +93,14 @@ public class TestDataSourceUtils {
     record.put("event_name", "Hudi Meetup");
     record.put("event_organizer", "Hudi PMC");
 
-    assertEquals(LocalDate.ofEpochDay(18000).toString(), DataSourceUtils.getNestedFieldValAsString(record, "event_date1",
+    assertEquals(LocalDate.ofEpochDay(18000).toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_date1",
         true));
-    assertEquals(LocalDate.ofEpochDay(18001).toString(), DataSourceUtils.getNestedFieldValAsString(record, "event_date2",
+    assertEquals(LocalDate.ofEpochDay(18001).toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_date2",
         true));
-    assertEquals(LocalDate.ofEpochDay(18002).toString(), DataSourceUtils.getNestedFieldValAsString(record, "event_date3",
+    assertEquals(LocalDate.ofEpochDay(18002).toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_date3",
         true));
-    assertEquals("Hudi Meetup", DataSourceUtils.getNestedFieldValAsString(record, "event_name", true));
-    assertEquals("Hudi PMC", DataSourceUtils.getNestedFieldValAsString(record, "event_organizer", true));
+    assertEquals("Hudi Meetup", HoodieAvroUtils.getNestedFieldValAsString(record, "event_name", true));
+    assertEquals("Hudi PMC", HoodieAvroUtils.getNestedFieldValAsString(record, "event_organizer", true));
   }
 
   @Test
@@ -127,23 +129,36 @@ public class TestDataSourceUtils {
 
   @Test
   public void testDoWriteOperationWithUserDefinedBulkInsertPartitioner() throws HoodieException {
-    setAndVerifyHoodieWriteClientWith(DataSourceTestUtils.NoOpBulkInsertPartitioner.class.getName());
+    setAndVerifyHoodieWriteClientWith(NoOpBulkInsertPartitioner.class.getName());
 
     DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
-            DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+        DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
 
     verify(hoodieWriteClient, times(1)).bulkInsert(any(hoodieRecords.getClass()), anyString(),
-            optionCaptor.capture());
-    assertThat(optionCaptor.getValue().get(), is(instanceOf(DataSourceTestUtils.NoOpBulkInsertPartitioner.class)));
+        optionCaptor.capture());
+    assertThat(optionCaptor.getValue().get(), is(instanceOf(NoOpBulkInsertPartitioner.class)));
   }
 
   private void setAndVerifyHoodieWriteClientWith(final String partitionerClassName) {
     config = HoodieWriteConfig.newBuilder().withPath(config.getBasePath())
-            .withUserDefinedBulkInsertPartitionerClass(partitionerClassName)
-            .build();
+        .withUserDefinedBulkInsertPartitionerClass(partitionerClassName)
+        .build();
     when(hoodieWriteClient.getConfig()).thenReturn(config);
 
     assertThat(config.getUserDefinedBulkInsertPartitionerClass(), is(equalTo(partitionerClassName)));
   }
 
+  public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>
+      implements BulkInsertPartitioner<T> {
+
+    @Override
+    public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
+      return records;
+    }
+
+    @Override
+    public boolean arePartitionRecordsSorted() {
+      return false;
+    }
+  }
 }

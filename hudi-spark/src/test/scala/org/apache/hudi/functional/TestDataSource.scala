@@ -17,12 +17,16 @@
 
 package org.apache.hudi.functional
 
+
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.testutils.DataSourceTestUtils
+import org.apache.hudi.exception.TableNotFoundException
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.streaming.{OutputMode, ProcessingTime}
@@ -39,6 +43,7 @@ import scala.concurrent.{Await, Future}
  * Basic tests on the spark datasource
  */
 class TestDataSource {
+  private val log = LogManager.getLogger(getClass)
 
   var spark: SparkSession = null
   var dataGen: HoodieTestDataGenerator = null
@@ -66,7 +71,7 @@ class TestDataSource {
 
   @Test def testShortNameStorage() {
     // Insert Operation
-    val records = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records, 2))
     inputDF.write.format("hudi")
       .options(commonOpts)
@@ -79,7 +84,7 @@ class TestDataSource {
 
   @Test def testCopyOnWriteStorage() {
     // Insert Operation
-    val records1 = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -95,7 +100,7 @@ class TestDataSource {
       .load(basePath + "/*/*/*/*");
     assertEquals(100, hoodieROViewDF1.count())
 
-    val records2 = DataSourceTestUtils.convertToStringList(dataGen.generateUpdates("001", 100)).toList
+    val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     val uniqueKeyCnt = inputDF2.select("_row_key").distinct().count()
 
@@ -127,7 +132,7 @@ class TestDataSource {
     assertEquals(firstCommit, countsPerCommit(0).get(0))
 
     // Upsert an empty dataFrame
-    val emptyRecords = DataSourceTestUtils.convertToStringList(dataGen.generateUpdates("002", 0)).toList
+    val emptyRecords = recordsToStrings(dataGen.generateUpdates("002", 0)).toList
     val emptyDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(emptyRecords, 1))
     emptyDF.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -156,7 +161,7 @@ class TestDataSource {
 
   @Test def testMergeOnReadStorage() {
     // Bulk Insert Operation
-    val records1 = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("001", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -184,7 +189,7 @@ class TestDataSource {
     val inserts2New = dataGen.generateSameKeyInserts("002", allRecords.subList(insert1Cnt, insert1Cnt + insert2NewKeyCnt))
     val inserts2Dup = dataGen.generateSameKeyInserts("002", inserts1.subList(0, insert2DupKeyCnt))
 
-    val records1 = DataSourceTestUtils.convertToStringList(inserts1).toList
+    val records1 = recordsToStrings(inserts1).toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -196,9 +201,7 @@ class TestDataSource {
     assertEquals(insert1Cnt, hoodieROViewDF1.count())
 
     val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val records2 = DataSourceTestUtils
-      .convertToStringList(inserts2Dup ++ inserts2New)
-      .toList
+    val records2 = recordsToStrings(inserts2Dup ++ inserts2New).toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -216,7 +219,7 @@ class TestDataSource {
     assertEquals(hoodieIncViewDF2.count(), insert2NewKeyCnt)
   }
 
-  //@Test (TODO: re-enable after fixing noisyness)
+  @Test
   def testStructuredStreaming(): Unit = {
     fs.delete(new Path(basePath), true)
     val sourcePath = basePath + "/source"
@@ -224,11 +227,11 @@ class TestDataSource {
     fs.mkdirs(new Path(sourcePath))
 
     // First chunk of data
-    val records1 = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
 
     // Second chunk of data
-    val records2 = DataSourceTestUtils.convertToStringList(dataGen.generateUpdates("001", 100)).toList
+    val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     val uniqueKeyCnt = inputDF2.select("_row_key").distinct().count()
 
@@ -256,7 +259,7 @@ class TestDataSource {
     val f2 = Future {
       inputDF1.write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process one microbatch
-      Thread.sleep(3000)
+      val currNumCommits = waitTillAtleastNCommits(fs, destPath, 1, 120, 5);
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, destPath, "000"))
       val commitInstantTime1: String = HoodieDataSourceHelpers.latestCommit(fs, destPath)
       // Read RO View
@@ -266,9 +269,8 @@ class TestDataSource {
 
       inputDF2.write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process one microbatch
-      Thread.sleep(10000)
+      waitTillAtleastNCommits(fs, destPath, currNumCommits + 1, 120, 5);
       val commitInstantTime2: String = HoodieDataSourceHelpers.latestCommit(fs, destPath)
-
       assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
       // Read RO View
       val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
@@ -301,8 +303,35 @@ class TestDataSource {
       assertEquals(1, countsPerCommit.length)
       assertEquals(commitInstantTime2, countsPerCommit(0).get(0))
     }
-
     Await.result(Future.sequence(Seq(f1, f2)), Duration.Inf)
+  }
 
+  @throws[InterruptedException]
+  private def waitTillAtleastNCommits(fs: FileSystem, tablePath: String,
+                               numCommits: Int, timeoutSecs: Int, sleepSecsAfterEachRun: Int): Int = {
+    val beginTime = System.currentTimeMillis
+    var currTime = beginTime
+    val timeoutMsecs = timeoutSecs * 1000
+    var numInstants = 0
+    var success: Boolean = false
+    while ({!success && (currTime - beginTime) < timeoutMsecs}) try {
+      val timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, tablePath)
+      log.info("Timeline :" + timeline.getInstants.toArray)
+      if (timeline.countInstants >= numCommits) {
+        numInstants = timeline.countInstants
+        success = true
+      }
+      val metaClient = new HoodieTableMetaClient(fs.getConf, tablePath, true)
+    } catch {
+      case te: TableNotFoundException =>
+        log.info("Got table not found exception. Retrying")
+    } finally {
+      Thread.sleep(sleepSecsAfterEachRun * 1000)
+      currTime = System.currentTimeMillis
+    }
+    if (!success) {
+      throw new IllegalStateException("Timed-out waiting for " + numCommits + " commits to appear in " + tablePath)
+    }
+    numInstants
   }
 }

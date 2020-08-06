@@ -22,7 +22,9 @@ package org.apache.hudi.common.model;
  * Hoodie file format.
  */
 public enum HoodieFileFormat {
-  PARQUET(".parquet"), HOODIE_LOG(".log");
+  PARQUET(".parquet"),
+  HOODIE_LOG(".log"),
+  HFILE(".hfile");
 
   private final String extension;
 

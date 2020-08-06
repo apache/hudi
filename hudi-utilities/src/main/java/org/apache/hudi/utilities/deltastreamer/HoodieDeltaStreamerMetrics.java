@@ -23,15 +23,17 @@ import org.apache.hudi.metrics.Metrics;
 
 import com.codahale.metrics.Timer;
 
-public class HoodieDeltaStreamerMetrics {
+import java.io.Serializable;
+
+public class HoodieDeltaStreamerMetrics implements Serializable {
 
   private HoodieWriteConfig config;
   private String tableName;
 
   public String overallTimerName = null;
   public String hiveSyncTimerName = null;
-  private Timer overallTimer = null;
-  public Timer hiveSyncTimer = null;
+  private transient Timer overallTimer = null;
+  public transient Timer hiveSyncTimer = null;
 
   public HoodieDeltaStreamerMetrics(HoodieWriteConfig config) {
     this.config = config;

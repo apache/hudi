@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -63,11 +64,15 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
   public static final String HOODIE_PAYLOAD_CLASS_PROP_NAME = "hoodie.compaction.payload.class";
   public static final String HOODIE_ARCHIVELOG_FOLDER_PROP_NAME = "hoodie.archivelog.folder";
+  public static final String HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME = "hoodie.bootstrap.index.class";
+  public static final String HOODIE_BOOTSTRAP_BASE_PATH = "hoodie.bootstrap.base.path";
 
   public static final HoodieTableType DEFAULT_TABLE_TYPE = HoodieTableType.COPY_ON_WRITE;
   public static final HoodieFileFormat DEFAULT_BASE_FILE_FORMAT = HoodieFileFormat.PARQUET;
   public static final HoodieFileFormat DEFAULT_LOG_FILE_FORMAT = HoodieFileFormat.HOODIE_LOG;
   public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
+  public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = HFileBootstrapIndex.class.getName();
+
   public static final Integer DEFAULT_TIMELINE_LAYOUT_VERSION = TimelineLayoutVersion.VERSION_0;
   public static final String DEFAULT_ARCHIVELOG_FOLDER = "";
   private Properties props;
@@ -131,6 +136,10 @@ public class HoodieTableConfig implements Serializable {
         // Use latest Version as default unless forced by client
         properties.setProperty(HOODIE_TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.CURR_VERSION.toString());
       }
+      if (properties.containsKey(HOODIE_BOOTSTRAP_BASE_PATH) && !properties.containsKey(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME)) {
+        // Use the default bootstrap index class.
+        properties.setProperty(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME, DEFAULT_BOOTSTRAP_INDEX_CLASS);
+      }
       properties.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }
   }
@@ -159,6 +168,19 @@ public class HoodieTableConfig implements Serializable {
     // change to org.apache.hudi
     return props.getProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS).replace("com.uber.hoodie",
         "org.apache.hudi");
+  }
+
+  /**
+   * Read the payload class for HoodieRecords from the table properties.
+   */
+  public String getBootstrapIndexClass() {
+    // There could be tables written with payload class from com.uber.hoodie. Need to transparently
+    // change to org.apache.hudi
+    return props.getProperty(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME, DEFAULT_BOOTSTRAP_INDEX_CLASS);
+  }
+
+  public Option<String> getBootstrapBasePath() {
+    return Option.ofNullable(props.getProperty(HOODIE_BOOTSTRAP_BASE_PATH));
   }
 
   /**

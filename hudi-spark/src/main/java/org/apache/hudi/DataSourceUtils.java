@@ -42,7 +42,7 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.parser.HoodieDateTimeParser;
-import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -67,14 +67,6 @@ import java.util.stream.Collectors;
 public class DataSourceUtils {
 
   private static final Logger LOG = LogManager.getLogger(DataSourceUtils.class);
-
-  /**
-   * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
-   */
-  public static String getNestedFieldValAsString(GenericRecord record, String fieldName, boolean returnNullIfNotFound) {
-    Object obj = getNestedFieldVal(record, fieldName, returnNullIfNotFound);
-    return (obj == null) ? null : obj.toString();
-  }
 
   /**
    * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c
@@ -107,8 +99,8 @@ public class DataSourceUtils {
       return null;
     } else {
       throw new HoodieException(
-        fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
-          + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+          fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
+              + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
     }
   }
 
@@ -200,13 +192,13 @@ public class DataSourceUtils {
    * if the class name of UserDefinedBulkInsertPartitioner is configured through the HoodieWriteConfig.
    * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
    */
-  private static Option<UserDefinedBulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
-          throws HoodieException {
+  private static Option<BulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
+      throws HoodieException {
     String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
     try {
       return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
-              ? Option.empty() :
-              Option.of((UserDefinedBulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
+          ? Option.empty() :
+          Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
     } catch (Throwable e) {
       throw new HoodieException("Could not create UserDefinedBulkInsertPartitioner class " + bulkInsertPartitionerClass, e);
     }
@@ -234,11 +226,16 @@ public class DataSourceUtils {
   }
 
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
-                                                     String tblName, Map<String, String> parameters) {
-
+      String tblName, Map<String, String> parameters) {
+    boolean asyncCompact = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_KEY()));
     // inline compaction is on by default for MOR
-    boolean inlineCompact = parameters.get(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY())
+    boolean inlineCompact = !asyncCompact && parameters.get(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY())
         .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
+    return createHoodieClient(jssc, schemaStr, basePath, tblName, parameters, inlineCompact);
+  }
+
+  public static HoodieWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
+      String tblName, Map<String, String> parameters, boolean inlineCompact) {
 
     // insert/bulk-insert combining to be true, if filtering for duplicates
     boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS_OPT_KEY()));
@@ -258,7 +255,7 @@ public class DataSourceUtils {
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
                                                       String instantTime, String operation) throws HoodieException {
     if (operation.equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL())) {
-      Option<UserDefinedBulkInsertPartitioner> userDefinedBulkInsertPartitioner =
+      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner =
           createUserDefinedBulkInsertPartitioner(client.getConfig());
       return client.bulkInsert(hoodieRecords, instantTime, userDefinedBulkInsertPartitioner);
     } else if (operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())) {
@@ -332,7 +329,7 @@ public class DataSourceUtils {
         props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
             SlashEncodedDayPartitionValueExtractor.class.getName());
     hiveSyncConfig.useJdbc = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_USE_JDBC_OPT_KEY(),
-            DataSourceWriteOptions.DEFAULT_HIVE_USE_JDBC_OPT_VAL()));
+        DataSourceWriteOptions.DEFAULT_HIVE_USE_JDBC_OPT_VAL()));
     return hiveSyncConfig;
   }
 }

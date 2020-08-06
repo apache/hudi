@@ -18,8 +18,12 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -28,26 +32,27 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.IOType;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.io.Serializable;
+import java.util.Arrays;
 import java.util.ArrayList;
-import java.util.LinkedList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Operates on marker files for a given write action (commit, delta commit, compaction).
  */
-public class MarkerFiles {
+public class MarkerFiles implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(MarkerFiles.class);
 
-  public static String stripMarkerSuffix(String path) {
-    return path.substring(0, path.indexOf(HoodieTableMetaClient.MARKER_EXTN));
-  }
-
   private final String instantTime;
-  private final FileSystem fs;
-  private final Path markerDirPath;
+  private final transient FileSystem fs;
+  private final transient Path markerDirPath;
   private final String basePath;
 
   public MarkerFiles(FileSystem fs, String basePath, String markerFolderPath, String instantTime) {
@@ -64,9 +69,9 @@ public class MarkerFiles {
         instantTime);
   }
 
-  public void quietDeleteMarkerDir() {
+  public void quietDeleteMarkerDir(JavaSparkContext jsc, int parallelism) {
     try {
-      deleteMarkerDir();
+      deleteMarkerDir(jsc, parallelism);
     } catch (HoodieIOException ioe) {
       LOG.warn("Error deleting marker directory for instant " + instantTime, ioe);
     }
@@ -74,40 +79,87 @@ public class MarkerFiles {
 
   /**
    * Delete Marker directory corresponding to an instant.
+   *
+   * @param jsc Java Spark Context.
+   * @param parallelism Spark parallelism for deletion.
    */
-  public boolean deleteMarkerDir() {
+  public boolean deleteMarkerDir(JavaSparkContext jsc, int parallelism) {
     try {
-      boolean result = fs.delete(markerDirPath, true);
-      if (result) {
+      if (fs.exists(markerDirPath)) {
+        FileStatus[] fileStatuses = fs.listStatus(markerDirPath);
+        List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
+                .map(fileStatus -> fileStatus.getPath().toString())
+                .collect(Collectors.toList());
+
+        if (markerDirSubPaths.size() > 0) {
+          SerializableConfiguration conf = new SerializableConfiguration(fs.getConf());
+          parallelism = Math.min(markerDirSubPaths.size(), parallelism);
+          jsc.parallelize(markerDirSubPaths, parallelism).foreach(subPathStr -> {
+            Path subPath = new Path(subPathStr);
+            FileSystem fileSystem = subPath.getFileSystem(conf.get());
+            fileSystem.delete(subPath, true);
+          });
+        }
+
+        boolean result = fs.delete(markerDirPath, true);
         LOG.info("Removing marker directory at " + markerDirPath);
-      } else {
-        LOG.info("No marker directory to delete at " + markerDirPath);
+        return result;
       }
-      return result;
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
+    return false;
   }
 
   public boolean doesMarkerDirExist() throws IOException {
     return fs.exists(markerDirPath);
   }
 
-  public List<String> createdAndMergedDataPaths() throws IOException {
-    List<String> dataFiles = new LinkedList<>();
-    FSUtils.processFiles(fs, markerDirPath.toString(), (status) -> {
-      String pathStr = status.getPath().toString();
-      if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
-        dataFiles.add(translateMarkerToDataPath(pathStr));
+  public Set<String> createdAndMergedDataPaths(JavaSparkContext jsc, int parallelism) throws IOException {
+    Set<String> dataFiles = new HashSet<>();
+
+    FileStatus[] topLevelStatuses = fs.listStatus(markerDirPath);
+    List<String> subDirectories = new ArrayList<>();
+    for (FileStatus topLevelStatus: topLevelStatuses) {
+      if (topLevelStatus.isFile()) {
+        String pathStr = topLevelStatus.getPath().toString();
+        if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
+          dataFiles.add(translateMarkerToDataPath(pathStr));
+        }
+      } else {
+        subDirectories.add(topLevelStatus.getPath().toString());
       }
-      return true;
-    }, false);
+    }
+
+    if (subDirectories.size() > 0) {
+      parallelism = Math.min(subDirectories.size(), parallelism);
+      SerializableConfiguration serializedConf = new SerializableConfiguration(fs.getConf());
+      dataFiles.addAll(jsc.parallelize(subDirectories, parallelism).flatMap(directory -> {
+        Path path = new Path(directory);
+        FileSystem fileSystem = path.getFileSystem(serializedConf.get());
+        RemoteIterator<LocatedFileStatus> itr = fileSystem.listFiles(path, true);
+        List<String> result = new ArrayList<>();
+        while (itr.hasNext()) {
+          FileStatus status = itr.next();
+          String pathStr = status.getPath().toString();
+          if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
+            result.add(translateMarkerToDataPath(pathStr));
+          }
+        }
+        return result.iterator();
+      }).collect());
+    }
+
     return dataFiles;
   }
 
   private String translateMarkerToDataPath(String markerPath) {
     String rPath = stripMarkerFolderPrefix(markerPath);
     return MarkerFiles.stripMarkerSuffix(rPath);
+  }
+
+  public static String stripMarkerSuffix(String path) {
+    return path.substring(0, path.indexOf(HoodieTableMetaClient.MARKER_EXTN));
   }
 
   public List<String> allMarkerFilePaths() throws IOException {
