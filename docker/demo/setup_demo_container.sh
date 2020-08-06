@@ -21,4 +21,4 @@ cp /var/hoodie/ws/docker/demo/config/log4j.properties $SPARK_CONF_DIR/.
 hadoop fs -mkdir -p /var/demo/
 hadoop fs -mkdir -p /tmp/spark-events
 hadoop fs -copyFromLocal  -f /var/hoodie/ws/docker/demo/config /var/demo/.
-chmod +x /var/hoodie/ws/hudi-hive-sync/run_sync_tool.sh
+chmod +x /var/hoodie/ws/hudi-sync/hudi-hive-sync/run_sync_tool.sh
