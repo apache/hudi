@@ -538,10 +538,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieMetricsConfig.GRAPHITE_SERVER_PORT));
   }
 
-  public String getPrometheusHost() {
-    return props.getProperty(HoodieMetricsPrometheusConfig.PROMETHEUS_HOST);
-  }
-
   public int getPrometheusPort() {
     return Integer.parseInt(props.getProperty(HoodieMetricsPrometheusConfig.PROMETHEUS_PORT));
   }

@@ -48,8 +48,6 @@ public class HoodieMetricsPrometheusConfig extends DefaultHoodieConfig {
 
   // Prometheus HttpServer
   public static final String PROMETHEUS_PREFIX = METRIC_PREFIX + ".prometheus";
-  public static final String PROMETHEUS_HOST = PROMETHEUS_PREFIX + ".host";
-  public static final String DEFAULT_PROMETHEUS_HOST = "localhost";
   public static final String PROMETHEUS_PORT = PROMETHEUS_PREFIX + ".port";
   public static final int DEFAULT_PROMETHEUS_PORT = 9090;
 
@@ -77,8 +75,6 @@ public class HoodieMetricsPrometheusConfig extends DefaultHoodieConfig {
 
     public HoodieMetricsPrometheusConfig build() {
       HoodieMetricsPrometheusConfig config = new HoodieMetricsPrometheusConfig(props);
-      setDefaultOnCondition(props, !props.containsKey(PROMETHEUS_HOST), PROMETHEUS_HOST,
-              DEFAULT_PROMETHEUS_HOST);
       setDefaultOnCondition(props, !props.containsKey(PROMETHEUS_PORT), PROMETHEUS_PORT,
               String.valueOf(DEFAULT_PROMETHEUS_PORT));
       setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_HOST),

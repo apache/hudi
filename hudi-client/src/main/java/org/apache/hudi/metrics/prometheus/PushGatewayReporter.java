@@ -35,8 +35,8 @@ public class PushGatewayReporter extends ScheduledReporter {
   private static final Logger LOG = LogManager.getLogger(PushGatewayReporter.class);
 
   private final PushGateway pushGateway;
-  private final DropwizardExports sparkMetricExports;
-  private final CollectorRegistry pushRegistry;
+  private final DropwizardExports metricExports;
+  private final CollectorRegistry collectorRegistry;
   private final String jobName;
   private final boolean deleteShutdown;
 
@@ -50,10 +50,10 @@ public class PushGatewayReporter extends ScheduledReporter {
     super(registry, "hudi-push-gateway-reporter", filter, rateUnit, durationUnit);
     this.jobName = jobName;
     this.deleteShutdown = deleteShutdown;
-    pushRegistry = new CollectorRegistry();
-    sparkMetricExports = new DropwizardExports(registry);
+    collectorRegistry = new CollectorRegistry();
+    metricExports = new DropwizardExports(registry);
     pushGateway = new PushGateway(address);
-    sparkMetricExports.register(pushRegistry);
+    metricExports.register(collectorRegistry);
   }
 
   @Override
@@ -63,7 +63,7 @@ public class PushGatewayReporter extends ScheduledReporter {
                      SortedMap<String, Meter> meters,
                      SortedMap<String, Timer> timers) {
     try {
-      pushGateway.pushAdd(pushRegistry, jobName);
+      pushGateway.pushAdd(collectorRegistry, jobName);
     } catch (IOException e) {
       LOG.warn("Can't push monitoring information to pushGateway", e);
     }
@@ -79,7 +79,7 @@ public class PushGatewayReporter extends ScheduledReporter {
     super.stop();
     try {
       if (deleteShutdown) {
-        pushRegistry.unregister(sparkMetricExports);
+        collectorRegistry.unregister(metricExports);
         pushGateway.delete(jobName);
       }
     } catch (IOException e) {

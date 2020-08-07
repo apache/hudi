@@ -18,6 +18,9 @@
 
 package org.apache.hudi.metrics.prometheus;
 
+import com.codahale.metrics.MetricRegistry;
+import io.prometheus.client.CollectorRegistry;
+import io.prometheus.client.dropwizard.DropwizardExports;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.MetricsReporter;
@@ -27,6 +30,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.Closeable;
+import java.net.InetSocketAddress;
 
 /**
  * Implementation of Prometheus reporter, which connects to the Http server, and get metrics
@@ -37,13 +41,16 @@ public class PrometheusReporter extends MetricsReporter {
   private static final Logger LOG = LogManager.getLogger(PrometheusReporter.class);
 
   private HTTPServer httpServer;
+  private final DropwizardExports metricExports;
+  private final CollectorRegistry collectorRegistry;
 
-  public PrometheusReporter(HoodieWriteConfig config) {
-    // Check the serverHost and serverPort here
-    String serverHost = config.getPrometheusHost();
+  public PrometheusReporter(HoodieWriteConfig config,  MetricRegistry registry) {
     int serverPort = config.getPrometheusPort();
+    collectorRegistry = new CollectorRegistry();
+    metricExports = new DropwizardExports(registry);
+    metricExports.register(collectorRegistry);
     try {
-      httpServer = new HTTPServer(serverHost, serverPort);
+      httpServer = new HTTPServer(new InetSocketAddress(serverPort), collectorRegistry);
     } catch (Exception e) {
       String msg = "Could not start PrometheusReporter HTTP server on port ";
       LOG.error(msg + serverPort, e);
@@ -66,6 +73,7 @@ public class PrometheusReporter extends MetricsReporter {
 
   @Override
   public void stop() {
+    collectorRegistry.unregister(metricExports);
     if (httpServer != null) {
       httpServer.stop();
     }

@@ -54,7 +54,7 @@ public class MetricsReporterFactory {
         reporter = new PushGatewayMetricsReporter(config, registry);
         break;
       case PROMETHEUS:
-        reporter = new PrometheusReporter(config);
+        reporter = new PrometheusReporter(config, registry);
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");
