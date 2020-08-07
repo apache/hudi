@@ -626,6 +626,34 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HoodieMetricsConfig.METRICS_REPORTER_CLASS);
   }
 
+  public int getPrometheusPort() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsPrometheusConfig.PROMETHEUS_PORT));
+  }
+
+  public String getPushGatewayHost() {
+    return props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_HOST);
+  }
+
+  public int getPushGatewayPort() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_PORT));
+  }
+
+  public int getPushGatewayReportPeriodSeconds() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_REPORT_PERIOD_SECONDS));
+  }
+
+  public boolean getPushGatewayDeleteShutdown() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_DELETE_ON_SHUTDOWN));
+  }
+
+  public String getPushGatewayJobName() {
+    return props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_JOB_NAME);
+  }
+
+  public boolean getPushGatewayRandomJobNameSuffix() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX));
+  }
+  
   /**
    * memory configs.
    */
