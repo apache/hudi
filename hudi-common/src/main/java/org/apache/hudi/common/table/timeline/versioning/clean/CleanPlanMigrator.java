@@ -18,18 +18,19 @@
 
 package org.apache.hudi.common.table.timeline.versioning.clean;
 
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.MetadataMigrator;
 
 import java.util.Arrays;
 
-public class CleanMetadataMigrator extends MetadataMigrator<HoodieCleanMetadata> {
+/**
+ * Manages upgrade/downgrade of cleaner plan.
+ */
+public class CleanPlanMigrator extends MetadataMigrator<HoodieCleanerPlan> {
 
-  public CleanMetadataMigrator(HoodieTableMetaClient metaClient) {
+  public CleanPlanMigrator(HoodieTableMetaClient metaClient) {
     super(metaClient,
-        Arrays
-            .asList(new CleanMetadataV1MigrationHandler(metaClient),
-                new CleanMetadataV2MigrationHandler(metaClient)));
+        Arrays.asList(new CleanPlanV1MigrationHandler(metaClient), new CleanPlanV2MigrationHandler(metaClient)));
   }
 }

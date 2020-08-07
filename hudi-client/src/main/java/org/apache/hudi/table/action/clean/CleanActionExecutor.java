@@ -23,8 +23,9 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.common.HoodieCleanStat;
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -82,40 +83,45 @@ public class CleanActionExecutor extends BaseActionExecutor<HoodieCleanMetadata>
       LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
       jsc.setJobGroup(this.getClass().getSimpleName(), "Generates list of file slices to be cleaned");
-      Map<String, List<String>> cleanOps = jsc
+      Map<String, List<HoodieCleanFileInfo>> cleanOps = jsc
           .parallelize(partitionsToClean, cleanerParallelism)
           .map(partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean)))
           .collect().stream()
-          .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+          .collect(Collectors.toMap(Pair::getKey,
+            (y) -> y.getValue().stream().map(CleanFileInfo::toHoodieFileCleanInfo).collect(Collectors.toList())));
 
       return new HoodieCleanerPlan(earliestInstant
           .map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
-          config.getCleanerPolicy().name(), cleanOps, 1);
+          config.getCleanerPolicy().name(), null, CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to schedule clean operation", e);
     }
   }
 
-  private static PairFlatMapFunction<Iterator<Tuple2<String, String>>, String, PartitionCleanStat> deleteFilesFunc(
-      HoodieTable table) {
-    return (PairFlatMapFunction<Iterator<Tuple2<String, String>>, String, PartitionCleanStat>) iter -> {
+  private static PairFlatMapFunction<Iterator<Tuple2<String, CleanFileInfo>>, String, PartitionCleanStat>
+        deleteFilesFunc(HoodieTable table) {
+    return (PairFlatMapFunction<Iterator<Tuple2<String, CleanFileInfo>>, String, PartitionCleanStat>) iter -> {
       Map<String, PartitionCleanStat> partitionCleanStatMap = new HashMap<>();
-
       FileSystem fs = table.getMetaClient().getFs();
-      Path basePath = new Path(table.getMetaClient().getBasePath());
       while (iter.hasNext()) {
-        Tuple2<String, String> partitionDelFileTuple = iter.next();
+        Tuple2<String, CleanFileInfo> partitionDelFileTuple = iter.next();
         String partitionPath = partitionDelFileTuple._1();
-        String delFileName = partitionDelFileTuple._2();
-        Path deletePath = FSUtils.getPartitionPath(FSUtils.getPartitionPath(basePath, partitionPath), delFileName);
+        Path deletePath = new Path(partitionDelFileTuple._2().getFilePath());
         String deletePathStr = deletePath.toString();
         Boolean deletedFileResult = deleteFileAndGetResult(fs, deletePathStr);
         if (!partitionCleanStatMap.containsKey(partitionPath)) {
           partitionCleanStatMap.put(partitionPath, new PartitionCleanStat(partitionPath));
         }
+        boolean isBootstrapBasePathFile = partitionDelFileTuple._2().isBootstrapBaseFile();
         PartitionCleanStat partitionCleanStat = partitionCleanStatMap.get(partitionPath);
-        partitionCleanStat.addDeleteFilePatterns(deletePath.getName());
-        partitionCleanStat.addDeletedFileResult(deletePath.getName(), deletedFileResult);
+        if (isBootstrapBasePathFile) {
+          // For Bootstrap Base file deletions, store the full file path.
+          partitionCleanStat.addDeleteFilePatterns(deletePath.toString(), true);
+          partitionCleanStat.addDeletedFileResult(deletePath.toString(), deletedFileResult, true);
+        } else {
+          partitionCleanStat.addDeleteFilePatterns(deletePath.getName(), false);
+          partitionCleanStat.addDeletedFileResult(deletePath.getName(), deletedFileResult, false);
+        }
       }
       return partitionCleanStatMap.entrySet().stream().map(e -> new Tuple2<>(e.getKey(), e.getValue()))
           .collect(Collectors.toList()).iterator();
@@ -145,14 +151,15 @@ public class CleanActionExecutor extends BaseActionExecutor<HoodieCleanMetadata>
    */
   List<HoodieCleanStat> clean(JavaSparkContext jsc, HoodieCleanerPlan cleanerPlan) {
     int cleanerParallelism = Math.min(
-        (int) (cleanerPlan.getFilesToBeDeletedPerPartition().values().stream().mapToInt(List::size).count()),
+        (int) (cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).count()),
         config.getCleanerParallelism());
     LOG.info("Using cleanerParallelism: " + cleanerParallelism);
-    
+
     jsc.setJobGroup(this.getClass().getSimpleName(), "Perform cleaning of partitions");
     List<Tuple2<String, PartitionCleanStat>> partitionCleanStats = jsc
-        .parallelize(cleanerPlan.getFilesToBeDeletedPerPartition().entrySet().stream()
-            .flatMap(x -> x.getValue().stream().map(y -> new Tuple2<>(x.getKey(), y)))
+        .parallelize(cleanerPlan.getFilePathsToBeDeletedPerPartition().entrySet().stream()
+            .flatMap(x -> x.getValue().stream().map(y -> new Tuple2<>(x.getKey(),
+              new CleanFileInfo(y.getFilePath(), y.getIsBootstrapBaseFile()))))
             .collect(Collectors.toList()), cleanerParallelism)
         .mapPartitionsToPair(deleteFilesFunc(table))
         .reduceByKey(PartitionCleanStat::merge).collect();
@@ -161,7 +168,7 @@ public class CleanActionExecutor extends BaseActionExecutor<HoodieCleanMetadata>
         .collect(Collectors.toMap(Tuple2::_1, Tuple2::_2));
 
     // Return PartitionCleanStat for each partition passed.
-    return cleanerPlan.getFilesToBeDeletedPerPartition().keySet().stream().map(partitionPath -> {
+    return cleanerPlan.getFilePathsToBeDeletedPerPartition().keySet().stream().map(partitionPath -> {
       PartitionCleanStat partitionCleanStat = partitionCleanStatsMap.containsKey(partitionPath)
           ? partitionCleanStatsMap.get(partitionPath)
           : new PartitionCleanStat(partitionPath);
@@ -175,21 +182,25 @@ public class CleanActionExecutor extends BaseActionExecutor<HoodieCleanMetadata>
           .withDeletePathPattern(partitionCleanStat.deletePathPatterns())
           .withSuccessfulDeletes(partitionCleanStat.successDeleteFiles())
           .withFailedDeletes(partitionCleanStat.failedDeleteFiles())
+          .withDeleteBootstrapBasePathPatterns(partitionCleanStat.getDeleteBootstrapBasePathPatterns())
+          .withSuccessfulDeleteBootstrapBaseFiles(partitionCleanStat.getSuccessfulDeleteBootstrapBaseFiles())
+          .withFailedDeleteBootstrapBaseFiles(partitionCleanStat.getFailedDeleteBootstrapBaseFiles())
           .build();
     }).collect(Collectors.toList());
   }
 
   /**
    * Creates a Cleaner plan if there are files to be cleaned and stores them in instant file.
+   * Cleaner Plan contains absolute file paths.
    *
    * @param startCleanTime Cleaner Instant Time
    * @return Cleaner Plan if generated
    */
   Option<HoodieCleanerPlan> requestClean(String startCleanTime) {
     final HoodieCleanerPlan cleanerPlan = requestClean(jsc);
-    if ((cleanerPlan.getFilesToBeDeletedPerPartition() != null)
-        && !cleanerPlan.getFilesToBeDeletedPerPartition().isEmpty()
-        && cleanerPlan.getFilesToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0) {
+    if ((cleanerPlan.getFilePathsToBeDeletedPerPartition() != null)
+        && !cleanerPlan.getFilePathsToBeDeletedPerPartition().isEmpty()
+        && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0) {
       // Only create cleaner plan which does some work
       final HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
       // Save to both aux and timeline folder
@@ -275,7 +286,7 @@ public class CleanActionExecutor extends BaseActionExecutor<HoodieCleanMetadata>
     if (cleanerPlanOpt.isPresent()) {
       table.getMetaClient().reloadActiveTimeline();
       HoodieCleanerPlan cleanerPlan = cleanerPlanOpt.get();
-      if ((cleanerPlan.getFilesToBeDeletedPerPartition() != null) && !cleanerPlan.getFilesToBeDeletedPerPartition().isEmpty()) {
+      if ((cleanerPlan.getFilePathsToBeDeletedPerPartition() != null) && !cleanerPlan.getFilePathsToBeDeletedPerPartition().isEmpty()) {
         return runClean(table, HoodieTimeline.getCleanRequestedInstant(instantTime), cleanerPlan);
       }
     }

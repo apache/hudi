@@ -31,11 +31,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class CleanV2MigrationHandler extends AbstractMigratorBase<HoodieCleanMetadata> {
+public class CleanMetadataV2MigrationHandler extends AbstractMigratorBase<HoodieCleanMetadata> {
 
   public static final Integer VERSION = 2;
 
-  public CleanV2MigrationHandler(HoodieTableMetaClient metaClient) {
+  public CleanMetadataV2MigrationHandler(HoodieTableMetaClient metaClient) {
     super(metaClient);
   }
 
