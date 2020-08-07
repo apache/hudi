@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.bootstrap;
 
+import java.util.Set;
 import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
@@ -50,17 +51,18 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit Tests for Bootstrap Index.
  */
 public class TestBootstrapIndex extends HoodieCommonTestHarness {
 
-  private static String[] PARTITIONS = {"2020/03/18", "2020/03/19", "2020/03/20", "2020/03/21"};
-  private static String BOOTSTRAP_BASE_PATH = "/tmp/source/parquet_tables/table1";
+  private static final String[] PARTITIONS = {"2020/03/18", "2020/03/19", "2020/03/20", "2020/03/21"};
+  private static final Set<String> PARTITION_SET = Arrays.stream(PARTITIONS).collect(Collectors.toSet());
+  private static final String BOOTSTRAP_BASE_PATH = "/tmp/source/parquet_tables/table1";
 
   @BeforeEach
-
   public void init() throws IOException {
     initMetaClient();
   }
@@ -129,9 +131,12 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
     try (BootstrapIndex.IndexReader reader = index.createReader()) {
       List<String> partitions = reader.getIndexedPartitionPaths();
       assertEquals(bootstrapMapping.size(), partitions.size());
+      partitions.forEach(partition -> assertTrue(PARTITION_SET.contains(partition)));
       long expNumFileGroupKeys = bootstrapMapping.values().stream().flatMap(x -> x.stream()).count();
-      long gotNumFileGroupKeys = reader.getIndexedFileIds().size();
+      List<HoodieFileGroupId> fileGroupIds = reader.getIndexedFileGroupIds();
+      long gotNumFileGroupKeys = fileGroupIds.size();
       assertEquals(expNumFileGroupKeys, gotNumFileGroupKeys);
+      fileGroupIds.forEach(fgId -> assertTrue(PARTITION_SET.contains(fgId.getPartitionPath())));
 
       bootstrapMapping.entrySet().stream().forEach(e -> {
         List<BootstrapFileMapping> gotMapping = reader.getSourceFileMappingForPartition(e.getKey());
