@@ -17,14 +17,14 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.GlobPattern
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.table.HoodieTable
+
+import org.apache.hadoop.fs.GlobPattern
 import org.apache.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
@@ -47,7 +47,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val log = LogManager.getLogger(classOf[IncrementalRelation])
 
-  private val metaClient = new HoodieTableMetaClient(sqlContext.sparkContext.hadoopConfiguration, basePath, true)
+  private val metaClient =
+    new HoodieTableMetaClient(sqlContext.sparkContext.hadoopConfiguration, basePath, true)
   // MOR tables not supported yet
   if (metaClient.getTableType.equals(HoodieTableType.MERGE_ON_READ)) {
     throw new HoodieException("Incremental view not implemented yet, for merge-on-read tables")

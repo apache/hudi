@@ -634,6 +634,10 @@ public class HoodieTestDataGenerator {
     return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
   }
 
+  public List<HoodieRecord> generateUniqueUpdatesAsPerSchema(String instantTime, Integer n, String schemaStr) {
+    return generateUniqueUpdatesStream(instantTime, n, schemaStr).collect(Collectors.toList());
+  }
+
   /**
    * Generates deduped delete of keys previously inserted, randomly distributed across the keys above.
    *
@@ -743,6 +747,17 @@ public class HoodieTestDataGenerator {
     }
     numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
     return result.stream();
+  }
+
+  /**
+   * Generates deduped delete records previously inserted, randomly distributed across the keys above.
+   *
+   * @param instantTime Commit Timestamp
+   * @param n          Number of unique records
+   * @return List of hoodie records for delete
+   */
+  public List<HoodieRecord> generateUniqueDeleteRecords(String instantTime, Integer n) {
+    return generateUniqueDeleteRecordStream(instantTime, n).collect(Collectors.toList());
   }
 
   public boolean deleteExistingKeyIfPresent(HoodieKey key) {

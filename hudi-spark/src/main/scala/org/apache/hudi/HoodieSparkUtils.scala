@@ -27,9 +27,9 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import scala.collection.JavaConverters._
 
 
-object HudiSparkUtils {
+object HoodieSparkUtils {
 
-  def getHudiMetadataSchema: StructType = {
+  def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
       StructField(col, StringType, nullable = true)
     }))

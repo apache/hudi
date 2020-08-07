@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.avro.LogicalTypes;
@@ -43,6 +44,7 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapred.JobConf;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -67,6 +69,17 @@ public class HoodieRealtimeRecordReaderUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read schema from " + filePath, e);
     }
+  }
+
+  /**
+   * get the max compaction memory in bytes from JobConf.
+   */
+  public static long getMaxCompactionMemoryInBytes(JobConf jobConf) {
+    // jobConf.getMemoryForMapTask() returns in MB
+    return (long) Math
+        .ceil(Double.parseDouble(jobConf.get(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP,
+            HoodieRealtimeConfig.DEFAULT_COMPACTION_MEMORY_FRACTION))
+            * jobConf.getMemoryForMapTask() * 1024 * 1024L);
   }
 
   /**
