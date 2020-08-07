@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -237,6 +238,9 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>,
    * By default, return the writer schema in Write Config for storing in commit.
    */
   protected String getSchemaToStoreInCommit() {
+    if (config.updatePartialFields() && !StringUtils.isNullOrEmpty(config.getLastSchema())) {
+      return config.getLastSchema();
+    }
     return config.getSchema();
   }
 

@@ -61,6 +61,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.PARTIAL_TRIP_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -96,6 +98,14 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     return getConfigBuilder(indexType).build();
   }
 
+  public HoodieWriteConfig getConfig(boolean updatePartialFields, boolean usePartialSchema) {
+    if (usePartialSchema) {
+      return getConfigBuilder(updatePartialFields, PARTIAL_TRIP_SCHEMA).build();
+    } else {
+      return getConfigBuilder(updatePartialFields, TRIP_SCHEMA).build();
+    }
+  }
+
   /**
    * Get Config builder with default configs set.
    *
@@ -118,16 +128,25 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     return getConfigBuilder(schemaStr, IndexType.BLOOM);
   }
 
+  public HoodieWriteConfig.Builder getConfigBuilder(boolean updatePartialFields, String schemaStr) {
+    return getConfigBuilder(schemaStr, IndexType.BLOOM, updatePartialFields);
+  }
+
   /**
    * Get Config builder with default configs set.
    *
    * @return Config Builder
    */
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, IndexType indexType) {
+    return getConfigBuilder(schemaStr, indexType, false);
+  }
+
+  public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, IndexType indexType, boolean updatePartialFields) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
+        .withUpdatePartialFields(updatePartialFields)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())

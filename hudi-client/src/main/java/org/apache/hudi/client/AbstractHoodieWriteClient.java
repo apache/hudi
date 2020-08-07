@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -117,7 +118,17 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     if (extraMetadata.isPresent()) {
       extraMetadata.get().forEach(metadata::addMetadata);
     }
-    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
+    String schema = config.getSchema();
+    if (config.updatePartialFields()) {
+      try {
+        TableSchemaResolver resolver = new TableSchemaResolver(table.getMetaClient());
+        schema = resolver.getTableAvroSchemaWithoutMetadataFields().toString();
+      } catch (Exception e) {
+        // ignore exception.
+        schema = config.getSchema();
+      }
+    }
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schema);
     metadata.setOperationType(operationType);
 
     try {

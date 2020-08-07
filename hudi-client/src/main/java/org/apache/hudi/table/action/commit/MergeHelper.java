@@ -30,6 +30,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.utils.MergingIterator;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.exception.HoodieException;
@@ -73,7 +74,11 @@ public class MergeHelper {
     } else {
       gReader = null;
       gWriter = null;
-      readSchema = upsertHandle.getWriterSchemaWithMetafields();
+      if (table.getConfig().updatePartialFields() && !StringUtils.isNullOrEmpty(table.getConfig().getLastSchema())) {
+        readSchema = new Schema.Parser().parse(table.getConfig().getLastSchema());
+      } else {
+        readSchema = upsertHandle.getWriterSchemaWithMetafields();
+      }
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
