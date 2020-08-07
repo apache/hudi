@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -39,6 +41,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
@@ -66,10 +69,15 @@ import org.apache.spark.sql.SparkSession;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.function.Function;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Function;
+import java.util.Properties;
+import java.util.Set;
+
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
@@ -391,6 +399,7 @@ public class DeltaSync implements Serializable {
     long totalRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
     boolean hasErrors = totalErrorRecords > 0;
     long hiveSyncTimeMs = 0;
+    long metaSyncTimeMs = 0;
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
@@ -413,10 +422,7 @@ public class DeltaSync implements Serializable {
         }
 
         if (!isEmpty) {
-          // Sync to hive if enabled
-          Timer.Context hiveSyncContext = metrics.getHiveSyncTimerContext();
-          syncHiveIfNeeded();
-          hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
+          syncMeta(metrics);
         }
       } else {
         LOG.info("Commit " + instantTime + " failed!");
@@ -438,8 +444,7 @@ public class DeltaSync implements Serializable {
     long overallTimeMs = overallTimerContext != null ? overallTimerContext.stop() : 0;
 
     // Send DeltaStreamer Metrics
-    metrics.updateDeltaStreamerMetrics(overallTimeMs, hiveSyncTimeMs);
-
+    metrics.updateDeltaStreamerMetrics(overallTimeMs);
     return Pair.of(scheduledCompactionInstant, writeStatusRDD);
   }
 
@@ -471,12 +476,41 @@ public class DeltaSync implements Serializable {
     throw lastException;
   }
 
-  /**
-   * Sync to Hive.
-   */
-  public void syncHiveIfNeeded() {
+  private String getSyncClassShortName(String syncClassName) {
+    return syncClassName.substring(syncClassName.lastIndexOf(".") + 1);
+  }
+
+  private void syncMeta(HoodieDeltaStreamerMetrics metrics) {
+    Set<String> syncClientToolClasses = new HashSet<>(Arrays.asList(cfg.syncClientToolClass.split(",")));
+    // for backward compatibility
     if (cfg.enableHiveSync) {
-      syncHive();
+      cfg.enableMetaSync = true;
+      syncClientToolClasses.add(HiveSyncTool.class.getName());
+      LOG.info("When set --enable-hive-sync will use HiveSyncTool for backward compatibility");
+    }
+    if (cfg.enableMetaSync) {
+      for (String impl : syncClientToolClasses) {
+        Timer.Context syncContext = metrics.getMetaSyncTimerContext();
+        impl = impl.trim();
+        AbstractSyncTool syncTool = null;
+        switch (impl) {
+          case "org.apache.hudi.hive.HiveSyncTool":
+            HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
+            LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
+                + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
+            syncTool = new HiveSyncTool(hiveSyncConfig, new HiveConf(conf, HiveConf.class), fs);
+            break;
+          default:
+            FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration());
+            Properties properties = new Properties();
+            properties.putAll(props);
+            properties.put("basePath", cfg.targetBasePath);
+            syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[]{Properties.class, FileSystem.class}, properties, fs);
+        }
+        syncTool.syncHoodieTable();
+        long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
+        metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
+      }
     }
   }
 
