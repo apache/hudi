@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
@@ -61,6 +62,8 @@ class TestMORDataSource extends HoodieClientTestBase {
   }
 
   @Test def testMergeOnReadStorage() {
+
+    val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
     // Bulk Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -79,6 +82,25 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(basePath + "/*/*/*/*")
     assertEquals(100, hudiRODF1.count()) // still 100, since we only updated
+    val insertCommitTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+    val insertCommitTimes = hudiRODF1.select("_hoodie_commit_time").distinct().collectAsList().map(r => r.getString(0)).toList
+    assertEquals(List(insertCommitTime), insertCommitTimes)
+
+    // Upsert operation
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).toList
+    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Read Snapshot query
+    val updateCommitTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+    val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .load(basePath + "/*/*/*/*")
+    val updateCommitTimes = hudiSnapshotDF2.select("_hoodie_commit_time").distinct().collectAsList().map(r => r.getString(0)).toList
+    assertEquals(List(updateCommitTime), updateCommitTimes)
   }
 
   @Test def testCount() {

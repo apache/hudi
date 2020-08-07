@@ -84,10 +84,9 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
     val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
 
-    // Read RO View
-    val hoodieROViewDF1 = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*/*/*")
-    assertEquals(100, hoodieROViewDF1.count())
+    // Snapshot query
+    val snapshotDF1 = spark.read.format("org.apache.hudi").load(basePath + "/*/*/*/*")
+    assertEquals(100, snapshotDF1.count())
 
     val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
@@ -102,12 +101,12 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
     assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
 
-    // Read RO View
-    val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
+    // Snapshot Query
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*/*/*")
-    assertEquals(100, hoodieROViewDF2.count()) // still 100, since we only updated
+    assertEquals(100, snapshotDF2.count()) // still 100, since we only updated
 
-    // Read Incremental View
+    // Read Incremental Query
     // we have 2 commits, try pulling the first commit (which is not the latest)
     val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").get(0)
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
@@ -146,6 +145,13 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .option(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY, "/2016/*/*/*")
       .load(basePath)
     assertEquals(hoodieIncViewDF2.filter(col("_hoodie_partition_path").contains("2016")).count(), hoodieIncViewDF3.count())
+
+    val timeTravelDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "000")
+      .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, firstCommit)
+      .load(basePath)
+    assertEquals(100, timeTravelDF.count()) // 100 initial inserts must be pulled
   }
 
   @Test def testDropInsertDup(): Unit = {

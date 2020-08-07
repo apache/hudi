@@ -36,9 +36,9 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
 /**
- * Basic tests on the spark datasource for COW table.
+ * Basic tests on the spark datasource for structured streaming sink
  */
-class TestStructureStreaming extends HoodieClientTestBase {
+class TestStructuredStreaming extends HoodieClientTestBase {
   private val log = LogManager.getLogger(getClass)
   var spark: SparkSession = null
   val commonOpts = Map(
