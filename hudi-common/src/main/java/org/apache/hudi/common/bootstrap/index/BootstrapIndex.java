@@ -71,9 +71,10 @@ public abstract class BootstrapIndex implements Serializable {
   }
 
   /**
-   * Check if bootstrap Index is present and ensures readable.
+   * Check if bootstrap Index is physically present. It does not guarantee the validity of the index.
+   * To ensure an index is valid, use useIndex() API.
    */
-  public abstract boolean isPresent();
+  protected abstract boolean isPresent();
 
   /**
    * Bootstrap Index Reader Interface.

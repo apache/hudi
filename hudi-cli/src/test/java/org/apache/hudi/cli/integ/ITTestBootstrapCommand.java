@@ -89,8 +89,8 @@ public class ITTestBootstrapCommand extends AbstractShellIntegrationTest {
     metaClient = HoodieCLI.getTableMetaClient();
     assertEquals(1, metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), "Should have 1 commit.");
 
-    // test "bootstrap index showPartitions"
-    CommandResult crForIndexedPartitions = getShell().executeCommand("bootstrap index showPartitions");
+    // test "bootstrap index showpartitions"
+    CommandResult crForIndexedPartitions = getShell().executeCommand("bootstrap index showpartitions");
     assertTrue(crForIndexedPartitions.isSuccess());
 
     String[] header = new String[] {"Indexed partitions"};
@@ -104,11 +104,11 @@ public class ITTestBootstrapCommand extends AbstractShellIntegrationTest {
     assertEquals(expect, got);
 
     // test "bootstrap index showMapping"
-    CommandResult crForIndexedMapping = getShell().executeCommand("bootstrap index showMapping");
+    CommandResult crForIndexedMapping = getShell().executeCommand("bootstrap index showmapping");
     assertTrue(crForIndexedMapping.isSuccess());
 
     CommandResult crForIndexedMappingWithPartition = getShell().executeCommand(String.format(
-        "bootstrap index showMapping --partitionPath %s=%s", PARTITION_FIELD, partitions.get(0)));
+        "bootstrap index showmapping --partitionPath %s=%s", PARTITION_FIELD, partitions.get(0)));
     assertTrue(crForIndexedMappingWithPartition.isSuccess());
   }
 }

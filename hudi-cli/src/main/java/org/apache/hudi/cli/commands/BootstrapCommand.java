@@ -106,9 +106,9 @@ public class BootstrapCommand implements CommandMarker {
     return "Bootstrapped source data as Hudi dataset";
   }
 
-  @CliCommand(value = "bootstrap index showMapping", help = "Show bootstrap index mapping")
+  @CliCommand(value = "bootstrap index showmapping", help = "Show bootstrap index mapping")
   public String showBootstrapIndexMapping(
-      @CliOption(key = {"partitionPath"}, unspecifiedDefaultValue = "", help = "A valid paritition path") String partitionPath,
+      @CliOption(key = {"partitionPath"}, unspecifiedDefaultValue = "", help = "A valid partition path") String partitionPath,
       @CliOption(key = {"fileIds"}, unspecifiedDefaultValue = "", help = "Valid fileIds split by comma") String fileIds,
       @CliOption(key = {"limit"}, unspecifiedDefaultValue = "-1", help = "Limit rows to be displayed") Integer limit,
       @CliOption(key = {"sortBy"}, unspecifiedDefaultValue = "", help = "Sorting Field") final String sortByField,
@@ -117,8 +117,9 @@ public class BootstrapCommand implements CommandMarker {
       final boolean headerOnly) {
 
     if (partitionPath.isEmpty() && !fileIds.isEmpty()) {
-      throw new IllegalStateException("When passing fileIds, partitionPath is mandatory");
+      throw new IllegalStateException("PartitionPath is mandatory when passing fileIds.");
     }
+
     BootstrapIndex.IndexReader indexReader = createBootstrapIndexReader();
     List<String> indexedPartitions = indexReader.getIndexedPartitionPaths();
 
@@ -144,14 +145,14 @@ public class BootstrapCommand implements CommandMarker {
         .addTableHeaderField("Hudi Partition")
         .addTableHeaderField("FileId")
         .addTableHeaderField("Source File Base Path")
-        .addTableHeaderField("Source File Parition")
+        .addTableHeaderField("Source File Partition")
         .addTableHeaderField("Source File Path");
 
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending,
         limit, headerOnly, rows);
   }
 
-  @CliCommand(value = "bootstrap index showPartitions", help = "Show bootstrap indexed partitions")
+  @CliCommand(value = "bootstrap index showpartitions", help = "Show bootstrap indexed partitions")
   public String showBootstrapIndexPartitions() {
 
     BootstrapIndex.IndexReader indexReader = createBootstrapIndexReader();
@@ -168,8 +169,8 @@ public class BootstrapCommand implements CommandMarker {
   private BootstrapIndex.IndexReader createBootstrapIndexReader() {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
-    if (!index.isPresent()) {
-      throw new HoodieException("This is not a bootstraped Hudi table. Don't have any index info");
+    if (!index.useIndex()) {
+      throw new HoodieException("This is not a bootstrapped Hudi table. Don't have any index info");
     }
     return index.createReader();
   }
