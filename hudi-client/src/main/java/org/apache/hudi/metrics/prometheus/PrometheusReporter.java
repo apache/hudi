@@ -51,9 +51,9 @@ public class PrometheusReporter extends MetricsReporter {
     try {
       httpServer = new HTTPServer(new InetSocketAddress(serverPort), collectorRegistry);
     } catch (Exception e) {
-      String msg = "Could not start PrometheusReporter HTTP server on port ";
-      LOG.error(msg + serverPort, e);
-      throw new HoodieException(msg + serverPort, e);
+      String msg = "Could not start PrometheusReporter HTTP server on port " + serverPort;
+      LOG.error(msg, e);
+      throw new HoodieException(msg, e);
     }
   }
 

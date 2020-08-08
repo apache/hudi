@@ -42,6 +42,7 @@ public class HoodieMetricsPrometheusConfig extends DefaultHoodieConfig {
   public static final boolean DEFAULT_PUSHGATEWAY_DELETE_ON_SHUTDOWN = true;
 
   public static final String PUSHGATEWAY_JOB_NAME = PUSHGATEWAY_PREFIX + ".job.name";
+  public static final String DEFAULT_PUSHGATEWAY_JOB_NAME = "";
 
   public static final String PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = PUSHGATEWAY_PREFIX + ".random.job.name.suffix";
   public static final boolean DEFAULT_PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = true;
@@ -91,7 +92,7 @@ public class HoodieMetricsPrometheusConfig extends DefaultHoodieConfig {
               PUSHGATEWAY_DELETE_ON_SHUTDOWN,
               String.valueOf(DEFAULT_PUSHGATEWAY_DELETE_ON_SHUTDOWN));
       setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_JOB_NAME),
-              PUSHGATEWAY_JOB_NAME, "");
+              PUSHGATEWAY_JOB_NAME, DEFAULT_PUSHGATEWAY_JOB_NAME);
       setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX),
               PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX,
               String.valueOf(DEFAULT_PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX));
