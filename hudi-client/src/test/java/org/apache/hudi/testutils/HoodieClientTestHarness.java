@@ -42,8 +42,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.Logger;
+import org.apache.log4j.LogManager;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -56,7 +56,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness implements Serializable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestHarness.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieClientTestHarness.class);
   
   private String testMethodName;
   protected transient JavaSparkContext jsc = null;
