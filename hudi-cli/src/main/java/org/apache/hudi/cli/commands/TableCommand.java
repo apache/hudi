@@ -87,7 +87,7 @@ public class TableCommand implements CommandMarker {
           help = "Hoodie Table Type. Must be one of : COPY_ON_WRITE or MERGE_ON_READ") final String tableTypeStr,
       @CliOption(key = {"archiveLogFolder"}, help = "Folder Name for storing archived timeline") String archiveFolder,
       @CliOption(key = {"layoutVersion"}, help = "Specific Layout Version to use") Integer layoutVersion,
-      @CliOption(key = {"payloadClass"}, unspecifiedDefaultValue = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+      @CliOption(key = {"payloadClass"}, unspecifiedDefaultValue = "org.apache.hudi.common.model.HoodieAvroPayload",
           help = "Payload Class") final String payloadClass) throws IOException {
 
     boolean initialized = HoodieCLI.initConf();
