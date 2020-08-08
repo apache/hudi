@@ -510,3 +510,30 @@ Property: `hoodie.memory.compaction.fraction` <br/>
 #### withWriteStatusFailureFraction(failureFraction = 0.1) {#withWriteStatusFailureFraction}
 Property: `hoodie.memory.writestatus.failure.fraction` <br/>
 <span style="color:grey">This property controls what fraction of the failed record, exceptions we report back to driver</span>
+
+### Write commit callback configs
+Controls callback behavior on write commit. Exception will be thrown if user enabled the callback service and errors occurred during the process of callback. Currently support http callback only, kafka implementation will be supported in the near future. 
+[withCallbackConfig](#withCallbackConfig) (HoodieWriteCommitCallbackConfig) <br/>
+<span style="color:grey">Callback related configs</span>
+
+##### writeCommitCallbackOn(callbackOn = false) {#writeCommitCallbackOn} 
+Property: `hoodie.write.commit.callback.on` <br/>
+<span style="color:grey">Turn callback on/off. off by default.</span>
+
+##### withCallbackClass(callbackClass) {#withCallbackClass} 
+Property: `hoodie.write.commit.callback.class` <br/>
+<span style="color:grey">Full path of user-defined callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default</span>
+
+#### HoodieWriteCommitHttpCallback
+
+##### withCallbackHttpUrl(url) {#withCallbackHttpUrl} 
+Property: `hoodie.write.commit.callback.http.url` <br/>
+<span style="color:grey">Callback host to be sent along with callback messages</span>
+
+##### withCallbackHttpTimeoutSeconds(timeoutSeconds = 3) {#withCallbackHttpTimeoutSeconds} 
+Property: `hoodie.write.commit.callback.http.timeout.seconds` <br/>
+<span style="color:grey">Callback timeout in seconds. 3 by default</span>
+
+##### withCallbackHttpApiKey(apiKey) {#withCallbackHttpApiKey} 
+Property: `hoodie.write.commit.callback.http.api.key` <br/>
+<span style="color:grey">Http callback API key. hudi_write_commit_http_callback by default</span>
