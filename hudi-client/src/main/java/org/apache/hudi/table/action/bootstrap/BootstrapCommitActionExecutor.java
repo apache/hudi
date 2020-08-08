@@ -193,7 +193,7 @@ public class BootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
   }
 
   /**
-   * Perform Metadata Bootstrap.
+   * Perform Full Bootstrap.
    * @param partitionFilesList List of partitions and files within that partitions
    */
   protected Option<HoodieWriteMetadata> fullBootstrap(List<Pair<String, List<HoodieFileStatus>>> partitionFilesList) {
