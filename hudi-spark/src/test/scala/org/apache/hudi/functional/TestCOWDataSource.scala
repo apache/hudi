@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestBase
@@ -193,5 +194,53 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, commitInstantTime1)
       .load(basePath)
     assertEquals(hoodieIncViewDF2.count(), insert2NewKeyCnt)
+  }
+
+  @Test def testOverwriteWithLatestAvroPayloadWithOlderUpdates(): Unit = {
+    // Insert Operation with newer timestamps
+    val newTs = 5.0
+    val insertRecords = recordsToStrings(dataGen.generateInserts("000", 10, false, newTs)).toList
+    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(insertRecords, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val viewName = "hoodie_ro_snapshot"
+    testOverwriteWithLatestAvroHelper(fs, basePath, viewName, "000", 10)
+    val commitInstantTime1: String = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+
+    // Update operation with older timestamps. Ensure the updates are ignore because they are older.
+    val oldTs = 4.0
+    val updateRecords = recordsToStrings(dataGen.generateUniqueUpdates("001", 10, oldTs)).toList
+    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(updateRecords, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    testOverwriteWithLatestAvroHelper(fs, basePath, viewName, "000", 10)
+    assertEquals(0, spark.sql("select * from " + viewName + " where timestamp = " + oldTs + " and `_hoodie_commit_time` > " + commitInstantTime1).count())
+    assertEquals(10, spark.sql("select * from " + viewName + " where timestamp = " + newTs + " and `_hoodie_commit_time` > " + commitInstantTime1).count())
+
+    // Delete operation with older timestamps. Ensure deletes are ignored because they are older.
+    val deleteRecords = recordsToStrings(dataGen.generateUniqueDeleteRecords("002", 5, oldTs)).toList
+    val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(deleteRecords, 2))
+    inputDF3.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    testOverwriteWithLatestAvroHelper(fs, basePath, viewName, "001", 10)
+    assertEquals(0, spark.sql("select * from " + viewName + " where timestamp = " + oldTs + " and `_hoodie_commit_time` > " + commitInstantTime1).count())
+    assertEquals(10, spark.sql("select * from " + viewName + " where timestamp = " + newTs + " and `_hoodie_commit_time` > " + commitInstantTime1).count())
+  }
+
+  def testOverwriteWithLatestAvroHelper(fs: FileSystem, basePath: String, viewName: String, prevCommitTime: String, totalExpectedRecords: Int): Unit = {
+    //new commit should be present but has no older data since the updates/delets were older than the existing records
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, prevCommitTime))
+    val hoodieROViewDF3 = spark.read.format("org.apache.hudi").load(basePath + "/*/*/*/*")
+    hoodieROViewDF3.createOrReplaceTempView(viewName)
+    assertEquals(totalExpectedRecords, hoodieROViewDF3.count)
   }
 }

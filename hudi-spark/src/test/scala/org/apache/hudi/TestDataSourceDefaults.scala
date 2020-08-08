@@ -17,9 +17,11 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{EmptyHoodieRecordPayload, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{BaseAvroPayload, EmptyHoodieRecordPayload, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.testutils.SchemaTestUtil
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
@@ -27,6 +29,8 @@ import org.apache.hudi.keygen.{ComplexKeyGenerator, GlobalDeleteKeyGenerator, Si
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.scalatest.Assertions.fail
+
+import scala.collection.JavaConverters._
 
 /**
  * Tests on the default key generator, payload classes.
@@ -294,7 +298,7 @@ class TestDataSourceDefaults {
     }
   }
 
-  @Test def testOverwriteWithLatestAvroPayload() = {
+  @Test def testOverwriteWithLatestAvroPayloadPrecombine() = {
     val overWritePayload1 = new OverwriteWithLatestAvroPayload(baseRecord, 1)
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")
@@ -309,6 +313,30 @@ class TestDataSourceDefaults {
     val combinedPayload21 = overWritePayload2.preCombine(overWritePayload1)
     val combinedGR21 = combinedPayload21.getInsertValue(schema).get().asInstanceOf[GenericRecord]
     assertEquals("field2", combinedGR21.get("field1").toString)
+  }
+
+  @Test def testOverwriteWithLatestAvroPayloadCombineAndGetUpdateValue() = {
+    val baseOrderingVal: Object = baseRecord.get("favoriteIntNumber")
+    val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
+    val basePayload = new OverwriteWithLatestAvroPayload(baseRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, baseOrderingVal).asInstanceOf[Comparable[_]])
+
+    val laterRecord = SchemaTestUtil
+      .generateAvroRecordFromJson(schema, 2, "001", "f1")
+    val laterOrderingVal: Object = laterRecord.get("favoriteIntNumber")
+    val newerPayload = new OverwriteWithLatestAvroPayload(laterRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal).asInstanceOf[Comparable[_]])
+
+    // it will provide the record with greatest combine value
+    val preCombinedPayload = basePayload.preCombine(newerPayload)
+    val precombinedGR = preCombinedPayload.getInsertValue(schema).get().asInstanceOf[GenericRecord]
+    assertEquals("field2", precombinedGR.get("field1").toString)
+
+    // test update with older record when storage has newer data. Here basePayload is the incoming record which is older
+    // than record in disk.
+    val props = Map(BaseAvroPayload.ORDERING_FIELD_OPT_KEY -> "favoriteIntNumber")
+    val recordInDisk = precombinedGR
+    val expectedGR = basePayload.combineAndGetUpdateValue(recordInDisk, schema, props.asJava).get().asInstanceOf[GenericRecord]
+    assertEquals("field2", expectedGR.get("field1").toString)
+    assertEquals( 2 + "001".hashCode() , expectedGR.get("favoriteIntNumber"))
   }
 
   @Test def testEmptyHoodieRecordPayload() = {

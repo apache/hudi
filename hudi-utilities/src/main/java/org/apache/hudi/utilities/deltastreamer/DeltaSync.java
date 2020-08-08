@@ -82,6 +82,7 @@ import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldVal;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_PROP;
@@ -349,7 +350,7 @@ public class DeltaSync implements Serializable {
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
       HoodieRecordPayload payload = DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-          (Comparable) DataSourceUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false));
+              (Comparable) getNestedFieldVal(gr, cfg.sourceOrderingField, false));
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 
@@ -558,7 +559,7 @@ public class DeltaSync implements Serializable {
                 // Inline compaction is disabled for continuous mode. otherwise enabled for MOR
                 .withInlineCompaction(cfg.isInlineCompactionEnabled()).build())
             .forTable(cfg.targetTableName)
-            .withAutoCommit(autoCommit).withProps(props);
+            .withAutoCommit(autoCommit).withPayloadOrderingField(cfg.sourceOrderingField).withProps(props);
 
     if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {
       builder = builder.withSchema(schemaProvider.getTargetSchema().toString());

@@ -31,6 +31,8 @@ import java.io.Serializable;
  * Base class for all AVRO record based payloads, that can be ordered based on a field.
  */
 public abstract class BaseAvroPayload implements Serializable {
+
+  public static final String ORDERING_FIELD_OPT_KEY = "ordering.field";
   /**
    * Avro data extracted from the source converted to bytes.
    */

@@ -50,7 +50,24 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    * @param schema Schema used for record
    * @return new combined/merged value to be written back to storage. EMPTY to skip writing this record.
    */
+  @Deprecated
   Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException;
+
+  /**
+   * This methods lets you write custom merging/combining logic to produce new values as a function of current value on
+   * storage and whats contained in this object.
+   * <p>
+   * eg: 1) You are updating counters, you may want to add counts to currentValue and write back updated counts 2) You
+   * may be reading DB redo logs, and merge them with current image for a database row on storage
+   *
+   * @param currentValue Current value in storage, to merge/combine this payload with
+   * @param schema Schema used for record
+   * @param props Payload related properties. For example pass the ordering field(s) name to extract from value in storage.
+   * @return new combined/merged value to be written back to storage. EMPTY to skip writing this record.
+   */
+  default Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Map<String, String> props) throws IOException {
+    return combineAndGetUpdateValue(currentValue, schema);
+  }
 
   /**
    * Generates an avro record out of the given HoodieRecordPayload, to be written out to storage. Called when writing a

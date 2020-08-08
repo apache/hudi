@@ -421,7 +421,7 @@ public class HoodieAvroUtils {
    * @param fieldValue avro field value
    * @return field value either converted (for certain data types) or as it is.
    */
-  private static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue) {
+  public static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue) {
     if (fieldSchema == null) {
       return fieldValue;
     }
@@ -438,7 +438,7 @@ public class HoodieAvroUtils {
    * @param fieldSchema avro field schema
    * @return boolean indicating whether fieldSchema is of Avro's Date Logical Type
    */
-  private static boolean isLogicalTypeDate(Schema fieldSchema) {
+  public static boolean isLogicalTypeDate(Schema fieldSchema) {
     if (fieldSchema.getType() == Schema.Type.UNION) {
       return fieldSchema.getTypes().stream().anyMatch(schema -> schema.getLogicalType() == LogicalTypes.date());
     }
