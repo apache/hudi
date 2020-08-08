@@ -40,7 +40,7 @@ public class PushGatewayMetricsReporter extends MetricsReporter {
     String serverHost = config.getPushGatewayHost();
     int serverPort = config.getPushGatewayPort();
     periodSeconds = config.getPushGatewayReportPeriodSeconds();
-    deleteShutdown = config.getPushGatewayDeleteShutdown();
+    deleteShutdown = config.getPushGatewayDeleteOnShutdown();
     configuredJobName = config.getPushGatewayJobName();
     randomSuffix = config.getPushGatewayRandomJobNameSuffix();
 

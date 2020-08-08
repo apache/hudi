@@ -642,7 +642,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_REPORT_PERIOD_SECONDS));
   }
 
-  public boolean getPushGatewayDeleteShutdown() {
+  public boolean getPushGatewayDeleteOnShutdown() {
     return Boolean.parseBoolean(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_DELETE_ON_SHUTDOWN));
   }
 
