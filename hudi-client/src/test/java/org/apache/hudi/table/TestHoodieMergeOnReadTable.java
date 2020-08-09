@@ -522,8 +522,10 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
         secondClient.rollback(commitTime1);
         allFiles = listAllDataFilesInPath(hoodieTable, cfg.getBasePath());
         // After rollback, there should be no base file with the failed commit time
-        assertEquals(0, Arrays.stream(allFiles)
-            .filter(file -> file.getPath().getName().contains(commitTime1)).count());
+        List<String> remainingFiles = Arrays.stream(allFiles).filter(file -> file.getPath().getName()
+            .contains(commitTime1)).map(fileStatus -> fileStatus.getPath().toString()).collect(Collectors.toList());
+        assertEquals(0, remainingFiles.size(), "There files should have been rolled-back "
+            + "when rolling back commit " + commitTime1 + " but are still remaining. Files: " + remainingFiles);
         dataFiles = tableView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
         recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf, dataFiles, basePath);
         assertEquals(200, recordsRead.size());

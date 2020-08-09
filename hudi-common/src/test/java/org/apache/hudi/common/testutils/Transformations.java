@@ -25,8 +25,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.groupingBy;
 
 /**
  * Common transformations in test cases.
@@ -49,6 +52,10 @@ public final class Transformations {
 
   public static List<HoodieKey> recordsToHoodieKeys(List<HoodieRecord> records) {
     return records.stream().map(HoodieRecord::getKey).collect(Collectors.toList());
+  }
+
+  public static Map<String, List<HoodieRecord>> recordsToPartitionRecordsMap(List<HoodieRecord> records) {
+    return records.stream().collect(groupingBy(HoodieRecord::getPartitionPath));
   }
 
   /**
