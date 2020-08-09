@@ -86,7 +86,7 @@ class TestDataSourceForBootstrap {
     val numRecords = 100
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
-    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, numRecords, Collections.emptyList(), jsc,
+    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, Collections.emptyList(), jsc,
       spark.sqlContext)
 
     // Write source data non-partitioned
@@ -118,8 +118,8 @@ class TestDataSourceForBootstrap {
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
     val numRecordsUpdate = 10
-    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, numRecordsUpdate, Collections.emptyList(),
-      jsc, spark.sqlContext)
+    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate,
+      Collections.emptyList(), jsc, spark.sqlContext)
 
     updateDF.write
       .format("hudi")
@@ -173,7 +173,7 @@ class TestDataSourceForBootstrap {
     val partitionPaths = List("2020-04-01", "2020-04-02", "2020-04-03")
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
-    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, numRecords, partitionPaths.asJava, jsc,
+    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
     // Write source data hive style partitioned
@@ -206,7 +206,7 @@ class TestDataSourceForBootstrap {
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
     val numRecordsUpdate = 10
-    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, numRecordsUpdate, partitionPaths.asJava,
+    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
       jsc, spark.sqlContext)
 
     updateDF.write
@@ -273,7 +273,7 @@ class TestDataSourceForBootstrap {
     val partitionPaths = List("2020-04-01", "2020-04-02", "2020-04-03")
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
-    var sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, numRecords, partitionPaths.asJava, jsc,
+    var sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
     // Writing data for each partition instead of using partitionBy to avoid hive-style partitioning and hence
@@ -310,7 +310,7 @@ class TestDataSourceForBootstrap {
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
     val numRecordsUpdate = 10
-    var updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, numRecordsUpdate, partitionPaths.asJava,
+    var updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
       jsc, spark.sqlContext)
 
     updateDF.write
@@ -376,7 +376,7 @@ class TestDataSourceForBootstrap {
     val partitionPaths = List("2020-04-01", "2020-04-02", "2020-04-03")
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
-    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, numRecords, partitionPaths.asJava, jsc,
+    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
     // Writing data for each partition instead of using partitionBy to avoid hive-style partitioning and hence
@@ -417,7 +417,7 @@ class TestDataSourceForBootstrap {
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
     val numRecordsUpdate = 10
-    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, numRecordsUpdate, partitionPaths.asJava,
+    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
       jsc, spark.sqlContext)
 
     updateDF.write
@@ -453,7 +453,7 @@ class TestDataSourceForBootstrap {
     val partitionPaths = List("2020-04-01", "2020-04-02", "2020-04-03")
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
-    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, numRecords, partitionPaths.asJava, jsc,
+    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
     // Writing data for each partition instead of using partitionBy to avoid hive-style partitioning and hence
@@ -494,8 +494,8 @@ class TestDataSourceForBootstrap {
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
     val numRecordsUpdate = 10
-    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, numRecordsUpdate, partitionPaths.asJava, jsc,
-      spark.sqlContext)
+    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate,
+      partitionPaths.asJava, jsc, spark.sqlContext)
 
     updateDF.write
       .format("hudi")
@@ -528,7 +528,7 @@ class TestDataSourceForBootstrap {
     val partitionPaths = List("2020-04-01", "2020-04-02", "2020-04-03")
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 
-    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, numRecords, partitionPaths.asJava, jsc,
+    val sourceDF = TestBootstrap.generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths.asJava, jsc,
       spark.sqlContext)
 
     // Writing data for each partition instead of using partitionBy to avoid hive-style partitioning and hence
@@ -569,7 +569,7 @@ class TestDataSourceForBootstrap {
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
     val numRecordsUpdate = 10
-    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, numRecordsUpdate, partitionPaths.asJava,
+    val updateDF = TestBootstrap.generateTestRawTripDataset(updateTimestamp, 0, numRecordsUpdate, partitionPaths.asJava,
       jsc, spark.sqlContext)
 
     updateDF.write

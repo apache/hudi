@@ -550,7 +550,6 @@ public class TestBootstrap extends HoodieClientTestBase {
     return builder;
   }
 
-
   public static Dataset<Row> generateTestRawTripDataset(double timestamp, int from, int to, List<String> partitionPaths,
                                                          JavaSparkContext jsc, SQLContext sqlContext) {
     boolean isPartitioned = partitionPaths != null && !partitionPaths.isEmpty();
