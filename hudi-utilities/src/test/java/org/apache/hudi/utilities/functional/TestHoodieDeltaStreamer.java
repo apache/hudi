@@ -581,8 +581,10 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     // Perform bootstrap with tableBasePath as source
     String bootstrapSourcePath = dfsBasePath + "/src_bootstrapped";
-    sqlContext.read().format("org.apache.hudi").load(tableBasePath + "/*/*.parquet").write().format("parquet")
-        .save(bootstrapSourcePath);
+    Dataset<Row> sourceDf = sqlContext.read()
+                              .format("org.apache.hudi")
+                              .load(tableBasePath + "/*/*.parquet");
+    sourceDf.write().format("parquet").save(bootstrapSourcePath);
 
     String newDatasetBasePath = dfsBasePath + "/test_dataset_bootstrapped";
     cfg.runBootstrap = true;
@@ -600,12 +602,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     assertEquals(1950, sqlContext.sql("select distinct _hoodie_record_key from bootstrapped").count());
 
     StructField[] fields = res.schema().fields();
-    assertEquals(5, fields.length);
-    assertEquals(HoodieRecord.COMMIT_TIME_METADATA_FIELD, fields[0].name());
-    assertEquals(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, fields[1].name());
-    assertEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, fields[2].name());
-    assertEquals(HoodieRecord.PARTITION_PATH_METADATA_FIELD, fields[3].name());
-    assertEquals(HoodieRecord.FILENAME_METADATA_FIELD, fields[4].name());
+    List<String> fieldNames = Arrays.asList(res.schema().fieldNames());
+    List<String> expectedFieldNames = Arrays.asList(sourceDf.schema().fieldNames());
+    assertEquals(expectedFieldNames.size(), fields.length);
+    assertTrue(fieldNames.containsAll(HoodieRecord.HOODIE_META_COLUMNS));
+    assertTrue(fieldNames.containsAll(expectedFieldNames));
   }
 
   @Test

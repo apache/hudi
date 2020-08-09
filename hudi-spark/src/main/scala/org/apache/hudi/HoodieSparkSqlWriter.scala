@@ -34,11 +34,13 @@ import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.ReflectionUtils
+import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, BOOTSTRAP_INDEX_CLASS_PROP, DEFAULT_BOOTSTRAP_INDEX_CLASS}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.log4j.LogManager
+import org.apache.spark.SparkContext
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
@@ -49,12 +51,13 @@ import scala.collection.mutable.ListBuffer
 private[hudi] object HoodieSparkSqlWriter {
 
   private val log = LogManager.getLogger(getClass)
+  private var tableExists: Boolean = false
 
   def write(sqlContext: SQLContext,
             mode: SaveMode,
             parameters: Map[String, String],
             df: DataFrame,
-            hoodieTableConfig: Option[HoodieTableConfig] = Option.empty,
+            hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
             hoodieWriteClient: Option[HoodieWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty,
             asyncCompactionTriggerFn: Option[Function1[HoodieWriteClient[HoodieRecordPayload[Nothing]], Unit]] = Option.empty
            )
@@ -90,32 +93,23 @@ private[hudi] object HoodieSparkSqlWriter {
       }
 
     val jsc = new JavaSparkContext(sparkContext)
-    val basePath = new Path(parameters("path"))
+    val basePath = new Path(path.get)
     val instantTime = HoodieActiveTimeline.createNewInstantTime()
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
-    var exists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
-    var tableConfig : HoodieTableConfig = if (exists) {
-      hoodieTableConfig.getOrElse(
-        new HoodieTableMetaClient(sparkContext.hadoopConfiguration, path.get).getTableConfig)
-    } else {
-      null
-    }
+    tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
+    var tableConfig = getHoodieTableConfig(sparkContext, path.get, hoodieTableConfigOpt)
 
-    if (mode == SaveMode.Ignore && exists) {
+    if (mode == SaveMode.Ignore && tableExists) {
       log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
       (false, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
     } else {
-      if (exists && mode == SaveMode.Append) {
-        val existingTableName = tableConfig.getTableName
-        if (!existingTableName.equals(tblName)) {
-          throw new HoodieException(s"hoodie table with name $existingTableName already exist at $basePath")
-        }
-      }
+      // Handle various save modes
+      handleSaveModes(mode, basePath, tableConfig, tblName, operation, fs)
+
       val (writeStatuses, writeClient: HoodieWriteClient[HoodieRecordPayload[Nothing]]) =
         if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
           // register classes & schemas
-          val structName = s"${tblName}_record"
-          val nameSpace = s"hoodie.${tblName}"
+          val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
           sparkContext.getConf.registerKryoClasses(
             Array(classOf[org.apache.avro.generic.GenericData],
               classOf[org.apache.avro.Schema]))
@@ -134,23 +128,11 @@ private[hudi] object HoodieSparkSqlWriter {
               parameters(PAYLOAD_CLASS_OPT_KEY))
           }).toJavaRDD()
 
-          // Handle various save modes
-          if (mode == SaveMode.ErrorIfExists && exists) {
-            throw new HoodieException(s"hoodie table at $basePath already exists.")
-          }
-
-          if (mode == SaveMode.Overwrite && exists) {
-            log.warn(s"hoodie table at $basePath already exists. Deleting existing data & overwriting with new data.")
-            fs.delete(basePath, true)
-            exists = false
-          }
-
           // Create the table if not present
-          if (!exists) {
-            //FIXME(bootstrap): bootstrapIndexClass needs to be set when bootstrap index class is integrated.
-            val tableMetaClient = HoodieTableMetaClient.initTableTypeWithBootstrap(sparkContext.hadoopConfiguration,
-              path.get, HoodieTableType.valueOf(tableType),
-              tblName, "archived", parameters(PAYLOAD_CLASS_OPT_KEY), null, null, null)
+          if (!tableExists) {
+            val tableMetaClient = HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get,
+              HoodieTableType.valueOf(tableType), tblName, "archived", parameters(PAYLOAD_CLASS_OPT_KEY),
+              null.asInstanceOf[String])
             tableConfig = tableMetaClient.getTableConfig
           }
 
@@ -179,12 +161,6 @@ private[hudi] object HoodieSparkSqlWriter {
           val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation)
           (writeStatuses, client)
         } else {
-
-          // Handle save modes
-          if (mode != SaveMode.Append) {
-            throw new HoodieException(s"Append is the only save mode applicable for $operation operation")
-          }
-
           val structName = s"${tblName}_record"
           val nameSpace = s"hoodie.${tblName}"
           sparkContext.getConf.registerKryoClasses(
@@ -196,7 +172,7 @@ private[hudi] object HoodieSparkSqlWriter {
           val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
           val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
 
-          if (!exists) {
+          if (!tableExists) {
             throw new HoodieException(s"hoodie table at $basePath does not exist")
           }
 
@@ -222,6 +198,56 @@ private[hudi] object HoodieSparkSqlWriter {
           operation, jsc)
       (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, writeClient, tableConfig)
     }
+  }
+
+  def bootstrap(sqlContext: SQLContext,
+                mode: SaveMode,
+                parameters: Map[String, String],
+                df: DataFrame,
+                hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty): Boolean = {
+
+    val sparkContext = sqlContext.sparkContext
+    val path = parameters.getOrElse("path", throw new HoodieException("'path' must be set."))
+    val tableName = parameters.getOrElse(HoodieWriteConfig.TABLE_NAME,
+      throw new HoodieException(s"'${HoodieWriteConfig.TABLE_NAME}' must be set."))
+    val tableType = parameters(TABLE_TYPE_OPT_KEY)
+    val bootstrapBasePath = parameters.getOrElse(BOOTSTRAP_BASE_PATH_PROP,
+      throw new HoodieException(s"'${BOOTSTRAP_BASE_PATH_PROP}' is required for '${BOOTSTRAP_OPERATION_OPT_VAL}'" +
+        " operation'"))
+    val bootstrapIndexClass = parameters.getOrDefault(BOOTSTRAP_INDEX_CLASS_PROP, DEFAULT_BOOTSTRAP_INDEX_CLASS)
+
+    var schema: String = null
+    if (df.schema.nonEmpty) {
+      val (structName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
+      schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, namespace).toString
+    } else {
+      schema = HoodieAvroUtils.getNullSchema.toString
+    }
+
+    val basePath = new Path(path)
+    val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
+    tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
+    val tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
+
+    // Handle various save modes
+    if (mode == SaveMode.Ignore && tableExists) {
+      log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
+      false
+    } else {
+      handleSaveModes(mode, basePath, tableConfig, tableName, BOOTSTRAP_OPERATION_OPT_VAL, fs)
+    }
+
+    if (!tableExists) {
+      HoodieTableMetaClient.initTableTypeWithBootstrap(sparkContext.hadoopConfiguration, path,
+        HoodieTableType.valueOf(tableType), tableName, "archived", parameters(PAYLOAD_CLASS_OPT_KEY),
+        null, bootstrapIndexClass, bootstrapBasePath)
+    }
+
+    val jsc = new JavaSparkContext(sqlContext.sparkContext)
+    val writeClient = DataSourceUtils.createHoodieClient(jsc, schema, path, tableName, mapAsJavaMap(parameters))
+    writeClient.bootstrap(org.apache.hudi.common.util.Option.empty())
+    val metaSyncSuccess = metaSync(parameters, basePath, jsc.hadoopConfiguration)
+    metaSyncSuccess
   }
 
   /**
@@ -265,6 +291,31 @@ private[hudi] object HoodieSparkSqlWriter {
     val props = new TypedProperties()
     params.foreach(kv => props.setProperty(kv._1, kv._2))
     props
+  }
+
+  private def handleSaveModes(mode: SaveMode, tablePath: Path, tableConfig: HoodieTableConfig, tableName: String,
+                              operation: String, fs: FileSystem): Unit = {
+    if (mode == SaveMode.Append && tableExists) {
+      val existingTableName = tableConfig.getTableName
+      if (!existingTableName.equals(tableName)) {
+        throw new HoodieException(s"hoodie table with name $existingTableName already exist at $tablePath")
+      }
+    }
+
+    if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
+      if (mode == SaveMode.ErrorIfExists && tableExists) {
+        throw new HoodieException(s"hoodie table at $tablePath already exists.")
+      } else if (mode == SaveMode.Overwrite && tableExists) {
+        log.warn(s"hoodie table at $tablePath already exists. Deleting existing data & overwriting with new data.")
+        fs.delete(tablePath, true)
+        tableExists = false
+      }
+    } else {
+      // Delete Operation only supports Append mode
+      if (mode != SaveMode.Append) {
+        throw new HoodieException(s"Append is the only save mode applicable for $operation operation")
+      }
+    }
   }
 
   private def syncHive(basePath: Path, fs: FileSystem, parameters: Map[String, String]): Boolean = {
@@ -401,6 +452,17 @@ private[hudi] object HoodieSparkSqlWriter {
       tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
     } else {
       false
+    }
+  }
+
+  private def getHoodieTableConfig(sparkContext: SparkContext,
+                                   tablePath: String,
+                                   hoodieTableConfigOpt: Option[HoodieTableConfig]): HoodieTableConfig = {
+    if (tableExists) {
+      hoodieTableConfigOpt.getOrElse(
+        new HoodieTableMetaClient(sparkContext.hadoopConfiguration, tablePath).getTableConfig)
+    } else {
+      null
     }
   }
 }

@@ -21,6 +21,7 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPartitionPathTranslator;
+import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 
 import java.io.File;
@@ -51,6 +52,9 @@ public class HoodieBootstrapConfig extends DefaultHoodieConfig {
   public static final String BOOTSTRAP_MODE_SELECTOR_REGEX_MODE = "hoodie.bootstrap.mode.selector.regex.mode";
   public static final String DEFAULT_BOOTSTRAP_MODE_SELECTOR_REGEX = ".*";
   public static final String DEFAULT_BOOTSTRAP_MODE_SELECTOR_REGEX_MODE = BootstrapMode.METADATA_ONLY.name();
+
+  public static final String BOOTSTRAP_INDEX_CLASS_PROP = "hoodie.bootstrap.index.class";
+  public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = HFileBootstrapIndex.class.getName();
 
   public HoodieBootstrapConfig(Properties props) {
     super(props);
@@ -129,6 +133,8 @@ public class HoodieBootstrapConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_MODE_SELECTOR_REGEX_MODE),
           BOOTSTRAP_MODE_SELECTOR_REGEX_MODE, DEFAULT_BOOTSTRAP_MODE_SELECTOR_REGEX_MODE);
       BootstrapMode.valueOf(props.getProperty(BOOTSTRAP_MODE_SELECTOR_REGEX_MODE));
+      setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_INDEX_CLASS_PROP), BOOTSTRAP_INDEX_CLASS_PROP,
+          DEFAULT_BOOTSTRAP_INDEX_CLASS);
       return config;
     }
   }
