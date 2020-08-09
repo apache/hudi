@@ -16,11 +16,28 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.metrics;
+package org.apache.hudi.metrics.prometheus;
 
-/**
- * Types of the reporter supported, hudi also supports user defined reporter.
- */
-public enum MetricsReporterType {
-  GRAPHITE, INMEMORY, JMX, DATADOG, CONSOLE, PROMETHEUS_PUSHGATEWAY, PROMETHEUS
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.metrics.MetricsReporterType;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+public class TestPrometheusReporter {
+
+  HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+
+  @Test
+  public void testRegisterGauge() {
+    when(config.isMetricsOn()).thenReturn(true);
+    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS);
+    when(config.getPrometheusPort()).thenReturn(9090);
+    assertDoesNotThrow(() -> {
+      new HoodieMetrics(config, "raw_table");
+    });
+  }
 }
