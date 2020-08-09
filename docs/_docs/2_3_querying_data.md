@@ -52,7 +52,7 @@ Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 |------------|--------|-----------|--------------|
 |**Hive**|Y|Y|Y|
 |**Spark SQL**|Y|Y|Y|
-|**Spark Datasource**|N|N|Y|
+|**Spark Datasource**|Y|N|Y|
 |**Presto**|N|N|Y|
 |**Impala**|N|N|Y|
 
@@ -132,8 +132,8 @@ spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.clas
 
 ## Spark Datasource
 
-The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi COPY_ON_WRITE tables can be queried via Spark datasource similar to how standard 
-datasources work (e.g: `spark.read.parquet`). Both snapshot querying and incremental querying are supported here. Typically spark jobs require adding `--jars <path to jar>/hudi-spark-bundle_2.11-<hudi version>.jar` to classpath of drivers 
+The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi COPY_ON_WRITE and MERGE_ON_READ tables can be queried via Spark datasource similar to how standard 
+datasources work (e.g: `spark.read.parquet`). MERGE_ON_READ table supports snapshot querying and COPY_ON_WRITE table supports both snapshot and incremental querying via Spark datasource. Typically spark jobs require adding `--jars <path to jar>/hudi-spark-bundle_2.11-<hudi version>.jar` to classpath of drivers 
 and executors. Alternatively, hudi-spark-bundle can also fetched via the `--packages` options (e.g: `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3`).
 
 ### Snapshot query {#spark-snap-query}
