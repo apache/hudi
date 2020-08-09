@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
 import org.apache.hudi.common.model.HoodieKey
 import org.apache.avro.Schema
+import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
@@ -92,6 +93,7 @@ object AvroConversionUtils {
   }
 
   def getAvroRecordNameAndNamespace(tableName: String): (String, String) = {
-    (s"${tableName}_record", s"hoodie.${tableName}")
+    val name = HoodieAvroUtils.sanitizeName(tableName)
+    (s"${name}_record", s"hoodie.${name}")
   }
 }

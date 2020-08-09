@@ -69,6 +69,11 @@ public class HoodieAvroUtils {
 
   private static ThreadLocal<BinaryDecoder> reuseDecoder = ThreadLocal.withInitial(() -> null);
 
+  // As per https://avro.apache.org/docs/current/spec.html#names
+  private static String INVALID_AVRO_CHARS_IN_NAMES = "[^A-Za-z0-9_]";
+  private static String INVALID_AVRO_FIRST_CHAR_IN_NAMES = "[^A-Za-z_]";
+  private static String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
+
   // All metadata fields are optional strings.
   public static final Schema METADATA_FIELD_SCHEMA =
       Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)));
@@ -447,5 +452,18 @@ public class HoodieAvroUtils {
 
   public static Schema getNullSchema() {
     return Schema.create(Schema.Type.NULL);
+  }
+
+  /**
+   * Sanitizes Name according to Avro rule for names.
+   * Removes characters other than the ones mentioned in https://avro.apache.org/docs/current/spec.html#names .
+   * @param name input name
+   * @return sanitized name
+   */
+  public static String sanitizeName(String name) {
+    if (name.substring(0,1).matches(INVALID_AVRO_FIRST_CHAR_IN_NAMES)) {
+      name = name.replaceFirst(INVALID_AVRO_FIRST_CHAR_IN_NAMES, MASK_FOR_INVALID_CHARS_IN_NAMES);
+    }
+    return name.replaceAll(INVALID_AVRO_CHARS_IN_NAMES, MASK_FOR_INVALID_CHARS_IN_NAMES);
   }
 }

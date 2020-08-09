@@ -90,10 +90,11 @@ public class BootstrapSchemaProvider {
             Boolean.parseBoolean(SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString()),
             Boolean.parseBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString()));
     StructType sparkSchema = converter.convert(parquetSchema);
-    String tableName = writeConfig.getTableName();
+    String tableName = HoodieAvroUtils.sanitizeName(writeConfig.getTableName());
     String structName = tableName + "_record";
     String recordNamespace = "hoodie." + tableName;
 
     return SchemaConverters.toAvroType(sparkSchema, false, structName, recordNamespace);
   }
+
 }
