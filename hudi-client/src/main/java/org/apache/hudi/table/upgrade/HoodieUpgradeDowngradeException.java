@@ -16,39 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.table;
+package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.exception.HoodieException;
 
-import java.util.Arrays;
+public class HoodieUpgradeDowngradeException extends HoodieException {
 
-/**
- * Table's version that controls what version of writer/readers can actually read/write
- * to a given table.
- */
-public enum HoodieTableVersion {
-  // < 0.6.0 versions
-  ZERO(0),
-  // 0.6.0 onwards
-  ONE(1);
-
-  private final int versionCode;
-
-  HoodieTableVersion(int versionCode) {
-    this.versionCode = versionCode;
+  public HoodieUpgradeDowngradeException(String msg, Throwable t) {
+    super(msg, t);
   }
 
-  public int versionCode() {
-    return versionCode;
-  }
-
-  public static HoodieTableVersion current() {
-    return ONE;
-  }
-
-  static HoodieTableVersion versionFromCode(int versionCode) {
-    return Arrays.stream(HoodieTableVersion.values())
-        .filter(v -> v.versionCode == versionCode).findAny()
-        .orElseThrow(() -> new HoodieException("Unknown versionCode:" + versionCode));
+  public HoodieUpgradeDowngradeException(int fromVersion, int toVersion, boolean upgrade) {
+    super(String.format("Cannot %s from version %s -> %s", upgrade ? "upgrade" : "downgrade", fromVersion, toVersion), null);
   }
 }

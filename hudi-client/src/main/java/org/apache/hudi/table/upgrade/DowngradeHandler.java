@@ -25,7 +25,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 /**
  * Interface to assist in downgrading Hoodie table.
  */
-public interface DowngradeHandle {
+public interface DowngradeHandler {
 
   /**
    * to be invoked to downgrade hoodie table from one version to a lower version.

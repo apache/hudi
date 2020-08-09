@@ -34,7 +34,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.table.upgrade.UpgradeDowngradeUtil;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.HDFSParquetImporter.Config;
@@ -192,7 +192,7 @@ public class SparkMain {
       case UPGRADE:
       case DOWNGRADE:
         assert (args.length == 5);
-        returnCode = upgradeOrDowngradeHoodieDataset(jsc, args[3], args[4]);
+        returnCode = upgradeOrDowngradeTable(jsc, args[3], args[4]);
         break;
       default:
         break;
@@ -390,22 +390,23 @@ public class SparkMain {
   }
 
   /**
-   * Upgrade or downgrade hoodie table.
+   * Upgrade or downgrade table.
+   *
    * @param jsc instance of {@link JavaSparkContext} to use.
    * @param basePath base path of the dataset.
    * @param toVersion version to which upgrade/downgrade to be done.
    * @return 0 if success, else -1.
    * @throws Exception
    */
-  protected static int upgradeOrDowngradeHoodieDataset(JavaSparkContext jsc, String basePath, String toVersion) throws Exception {
+  protected static int upgradeOrDowngradeTable(JavaSparkContext jsc, String basePath, String toVersion) {
     HoodieWriteConfig config = getWriteConfig(basePath);
     HoodieTableMetaClient metaClient = ClientUtils.createMetaClient(jsc.hadoopConfiguration(), config, false);
     try {
-      UpgradeDowngradeUtil.doUpgradeOrDowngrade(metaClient, HoodieTableVersion.valueOf(toVersion), config, jsc, null);
-      LOG.info(String.format("Hudi dataset at \"%s\" upgraded / downgraded to version \"%s\".", basePath, toVersion));
+      UpgradeDowngrade.run(metaClient, HoodieTableVersion.valueOf(toVersion), config, jsc, null);
+      LOG.info(String.format("Table at \"%s\" upgraded / downgraded to version \"%s\".", basePath, toVersion));
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("Failed: Could not upgrade/downgrade Hudi dataset at \"%s\" to version \"%s\".", basePath, toVersion));
+      LOG.warn(String.format("Failed: Could not upgrade/downgrade table at \"%s\" to version \"%s\".", basePath, toVersion), e);
       return -1;
     }
   }

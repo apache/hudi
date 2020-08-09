@@ -25,7 +25,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 /**
  * Interface to assist in upgrading Hoodie table.
  */
-public interface UpgradeHandle {
+public interface UpgradeHandler {
 
   /**
    * to be invoked to upgrade hoodie table from one version to a higher version.

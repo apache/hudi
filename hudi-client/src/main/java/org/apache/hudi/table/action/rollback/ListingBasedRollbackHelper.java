@@ -71,7 +71,7 @@ public class ListingBasedRollbackHelper implements Serializable {
   public List<HoodieRollbackStat> performRollback(JavaSparkContext jsc, HoodieInstant instantToRollback, List<ListingBasedRollbackRequest> rollbackRequests) {
     int sparkPartitions = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
     jsc.setJobGroup(this.getClass().getSimpleName(), "Perform rollback actions");
-    JavaPairRDD<String, HoodieRollbackStat> partitionPathRollbackStatsPairRDD = maybeDeleteAndCollectStatsOrCollectStats(jsc, instantToRollback, rollbackRequests, sparkPartitions, true);
+    JavaPairRDD<String, HoodieRollbackStat> partitionPathRollbackStatsPairRDD = maybeDeleteAndCollectStats(jsc, instantToRollback, rollbackRequests, sparkPartitions, true);
     return partitionPathRollbackStatsPairRDD.reduceByKey(RollbackUtils::mergeRollbackStat).map(Tuple2::_2).collect();
   }
 
@@ -81,7 +81,7 @@ public class ListingBasedRollbackHelper implements Serializable {
   public List<HoodieRollbackStat> collectRollbackStats(JavaSparkContext jsc, HoodieInstant instantToRollback, List<ListingBasedRollbackRequest> rollbackRequests) {
     int sparkPartitions = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
     jsc.setJobGroup(this.getClass().getSimpleName(), "Collect rollback stats for upgrade/downgrade");
-    JavaPairRDD<String, HoodieRollbackStat> partitionPathRollbackStatsPairRDD = maybeDeleteAndCollectStatsOrCollectStats(jsc, instantToRollback, rollbackRequests, sparkPartitions, false);
+    JavaPairRDD<String, HoodieRollbackStat> partitionPathRollbackStatsPairRDD = maybeDeleteAndCollectStats(jsc, instantToRollback, rollbackRequests, sparkPartitions, false);
     return partitionPathRollbackStatsPairRDD.map(Tuple2::_2).collect();
   }
 
@@ -95,8 +95,8 @@ public class ListingBasedRollbackHelper implements Serializable {
    * @param doDelete {@code true} if deletion has to be done. {@code false} if only stats are to be collected w/o performing any deletes.
    * @return stats collected with or w/o actual deletions.
    */
-  JavaPairRDD<String, HoodieRollbackStat> maybeDeleteAndCollectStatsOrCollectStats(JavaSparkContext jsc, HoodieInstant instantToRollback, List<ListingBasedRollbackRequest> rollbackRequests,
-      int sparkPartitions, boolean doDelete) {
+  JavaPairRDD<String, HoodieRollbackStat> maybeDeleteAndCollectStats(JavaSparkContext jsc, HoodieInstant instantToRollback, List<ListingBasedRollbackRequest> rollbackRequests,
+                                                                     int sparkPartitions, boolean doDelete) {
     return jsc.parallelize(rollbackRequests, sparkPartitions).mapToPair(rollbackRequest -> {
       switch (rollbackRequest.getType()) {
         case DELETE_DATA_FILES_ONLY: {

@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 /**
  * Downgrade handle to assist in downgrading hoodie table from version 1 to 0.
  */
-public class DowngradeHandleOneToZero implements DowngradeHandle {
+public class OneToZeroDowngradeHandler implements DowngradeHandler {
 
   @Override
   public void downgrade(HoodieWriteConfig config, JavaSparkContext jsc, String instantTime) {

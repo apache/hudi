@@ -309,4 +309,29 @@ public class HoodieClientTestUtils {
     f.createNewFile();
     return f.getAbsolutePath();
   }
+
+  public static void createMarkerFile(String basePath, String partitionPath, String instantTime, String dataFileName) throws IOException {
+    createTempFolderForMarkerFiles(basePath);
+    String folderPath = getTempFolderName(basePath);
+    // create dir for this instant
+    new File(folderPath + "/" + instantTime + "/" + partitionPath).mkdirs();
+    new File(folderPath + "/" + instantTime + "/" + partitionPath + "/" + dataFileName + ".marker.MERGE").createNewFile();
+  }
+
+  public static int getTotalMarkerFileCount(String basePath, String partitionPath, String instantTime) {
+    String folderPath = getTempFolderName(basePath);
+    File markerDir = new File(folderPath + "/" + instantTime + "/" + partitionPath);
+    if (markerDir.exists()) {
+      return markerDir.listFiles((dir, name) -> name.contains(".marker.MERGE")).length;
+    }
+    return 0;
+  }
+
+  public static void createTempFolderForMarkerFiles(String basePath) {
+    new File(basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME).mkdirs();
+  }
+
+  public static String getTempFolderName(String basePath) {
+    return basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME;
+  }
 }

@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -38,7 +39,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.upgrade.UpgradeDowngradeUtil;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -205,14 +206,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
    */
   protected HoodieTable getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    if (config.shouldRollbackUsingMarkers()) {
-      mayBeUpgrade(metaClient, instantTime);
-    }
-    return getTableAndInitCtx(operationType);
-  }
-
-  protected HoodieTable getTableAndInitCtx(WriteOperationType operationType) {
-    HoodieTableMetaClient metaClient = createMetaClient(true);
+    UpgradeDowngrade.run(metaClient, HoodieTableVersion.current(), config, jsc, instantTime);
     return getTableAndInitCtx(metaClient, operationType);
   }
 
@@ -228,20 +222,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
       writeContext = metrics.getDeltaCommitCtx();
     }
     return table;
-  }
-
-  /**
-   * Execute upgrade steps when there is a change in hoodie table version.
-   * @param metaClient instance of {@link HoodieTableMetaClient} of interest
-   * @param instantTime current instant time that should not be touched
-   * @throws IOException
-   */
-  public void mayBeUpgrade(HoodieTableMetaClient metaClient, String instantTime) {
-    try {
-      UpgradeDowngradeUtil.doUpgradeOrDowngrade(metaClient, metaClient.getTableConfig().getCurrentHoodieTableVersion(), config, jsc, instantTime);
-    } catch (IOException e) {
-      throw new HoodieIOException("IOException thrown while upgrading/downgrading hoodie ", e);
-    }
   }
 
   /**

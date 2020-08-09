@@ -27,8 +27,10 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,11 +77,11 @@ public class TestUpgradeDowngradeCommand extends AbstractShellIntegrationTest {
     // generate commit and marker files for inflight commit 101
     for (String commitTime : Arrays.asList(commitTime2)) {
       HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, commitTime, "file-1");
-      HoodieTestUtils.createMarkerFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, commitTime, "file-1");
+      HoodieClientTestUtils.createMarkerFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, commitTime, "file-1");
       HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime, "file-2");
-      HoodieTestUtils.createMarkerFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime, "file-2");
+      HoodieClientTestUtils.createMarkerFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime, "file-2");
       HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, commitTime, "file-3");
-      HoodieTestUtils.createMarkerFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, commitTime, "file-3");
+      HoodieClientTestUtils.createMarkerFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, commitTime, "file-3");
     }
   }
 
@@ -88,27 +90,29 @@ public class TestUpgradeDowngradeCommand extends AbstractShellIntegrationTest {
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
     // update hoodie.table.version to 1
-    metaClient.getTableConfig().setHoodieTableVersion(HoodieTableVersion.ONE, metaClient.getFs(), metaClient.getMetaPath());
-
+    metaClient.getTableConfig().setTableVersion(HoodieTableVersion.ONE);
+    try (FSDataOutputStream os = metaClient.getFs().create(new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE), true)) {
+      metaClient.getTableConfig().getProperties().store(os, "");
+    }
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
     // verify marker files for inflight commit exists
     for (String partitionPath : HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS) {
-      assertEquals(1, HoodieTestUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101"));
+      assertEquals(1, HoodieClientTestUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101"));
     }
 
-    SparkMain.upgradeOrDowngradeHoodieDataset(jsc, tablePath, HoodieTableVersion.ZERO.name());
+    SparkMain.upgradeOrDowngradeTable(jsc, tablePath, HoodieTableVersion.ZERO.name());
 
     // verify hoodie.table.version got downgraded
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
     // verify hoodie.table.version
-    assertEquals(metaClient.getTableConfig().getHoodieTableVersionFromPropertyFile().version, HoodieTableVersion.ZERO.version);
+    assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.ZERO.versionCode());
     assertTableVersionFromPropertyFile();
 
     // verify marker files are non existant
     for (String partitionPath : HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS) {
-      assertEquals(0, HoodieTestUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101"));
+      assertEquals(0, HoodieClientTestUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101"));
     }
   }
 
@@ -119,6 +123,6 @@ public class TestUpgradeDowngradeCommand extends AbstractShellIntegrationTest {
     Properties prop = new Properties();
     prop.load(fsDataInputStream);
     fsDataInputStream.close();
-    assertEquals(Integer.toString(HoodieTableVersion.ZERO.version), prop.getProperty(HoodieTableConfig.HOODIE_TABLE_VERSION_PROP_NAME));
+    assertEquals(Integer.toString(HoodieTableVersion.ZERO.versionCode()), prop.getProperty(HoodieTableConfig.HOODIE_TABLE_VERSION_PROP_NAME));
   }
 }

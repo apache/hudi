@@ -156,7 +156,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     if (rollbackPending) {
       rollBackInflightBootstrap();
     }
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS);
     table.bootstrap(jsc, extraMetadata);
   }
 

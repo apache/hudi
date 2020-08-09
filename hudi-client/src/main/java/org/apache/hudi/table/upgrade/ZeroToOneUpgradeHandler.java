@@ -19,6 +19,7 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -34,6 +35,7 @@ import org.apache.hudi.table.action.rollback.ListingBasedRollbackRequest;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.List;
@@ -42,9 +44,7 @@ import java.util.stream.Collectors;
 /**
  * Upgrade handle to assist in upgrading hoodie table from version 0 to 1.
  */
-public class UpgradeHandleFromZeroToOne implements UpgradeHandle {
-
-  private static final String PARQUET = "parquet";
+public class ZeroToOneUpgradeHandler implements UpgradeHandler {
 
   @Override
   public void upgrade(HoodieWriteConfig config, JavaSparkContext jsc, String instantTime) {
@@ -86,7 +86,7 @@ public class UpgradeHandleFromZeroToOne implements UpgradeHandle {
         markerFiles.quietDeleteMarkerDir(jsc, parallelism);
 
         // generate rollback stats
-        List<ListingBasedRollbackRequest> rollbackRequests = null;
+        List<ListingBasedRollbackRequest> rollbackRequests;
         if (table.getMetaClient().getTableType() == HoodieTableType.COPY_ON_WRITE) {
           rollbackRequests = RollbackUtils.generateRollbackRequestsByListingCOW(table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
               table.getConfig().shouldAssumeDatePartitioning());
@@ -104,7 +104,7 @@ public class UpgradeHandleFromZeroToOne implements UpgradeHandle {
             markerFiles.create(rollbackStat.getPartitionPath(), dataFileName, IOType.MERGE);
           }
           for (FileStatus fileStatus : rollbackStat.getCommandBlocksCount().keySet()) {
-            markerFiles.create(rollbackStat.getPartitionPath(), getFileNameForMarkerFromLogFile(fileStatus.getPath().toString()), IOType.APPEND);
+            markerFiles.create(rollbackStat.getPartitionPath(), getFileNameForMarkerFromLogFile(fileStatus.getPath().toString(), table), IOType.APPEND);
           }
         }
       }
@@ -121,12 +121,12 @@ public class UpgradeHandleFromZeroToOne implements UpgradeHandle {
    * @param logFilePath log file path for which marker file name needs to be generated.
    * @return the marker file name thus curated.
    */
-  private static String getFileNameForMarkerFromLogFile(String logFilePath) {
-    String fileName = logFilePath.toString().substring(logFilePath.lastIndexOf("/") + 2);
-    String fileId = fileName.substring(0, fileName.indexOf('_'));
-    String baseInstant = fileName.substring(fileName.indexOf('_') + 1, fileName.indexOf('.'));
-    String writeToken = fileName.substring(fileName.lastIndexOf('_') + 1);
-    // assuming parquet since it is not feasible to deduce base file extension from log file path
-    return fileId + "_" + writeToken + "_" + baseInstant + "." + PARQUET;
+  private static String getFileNameForMarkerFromLogFile(String logFilePath, HoodieTable table) {
+    Path logPath = new Path(table.getMetaClient().getBasePath(), logFilePath);
+    String fileId = FSUtils.getFileIdFromLogPath(logPath);
+    String baseInstant = FSUtils.getBaseCommitTimeFromLogPath(logPath);
+    String writeToken = FSUtils.getWriteTokenFromLogPath(logPath);
+
+    return FSUtils.makeDataFileName(baseInstant, writeToken, fileId, table.getBaseFileFormat().getFileExtension());
   }
 }

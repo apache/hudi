@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -73,10 +74,7 @@ public class HoodieTableConfig implements Serializable {
   public static final HoodieFileFormat DEFAULT_LOG_FILE_FORMAT = HoodieFileFormat.HOODIE_LOG;
   public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
   public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = HFileBootstrapIndex.class.getName();
-
-  public static final Integer DEFAULT_TIMELINE_LAYOUT_VERSION = TimelineLayoutVersion.VERSION_0;
   public static final String DEFAULT_ARCHIVELOG_FOLDER = "";
-  public static final HoodieTableVersion CUR_TABLE_VERSION = HoodieTableVersion.ONE;
 
   private Properties props;
 
@@ -99,6 +97,8 @@ public class HoodieTableConfig implements Serializable {
       throw new HoodieIOException("Could not load Hoodie properties from " + propertyPath, e);
     }
     this.props = props;
+    ValidationUtils.checkArgument(props.containsKey(HOODIE_TABLE_TYPE_PROP_NAME) && props.containsKey(HOODIE_TABLE_NAME_PROP_NAME),
+        "hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
   }
 
   public HoodieTableConfig(Properties props) {
@@ -167,42 +167,14 @@ public class HoodieTableConfig implements Serializable {
   /**
    * @return the hoodie.table.version from hoodie.properties file.
    */
-  public HoodieTableVersion getHoodieTableVersionFromPropertyFile() {
-    String versionFromFile = props.getProperty(HOODIE_TABLE_VERSION_PROP_NAME);
-    if (versionFromFile != null) {
-      try {
-        String propValue = props.getProperty(HOODIE_TABLE_VERSION_PROP_NAME);
-        if (Integer.parseInt(propValue) == HoodieTableVersion.ONE.version) {
-          return HoodieTableVersion.ONE;
-        }
-      } catch (Exception e) {
-        LOG.warn("Hoodie table version parsing exception " + e.getCause());
-      }
-    }
-    return DEFAULT_TABLE_VERSION;
+  public HoodieTableVersion getTableVersion() {
+    return props.containsKey(HOODIE_TABLE_VERSION_PROP_NAME)
+        ? HoodieTableVersion.versionFromCode(Integer.parseInt(props.getProperty(HOODIE_TABLE_VERSION_PROP_NAME)))
+        : DEFAULT_TABLE_VERSION;
   }
 
-  /**
-   * Updates hoodie.table.version in properties and in property file.
-   * @param hoodieTableVersion hoodie table version to be updated to.
-   * @param fs instance of {@link FileSystem} to use.
-   * @param metaPath meta path to be used.
-   */
-  public void setHoodieTableVersion(HoodieTableVersion hoodieTableVersion, FileSystem fs, String metaPath) {
-    props.put(HOODIE_TABLE_VERSION_PROP_NAME, Integer.toString(hoodieTableVersion.version));
-    Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
-    try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
-      props.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to update hoodie.properties file with hoodie.table.version " + propertyPath, e);
-    }
-  }
-
-  /**
-   * @return the current hoodie table version.
-   */
-  public HoodieTableVersion getCurrentHoodieTableVersion() {
-    return CUR_TABLE_VERSION;
+  public void setTableVersion(HoodieTableVersion tableVersion) {
+    props.put(HOODIE_TABLE_VERSION_PROP_NAME, Integer.toString(tableVersion.versionCode()));
   }
 
   /**
@@ -275,5 +247,9 @@ public class HoodieTableConfig implements Serializable {
   public Map<String, String> getProps() {
     return props.entrySet().stream()
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
+  }
+
+  public Properties getProperties() {
+    return props;
   }
 }

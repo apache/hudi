@@ -40,13 +40,13 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -68,26 +68,32 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Unit tests {@link UpgradeDowngradeUtil}.
+ * Unit tests {@link UpgradeDowngrade}.
  */
-public class TestUpgradeDowngradeUtil extends HoodieClientTestBase {
+public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
-  private static final Logger LOG = LogManager.getLogger(TestUpgradeDowngradeUtil.class);
-  private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with induceResiduesFromPrevUpgrade={0}, deletePartialMarkerFiles={1} and TableType = {2}";
+  private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with deletePartialMarkerFiles={0} and TableType = {1}";
 
   public static Stream<Arguments> configParams() {
-    Object[][] data =
-        new Object[][] {{true, true, HoodieTableType.COPY_ON_WRITE}, {true, false, HoodieTableType.COPY_ON_WRITE}, {false, true, HoodieTableType.COPY_ON_WRITE},
-            {false, false, HoodieTableType.COPY_ON_WRITE},
-            {true, true, HoodieTableType.MERGE_ON_READ}, {true, false, HoodieTableType.MERGE_ON_READ}, {false, true, HoodieTableType.MERGE_ON_READ}, {false, false, HoodieTableType.MERGE_ON_READ}};
-
-    //new Object[][] {{false, false, HoodieTableType.COPY_ON_WRITE}};
+    Object[][] data = new Object[][] {
+            {true, HoodieTableType.COPY_ON_WRITE}, {false, HoodieTableType.COPY_ON_WRITE},
+            {true, HoodieTableType.MERGE_ON_READ}, {false, HoodieTableType.MERGE_ON_READ}
+    };
     return Stream.of(data).map(Arguments::of);
+  }
+
+  @Test
+  public void testLeftOverUpdatedPropFileCleanup() throws IOException {
+    testUpgradeInternal(true, true, HoodieTableType.MERGE_ON_READ);
   }
 
   @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
   @MethodSource("configParams")
-  public void testUpgrade(boolean induceResiduesFromPrevUpgrade, boolean deletePartialMarkerFiles, HoodieTableType tableType) throws IOException {
+  public void testUpgrade(boolean deletePartialMarkerFiles, HoodieTableType tableType) throws IOException {
+    testUpgradeInternal(false, deletePartialMarkerFiles, tableType);
+  }
+
+  public void testUpgradeInternal(boolean induceResiduesFromPrevUpgrade, boolean deletePartialMarkerFiles, HoodieTableType tableType) throws IOException {
     // init config, table and client.
     Map<String, String> params = new HashMap<>();
     if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -115,21 +121,20 @@ public class TestUpgradeDowngradeUtil extends HoodieClientTestBase {
     }
 
     // set hoodie.table.version to 0 in hoodie.properties file
-    metaClient.getTableConfig().setHoodieTableVersion(HoodieTableVersion.ZERO, metaClient.getFs(), metaClient.getMetaPath());
+    metaClient.getTableConfig().setTableVersion(HoodieTableVersion.ZERO);
 
-    // if induce residues are set, copy property file to orig file. Upgrade should skip actual upgrade steps but should update hoodie.table.version
     if (induceResiduesFromPrevUpgrade) {
-      copyPropertyFileToOrig();
+      createResidualFile();
     }
 
-    // should re-create marker files for 2nd commit since its pending. If there was any residues, no upgrade steps should happen except for updating the hoodie.table.version
-    UpgradeDowngradeUtil.doUpgradeOrDowngrade(metaClient, HoodieTableVersion.ONE, cfg, jsc, null);
+    // should re-create marker files for 2nd commit since its pending.
+    UpgradeDowngrade.run(metaClient, HoodieTableVersion.ONE, cfg, jsc, null);
 
     // assert marker files
-    assertMarkerFilesForUpgrade(table, commitInstant, induceResiduesFromPrevUpgrade, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, markerPaths);
+    assertMarkerFilesForUpgrade(table, commitInstant, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
 
     // verify hoodie.table.version got upgraded
-    assertEquals(metaClient.getTableConfig().getHoodieTableVersionFromPropertyFile().version, HoodieTableVersion.ONE.version);
+    assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.ONE.versionCode());
     assertTableVersionFromPropertyFile(HoodieTableVersion.ONE);
 
     // trigger 3rd commit with marker based rollback enabled.
@@ -137,12 +142,14 @@ public class TestUpgradeDowngradeUtil extends HoodieClientTestBase {
 
     // Check the entire dataset has all records only from 1st commit and 3rd commit since 2nd is expected to be rolledback.
     assertRows(inputRecords.getKey(), thirdBatch);
+    if (induceResiduesFromPrevUpgrade) {
+      assertFalse(fs.exists(new Path(metaClient.getMetaPath(), UpgradeDowngrade.HOODIE_UPDATED_PROPERTY_FILE)));
+    }
   }
 
   @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
   @MethodSource("configParams")
-  public void testDowngrade(boolean induceResiduesFromPrevUpgrade, boolean deletePartialMarkerFiles, HoodieTableType tableType) throws IOException {
-    prepForDowngrade();
+  public void testDowngrade(boolean deletePartialMarkerFiles, HoodieTableType tableType) throws IOException {
     // init config, table and client.
     Map<String, String> params = new HashMap<>();
     if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -172,19 +179,14 @@ public class TestUpgradeDowngradeUtil extends HoodieClientTestBase {
     // set hoodie.table.version to 1 in hoodie.properties file
     prepForDowngrade();
 
-    // if induce residues are set, copy property file to orig file. Downgrade should skip actual downgrade steps but should update hoodie.table.version
-    if (induceResiduesFromPrevUpgrade) {
-      copyPropertyFileToOrig();
-    }
-
     // downgrade should be performed. all marker files should be deleted
-    UpgradeDowngradeUtil.doUpgradeOrDowngrade(metaClient, HoodieTableVersion.ZERO, cfg, jsc, null);
+    UpgradeDowngrade.run(metaClient, HoodieTableVersion.ZERO, cfg, jsc, null);
 
     // assert marker files
-    assertMarkerFilesForDowngrade(table, commitInstant, induceResiduesFromPrevUpgrade);
+    assertMarkerFilesForDowngrade(table, commitInstant);
 
     // verify hoodie.table.version got downgraded
-    assertEquals(metaClient.getTableConfig().getHoodieTableVersionFromPropertyFile().version, HoodieTableVersion.ZERO.version);
+    assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.ZERO.versionCode());
     assertTableVersionFromPropertyFile(HoodieTableVersion.ZERO);
 
     // trigger 3rd commit with marker based rollback disabled.
@@ -194,91 +196,77 @@ public class TestUpgradeDowngradeUtil extends HoodieClientTestBase {
     assertRows(inputRecords.getKey(), thirdBatch);
   }
 
-  private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant, boolean induceResiduesFromPrevUpgrade) throws IOException {
+  private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant) throws IOException {
     // Verify recreated marker files are as expected
     MarkerFiles markerFiles = new MarkerFiles(table, commitInstant.getTimestamp());
-    if (induceResiduesFromPrevUpgrade) {
-      assertTrue(markerFiles.doesMarkerDirExist());
-    } else {
-      assertFalse(markerFiles.doesMarkerDirExist());
-    }
+    assertFalse(markerFiles.doesMarkerDirExist());
   }
 
-  private void assertMarkerFilesForUpgrade(HoodieTable table, HoodieInstant commitInstant, boolean induceResiduesFromPrevUpgrade, List<FileSlice> firstPartitionCommit2FileSlices,
-      List<FileSlice> secondPartitionCommit2FileSlices, List<String> originalMarkerPaths) throws IOException {
+  private void assertMarkerFilesForUpgrade(HoodieTable table, HoodieInstant commitInstant, List<FileSlice> firstPartitionCommit2FileSlices,
+                                           List<FileSlice> secondPartitionCommit2FileSlices) throws IOException {
     // Verify recreated marker files are as expected
     MarkerFiles markerFiles = new MarkerFiles(table, commitInstant.getTimestamp());
     assertTrue(markerFiles.doesMarkerDirExist());
     List<String> files = markerFiles.allMarkerFilePaths();
 
-    if (!induceResiduesFromPrevUpgrade) {
-      assertEquals(2, files.size());
-      List<String> actualFiles = new ArrayList<>();
-      for (String file : files) {
-        String fileName = MarkerFiles.stripMarkerSuffix(file);
-        actualFiles.add(fileName);
-      }
+    assertEquals(2, files.size());
+    List<String> actualFiles = new ArrayList<>();
+    for (String file : files) {
+      String fileName = MarkerFiles.stripMarkerSuffix(file);
+      actualFiles.add(fileName);
+    }
 
-      List<FileSlice> expectedFileSlices = new ArrayList<>();
-      expectedFileSlices.addAll(firstPartitionCommit2FileSlices);
-      expectedFileSlices.addAll(secondPartitionCommit2FileSlices);
+    List<FileSlice> expectedFileSlices = new ArrayList<>();
+    expectedFileSlices.addAll(firstPartitionCommit2FileSlices);
+    expectedFileSlices.addAll(secondPartitionCommit2FileSlices);
 
-      List<String> expectedPaths = new ArrayList<>();
-      List<Pair<String, String>> expectedLogFilePaths = new ArrayList<>();
+    List<String> expectedPaths = new ArrayList<>();
+    List<Pair<String, String>> expectedLogFilePaths = new ArrayList<>();
 
-      for (FileSlice fileSlice : expectedFileSlices) {
-        String partitionPath = fileSlice.getPartitionPath();
-        if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-          for (HoodieLogFile logFile : fileSlice.getLogFiles().collect(Collectors.toList())) {
-            // log file format can't be matched as is, since the write token can't be asserted. Hence asserting for partitionpath, fileId and baseCommit time.
-            String logBaseCommitTime = logFile.getBaseCommitTime();
-            expectedLogFilePaths.add(Pair.of(partitionPath + "/" + logFile.getFileId(), logBaseCommitTime));
-          }
-        }
-        if (fileSlice.getBaseInstantTime().equals(commitInstant.getTimestamp())) {
-          String path = fileSlice.getBaseFile().get().getPath();
-          // for base files, path can be asserted as is.
-          expectedPaths.add(path.substring(path.indexOf(partitionPath)));
+    for (FileSlice fileSlice : expectedFileSlices) {
+      String partitionPath = fileSlice.getPartitionPath();
+      if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
+        for (HoodieLogFile logFile : fileSlice.getLogFiles().collect(Collectors.toList())) {
+          // log file format can't be matched as is, since the write token can't be asserted. Hence asserting for partitionpath, fileId and baseCommit time.
+          String logBaseCommitTime = logFile.getBaseCommitTime();
+          expectedLogFilePaths.add(Pair.of(partitionPath + "/" + logFile.getFileId(), logBaseCommitTime));
         }
       }
-
-      // Trim log file paths only
-      List<String> trimmedActualFiles = new ArrayList<>();
-      for (String actualFile : actualFiles) {
-        if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-          trimmedActualFiles.add(actualFile.substring(0, actualFile.lastIndexOf('.')));
-        } else {
-          trimmedActualFiles.add(actualFile);
-        }
+      if (fileSlice.getBaseInstantTime().equals(commitInstant.getTimestamp())) {
+        String path = fileSlice.getBaseFile().get().getPath();
+        // for base files, path can be asserted as is.
+        expectedPaths.add(path.substring(path.indexOf(partitionPath)));
       }
-      // assert for base files.
-      for (String expected : expectedPaths) {
-        if (trimmedActualFiles.contains(expected)) {
-          trimmedActualFiles.remove(expected);
-        }
-      }
+    }
 
-      if (expectedLogFilePaths.size() > 0) {
-        // assert for log files
-        List<Pair<String, String>> actualLogFiles = new ArrayList<>();
-        for (String actual : trimmedActualFiles) {
-          actualLogFiles.add(Pair.of(actual.substring(0, actual.indexOf('_')), actual.substring(actual.lastIndexOf('_') + 1)));
-        }
-        assertEquals(expectedLogFilePaths.size(), actualLogFiles.size());
-        for (Pair<String, String> entry : expectedLogFilePaths) {
-          assertTrue(actualLogFiles.contains(entry));
-        }
+    // Trim log file paths only
+    List<String> trimmedActualFiles = new ArrayList<>();
+    for (String actualFile : actualFiles) {
+      if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
+        trimmedActualFiles.add(actualFile.substring(0, actualFile.lastIndexOf('.')));
       } else {
-        assertTrue(trimmedActualFiles.size() == 0);
+        trimmedActualFiles.add(actualFile);
+      }
+    }
+    // assert for base files.
+    for (String expected : expectedPaths) {
+      if (trimmedActualFiles.contains(expected)) {
+        trimmedActualFiles.remove(expected);
+      }
+    }
+
+    if (expectedLogFilePaths.size() > 0) {
+      // assert for log files
+      List<Pair<String, String>> actualLogFiles = new ArrayList<>();
+      for (String actual : trimmedActualFiles) {
+        actualLogFiles.add(Pair.of(actual.substring(0, actual.indexOf('_')), actual.substring(actual.lastIndexOf('_') + 1)));
+      }
+      assertEquals(expectedLogFilePaths.size(), actualLogFiles.size());
+      for (Pair<String, String> entry : expectedLogFilePaths) {
+        assertTrue(actualLogFiles.contains(entry));
       }
     } else {
-      // if residues are present i.e hoodie.properties.orig, no recreation of marker files happens. So, verify original marker files are left intact.
-      assertEquals(originalMarkerPaths.size(), files.size());
-      List<String> actualFiles = new ArrayList<>();
-      for (String file : files) {
-        actualFiles.add(file);
-      }
-      assertEquals(originalMarkerPaths, actualFiles);
+      assertTrue(trimmedActualFiles.size() == 0);
     }
   }
 
@@ -391,16 +379,20 @@ public class TestUpgradeDowngradeUtil extends HoodieClientTestBase {
     return Pair.of(records, records2);
   }
 
-  private void prepForDowngrade() {
-    metaClient.getTableConfig().setHoodieTableVersion(HoodieTableVersion.ONE, metaClient.getFs(), metaClient.getMetaPath());
+  private void prepForDowngrade() throws IOException {
+    metaClient.getTableConfig().setTableVersion(HoodieTableVersion.ONE);
+    Path propertyFile = new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+    try (FSDataOutputStream os = metaClient.getFs().create(propertyFile)) {
+      metaClient.getTableConfig().getProperties().store(os, "");
+    }
   }
 
-  private void copyPropertyFileToOrig() throws IOException {
+  private void createResidualFile() throws IOException {
     Path propertyFile = new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
-    Path origPropertyFile = new Path(metaClient.getMetaPath() + "/" + UpgradeDowngradeUtil.HOODIE_ORIG_PROPERTY_FILE);
+    Path updatedPropertyFile = new Path(metaClient.getMetaPath() + "/" + UpgradeDowngrade.HOODIE_UPDATED_PROPERTY_FILE);
 
     // Step1: Copy hoodie.properties to hoodie.properties.orig
-    FileUtil.copy(metaClient.getFs(), propertyFile, metaClient.getFs(), origPropertyFile,
+    FileUtil.copy(metaClient.getFs(), propertyFile, metaClient.getFs(), updatedPropertyFile,
         false, metaClient.getHadoopConf());
   }
 
@@ -411,7 +403,6 @@ public class TestUpgradeDowngradeUtil extends HoodieClientTestBase {
     Properties prop = new Properties();
     prop.load(fsDataInputStream);
     fsDataInputStream.close();
-    assertEquals(Integer.toString(expectedVersion.version), prop.getProperty(HoodieTableConfig.HOODIE_TABLE_VERSION_PROP_NAME));
+    assertEquals(Integer.toString(expectedVersion.versionCode()), prop.getProperty(HoodieTableConfig.HOODIE_TABLE_VERSION_PROP_NAME));
   }
-
 }
