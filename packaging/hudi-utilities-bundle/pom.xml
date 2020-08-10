@@ -96,6 +96,10 @@
                   <include>io.confluent:kafka-schema-registry-client</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
+                  <include>io.prometheus:simpleclient</include>
+                  <include>io.prometheus:simpleclient_httpserver</include>
+                  <include>io.prometheus:simpleclient_dropwizard</include>
+                  <include>io.prometheus:simpleclient_pushgateway</include>
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>org.apache.spark:spark-streaming-kafka-0-10_${scala.binary.version}</include>
                   <include>org.apache.kafka:kafka_${scala.binary.version}</include>
