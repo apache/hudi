@@ -19,43 +19,40 @@
 package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.common.HoodieRollbackStat;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class CopyOnWriteRollbackActionExecutor extends BaseRollbackActionExecutor {
 
   private static final Logger LOG = LogManager.getLogger(CopyOnWriteRollbackActionExecutor.class);
 
   public CopyOnWriteRollbackActionExecutor(JavaSparkContext jsc,
-                                           HoodieWriteConfig config,
-                                           HoodieTable<?> table,
-                                           String instantTime,
-                                           HoodieInstant commitInstant,
-                                           boolean deleteInstants) {
+      HoodieWriteConfig config,
+      HoodieTable<?> table,
+      String instantTime,
+      HoodieInstant commitInstant,
+      boolean deleteInstants) {
     super(jsc, config, table, instantTime, commitInstant, deleteInstants);
   }
 
   public CopyOnWriteRollbackActionExecutor(JavaSparkContext jsc,
-                                           HoodieWriteConfig config,
-                                           HoodieTable<?> table,
-                                           String instantTime,
-                                           HoodieInstant commitInstant,
-                                           boolean deleteInstants,
-                                           boolean skipTimelinePublish,
-                                           boolean useMarkerBasedStrategy) {
+      HoodieWriteConfig config,
+      HoodieTable<?> table,
+      String instantTime,
+      HoodieInstant commitInstant,
+      boolean deleteInstants,
+      boolean skipTimelinePublish,
+      boolean useMarkerBasedStrategy) {
     super(jsc, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, useMarkerBasedStrategy);
   }
 
@@ -91,20 +88,10 @@ public class CopyOnWriteRollbackActionExecutor extends BaseRollbackActionExecuto
     return stats;
   }
 
-  private List<ListingBasedRollbackRequest> generateRollbackRequestsByListing() {
-    try {
-      return FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
-          config.shouldAssumeDatePartitioning()).stream()
-          .map(ListingBasedRollbackRequest::createRollbackRequestWithDeleteDataAndLogFilesAction)
-          .collect(Collectors.toList());
-    } catch (IOException e) {
-      throw new HoodieIOException("Error generating rollback requests", e);
-    }
-  }
-
   @Override
   protected List<HoodieRollbackStat> executeRollbackUsingFileListing(HoodieInstant instantToRollback) {
-    List<ListingBasedRollbackRequest> rollbackRequests = generateRollbackRequestsByListing();
+    List<ListingBasedRollbackRequest> rollbackRequests = RollbackUtils.generateRollbackRequestsByListingCOW(table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
+        config.shouldAssumeDatePartitioning());
     return new ListingBasedRollbackHelper(table.getMetaClient(), config).performRollback(jsc, instantToRollback, rollbackRequests);
   }
 }

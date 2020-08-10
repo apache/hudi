@@ -25,6 +25,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
+import org.apache.hudi.metrics.prometheus.PrometheusReporter;
+import org.apache.hudi.metrics.prometheus.PushGatewayMetricsReporter;
 import org.apache.hudi.metrics.userdefined.AbstractUserDefinedMetricsReporter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -65,6 +67,12 @@ public class MetricsReporterFactory {
         break;
       case DATADOG:
         reporter = new DatadogMetricsReporter(config, registry);
+        break;
+      case PROMETHEUS_PUSHGATEWAY:
+        reporter = new PushGatewayMetricsReporter(config, registry);
+        break;
+      case PROMETHEUS:
+        reporter = new PrometheusReporter(config, registry);
         break;
       case CONSOLE:
         reporter = new ConsoleMetricsReporter(registry);

@@ -59,6 +59,7 @@ import scala.Tuple2;
 
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS;
+import static org.apache.hudi.common.testutils.Transformations.recordsToPartitionRecordsMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -90,16 +91,16 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
 
     String commitTime = "000";
     List<HoodieRecord> records = dataGen.generateInserts(commitTime, 100);
-    Map<String, List<HoodieRecord>> recordsPerPartiton = getRecordsPerPartition(records);
+    Map<String, List<HoodieRecord>> partitionRecordsMap = recordsToPartitionRecordsMap(records);
 
-    Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> expectedList = writeToParquetAndGetExpectedRecordLocations(recordsPerPartiton);
+    Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> expectedList = writeToParquetAndGetExpectedRecordLocations(partitionRecordsMap);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc.hadoopConfiguration());
 
     Files.createDirectories(Paths.get(basePath, ".hoodie"));
 
-    List<Tuple2<String, HoodieBaseFile>> partitionPathFileIdPairs = loadAllFilesForPartitions(new ArrayList<>(recordsPerPartiton.keySet()), jsc, hoodieTable);
+    List<Tuple2<String, HoodieBaseFile>> partitionPathFileIdPairs = loadAllFilesForPartitions(new ArrayList<>(partitionRecordsMap.keySet()), jsc, hoodieTable);
 
     for (Tuple2<String, HoodieBaseFile> entry : partitionPathFileIdPairs) {
       HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2));
@@ -110,21 +111,10 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
     }
   }
 
-  private Map<String, List<HoodieRecord>> getRecordsPerPartition(List<HoodieRecord> records) {
-    Map<String, List<HoodieRecord>> recordsPerPartiton = new HashMap<>();
-    for (HoodieRecord record : records) {
-      if (!recordsPerPartiton.containsKey(record.getPartitionPath())) {
-        recordsPerPartiton.put(record.getPartitionPath(), new ArrayList<>());
-      }
-      recordsPerPartiton.get(record.getPartitionPath()).add(record);
-    }
-    return recordsPerPartiton;
-  }
-
   private Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> writeToParquetAndGetExpectedRecordLocations(
-      Map<String, List<HoodieRecord>> recordsPerPartiton) throws Exception {
+      Map<String, List<HoodieRecord>> partitionRecordsMap) throws Exception {
     Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> expectedList = new HashMap<>();
-    for (Map.Entry<String, List<HoodieRecord>> entry : recordsPerPartiton.entrySet()) {
+    for (Map.Entry<String, List<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
       int totalRecordsPerPartition = entry.getValue().size();
       int totalSlices = 1;
       if (totalRecordsPerPartition > 5) {

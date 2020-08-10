@@ -71,14 +71,15 @@ public abstract class BootstrapIndex implements Serializable {
   }
 
   /**
-   * Check if bootstrap Index is present and ensures readable.
+   * Check if bootstrap Index is physically present. It does not guarantee the validity of the index.
+   * To ensure an index is valid, use useIndex() API.
    */
   protected abstract boolean isPresent();
 
   /**
    * Bootstrap Index Reader Interface.
    */
-  public abstract static  class IndexReader implements Serializable, AutoCloseable {
+  public abstract static class IndexReader implements Serializable, AutoCloseable {
 
     protected final HoodieTableMetaClient metaClient;
 
@@ -102,7 +103,7 @@ public abstract class BootstrapIndex implements Serializable {
      * Return list file-ids indexed.
      * @return
      */
-    public abstract List<String> getIndexedFileIds();
+    public abstract List<HoodieFileGroupId> getIndexedFileGroupIds();
 
     /**
      * Lookup bootstrap index by partition.

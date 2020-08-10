@@ -144,6 +144,10 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
           HoodieMetricsDatadogConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !props.containsKey(METRICS_REPORTER_CLASS),
               METRICS_REPORTER_CLASS, DEFAULT_METRICS_REPORTER_CLASS);
+      setDefaultOnCondition(props, reporterType == MetricsReporterType.PROMETHEUS_PUSHGATEWAY,
+              HoodieMetricsPrometheusConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, reporterType == MetricsReporterType.PROMETHEUS,
+              HoodieMetricsPrometheusConfig.newBuilder().fromProperties(props).build());
 
       return config;
     }

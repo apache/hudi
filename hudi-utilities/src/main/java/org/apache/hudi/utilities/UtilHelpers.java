@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -100,7 +101,7 @@ public class UtilHelpers {
   public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,
                                                     JavaSparkContext jssc) throws IOException {
     try {
-      return schemaProviderClass == null ? null
+      return StringUtils.isNullOrEmpty(schemaProviderClass) ? null
           : (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
     } catch (Throwable e) {
       throw new IOException("Could not load schema provider class " + schemaProviderClass, e);

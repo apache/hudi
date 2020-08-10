@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -38,6 +39,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -198,10 +201,16 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
    * Get HoodieTable and init {@link Timer.Context}.
    *
    * @param operationType write operation type
+   * @param instantTime current inflight instant time
    * @return HoodieTable
    */
-  protected HoodieTable getTableAndInitCtx(WriteOperationType operationType) {
+  protected HoodieTable getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
+    UpgradeDowngrade.run(metaClient, HoodieTableVersion.current(), config, jsc, instantTime);
+    return getTableAndInitCtx(metaClient, operationType);
+  }
+
+  private HoodieTable getTableAndInitCtx(HoodieTableMetaClient metaClient, WriteOperationType operationType) {
     if (operationType == WriteOperationType.DELETE) {
       setWriteSchemaForDeletes(metaClient);
     }

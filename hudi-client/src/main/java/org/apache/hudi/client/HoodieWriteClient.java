@@ -156,7 +156,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     if (rollbackPending) {
       rollBackInflightBootstrap();
     }
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS);
     table.bootstrap(jsc, extraMetadata);
   }
 
@@ -186,7 +186,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String instantTime) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT, instantTime);
     table.validateUpsertSchema();
     setOperationType(WriteOperationType.UPSERT);
     this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
@@ -207,7 +207,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String instantTime) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT_PREPPED);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT_PREPPED, instantTime);
     table.validateUpsertSchema();
     setOperationType(WriteOperationType.UPSERT_PREPPED);
     this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
@@ -226,7 +226,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, final String instantTime) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT, instantTime);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.INSERT);
     this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
@@ -246,7 +246,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String instantTime) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT_PREPPED);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT_PREPPED, instantTime);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.INSERT_PREPPED);
     this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
@@ -285,8 +285,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String instantTime,
-      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT);
+                                         Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT, instantTime);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT);
     this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
@@ -311,8 +311,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String instantTime,
-      Option<BulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED);
+                                                       Option<BulkInsertPartitioner> bulkInsertPartitioner) {
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED, instantTime);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT_PREPPED);
     this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
@@ -329,7 +329,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> delete(JavaRDD<HoodieKey> keys, final String instantTime) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.DELETE);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.DELETE, instantTime);
     setOperationType(WriteOperationType.DELETE);
     HoodieWriteMetadata result = table.delete(jsc,instantTime, keys);
     return postWrite(result, instantTime, table);

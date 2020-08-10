@@ -33,7 +33,6 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapFileMapping;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -137,6 +136,7 @@ public class BootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
     }
   }
 
+  @Override
   protected String getSchemaToStoreInCommit() {
     return bootstrapSchema;
   }
@@ -194,7 +194,7 @@ public class BootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
   }
 
   /**
-   * Perform Metadata Bootstrap.
+   * Perform Full Bootstrap.
    * @param partitionFilesList List of partitions and files within that partitions
    */
   protected Option<HoodieWriteMetadata> fullBootstrap(List<Pair<String, List<HoodieFileStatus>>> partitionFilesList) {
@@ -280,13 +280,8 @@ public class BootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
    * @throws IOException
    */
   private Map<BootstrapMode, List<Pair<String, List<HoodieFileStatus>>>> listAndProcessSourcePartitions() throws IOException {
-    List<Pair<String, List<HoodieFileStatus>>> folders =
-        BootstrapUtils.getAllLeafFoldersWithFiles(bootstrapSourceFileSystem,
-            config.getBootstrapSourceBasePath(), path -> {
-              // TODO: Needs to be abstracted out when supporting different formats
-              // TODO: Remove hoodieFilter
-              return path.getName().endsWith(HoodieFileFormat.PARQUET.getFileExtension());
-            });
+    List<Pair<String, List<HoodieFileStatus>>> folders = BootstrapUtils.getAllLeafFoldersWithFiles(
+            table.getMetaClient(), bootstrapSourceFileSystem, config.getBootstrapSourceBasePath(), jsc);
 
     LOG.info("Fetching Bootstrap Schema !!");
     BootstrapSchemaProvider sourceSchemaProvider = new BootstrapSchemaProvider(config);

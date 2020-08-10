@@ -35,6 +35,7 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.BaseActionExecutor;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -51,6 +52,7 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
   private static final Logger LOG = LogManager.getLogger(BaseRollbackActionExecutor.class);
 
   interface RollbackStrategy extends Serializable {
+
     List<HoodieRollbackStat> execute(HoodieInstant instantToRollback);
   }
 
@@ -60,23 +62,23 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
   protected final boolean useMarkerBasedStrategy;
 
   public BaseRollbackActionExecutor(JavaSparkContext jsc,
-                                    HoodieWriteConfig config,
-                                    HoodieTable<?> table,
-                                    String instantTime,
-                                    HoodieInstant instantToRollback,
-                                    boolean deleteInstants) {
+      HoodieWriteConfig config,
+      HoodieTable<?> table,
+      String instantTime,
+      HoodieInstant instantToRollback,
+      boolean deleteInstants) {
     this(jsc, config, table, instantTime, instantToRollback, deleteInstants,
         false, config.shouldRollbackUsingMarkers());
   }
 
   public BaseRollbackActionExecutor(JavaSparkContext jsc,
-                                    HoodieWriteConfig config,
-                                    HoodieTable<?> table,
-                                    String instantTime,
-                                    HoodieInstant instantToRollback,
-                                    boolean deleteInstants,
-                                    boolean skipTimelinePublish,
-                                    boolean useMarkerBasedStrategy) {
+      HoodieWriteConfig config,
+      HoodieTable<?> table,
+      String instantTime,
+      HoodieInstant instantToRollback,
+      boolean deleteInstants,
+      boolean skipTimelinePublish,
+      boolean useMarkerBasedStrategy) {
     super(jsc, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.deleteInstants = deleteInstants;
@@ -84,7 +86,7 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
     this.useMarkerBasedStrategy = useMarkerBasedStrategy;
     if (useMarkerBasedStrategy) {
       ValidationUtils.checkArgument(!instantToRollback.isCompleted(),
-              "Cannot use marker based rollback strategy on completed instant:" + instantToRollback);
+          "Cannot use marker based rollback strategy on completed instant:" + instantToRollback);
     }
   }
 
@@ -208,8 +210,8 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
    * @param instantToBeDeleted Instant to be deleted
    */
   protected void deleteInflightAndRequestedInstant(boolean deleteInstant,
-                                                   HoodieActiveTimeline activeTimeline,
-                                                   HoodieInstant instantToBeDeleted) {
+      HoodieActiveTimeline activeTimeline,
+      HoodieInstant instantToBeDeleted) {
     // Remove the rolled back inflight commits
     if (deleteInstant) {
       LOG.info("Deleting instant=" + instantToBeDeleted);
