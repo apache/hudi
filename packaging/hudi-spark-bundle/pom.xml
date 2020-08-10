@@ -93,6 +93,7 @@
                   <include>io.prometheus:simpleclient_httpserver</include>
                   <include>io.prometheus:simpleclient_dropwizard</include>
                   <include>io.prometheus:simpleclient_pushgateway</include>
+                  <include>io.prometheus:simpleclient_common</include>
                   <include>com.yammer.metrics:metrics-core</include>
 
                   <include>org.apache.spark:spark-avro_${scala.binary.version}</include>
