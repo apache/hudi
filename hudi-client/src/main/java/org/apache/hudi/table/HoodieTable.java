@@ -32,7 +32,9 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
+import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
+import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -505,7 +507,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     final FileSystem fileSystem = metaClient.getRawFs();
     List<String> fileList = partitionFilePaths.map(Pair::getValue).collect(Collectors.toList());
     try {
-      getFailSafeConsistencyGuard(fileSystem).waitTill(partitionPath, fileList, visibility);
+      getConsistencyGuard(fileSystem, config.getConsistencyGuardConfig()).waitTill(partitionPath, fileList, visibility);
     } catch (IOException | TimeoutException ioe) {
       LOG.error("Got exception while waiting for files to show up", ioe);
       return false;
@@ -513,8 +515,18 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     return true;
   }
 
-  private ConsistencyGuard getFailSafeConsistencyGuard(FileSystem fileSystem) {
-    return new FailSafeConsistencyGuard(fileSystem, config.getConsistencyGuardConfig());
+  /**
+   * Instantiate {@link ConsistencyGuard} based on configs.
+   * <p>
+   * Default consistencyGuard class is {@link OptimisticConsistencyGuard}.
+   */
+  public static ConsistencyGuard getConsistencyGuard(FileSystem fs, ConsistencyGuardConfig consistencyGuardConfig) throws IOException {
+    try {
+      return consistencyGuardConfig.shouldEnableOptimisticConsistencyGuard()
+          ? new OptimisticConsistencyGuard(fs, consistencyGuardConfig) : new FailSafeConsistencyGuard(fs, consistencyGuardConfig);
+    } catch (Throwable e) {
+      throw new IOException("Could not load ConsistencyGuard ", e);
+    }
   }
 
   public SparkTaskContextSupplier getSparkTaskContextSupplier() {

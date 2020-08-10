@@ -44,6 +44,7 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.IOType;
@@ -63,6 +64,7 @@ import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -91,6 +93,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -1081,54 +1084,97 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Tests behavior of committing only when consistency is verified.
    */
-  @Test
-  public void testConsistencyCheckDuringFinalize() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testConsistencyCheckDuringFinalize(boolean enableOptimisticConsistencyGuard) throws Exception {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
     String instantTime = "000";
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
+        .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
-    Pair<Path, JavaRDD<WriteStatus>> result = testConsistencyCheck(metaClient, instantTime);
+    Pair<Path, JavaRDD<WriteStatus>> result = testConsistencyCheck(metaClient, instantTime, enableOptimisticConsistencyGuard);
 
     // Delete orphan marker and commit should succeed
     metaClient.getFs().delete(result.getKey(), false);
-    assertTrue(client.commit(instantTime, result.getRight()), "Commit should succeed");
-    assertTrue(HoodieTestUtils.doesCommitExist(basePath, instantTime),
-        "After explicit commit, commit file should be created");
-    // Marker directory must be removed
-    assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
+    if (!enableOptimisticConsistencyGuard) {
+      assertTrue(client.commit(instantTime, result.getRight()), "Commit should succeed");
+      assertTrue(HoodieTestUtils.doesCommitExist(basePath, instantTime),
+          "After explicit commit, commit file should be created");
+      // Marker directory must be removed
+      assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
+    } else {
+      // with optimistic, first client.commit should have succeeded.
+      assertTrue(HoodieTestUtils.doesCommitExist(basePath, instantTime),
+          "After explicit commit, commit file should be created");
+      // Marker directory must be removed
+      assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
+    }
   }
 
-  private void testRollbackAfterConsistencyCheckFailureUsingFileList(boolean rollbackUsingMarkers) throws Exception {
+  private void testRollbackAfterConsistencyCheckFailureUsingFileList(boolean rollbackUsingMarkers, boolean enableOptimisticConsistencyGuard) throws Exception {
     String instantTime = "000";
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
-    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers).withAutoCommit(false).build();
-    HoodieWriteClient client = getHoodieWriteClient(cfg);
-    testConsistencyCheck(metaClient, instantTime);
-
-    // Rollback of this commit should succeed
-    client.rollback(instantTime);
-    assertFalse(HoodieTestUtils.doesCommitExist(basePath, instantTime),
-        "After explicit rollback, commit file should not be present");
-    // Marker directory must be removed after rollback
-    assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
-  }
-
-  @Test
-  public void testRollbackAfterConsistencyCheckFailureUsingFileList() throws Exception {
-    testRollbackAfterConsistencyCheckFailureUsingFileList(false);
-  }
-
-  @Test
-  public void testRollbackAfterConsistencyCheckFailureUsingMarkers() throws Exception {
-    testRollbackAfterConsistencyCheckFailureUsingFileList(true);
-  }
-
-  private Pair<Path, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String instantTime)
-      throws Exception {
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false)
+    HoodieWriteConfig cfg = !enableOptimisticConsistencyGuard ? getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers).withAutoCommit(false)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
-            .withMaxConsistencyCheckIntervalMs(1).withInitialConsistencyCheckIntervalMs(1).build())
-        .build();
+            .withMaxConsistencyCheckIntervalMs(1).withInitialConsistencyCheckIntervalMs(1).withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build() :
+        getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers).withAutoCommit(false)
+            .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
+                .withConsistencyCheckEnabled(true)
+                .withOptimisticConsistencyGuardSleepTimeMs(1).build()).build();
+    HoodieWriteClient client = getHoodieWriteClient(cfg);
+    testConsistencyCheck(metaClient, instantTime, enableOptimisticConsistencyGuard);
+
+    if (!enableOptimisticConsistencyGuard) {
+      // Rollback of this commit should succeed with FailSafeCG
+      client.rollback(instantTime);
+      assertFalse(HoodieTestUtils.doesCommitExist(basePath, instantTime),
+          "After explicit rollback, commit file should not be present");
+      // Marker directory must be removed after rollback
+      assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
+    } else {
+      // if optimistic CG is enabled, commit should have succeeded.
+      assertTrue(HoodieTestUtils.doesCommitExist(basePath, instantTime),
+          "With optimistic CG, first commit should succeed. commit file should be present");
+      // Marker directory must be removed after rollback
+      assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(instantTime))));
+      if (rollbackUsingMarkers) {
+        // rollback of a completed commit should fail if marked based rollback is used.
+        try {
+          client.rollback(instantTime);
+          fail("Rollback of completed commit should throw exception");
+        } catch (HoodieRollbackException e) {
+          // ignore
+        }
+      } else {
+        // rollback of a completed commit should succeed if using list based rollback
+        client.rollback(instantTime);
+        assertFalse(HoodieTestUtils.doesCommitExist(basePath, instantTime),
+            "After explicit rollback, commit file should not be present");
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testRollbackAfterConsistencyCheckFailureUsingFileList(boolean enableOptimisticConsistencyGuard) throws Exception {
+    testRollbackAfterConsistencyCheckFailureUsingFileList(false, enableOptimisticConsistencyGuard);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testRollbackAfterConsistencyCheckFailureUsingMarkers(boolean enableOptimisticConsistencyGuard) throws Exception {
+    testRollbackAfterConsistencyCheckFailureUsingFileList(true, enableOptimisticConsistencyGuard);
+  }
+
+  private Pair<Path, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String instantTime, boolean enableOptimisticConsistencyGuard)
+      throws Exception {
+    HoodieWriteConfig cfg = !enableOptimisticConsistencyGuard ? (getConfigBuilder().withAutoCommit(false)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
+            .withMaxConsistencyCheckIntervalMs(1).withInitialConsistencyCheckIntervalMs(1).withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build())
+        .build()) : (getConfigBuilder().withAutoCommit(false)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
+            .withOptimisticConsistencyGuardSleepTimeMs(1).build())
+        .build());
     HoodieWriteClient client = getHoodieWriteClient(cfg);
 
     client.startCommitWithTime(instantTime);
@@ -1149,10 +1195,15 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             IOType.MERGE);
     LOG.info("Created a dummy marker path=" + markerFilePath);
 
-    Exception e = assertThrows(HoodieCommitException.class, () -> {
+    if (!enableOptimisticConsistencyGuard) {
+      Exception e = assertThrows(HoodieCommitException.class, () -> {
+        client.commit(instantTime, result);
+      }, "Commit should fail due to consistency check");
+      assertTrue(e.getCause() instanceof HoodieIOException);
+    } else {
+      // with optimistic CG, commit should succeed
       client.commit(instantTime, result);
-    }, "Commit should fail due to consistency check");
-    assertTrue(e.getCause() instanceof HoodieIOException);
+    }
     return Pair.of(markerFilePath, result);
   }
 
