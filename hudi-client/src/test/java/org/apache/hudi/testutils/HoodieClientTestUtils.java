@@ -35,7 +35,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
-import org.apache.hudi.common.testutils.FilesTestUtils;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -176,7 +176,7 @@ public class HoodieClientTestUtils {
   /**
    * Find total basefiles for passed in paths.
    * <p>
-   * TODO move to {@link FilesTestUtils}.
+   * TODO move to {@link FileCreateUtils}.
    */
   public static Map<String, Integer> getBaseFileCountForPaths(String basePath, FileSystem fs,
       String... paths) {
@@ -246,7 +246,7 @@ public class HoodieClientTestUtils {
   }
 
   /**
-   * TODO move to {@link org.apache.hudi.common.testutils.FilesTestUtils}.
+   * TODO move to {@link FileCreateUtils}.
    */
   public static void createMarkerFile(String basePath, String partitionPath, String instantTime, String dataFileName) throws IOException {
     createTempFolderForMarkerFiles(basePath);

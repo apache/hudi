@@ -53,9 +53,9 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.FilesTestUtils.fakeDeltaCommit;
-import static org.apache.hudi.common.testutils.FilesTestUtils.fakeInflightDeltaCommit;
-import static org.apache.hudi.common.testutils.FilesTestUtils.fakeRequestedDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -169,9 +169,9 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
           assertEquals(1, fileSlice.getLogFiles().count(), "There should be 1 log file written for every data file");
         }
       }
-      fakeDeltaCommit(basePath, newCommitTime);
-      fakeRequestedDeltaCommit(basePath, newCommitTime);
-      fakeInflightDeltaCommit(basePath, newCommitTime);
+      createDeltaCommit(basePath, newCommitTime);
+      createRequestedDeltaCommit(basePath, newCommitTime);
+      createInflightDeltaCommit(basePath, newCommitTime);
 
       // Do a compaction
       table = HoodieTable.create(config, hadoopConf);

@@ -31,9 +31,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-public class FilesTestUtils {
+public class FileCreateUtils {
 
-  private static void fakeMetaFile(String basePath, String instantTime, String suffix) throws IOException {
+  private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
     String parentPath = basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME;
     Files.createDirectories(Paths.get(parentPath));
     Path metaFilePath = Paths.get(parentPath, instantTime + suffix);
@@ -42,36 +42,36 @@ public class FilesTestUtils {
     }
   }
 
-  public static void fakeCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
+  public static void createCommit(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
   }
 
-  public static void fakeRequestedCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMMIT_EXTENSION);
+  public static void createRequestedCommit(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMMIT_EXTENSION);
   }
 
-  public static void fakeInflightCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
+  public static void createInflightCommit(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
   }
 
-  public static void fakeDeltaCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION);
+  public static void createDeltaCommit(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION);
   }
 
-  public static void fakeRequestedDeltaCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_DELTA_COMMIT_EXTENSION);
+  public static void createRequestedDeltaCommit(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_DELTA_COMMIT_EXTENSION);
   }
 
-  public static void fakeInflightDeltaCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
+  public static void createInflightDeltaCommit(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
   }
 
-  public static void fakeDataFile(String basePath, String partitionPath, String instantTime, String fileId)
+  public static void createDataFile(String basePath, String partitionPath, String instantTime, String fileId)
       throws Exception {
-    fakeDataFile(basePath, partitionPath, instantTime, fileId, 0);
+    createDataFile(basePath, partitionPath, instantTime, fileId, 0);
   }
 
-  public static void fakeDataFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
+  public static void createDataFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
       throws Exception {
     String parentPath = String.format("%s/%s", basePath, partitionPath);
     Files.createDirectories(Paths.get(parentPath));
@@ -82,12 +82,12 @@ public class FilesTestUtils {
     new RandomAccessFile(path, "rw").setLength(length);
   }
 
-  public static void fakeLogFile(String basePath, String partitionPath, String baseInstantTime, String fileId, int version)
+  public static void createLogFile(String basePath, String partitionPath, String baseInstantTime, String fileId, int version)
       throws Exception {
-    fakeLogFile(basePath, partitionPath, baseInstantTime, fileId, version, 0);
+    createLogFile(basePath, partitionPath, baseInstantTime, fileId, version, 0);
   }
 
-  public static void fakeLogFile(String basePath, String partitionPath, String baseInstantTime, String fileId, int version, int length)
+  public static void createLogFile(String basePath, String partitionPath, String baseInstantTime, String fileId, int version, int length)
       throws Exception {
     String parentPath = String.format("%s/%s", basePath, partitionPath);
     Files.createDirectories(Paths.get(parentPath));

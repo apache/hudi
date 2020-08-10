@@ -39,15 +39,13 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.common.testutils.FilesTestUtils.createMarkerFile;
-import static org.apache.hudi.common.testutils.FilesTestUtils.fakeCommit;
-import static org.apache.hudi.common.testutils.FilesTestUtils.fakeDataFile;
-import static org.apache.hudi.common.testutils.FilesTestUtils.fakeDeltaCommit;
-import static org.apache.hudi.common.testutils.FilesTestUtils.fakeInflightCommit;
-import static org.apache.hudi.common.testutils.FilesTestUtils.fakeInflightDeltaCommit;
-import static org.apache.hudi.common.testutils.FilesTestUtils.fakeLogFile;
-import static org.apache.hudi.common.testutils.FilesTestUtils.fakeRequestedCommit;
-import static org.apache.hudi.common.testutils.FilesTestUtils.fakeRequestedDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 
 public class HoodieTestTable {
 
@@ -69,48 +67,48 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addRequestedCommit(String instantTime) throws Exception {
-    fakeRequestedCommit(basePath, instantTime);
+    createRequestedCommit(basePath, instantTime);
     currentInstantTime = instantTime;
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return this;
   }
 
   public HoodieTestTable addRequestedDeltaCommit(String instantTime) throws Exception {
-    fakeRequestedDeltaCommit(basePath, instantTime);
+    createRequestedDeltaCommit(basePath, instantTime);
     currentInstantTime = instantTime;
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return this;
   }
 
   public HoodieTestTable addInflightCommit(String instantTime) throws Exception {
-    fakeRequestedCommit(basePath, instantTime);
-    fakeInflightCommit(basePath, instantTime);
+    createRequestedCommit(basePath, instantTime);
+    createInflightCommit(basePath, instantTime);
     currentInstantTime = instantTime;
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return this;
   }
 
   public HoodieTestTable addInflightDeltaCommit(String instantTime) throws Exception {
-    fakeRequestedDeltaCommit(basePath, instantTime);
-    fakeInflightDeltaCommit(basePath, instantTime);
+    createRequestedDeltaCommit(basePath, instantTime);
+    createInflightDeltaCommit(basePath, instantTime);
     currentInstantTime = instantTime;
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return this;
   }
 
   public HoodieTestTable addCommit(String instantTime) throws Exception {
-    fakeRequestedCommit(basePath, instantTime);
-    fakeInflightCommit(basePath, instantTime);
-    fakeCommit(basePath, instantTime);
+    createRequestedCommit(basePath, instantTime);
+    createInflightCommit(basePath, instantTime);
+    createCommit(basePath, instantTime);
     currentInstantTime = instantTime;
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return this;
   }
 
   public HoodieTestTable addDeltaCommit(String instantTime) throws Exception {
-    fakeRequestedDeltaCommit(basePath, instantTime);
-    fakeInflightDeltaCommit(basePath, instantTime);
-    fakeDeltaCommit(basePath, instantTime);
+    createRequestedDeltaCommit(basePath, instantTime);
+    createInflightDeltaCommit(basePath, instantTime);
+    createDeltaCommit(basePath, instantTime);
     currentInstantTime = instantTime;
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return this;
@@ -156,7 +154,7 @@ public class HoodieTestTable {
     Map<String, String> partitionFileIdMap = new HashMap<>();
     for (String p : partitions) {
       String fileId = UUID.randomUUID().toString();
-      fakeDataFile(basePath, p, currentInstantTime, fileId);
+      FileCreateUtils.createDataFile(basePath, p, currentInstantTime, fileId);
       partitionFileIdMap.put(p, fileId);
     }
     return partitionFileIdMap;
@@ -164,7 +162,7 @@ public class HoodieTestTable {
 
   public HoodieTestTable withUpdates(String partition, String... fileIds) throws Exception {
     for (String f : fileIds) {
-      fakeDataFile(basePath, partition, currentInstantTime, f);
+      FileCreateUtils.createDataFile(basePath, partition, currentInstantTime, f);
     }
     return this;
   }
@@ -180,7 +178,7 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable withLogFile(String partitionPath, String fileId, int version) throws Exception {
-    fakeLogFile(basePath, partitionPath, currentInstantTime, fileId, version);
+    FileCreateUtils.createLogFile(basePath, partitionPath, currentInstantTime, fileId, version);
     return this;
   }
 
