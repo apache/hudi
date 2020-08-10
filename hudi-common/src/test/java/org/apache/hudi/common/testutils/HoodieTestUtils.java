@@ -206,8 +206,8 @@ public class HoodieTestUtils {
           .forEach(f -> {
             FSDataOutputStream os = null;
             try {
-              Path commitFile = new Path(
-                  metaClient.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
+              Path commitFile = new Path(Paths
+                  .get(metaClient.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME, f).toString());
               os = metaClient.getFs().create(commitFile, true);
               // Write empty clean metadata
               os.write(TimelineMetadataUtils.serializeCleanerPlan(
@@ -233,8 +233,8 @@ public class HoodieTestUtils {
         .forEach(f -> {
           FSDataOutputStream os = null;
           try {
-            Path commitFile = new Path(
-                metaClient.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
+            Path commitFile = new Path(Paths
+                .get(metaClient.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME, f).toString());
             os = metaClient.getFs().create(commitFile, true);
             // Write empty clean metadata
             os.write(new byte[0]);

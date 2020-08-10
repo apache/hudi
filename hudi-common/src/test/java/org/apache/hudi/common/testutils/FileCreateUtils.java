@@ -34,9 +34,9 @@ import java.nio.file.Paths;
 public class FileCreateUtils {
 
   private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    String parentPath = basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME;
-    Files.createDirectories(Paths.get(parentPath));
-    Path metaFilePath = Paths.get(parentPath, instantTime + suffix);
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    Files.createDirectories(parentPath);
+    Path metaFilePath = parentPath.resolve(instantTime + suffix);
     if (Files.notExists(metaFilePath)) {
       Files.createFile(metaFilePath);
     }
@@ -73,13 +73,13 @@ public class FileCreateUtils {
 
   public static void createDataFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
       throws Exception {
-    String parentPath = String.format("%s/%s", basePath, partitionPath);
-    Files.createDirectories(Paths.get(parentPath));
-    String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(instantTime, "1-0-1", fileId));
-    if (Files.notExists(Paths.get(path))) {
-      Files.createFile(Paths.get(path));
+    Path parentPath = Paths.get(basePath, partitionPath);
+    Files.createDirectories(parentPath);
+    Path dataFilePath = parentPath.resolve(FSUtils.makeDataFileName(instantTime, "1-0-1", fileId));
+    if (Files.notExists(dataFilePath)) {
+      Files.createFile(dataFilePath);
     }
-    new RandomAccessFile(path, "rw").setLength(length);
+    new RandomAccessFile(dataFilePath.toFile(), "rw").setLength(length);
   }
 
   public static void createLogFile(String basePath, String partitionPath, String baseInstantTime, String fileId, int version)
@@ -89,13 +89,13 @@ public class FileCreateUtils {
 
   public static void createLogFile(String basePath, String partitionPath, String baseInstantTime, String fileId, int version, int length)
       throws Exception {
-    String parentPath = String.format("%s/%s", basePath, partitionPath);
-    Files.createDirectories(Paths.get(parentPath));
-    String path = String.format("%s/%s", parentPath, FSUtils.makeLogFileName(fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseInstantTime, version, "1-0-1"));
-    if (Files.notExists(Paths.get(path))) {
-      Files.createFile(Paths.get(path));
+    Path parentPath = Paths.get(basePath, partitionPath);
+    Files.createDirectories(parentPath);
+    Path logFilePath = parentPath.resolve(FSUtils.makeLogFileName(fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseInstantTime, version, "1-0-1"));
+    if (Files.notExists(logFilePath)) {
+      Files.createFile(logFilePath);
     }
-    new RandomAccessFile(path, "rw").setLength(length);
+    new RandomAccessFile(logFilePath.toFile(), "rw").setLength(length);
   }
 
   public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileID, IOType ioType)
