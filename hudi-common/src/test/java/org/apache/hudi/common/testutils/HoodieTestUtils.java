@@ -137,7 +137,7 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                           String tableName)
+      String tableName)
       throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
@@ -145,7 +145,7 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                           HoodieFileFormat baseFileFormat)
+      HoodieFileFormat baseFileFormat)
       throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME, baseFileFormat.toString());
@@ -153,7 +153,7 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                           Properties properties)
+      Properties properties)
       throws IOException {
     properties.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, RAW_TRIPS_TEST_NAME);
     properties.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
@@ -273,7 +273,7 @@ public class HoodieTestUtils {
   }
 
   private static String createDataFileFixLength(String basePath, String partitionPath, String instantTime, String fileID,
-                                                long length) throws IOException {
+      long length) throws IOException {
     String folderPath = basePath + "/" + partitionPath + "/";
     Files.createDirectories(Paths.get(folderPath));
     String filePath = folderPath + FSUtils.makeDataFileName(instantTime, DEFAULT_WRITE_TOKEN, fileID);
@@ -288,7 +288,7 @@ public class HoodieTestUtils {
    * @deprecated Use {@link HoodieTestTable} instead.
    */
   public static String createNewLogFile(FileSystem fs, String basePath, String partitionPath, String instantTime,
-                                        String fileID, Option<Integer> version) throws IOException {
+      String fileID, Option<Integer> version) throws IOException {
     String folderPath = basePath + "/" + partitionPath + "/";
     boolean makeDir = fs.mkdirs(new Path(folderPath));
     if (!makeDir) {
@@ -304,7 +304,7 @@ public class HoodieTestUtils {
   }
 
   public static void createCompactionRequest(HoodieTableMetaClient metaClient, String instant,
-                                             List<Pair<String, FileSlice>> fileSliceList) throws IOException {
+      List<Pair<String, FileSlice>> fileSliceList) throws IOException {
     HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(fileSliceList, Option.empty(), Option.empty());
     HoodieInstant compactionInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instant);
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
@@ -322,7 +322,7 @@ public class HoodieTestUtils {
    * @deprecated Use {@link HoodieTestTable} instead.
    */
   public static String getLogFilePath(String basePath, String partitionPath, String instantTime, String fileID,
-                                      Option<Integer> version) {
+      Option<Integer> version) {
     return basePath + "/" + partitionPath + "/" + FSUtils.makeLogFileName(fileID, ".log", instantTime,
         version.orElse(DEFAULT_LOG_VERSION), HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
   }
@@ -351,7 +351,7 @@ public class HoodieTestUtils {
    * @deprecated Use {@link HoodieTestTable} instead.
    */
   public static boolean doesDataFileExist(String basePath, String partitionPath, String instantTime,
-                                          String fileID) {
+      String fileID) {
     return new File(getDataFilePath(basePath, partitionPath, instantTime, fileID)).exists();
   }
 
@@ -371,7 +371,7 @@ public class HoodieTestUtils {
   }
 
   public static void createCleanFiles(HoodieTableMetaClient metaClient, String basePath,
-                                      String instantTime, Configuration configuration)
+      String instantTime, Configuration configuration)
       throws IOException {
     createPendingCleanFiles(metaClient, instantTime);
     Path commitFile = new Path(
