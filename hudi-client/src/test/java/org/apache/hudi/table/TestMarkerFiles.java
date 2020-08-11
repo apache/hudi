@@ -18,17 +18,17 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.testutils.FileSystemTestUtils;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.HoodieClientTestUtils;
-
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.testutils.FileSystemTestUtils;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+
+import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.IOType;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
