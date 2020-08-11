@@ -817,7 +817,7 @@ public class TestCleaner extends HoodieClientTestBase {
         gotVersion1Plan.getFilesToBeDeletedPerPartition().get(partition1).get(0));
     assertEquals(version1Plan.getFilesToBeDeletedPerPartition().get(partition2).get(0),
         gotVersion1Plan.getFilesToBeDeletedPerPartition().get(partition2).get(0));
-    assertNull(gotVersion1Plan.getFilePathsToBeDeletedPerPartition());
+    assertTrue(gotVersion1Plan.getFilePathsToBeDeletedPerPartition().isEmpty());
     assertNull(version1Plan.getFilePathsToBeDeletedPerPartition());
   }
 

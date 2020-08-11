@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.timeline.versioning.clean;
 
-import java.util.HashMap;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.fs.FSUtils;
@@ -28,6 +27,7 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.fs.Path;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -52,7 +52,8 @@ public class CleanPlanV2MigrationHandler extends AbstractMigratorBase<HoodieClea
           .map(v -> new HoodieCleanFileInfo(
             new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), e.getKey()), v).toString(), false))
           .collect(Collectors.toList()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-    return new HoodieCleanerPlan(plan.getEarliestInstantToRetain(), plan.getPolicy(), new HashMap<>(), VERSION, filePathsPerPartition);
+    return new HoodieCleanerPlan(plan.getEarliestInstantToRetain(), plan.getPolicy(), new HashMap<>(), VERSION,
+        filePathsPerPartition);
   }
 
   @Override

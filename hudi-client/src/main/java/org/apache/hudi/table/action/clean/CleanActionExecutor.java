@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -87,12 +88,12 @@ public class CleanActionExecutor extends BaseActionExecutor<HoodieCleanMetadata>
           .parallelize(partitionsToClean, cleanerParallelism)
           .map(partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean)))
           .collect().stream()
-          .collect(Collectors.toMap(Pair::getKey,
-            (y) -> y.getValue().stream().map(CleanFileInfo::toHoodieFileCleanInfo).collect(Collectors.toList())));
+          .collect(Collectors.toMap(Pair::getKey, y -> CleanerUtils.convertToHoodieCleanFileInfoList(y.getValue())));
 
       return new HoodieCleanerPlan(earliestInstant
           .map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
-          config.getCleanerPolicy().name(), null, CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps);
+          config.getCleanerPolicy().name(), CollectionUtils.createImmutableMap(),
+          CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to schedule clean operation", e);
     }

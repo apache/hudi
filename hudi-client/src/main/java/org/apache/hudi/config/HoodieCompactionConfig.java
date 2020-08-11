@@ -53,7 +53,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String MIN_COMMITS_TO_KEEP_PROP = "hoodie.keep.min.commits";
   public static final String COMMITS_ARCHIVAL_BATCH_SIZE_PROP = "hoodie.commits.archival.batch";
   // Set true to clean bootstrap source files when necessary
-  public static final String CLEANER_BOOTSTRAP_BASE_FILE_ENABLED = "hoodie.cleaner.bootstrap.base.file";
+  public static final String CLEANER_BOOTSTRAP_BASE_FILE_ENABLED = "hoodie.cleaner.delete.bootstrap.base.file";
   // Upsert uses this file size to compact new data onto existing files..
   public static final String PARQUET_SMALL_FILE_LIMIT_BYTES = "hoodie.parquet.small.file.limit";
   // By default, treat any file <= 100MB as a small file.

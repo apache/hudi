@@ -18,22 +18,25 @@
 
 package org.apache.hudi.common.util;
 
+import java.util.stream.Collectors;
+import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.HoodieCleanStat;
+import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV2MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
 
 public class CleanerUtils {
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanMetadataV1MigrationHandler.VERSION;
@@ -99,5 +102,14 @@ public class CleanerUtils {
     HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadata(
         metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get(), HoodieCleanerPlan.class);
     return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
+  }
+
+  /**
+   * Convert list of cleanFileInfo instances to list of avro-generated HoodieCleanFileInfo instances.
+   * @param cleanFileInfoList
+   * @return
+   */
+  public static List<HoodieCleanFileInfo> convertToHoodieCleanFileInfoList(List<CleanFileInfo> cleanFileInfoList) {
+    return cleanFileInfoList.stream().map(CleanFileInfo::toHoodieFileCleanInfo).collect(Collectors.toList());
   }
 }

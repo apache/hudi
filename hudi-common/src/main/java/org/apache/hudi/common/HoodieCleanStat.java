@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common;
 
-import java.util.ArrayList;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
@@ -40,7 +40,7 @@ public class HoodieCleanStat implements Serializable {
   private final List<String> successDeleteFiles;
   // Files that could not be deleted
   private final List<String> failedDeleteFiles;
-  // Boostrap Base Path patterns that were generated for the delete operation
+  // Bootstrap Base Path patterns that were generated for the delete operation
   private final List<String> deleteBootstrapBasePathPatterns;
   private final List<String> successDeleteBootstrapBaseFiles;
   // Files that could not be deleted
@@ -51,7 +51,8 @@ public class HoodieCleanStat implements Serializable {
   public HoodieCleanStat(HoodieCleaningPolicy policy, String partitionPath, List<String> deletePathPatterns,
       List<String> successDeleteFiles, List<String> failedDeleteFiles, String earliestCommitToRetain) {
     this(policy, partitionPath, deletePathPatterns, successDeleteFiles, failedDeleteFiles, earliestCommitToRetain,
-        new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+        CollectionUtils.createImmutableList(), CollectionUtils.createImmutableList(),
+        CollectionUtils.createImmutableList());
   }
 
   public HoodieCleanStat(HoodieCleaningPolicy policy, String partitionPath, List<String> deletePathPatterns,
