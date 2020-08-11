@@ -61,7 +61,7 @@ public abstract class KeyGenerator implements Serializable {
    * @param recordNamespace record namespace of the dataset.
    */
   public void initializeRowKeyGenerator(StructType structType, String structName, String recordNamespace) {
-    throw new UnsupportedOperationException("This method is invoked only for operation BULK_INSERT_DATASET. Expected to be overridden by sub classes");
+    throw new UnsupportedOperationException("Expected to be overridden by sub classes, to improve performance for spark datasource writes ");
   }
 
   /**
@@ -69,8 +69,8 @@ public abstract class KeyGenerator implements Serializable {
    * @param row instance of {@link Row} from which record key is requested.
    * @return the record key of interest from {@link Row}.
    */
-  public String getRecordKeyFromRow(Row row) {
-    throw new UnsupportedOperationException("This method is invoked only for operation BULK_INSERT_DATASET. Expected to be overridden by sub classes");
+  public String getRecordKey(Row row) {
+    throw new UnsupportedOperationException("Expected to be overridden by sub classes, to improve performance for spark datasource writes ");
   }
 
   /**
@@ -78,7 +78,7 @@ public abstract class KeyGenerator implements Serializable {
    * @param row instance of {@link Row} from which partition path is requested
    * @return the partition path of interest from {@link Row}.
    */
-  public String getPartitionPathFromRow(Row row) {
-    throw new UnsupportedOperationException("This method is invoked only for operation BULK_INSERT_DATASET. Expected to be overridden by sub classes");
+  public String getPartitionPath(Row row) {
+    throw new UnsupportedOperationException("Expected to be overridden by sub classes, to improve performance for spark datasource writes ");
   }
 }

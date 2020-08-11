@@ -31,12 +31,6 @@ import java.util.Arrays;
  */
 public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
-  @Deprecated
-  protected final String recordKeyField;
-
-  @Deprecated
-  protected final String partitionPathField;
-
   protected final boolean hiveStylePartitioning;
 
   protected final boolean encodePartitionPath;
@@ -47,34 +41,31 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   public SimpleKeyGenerator(TypedProperties props, String partitionPathField) {
     super(props);
-    this.setRecordKeyFields(Arrays.asList(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY())));
-    this.setPartitionPathFields(Arrays.asList(partitionPathField));
+    this.recordKeyFields = Arrays.asList(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()));
+    this.partitionPathFields = Arrays.asList(partitionPathField);
     this.hiveStylePartitioning = props.getBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
         Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
     this.encodePartitionPath = props.getBoolean(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY(),
         Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL()));
-    // Retaining this for compatibility
-    this.recordKeyField = getRecordKeyFields().get(0);
-    this.partitionPathField = getPartitionPathFields().get(0);
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return KeyGenUtils.getRecordKey(record, recordKeyField);
+    return KeyGenUtils.getRecordKey(record, getRecordKeyFields().get(0));
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return KeyGenUtils.getPartitionPath(record, partitionPathField, hiveStylePartitioning, encodePartitionPath);
+    return KeyGenUtils.getPartitionPath(record, getPartitionPathFields().get(0), hiveStylePartitioning, encodePartitionPath);
   }
 
   @Override
-  public String getRecordKeyFromRow(Row row) {
+  public String getRecordKey(Row row) {
     return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), getRecordKeyPositions(), false);
   }
 
   @Override
-  public String getPartitionPathFromRow(Row row) {
+  public String getPartitionPath(Row row) {
     return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(),
         hiveStylePartitioning, getPartitionPathPositions());
   }

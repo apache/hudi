@@ -130,7 +130,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, partitionPathField, true);
+    Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, getPartitionPathFields().get(0), true);
     if (partitionVal == null) {
       partitionVal = 1L;
     }
@@ -181,7 +181,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
         throw new HoodieException(uoe.getMessage(), uoe);
       }
     }
-    return hiveStylePartitioning ? partitionPathField + "=" + partitionPath : partitionPath;
+    return hiveStylePartitioning ? getPartitionPathFields().get(0) + "=" + partitionPath : partitionPath;
   }
 
   private long convertLongTimeToMillis(Long partitionVal) {
@@ -193,12 +193,12 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   }
 
   @Override
-  public String getRecordKeyFromRow(Row row) {
+  public String getRecordKey(Row row) {
     return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), getRecordKeyPositions(), false);
   }
 
   @Override
-  public String getPartitionPathFromRow(Row row) {
+  public String getPartitionPath(Row row) {
     Object fieldVal = null;
     Object partitionPathFieldVal =  RowKeyGeneratorHelper.getNestedFieldVal(row, getPartitionPathPositions().get(getPartitionPathFields().get(0)));
     try {

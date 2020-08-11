@@ -776,9 +776,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     }
 
     public Builder withSchema(String schemaStr) {
-      if (null != schemaStr) {
-        props.setProperty(AVRO_SCHEMA, schemaStr);
-      }
+      props.setProperty(AVRO_SCHEMA, schemaStr);
       return this;
     }
 

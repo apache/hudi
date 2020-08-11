@@ -41,11 +41,12 @@ import scala.Function1;
  */
 public abstract class BuiltinKeyGenerator extends KeyGenerator {
 
-  private List<String> recordKeyFields;
-  private List<String> partitionPathFields;
-  private Map<String, List<Integer>> recordKeyPositions = new HashMap<>();
+  protected List<String> recordKeyFields;
+  protected List<String> partitionPathFields;
 
+  private Map<String, List<Integer>> recordKeyPositions = new HashMap<>();
   private Map<String, List<Integer>> partitionPathPositions = new HashMap<>();
+
   private transient Function1<Object, Object> converterFn = null;
   protected StructType structType;
   private String structName;
@@ -115,7 +116,7 @@ public abstract class BuiltinKeyGenerator extends KeyGenerator {
    * @return the record key of interest from {@link Row}.
    */
   @Override
-  public String getRecordKeyFromRow(Row row) {
+  public String getRecordKey(Row row) {
     if (null != converterFn) {
       converterFn = AvroConversionHelper.createConverterToAvro(structType, structName, recordNamespace);
     }
@@ -129,7 +130,7 @@ public abstract class BuiltinKeyGenerator extends KeyGenerator {
    * @return the partition path of interest from {@link Row}.
    */
   @Override
-  public String getPartitionPathFromRow(Row row) {
+  public String getPartitionPath(Row row) {
     if (null != converterFn) {
       converterFn = AvroConversionHelper.createConverterToAvro(structType, structName, recordNamespace);
     }
@@ -143,14 +144,6 @@ public abstract class BuiltinKeyGenerator extends KeyGenerator {
 
   public List<String> getPartitionPathFields() {
     return partitionPathFields;
-  }
-
-  protected void setRecordKeyFields(List<String> recordKeyFields) {
-    this.recordKeyFields = recordKeyFields;
-  }
-
-  protected void setPartitionPathFields(List<String> partitionPathFields) {
-    this.partitionPathFields = partitionPathFields;
   }
 
   protected Map<String, List<Integer>> getRecordKeyPositions() {

@@ -44,7 +44,6 @@ import java.util.stream.Collectors;
  */
 public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
-  protected final TypedProperties properties;
   private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   private static final String SPLIT_REGEX = ":";
 
@@ -57,10 +56,8 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   public CustomKeyGenerator(TypedProperties props) {
     super(props);
-    this.properties = props;
-    this.setRecordKeyFields(Arrays.stream(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(",")).map(String::trim).collect(Collectors.toList()));
-    this.setPartitionPathFields(
-        Arrays.stream(props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()).split(",")).map(String::trim).collect(Collectors.toList()));
+    this.recordKeyFields = Arrays.stream(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.partitionPathFields = Arrays.stream(props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()).split(",")).map(String::trim).collect(Collectors.toList());
   }
 
   @Override
@@ -86,11 +83,11 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
       PartitionKeyType keyType = PartitionKeyType.valueOf(fieldWithType[1].toUpperCase());
       switch (keyType) {
         case SIMPLE:
-          partitionPath.append(new SimpleKeyGenerator(properties, partitionPathField).getPartitionPath(record));
+          partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(record));
           break;
         case TIMESTAMP:
           try {
-            partitionPath.append(new TimestampBasedKeyGenerator(properties, partitionPathField).getPartitionPath(record));
+            partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(record));
           } catch (IOException ioe) {
             throw new HoodieDeltaStreamerException("Unable to initialise TimestampBasedKeyGenerator class");
           }
@@ -111,7 +108,8 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     if (getRecordKeyFields() == null || getRecordKeyFields().isEmpty()) {
       throw new HoodieKeyException("Unable to find field names for record key in cfg");
     }
-
-    return getRecordKeyFields().size() == 1 ? new SimpleKeyGenerator(properties).getRecordKey(record) : new ComplexKeyGenerator(properties).getRecordKey(record);
+    return getRecordKeyFields().size() == 1
+        ? new SimpleKeyGenerator(config).getRecordKey(record)
+        : new ComplexKeyGenerator(config).getRecordKey(record);
   }
 }

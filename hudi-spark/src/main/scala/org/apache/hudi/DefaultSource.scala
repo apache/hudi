@@ -118,7 +118,7 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
-    val parameters = HoodieSparkSqlWriter.parametersWithWriteDefaults(optParams)
+    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(optParams)
     if (parameters(OPERATION_OPT_KEY).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
       HoodieSparkSqlWriter.bootstrap(sqlContext, mode, parameters, df)
     } else {

@@ -62,12 +62,11 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
   private final WriteOperationType operationType;
 
   public HoodieDataSourceInternalWriter(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-                                        SparkSession sparkSession, Configuration configuration,
-                                        WriteOperationType operationType) {
+                                        SparkSession sparkSession, Configuration configuration) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
-    this.operationType = operationType;
+    this.operationType = WriteOperationType.BULK_INSERT;
     this.writeClient  = new HoodieWriteClient<>(new JavaSparkContext(sparkSession.sparkContext()), writeConfig, true);
     writeClient.setOperationType(operationType);
     writeClient.startCommitWithTime(instantTime);
@@ -79,7 +78,7 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
   public DataWriterFactory<InternalRow> createWriterFactory() {
     metaClient.getActiveTimeline().transitionRequestedToInflight(
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, instantTime), Option.empty());
-    if (WriteOperationType.BULK_INSERT_DATASET == operationType) {
+    if (WriteOperationType.BULK_INSERT == operationType) {
       return new HoodieBulkInsertDataInternalWriterFactory(hoodieTable, writeConfig, instantTime, structType);
     } else {
       throw new IllegalArgumentException("Write Operation Type + " + operationType + " not supported ");
@@ -102,7 +101,7 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
             .flatMap(m -> m.getWriteStatuses().stream().map(m2 -> m2.getStat())).collect(Collectors.toList());
 
     try {
-      writeClient.commitStat(instantTime, writeStatList, Option.empty());
+      writeClient.commitStats(instantTime, writeStatList, Option.empty());
     } catch (Exception ioe) {
       throw new HoodieException(ioe.getMessage(), ioe);
     } finally {

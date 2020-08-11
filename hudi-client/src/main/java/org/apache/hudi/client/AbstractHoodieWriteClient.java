@@ -96,11 +96,10 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
   public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata) {
     List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();
-    return commitStat(instantTime, stats, extraMetadata);
+    return commitStats(instantTime, stats, extraMetadata);
   }
 
-  // fixme(bulkinsertv2) this name is ughh
-  public boolean commitStat(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata) {
+  public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata) {
     LOG.info("Committing " + instantTime);
     HoodieTableMetaClient metaClient = createMetaClient(false);
     String actionType = metaClient.getCommitActionType();

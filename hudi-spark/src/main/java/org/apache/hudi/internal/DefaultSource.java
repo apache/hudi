@@ -80,7 +80,7 @@ public class DefaultSource implements DataSourceV2, ReadSupport, WriteSupport,
     String tblName = options.get(HoodieWriteConfig.TABLE_NAME).get();
     HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(null, path, tblName, options.asMap());
     return Optional.of(new HoodieDataSourceInternalWriter(instantTime, config, schema, getSparkSession(),
-            getConfiguration(), WriteOperationType.BULK_INSERT_DATASET));
+            getConfiguration()));
   }
 
   private SparkSession getSparkSession() {

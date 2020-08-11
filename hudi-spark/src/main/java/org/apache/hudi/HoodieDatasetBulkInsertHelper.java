@@ -58,6 +58,7 @@ public class HoodieDatasetBulkInsertHelper {
    *  2. Add hoodie columns to input spark dataset.
    *  3. Reorders input dataset columns so that hoodie columns appear in the beginning.
    *  4. Sorts input dataset by hoodie partition path and record key
+   *
    * @param sqlContext SQL Context
    * @param config  Hoodie Write Config
    * @param rows    Spark Input dataset
@@ -75,10 +76,8 @@ public class HoodieDatasetBulkInsertHelper {
     StructType structTypeForUDF = rows.schema();
 
     keyGenerator.initializeRowKeyGenerator(structTypeForUDF, structName, recordNamespace);
-
-    sqlContext.udf().register(RECORD_KEY_UDF_FN, (UDF1<Row, String>) keyGenerator::getRecordKeyFromRow, DataTypes.StringType);
-
-    sqlContext.udf().register(PARTITION_PATH_UDF_FN, (UDF1<Row, String>) keyGenerator::getPartitionPathFromRow, DataTypes.StringType);
+    sqlContext.udf().register(RECORD_KEY_UDF_FN, (UDF1<Row, String>) keyGenerator::getRecordKey, DataTypes.StringType);
+    sqlContext.udf().register(PARTITION_PATH_UDF_FN, (UDF1<Row, String>) keyGenerator::getPartitionPath, DataTypes.StringType);
 
     final Dataset<Row> rowDatasetWithRecordKeys = rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD,
         callUDF(RECORD_KEY_UDF_FN, org.apache.spark.sql.functions.struct(
@@ -103,8 +102,8 @@ public class HoodieDatasetBulkInsertHelper {
     Dataset<Row> colOrderedDataset = rowDatasetWithHoodieColumns.select(
         JavaConverters.collectionAsScalaIterableConverter(orderedFields).asScala().toSeq());
 
-    return colOrderedDataset.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
-        functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
+    return colOrderedDataset
+        .sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
         .coalesce(config.getBulkInsertShuffleParallelism());
   }
 }

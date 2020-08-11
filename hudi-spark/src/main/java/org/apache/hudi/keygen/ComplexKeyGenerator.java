@@ -38,10 +38,10 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
-    this.setRecordKeyFields(Arrays.stream(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY())
-        .split(",")).map(String::trim).collect(Collectors.toList()));
-    this.setPartitionPathFields(Arrays.stream(props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY())
-        .split(",")).map(String::trim).collect(Collectors.toList()));
+    this.recordKeyFields = Arrays.stream(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY())
+        .split(",")).map(String::trim).collect(Collectors.toList());
+    this.partitionPathFields = Arrays.stream(props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY())
+        .split(",")).map(String::trim).collect(Collectors.toList());
     this.hiveStylePartitioning = props.getBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
         Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
     this.encodePartitionPath = props.getBoolean(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY(),
@@ -59,12 +59,12 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
-  public String getRecordKeyFromRow(Row row) {
+  public String getRecordKey(Row row) {
     return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), getRecordKeyPositions(), true);
   }
 
   @Override
-  public String getPartitionPathFromRow(Row row) {
+  public String getPartitionPath(Row row) {
     return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(),
         hiveStylePartitioning, getPartitionPathPositions());
   }

@@ -227,9 +227,13 @@ public class DataSourceUtils {
         .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
     // insert/bulk-insert combining to be true, if filtering for duplicates
     boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS_OPT_KEY()));
+    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).withAutoCommit(false).combineInput(combineInserts, true);
+    if (schemaStr != null) {
+      builder = builder.withSchema(schemaStr);
+    }
 
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withAutoCommit(false)
-        .combineInput(combineInserts, true).withSchema(schemaStr).forTable(tblName)
+    return builder.forTable(tblName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY()))

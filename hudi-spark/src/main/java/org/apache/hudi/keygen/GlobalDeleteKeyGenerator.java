@@ -37,7 +37,7 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
 
   public GlobalDeleteKeyGenerator(TypedProperties config) {
     super(config);
-    this.setRecordKeyFields(Arrays.asList(config.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(",")));
+    this.recordKeyFields = Arrays.asList(config.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(","));
   }
 
   @Override
@@ -56,12 +56,12 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
-  public String getRecordKeyFromRow(Row row) {
+  public String getRecordKey(Row row) {
     return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), getRecordKeyPositions(), true);
   }
 
   @Override
-  public String getPartitionPathFromRow(Row row) {
+  public String getPartitionPath(Row row) {
     return EMPTY_PARTITION;
   }
 }

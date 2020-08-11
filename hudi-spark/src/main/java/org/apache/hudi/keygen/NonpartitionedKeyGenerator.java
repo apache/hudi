@@ -48,12 +48,12 @@ public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
   }
 
   @Override
-  public String getRecordKeyFromRow(Row row) {
-    return super.getRecordKeyFromRow(row);
+  public String getRecordKey(Row row) {
+    return super.getRecordKey(row);
   }
 
   @Override
-  public String getPartitionPathFromRow(Row row) {
+  public String getPartitionPath(Row row) {
     return EMPTY_PARTITION;
   }
 }

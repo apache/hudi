@@ -118,7 +118,7 @@ public class HoodieInternalRow extends InternalRow {
     }
   }
 
-  private String getHoodieColumnVal(int ordinal) {
+  private String getMetaColumnVal(int ordinal) {
     switch (ordinal) {
       case 0: {
         return commitTime;
@@ -142,7 +142,7 @@ public class HoodieInternalRow extends InternalRow {
   @Override
   public boolean isNullAt(int ordinal) {
     if (ordinal < HoodieRecord.HOODIE_META_COLUMNS.size()) {
-      return null == getHoodieColumnVal(ordinal);
+      return null == getMetaColumnVal(ordinal);
     }
     return row.isNullAt(ordinal);
   }
@@ -190,7 +190,7 @@ public class HoodieInternalRow extends InternalRow {
   @Override
   public UTF8String getUTF8String(int ordinal) {
     if (ordinal < HoodieRecord.HOODIE_META_COLUMNS.size()) {
-      return UTF8String.fromBytes(getHoodieColumnVal(ordinal).getBytes());
+      return UTF8String.fromBytes(getMetaColumnVal(ordinal).getBytes());
     }
     return row.getUTF8String(ordinal);
   }
@@ -198,7 +198,7 @@ public class HoodieInternalRow extends InternalRow {
   @Override
   public String getString(int ordinal) {
     if (ordinal < HoodieRecord.HOODIE_META_COLUMNS.size()) {
-      return new String(getHoodieColumnVal(ordinal).getBytes());
+      return new String(getMetaColumnVal(ordinal).getBytes());
     }
     return row.getString(ordinal);
   }
@@ -231,7 +231,7 @@ public class HoodieInternalRow extends InternalRow {
   @Override
   public Object get(int ordinal, DataType dataType) {
     if (ordinal < HoodieRecord.HOODIE_META_COLUMNS.size()) {
-      return UTF8String.fromBytes(getHoodieColumnVal(ordinal).getBytes());
+      return UTF8String.fromBytes(getMetaColumnVal(ordinal).getBytes());
     }
     return row.get(ordinal, dataType);
   }

@@ -122,7 +122,7 @@ public class TestTimestampBasedKeyGenerator {
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
-    assertEquals("2020-01-06 12", keyGen.getPartitionPathFromRow(baseRow));
+    assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
 
     // timezone is GMT
     properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT", null);
@@ -132,7 +132,7 @@ public class TestTimestampBasedKeyGenerator {
 
     // test w/ Row
     keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
-    assertEquals("2020-01-06 04", keyGen.getPartitionPathFromRow(baseRow));
+    assertEquals("2020-01-06 04", keyGen.getPartitionPath(baseRow));
 
     // timestamp is DATE_STRING, timezone is GMT+8:00
     baseRecord.put("createTime", "2020-01-06 12:12:12");
@@ -145,7 +145,7 @@ public class TestTimestampBasedKeyGenerator {
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
-    assertEquals("2020-01-06 12", keyGen.getPartitionPathFromRow(baseRow));
+    assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
 
     // timezone is GMT
     properties = getBaseKeyConfig("DATE_STRING", "yyyy-MM-dd hh", "GMT", null);
@@ -155,7 +155,7 @@ public class TestTimestampBasedKeyGenerator {
 
     // test w/ Row
     keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
-    assertEquals("2020-01-06 12", keyGen.getPartitionPathFromRow(baseRow));
+    assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
   }
 
   @Test
@@ -172,7 +172,7 @@ public class TestTimestampBasedKeyGenerator {
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
-    assertEquals("2024-10-04 12", keyGen.getPartitionPathFromRow(baseRow));
+    assertEquals("2024-10-04 12", keyGen.getPartitionPath(baseRow));
   }
 
   @Test
