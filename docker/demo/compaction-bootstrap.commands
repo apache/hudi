@@ -15,7 +15,7 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-connect --path /user/hive/warehouse/stock_ticks_mor
+connect --path /user/hive/warehouse/stock_ticks_mor_bs
 compactions show all
 compaction schedule --hoodieConfigs hoodie.compact.inline.max.delta.commits=1
 compaction run --parallelism 2 --sparkMemory 1G  --schemaFilePath /var/demo/config/schema.avsc --retry 1 
