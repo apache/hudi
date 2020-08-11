@@ -368,6 +368,7 @@
       <li><a href="#压缩配置">压缩配置</a></li>
       <li><a href="#指标配置">指标配置</a></li>
       <li><a href="#内存配置">内存配置</a></li>
+      <li><a href="#写提交回调配置">写提交回调配置</a></li>
     </ul>
   </li>
 </ul>
@@ -908,6 +909,33 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 <h4 id="withWriteStatusFailureFraction">withWriteStatusFailureFraction(failureFraction = 0.1)</h4>
 <p>属性：<code class="highlighter-rouge">hoodie.memory.writestatus.failure.fraction</code> <br />
 <span style="color:grey">此属性控制报告给驱动程序的失败记录和异常的比例</span></p>
+
+<h3 id="写提交回调配置">写提交回调配置</h3>
+<p>控制写提交的回调。 如果用户启用了回调并且回调过程发生了错误，则会抛出异常。 当前只支持Http回调方式，Kafka不久后会支持。
+<a href="#withCallbackConfig">withCallbackConfig</a> (HoodieWriteCommitCallbackConfig) <br />
+<span style="color:grey">写提交回调相关配置</span></p>
+
+<h5 id="writeCommitCallbackOn">writeCommitCallbackOn(callbackOn = false)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.on</code> <br />
+<span style="color:grey">打开或关闭回调功能. 默认关闭.</span></p>
+
+<h5 id="withCallbackClass">withCallbackClass(callbackClass)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.class</code> <br />
+<span style="color:grey">用户自定义回调的类全路径名，回调类必须为HoodieWriteCommitCallback的子类。默认 org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback</span></p>
+
+<h4 id="hoodiewritecommithttpcallback">HoodieWriteCommitHttpCallback</h4>
+
+<h5 id="withCallbackHttpUrl">withCallbackHttpUrl(url)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.http.url</code> <br />
+<span style="color:grey">Http回调主机，回调信息将会发送到该主机</span></p>
+
+<h5 id="withCallbackHttpTimeoutSeconds">withCallbackHttpTimeoutSeconds(timeoutSeconds = 3)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.http.timeout.seconds</code> <br />
+<span style="color:grey">Http回调超时时间（单位秒），默认3秒</span></p>
+
+<h5 id="withCallbackHttpApiKey">withCallbackHttpApiKey(apiKey)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.http.api.key</code> <br />
+<span style="color:grey">Http 回调秘钥. 默认 hudi_write_commit_http_callback</span></p>
 
       </section>
 
