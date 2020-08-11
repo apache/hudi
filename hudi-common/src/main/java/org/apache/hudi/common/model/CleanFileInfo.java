@@ -16,20 +16,32 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.table.timeline.versioning.clean;
+package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.versioning.MetadataMigrator;
+import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 
-import java.util.Arrays;
+import java.io.Serializable;
 
-public class CleanMetadataMigrator extends MetadataMigrator<HoodieCleanMetadata> {
+public class CleanFileInfo implements Serializable {
 
-  public CleanMetadataMigrator(HoodieTableMetaClient metaClient) {
-    super(metaClient,
-        Arrays
-            .asList(new CleanMetadataV1MigrationHandler(metaClient),
-                new CleanMetadataV2MigrationHandler(metaClient)));
+  private final String filePath;
+  private final boolean isBootstrapBaseFile;
+
+  public CleanFileInfo(String filePath, boolean isBootstrapBaseFile) {
+    this.filePath = filePath;
+    this.isBootstrapBaseFile = isBootstrapBaseFile;
+  }
+
+  public String getFilePath() {
+    return filePath;
+  }
+
+  public boolean isBootstrapBaseFile() {
+    return isBootstrapBaseFile;
+  }
+
+  public HoodieCleanFileInfo toHoodieFileCleanInfo() {
+    return new HoodieCleanFileInfo(filePath, isBootstrapBaseFile);
   }
 }
+

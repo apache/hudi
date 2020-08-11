@@ -28,21 +28,36 @@ class PartitionCleanStat implements Serializable {
   private final List<String> deletePathPatterns = new ArrayList<>();
   private final List<String> successDeleteFiles = new ArrayList<>();
   private final List<String> failedDeleteFiles = new ArrayList<>();
+  private final List<String> deleteBootstrapBasePathPatterns = new ArrayList<>();
+  private final List<String> successfulDeleteBootstrapBaseFiles = new ArrayList<>();
+  private final List<String> failedDeleteBootstrapBaseFiles = new ArrayList<>();
 
   PartitionCleanStat(String partitionPath) {
     this.partitionPath = partitionPath;
   }
 
-  void addDeletedFileResult(String deletePathStr, Boolean deletedFileResult) {
-    if (deletedFileResult) {
-      successDeleteFiles.add(deletePathStr);
+  void addDeletedFileResult(String deletePathStr, boolean success, boolean isBootstrapBasePath) {
+    if (success) {
+      if (isBootstrapBasePath) {
+        successfulDeleteBootstrapBaseFiles.add(deletePathStr);
+      } else {
+        successDeleteFiles.add(deletePathStr);
+      }
     } else {
-      failedDeleteFiles.add(deletePathStr);
+      if (isBootstrapBasePath) {
+        failedDeleteBootstrapBaseFiles.add(deletePathStr);
+      } else {
+        failedDeleteFiles.add(deletePathStr);
+      }
     }
   }
 
-  void addDeleteFilePatterns(String deletePathStr) {
-    deletePathPatterns.add(deletePathStr);
+  void addDeleteFilePatterns(String deletePathStr, boolean isBootstrapBasePath) {
+    if (isBootstrapBasePath) {
+      deleteBootstrapBasePathPatterns.add(deletePathStr);
+    } else {
+      deletePathPatterns.add(deletePathStr);
+    }
   }
 
   PartitionCleanStat merge(PartitionCleanStat other) {
@@ -53,6 +68,9 @@ class PartitionCleanStat implements Serializable {
     successDeleteFiles.addAll(other.successDeleteFiles);
     deletePathPatterns.addAll(other.deletePathPatterns);
     failedDeleteFiles.addAll(other.failedDeleteFiles);
+    deleteBootstrapBasePathPatterns.addAll(other.deleteBootstrapBasePathPatterns);
+    successfulDeleteBootstrapBaseFiles.addAll(other.successfulDeleteBootstrapBaseFiles);
+    failedDeleteBootstrapBaseFiles.addAll(other.failedDeleteBootstrapBaseFiles);
     return this;
   }
 
@@ -66,5 +84,17 @@ class PartitionCleanStat implements Serializable {
 
   public List<String> failedDeleteFiles() {
     return failedDeleteFiles;
+  }
+
+  public List<String> getDeleteBootstrapBasePathPatterns() {
+    return deleteBootstrapBasePathPatterns;
+  }
+
+  public List<String> getSuccessfulDeleteBootstrapBaseFiles() {
+    return successfulDeleteBootstrapBaseFiles;
+  }
+
+  public List<String> getFailedDeleteBootstrapBaseFiles() {
+    return failedDeleteBootstrapBaseFiles;
   }
 }

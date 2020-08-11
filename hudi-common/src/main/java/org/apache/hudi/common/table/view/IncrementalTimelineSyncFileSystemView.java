@@ -252,7 +252,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   /**
-   * Add newly found clean instant.
+   * Add newly found clean instant. Note that cleaner metadata (.clean.completed)
+   * contains only relative paths unlike clean plans (.clean.requested) which contains absolute paths.
    *
    * @param timeline Timeline
    * @param instant Clean instant

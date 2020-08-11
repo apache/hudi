@@ -45,6 +45,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -219,7 +220,8 @@ public class HoodieTestUtils {
               os = metaClient.getFs().create(commitFile, true);
               // Write empty clean metadata
               os.write(TimelineMetadataUtils.serializeCleanerPlan(
-                  new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(), 1)).get());
+                  new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(),
+                      CleanPlanV2MigrationHandler.VERSION, new HashMap<>())).get());
             } catch (IOException ioe) {
               throw new HoodieIOException(ioe.getMessage(), ioe);
             } finally {
