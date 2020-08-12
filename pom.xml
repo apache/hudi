@@ -1123,7 +1123,7 @@
             <configuration combine.self="override">
               <skip>${skipITs}</skip>
               <includes>
-                <include>**/IT*.java</include>
+                <include>**/ITTestHoodieSanity.java</include>
               </includes>
             </configuration>
             <executions>

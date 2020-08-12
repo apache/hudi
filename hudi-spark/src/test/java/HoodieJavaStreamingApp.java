@@ -156,8 +156,9 @@ public class HoodieJavaStreamingApp {
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));
 
     List<String> records2 = recordsToStrings(dataGen.generateUpdatesForAllRecords("002"));
+    ValidationUtils.checkArgument(records2.size() == 100, "Update Records :" + records2
+        + "\n\nInsert Records :" + records1);
     Dataset<Row> inputDF2 = spark.read().json(jssc.parallelize(records2, 2));
-
 
     String ckptPath = streamingCheckpointingPath + "/stream1";
     String srcPath = streamingSourcePath + "/stream1";
@@ -312,6 +313,9 @@ public class HoodieJavaStreamingApp {
     waitTillNCommits(fs, numExpCommits, 180, 3);
     String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
     LOG.info("First commit at instant time :" + commitInstantTime1);
+
+    System.out.println("Showing all records. First Instant Time =" + commitInstantTime1);
+    spark.sql("select * from hoodie_ro").show(200, false);
 
     String commitInstantTime2 = commitInstantTime1;
     if (null != inputDF2) {
