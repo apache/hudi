@@ -216,6 +216,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     String key = oldRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
     boolean copyOldRecord = true;
     if (keyToNewRecords.containsKey(key)) {
+      System.out.println("Key :" + key + " is an update. "
+          + "PPath:" + partitionPath + ", File:" + newFilePath.toString());
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(key));
@@ -239,6 +241,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     }
 
     if (copyOldRecord) {
+      System.out.println("Key :" + key + " is an existing record and not update. "
+          + "PPath:" + partitionPath + ", File:" + newFilePath.toString());
       // this should work as it is, since this is an existing record
       String errMsg = "Failed to merge old record into new file for key " + key + " from old file " + getOldFilePath()
           + " to new file " + newFilePath;
@@ -266,6 +270,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       while (newRecordsItr.hasNext()) {
         HoodieRecord<T> hoodieRecord = newRecordsItr.next();
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
+          System.out.println("Key :" + hoodieRecord.getRecordKey() + " is an insert. "
+              + "PPath:" + partitionPath + ", File:" + newFilePath.toString());
           if (useWriterSchema) {
             writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchemaWithMetafields));
           } else {
