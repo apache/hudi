@@ -16,10 +16,14 @@
  * limitations under the License.
  */
 
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.stream.Collectors;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -34,6 +38,7 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.Level;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -106,6 +111,9 @@ public class HoodieJavaStreamingApp {
   private static final Logger LOG = LogManager.getLogger(HoodieJavaStreamingApp.class);
 
   public static void main(String[] args) throws Exception {
+
+    Logger.getRootLogger().setLevel(Level.INFO);
+
     HoodieJavaStreamingApp cli = new HoodieJavaStreamingApp();
     JCommander cmd = new JCommander(cli, null, args);
 
@@ -237,7 +245,7 @@ public class HoodieJavaStreamingApp {
   }
 
   private void waitTillNCommits(FileSystem fs, int numCommits, int timeoutSecs, int sleepSecsAfterEachRun)
-      throws InterruptedException {
+      throws Exception {
     long beginTime = System.currentTimeMillis();
     long currTime = beginTime;
     long timeoutMsecs = timeoutSecs * 1000;
@@ -258,6 +266,30 @@ public class HoodieJavaStreamingApp {
         currTime = System.currentTimeMillis();
       }
     }
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), tablePath, true);
+    System.out.println("Final Instants :" + metaClient.getActiveTimeline().getInstants().collect(Collectors.toList()));
+    List<String> paths = FSUtils.getAllPartitionPaths(metaClient.getFs(), tablePath, false);
+    System.out.println("All Partition Paths :" + paths);
+    paths.forEach(path -> {
+      try {
+        System.out.println("Files under path : " + path + " is "
+            + Arrays.stream(metaClient.getFs().listStatus(new Path(path))).map(f -> f.getPath().toString())
+            .collect(Collectors.joining(",")));
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    });
+    metaClient.getCommitsTimeline().filterCompletedInstants().getInstants().forEach(instant -> {
+      try {
+        System.out.println("Getting Commit Metadata for instant :" + instant);
+        final HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+            metaClient.getActiveTimeline().getInstantDetails(instant).get(),
+            HoodieCommitMetadata.class);
+        System.out.println("Commit Metadata for instant :" + instant + " is " + commitMetadata);
+      } catch (Exception ex) {
+        LOG.error("Unable to extract metadata for instant " + instant, ex);
+      }
+    });
     throw new IllegalStateException("Timedout waiting for " + numCommits + " commits to appear in " + tablePath);
   }
 
