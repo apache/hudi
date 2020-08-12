@@ -35,6 +35,7 @@ public class Counter implements Metric {
     this.count.addAndGet(n);
   }
 
+  @Override
   public Long getValue() {
     return count.get();
   }

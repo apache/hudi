@@ -53,17 +53,17 @@ public class Registry {
    * @return
    */
   public static synchronized Map<String, Long> getAllMetrics(boolean flush, boolean prefixWithRegistryName) {
-    HashMap allMetrics = new HashMap<String, Long>();
+    HashMap<String, Long> allMetrics = new HashMap<>();
     registryMap.forEach((registryName, registry) -> {
       allMetrics.putAll(registry.getAllCounts(prefixWithRegistryName));
       if (flush) {
-        registry.flush();
+        registry.clear();
       }
     });
     return allMetrics;
   }
 
-  public void flush() {
+  public void clear() {
     counters.clear();
   }
 
