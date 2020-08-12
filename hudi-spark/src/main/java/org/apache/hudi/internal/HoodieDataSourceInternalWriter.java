@@ -52,6 +52,7 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieDataSourceInternalWriter.class);
+  public static final String INSTANT_TIME_OPT_KEY = "hoodie.instant.time";
 
   private final String instantTime;
   private final HoodieTableMetaClient metaClient;

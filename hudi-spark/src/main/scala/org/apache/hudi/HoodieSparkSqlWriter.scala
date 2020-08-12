@@ -37,6 +37,7 @@ import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, B
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
+import org.apache.hudi.internal.HoodieDataSourceInternalWriter
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.log4j.LogManager
 import org.apache.spark.SparkContext
@@ -114,7 +115,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
       // short-circuit if bulk_insert via row is enabled.
       // scalastyle:off
-      if (operation.equalsIgnoreCase(BULK_INSERT_DATASET_OPERATION_OPT_VAL)) {
+      if (parameters(ENABLE_ROW_WRITER_OPT_KEY).toBoolean) {
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
                                                                                 basePath, path, instantTime)
         return (success, commitTime, common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
@@ -269,7 +270,7 @@ private[hudi] object HoodieSparkSqlWriter {
     val writeConfig = DataSourceUtils.createHoodieConfig(null, path.get, tblName, mapAsJavaMap(parameters))
     val hoodieDF = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace)
     hoodieDF.write.format("org.apache.hudi.internal")
-      .option(INSTANT_TIME, instantTime)
+      .option(HoodieDataSourceInternalWriter.INSTANT_TIME_OPT_KEY, instantTime)
       .options(parameters)
       .save()
     val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
@@ -443,7 +444,7 @@ private[hudi] object HoodieSparkSqlWriter {
                                        parameters: Map[String, String], configuration: Configuration) : Boolean = {
     log.info(s"Config.isInlineCompaction ? ${client.getConfig.isInlineCompaction}")
     if (!client.getConfig.isInlineCompaction
-      && parameters.get(ASYNC_COMPACT_ENABLE_KEY).exists(r => r.toBoolean)) {
+      && parameters.get(ASYNC_COMPACT_ENABLE_OPT_KEY).exists(r => r.toBoolean)) {
       tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
     } else {
       false

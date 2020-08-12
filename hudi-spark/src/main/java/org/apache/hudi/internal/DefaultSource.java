@@ -71,10 +71,7 @@ public class DefaultSource implements DataSourceV2, ReadSupport, WriteSupport,
   @Override
   public Optional<DataSourceWriter> createWriter(String writeUUID, StructType schema, SaveMode mode,
       DataSourceOptions options) {
-    String instantTime = options.get(DataSourceWriteOptions.INSTANT_TIME()).get();
-    Map<String, String> paramsWithDefaults = HoodieWriterUtils.javaParametersWithWriteDefaults(options.asMap());
-    Properties props = new Properties();
-    props.putAll(paramsWithDefaults);
+    String instantTime = options.get(HoodieDataSourceInternalWriter.INSTANT_TIME_OPT_KEY).get();
     String path = options.get("path").get();
     String tblName = options.get(HoodieWriteConfig.TABLE_NAME).get();
     HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(null, path, tblName, options.asMap());
