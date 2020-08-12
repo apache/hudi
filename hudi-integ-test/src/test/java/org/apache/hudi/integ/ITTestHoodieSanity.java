@@ -19,8 +19,6 @@
 package org.apache.hudi.integ;
 
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -62,7 +60,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * in hive console.
    */
   public void testRunHoodieJavaAppOnMultiPartitionKeysCOWTable(String command) throws Exception {
-    String hiveTableName = "docker_hoodie_multi_partition_key_cow_test_" + HoodieActiveTimeline.createNewInstantTime();
+    String hiveTableName = "docker_hoodie_multi_partition_key_cow_test";
     testRunHoodieJavaApp(command, hiveTableName, HoodieTableType.COPY_ON_WRITE.name(),
         PartitionType.MULTI_KEYS_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());
@@ -75,7 +73,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnNonPartitionedCOWTable() throws Exception {
-    String hiveTableName = "docker_hoodie_non_partition_key_cow_test_" + HoodieActiveTimeline.createNewInstantTime();
+    String hiveTableName = "docker_hoodie_non_partition_key_cow_test";
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.COPY_ON_WRITE.name(), PartitionType.NON_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());
   }
@@ -88,7 +86,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnSinglePartitionKeyMORTable(String command) throws Exception {
-    String hiveTableName = "docker_hoodie_single_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
+    String hiveTableName = "docker_hoodie_single_partition_key_mor_test";
     testRunHoodieJavaApp(command, hiveTableName, HoodieTableType.MERGE_ON_READ.name(),
         PartitionType.SINGLE_KEY_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
@@ -102,7 +100,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * in hive console.
    */
   public void testRunHoodieJavaAppOnMultiPartitionKeysMORTable(String command) throws Exception {
-    String hiveTableName = "docker_hoodie_multi_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
+    String hiveTableName = "docker_hoodie_multi_partition_key_mor_test";
     testRunHoodieJavaApp(command, hiveTableName, HoodieTableType.MERGE_ON_READ.name(),
         PartitionType.MULTI_KEYS_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
@@ -115,7 +113,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnNonPartitionedMORTable() throws Exception {
-    String hiveTableName = "docker_hoodie_non_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
+    String hiveTableName = "docker_hoodie_non_partition_key_mor_test";
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.MERGE_ON_READ.name(), PartitionType.NON_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
   }
