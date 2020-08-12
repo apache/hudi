@@ -18,10 +18,6 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.avro.JsonProperties;
-import java.time.LocalDate;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.generic.GenericData.Record;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -29,11 +25,17 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatabilityException;
 
+import org.apache.avro.Conversions.DecimalConversion;
+import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
@@ -49,7 +51,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -433,23 +437,28 @@ public class HoodieAvroUtils {
       return fieldValue;
     }
 
-    if (isLogicalTypeDate(fieldSchema)) {
+    if (fieldSchema.getType() == Schema.Type.UNION) {
+      for (Schema schema : fieldSchema.getTypes()) {
+        if (schema.getLogicalType() == LogicalTypes.date() || schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          return convertValueForSpecificDataTypes(schema, fieldValue);
+        }
+      }
+    } else if (fieldSchema.getLogicalType() == LogicalTypes.date()) {
+      // special handle for Logical Date type
       return LocalDate.ofEpochDay(Long.parseLong(fieldValue.toString()));
+    } else if (fieldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+      // special handle for Logical Decimal type
+      Decimal dc = (Decimal) fieldSchema.getLogicalType();
+      DecimalConversion decimalConversion = new DecimalConversion();
+      if (fieldSchema.getType() == Schema.Type.FIXED) {
+        return decimalConversion.fromFixed((GenericFixed) fieldValue, fieldSchema,
+            LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+      } else if (fieldSchema.getType() == Schema.Type.BYTES) {
+        return decimalConversion.fromBytes((ByteBuffer) fieldValue, fieldSchema,
+            LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+      }
     }
     return fieldValue;
-  }
-
-  /**
-   * Given an Avro field schema checks whether the field is of Logical Date Type or not.
-   *
-   * @param fieldSchema avro field schema
-   * @return boolean indicating whether fieldSchema is of Avro's Date Logical Type
-   */
-  private static boolean isLogicalTypeDate(Schema fieldSchema) {
-    if (fieldSchema.getType() == Schema.Type.UNION) {
-      return fieldSchema.getTypes().stream().anyMatch(schema -> schema.getLogicalType() == LogicalTypes.date());
-    }
-    return fieldSchema.getLogicalType() == LogicalTypes.date();
   }
 
   public static Schema getNullSchema() {
