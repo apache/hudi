@@ -18,10 +18,18 @@
 
 package org.apache.hudi.hive.util;
 
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.StorageSchemes;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
+import org.apache.hudi.hive.PartitionValueExtractor;
 import org.apache.hudi.hive.SchemaDifference;
+import org.apache.hudi.hive.client.HoodieHiveClient;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.DecimalMetadata;
@@ -138,7 +146,12 @@ public class HiveSchemaUtil {
    * @param messageType : Parquet Schema
    * @return : Hive Table schema read from parquet file MAP[String,String]
    */
-  private static Map<String, String> convertParquetSchemaToHiveSchema(MessageType messageType, boolean supportTimestamp) throws IOException {
+  public static Map<String, String> convertParquetSchemaToHiveSchema(MessageType messageType, boolean supportTimestamp) throws IOException {
+    return convertParquetSchemaToHiveSchema(messageType, supportTimestamp, true);
+  }
+
+  public static Map<String, String> convertParquetSchemaToHiveSchema(MessageType messageType,
+      boolean supportTimestamp, boolean isTickSurround) throws IOException {
     Map<String, String> schema = new LinkedHashMap<>();
     List<Type> parquetFields = messageType.getFields();
     for (Type parquetType : parquetFields) {
@@ -150,7 +163,7 @@ public class HiveSchemaUtil {
         result.append(convertField(parquetType, supportTimestamp));
       }
 
-      schema.put(hiveCompatibleFieldName(key, false), result.toString());
+      schema.put(hiveCompatibleFieldName(key, false, isTickSurround), result.toString());
     }
     return schema;
   }
@@ -286,7 +299,7 @@ public class HiveSchemaUtil {
     for (Type field : parquetFields) {
       // TODO: struct field name is only translated to support special char($)
       // We will need to extend it to other collection type
-      struct.append(hiveCompatibleFieldName(field.getName(), true)).append(" : ");
+      struct.append(hiveCompatibleFieldName(field.getName(), true, true)).append(" : ");
       struct.append(convertField(field, supportTimestamp)).append(", ");
     }
     struct.delete(struct.length() - 2, struct.length()); // Remove the last
@@ -300,12 +313,12 @@ public class HiveSchemaUtil {
     return finalStr;
   }
 
-  private static String hiveCompatibleFieldName(String fieldName, boolean isNested) {
+  private static String hiveCompatibleFieldName(String fieldName, boolean isNested, boolean isTickSurround) {
     String result = fieldName;
     if (isNested) {
       result = ColumnNameXLator.translateNestedColumn(fieldName);
     }
-    return tickSurround(result);
+    return isTickSurround ? tickSurround(result) : result;
   }
 
   private static String tickSurround(String result) {
@@ -403,7 +416,7 @@ public class HiveSchemaUtil {
     for (String partitionKey : config.partitionFields) {
       String partitionKeyWithTicks = tickSurround(partitionKey);
       partitionFields.add(new StringBuilder().append(partitionKeyWithTicks).append(" ")
-          .append(getPartitionKeyType(hiveSchema, partitionKeyWithTicks)).toString());
+          .append(getPartitionKeyTypeForSQLFormat(hiveSchema, partitionKeyWithTicks)).toString());
     }
 
     String partitionsStr = String.join(",", partitionFields);
@@ -420,13 +433,94 @@ public class HiveSchemaUtil {
     return sb.toString();
   }
 
-  private static String getPartitionKeyType(Map<String, String> hiveSchema, String partitionKey) {
+  public static String generateAddPartitionsDDL(String tableName, List<String> partitions, HiveSyncConfig syncConfig,
+      PartitionValueExtractor partitionValueExtractor) {
+    StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
+    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(syncConfig.databaseName)
+        .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
+        .append(tableName).append(HIVE_ESCAPE_CHARACTER).append(" ADD IF NOT EXISTS ");
+    for (String partition : partitions) {
+      String partitionClause = getHiveFormatPartitionString(partition, syncConfig, partitionValueExtractor);
+      String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
+      alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '").append(fullPartitionPath)
+          .append("' ");
+    }
+    return alterSQL.toString();
+  }
+
+  public static List<String> generateChangePartitionsDDLs(String tableName, List<String> partitions, HiveSyncConfig syncConfig,
+      FileSystem fs, PartitionValueExtractor partitionValueExtractor) {
+    List<String> changePartitions = new ArrayList<>();
+    // Hive 2.x doesn't like db.table name for operations, hence we need to change to using the database first
+    String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + syncConfig.databaseName + HIVE_ESCAPE_CHARACTER;
+    changePartitions.add(useDatabase);
+    String alterTable = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER;
+    for (String partition : partitions) {
+      String partitionClause = getHiveFormatPartitionString(partition, syncConfig, partitionValueExtractor);
+      Path partitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition);
+      String partitionScheme = partitionPath.toUri().getScheme();
+      String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
+          ? FSUtils.getDFSFullPartitionPath(fs, partitionPath) : partitionPath.toString();
+      String changePartition =
+          alterTable + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'";
+      changePartitions.add(changePartition);
+    }
+    return changePartitions;
+  }
+
+  /**
+   * Generate Hive Partition String from partition values.
+   * If using JDBC, it will return the partition clause. if using metastore client, it will return the hive format partition path.
+   *
+   * @param partition Partition path
+   * @return
+   */
+  public static String getHiveFormatPartitionString(String partition, HiveSyncConfig syncConfig, PartitionValueExtractor partitionValueExtractor) {
+    List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
+    ValidationUtils.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
+        "Partition key parts " + syncConfig.partitionFields + " does not match with partition values " + partitionValues
+            + ". Check partition strategy. ");
+    List<String> partBuilder = new ArrayList<>();
+    for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
+      if (!syncConfig.hiveClientClass.equals(HoodieHiveClient.class.getName())) {
+        partBuilder.add("`" + syncConfig.partitionFields.get(i) + "`='" + partitionValues.get(i) + "'");
+      } else {
+        partBuilder.add(syncConfig.partitionFields.get(i) + "=" + partitionValues.get(i));
+      }
+    }
+    return String.join(!syncConfig.hiveClientClass.equals(HoodieHiveClient.class.getName()) ? "," : "/", partBuilder);
+  }
+
+  public static String generateUpdateTableDefinitionDDL(String tableName, MessageType newSchema, HiveSyncConfig syncConfig)
+      throws IOException {
+    String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields, syncConfig.supportTimestamp);
+    // Cascade clause should not be present for non-partitioned tables
+    String cascadeClause = syncConfig.partitionFields.size() > 0 ? " cascade" : "";
+    StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
+        .append(syncConfig.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
+        .append(HIVE_ESCAPE_CHARACTER).append(tableName)
+        .append(HIVE_ESCAPE_CHARACTER).append(" REPLACE COLUMNS(")
+        .append(newSchemaStr).append(" )").append(cascadeClause);
+    LOG.info("Updating table definition with " + sqlBuilder);
+    return sqlBuilder.toString();
+  }
+
+  private static String getPartitionKeyTypeForSQLFormat(Map<String, String> hiveSchema, String partitionKey) {
+    if (hiveSchema.containsKey(partitionKey)) {
+      return hiveSchema.get(partitionKey).toUpperCase();
+    }
+    // Default the unknown partition fields to be STRING
+    // TODO - all partition fields should be part of the schema. datestr is treated as special.
+    // Dont do that
+    return "STRING";
+  }
+
+  public static String getPartitionKeyTypeForHiveThriftFormat(Map<String, String> hiveSchema, String partitionKey) {
     if (hiveSchema.containsKey(partitionKey)) {
       return hiveSchema.get(partitionKey);
     }
-    // Default the unknown partition fields to be String
+    // Default the unknown partition fields to be string
     // TODO - all partition fields should be part of the schema. datestr is treated as special.
-    // Dont do that
-    return "String";
+    return serdeConstants.STRING_TYPE_NAME;
   }
 }

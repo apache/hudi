@@ -43,7 +43,7 @@ import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.hive.HoodieHiveClient;
+import org.apache.hudi.hive.client.HoodieHiveClient;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -129,7 +129,7 @@ public class HiveTestUtil {
     HoodieTableMetaClient.initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
         hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
 
-    HoodieHiveClient client = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), fileSystem);
+    HoodieHiveClient client = HiveSyncTool.loadHoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), fileSystem);
     for (String tableName : createdTablesSet) {
       client.updateHiveSQL("drop table if exists " + tableName);
     }

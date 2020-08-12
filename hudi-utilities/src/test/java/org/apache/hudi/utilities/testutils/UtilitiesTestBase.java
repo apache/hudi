@@ -33,7 +33,8 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.hive.HoodieHiveClient;
+import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.hive.client.HoodieHiveClient;
 import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
@@ -181,7 +182,7 @@ public class UtilitiesTestBase {
     hiveConf.addResource(hiveServer.getHiveConf());
     HoodieTableMetaClient.initTableType(dfs.getConf(), hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
         hiveSyncConfig.tableName, null);
-    HoodieHiveClient client = new HoodieHiveClient(hiveSyncConfig, hiveConf, dfs);
+    HoodieHiveClient client = HiveSyncTool.loadHoodieHiveClient(hiveSyncConfig, hiveConf, dfs);
     client.updateHiveSQL("drop database if exists " + hiveSyncConfig.databaseName);
     client.updateHiveSQL("create database " + hiveSyncConfig.databaseName);
     client.close();

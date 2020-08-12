@@ -284,14 +284,15 @@ public class DataSourceUtils {
     hiveSyncConfig.partitionValueExtractorClass =
         props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
             SlashEncodedDayPartitionValueExtractor.class.getName());
-    hiveSyncConfig.useJdbc = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_USE_JDBC_OPT_KEY(),
-        DataSourceWriteOptions.DEFAULT_HIVE_USE_JDBC_OPT_VAL()));
     hiveSyncConfig.autoCreateDatabase = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_AUTO_CREATE_DATABASE_OPT_KEY(),
         DataSourceWriteOptions.DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY()));
     hiveSyncConfig.skipROSuffix = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX(),
         DataSourceWriteOptions.DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL()));
     hiveSyncConfig.supportTimestamp = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP(),
         DataSourceWriteOptions.DEFAULT_HIVE_SUPPORT_TIMESTAMP()));
+    hiveSyncConfig.hiveClientClass =
+        props.getString(DataSourceWriteOptions.HIVE_CLIENT_CLASS_OPT_KEY(),
+            DataSourceWriteOptions.DEFAULT_HIVE_CLIENT_CLASS_OPT_VAL());
     return hiveSyncConfig;
   }
 }

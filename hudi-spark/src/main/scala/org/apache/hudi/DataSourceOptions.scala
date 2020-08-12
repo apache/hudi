@@ -20,8 +20,10 @@ package org.apache.hudi
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
+import org.apache.hudi.hive.client.{HoodieHiveDriverClient, HoodieHiveJDBCClient}
 import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.log4j.LogManager
@@ -300,10 +302,10 @@ object DataSourceWriteOptions {
   val HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY = "hoodie.datasource.hive_sync.partition_extractor_class"
   val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = "hoodie.datasource.hive_sync.assume_date_partitioning"
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = "hoodie.datasource.hive_sync.use_pre_apache_input_format"
-  val HIVE_USE_JDBC_OPT_KEY = "hoodie.datasource.hive_sync.use_jdbc"
   val HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "hoodie.datasource.hive_sync.auto_create_database"
   val HIVE_SKIP_RO_SUFFIX = "hoodie.datasource.hive_sync.skip_ro_suffix"
   val HIVE_SUPPORT_TIMESTAMP = "hoodie.datasource.hive_sync.support_timestamp"
+  val HIVE_CLIENT_CLASS_OPT_KEY = "hoodie.datasource.hive_sync.hive_client_class"
 
   // DEFAULT FOR HIVE SPECIFIC CONFIGS
   val DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL = "false"
@@ -318,10 +320,30 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL = classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName
   val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = "false"
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
+  val DEFAULT_HIVE_CLIENT_CLASS_OPT_VAL = classOf[HoodieHiveJDBCClient].getCanonicalName
+
+  @deprecated
+  val HIVE_USE_JDBC_OPT_KEY = "hoodie.datasource.hive_sync.use_jdbc"
+  @deprecated
   val DEFAULT_HIVE_USE_JDBC_OPT_VAL = "true"
   val DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "true"
   val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = "false"
   val DEFAULT_HIVE_SUPPORT_TIMESTAMP = "false"
+
+  def translateUseJDBCToHiveClientClass(optParams: Map[String, String]) : Map[String, String] = {
+    if (optParams.contains(HIVE_USE_JDBC_OPT_KEY) && !optParams.contains(HIVE_CLIENT_CLASS_OPT_KEY)) {
+      log.warn(HIVE_USE_JDBC_OPT_KEY + " is deprecated and will be removed in a later release; Please use " + HIVE_CLIENT_CLASS_OPT_KEY)
+      if (optParams(HIVE_USE_JDBC_OPT_KEY).equals("true")) {
+        optParams ++ Map(HIVE_CLIENT_CLASS_OPT_KEY -> DEFAULT_HIVE_CLIENT_CLASS_OPT_VAL)
+      } else if (optParams(HIVE_USE_JDBC_OPT_KEY).equals("false")) {
+        optParams ++ Map(HIVE_CLIENT_CLASS_OPT_KEY -> classOf[HoodieHiveDriverClient].getCanonicalName)
+      } else {
+        throw new HoodieException(HIVE_USE_JDBC_OPT_KEY + " can only be set to true or false")
+      }
+    } else {
+      optParams
+    }
+  }
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE_OPT_KEY = "hoodie.datasource.compaction.async.enable"

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.hive.client.HoodieHiveJDBCClient;
+
 import com.beust.jcommander.Parameter;
 
 import java.io.Serializable;
@@ -68,8 +70,8 @@ public class HiveSyncConfig implements Serializable {
           + "org.apache.hudi input format.")
   public Boolean usePreApacheInputFormat = false;
 
-  @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
-  public Boolean useJdbc = true;
+  @Parameter(names = {"--hive-client-class"}, description = "Class which perform Hive functionalities")
+  public String hiveClientClass = HoodieHiveJDBCClient.class.getName();
 
   @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
   public Boolean autoCreateDatabase = true;
@@ -97,6 +99,7 @@ public class HiveSyncConfig implements Serializable {
     newConfig.tableName = cfg.tableName;
     newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
     newConfig.supportTimestamp = cfg.supportTimestamp;
+    newConfig.hiveClientClass = cfg.hiveClientClass;
     return newConfig;
   }
 
@@ -106,6 +109,7 @@ public class HiveSyncConfig implements Serializable {
         + ", hiveUser='" + hiveUser + '\'' + ", hivePass='" + hivePass + '\'' + ", jdbcUrl='" + jdbcUrl + '\''
         + ", basePath='" + basePath + '\'' + ", partitionFields=" + partitionFields + ", partitionValueExtractorClass='"
         + partitionValueExtractorClass + '\'' + ", assumeDatePartitioning=" + assumeDatePartitioning + '\'' + ", supportTimestamp='" + supportTimestamp + '\''
-        + ", usePreApacheInputFormat=" + usePreApacheInputFormat + ", useJdbc=" + useJdbc + ", help=" + help + '}';
+        + ", usePreApacheInputFormat=" + usePreApacheInputFormat + ", hiveClientClass=" + hiveClientClass
+        + ", help=" + help + '}';
   }
 }

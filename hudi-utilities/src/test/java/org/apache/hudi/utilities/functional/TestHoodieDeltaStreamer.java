@@ -36,8 +36,9 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.hive.HoodieHiveClient;
+import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
+import org.apache.hudi.hive.client.HoodieHiveClient;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
@@ -728,7 +729,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     assertEquals(2000, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
     // Test Hive integration
-    HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), dfs);
+    HoodieHiveClient hiveClient = HiveSyncTool
+        .loadHoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), dfs);
     assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName), "Table " + hiveSyncConfig.tableName + " should exist");
     assertEquals(1, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
         "Table partitions should match the number of partitions we wrote");
