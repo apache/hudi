@@ -315,7 +315,13 @@ public class HoodieJavaStreamingApp {
     LOG.info("First commit at instant time :" + commitInstantTime1);
 
     System.out.println("Showing all records. First Instant Time =" + commitInstantTime1);
-    spark.sql("select * from hoodie_ro").show(200, false);
+    Dataset<Row> hoodieROViewDF1 = spark.read().format("hudi")
+        // pass any path glob, can include hoodie & non-hoodie
+        // datasets
+        .load(tablePath + "/*/*/*/*");
+    hoodieROViewDF1.registerTempTable("hoodie_ro1");
+    spark.sql("describe hoodie_ro1").show();
+    spark.sql("select * from hoodie_ro1").show(200, false);
 
     String commitInstantTime2 = commitInstantTime1;
     if (null != inputDF2) {
