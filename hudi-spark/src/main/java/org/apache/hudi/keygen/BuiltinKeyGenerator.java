@@ -90,7 +90,13 @@ public abstract class BuiltinKeyGenerator extends KeyGenerator {
     // parse simple feilds
     getRecordKeyFields().stream()
         .filter(f -> !(f.contains(".")))
-        .forEach(f -> recordKeyPositions.put(f, Collections.singletonList((Integer) (structType.getFieldIndex(f).get()))));
+        .forEach(f -> {
+          if (structType.getFieldIndex(f).isDefined()) {
+            recordKeyPositions.put(f, Collections.singletonList((Integer) (structType.getFieldIndex(f).get())));
+          } else {
+            throw new HoodieKeyException("recordKey value not found for field: \"" + f + "\"");
+          }
+        });
     // parse nested fields
     getRecordKeyFields().stream()
         .filter(f -> f.contains("."))
@@ -98,8 +104,14 @@ public abstract class BuiltinKeyGenerator extends KeyGenerator {
     // parse simple fields
     if (getPartitionPathFields() != null) {
       getPartitionPathFields().stream().filter(f -> !f.isEmpty()).filter(f -> !(f.contains(".")))
-          .forEach(f -> partitionPathPositions.put(f,
-              Collections.singletonList((Integer) (structType.getFieldIndex(f).get()))));
+          .forEach(f -> {
+            if (structType.getFieldIndex(f).isDefined()) {
+              partitionPathPositions.put(f,
+                  Collections.singletonList((Integer) (structType.getFieldIndex(f).get())));
+            } else {
+              partitionPathPositions.put(f, Collections.singletonList(-1));
+            }
+          });
       // parse nested fields
       getPartitionPathFields().stream().filter(f -> !f.isEmpty()).filter(f -> f.contains("."))
           .forEach(f -> partitionPathPositions.put(f,
@@ -112,12 +124,13 @@ public abstract class BuiltinKeyGenerator extends KeyGenerator {
 
   /**
    * Fetch record key from {@link Row}.
+   *
    * @param row instance of {@link Row} from which record key is requested.
    * @return the record key of interest from {@link Row}.
    */
   @Override
   public String getRecordKey(Row row) {
-    if (null != converterFn) {
+    if (null == converterFn) {
       converterFn = AvroConversionHelper.createConverterToAvro(structType, structName, recordNamespace);
     }
     GenericRecord genericRecord = (GenericRecord) converterFn.apply(row);
@@ -126,12 +139,13 @@ public abstract class BuiltinKeyGenerator extends KeyGenerator {
 
   /**
    * Fetch partition path from {@link Row}.
+   *
    * @param row instance of {@link Row} from which partition path is requested
    * @return the partition path of interest from {@link Row}.
    */
   @Override
   public String getPartitionPath(Row row) {
-    if (null != converterFn) {
+    if (null == converterFn) {
       converterFn = AvroConversionHelper.createConverterToAvro(structType, structName, recordNamespace);
     }
     GenericRecord genericRecord = (GenericRecord) converterFn.apply(row);

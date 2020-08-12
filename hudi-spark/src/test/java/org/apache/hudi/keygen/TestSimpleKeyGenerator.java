@@ -23,6 +23,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieKeyException;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -49,6 +51,13 @@ public class TestSimpleKeyGenerator extends TestKeyGeneratorUtilities {
     TypedProperties properties = new TypedProperties();
     properties.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "timestamp");
     properties.put(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_wrong_key");
+    return properties;
+  }
+
+  private TypedProperties getWrongPartitionPathFieldProps() {
+    TypedProperties properties = new TypedProperties();
+    properties.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "_wrong_partition_path");
+    properties.put(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key");
     return properties;
   }
 
@@ -79,19 +88,40 @@ public class TestSimpleKeyGenerator extends TestKeyGeneratorUtilities {
   public void testWrongRecordKeyField() {
     SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getWrongRecordKeyFieldProps());
     Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));
+    Assertions.assertThrows(HoodieKeyException.class,
+        () -> keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME, TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE));
+  }
+
+  @Test
+  public void testWrongPartitionPathField() {
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getWrongPartitionPathFieldProps());
+    GenericRecord record = getRecord();
+    Assertions.assertEquals(keyGenerator.getPartitionPath(record), KeyGenUtils.DEFAULT_PARTITION_PATH);
+    keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME, TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE);
+    Assertions.assertEquals(keyGenerator.getPartitionPath(TestKeyGeneratorUtilities.getRow(record)),
+        KeyGenUtils.DEFAULT_PARTITION_PATH);
   }
 
   @Test
   public void testComplexRecordKeyField() {
     SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getComplexRecordKeyProp());
     Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));
+    Assertions.assertThrows(HoodieKeyException.class,
+        () -> keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME, TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE));
   }
 
   @Test
   public void testHappyFlow() {
     SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getProps());
+    GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(getRecord());
     Assertions.assertEquals(key.getRecordKey(), "key1");
     Assertions.assertEquals(key.getPartitionPath(), "timestamp=4357686");
+
+    keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME, TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE);
+    Row row = TestKeyGeneratorUtilities.getRow(record);
+    Assertions.assertEquals(keyGenerator.getRecordKey(row), "key1");
+    Assertions.assertEquals(keyGenerator.getPartitionPath(row), "timestamp=4357686");
   }
+
 }

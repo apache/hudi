@@ -209,7 +209,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
         fieldVal = partitionPathFieldVal;
       }
       return getPartitionPath(fieldVal);
-    } catch (ParseException e) {
+    } catch (Exception e) {
       throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + fieldVal, e);
     }
   }
