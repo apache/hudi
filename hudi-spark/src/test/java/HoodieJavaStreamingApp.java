@@ -140,6 +140,7 @@ public class HoodieJavaStreamingApp {
     // Spark session setup..
     SparkSession spark = SparkSession.builder().appName("Hoodie Spark Streaming APP")
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
+    spark.sparkContext().setLogLevel("INFO");
     JavaSparkContext jssc = new JavaSparkContext(spark.sparkContext());
 
     // folder path clean up and creation, preparing the environment
@@ -156,6 +157,17 @@ public class HoodieJavaStreamingApp {
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));
 
     List<String> records2 = recordsToStrings(dataGen.generateUpdatesForAllRecords("002"));
+    System.out.println("===BEGIN====");
+    System.out.println("Insert Records : ");
+    records1.forEach(r -> {
+      System.out.println(r);
+    });
+
+    System.out.println("Updated Records : ");
+    records2.forEach(r -> {
+      System.out.println(r);
+    });
+    System.out.println("===END====");
     ValidationUtils.checkArgument(records2.size() == 100, "Update Records :" + records2
         + "\n\nInsert Records :" + records1);
     Dataset<Row> inputDF2 = spark.read().json(jssc.parallelize(records2, 2));
