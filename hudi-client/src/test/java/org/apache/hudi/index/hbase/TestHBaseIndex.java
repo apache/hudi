@@ -21,9 +21,11 @@ package org.apache.hudi.index.hbase;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
@@ -116,7 +118,17 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   }
 
   @Test
-  public void testSimpleTagLocationAndUpdate() throws Exception {
+  public void testSimpleTagLocationAndUpdateCOW() throws Exception {
+    testSimpleTagLocationAndUpdate(HoodieTableType.COPY_ON_WRITE);
+  }
+
+  @Test void testSimpleTagLocationAndUpdateMOR() throws Exception {
+    testSimpleTagLocationAndUpdate(HoodieTableType.MERGE_ON_READ);
+  }
+
+  public void testSimpleTagLocationAndUpdate(HoodieTableType tableType) throws Exception {
+    metaClient = HoodieTestUtils.init(hadoopConf, basePath(), tableType);
+
     final String newCommitTime = "001";
     final int numRecords = 10;
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
@@ -138,8 +150,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
       JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
       assertNoWriteErrors(writeStatues.collect());
 
-      // Now tagLocation for these records, hbaseIndex should not tag them since it was a failed
-      // commit
+      // Now tagLocation for these records, hbaseIndex should not tag them since commit never occurred
       JavaRDD<HoodieRecord> records2 = index.tagLocation(writeRecords, jsc(), hoodieTable);
       assertEquals(0, records2.filter(record -> record.isCurrentLocationKnown()).count());
 
