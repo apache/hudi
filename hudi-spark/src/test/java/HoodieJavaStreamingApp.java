@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -196,9 +197,17 @@ public class HoodieJavaStreamingApp {
       // thread for adding data to the streaming source and showing results over time
       Future<Integer> showFuture = executor.submit(() -> {
         LOG.info("===== Showing Starting =====");
-        int numCommits = addInputAndValidateIngestion(spark, fs,  srcPath,0, 100, inputDF1, inputDF2, true);
-        LOG.info("===== Showing Ends =====");
-        return numCommits;
+        try {
+          int numCommits = addInputAndValidateIngestion(spark, fs,  srcPath,0, 100, inputDF1,
+              inputDF2, true);
+          LOG.info("===== Showing Ends =====");
+          return numCommits;
+        } catch (RuntimeException re) {
+          List<String> allFiles = FileSystemTestUtils.listRecursive(fs, new Path(tablePath))
+              .stream().map(f -> f.getPath().toString()).sorted().collect(Collectors.toList());
+          System.out.println("All Files before throwing exception " + allFiles);
+          throw re;
+        }
       });
 
       // let the threads run
@@ -244,9 +253,16 @@ public class HoodieJavaStreamingApp {
       // thread for adding data to the streaming source and showing results over time
       Future<Void> showFuture = executor.submit(() -> {
         LOG.info("===== Showing Starting =====");
-        addInputAndValidateIngestion(newSpark, fs, srcPath2, numCommits, 80, inputDF3, null, false);
-        LOG.info("===== Showing Ends =====");
-        return null;
+        try {
+          addInputAndValidateIngestion(newSpark, fs, srcPath2, numCommits, 80, inputDF3, null, false);
+          LOG.info("===== Showing Ends =====");
+          return null;
+        } catch (RuntimeException re) {
+          List<String> allFiles = FileSystemTestUtils.listRecursive(fs, new Path(tablePath))
+              .stream().map(f -> f.getPath().toString()).sorted().collect(Collectors.toList());
+          System.out.println("All Files before throwing exception " + allFiles);
+          throw re;
+        }
       });
 
       // let the threads run

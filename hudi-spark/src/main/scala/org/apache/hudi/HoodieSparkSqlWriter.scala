@@ -131,7 +131,7 @@ private[hudi] object HoodieSparkSqlWriter {
               classOf[org.apache.avro.Schema]))
           val schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
           sparkContext.getConf.registerAvroSchemas(schema)
-          log.info(s"Registered avro schema : ${schema.toString(true)}")
+          System.out.println(s"Registered avro schema : ${schema.toString(true)}")
 
           // Convert to RDD[HoodieRecord]
           val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
@@ -162,7 +162,7 @@ private[hudi] object HoodieSparkSqlWriter {
             }
 
           if (hoodieRecords.isEmpty()) {
-            log.info("new batch has no new records, skipping...")
+            System.out.println("new batch has no new records, skipping...")
             (true, common.util.Option.empty())
           }
           client.startCommitWithTime(instantTime)
@@ -359,7 +359,7 @@ private[hudi] object HoodieSparkSqlWriter {
       syncClientToolClassSet.foreach(impl => {
         val syncSuccess = impl.trim match {
           case "org.apache.hudi.hive.HiveSyncTool" => {
-            log.info("Syncing to Hive Metastore (URL: " + parameters(HIVE_URL_OPT_KEY) + ")")
+            System.out.println("Syncing to Hive Metastore (URL: " + parameters(HIVE_URL_OPT_KEY) + ")")
             syncHive(basePath, fs, parameters)
             true
           }
@@ -388,7 +388,7 @@ private[hudi] object HoodieSparkSqlWriter {
                                              jsc: JavaSparkContext): (Boolean, common.util.Option[java.lang.String]) = {
     val errorCount = writeStatuses.rdd.filter(ws => ws.hasErrors).count()
     if (errorCount == 0) {
-      log.info("No errors. Proceeding to commit the write.")
+      System.out.println("No errors. Proceeding to commit the write.")
       val metaMap = parameters.filter(kv =>
         kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX_OPT_KEY)))
       val commitSuccess = if (metaMap.isEmpty) {
@@ -399,24 +399,25 @@ private[hudi] object HoodieSparkSqlWriter {
       }
 
       if (commitSuccess) {
-        log.info("Commit " + instantTime + " successful!")
+        System.out.println("Commit " + instantTime + " successful!")
       }
       else {
-        log.info("Commit " + instantTime + " failed!")
+        System.out.println("Commit " + instantTime + " failed!")
       }
 
       val asyncCompactionEnabled = isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())
       val compactionInstant : common.util.Option[java.lang.String] =
         if (asyncCompactionEnabled) {
+          System.out.println("Balaji scheduling compaction !!")
           client.scheduleCompaction(common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
         } else {
           common.util.Option.empty()
         }
 
-      log.info(s"Compaction Scheduled is $compactionInstant")
+      System.out.println(s"Compaction Scheduled is $compactionInstant")
       val metaSyncSuccess =  metaSync(parameters, basePath, jsc.hadoopConfiguration())
 
-      log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
+      System.out.println(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
       if (!asyncCompactionEnabled) {
         client.close()
       }
@@ -442,7 +443,7 @@ private[hudi] object HoodieSparkSqlWriter {
   private def isAsyncCompactionEnabled(client: HoodieWriteClient[HoodieRecordPayload[Nothing]],
                                        tableConfig: HoodieTableConfig,
                                        parameters: Map[String, String], configuration: Configuration) : Boolean = {
-    log.info(s"Config.isInlineCompaction ? ${client.getConfig.isInlineCompaction}")
+    System.out.println(s"Config.isInlineCompaction ? ${client.getConfig.isInlineCompaction}")
     if (!client.getConfig.isInlineCompaction
       && parameters.get(ASYNC_COMPACT_ENABLE_OPT_KEY).exists(r => r.toBoolean)) {
       tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
