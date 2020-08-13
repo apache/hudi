@@ -370,6 +370,7 @@
   <li><a href="#deltastreamer">DeltaStreamer</a></li>
   <li><a href="#multitabledeltastreamer">MultiTableDeltaStreamer</a></li>
   <li><a href="#datasource-writer">Datasource Writer</a></li>
+  <li><a href="#key-generation">Key Generation</a></li>
   <li><a href="#syncing-to-hive">Syncing to Hive</a></li>
   <li><a href="#deletes">Deletes</a></li>
   <li><a href="#optimized-dfs-access">Optimized DFS Access</a></li>
@@ -602,9 +603,7 @@ Available values:<br />
 Available values:<br />
 <a href="/docs/concepts.html#copy-on-write-table"><code class="highlighter-rouge">COW_TABLE_TYPE_OPT_VAL</code></a> (default), <a href="/docs/concepts.html#merge-on-read-table"><code class="highlighter-rouge">MOR_TABLE_TYPE_OPT_VAL</code></a></p>
 
-<p><strong>KEYGENERATOR_CLASS_OPT_KEY</strong>: Key generator class, that will extract the key out of incoming record. If single column key use <code class="highlighter-rouge">SimpleKeyGenerator</code>. For multiple column keys use <code class="highlighter-rouge">ComplexKeyGenerator</code>. Note: A custom key generator class can be written/provided here as well. Primary key columns should be provided via <code class="highlighter-rouge">RECORDKEY_FIELD_OPT_KEY</code> option.<br />
-Available values:<br />
-<code class="highlighter-rouge">classOf[SimpleKeyGenerator].getName</code> (default), <code class="highlighter-rouge">classOf[NonpartitionedKeyGenerator].getName</code> (Non-partitioned tables can currently only have a single key column, <a href="https://issues.apache.org/jira/browse/HUDI-1053">HUDI-1053</a>), <code class="highlighter-rouge">classOf[ComplexKeyGenerator].getName</code></p>
+<p><strong>KEYGENERATOR_CLASS_OPT_KEY</strong>: Refer to <a href="#key-generation">Key Generation</a> section below.</p>
 
 <p><strong>HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY</strong>: If using hive, specify if the table should or should not be partitioned.<br />
 Available values:<br />
@@ -623,6 +622,69 @@ Upsert a DataFrame, specifying the necessary field names for <code class="highli
        <span class="o">.</span><span class="na">mode</span><span class="o">(</span><span class="nc">SaveMode</span><span class="o">.</span><span class="na">Append</span><span class="o">)</span>
        <span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
 </code></pre></div></div>
+
+<h2 id="key-generation">Key Generation</h2>
+
+<p>Hudi maintains hoodie keys (record key + partition path) for uniquely identifying a particular record. Key generator class will extract these out of incoming record. Both the tools above have configs to specify the 
+<code class="highlighter-rouge">hoodie.datasource.write.keygenerator.class</code> property. For DeltaStreamer this would come from the property file specified in <code class="highlighter-rouge">--props</code> and 
+DataSource writer takes this config directly using <code class="highlighter-rouge">DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY()</code>.
+The default value for this config is <code class="highlighter-rouge">SimpleKeyGenerator</code>. Note: A custom key generator class can be written/provided here as well. Primary key columns should be provided via <code class="highlighter-rouge">RECORDKEY_FIELD_OPT_KEY</code> option.<br /></p>
+
+<p>Hudi currently supports different combinations of record keys and partition paths as below -</p>
+
+<ul>
+  <li>Simple record key (consisting of only one field) and simple partition path (with optional hive style partitioning)</li>
+  <li>Simple record key and custom timestamp based partition path (with optional hive style partitioning)</li>
+  <li>Composite record keys (combination of multiple fields) and composite partition paths</li>
+  <li>Composite record keys and timestamp based partition paths (composite also supported)</li>
+  <li>Non partitioned table</li>
+</ul>
+
+<p><code class="highlighter-rouge">CustomKeyGenerator.java</code> (part of hudi-spark module) class provides great support for generating hoodie keys of all the above listed types. All you need to do is supply values for the following properties properly to create your desired keys -</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">recordkey</span><span class="o">.</span><span class="na">field</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">partitionpath</span><span class="o">.</span><span class="na">field</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">keygenerator</span><span class="o">.</span><span class="na">class</span><span class="o">=</span><span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">keygen</span><span class="o">.</span><span class="na">CustomKeyGenerator</span>
+</code></pre></div></div>
+
+<p>For having composite record keys, you need to provide comma separated fields like</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">recordkey</span><span class="o">.</span><span class="na">field</span><span class="o">=</span><span class="n">field1</span><span class="o">,</span><span class="n">field2</span>
+</code></pre></div></div>
+
+<p>This will create your record key in the format <code class="highlighter-rouge">field1:value1,field2:value2</code> and so on, otherwise you can specify only one field in case of simple record keys. <code class="highlighter-rouge">CustomKeyGenerator</code> class defines an enum <code class="highlighter-rouge">PartitionKeyType</code> for configuring partition paths. It can take two possible values - SIMPLE and TIMESTAMP. 
+The value for <code class="highlighter-rouge">hoodie.datasource.write.partitionpath.field</code> property in case of partitioned tables needs to be provided in the format <code class="highlighter-rouge">field1:PartitionKeyType1,field2:PartitionKeyType2</code> and so on. For example, if you want to create partition path using 2 fields <code class="highlighter-rouge">country</code> and <code class="highlighter-rouge">date</code> where the latter has timestamp based values and needs to be customised in a given format, you can specify the following</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">partitionpath</span><span class="o">.</span><span class="na">field</span><span class="o">=</span><span class="nl">country:</span><span class="no">SIMPLE</span><span class="o">,</span><span class="nl">date:</span><span class="no">TIMESTAMP</span>
+</code></pre></div></div>
+<p>This will create the partition path in the format <code class="highlighter-rouge">&lt;country_name&gt;/&lt;date&gt;</code> or <code class="highlighter-rouge">country=&lt;country_name&gt;/date=&lt;date&gt;</code> depending on whether you want hive style partitioning or not.</p>
+
+<p><code class="highlighter-rouge">TimestampBasedKeyGenerator</code> class defines the following properties which can be used for doing the customizations for timestamp based partition paths</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">keygen</span><span class="o">.</span><span class="na">timebased</span><span class="o">.</span><span class="na">timestamp</span><span class="o">.</span><span class="na">type</span>
+  <span class="nc">This</span> <span class="n">defines</span> <span class="n">the</span> <span class="n">type</span> <span class="n">of</span> <span class="n">the</span> <span class="n">value</span> <span class="n">that</span> <span class="n">your</span> <span class="n">field</span> <span class="n">contains</span><span class="o">.</span> <span class="nc">It</span> <span class="n">can</span> <span class="n">be</span> <span class="n">in</span> <span class="n">string</span> <span class="n">format</span> <span class="n">or</span> <span class="n">epoch</span> <span class="n">format</span><span class="o">,</span> <span class="k">for</span> <span class="n">example</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">keygen</span><span class="o">.</span><span class="na">timebased</span><span class="o">.</span><span class="na">timestamp</span><span class="o">.</span><span class="na">scalar</span><span class="o">.</span><span class="na">time</span><span class="o">.</span><span class="na">unit</span>
+  <span class="nc">This</span> <span class="n">defines</span> <span class="n">the</span> <span class="n">granularity</span> <span class="n">of</span> <span class="n">your</span> <span class="n">field</span><span class="o">,</span> <span class="n">whether</span> <span class="n">it</span> <span class="n">contains</span> <span class="n">the</span> <span class="n">values</span> <span class="n">in</span> <span class="n">seconds</span> <span class="n">or</span> <span class="n">milliseconds</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">keygen</span><span class="o">.</span><span class="na">timebased</span><span class="o">.</span><span class="na">input</span><span class="o">.</span><span class="na">dateformat</span>
+  <span class="nc">This</span> <span class="n">defines</span> <span class="n">the</span> <span class="n">custom</span> <span class="n">format</span> <span class="n">in</span> <span class="n">which</span> <span class="n">the</span> <span class="n">values</span> <span class="n">are</span> <span class="n">present</span> <span class="n">in</span> <span class="n">your</span> <span class="n">field</span><span class="o">,</span> <span class="k">for</span> <span class="n">example</span> <span class="n">yyyy</span><span class="o">/</span><span class="no">MM</span><span class="o">/</span><span class="n">dd</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">keygen</span><span class="o">.</span><span class="na">timebased</span><span class="o">.</span><span class="na">output</span><span class="o">.</span><span class="na">dateformat</span>
+  <span class="nc">This</span> <span class="n">defines</span> <span class="n">the</span> <span class="n">custom</span> <span class="n">format</span> <span class="n">in</span> <span class="n">which</span> <span class="n">you</span> <span class="n">want</span> <span class="n">the</span> <span class="n">partition</span> <span class="n">paths</span> <span class="n">to</span> <span class="n">be</span> <span class="n">created</span><span class="o">,</span> <span class="k">for</span> <span class="n">example</span> <span class="n">dt</span><span class="o">=</span><span class="n">yyyyMMdd</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">keygen</span><span class="o">.</span><span class="na">timebased</span><span class="o">.</span><span class="na">timezone</span>
+  <span class="nc">This</span> <span class="n">defines</span> <span class="n">the</span> <span class="n">timezone</span> <span class="n">which</span> <span class="n">the</span> <span class="n">timestamp</span> <span class="n">based</span> <span class="n">values</span> <span class="n">belong</span> <span class="n">to</span>
+</code></pre></div></div>
+
+<p>When keygenerator class is <code class="highlighter-rouge">CustomKeyGenerator</code>, non partitioned table can be handled by simply leaving the property blank like</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">partitionpath</span><span class="o">.</span><span class="na">field</span><span class="o">=</span>
+</code></pre></div></div>
+
+<p>For those on hudi versions &lt; 0.6.0, you can use the following key generator classes for fulfilling your use cases -</p>
+
+<ul>
+  <li>Simple record key (consisting of only one field) and simple partition path (with optional hive style partitioning) - <code class="highlighter-rouge">SimpleKeyGenerator.java</code></li>
+  <li>Simple record key and custom timestamp based partition path (with optional hive style partitioning) - <code class="highlighter-rouge">TimestampBasedKeyGenerator.java</code></li>
+  <li>Composite record keys (combination of multiple fields) and composite partition paths - <code class="highlighter-rouge">ComplexKeyGenerator.java</code></li>
+  <li>Composite record keys and timestamp based partition paths (composite also supported) - You might need to move to 0.6.0 and use <code class="highlighter-rouge">CustomKeyGenerator.java</code> class</li>
+  <li>Non partitioned table - <code class="highlighter-rouge">NonPartitionedKeyGenerator.java</code>. Non-partitioned tables can currently only have a single key column, <a href="https://issues.apache.org/jira/browse/HUDI-1053">HUDI-1053</a></li>
+</ul>
 
 <h2 id="syncing-to-hive">Syncing to Hive</h2>
 
