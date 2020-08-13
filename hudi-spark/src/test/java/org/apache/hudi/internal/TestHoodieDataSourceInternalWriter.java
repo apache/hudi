@@ -40,11 +40,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
-import static org.apache.hudi.testutils.HoodieDatasetTestUtils.ENCODER;
-import static org.apache.hudi.testutils.HoodieDatasetTestUtils.STRUCT_TYPE;
-import static org.apache.hudi.testutils.HoodieDatasetTestUtils.getConfigBuilder;
-import static org.apache.hudi.testutils.HoodieDatasetTestUtils.getRandomRows;
-import static org.apache.hudi.testutils.HoodieDatasetTestUtils.toInternalRows;
+import static org.apache.hudi.testutils.SparkDatasetTestUtils.ENCODER;
+import static org.apache.hudi.testutils.SparkDatasetTestUtils.STRUCT_TYPE;
+import static org.apache.hudi.testutils.SparkDatasetTestUtils.getConfigBuilder;
+import static org.apache.hudi.testutils.SparkDatasetTestUtils.getRandomRows;
+import static org.apache.hudi.testutils.SparkDatasetTestUtils.toInternalRows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

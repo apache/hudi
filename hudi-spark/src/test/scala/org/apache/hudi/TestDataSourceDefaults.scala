@@ -22,11 +22,12 @@ import java.util
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{EmptyHoodieRecordPayload, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{EmptyHoodieRecordPayload, HoodieKey, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.testutils.SchemaTestUtil
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen._
+import org.apache.hudi.testutils.KeyGeneratorTestUtilities
 import org.apache.spark.sql.Row
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -47,7 +48,7 @@ class TestDataSourceDefaults {
   @BeforeEach def initialize(): Unit = {
     baseRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 1, "001", "f1")
-    baseRow = TestKeyGeneratorUtilities.getRow(baseRecord, schema, structType)
+    baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
   }
 
   private def getKeyConfig(recordKeyFieldName: String, partitionPathField: String, hiveStylePartitioning: String): TypedProperties = {
@@ -66,7 +67,6 @@ class TestDataSourceDefaults {
     assertEquals("field1", hk1.getRecordKey)
     assertEquals("name1", hk1.getPartitionPath)
 
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
     assertEquals("field1", keyGen.getRecordKey(baseRow))
     assertEquals("name1", keyGen.getPartitionPath(baseRow))
 
@@ -86,7 +86,6 @@ class TestDataSourceDefaults {
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "field1")
       val keyGen = new SimpleKeyGenerator(props)
-      keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
     } catch {
@@ -110,7 +109,6 @@ class TestDataSourceDefaults {
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionField")
       val keyGen = new SimpleKeyGenerator(props)
-      keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
       keyGen.getPartitionPath(baseRow)
       fail("Should have errored out")
     } catch {
@@ -141,7 +139,6 @@ class TestDataSourceDefaults {
 
     // if partition path can't be found, return default partition path using row
     keyGen = new SimpleKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere", "false"))
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
     val hk3_row = keyGen.getPartitionPath(baseRow)
     assertEquals("default", hk3_row)
 
@@ -151,7 +148,6 @@ class TestDataSourceDefaults {
 
     // if enable hive style partitioning using row
     keyGen = new SimpleKeyGenerator(getKeyConfig("field1", "name", "true"))
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
     val hk4_row = keyGen.getPartitionPath(baseRow)
     assertEquals("name=name1", hk4_row)
 
@@ -163,8 +159,7 @@ class TestDataSourceDefaults {
 
     // if partition is null, return default partition path using Row
     keyGen = new SimpleKeyGenerator(getKeyConfig("field1", "name", "false"))
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
-    baseRow = TestKeyGeneratorUtilities.getRow(baseRecord, schema, structType)
+    baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
     val hk5_row = keyGen.getPartitionPath(baseRow)
     assertEquals("default", hk5_row)
 
@@ -176,8 +171,7 @@ class TestDataSourceDefaults {
 
     // if partition is empty, return default partition path using Row
     keyGen = new SimpleKeyGenerator(getKeyConfig("field1", "name", "false"))
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
-    baseRow = TestKeyGeneratorUtilities.getRow(baseRecord, schema, structType)
+    baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
     val hk6_row = keyGen.getPartitionPath(baseRow)
     assertEquals("default", hk6_row)
 
@@ -200,8 +194,7 @@ class TestDataSourceDefaults {
       props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "field1")
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "name")
       keyGen = new SimpleKeyGenerator(props)
-      keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
-      baseRow = TestKeyGeneratorUtilities.getRow(baseRecord, schema, structType)
+      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
     } catch {
@@ -228,8 +221,7 @@ class TestDataSourceDefaults {
       props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "field1")
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "name")
       keyGen = new SimpleKeyGenerator(props)
-      keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
-      baseRow = TestKeyGeneratorUtilities.getRow(baseRecord, schema, structType)
+      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
     } catch {
@@ -238,35 +230,19 @@ class TestDataSourceDefaults {
     }
   }
 
-  @Test def testUserDefinedKeyGenerator(): Unit = {
-    var keyGen = new UserDefinedKeyGenerator(getKeyConfig("field1", "name", "false"))
-    val hk1 = keyGen.getKey(baseRecord)
-    assertEquals("field1", hk1.getRecordKey)
-    assertEquals("name1", hk1.getPartitionPath)
-
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
+  @Test def testUserDefinedKeyGeneratorWorksWithRows(): Unit = {
+    val keyGen = new UserDefinedKeyGenerator(getKeyConfig("field1", "name", "false"))
     assertEquals("field1", keyGen.getRecordKey(baseRow))
     assertEquals("name1", keyGen.getPartitionPath(baseRow))
   }
 
-  class UserDefinedKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props) {
+  class UserDefinedKeyGenerator(props: TypedProperties) extends KeyGenerator(props) {
     val recordKeyProp: String = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY)
     val partitionPathProp: String = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY)
-    this.recordKeyFields = util.Arrays.asList(recordKeyProp)
-    this.partitionPathFields = util.Arrays.asList(partitionPathProp)
 
-    /**
-     * Generate a record Key out of provided generic record.
-     */
-    override def getRecordKey(record: GenericRecord): String = {
-      HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyProp, true)
-    }
-
-    /**
-     * Generate a partition path out of provided generic record.
-     */
-    override def getPartitionPath(record: GenericRecord): String = {
-      HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathProp, true)
+    override def getKey(record: GenericRecord): HoodieKey = {
+      new HoodieKey(HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyProp, true),
+        HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathProp, true))
     }
   }
 
@@ -278,7 +254,6 @@ class TestDataSourceDefaults {
     assertEquals("field1/name1", hk1.getPartitionPath)
 
     // top level, valid fields with Row
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
     assertEquals("field1:field1,name:name1", keyGen.getRecordKey(baseRow))
     assertEquals("field1/name1", keyGen.getPartitionPath(baseRow))
 
@@ -298,7 +273,6 @@ class TestDataSourceDefaults {
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "field1")
       val keyGen = new ComplexKeyGenerator(props)
-      keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
     } catch {
@@ -322,7 +296,7 @@ class TestDataSourceDefaults {
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionField")
       val keyGen = new ComplexKeyGenerator(props)
-      keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
+      keyGen.getPartitionPath(baseRow)
       fail("Should have errored out")
     } catch {
       case e: IllegalArgumentException =>
@@ -336,7 +310,6 @@ class TestDataSourceDefaults {
     assertEquals("UserId1@001/false", hk2.getPartitionPath)
 
     // nested field as record key and partition path
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
     assertEquals("testNestedRecord.userId:UserId1@001,testNestedRecord.isAdmin:false", keyGen.getRecordKey(baseRow))
     assertEquals("UserId1@001/false", keyGen.getPartitionPath(baseRow))
 
@@ -353,7 +326,6 @@ class TestDataSourceDefaults {
     // Nested record key not found
     try {
       val keyGen = new ComplexKeyGenerator(getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false"))
-      keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
     } catch {
@@ -366,7 +338,6 @@ class TestDataSourceDefaults {
     val hk3 = keyGen.getKey(baseRecord)
     assertEquals("default", hk3.getPartitionPath)
 
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
     assertEquals("default", keyGen.getPartitionPath(baseRow))
 
     // if enable hive style partitioning
@@ -375,7 +346,6 @@ class TestDataSourceDefaults {
     assertEquals("field1:field1,name:name1", hk4.getRecordKey)
     assertEquals("field1=field1/name=name1", hk4.getPartitionPath)
 
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
     assertEquals("field1:field1,name:name1", keyGen.getRecordKey(baseRow))
     assertEquals("field1=field1/name=name1", keyGen.getPartitionPath(baseRow))
 
@@ -386,8 +356,7 @@ class TestDataSourceDefaults {
     assertEquals("field1:field1,name:__empty__", hk5.getRecordKey)
     assertEquals("field1/default", hk5.getPartitionPath)
 
-    baseRow = TestKeyGeneratorUtilities.getRow(baseRecord, schema, structType)
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
+    baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
     assertEquals("field1:field1,name:__empty__", keyGen.getRecordKey(baseRow))
     assertEquals("field1/default", keyGen.getPartitionPath(baseRow))
 
@@ -398,8 +367,7 @@ class TestDataSourceDefaults {
     assertEquals("field1:field1,name:__null__", hk6.getRecordKey)
     assertEquals("field1/default", hk6.getPartitionPath)
 
-    baseRow = TestKeyGeneratorUtilities.getRow(baseRecord, schema, structType)
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
+    baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
     assertEquals("field1:field1,name:__null__", keyGen.getRecordKey(baseRow))
     assertEquals("field1/default", keyGen.getPartitionPath(baseRow))
 
@@ -425,8 +393,7 @@ class TestDataSourceDefaults {
       props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "field1,name")
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "field1,name")
       keyGen = new ComplexKeyGenerator(props)
-      baseRow = TestKeyGeneratorUtilities.getRow(baseRecord, schema, structType)
-      keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
+      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
     } catch {
@@ -442,8 +409,7 @@ class TestDataSourceDefaults {
     assertEquals("field1:field1,name:name1", hk7.getRecordKey)
     assertEquals("field1/name1", hk7.getPartitionPath)
 
-    baseRow = TestKeyGeneratorUtilities.getRow(baseRecord, schema, structType)
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
+    baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
     assertEquals("field1:field1,name:name1", keyGen.getRecordKey(baseRow))
     assertEquals("field1/name1", keyGen.getPartitionPath(baseRow))
 
@@ -452,7 +418,6 @@ class TestDataSourceDefaults {
     assertEquals("field1:field1", hk8.getRecordKey)
     assertEquals("field1", hk8.getPartitionPath)
 
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
     assertEquals("field1:field1", keyGen.getRecordKey(baseRow))
     assertEquals("field1", keyGen.getPartitionPath(baseRow))
   }
@@ -464,7 +429,6 @@ class TestDataSourceDefaults {
     assertEquals("field1:field1,name:name1", hk1.getRecordKey)
     assertEquals("", hk1.getPartitionPath)
 
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
     assertEquals("field1:field1,name:name1", keyGen.getRecordKey(baseRow))
     assertEquals("", keyGen.getPartitionPath(baseRow))
 
@@ -476,7 +440,6 @@ class TestDataSourceDefaults {
     assertEquals("field1:field1,name:name1", hk2.getRecordKey)
     assertEquals("", hk2.getPartitionPath)
 
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
     assertEquals("field1:field1,name:name1", keyGen.getRecordKey(baseRow))
     assertEquals("", keyGen.getPartitionPath(baseRow))
 
@@ -487,8 +450,7 @@ class TestDataSourceDefaults {
     assertEquals("field1:field1,name:__empty__", hk3.getRecordKey)
     assertEquals("", hk3.getPartitionPath)
 
-    baseRow = TestKeyGeneratorUtilities.getRow(baseRecord, schema, structType)
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
+    baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
     assertEquals("field1:field1,name:__empty__", keyGen.getRecordKey(baseRow))
     assertEquals("", keyGen.getPartitionPath(baseRow))
 
@@ -499,8 +461,7 @@ class TestDataSourceDefaults {
     assertEquals("field1:field1,name:__null__", hk4.getRecordKey)
     assertEquals("", hk4.getPartitionPath)
 
-    baseRow = TestKeyGeneratorUtilities.getRow(baseRecord, schema, structType)
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
+    baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
     assertEquals("field1:field1,name:__null__", keyGen.getRecordKey(baseRow))
     assertEquals("", keyGen.getPartitionPath(baseRow))
 
@@ -520,7 +481,6 @@ class TestDataSourceDefaults {
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionField")
       val keyGen = new GlobalDeleteKeyGenerator(props)
-      keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
     } catch {
@@ -541,7 +501,6 @@ class TestDataSourceDefaults {
     // Nested record key not found
     try {
       val keyGen = new GlobalDeleteKeyGenerator(getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false"))
-      keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
     } catch {
@@ -566,11 +525,10 @@ class TestDataSourceDefaults {
     try {
       baseRecord.put("name", "")
       baseRecord.put("field1", null)
-      baseRow = TestKeyGeneratorUtilities.getRow(baseRecord, schema, structType)
+      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "field1,name")
       val keyGen = new GlobalDeleteKeyGenerator(props)
-      keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
     } catch {

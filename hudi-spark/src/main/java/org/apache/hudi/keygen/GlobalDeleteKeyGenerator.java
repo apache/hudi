@@ -29,7 +29,8 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Key generator for deletes using global indices. Global index deletes do not require partition value so this key generator avoids using partition value for generating HoodieKey.
+ * Key generator for deletes using global indices. Global index deletes do not require partition value so this key generator
+ * avoids using partition value for generating HoodieKey.
  */
 public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
 
@@ -57,7 +58,8 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), getRecordKeyPositions(), true);
+    buildFieldPositionMapIfNeeded(row.schema());
+    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, true);
   }
 
   @Override

@@ -55,8 +55,7 @@ public class RowKeyGeneratorHelper {
    */
   public static String getRecordKeyFromRow(Row row, List<String> recordKeyFields, Map<String, List<Integer>> recordKeyPositions, boolean prefixFieldName) {
     AtomicBoolean keyIsNullOrEmpty = new AtomicBoolean(true);
-    String toReturn = IntStream.range(0, recordKeyFields.size()).mapToObj(idx -> {
-      String field = recordKeyFields.get(idx);
+    String toReturn = recordKeyFields.stream().map(field -> {
       String val = null;
       List<Integer> fieldPositions = recordKeyPositions.get(field);
       if (fieldPositions.size() == 1) { // simple field

@@ -53,7 +53,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieBootstrapHandle;
-import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -225,7 +225,7 @@ public class BootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
   }
 
   private BootstrapWriteStatus handleMetadataBootstrap(String srcPartitionPath, String partitionPath,
-                                                       HoodieFileStatus srcFileStatus, KeyGenerator keyGenerator) {
+                                                       HoodieFileStatus srcFileStatus, KeyGeneratorInterface keyGenerator) {
 
     Path sourceFilePath = FileStatusUtils.toPath(srcFileStatus.getPath());
     HoodieBootstrapHandle bootstrapHandle = new HoodieBootstrapHandle(config, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
@@ -311,7 +311,7 @@ public class BootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
 
     TypedProperties properties = new TypedProperties();
     properties.putAll(config.getProps());
-    KeyGenerator keyGenerator  = (KeyGenerator) ReflectionUtils.loadClass(config.getBootstrapKeyGeneratorClass(),
+    KeyGeneratorInterface keyGenerator  = (KeyGeneratorInterface) ReflectionUtils.loadClass(config.getBootstrapKeyGeneratorClass(),
         properties);
     BootstrapPartitionPathTranslator translator = (BootstrapPartitionPathTranslator) ReflectionUtils.loadClass(
         config.getBootstrapPartitionPathTranslatorClass(), properties);

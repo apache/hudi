@@ -23,11 +23,12 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-public class TestCustomKeyGenerator extends TestKeyGeneratorUtilities {
+public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   private TypedProperties getCommonProps(boolean getComplexRecordKey) {
     TypedProperties properties = new TypedProperties();
@@ -103,9 +104,7 @@ public class TestCustomKeyGenerator extends TestKeyGeneratorUtilities {
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "key1");
     Assertions.assertEquals(key.getPartitionPath(), "timestamp=4357686");
-    Row row = TestKeyGeneratorUtilities.getRow(record);
-    keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME,
-        TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE);
+    Row row = KeyGeneratorTestUtilities.getRow(record);
     Assertions.assertEquals(keyGenerator.getRecordKey(row), "key1");
     Assertions.assertEquals(keyGenerator.getPartitionPath(row), "timestamp=4357686");
   }
@@ -117,9 +116,7 @@ public class TestCustomKeyGenerator extends TestKeyGeneratorUtilities {
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "key1");
     Assertions.assertEquals(key.getPartitionPath(), "ts_ms=20200321");
-    Row row = TestKeyGeneratorUtilities.getRow(record);
-    keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME,
-        TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE);
+    Row row = KeyGeneratorTestUtilities.getRow(record);
     Assertions.assertEquals(keyGenerator.getRecordKey(row), "key1");
     Assertions.assertEquals(keyGenerator.getPartitionPath(row), "ts_ms=20200321");
   }
@@ -131,9 +128,7 @@ public class TestCustomKeyGenerator extends TestKeyGeneratorUtilities {
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "key1");
     Assertions.assertTrue(key.getPartitionPath().isEmpty());
-    Row row = TestKeyGeneratorUtilities.getRow(record);
-    keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME,
-        TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE);
+    Row row = KeyGeneratorTestUtilities.getRow(record);
     Assertions.assertEquals(keyGenerator.getRecordKey(row), "key1");
     Assertions.assertTrue(keyGenerator.getPartitionPath(row).isEmpty());
   }
@@ -151,15 +146,12 @@ public class TestCustomKeyGenerator extends TestKeyGeneratorUtilities {
     try {
       KeyGenerator keyGenerator = new CustomKeyGenerator(getInvalidPartitionKeyTypeProps());
       GenericRecord record = getRecord();
-      Row row = TestKeyGeneratorUtilities.getRow(record);
-      keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME,
-          TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE);
-      keyGenerator.getRecordKey(row);
+      Row row = KeyGeneratorTestUtilities.getRow(record);
+      keyGenerator.getPartitionPath(row);
       Assertions.fail("should fail when invalid PartitionKeyType is provided!");
     } catch (Exception e) {
       Assertions.assertTrue(e.getMessage().contains("No enum constant org.apache.hudi.keygen.CustomKeyGenerator.PartitionKeyType.DUMMY"));
     }
-
   }
 
   @Test
@@ -175,9 +167,7 @@ public class TestCustomKeyGenerator extends TestKeyGeneratorUtilities {
     try {
       KeyGenerator keyGenerator = new CustomKeyGenerator(getPropsWithoutRecordKeyFieldProps());
       GenericRecord record = getRecord();
-      Row row = TestKeyGeneratorUtilities.getRow(record);
-      keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME,
-          TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE);
+      Row row = KeyGeneratorTestUtilities.getRow(record);
       keyGenerator.getRecordKey(row);
       Assertions.fail("should fail when record key field is not provided!");
     } catch (Exception e) {
@@ -198,9 +188,7 @@ public class TestCustomKeyGenerator extends TestKeyGeneratorUtilities {
     try {
       KeyGenerator keyGenerator = new CustomKeyGenerator(getImproperPartitionFieldFormatProp());
       GenericRecord record = getRecord();
-      Row row = TestKeyGeneratorUtilities.getRow(record);
-      keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME,
-          TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE);
+      Row row = KeyGeneratorTestUtilities.getRow(record);
       keyGenerator.getPartitionPath(row);
       Assertions.fail("should fail when partition key field is provided in improper format!");
     } catch (Exception e) {
@@ -216,9 +204,7 @@ public class TestCustomKeyGenerator extends TestKeyGeneratorUtilities {
     Assertions.assertEquals(key.getRecordKey(), "_row_key:key1,pii_col:pi");
     Assertions.assertEquals(key.getPartitionPath(), "timestamp=4357686");
 
-    keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME,
-        TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE);
-    Row row = TestKeyGeneratorUtilities.getRow(record);
+    Row row = KeyGeneratorTestUtilities.getRow(record);
     Assertions.assertEquals(keyGenerator.getRecordKey(row), "_row_key:key1,pii_col:pi");
     Assertions.assertEquals(keyGenerator.getPartitionPath(row), "timestamp=4357686");
   }
@@ -231,9 +217,7 @@ public class TestCustomKeyGenerator extends TestKeyGeneratorUtilities {
     Assertions.assertEquals(key.getRecordKey(), "_row_key:key1,pii_col:pi");
     Assertions.assertEquals(key.getPartitionPath(), "timestamp=4357686/ts_ms=20200321");
 
-    keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME,
-        TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE);
-    Row row = TestKeyGeneratorUtilities.getRow(record);
+    Row row = KeyGeneratorTestUtilities.getRow(record);
     Assertions.assertEquals(keyGenerator.getRecordKey(row), "_row_key:key1,pii_col:pi");
     Assertions.assertEquals(keyGenerator.getPartitionPath(row), "timestamp=4357686/ts_ms=20200321");
   }

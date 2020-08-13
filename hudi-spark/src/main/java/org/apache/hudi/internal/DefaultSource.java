@@ -19,8 +19,6 @@
 package org.apache.hudi.internal;
 
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.HoodieWriterUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.conf.Configuration;
@@ -37,9 +35,7 @@ import org.apache.spark.sql.sources.v2.reader.DataSourceReader;
 import org.apache.spark.sql.sources.v2.writer.DataSourceWriter;
 import org.apache.spark.sql.types.StructType;
 
-import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 
 /**
  * DataSource V2 implementation for managing internal write logic. Only called internally.

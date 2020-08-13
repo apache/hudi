@@ -54,7 +54,7 @@ import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 /**
  * Dataset test utils.
  */
-public class HoodieDatasetTestUtils {
+public class SparkDatasetTestUtils {
 
   public static final StructType STRUCT_TYPE = new StructType(new StructField[] {
       new StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),

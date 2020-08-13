@@ -20,10 +20,12 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -61,7 +63,16 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
+  public String getPartitionPath(Row row) {
+    return getPartitionPath(Option.empty(), Option.of(row));
+  }
+
+  @Override
   public String getPartitionPath(GenericRecord record) {
+    return getPartitionPath(Option.of(record), Option.empty());
+  }
+
+  private String getPartitionPath(Option<GenericRecord> record, Option<Row> row) {
     if (getPartitionPathFields() == null) {
       throw new HoodieKeyException("Unable to find field names for partition path in cfg");
     }
@@ -83,11 +94,19 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
       PartitionKeyType keyType = PartitionKeyType.valueOf(fieldWithType[1].toUpperCase());
       switch (keyType) {
         case SIMPLE:
-          partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(record));
+          if (record.isPresent()) {
+            partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(record.get()));
+          } else {
+            partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
+          }
           break;
         case TIMESTAMP:
           try {
-            partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(record));
+            if (record.isPresent()) {
+              partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(record.get()));
+            } else {
+              partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
+            }
           } catch (IOException ioe) {
             throw new HoodieDeltaStreamerException("Unable to initialise TimestampBasedKeyGenerator class");
           }
@@ -105,11 +124,23 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    if (getRecordKeyFields() == null || getRecordKeyFields().isEmpty()) {
-      throw new HoodieKeyException("Unable to find field names for record key in cfg");
-    }
+    validateRecordKeyFields();
     return getRecordKeyFields().size() == 1
         ? new SimpleKeyGenerator(config).getRecordKey(record)
         : new ComplexKeyGenerator(config).getRecordKey(record);
+  }
+
+  @Override
+  public String getRecordKey(Row row) {
+    validateRecordKeyFields();
+    return getRecordKeyFields().size() == 1
+        ? new SimpleKeyGenerator(config).getRecordKey(row)
+        : new ComplexKeyGenerator(config).getRecordKey(row);
+  }
+
+  private void validateRecordKeyFields() {
+    if (getRecordKeyFields() == null || getRecordKeyFields().isEmpty()) {
+      throw new HoodieKeyException("Unable to find field names for record key in cfg");
+    }
   }
 }

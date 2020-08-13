@@ -24,11 +24,12 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-public class TestComplexKeyGenerator extends TestKeyGeneratorUtilities {
+public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
 
   private TypedProperties getCommonProps(boolean getComplexRecordKey) {
     TypedProperties properties = new TypedProperties();
@@ -78,8 +79,7 @@ public class TestComplexKeyGenerator extends TestKeyGeneratorUtilities {
   public void testWrongRecordKeyField() {
     ComplexKeyGenerator keyGenerator = new ComplexKeyGenerator(getWrongRecordKeyFieldProps());
     Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));
-    Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME,
-        TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE));
+    Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.buildFieldPositionMapIfNeeded(KeyGeneratorTestUtilities.structType));
   }
 
   @Test
@@ -89,9 +89,7 @@ public class TestComplexKeyGenerator extends TestKeyGeneratorUtilities {
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "_row_key:key1,pii_col:pi");
     Assertions.assertEquals(key.getPartitionPath(), "timestamp=4357686/ts_ms=2020-03-21");
-    Row row = TestKeyGeneratorUtilities.getRow(record);
-    keyGenerator.initializeRowKeyGenerator(TestKeyGeneratorUtilities.structType, TestKeyGeneratorUtilities.TEST_STRUCTNAME,
-        TestKeyGeneratorUtilities.TEST_RECORD_NAMESPACE);
+    Row row = KeyGeneratorTestUtilities.getRow(record);
     Assertions.assertEquals(keyGenerator.getRecordKey(row), "_row_key:key1,pii_col:pi");
     Assertions.assertEquals(keyGenerator.getPartitionPath(row), "timestamp=4357686/ts_ms=2020-03-21");
   }

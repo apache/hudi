@@ -18,13 +18,12 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.AvroConversionHelper;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.spark.sql.Row;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.Collections;
@@ -32,8 +31,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import scala.Function1;
 
 /**
  * Base class for all the built-in key generators. Contains methods structured for
@@ -43,17 +40,19 @@ public abstract class BuiltinKeyGenerator extends KeyGenerator {
 
   protected List<String> recordKeyFields;
   protected List<String> partitionPathFields;
+  protected final boolean encodePartitionPath;
+  protected final boolean hiveStylePartitioning;
 
-  private Map<String, List<Integer>> recordKeyPositions = new HashMap<>();
-  private Map<String, List<Integer>> partitionPathPositions = new HashMap<>();
-
-  private transient Function1<Object, Object> converterFn = null;
+  protected Map<String, List<Integer>> recordKeyPositions = new HashMap<>();
+  protected Map<String, List<Integer>> partitionPathPositions = new HashMap<>();
   protected StructType structType;
-  private String structName;
-  private String recordNamespace;
 
   protected BuiltinKeyGenerator(TypedProperties config) {
     super(config);
+    this.encodePartitionPath = config.getBoolean(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY(),
+        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL()));
+    this.hiveStylePartitioning = config.getBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
+        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
   }
 
   /**
@@ -85,71 +84,40 @@ public abstract class BuiltinKeyGenerator extends KeyGenerator {
     }).collect(Collectors.toList());
   }
 
-  @Override
-  public void initializeRowKeyGenerator(StructType structType, String structName, String recordNamespace) {
-    // parse simple feilds
-    getRecordKeyFields().stream()
-        .filter(f -> !(f.contains(".")))
-        .forEach(f -> {
-          if (structType.getFieldIndex(f).isDefined()) {
-            recordKeyPositions.put(f, Collections.singletonList((Integer) (structType.getFieldIndex(f).get())));
-          } else {
-            throw new HoodieKeyException("recordKey value not found for field: \"" + f + "\"");
-          }
-        });
-    // parse nested fields
-    getRecordKeyFields().stream()
-        .filter(f -> f.contains("."))
-        .forEach(f -> recordKeyPositions.put(f, RowKeyGeneratorHelper.getNestedFieldIndices(structType, f, true)));
-    // parse simple fields
-    if (getPartitionPathFields() != null) {
-      getPartitionPathFields().stream().filter(f -> !f.isEmpty()).filter(f -> !(f.contains(".")))
+  void buildFieldPositionMapIfNeeded(StructType structType) {
+    if (this.structType == null) {
+      // parse simple fields
+      getRecordKeyFields().stream()
+          .filter(f -> !(f.contains(".")))
           .forEach(f -> {
             if (structType.getFieldIndex(f).isDefined()) {
-              partitionPathPositions.put(f,
-                  Collections.singletonList((Integer) (structType.getFieldIndex(f).get())));
+              recordKeyPositions.put(f, Collections.singletonList((Integer) (structType.getFieldIndex(f).get())));
             } else {
-              partitionPathPositions.put(f, Collections.singletonList(-1));
+              throw new HoodieKeyException("recordKey value not found for field: \"" + f + "\"");
             }
           });
       // parse nested fields
-      getPartitionPathFields().stream().filter(f -> !f.isEmpty()).filter(f -> f.contains("."))
-          .forEach(f -> partitionPathPositions.put(f,
-              RowKeyGeneratorHelper.getNestedFieldIndices(structType, f, false)));
+      getRecordKeyFields().stream()
+          .filter(f -> f.contains("."))
+          .forEach(f -> recordKeyPositions.put(f, RowKeyGeneratorHelper.getNestedFieldIndices(structType, f, true)));
+      // parse simple fields
+      if (getPartitionPathFields() != null) {
+        getPartitionPathFields().stream().filter(f -> !f.isEmpty()).filter(f -> !(f.contains(".")))
+            .forEach(f -> {
+              if (structType.getFieldIndex(f).isDefined()) {
+                partitionPathPositions.put(f,
+                    Collections.singletonList((Integer) (structType.getFieldIndex(f).get())));
+              } else {
+                partitionPathPositions.put(f, Collections.singletonList(-1));
+              }
+            });
+        // parse nested fields
+        getPartitionPathFields().stream().filter(f -> !f.isEmpty()).filter(f -> f.contains("."))
+            .forEach(f -> partitionPathPositions.put(f,
+                RowKeyGeneratorHelper.getNestedFieldIndices(structType, f, false)));
+      }
+      this.structType = structType;
     }
-    this.structName = structName;
-    this.structType = structType;
-    this.recordNamespace = recordNamespace;
-  }
-
-  /**
-   * Fetch record key from {@link Row}.
-   *
-   * @param row instance of {@link Row} from which record key is requested.
-   * @return the record key of interest from {@link Row}.
-   */
-  @Override
-  public String getRecordKey(Row row) {
-    if (null == converterFn) {
-      converterFn = AvroConversionHelper.createConverterToAvro(structType, structName, recordNamespace);
-    }
-    GenericRecord genericRecord = (GenericRecord) converterFn.apply(row);
-    return getKey(genericRecord).getRecordKey();
-  }
-
-  /**
-   * Fetch partition path from {@link Row}.
-   *
-   * @param row instance of {@link Row} from which partition path is requested
-   * @return the partition path of interest from {@link Row}.
-   */
-  @Override
-  public String getPartitionPath(Row row) {
-    if (null == converterFn) {
-      converterFn = AvroConversionHelper.createConverterToAvro(structType, structName, recordNamespace);
-    }
-    GenericRecord genericRecord = (GenericRecord) converterFn.apply(row);
-    return getKey(genericRecord).getPartitionPath();
   }
 
   public List<String> getRecordKeyFields() {
@@ -158,13 +126,5 @@ public abstract class BuiltinKeyGenerator extends KeyGenerator {
 
   public List<String> getPartitionPathFields() {
     return partitionPathFields;
-  }
-
-  protected Map<String, List<Integer>> getRecordKeyPositions() {
-    return recordKeyPositions;
-  }
-
-  protected Map<String, List<Integer>> getPartitionPathPositions() {
-    return partitionPathPositions;
   }
 }

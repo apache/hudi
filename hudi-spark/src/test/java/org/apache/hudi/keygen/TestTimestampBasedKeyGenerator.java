@@ -49,8 +49,6 @@ public class TestTimestampBasedKeyGenerator {
   private Schema schema;
   private StructType structType;
   private Row baseRow;
-  private String testStructName = "testStructName";
-  private String testNamespace = "testNamespace";
 
   @BeforeEach
   public void initialize() throws IOException {
@@ -121,7 +119,6 @@ public class TestTimestampBasedKeyGenerator {
 
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
 
     // timezone is GMT
@@ -131,7 +128,6 @@ public class TestTimestampBasedKeyGenerator {
     assertEquals("2020-01-06 04", hk2.getPartitionPath());
 
     // test w/ Row
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("2020-01-06 04", keyGen.getPartitionPath(baseRow));
 
     // timestamp is DATE_STRING, timezone is GMT+8:00
@@ -144,7 +140,6 @@ public class TestTimestampBasedKeyGenerator {
 
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
 
     // timezone is GMT
@@ -154,7 +149,6 @@ public class TestTimestampBasedKeyGenerator {
     assertEquals("2020-01-06 12", hk4.getPartitionPath());
 
     // test w/ Row
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
   }
 
@@ -171,7 +165,6 @@ public class TestTimestampBasedKeyGenerator {
 
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("2024-10-04 12", keyGen.getPartitionPath(baseRow));
   }
 
@@ -190,7 +183,6 @@ public class TestTimestampBasedKeyGenerator {
     Assertions.assertEquals("2020040113", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("2020040113", keyGen.getPartitionPath(baseRow));
   }
 
@@ -209,7 +201,6 @@ public class TestTimestampBasedKeyGenerator {
     Assertions.assertEquals("2020040113", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("2020040113", keyGen.getPartitionPath(baseRow));
   }
 
@@ -228,7 +219,6 @@ public class TestTimestampBasedKeyGenerator {
     Assertions.assertEquals("2020040113", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("2020040113", keyGen.getPartitionPath(baseRow));
   }
 
@@ -247,7 +237,6 @@ public class TestTimestampBasedKeyGenerator {
     Assertions.assertEquals("2020040113", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("2020040113", keyGen.getPartitionPath(baseRow));
   }
 
@@ -266,7 +255,6 @@ public class TestTimestampBasedKeyGenerator {
     Assertions.assertEquals("2020040118", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("2020040118", keyGen.getPartitionPath(baseRow));
   }
 
@@ -285,7 +273,6 @@ public class TestTimestampBasedKeyGenerator {
     Assertions.assertEquals("2020040118", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("2020040118", keyGen.getPartitionPath(baseRow));
   }
 
@@ -304,7 +291,6 @@ public class TestTimestampBasedKeyGenerator {
     Assertions.assertEquals("2020040109", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("2020040109", keyGen.getPartitionPath(baseRow));
   }
 
@@ -322,7 +308,6 @@ public class TestTimestampBasedKeyGenerator {
     Assertions.assertThrows(HoodieDeltaStreamerException.class, () -> keyGen.getKey(baseRecord));
 
     baseRow = genericRecordToRow(baseRecord);
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     Assertions.assertThrows(HoodieDeltaStreamerException.class, () -> keyGen.getPartitionPath(baseRow));
   }
 
@@ -341,7 +326,6 @@ public class TestTimestampBasedKeyGenerator {
     Assertions.assertEquals("04/01/2020", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
-    keyGen.initializeRowKeyGenerator(structType, testStructName, testNamespace);
     assertEquals("04/01/2020", keyGen.getPartitionPath(baseRow));
   }
 }

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.keygen;
+package org.apache.hudi.testutils;
 
 import org.apache.hudi.AvroConversionHelper;
 import org.apache.hudi.AvroConversionUtils;
@@ -30,7 +30,7 @@ import org.apache.spark.sql.types.StructType;
 
 import scala.Function1;
 
-public class TestKeyGeneratorUtilities {
+public class KeyGeneratorTestUtilities {
 
   public static String exampleSchema = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"long\"},{\"name\": \"_row_key\", \"type\": \"string\"},"

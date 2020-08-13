@@ -33,8 +33,6 @@ import org.apache.spark.sql.Row;
 public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   public static final String DEFAULT_RECORD_KEY_SEPARATOR = ":";
-  protected final boolean hiveStylePartitioning;
-  protected final boolean encodePartitionPath;
 
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
@@ -42,10 +40,6 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
         .split(",")).map(String::trim).collect(Collectors.toList());
     this.partitionPathFields = Arrays.stream(props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY())
         .split(",")).map(String::trim).collect(Collectors.toList());
-    this.hiveStylePartitioning = props.getBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
-        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
-    this.encodePartitionPath = props.getBoolean(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY(),
-        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL()));
   }
 
   @Override
@@ -60,12 +54,14 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(Row row) {
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), getRecordKeyPositions(), true);
+    buildFieldPositionMapIfNeeded(row.schema());
+    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, true);
   }
 
   @Override
   public String getPartitionPath(Row row) {
+    buildFieldPositionMapIfNeeded(row.schema());
     return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(),
-        hiveStylePartitioning, getPartitionPathPositions());
+        hiveStylePartitioning, partitionPathPositions);
   }
 }

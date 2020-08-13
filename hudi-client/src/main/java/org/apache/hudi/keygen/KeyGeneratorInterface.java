@@ -18,38 +18,24 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.common.config.TypedProperties;
-
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.spark.sql.Row;
 
-import java.util.ArrayList;
+import java.io.Serializable;
 import java.util.List;
 
 /**
- * Simple Key generator for unpartitioned Hive Tables.
+ * Represents the interface key generators need to adhere to.
  */
-public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
+public interface KeyGeneratorInterface extends Serializable {
 
-  private static final String EMPTY_PARTITION = "";
-  private static final List<String> EMPTY_PARTITION_FIELD_LIST = new ArrayList<>();
+  HoodieKey getKey(GenericRecord record);
 
-  public NonpartitionedKeyGenerator(TypedProperties props) {
-    super(props);
-  }
+  List<String> getRecordKeyFieldNames();
 
-  @Override
-  public String getPartitionPath(GenericRecord record) {
-    return EMPTY_PARTITION;
-  }
+  String getRecordKey(Row row);
 
-  @Override
-  public List<String> getPartitionPathFields() {
-    return EMPTY_PARTITION_FIELD_LIST;
-  }
+  String getPartitionPath(Row row);
 
-  @Override
-  public String getPartitionPath(Row row) {
-    return EMPTY_PARTITION;
-  }
 }
