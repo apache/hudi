@@ -126,6 +126,8 @@
     <utilities.bundle.hive.shade.prefix></utilities.bundle.hive.shade.prefix>
     <argLine>-Xmx2g</argLine>
     <jacoco.version>0.8.5</jacoco.version>
+    <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
+    <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
   </properties>
 
   <scm>
