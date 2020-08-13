@@ -25,10 +25,11 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.keygen.parser.HoodieDateTimeParser;
 import org.apache.hudi.keygen.parser.HoodieDateTimeParserImpl;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
@@ -39,10 +40,14 @@ import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
 import java.util.concurrent.TimeUnit;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH;
+import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
+import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
 
 /**
  * Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
@@ -89,11 +94,16 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   }
 
   public TimestampBasedKeyGenerator(TypedProperties config) throws IOException {
-    this(config, config.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()));
+    this(config, config.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()),
+        config.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()));
   }
 
-  public TimestampBasedKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
-    super(config, partitionPathField);
+  TimestampBasedKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
+    this(config, null, partitionPathField);
+  }
+
+  TimestampBasedKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
+    super(config, recordKeyField, partitionPathField);
     String dateTimeParserClass = config.getString(Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParserImpl.class.getName());
     this.parser = DataSourceUtils.createDateTimeParser(config, dateTimeParserClass);
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
@@ -125,49 +135,58 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, partitionPathField, true);
+    Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, getPartitionPathFields().get(0), true);
     if (partitionVal == null) {
       partitionVal = 1L;
     }
+    try {
+      return getPartitionPath(partitionVal);
+    } catch (Exception e) {
+      throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, e);
+    }
+  }
 
+  /**
+   * Parse and fetch partition path based on data type.
+   *
+   * @param partitionVal partition path object value fetched from record/row
+   * @return the parsed partition path based on data type
+   * @throws ParseException on any parse exception
+   */
+  private String getPartitionPath(Object partitionVal) throws ParseException {
     DateTimeFormatter partitionFormatter = DateTimeFormat.forPattern(outputDateFormat);
     if (this.outputDateTimeZone != null) {
       partitionFormatter = partitionFormatter.withZone(outputDateTimeZone);
     }
-
-    try {
-      long timeMs;
-      if (partitionVal instanceof Double) {
-        timeMs = convertLongTimeToMillis(((Double) partitionVal).longValue());
-      } else if (partitionVal instanceof Float) {
-        timeMs = convertLongTimeToMillis(((Float) partitionVal).longValue());
-      } else if (partitionVal instanceof Long) {
-        timeMs = convertLongTimeToMillis((Long) partitionVal);
-      } else if (partitionVal instanceof CharSequence) {
-        DateTime parsedDateTime = inputFormatter.parseDateTime(partitionVal.toString());
-        if (this.outputDateTimeZone == null) {
-          // Use the timezone that came off the date that was passed in, if it had one
-          partitionFormatter = partitionFormatter.withZone(parsedDateTime.getZone());
-        }
-
-        timeMs = inputFormatter.parseDateTime(partitionVal.toString()).getMillis();
-      } else {
-        throw new HoodieNotSupportedException(
-            "Unexpected type for partition field: " + partitionVal.getClass().getName());
+    long timeMs;
+    if (partitionVal instanceof Double) {
+      timeMs = convertLongTimeToMillis(((Double) partitionVal).longValue());
+    } else if (partitionVal instanceof Float) {
+      timeMs = convertLongTimeToMillis(((Float) partitionVal).longValue());
+    } else if (partitionVal instanceof Long) {
+      timeMs = convertLongTimeToMillis((Long) partitionVal);
+    } else if (partitionVal instanceof CharSequence) {
+      DateTime parsedDateTime = inputFormatter.parseDateTime(partitionVal.toString());
+      if (this.outputDateTimeZone == null) {
+        // Use the timezone that came off the date that was passed in, if it had one
+        partitionFormatter = partitionFormatter.withZone(parsedDateTime.getZone());
       }
-      DateTime timestamp = new DateTime(timeMs, outputDateTimeZone);
-      String partitionPath = timestamp.toString(partitionFormatter);
-      if (encodePartitionPath) {
-        try {
-          partitionPath = URLEncoder.encode(partitionPath, StandardCharsets.UTF_8.toString());
-        } catch (UnsupportedEncodingException uoe) {
-          throw new HoodieException(uoe.getMessage(), uoe);
-        }
-      }
-      return hiveStylePartitioning ? partitionPathField + "=" + partitionPath : partitionPath;
-    } catch (Exception e) {
-      throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, e);
+
+      timeMs = inputFormatter.parseDateTime(partitionVal.toString()).getMillis();
+    } else {
+      throw new HoodieNotSupportedException(
+          "Unexpected type for partition field: " + partitionVal.getClass().getName());
     }
+    DateTime timestamp = new DateTime(timeMs, outputDateTimeZone);
+    String partitionPath = timestamp.toString(partitionFormatter);
+    if (encodePartitionPath) {
+      try {
+        partitionPath = URLEncoder.encode(partitionPath, StandardCharsets.UTF_8.toString());
+      } catch (UnsupportedEncodingException uoe) {
+        throw new HoodieException(uoe.getMessage(), uoe);
+      }
+    }
+    return hiveStylePartitioning ? getPartitionPathFields().get(0) + "=" + partitionPath : partitionPath;
   }
 
   private long convertLongTimeToMillis(Long partitionVal) {
@@ -176,5 +195,29 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
       throw new RuntimeException(Config.INPUT_TIME_UNIT + " is not specified but scalar it supplied as time value");
     }
     return MILLISECONDS.convert(partitionVal, timeUnit);
+  }
+
+  @Override
+  public String getRecordKey(Row row) {
+    buildFieldPositionMapIfNeeded(row.schema());
+    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, false);
+  }
+
+  @Override
+  public String getPartitionPath(Row row) {
+    Object fieldVal = null;
+    buildFieldPositionMapIfNeeded(row.schema());
+    Object partitionPathFieldVal =  RowKeyGeneratorHelper.getNestedFieldVal(row, partitionPathPositions.get(getPartitionPathFields().get(0)));
+    try {
+      if (partitionPathFieldVal.toString().contains(DEFAULT_PARTITION_PATH) || partitionPathFieldVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER)
+          || partitionPathFieldVal.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
+        fieldVal = 1L;
+      } else {
+        fieldVal = partitionPathFieldVal;
+      }
+      return getPartitionPath(fieldVal);
+    } catch (Exception e) {
+      throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + fieldVal, e);
+    }
   }
 }

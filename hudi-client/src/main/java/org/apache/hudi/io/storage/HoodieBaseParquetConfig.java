@@ -18,14 +18,15 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
-public class HoodieParquetConfig {
-
-  private HoodieAvroWriteSupport writeSupport;
+/**
+ * Base ParquetConfig to hold config params for writing to Parquet.
+ * @param <T>
+ */
+public class HoodieBaseParquetConfig<T> {
+  private final T writeSupport;
   private CompressionCodecName compressionCodecName;
   private int blockSize;
   private int pageSize;
@@ -33,8 +34,8 @@ public class HoodieParquetConfig {
   private Configuration hadoopConf;
   private double compressionRatio;
 
-  public HoodieParquetConfig(HoodieAvroWriteSupport writeSupport, CompressionCodecName compressionCodecName,
-      int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio) {
+  public HoodieBaseParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize,
+                                 int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio) {
     this.writeSupport = writeSupport;
     this.compressionCodecName = compressionCodecName;
     this.blockSize = blockSize;
@@ -42,10 +43,6 @@ public class HoodieParquetConfig {
     this.maxFileSize = maxFileSize;
     this.hadoopConf = hadoopConf;
     this.compressionRatio = compressionRatio;
-  }
-
-  public HoodieAvroWriteSupport getWriteSupport() {
-    return writeSupport;
   }
 
   public CompressionCodecName getCompressionCodecName() {
@@ -70,5 +67,9 @@ public class HoodieParquetConfig {
 
   public double getCompressionRatio() {
     return compressionRatio;
+  }
+
+  public T getWriteSupport() {
+    return writeSupport;
   }
 }

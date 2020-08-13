@@ -229,6 +229,13 @@ object DataSourceWriteOptions {
   val DEFAULT_KEYGENERATOR_CLASS_OPT_VAL = classOf[SimpleKeyGenerator].getName
 
   /**
+   * When set to true, will perform write operations directly using the spark native `Row` representation.
+   * By default, false (will be enabled as default in a future release)
+   */
+  val ENABLE_ROW_WRITER_OPT_KEY = "hoodie.datasource.write.row.writer.enable"
+  val DEFAULT_ENABLE_ROW_WRITER_OPT_VAL = "false"
+
+  /**
     * Option keys beginning with this prefix, are automatically added to the commit/deltacommit metadata.
     * This is useful to store checkpointing information, in a consistent way with the hoodie timeline
     */
@@ -299,6 +306,6 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_USE_JDBC_OPT_VAL = "true"
 
   // Async Compaction - Enabled by default for MOR
-  val ASYNC_COMPACT_ENABLE_KEY = "hoodie.datasource.compaction.async.enable"
-  val DEFAULT_ASYNC_COMPACT_ENABLE_VAL = "true"
+  val ASYNC_COMPACT_ENABLE_OPT_KEY = "hoodie.datasource.compaction.async.enable"
+  val DEFAULT_ASYNC_COMPACT_ENABLE_OPT_VAL = "true"
 }

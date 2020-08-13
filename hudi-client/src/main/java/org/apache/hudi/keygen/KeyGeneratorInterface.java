@@ -18,37 +18,24 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieKey;
-
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.spark.sql.Row;
 
 import java.io.Serializable;
 import java.util.List;
 
 /**
- * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record.
+ * Represents the interface key generators need to adhere to.
  */
-public abstract class KeyGenerator implements Serializable {
+public interface KeyGeneratorInterface extends Serializable {
 
-  protected transient TypedProperties config;
+  HoodieKey getKey(GenericRecord record);
 
-  protected KeyGenerator(TypedProperties config) {
-    this.config = config;
-  }
+  List<String> getRecordKeyFieldNames();
 
-  /**
-   * Generate a Hoodie Key out of provided generic record.
-   */
-  public abstract HoodieKey getKey(GenericRecord record);
+  String getRecordKey(Row row);
 
-  /**
-   * Used during bootstrap, to project out only the record key fields from bootstrap source dataset.
-   *
-   * @return list of field names, when concatenated make up the record key.
-   */
-  public List<String> getRecordKeyFieldNames() {
-    throw new UnsupportedOperationException("Bootstrap not supported for key generator. "
-        + "Please override this method in your custom key generator.");
-  }
+  String getPartitionPath(Row row);
+
 }

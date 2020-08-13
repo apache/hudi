@@ -16,18 +16,31 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.keygen;
+package org.apache.hudi.testutils;
+
+import org.apache.hudi.AvroConversionHelper;
+import org.apache.hudi.AvroConversionUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
+import org.apache.spark.sql.types.StructType;
 
-public class TestKeyGeneratorUtilities {
+import scala.Function1;
 
-  public String exampleSchema = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+public class KeyGeneratorTestUtilities {
+
+  public static String exampleSchema = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"long\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"ts_ms\", \"type\": \"string\"},"
       + "{\"name\": \"pii_col\", \"type\": \"string\"}]}";
+
+  public static final String TEST_STRUCTNAME = "test_struct_name";
+  public static final String TEST_RECORD_NAMESPACE = "test_record_namespace";
+  public static Schema schema = new Schema.Parser().parse(exampleSchema);
+  public static StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
 
   public GenericRecord getRecord() {
     GenericRecord record = new GenericData.Record(new Schema.Parser().parse(exampleSchema));
@@ -36,5 +49,20 @@ public class TestKeyGeneratorUtilities {
     record.put("ts_ms", "2020-03-21");
     record.put("pii_col", "pi");
     return record;
+  }
+
+  public static Row getRow(GenericRecord record) {
+    return getRow(record, schema, structType);
+  }
+
+  public static Row getRow(GenericRecord record, Schema schema, StructType structType) {
+    Function1<Object, Object> converterFn = AvroConversionHelper.createConverterToRow(schema, structType);
+    Row row = (Row) converterFn.apply(record);
+    int fieldCount = structType.fieldNames().length;
+    Object[] values = new Object[fieldCount];
+    for (int i = 0; i < fieldCount; i++) {
+      values[i] = row.get(i);
+    }
+    return new GenericRowWithSchema(values, structType);
   }
 }
