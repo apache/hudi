@@ -18,7 +18,10 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.AvroConversionHelper;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 
@@ -32,6 +35,7 @@ import java.util.List;
 /**
  * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public abstract class KeyGenerator implements Serializable, KeyGeneratorInterface {
 
   private static final String STRUCT_NAME = "hoodieRowTopLevelField";
@@ -47,6 +51,7 @@ public abstract class KeyGenerator implements Serializable, KeyGeneratorInterfac
   /**
    * Generate a Hoodie Key out of provided generic record.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract HoodieKey getKey(GenericRecord record);
 
   /**
@@ -54,6 +59,7 @@ public abstract class KeyGenerator implements Serializable, KeyGeneratorInterfac
    *
    * @return list of field names, when concatenated make up the record key.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public List<String> getRecordKeyFieldNames() {
     throw new UnsupportedOperationException("Bootstrap not supported for key generator. "
         + "Please override this method in your custom key generator.");
@@ -64,6 +70,7 @@ public abstract class KeyGenerator implements Serializable, KeyGeneratorInterfac
    * @param row instance of {@link Row} from which record key is requested.
    * @return the record key of interest from {@link Row}.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getRecordKey(Row row) {
     if (null == converterFn) {
       converterFn = AvroConversionHelper.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
@@ -77,6 +84,7 @@ public abstract class KeyGenerator implements Serializable, KeyGeneratorInterfac
    * @param row instance of {@link Row} from which partition path is requested
    * @return the partition path of interest from {@link Row}.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getPartitionPath(Row row) {
     if (null == converterFn) {
       converterFn = AvroConversionHelper.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
