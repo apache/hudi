@@ -19,6 +19,7 @@
 package org.apache.hudi.integ;
 
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -34,20 +35,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class ITTestHoodieSanity extends ITTestBase {
 
+  private static final String HDFS_BASE_URL =  "hdfs://namenode";
+  private static final String HDFS_STREAMING_SOURCE =  HDFS_BASE_URL + "/streaming/source/";
+  private static final String HDFS_STREAMING_CKPT =  HDFS_BASE_URL + "/streaming/ckpt/";
+
   enum PartitionType {
     SINGLE_KEY_PARTITIONED, MULTI_KEYS_PARTITIONED, NON_PARTITIONED,
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = { HOODIE_JAVA_APP, HOODIE_JAVA_STREAMING_APP })
+  @Test
   /**
    * A basic integration test that runs HoodieJavaApp to create a sample COW Hoodie with single partition key data-set
    * and performs upserts on it. Hive integration and upsert functionality is checked by running a count query in hive
    * console.
    */
-  public void testRunHoodieJavaAppOnSinglePartitionKeyCOWTable(String command) throws Exception {
-    String hiveTableName = "docker_hoodie_single_partition_key_cow_test";
-    testRunHoodieJavaApp(command, hiveTableName, HoodieTableType.COPY_ON_WRITE.name(),
+  public void testRunHoodieJavaAppOnSinglePartitionKeyCOWTable() throws Exception {
+    String hiveTableName = "docker_hoodie_single_partition_key_cow_test_" + HoodieActiveTimeline.createNewInstantTime();
+    testRunHoodieJavaApp(hiveTableName, HoodieTableType.COPY_ON_WRITE.name(),
         PartitionType.SINGLE_KEY_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());
   }
@@ -59,9 +63,9 @@ public class ITTestHoodieSanity extends ITTestBase {
    * data-set and performs upserts on it. Hive integration and upsert functionality is checked by running a count query
    * in hive console.
    */
-  public void testRunHoodieJavaAppOnMultiPartitionKeysCOWTable(String command) throws Exception {
-    String hiveTableName = "docker_hoodie_multi_partition_key_cow_test";
-    testRunHoodieJavaApp(command, hiveTableName, HoodieTableType.COPY_ON_WRITE.name(),
+  public void testRunHoodieJavaAppOnMultiPartitionKeysCOWTable() throws Exception {
+    String hiveTableName = "docker_hoodie_multi_partition_key_cow_test_" + HoodieActiveTimeline.createNewInstantTime();
+    testRunHoodieJavaApp(HOODIE_JAVA_APP, hiveTableName, HoodieTableType.COPY_ON_WRITE.name(),
         PartitionType.MULTI_KEYS_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());
   }
@@ -73,21 +77,20 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnNonPartitionedCOWTable() throws Exception {
-    String hiveTableName = "docker_hoodie_non_partition_key_cow_test";
+    String hiveTableName = "docker_hoodie_non_partition_key_cow_test_" + HoodieActiveTimeline.createNewInstantTime();
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.COPY_ON_WRITE.name(), PartitionType.NON_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = { HOODIE_JAVA_APP, HOODIE_JAVA_STREAMING_APP })
+  @Test
   /**
    * A basic integration test that runs HoodieJavaApp to create a sample MOR Hoodie with single partition key data-set
    * and performs upserts on it. Hive integration and upsert functionality is checked by running a count query in hive
    * console.
    */
-  public void testRunHoodieJavaAppOnSinglePartitionKeyMORTable(String command) throws Exception {
-    String hiveTableName = "docker_hoodie_single_partition_key_mor_test";
-    testRunHoodieJavaApp(command, hiveTableName, HoodieTableType.MERGE_ON_READ.name(),
+  public void testRunHoodieJavaAppOnSinglePartitionKeyMORTable() throws Exception {
+    String hiveTableName = "docker_hoodie_single_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
+    testRunHoodieJavaApp(hiveTableName, HoodieTableType.MERGE_ON_READ.name(),
         PartitionType.SINGLE_KEY_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
   }
@@ -100,7 +103,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * in hive console.
    */
   public void testRunHoodieJavaAppOnMultiPartitionKeysMORTable(String command) throws Exception {
-    String hiveTableName = "docker_hoodie_multi_partition_key_mor_test";
+    String hiveTableName = "docker_hoodie_multi_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
     testRunHoodieJavaApp(command, hiveTableName, HoodieTableType.MERGE_ON_READ.name(),
         PartitionType.MULTI_KEYS_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
@@ -113,7 +116,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnNonPartitionedMORTable() throws Exception {
-    String hiveTableName = "docker_hoodie_non_partition_key_mor_test";
+    String hiveTableName = "docker_hoodie_non_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.MERGE_ON_READ.name(), PartitionType.NON_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
   }
@@ -127,7 +130,7 @@ public class ITTestHoodieSanity extends ITTestBase {
       throws Exception {
 
     String hdfsPath = "/" + hiveTableName;
-    String hdfsUrl = "hdfs://namenode" + hdfsPath;
+    String hdfsUrl = HDFS_BASE_URL + hdfsPath;
 
     // Drop Table if it exists
     try {
@@ -154,6 +157,13 @@ public class ITTestHoodieSanity extends ITTestBase {
     } else {
       cmd = command + " --hive-sync --table-path " + hdfsUrl + " --hive-url " + HIVE_SERVER_JDBC_URL
           + " --table-type " + tableType + " --hive-table " + hiveTableName + " --non-partitioned";
+    }
+
+    if (command.equals(HOODIE_JAVA_STREAMING_APP)) {
+      String streamingSourcePath = HDFS_STREAMING_SOURCE + hiveTableName;
+      String streamingCkptPath = HDFS_STREAMING_CKPT + hiveTableName;
+      cmd = cmd + " --streaming-source-path " +  streamingSourcePath
+          + " --streaming-checkpointing-path " + streamingCkptPath;
     }
     executeCommandStringInDocker(ADHOC_1_CONTAINER, cmd, true);
 

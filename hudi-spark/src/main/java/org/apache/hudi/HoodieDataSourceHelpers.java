@@ -74,7 +74,7 @@ public class HoodieDataSourceHelpers {
     if (metaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
       return metaClient.getActiveTimeline().getTimelineOfActions(
           CollectionUtils.createSet(HoodieActiveTimeline.COMMIT_ACTION,
-              HoodieActiveTimeline.DELTA_COMMIT_ACTION));
+              HoodieActiveTimeline.DELTA_COMMIT_ACTION)).filterCompletedInstants();
     } else {
       return metaClient.getCommitTimeline().filterCompletedInstants();
     }
