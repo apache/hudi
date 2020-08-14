@@ -35,9 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class ITTestHoodieSanity extends ITTestBase {
 
-  private static final String HDFS_BASE_URL =  "hdfs://namenode/";
-  private static final String HDFS_STREAMING_SOURCE =  HDFS_BASE_URL + "streaming/source/";
-  private static final String HDFS_STREAMING_CKPT =  HDFS_BASE_URL + "streaming/ckpt/";
+  private static final String HDFS_BASE_URL =  "hdfs://namenode";
+  private static final String HDFS_STREAMING_SOURCE =  HDFS_BASE_URL + "/streaming/source/";
+  private static final String HDFS_STREAMING_CKPT =  HDFS_BASE_URL + "/streaming/ckpt/";
 
   enum PartitionType {
     SINGLE_KEY_PARTITIONED, MULTI_KEYS_PARTITIONED, NON_PARTITIONED,
@@ -129,7 +129,7 @@ public class ITTestHoodieSanity extends ITTestBase {
   public void testRunHoodieJavaApp(String command, String hiveTableName, String tableType, PartitionType partitionType)
       throws Exception {
 
-    String hdfsPath = hiveTableName;
+    String hdfsPath = "/" + hiveTableName;
     String hdfsUrl = HDFS_BASE_URL + hdfsPath;
 
     // Drop Table if it exists
