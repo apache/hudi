@@ -71,6 +71,9 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
   public Boolean useJdbc = true;
 
+  @Parameter(names = {"--create-database"}, description = "Create hive database")
+  public Boolean createDatabase = false;
+
   @Parameter(names = {"--skip-ro-suffix"}, description = "Skip the `_ro` suffix for Read optimized table, when registering")
   public Boolean skipROSuffix = false;
 
