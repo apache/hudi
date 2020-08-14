@@ -18,6 +18,9 @@
 
 package org.apache.hudi.utilities.schema;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.Schema;
@@ -28,6 +31,7 @@ import java.io.Serializable;
 /**
  * Class to provide schema for reading data and also writing into a Hoodie table.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public abstract class SchemaProvider implements Serializable {
 
   protected TypedProperties config;
@@ -39,8 +43,10 @@ public abstract class SchemaProvider implements Serializable {
     this.jssc = jssc;
   }
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract Schema getSourceSchema();
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public Schema getTargetSchema() {
     // by default, use source schema as target for hoodie table as well
     return getSourceSchema();

@@ -18,6 +18,9 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
@@ -45,6 +48,7 @@ import java.io.Serializable;
 /**
  * Base class for different types of indexes to determine the mapping from uuid.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Serializable {
 
   protected final HoodieWriteConfig config;
@@ -85,6 +89,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    * Checks if the given [Keys] exists in the hoodie table and returns [Key, Option[partitionPath, fileID]] If the
    * optional is empty, then the key is not found.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract JavaPairRDD<HoodieKey, Option<Pair<String, String>>> fetchRecordLocation(
       JavaRDD<HoodieKey> hoodieKeys, final JavaSparkContext jsc, HoodieTable<T> hoodieTable);
 
@@ -92,6 +97,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    * Looks up the index and tags each incoming record with a location of a file that contains the row (if it is actually
    * present).
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, JavaSparkContext jsc,
                                                        HoodieTable<T> hoodieTable) throws HoodieIndexException;
 
@@ -100,12 +106,14 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    * <p>
    * TODO(vc): We may need to propagate the record as well in a WriteStatus class
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc,
                                                       HoodieTable<T> hoodieTable) throws HoodieIndexException;
 
   /**
    * Rollback the efffects of the commit made at instantTime.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract boolean rollbackCommit(String instantTime);
 
   /**
@@ -115,6 +123,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    *
    * @return whether or not, the index implementation is global in nature
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract boolean isGlobal();
 
   /**
@@ -123,12 +132,14 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    *
    * @return Returns true/false depending on whether the impl has this capability
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract boolean canIndexLogFiles();
 
   /**
    * An index is "implicit" with respect to storage, if just writing new data to a file slice, updates the index as
    * well. This is used by storage, to save memory footprint in certain cases.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract boolean isImplicitWithStorage();
 
   /**
