@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
@@ -119,6 +120,8 @@ public class HoodieJavaApp {
     } else {
       dataGen = new HoodieTestDataGenerator();
     }
+
+    fs.delete(new Path(tablePath), true);
 
     /**
      * Commit with only inserts

@@ -302,6 +302,8 @@ private[hudi] object HoodieSparkSqlWriter {
       if (mode == SaveMode.ErrorIfExists && tableExists) {
         throw new HoodieException(s"hoodie table at $tablePath already exists.")
       } else if (mode == SaveMode.Overwrite && tableExists) {
+        System.out.println(s"hoodie table at $tablePath already exists. " +
+          s"Deleting existing data & overwriting with new data.")
         log.warn(s"hoodie table at $tablePath already exists. Deleting existing data & overwriting with new data.")
         fs.delete(tablePath, true)
         tableExists = false

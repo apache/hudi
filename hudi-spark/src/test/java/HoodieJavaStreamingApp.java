@@ -334,7 +334,8 @@ public class HoodieJavaStreamingApp {
   public int addInputAndValidateIngestion(SparkSession spark, FileSystem fs, String srcPath,
       int initialCommits, int expRecords,
       Dataset<Row> inputDF1, Dataset<Row> inputDF2, boolean instantTimeValidation) throws Exception {
-    inputDF1.write().mode(SaveMode.Append).json(srcPath);
+    // Ensure, we always write only one file.
+    inputDF1.coalesce(1).write().mode(SaveMode.Append).json(srcPath);
 
     int numExpCommits = initialCommits + 1;
     // wait for spark streaming to process one microbatch
