@@ -67,7 +67,7 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
       producer.send(record);
       LOG.info(String.format("Send callback message %s succeed", callbackMsg));
     } catch (Exception e) {
-      LOG.error("Send kafka callback msg failed : " + e);
+      LOG.error("Send kafka callback msg failed : ", e);
     }
   }
 
@@ -91,7 +91,7 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
     kafkaProducerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
         "org.apache.kafka.common.serialization.StringSerializer");
 
-    LOG.info("Callback kafka producer init with configs: "
+    LOG.debug("Callback kafka producer init with configs: "
         + HoodieWriteCommitCallbackUtil.convertToJsonString(kafkaProducerProps));
     return new KafkaProducer<String, String>(kafkaProducerProps);
   }
@@ -108,14 +108,10 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
   private ProducerRecord<String, String> buildProducerRecord(Properties props, String callbackMsg) {
     String partition = props.getProperty(CALLBACK_KAFKA_PARTITION);
     if (null != partition) {
-      return new ProducerRecord<String, String>(topic,
-          Integer.valueOf(partition),
-          props.getProperty(TABLE_NAME),
+      return new ProducerRecord<String, String>(topic, Integer.valueOf(partition), props.getProperty(TABLE_NAME),
           callbackMsg);
     } else {
-      return new ProducerRecord<String, String>(topic,
-          props.getProperty(TABLE_NAME),
-          callbackMsg);
+      return new ProducerRecord<String, String>(topic, props.getProperty(TABLE_NAME), callbackMsg);
     }
   }
 

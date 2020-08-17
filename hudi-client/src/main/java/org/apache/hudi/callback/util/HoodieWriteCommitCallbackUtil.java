@@ -28,12 +28,12 @@ import java.io.IOException;
  */
 public class HoodieWriteCommitCallbackUtil {
 
+  private static ObjectMapper mapper = new ObjectMapper();
+
   /**
    * Convert data to json string format.
    */
   public static String convertToJsonString(Object obj) {
-    // convert to json
-    ObjectMapper mapper = new ObjectMapper();
     try {
       return mapper.writeValueAsString(obj);
     } catch (IOException e) {
