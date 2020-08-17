@@ -512,7 +512,7 @@ Property: `hoodie.memory.writestatus.failure.fraction` <br/>
 <span style="color:grey">This property controls what fraction of the failed record, exceptions we report back to driver</span>
 
 ### Write commit callback configs
-Controls callback behavior on write commit. Exception will be thrown if user enabled the callback service and errors occurred during the process of callback. Currently support http callback only, kafka implementation will be supported in the near future. 
+Controls callback behavior on write commit. Exception will be thrown if user enabled the callback service and errors occurred during the process of callback. Currently support http, kafka type only. 
 [withCallbackConfig](#withCallbackConfig) (HoodieWriteCommitCallbackConfig) <br/>
 <span style="color:grey">Callback related configs</span>
 
@@ -522,9 +522,10 @@ Property: `hoodie.write.commit.callback.on` <br/>
 
 ##### withCallbackClass(callbackClass) {#withCallbackClass} 
 Property: `hoodie.write.commit.callback.class` <br/>
-<span style="color:grey">Full path of user-defined callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default</span>
+<span style="color:grey">Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default</span>
 
-#### HoodieWriteCommitHttpCallback
+#### HTTP CALLBACK
+Callback via http, User does not need to specify this way explicitly, it is the default type.
 
 ##### withCallbackHttpUrl(url) {#withCallbackHttpUrl} 
 Property: `hoodie.write.commit.callback.http.url` <br/>
@@ -537,3 +538,26 @@ Property: `hoodie.write.commit.callback.http.timeout.seconds` <br/>
 ##### withCallbackHttpApiKey(apiKey) {#withCallbackHttpApiKey} 
 Property: `hoodie.write.commit.callback.http.api.key` <br/>
 <span style="color:grey">Http callback API key. hudi_write_commit_http_callback by default</span>
+
+#### KAFKA CALLBACK
+To use kafka callback, User should set `hoodie.write.commit.callback.class` = `org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback`
+
+##### CALLBACK_KAFKA_BOOTSTRAP_SERVERS
+Property: `hoodie.write.commit.callback.kafka.bootstrap.servers` <br/>
+<span style="color:grey">Bootstrap servers of kafka callback cluster</span>
+
+##### CALLBACK_KAFKA_TOPIC
+Property: `hoodie.write.commit.callback.kafka.topic` <br/>
+<span style="color:grey">Kafka topic to be sent along with callback messages</span>
+
+##### CALLBACK_KAFKA_PARTITION
+Property: `hoodie.write.commit.callback.kafka.partition` <br/>
+<span style="color:grey">partition of `CALLBACK_KAFKA_TOPIC`, 0 by default</span>
+
+##### CALLBACK_KAFKA_ACKS
+Property: `hoodie.write.commit.callback.kafka.acks` <br/>
+<span style="color:grey">kafka acks level, `all` by default</span>
+
+##### CALLBACK_KAFKA_RETRIES
+Property: `hoodie.write.commit.callback.kafka.retries` <br/>
+<span style="color:grey">Times to retry. 3 by default</span>
