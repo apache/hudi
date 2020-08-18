@@ -20,8 +20,8 @@ package org.apache.hudi
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.TypedProperties
 
-import scala.collection.JavaConversions._
-import scala.collection.JavaConverters._
+import scala.collection.JavaConversions.mapAsJavaMap
+import scala.collection.JavaConverters.mapAsScalaMapConverter
 
 /**
  * WriterUtils to assist in write path in Datasource and tests.
