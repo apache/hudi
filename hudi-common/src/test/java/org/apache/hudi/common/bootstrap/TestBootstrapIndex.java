@@ -26,6 +26,7 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -86,7 +87,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
 
   @Test
   public void testBootstrapIndexConcurrent() throws Exception {
-    Map<String, List<BootstrapFileMapping>> bootstrapMapping  = generateBootstrapIndex(100);
+    Map<String, List<BootstrapFileMapping>> bootstrapMapping  = generateBootstrapIndex(metaClient, BOOTSTRAP_BASE_PATH, PARTITIONS, 100);
     final int numThreads = 20;
     final int numRequestsPerThread = 50;
     ExecutorService service = Executors.newFixedThreadPool(numThreads);
@@ -111,15 +112,15 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
   }
 
   private void testBootstrapIndexOneRound(int numEntriesPerPartition) throws IOException {
-    Map<String, List<BootstrapFileMapping>> bootstrapMapping = generateBootstrapIndex(numEntriesPerPartition);
+    Map<String, List<BootstrapFileMapping>> bootstrapMapping = generateBootstrapIndex(metaClient, BOOTSTRAP_BASE_PATH, PARTITIONS, numEntriesPerPartition);
     validateBootstrapIndex(bootstrapMapping);
   }
 
-  private Map<String, List<BootstrapFileMapping>> generateBootstrapIndex(int numEntriesPerPartition)
-      throws IOException {
-    Map<String, List<BootstrapFileMapping>> bootstrapMapping = generateBootstrapMapping(numEntriesPerPartition);
+  public static Map<String, List<BootstrapFileMapping>> generateBootstrapIndex(HoodieTableMetaClient metaClient,
+      String sourceBasePath, String[] partitions, int numEntriesPerPartition) {
+    Map<String, List<BootstrapFileMapping>> bootstrapMapping = generateBootstrapMapping(sourceBasePath, partitions, numEntriesPerPartition);
     BootstrapIndex index = new HFileBootstrapIndex(metaClient);
-    try (IndexWriter writer = index.createWriter(BOOTSTRAP_BASE_PATH)) {
+    try (IndexWriter writer = index.createWriter(sourceBasePath)) {
       writer.begin();
       bootstrapMapping.entrySet().stream().forEach(e -> writer.appendNextPartition(e.getKey(), e.getValue()));
       writer.finish();
@@ -162,13 +163,14 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
     }
   }
 
-  private Map<String, List<BootstrapFileMapping>> generateBootstrapMapping(int numEntriesPerPartition) {
-    return Arrays.stream(PARTITIONS).map(partition -> {
+  private static Map<String, List<BootstrapFileMapping>> generateBootstrapMapping(String sourceBasePath,
+      String[] partitions, int numEntriesPerPartition) {
+    return Arrays.stream(partitions).map(partition -> {
       return Pair.of(partition, IntStream.range(0, numEntriesPerPartition).mapToObj(idx -> {
         String hudiFileId = UUID.randomUUID().toString();
         String sourceFileName = idx + ".parquet";
         HoodieFileStatus sourceFileStatus = HoodieFileStatus.newBuilder()
-            .setPath(HoodiePath.newBuilder().setUri(BOOTSTRAP_BASE_PATH + "/" + partition + "/" + sourceFileName).build())
+            .setPath(HoodiePath.newBuilder().setUri(sourceBasePath + "/" + partition + "/" + sourceFileName).build())
             .setLength(256 * 1024 * 1024L)
             .setAccessTime(new Date().getTime())
             .setModificationTime(new Date().getTime() + 99999)
@@ -179,7 +181,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
             .setPermission(HoodieFSPermission.newBuilder().setUserAction(FsAction.ALL.name())
                 .setGroupAction(FsAction.READ.name()).setOtherAction(FsAction.NONE.name()).setStickyBit(true).build())
             .build();
-        return new BootstrapFileMapping(BOOTSTRAP_BASE_PATH, partition, partition, sourceFileStatus, hudiFileId);
+        return new BootstrapFileMapping(sourceBasePath, partition, partition, sourceFileStatus, hudiFileId);
       }).collect(Collectors.toList()));
     }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }

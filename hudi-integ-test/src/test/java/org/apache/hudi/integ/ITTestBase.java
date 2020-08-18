@@ -115,11 +115,9 @@ public abstract class ITTestBase {
   }
 
   static String getPrestoConsoleCommand(String commandFile) {
-    StringBuilder builder = new StringBuilder().append("presto --server " + PRESTO_COORDINATOR_URL)
+    return new StringBuilder().append("presto --server " + PRESTO_COORDINATOR_URL)
         .append(" --catalog hive --schema default")
-        .append(" -f " + commandFile);
-    System.out.println("Presto comamnd " + builder.toString());
-    return builder.toString();
+        .append(" -f " + commandFile).toString();
   }
 
   @BeforeEach
@@ -166,14 +164,14 @@ public abstract class ITTestBase {
 
     boolean completed =
       dockerClient.execStartCmd(createCmdResponse.getId()).withDetach(false).withTty(false).exec(callback)
-        .awaitCompletion(900, SECONDS);
+        .awaitCompletion(540, SECONDS);
     if (!completed) {
       callback.getStderr().flush();
       callback.getStdout().flush();
       LOG.error("\n\n ###### Timed Out Command : " +  Arrays.asList(command));
       LOG.error("\n\n ###### Stderr of timed-out command #######\n" + callback.getStderr().toString());
-      LOG.error("\n\n ###### stdout of timed-out command #######\n" + callback.getStderr().toString());
-      throw new TimeoutException("Command " + command +  " has been running for more than 15 minutes. "
+      LOG.error("\n\n ###### stdout of timed-out command #######\n" + callback.getStdout().toString());
+      throw new TimeoutException("Command " + command +  " has been running for more than 9 minutes. "
         + "Killing and failing !!");
     }
     int exitCode = dockerClient.inspectExecCmd(createCmdResponse.getId()).exec().getExitCode();

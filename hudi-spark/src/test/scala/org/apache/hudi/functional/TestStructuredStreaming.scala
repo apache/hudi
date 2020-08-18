@@ -102,7 +102,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     }
 
     val f2 = Future {
-      inputDF1.write.mode(SaveMode.Append).json(sourcePath)
+      inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process one microbatch
       val currNumCommits = waitTillAtleastNCommits(fs, destPath, 1, 120, 5)
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, destPath, "000"))
@@ -112,7 +112,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
         .load(destPath + "/*/*/*/*")
       assert(hoodieROViewDF1.count() == 100)
 
-      inputDF2.write.mode(SaveMode.Append).json(sourcePath)
+      inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process one microbatch
       waitTillAtleastNCommits(fs, destPath, currNumCommits + 1, 120, 5)
       val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, destPath)

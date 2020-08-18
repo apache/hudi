@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.6.0-SNAPSHOT</version>
+    <version>0.6.1-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -89,6 +89,11 @@
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
+                  <include>io.prometheus:simpleclient</include>
+                  <include>io.prometheus:simpleclient_httpserver</include>
+                  <include>io.prometheus:simpleclient_dropwizard</include>
+                  <include>io.prometheus:simpleclient_pushgateway</include>
+                  <include>io.prometheus:simpleclient_common</include>
                   <include>com.yammer.metrics:metrics-core</include>
 
                   <include>org.apache.spark:spark-avro_${scala.binary.version}</include>

@@ -47,6 +47,7 @@
       "type": "string"
     },
     {
+      /** This is deprecated and replaced by the field filePathsToBeDeletedPerPartition **/
       "name": "filesToBeDeletedPerPartition",
       "type": [
         "null", {
@@ -64,6 +65,33 @@
       "name":"version",
       "type":["int", "null"],
       "default": 1
+    },
+    {
+      "name": "filePathsToBeDeletedPerPartition",
+      "doc": "This field replaces the field filesToBeDeletedPerPartition",
+      "type": [
+        "null", {
+        "type":"map",
+        "values": {
+          "type":"array",
+          "items":{
+            "name":"HoodieCleanFileInfo",
+            "type": "record",
+            "fields":[
+                     {
+                        "name":"filePath",
+                        "type":["null","string"],
+                        "default": null
+                     },
+                     {
+                        "name":"isBootstrapBaseFile",
+                        "type":["null","boolean"],
+                        "default": null
+                     }
+                ]
+          }
+      }}],
+      "default" : null
     }
   ]
 }

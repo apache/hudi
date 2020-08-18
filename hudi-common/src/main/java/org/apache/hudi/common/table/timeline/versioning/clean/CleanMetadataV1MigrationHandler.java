@@ -31,11 +31,11 @@ import org.apache.hadoop.fs.Path;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class CleanV1MigrationHandler extends AbstractMigratorBase<HoodieCleanMetadata> {
+public class CleanMetadataV1MigrationHandler extends AbstractMigratorBase<HoodieCleanMetadata> {
 
   public static final Integer VERSION = 1;
 
-  public CleanV1MigrationHandler(HoodieTableMetaClient metaClient) {
+  public CleanMetadataV1MigrationHandler(HoodieTableMetaClient metaClient) {
     super(metaClient);
   }
 

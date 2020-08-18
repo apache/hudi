@@ -18,10 +18,10 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,12 +32,10 @@ import java.util.List;
 public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
 
   private static final String EMPTY_PARTITION = "";
-
-  protected final String recordKeyField;
+  private static final List<String> EMPTY_PARTITION_FIELD_LIST = new ArrayList<>();
 
   public NonpartitionedKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyField = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
   }
 
   @Override
@@ -47,6 +45,11 @@ public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public List<String> getPartitionPathFields() {
-    return new ArrayList<>();
+    return EMPTY_PARTITION_FIELD_LIST;
+  }
+
+  @Override
+  public String getPartitionPath(Row row) {
+    return EMPTY_PARTITION;
   }
 }

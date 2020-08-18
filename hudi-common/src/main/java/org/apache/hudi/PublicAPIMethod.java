@@ -16,25 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.keygen;
+package org.apache.hudi;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Inherited;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-public class TestKeyGeneratorUtilities {
-
-  public String exampleSchema = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
-      + "{\"name\": \"timestamp\",\"type\": \"long\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
-      + "{\"name\": \"ts_ms\", \"type\": \"string\"},"
-      + "{\"name\": \"pii_col\", \"type\": \"string\"}]}";
-
-  public GenericRecord getRecord() {
-    GenericRecord record = new GenericData.Record(new Schema.Parser().parse(exampleSchema));
-    record.put("timestamp", 4357686);
-    record.put("_row_key", "key1");
-    record.put("ts_ms", "2020-03-21");
-    record.put("pii_col", "pi");
-    return record;
-  }
+/**
+ * Annotates a method, as part of the public contract with user code.
+ */
+@Inherited
+@Documented
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.CLASS)
+public @interface PublicAPIMethod {
+  ApiMaturityLevel maturity();
 }
+

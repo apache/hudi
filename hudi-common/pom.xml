@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.6.0-SNAPSHOT</version>
+    <version>0.6.1-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -70,6 +70,7 @@
             <import>${basedir}/src/main/avro/HoodieCompactionOperation.avsc</import>
             <import>${basedir}/src/main/avro/HoodieSavePointMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCompactionMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieCleanPartitionMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCleanMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCleanerPlan.avsc</import>
             <import>${basedir}/src/main/avro/HoodieRollbackMetadata.avsc</import>
