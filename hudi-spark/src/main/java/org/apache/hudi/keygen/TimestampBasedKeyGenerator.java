@@ -40,7 +40,6 @@ import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.text.ParseException;
 import java.util.concurrent.TimeUnit;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -61,6 +60,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   private final TimeUnit timeUnit;
   private final TimestampType timestampType;
   private final String outputDateFormat;
+  private transient DateTimeFormatter inputFormatter;
+  private transient DateTimeFormatter partitionFormatter;
   private final HoodieDateTimeParser parser;
 
   // TimeZone detailed settings reference
@@ -140,8 +141,19 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     }
   }
 
+  /**
+   * The function takes care of lazily initialising dateTimeFormatter variables only once.
+   */
   private void initIfNeeded() {
-
+    if (this.inputFormatter == null) {
+      this.inputFormatter = parser.getInputFormatter();
+    }
+    if (this.partitionFormatter == null) {
+      this.partitionFormatter = DateTimeFormat.forPattern(outputDateFormat);
+      if (this.outputDateTimeZone != null) {
+        partitionFormatter = partitionFormatter.withZone(outputDateTimeZone);
+      }
+    }
   }
 
   /**
@@ -151,11 +163,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
    * @return the parsed partition path based on data type
    */
   private String getPartitionPath(Object partitionVal) {
-    DateTimeFormatter inputFormatter = parser.getInputFormatter();
-    DateTimeFormatter partitionFormatter = DateTimeFormat.forPattern(outputDateFormat);
-    if (this.outputDateTimeZone != null) {
-      partitionFormatter = partitionFormatter.withZone(outputDateTimeZone);
-    }
+    initIfNeeded();
     long timeMs;
     if (partitionVal instanceof Double) {
       timeMs = convertLongTimeToMillis(((Double) partitionVal).longValue());
