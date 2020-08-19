@@ -19,7 +19,7 @@ package org.apache.hudi.keygen.parser;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator.Config;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator.TimestampType;
 import org.joda.time.DateTimeZone;
@@ -86,16 +86,16 @@ public class HoodieDateTimeParserImpl implements HoodieDateTimeParser, Serializa
   }
 
   @Override
-  public DateTimeFormatter getInputFormatter() {
+  public Option<DateTimeFormatter> getInputFormatter() {
     TimestampType timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
     if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
       DataSourceUtils.checkRequiredProperties(config,
           Collections.singletonList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
       this.configInputDateFormatList = config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "");
-      return getInputDateFormatter();
+      return Option.of(getInputDateFormatter());
     }
 
-    throw new HoodieException("No need to use inputFormatter when timestampType is not DATE_STRING or MIXED!");
+    return Option.empty();
   }
 
   @Override

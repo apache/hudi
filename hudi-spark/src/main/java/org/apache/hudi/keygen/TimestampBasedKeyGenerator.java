@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -60,7 +61,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   private final TimeUnit timeUnit;
   private final TimestampType timestampType;
   private final String outputDateFormat;
-  private transient DateTimeFormatter inputFormatter;
+  private transient Option<DateTimeFormatter> inputFormatter;
   private transient DateTimeFormatter partitionFormatter;
   private final HoodieDateTimeParser parser;
 
@@ -172,13 +173,16 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     } else if (partitionVal instanceof Long) {
       timeMs = convertLongTimeToMillis((Long) partitionVal);
     } else if (partitionVal instanceof CharSequence) {
-      DateTime parsedDateTime = inputFormatter.parseDateTime(partitionVal.toString());
+      if (!inputFormatter.isPresent()) {
+        throw new HoodieException("Missing inputformatter. Ensure " +  Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP + " config is set when timestampType is DATE_STRING or MIXED!");
+      }
+      DateTime parsedDateTime = inputFormatter.get().parseDateTime(partitionVal.toString());
       if (this.outputDateTimeZone == null) {
         // Use the timezone that came off the date that was passed in, if it had one
         partitionFormatter = partitionFormatter.withZone(parsedDateTime.getZone());
       }
 
-      timeMs = inputFormatter.parseDateTime(partitionVal.toString()).getMillis();
+      timeMs = inputFormatter.get().parseDateTime(partitionVal.toString()).getMillis();
     } else {
       throw new HoodieNotSupportedException(
           "Unexpected type for partition field: " + partitionVal.getClass().getName());
