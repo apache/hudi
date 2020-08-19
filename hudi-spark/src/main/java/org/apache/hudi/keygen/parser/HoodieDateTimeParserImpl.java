@@ -19,6 +19,7 @@ package org.apache.hudi.keygen.parser;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator.Config;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator.TimestampType;
 import org.joda.time.DateTimeZone;
@@ -94,7 +95,7 @@ public class HoodieDateTimeParserImpl implements HoodieDateTimeParser, Serializa
       return getInputDateFormatter();
     }
 
-    return null;
+    throw new HoodieException("No need to use inputFormatter when timestampType is not DATE_STRING or MIXED!");
   }
 
   @Override
