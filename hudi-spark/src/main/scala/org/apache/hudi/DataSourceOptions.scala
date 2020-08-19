@@ -282,7 +282,7 @@ object DataSourceWriteOptions {
   val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = "hoodie.datasource.hive_sync.assume_date_partitioning"
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = "hoodie.datasource.hive_sync.use_pre_apache_input_format"
   val HIVE_USE_JDBC_OPT_KEY = "hoodie.datasource.hive_sync.use_jdbc"
-  val HIVE_CREATE_DATABASE_OPT_KEY = "hoodie.datasource.hive_sync.create.database"
+  val HIVE_CREATE_DATABASE_ENABLED_OPT_KEY = "hoodie.datasource.hive_sync.create.database.enable"
 
   // DEFAULT FOR HIVE SPECIFIC CONFIGS
   val DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL = "false"
@@ -298,7 +298,7 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = "false"
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
   val DEFAULT_HIVE_USE_JDBC_OPT_VAL = "true"
-  val DEFAULT_HIVE_CREATE_DATABASE_OPT_VAL = "false"
+  val DEFAULT_HIVE_CREATE_DATABASE_ENABLED_OPT_VAL = "false"
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE_KEY = "hoodie.datasource.compaction.async.enable"

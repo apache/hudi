@@ -117,7 +117,7 @@ public class HiveSyncTool extends AbstractSyncTool {
     boolean tableExists = hoodieHiveClient.doesTableExist(tableName);
 
     // check if the database exists else create it
-    if (cfg.createDatabase) {
+    if (cfg.enableCreateDatabase) {
       try {
         hoodieHiveClient.updateHiveSQL("create database if not exists " + cfg.databaseName);
       } catch (Exception e) {
