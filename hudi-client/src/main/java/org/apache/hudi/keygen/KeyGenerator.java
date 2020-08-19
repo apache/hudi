@@ -31,7 +31,7 @@ import java.util.List;
  */
 public abstract class KeyGenerator implements Serializable {
 
-  protected transient TypedProperties config;
+  protected  TypedProperties config;
 
   protected KeyGenerator(TypedProperties config) {
     this.config = config;
