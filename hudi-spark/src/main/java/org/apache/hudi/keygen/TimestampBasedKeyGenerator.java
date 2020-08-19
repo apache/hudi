@@ -40,7 +40,6 @@ import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.text.ParseException;
 import java.util.concurrent.TimeUnit;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -61,7 +60,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   private final TimeUnit timeUnit;
   private final TimestampType timestampType;
   private final String outputDateFormat;
-  private DateTimeFormatter inputFormatter;
+  private transient DateTimeFormatter inputFormatter;
+  private transient DateTimeFormatter partitionFormatter;
   private final HoodieDateTimeParser parser;
 
   // TimeZone detailed settings reference
@@ -108,12 +108,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     this.parser = DataSourceUtils.createDateTimeParser(config, dateTimeParserClass);
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
     this.outputDateFormat = parser.getOutputDateFormat();
-    this.inputFormatter = parser.getInputFormatter();
     this.timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
-
-    if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
-      this.inputFormatter = parser.getInputFormatter();
-    }
 
     switch (this.timestampType) {
       case EPOCHMILLISECONDS:
@@ -147,17 +142,28 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   }
 
   /**
+   * The function takes care of lazily initialising dateTimeFormatter variables only once.
+   */
+  private void initIfNeeded() {
+    if (this.inputFormatter == null) {
+      this.inputFormatter = parser.getInputFormatter();
+    }
+    if (this.partitionFormatter == null) {
+      this.partitionFormatter = DateTimeFormat.forPattern(outputDateFormat);
+      if (this.outputDateTimeZone != null) {
+        partitionFormatter = partitionFormatter.withZone(outputDateTimeZone);
+      }
+    }
+  }
+
+  /**
    * Parse and fetch partition path based on data type.
    *
    * @param partitionVal partition path object value fetched from record/row
    * @return the parsed partition path based on data type
-   * @throws ParseException on any parse exception
    */
-  private String getPartitionPath(Object partitionVal) throws ParseException {
-    DateTimeFormatter partitionFormatter = DateTimeFormat.forPattern(outputDateFormat);
-    if (this.outputDateTimeZone != null) {
-      partitionFormatter = partitionFormatter.withZone(outputDateTimeZone);
-    }
+  private String getPartitionPath(Object partitionVal) {
+    initIfNeeded();
     long timeMs;
     if (partitionVal instanceof Double) {
       timeMs = convertLongTimeToMillis(((Double) partitionVal).longValue());
