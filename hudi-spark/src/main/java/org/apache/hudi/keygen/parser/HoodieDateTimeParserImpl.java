@@ -37,7 +37,6 @@ public class HoodieDateTimeParserImpl implements HoodieDateTimeParser, Serializa
   private String configInputDateFormatList;
   private final String configInputDateFormatDelimiter;
   private final TypedProperties config;
-  private DateTimeFormatter inputFormatter;
 
   // TimeZone detailed settings reference
   // https://docs.oracle.com/javase/8/docs/api/java/util/TimeZone.html
@@ -48,14 +47,6 @@ public class HoodieDateTimeParserImpl implements HoodieDateTimeParser, Serializa
     DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.TIMESTAMP_TYPE_FIELD_PROP, Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP));
     this.inputDateTimeZone = getInputDateTimeZone();
     this.configInputDateFormatDelimiter = getConfigInputDateFormatDelimiter();
-
-    TimestampType timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
-    if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
-      DataSourceUtils.checkRequiredProperties(config,
-          Collections.singletonList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
-      this.configInputDateFormatList = config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "");
-      inputFormatter = getInputDateFormatter();
-    }
   }
 
   private String getConfigInputDateFormatDelimiter() {
@@ -95,7 +86,15 @@ public class HoodieDateTimeParserImpl implements HoodieDateTimeParser, Serializa
 
   @Override
   public DateTimeFormatter getInputFormatter() {
-    return this.inputFormatter;
+    TimestampType timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
+    if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
+      DataSourceUtils.checkRequiredProperties(config,
+          Collections.singletonList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
+      this.configInputDateFormatList = config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "");
+      return getInputDateFormatter();
+    }
+
+    return null;
   }
 
   @Override

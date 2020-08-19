@@ -61,7 +61,6 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   private final TimeUnit timeUnit;
   private final TimestampType timestampType;
   private final String outputDateFormat;
-  private DateTimeFormatter inputFormatter;
   private final HoodieDateTimeParser parser;
 
   // TimeZone detailed settings reference
@@ -108,12 +107,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     this.parser = DataSourceUtils.createDateTimeParser(config, dateTimeParserClass);
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
     this.outputDateFormat = parser.getOutputDateFormat();
-    this.inputFormatter = parser.getInputFormatter();
     this.timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
-
-    if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
-      this.inputFormatter = parser.getInputFormatter();
-    }
 
     switch (this.timestampType) {
       case EPOCHMILLISECONDS:
@@ -153,7 +147,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
    * @return the parsed partition path based on data type
    * @throws ParseException on any parse exception
    */
-  private String getPartitionPath(Object partitionVal) throws ParseException {
+  private String getPartitionPath(Object partitionVal) {
+    DateTimeFormatter inputFormatter = parser.getInputFormatter();
     DateTimeFormatter partitionFormatter = DateTimeFormat.forPattern(outputDateFormat);
     if (this.outputDateTimeZone != null) {
       partitionFormatter = partitionFormatter.withZone(outputDateTimeZone);

@@ -20,7 +20,9 @@ package org.apache.hudi.keygen.parser;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormatter;
 
-public interface HoodieDateTimeParser {
+import java.io.Serializable;
+
+public interface HoodieDateTimeParser extends Serializable {
 
   /**
    * Returns the output date format in which the partition paths will be created for the hudi dataset.
