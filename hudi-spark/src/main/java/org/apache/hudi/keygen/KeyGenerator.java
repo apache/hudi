@@ -41,7 +41,7 @@ public abstract class KeyGenerator implements Serializable, KeyGeneratorInterfac
   private static final String STRUCT_NAME = "hoodieRowTopLevelField";
   private static final String NAMESPACE = "hoodieRow";
 
-  protected transient TypedProperties config;
+  protected TypedProperties config;
   private transient Function1<Object, Object> converterFn = null;
 
   protected KeyGenerator(TypedProperties config) {
