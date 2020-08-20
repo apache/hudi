@@ -110,4 +110,13 @@ public class FileCreateUtils {
     }
     return markerFilePath.toAbsolutePath().toString();
   }
+
+  public static long getTotalMarkerFileCount(String basePath, String partitionPath, String instantTime, IOType ioType) throws IOException {
+    Path markerDir = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
+    if (Files.notExists(markerDir)) {
+      return 0;
+    }
+    return Files.list(markerDir).filter(p -> p.getFileName().toString()
+        .endsWith(String.format("%s.%s", HoodieTableMetaClient.MARKER_EXTN, ioType))).count();
+  }
 }

@@ -57,7 +57,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -245,34 +244,4 @@ public class HoodieClientTestUtils {
         createCommitTime);
   }
 
-  /**
-   * TODO move to {@link FileCreateUtils}.
-   */
-  public static void createMarkerFile(String basePath, String partitionPath, String instantTime, String dataFileName) throws IOException {
-    createTempFolderForMarkerFiles(basePath);
-    String folderPath = getTempFolderName(basePath);
-    // create dir for this instant
-    new File(folderPath + "/" + instantTime + "/" + partitionPath).mkdirs();
-    new File(folderPath + "/" + instantTime + "/" + partitionPath + "/" + dataFileName + ".marker.MERGE").createNewFile();
-  }
-
-  /**
-   * TODO Incorporate into {@link org.apache.hudi.common.testutils.HoodieTestTable}.
-   */
-  public static int getTotalMarkerFileCount(String basePath, String partitionPath, String instantTime) {
-    String folderPath = getTempFolderName(basePath);
-    File markerDir = new File(folderPath + "/" + instantTime + "/" + partitionPath);
-    if (markerDir.exists()) {
-      return markerDir.listFiles((dir, name) -> name.contains(".marker.MERGE")).length;
-    }
-    return 0;
-  }
-
-  private static void createTempFolderForMarkerFiles(String basePath) {
-    new File(basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME).mkdirs();
-  }
-
-  private static String getTempFolderName(String basePath) {
-    return basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME;
-  }
 }
