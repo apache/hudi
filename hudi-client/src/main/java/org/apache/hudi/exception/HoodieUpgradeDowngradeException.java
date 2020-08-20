@@ -16,9 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.upgrade;
-
-import org.apache.hudi.exception.HoodieException;
+package org.apache.hudi.exception;
 
 public class HoodieUpgradeDowngradeException extends HoodieException {
 
