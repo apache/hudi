@@ -29,17 +29,18 @@ import java.util.Properties;
  */
 public class HoodieWriteCommitCallbackConfig extends DefaultHoodieConfig {
 
-  public static final String CALLBACK_ON = "hoodie.write.commit.callback.on";
+  public static final String CALLBACK_PREFIX = "hoodie.write.commit.callback.";
+  public static final String CALLBACK_ON = CALLBACK_PREFIX + "on";
   public static final boolean DEFAULT_CALLBACK_ON = false;
 
-  public static final String CALLBACK_CLASS_PROP = "hoodie.write.commit.callback.class";
+  public static final String CALLBACK_CLASS_PROP = CALLBACK_PREFIX + "class";
   public static final String DEFAULT_CALLBACK_CLASS_PROP = "org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback";
 
-  // ***** REST callback configs *****
-  public static final String CALLBACK_HTTP_URL_PROP = "hoodie.write.commit.callback.http.url";
-  public static final String CALLBACK_HTTP_API_KEY = "hoodie.write.commit.callback.http.api.key";
+  // ***** HTTP callback configs *****
+  public static final String CALLBACK_HTTP_URL_PROP = CALLBACK_PREFIX + "http.url";
+  public static final String CALLBACK_HTTP_API_KEY = CALLBACK_PREFIX + "http.api.key";
   public static final String DEFAULT_CALLBACK_HTTP_API_KEY = "hudi_write_commit_http_callback";
-  public static final String CALLBACK_HTTP_TIMEOUT_SECONDS = "hoodie.write.commit.callback.http.timeout.seconds";
+  public static final String CALLBACK_HTTP_TIMEOUT_SECONDS = CALLBACK_PREFIX + "http.timeout.seconds";
   public static final int DEFAULT_CALLBACK_HTTP_TIMEOUT_SECONDS = 3;
 
   private HoodieWriteCommitCallbackConfig(Properties props) {

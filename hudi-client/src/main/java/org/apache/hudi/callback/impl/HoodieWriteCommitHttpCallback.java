@@ -21,12 +21,11 @@ import org.apache.hudi.callback.HoodieWriteCommitCallback;
 import org.apache.hudi.callback.client.http.HoodieWriteCommitHttpCallbackClient;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieCommitCallbackException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.codehaus.jackson.map.ObjectMapper;
 
-import java.io.IOException;
+import static org.apache.hudi.callback.util.HoodieWriteCommitCallbackUtil.convertToJsonString;
 
 /**
  * A http implementation of {@link HoodieWriteCommitCallback}.
@@ -44,13 +43,7 @@ public class HoodieWriteCommitHttpCallback implements HoodieWriteCommitCallback 
   @Override
   public void call(HoodieWriteCommitCallbackMessage callbackMessage) {
     // convert to json
-    ObjectMapper mapper = new ObjectMapper();
-    String callbackMsg = null;
-    try {
-      callbackMsg = mapper.writeValueAsString(callbackMessage);
-    } catch (IOException e) {
-      throw new HoodieCommitCallbackException("Callback service convert message to json failed", e);
-    }
+    String callbackMsg = convertToJsonString(callbackMessage);
     LOG.info("Try to send callbackMsg, msg = " + callbackMsg);
     client.send(callbackMsg);
   }
