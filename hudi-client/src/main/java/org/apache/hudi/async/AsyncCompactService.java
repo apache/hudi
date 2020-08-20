@@ -64,7 +64,7 @@ public class AsyncCompactService extends AbstractAsyncService {
   public AsyncCompactService(JavaSparkContext jssc, HoodieWriteClient client, boolean runInDaemonMode) {
     super(runInDaemonMode);
     this.jssc = jssc;
-    this.compactor = new Compactor(client, jssc);
+    this.compactor = new Compactor(client);
     this.maxConcurrentCompaction = 1;
   }
 
