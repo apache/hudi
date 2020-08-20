@@ -25,7 +25,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -39,10 +38,8 @@ public class Compactor implements Serializable {
   private static final Logger LOG = LogManager.getLogger(Compactor.class);
 
   private transient HoodieWriteClient compactionClient;
-  private transient JavaSparkContext jssc;
 
-  public Compactor(HoodieWriteClient compactionClient, JavaSparkContext jssc) {
-    this.jssc = jssc;
+  public Compactor(HoodieWriteClient compactionClient) {
     this.compactionClient = compactionClient;
   }
 
