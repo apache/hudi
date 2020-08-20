@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -40,7 +41,6 @@ import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.text.ParseException;
 import java.util.concurrent.TimeUnit;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -61,7 +61,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   private final TimeUnit timeUnit;
   private final TimestampType timestampType;
   private final String outputDateFormat;
-  private DateTimeFormatter inputFormatter;
+  private transient Option<DateTimeFormatter> inputFormatter;
+  private transient DateTimeFormatter partitionFormatter;
   private final HoodieDateTimeParser parser;
 
   // TimeZone detailed settings reference
@@ -108,12 +109,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     this.parser = DataSourceUtils.createDateTimeParser(config, dateTimeParserClass);
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
     this.outputDateFormat = parser.getOutputDateFormat();
-    this.inputFormatter = parser.getInputFormatter();
     this.timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
-
-    if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
-      this.inputFormatter = parser.getInputFormatter();
-    }
 
     switch (this.timestampType) {
       case EPOCHMILLISECONDS:
@@ -147,17 +143,28 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   }
 
   /**
+   * The function takes care of lazily initialising dateTimeFormatter variables only once.
+   */
+  private void initIfNeeded() {
+    if (this.inputFormatter == null) {
+      this.inputFormatter = parser.getInputFormatter();
+    }
+    if (this.partitionFormatter == null) {
+      this.partitionFormatter = DateTimeFormat.forPattern(outputDateFormat);
+      if (this.outputDateTimeZone != null) {
+        partitionFormatter = partitionFormatter.withZone(outputDateTimeZone);
+      }
+    }
+  }
+
+  /**
    * Parse and fetch partition path based on data type.
    *
    * @param partitionVal partition path object value fetched from record/row
    * @return the parsed partition path based on data type
-   * @throws ParseException on any parse exception
    */
-  private String getPartitionPath(Object partitionVal) throws ParseException {
-    DateTimeFormatter partitionFormatter = DateTimeFormat.forPattern(outputDateFormat);
-    if (this.outputDateTimeZone != null) {
-      partitionFormatter = partitionFormatter.withZone(outputDateTimeZone);
-    }
+  private String getPartitionPath(Object partitionVal) {
+    initIfNeeded();
     long timeMs;
     if (partitionVal instanceof Double) {
       timeMs = convertLongTimeToMillis(((Double) partitionVal).longValue());
@@ -166,13 +173,16 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     } else if (partitionVal instanceof Long) {
       timeMs = convertLongTimeToMillis((Long) partitionVal);
     } else if (partitionVal instanceof CharSequence) {
-      DateTime parsedDateTime = inputFormatter.parseDateTime(partitionVal.toString());
+      if (!inputFormatter.isPresent()) {
+        throw new HoodieException("Missing inputformatter. Ensure " +  Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP + " config is set when timestampType is DATE_STRING or MIXED!");
+      }
+      DateTime parsedDateTime = inputFormatter.get().parseDateTime(partitionVal.toString());
       if (this.outputDateTimeZone == null) {
         // Use the timezone that came off the date that was passed in, if it had one
         partitionFormatter = partitionFormatter.withZone(parsedDateTime.getZone());
       }
 
-      timeMs = inputFormatter.parseDateTime(partitionVal.toString()).getMillis();
+      timeMs = inputFormatter.get().parseDateTime(partitionVal.toString()).getMillis();
     } else {
       throw new HoodieNotSupportedException(
           "Unexpected type for partition field: " + partitionVal.getClass().getName());
