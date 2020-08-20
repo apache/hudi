@@ -22,7 +22,7 @@ abstract class HoodieLogBlockVersion {
 
   private final int currentVersion;
 
-  public static final int DEFAULT_VERSION = 0;
+  public static final int DEFAULT_VERSION = Integer.parseInt("hoodie.logblock.default.version");
 
   HoodieLogBlockVersion(int version) {
     this.currentVersion = version;
