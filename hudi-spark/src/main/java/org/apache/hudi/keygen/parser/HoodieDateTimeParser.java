@@ -17,10 +17,13 @@
 
 package org.apache.hudi.keygen.parser;
 
+import org.apache.hudi.common.util.Option;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormatter;
 
-public interface HoodieDateTimeParser {
+import java.io.Serializable;
+
+public interface HoodieDateTimeParser extends Serializable {
 
   /**
    * Returns the output date format in which the partition paths will be created for the hudi dataset.
@@ -32,7 +35,7 @@ public interface HoodieDateTimeParser {
    * Returns input formats in which datetime based values might be coming in incoming records.
    * @return
    */
-  DateTimeFormatter getInputFormatter();
+  Option<DateTimeFormatter> getInputFormatter();
 
   /**
    * Returns the datetime zone one should expect the incoming values into.
