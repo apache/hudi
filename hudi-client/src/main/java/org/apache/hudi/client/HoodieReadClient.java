@@ -55,6 +55,7 @@ import scala.Tuple2;
  * Provides an RDD based API for accessing/filtering Hoodie tables, based on keys.
  */
 public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializable {
+
   private static final long serialVersionUID = 1L;
 
   /**
