@@ -17,35 +17,57 @@
 
 package org.apache.hudi.keygen.parser;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormatter;
 
 import java.io.Serializable;
 
-public interface HoodieDateTimeParser extends Serializable {
+public abstract class AbstractHoodieDateTimeParser implements Serializable {
+
+  protected final TypedProperties config;
+  protected final String configInputDateFormatDelimiter;
+
+  public AbstractHoodieDateTimeParser(TypedProperties config) {
+    this.config = config;
+    this.configInputDateFormatDelimiter = initInputDateFormatDelimiter();
+  }
+
+  private String initInputDateFormatDelimiter() {
+    String inputDateFormatDelimiter = config.getString(TimestampBasedKeyGenerator.Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP, ",").trim();
+    inputDateFormatDelimiter = inputDateFormatDelimiter.isEmpty() ? "," : inputDateFormatDelimiter;
+    return inputDateFormatDelimiter;
+  }
 
   /**
    * Returns the output date format in which the partition paths will be created for the hudi dataset.
-   * @return
    */
-  String getOutputDateFormat();
+  public String getOutputDateFormat() {
+    return config.getString(TimestampBasedKeyGenerator.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP);
+  }
 
   /**
    * Returns input formats in which datetime based values might be coming in incoming records.
-   * @return
    */
-  Option<DateTimeFormatter> getInputFormatter();
+  public abstract Option<DateTimeFormatter> getInputFormatter();
 
   /**
    * Returns the datetime zone one should expect the incoming values into.
-   * @return
    */
-  DateTimeZone getInputDateTimeZone();
+  public abstract DateTimeZone getInputDateTimeZone();
 
   /**
    * Returns the datetime zone using which the final partition paths for hudi dataset are created.
-   * @return
    */
-  DateTimeZone getOutputDateTimeZone();
+  public abstract DateTimeZone getOutputDateTimeZone();
+
+  /**
+   * Returns the input date format delimiter, comma by default.
+   */
+  public String getConfigInputDateFormatDelimiter() {
+    return this.configInputDateFormatDelimiter;
+  }
+
 }

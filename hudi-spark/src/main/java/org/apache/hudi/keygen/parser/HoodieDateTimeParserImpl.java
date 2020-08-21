@@ -28,32 +28,22 @@ import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.DateTimeFormatterBuilder;
 import org.joda.time.format.DateTimeParser;
 
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.TimeZone;
 
-public class HoodieDateTimeParserImpl implements HoodieDateTimeParser, Serializable {
+public class HoodieDateTimeParserImpl extends AbstractHoodieDateTimeParser {
 
   private String configInputDateFormatList;
-  private final String configInputDateFormatDelimiter;
-  private final TypedProperties config;
 
   // TimeZone detailed settings reference
   // https://docs.oracle.com/javase/8/docs/api/java/util/TimeZone.html
   private final DateTimeZone inputDateTimeZone;
 
   public HoodieDateTimeParserImpl(TypedProperties config) {
-    this.config = config;
+    super(config);
     DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.TIMESTAMP_TYPE_FIELD_PROP, Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP));
     this.inputDateTimeZone = getInputDateTimeZone();
-    this.configInputDateFormatDelimiter = getConfigInputDateFormatDelimiter();
-  }
-
-  private String getConfigInputDateFormatDelimiter() {
-    String inputDateFormatDelimiter = config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP, ",").trim();
-    inputDateFormatDelimiter = inputDateFormatDelimiter.isEmpty() ? "," : inputDateFormatDelimiter;
-    return inputDateFormatDelimiter;
   }
 
   private DateTimeFormatter getInputDateFormatter() {
@@ -65,7 +55,7 @@ public class HoodieDateTimeParserImpl implements HoodieDateTimeParser, Serializa
         .append(
         null,
         Arrays.stream(
-          this.configInputDateFormatList.split(this.configInputDateFormatDelimiter))
+          this.configInputDateFormatList.split(super.configInputDateFormatDelimiter))
           .map(String::trim)
           .map(DateTimeFormat::forPattern)
           .map(DateTimeFormatter::getParser)
@@ -119,4 +109,5 @@ public class HoodieDateTimeParserImpl implements HoodieDateTimeParser, Serializa
     }
     return !outputTimeZone.trim().isEmpty() ? DateTimeZone.forTimeZone(TimeZone.getTimeZone(outputTimeZone)) : null;
   }
+
 }

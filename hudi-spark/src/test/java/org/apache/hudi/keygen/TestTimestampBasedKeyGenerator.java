@@ -150,6 +150,29 @@ public class TestTimestampBasedKeyGenerator {
 
     // test w/ Row
     assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
+
+    // timezone is GMT+8:00, createTime is null
+    baseRecord.put("createTime", null);
+    properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
+    keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieKey hk5 = keyGen.getKey(baseRecord);
+    assertEquals("1970-01-01 08", hk5.getPartitionPath());
+
+    // test w/ Row
+    baseRow = genericRecordToRow(baseRecord);
+    assertEquals("1970-01-01 08", keyGen.getPartitionPath(baseRow));
+
+    // timestamp is DATE_STRING, timezone is GMT, createTime is null
+    baseRecord.put("createTime", null);
+    properties = getBaseKeyConfig("DATE_STRING", "yyyy-MM-dd hh:mm:ss", "GMT", null);
+    properties.setProperty("hoodie.deltastreamer.keygen.timebased.input.dateformat", "yyyy-MM-dd hh:mm:ss");
+    keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieKey hk6 = keyGen.getKey(baseRecord);
+    assertEquals("1970-01-01 12:00:00", hk6.getPartitionPath());
+
+    // test w/ Row
+    baseRow = genericRecordToRow(baseRecord);
+    assertEquals("1970-01-01 12:00:00", keyGen.getPartitionPath(baseRow));
   }
 
   @Test
@@ -160,12 +183,24 @@ public class TestTimestampBasedKeyGenerator {
     // timezone is GMT
     properties = getBaseKeyConfig("SCALAR", "yyyy-MM-dd hh", "GMT", "days");
     TimestampBasedKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
-    HoodieKey hk5 = keyGen.getKey(baseRecord);
-    assertEquals(hk5.getPartitionPath(), "2024-10-04 12");
+    HoodieKey hk1 = keyGen.getKey(baseRecord);
+    assertEquals(hk1.getPartitionPath(), "2024-10-04 12");
 
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2024-10-04 12", keyGen.getPartitionPath(baseRow));
+
+    // timezone is GMT, createTime is null
+    baseRecord.put("createTime", null);
+    properties = getBaseKeyConfig("SCALAR", "yyyy-MM-dd hh", "GMT", "days");
+    keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieKey hk2 = keyGen.getKey(baseRecord);
+    assertEquals("1970-01-02 12", hk2.getPartitionPath());
+
+    // test w/ Row
+    baseRow = genericRecordToRow(baseRecord);
+    assertEquals("1970-01-02 12", keyGen.getPartitionPath(baseRow));
+
   }
 
   @Test

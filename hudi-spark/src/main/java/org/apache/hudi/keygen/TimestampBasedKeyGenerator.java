@@ -26,7 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.keygen.parser.HoodieDateTimeParser;
+import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
 import org.apache.hudi.keygen.parser.HoodieDateTimeParserImpl;
 
 import org.apache.avro.generic.GenericRecord;
@@ -41,6 +41,7 @@ import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -63,10 +64,11 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   private final String outputDateFormat;
   private transient Option<DateTimeFormatter> inputFormatter;
   private transient DateTimeFormatter partitionFormatter;
-  private final HoodieDateTimeParser parser;
+  private final AbstractHoodieDateTimeParser parser;
 
   // TimeZone detailed settings reference
   // https://docs.oracle.com/javase/8/docs/api/java/util/TimeZone.html
+  private final DateTimeZone inputDateTimeZone;
   private final DateTimeZone outputDateTimeZone;
 
   protected final boolean encodePartitionPath;
@@ -107,6 +109,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     super(config, recordKeyField, partitionPathField);
     String dateTimeParserClass = config.getString(Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParserImpl.class.getName());
     this.parser = DataSourceUtils.createDateTimeParser(config, dateTimeParserClass);
+    this.inputDateTimeZone = parser.getInputDateTimeZone();
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
     this.outputDateFormat = parser.getOutputDateFormat();
     this.timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
@@ -133,13 +136,38 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   public String getPartitionPath(GenericRecord record) {
     Object partitionVal = HoodieAvroUtils.getNestedFieldVal(record, getPartitionPathFields().get(0), true);
     if (partitionVal == null) {
-      partitionVal = 1L;
+      partitionVal = getDefaultPartitionVal();
     }
     try {
       return getPartitionPath(partitionVal);
     } catch (Exception e) {
       throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, e);
     }
+  }
+
+  /**
+   * Set default value to partitionVal if the input value of partitionPathField is null.
+   */
+  private Object getDefaultPartitionVal() {
+    Object result = 1L;
+    if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
+      // since partitionVal is null, we can set a default value of any format as TIMESTAMP_INPUT_DATE_FORMAT_PROP
+      // configured, here we take the first.
+      // {Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP} won't be null, it has been checked in the initialization process of
+      // inputFormatter
+      String delimiter = parser.getConfigInputDateFormatDelimiter();
+      String format = config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "").split(delimiter)[0];
+
+      // if both input and output timeZone are not configured, use GMT.
+      if (null != inputDateTimeZone) {
+        return new DateTime(result, inputDateTimeZone).toString(format);
+      } else if (null != outputDateTimeZone) {
+        return new DateTime(result, outputDateTimeZone).toString(format);
+      } else {
+        return new DateTime(result, DateTimeZone.forTimeZone(TimeZone.getTimeZone("GMT"))).toString(format);
+      }
+    }
+    return result;
   }
 
   /**
@@ -219,9 +247,9 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     buildFieldPositionMapIfNeeded(row.schema());
     Object partitionPathFieldVal =  RowKeyGeneratorHelper.getNestedFieldVal(row, partitionPathPositions.get(getPartitionPathFields().get(0)));
     try {
-      if (partitionPathFieldVal.toString().contains(DEFAULT_PARTITION_PATH) || partitionPathFieldVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER)
+      if (partitionPathFieldVal == null || partitionPathFieldVal.toString().contains(DEFAULT_PARTITION_PATH) || partitionPathFieldVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER)
           || partitionPathFieldVal.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
-        fieldVal = 1L;
+        fieldVal = getDefaultPartitionVal();
       } else {
         fieldVal = partitionPathFieldVal;
       }
