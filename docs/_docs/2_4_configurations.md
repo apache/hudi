@@ -525,7 +525,7 @@ Property: `hoodie.write.commit.callback.class` <br/>
 <span style="color:grey">Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default</span>
 
 #### HTTP CALLBACK
-Callback via http, User does not need to specify this way explicitly, it is the default type.
+Callback via HTTP, User does not need to specify this way explicitly, it is the default type.
 
 ##### withCallbackHttpUrl(url) {#withCallbackHttpUrl} 
 Property: `hoodie.write.commit.callback.http.url` <br/>
