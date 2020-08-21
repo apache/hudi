@@ -17,7 +17,7 @@ first_insert:
   config:
     record_size: 70000
     num_insert_partitions: 1
-    repeat_count: 5
+    repeat_count: 1
     num_records_insert: 100
   type: InsertNode
   deps: none
@@ -25,7 +25,7 @@ second_insert:
   config:
     record_size: 70000
     num_insert_partitions: 1
-    repeat_count: 5
+    repeat_count: 1
     num_records_insert: 100
   deps: first_insert
   type: InsertNode
@@ -33,7 +33,7 @@ third_insert:
   config:
     record_size: 70000
     num_insert_partitions: 1
-    repeat_count: 2
+    repeat_count: 1
     num_records_insert: 300
   deps: second_insert
   type: InsertNode
@@ -46,7 +46,7 @@ first_upsert:
     record_size: 70000
     num_insert_partitions: 1
     num_records_insert: 300
-    repeat_count: 5
+    repeat_count: 1
     num_records_upsert: 100
     num_upsert_partitions: 10
   type: UpsertNode
@@ -57,22 +57,16 @@ first_hive_sync:
     engine: "mr"
   type: HiveSyncNode
   deps: first_upsert
-first_hive_query:
-  config:
-    queue_name: "adhoc"
-    engine: "mr"
-  type: HiveQueryNode
-  deps: first_hive_sync
 second_upsert:
   config:
     record_size: 70000
     num_insert_partitions: 1
     num_records_insert: 300
-    repeat_count: 5
+    repeat_count: 1
     num_records_upsert: 100
     num_upsert_partitions: 10
   type: UpsertNode
-  deps: first_hive_query
+  deps: first_hive_sync
 second_hive_query:
   config:
     queue_name: "adhoc"
@@ -81,11 +75,11 @@ second_hive_query:
       query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
       result1: 0
       query2: "select count(*) from testdb.table1"
-      result2: 3100
+      result2: 800
       query3: "select count(*) from testdb.table1_rt group by `_row_key` having count(*) > 1"
       result3: 0
       query4: "select count(*) from testdb.table1_rt"
-      result4: 3100
+      result4: 800
   type: HiveQueryNode
   deps: second_upsert
 first_schedule_compact:
@@ -97,7 +91,7 @@ third_upsert:
     record_size: 70000
     num_insert_partitions: 1
     num_records_insert: 300
-    repeat_count: 5
+    repeat_count: 1
     num_records_upsert: 100
     num_upsert_partitions: 10
   type: UpsertNode
@@ -114,6 +108,6 @@ third_hive_query:
       query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
       result1: 0
       query2: "select count(*) from testdb.table1"
-      result2: 2210
+      result2: 1100
   type: HiveQueryNode
   deps: second_upsert
