@@ -24,12 +24,19 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.exception.HoodieException;
+
+import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
 
 public class FileCreateUtils {
 
@@ -118,5 +125,23 @@ public class FileCreateUtils {
     }
     return Files.list(markerDir).filter(p -> p.getFileName().toString()
         .endsWith(String.format("%s.%s", HoodieTableMetaClient.MARKER_EXTN, ioType))).count();
+  }
+
+  /**
+   * Find total basefiles for passed in paths.
+   */
+  public static Map<String, Long> getBaseFileCountsForPaths(String basePath, FileSystem fs, String... paths) {
+    Map<String, Long> toReturn = new HashMap<>();
+    try {
+      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
+      for (String path : paths) {
+        TableFileSystemView.BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
+            metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new org.apache.hadoop.fs.Path(path)));
+        toReturn.put(path, fileSystemView.getLatestBaseFiles().count());
+      }
+      return toReturn;
+    } catch (Exception e) {
+      throw new HoodieException("Error reading hoodie table as a dataframe", e);
+    }
   }
 }
