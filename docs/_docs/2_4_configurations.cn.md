@@ -549,7 +549,7 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 <span style="color:grey">此属性控制报告给驱动程序的失败记录和异常的比例</span>
 
 ### 写提交回调配置
-控制写提交的回调。 如果用户启用了回调并且回调过程发生了错误，则会抛出异常。 当前只支持 Http, Kafka 两种回调方式。
+控制写提交的回调。 如果用户启用了回调并且回调过程发生了错误，则会抛出异常。 当前支持HTTP, Kafka 两种回调方式。
 [withCallbackConfig](#withCallbackConfig) (HoodieWriteCommitCallbackConfig) <br/>
 <span style="color:grey">写提交回调相关配置</span>
 
@@ -559,7 +559,7 @@ Property: `hoodie.write.commit.callback.on` <br/>
 
 ##### withCallbackClass(callbackClass) {#withCallbackClass} 
 Property: `hoodie.write.commit.callback.class` <br/>
-<span style="color:grey">回调类全路径名，回调类必须为HoodieWriteCommitCallback的子类。默认 org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback</span>
+<span style="color:grey">回调类的完全限定名，必须实现HoodieWriteCommitCallback接口。默认 org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback</span>
 
 #### HTTP CALLBACK
 通过 HTTP 发送写提交回调信息. 这是默认的实现方式，用户不需要显式指定。
@@ -585,7 +585,7 @@ Property: `hoodie.write.commit.callback.kafka.bootstrap.servers` <br/>
 
 ##### CALLBACK_KAFKA_TOPIC
 Property: `hoodie.write.commit.callback.kafka.topic` <br/>
-<span style="color:grey">发送回调信息的主题</span>
+<span style="color:grey">发送回调信息的topic</span>
 
 ##### CALLBACK_KAFKA_PARTITION
 Property: `hoodie.write.commit.callback.kafka.partition` <br/>

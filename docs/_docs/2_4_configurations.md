@@ -512,7 +512,7 @@ Property: `hoodie.memory.writestatus.failure.fraction` <br/>
 <span style="color:grey">This property controls what fraction of the failed record, exceptions we report back to driver</span>
 
 ### Write commit callback configs
-Controls callback behavior on write commit. Exception will be thrown if user enabled the callback service and errors occurred during the process of callback. Currently support http, kafka type only. 
+Controls callback behavior on write commit. Exception will be thrown if user enabled the callback service and errors occurred during the process of callback. Currently support HTTP, Kafka type. 
 [withCallbackConfig](#withCallbackConfig) (HoodieWriteCommitCallbackConfig) <br/>
 <span style="color:grey">Callback related configs</span>
 
