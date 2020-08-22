@@ -911,7 +911,7 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 <span style="color:grey">此属性控制报告给驱动程序的失败记录和异常的比例</span></p>
 
 <h3 id="写提交回调配置">写提交回调配置</h3>
-<p>控制写提交的回调。 如果用户启用了回调并且回调过程发生了错误，则会抛出异常。 当前只支持Http回调方式，Kafka不久后会支持。
+<p>控制写提交的回调。 如果用户启用了回调并且回调过程发生了错误，则会抛出异常。 当前支持HTTP, Kafka 两种回调方式。
 <a href="#withCallbackConfig">withCallbackConfig</a> (HoodieWriteCommitCallbackConfig) <br />
 <span style="color:grey">写提交回调相关配置</span></p>
 
@@ -921,9 +921,10 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 
 <h5 id="withCallbackClass">withCallbackClass(callbackClass)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.class</code> <br />
-<span style="color:grey">用户自定义回调的类全路径名，回调类必须为HoodieWriteCommitCallback的子类。默认 org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback</span></p>
+<span style="color:grey">回调类的完全限定名，必须实现HoodieWriteCommitCallback接口。默认 org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback</span></p>
 
-<h4 id="hoodiewritecommithttpcallback">HoodieWriteCommitHttpCallback</h4>
+<h4 id="http-callback">HTTP CALLBACK</h4>
+<p>通过 HTTP 发送写提交回调信息. 这是默认的实现方式，用户不需要显式指定。</p>
 
 <h5 id="withCallbackHttpUrl">withCallbackHttpUrl(url)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.http.url</code> <br />
@@ -936,6 +937,30 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 <h5 id="withCallbackHttpApiKey">withCallbackHttpApiKey(apiKey)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.http.api.key</code> <br />
 <span style="color:grey">Http 回调秘钥. 默认 hudi_write_commit_http_callback</span></p>
+
+<h4 id="kafka-callback">KAFKA CALLBACK</h4>
+<p>使用Kafka发送写提交回调信息, 用户需要配置 <code class="highlighter-rouge">hoodie.write.commit.callback.class</code> = <code class="highlighter-rouge">org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback</code></p>
+
+<h5 id="callback_kafka_bootstrap_servers">CALLBACK_KAFKA_BOOTSTRAP_SERVERS</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.bootstrap.servers</code> <br />
+<span style="color:grey">Kafka 集群地址</span></p>
+
+<h5 id="callback_kafka_topic">CALLBACK_KAFKA_TOPIC</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.topic</code> <br />
+<span style="color:grey">发送回调信息的topic</span></p>
+
+<h5 id="callback_kafka_partition">CALLBACK_KAFKA_PARTITION</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.partition</code> <br />
+<span style="color:grey">指定发送的分区, 默认 0 </span></p>
+
+<h5 id="callback_kafka_acks">CALLBACK_KAFKA_ACKS</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.acks</code> <br />
+<span style="color:grey">Acks 级别, 默认 <code class="highlighter-rouge">all</code></span></p>
+
+<h5 id="callback_kafka_retries">CALLBACK_KAFKA_RETRIES</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.retries</code> <br />
+<span style="color:grey">Kafka 发送数据失败重试次数. 默认 3 次</span></p>
+
 
       </section>
 

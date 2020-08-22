@@ -886,7 +886,7 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <span style="color:grey">This property controls what fraction of the failed record, exceptions we report back to driver</span></p>
 
 <h3 id="write-commit-callback-configs">Write commit callback configs</h3>
-<p>Controls callback behavior on write commit. Exception will be thrown if user enabled the callback service and errors occurred during the process of callback. Currently support http callback only, kafka implementation will be supported in the near future. 
+<p>Controls callback behavior on write commit. Exception will be thrown if user enabled the callback service and errors occurred during the process of callback. Currently support HTTP, Kafka type. 
 <a href="#withCallbackConfig">withCallbackConfig</a> (HoodieWriteCommitCallbackConfig) <br />
 <span style="color:grey">Callback related configs</span></p>
 
@@ -896,9 +896,10 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 
 <h5 id="withCallbackClass">withCallbackClass(callbackClass)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.class</code> <br />
-<span style="color:grey">Full path of user-defined callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default</span></p>
+<span style="color:grey">Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default</span></p>
 
-<h4 id="hoodiewritecommithttpcallback">HoodieWriteCommitHttpCallback</h4>
+<h4 id="http-callback">HTTP CALLBACK</h4>
+<p>Callback via HTTP, User does not need to specify this way explicitly, it is the default type.</p>
 
 <h5 id="withCallbackHttpUrl">withCallbackHttpUrl(url)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.http.url</code> <br />
@@ -911,6 +912,29 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <h5 id="withCallbackHttpApiKey">withCallbackHttpApiKey(apiKey)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.http.api.key</code> <br />
 <span style="color:grey">Http callback API key. hudi_write_commit_http_callback by default</span></p>
+
+<h4 id="kafka-callback">KAFKA CALLBACK</h4>
+<p>To use kafka callback, User should set <code class="highlighter-rouge">hoodie.write.commit.callback.class</code> = <code class="highlighter-rouge">org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback</code></p>
+
+<h5 id="callback_kafka_bootstrap_servers">CALLBACK_KAFKA_BOOTSTRAP_SERVERS</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.bootstrap.servers</code> <br />
+<span style="color:grey">Bootstrap servers of kafka callback cluster</span></p>
+
+<h5 id="callback_kafka_topic">CALLBACK_KAFKA_TOPIC</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.topic</code> <br />
+<span style="color:grey">Kafka topic to be sent along with callback messages</span></p>
+
+<h5 id="callback_kafka_partition">CALLBACK_KAFKA_PARTITION</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.partition</code> <br />
+<span style="color:grey">partition of <code class="highlighter-rouge">CALLBACK_KAFKA_TOPIC</code>, 0 by default</span></p>
+
+<h5 id="callback_kafka_acks">CALLBACK_KAFKA_ACKS</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.acks</code> <br />
+<span style="color:grey">kafka acks level, <code class="highlighter-rouge">all</code> by default</span></p>
+
+<h5 id="callback_kafka_retries">CALLBACK_KAFKA_RETRIES</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.retries</code> <br />
+<span style="color:grey">Times to retry. 3 by default</span></p>
 
       </section>
 
