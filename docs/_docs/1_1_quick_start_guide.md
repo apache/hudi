@@ -427,7 +427,7 @@ hudi_delete_options = {
 
 from pyspark.sql.functions import lit
 deletes = list(map(lambda row: (row[0], row[1]), ds.collect()))
-df = spark.sparkContext.parallelize(deletes).toDF(['partitionpath', 'uuid']).withColumn('ts', lit(0.0))
+df = spark.sparkContext.parallelize(deletes).toDF(['uuid', 'partitionpath']).withColumn('ts', lit(0.0))
 df.write.format("hudi"). \
   options(**hudi_delete_options). \
   mode("append"). \
