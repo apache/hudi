@@ -472,7 +472,7 @@
     </tr>
     <tr>
       <td><strong>Spark Datasource</strong></td>
-      <td>N</td>
+      <td>Y</td>
       <td>N</td>
       <td>Y</td>
     </tr>
@@ -615,7 +615,7 @@ Upsert实用程序（<code class="highlighter-rouge">HoodieDeltaStreamer</code>�
 <p>Spark可将Hudi jars和捆绑包轻松部署和管理到作业/笔记本中。简而言之，通过Spark有两种方法可以访问Hudi数据集。</p>
 
 <ul>
-  <li><strong>Hudi DataSource</strong>：支持读取优化和增量拉取，类似于标准数据源（例如：<code class="highlighter-rouge">spark.read.parquet</code>）的工作方式。</li>
+  <li><strong>Hudi DataSource</strong>：支持实时视图，读取优化和增量拉取，类似于标准数据源（例如：<code class="highlighter-rouge">spark.read.parquet</code>）的工作方式。</li>
   <li><strong>以Hive表读取</strong>：支持所有三个视图，包括实时视图，依赖于自定义的Hudi输入格式（再次类似Hive）。</li>
 </ul>
 
@@ -638,12 +638,27 @@ Upsert实用程序（<code class="highlighter-rouge">HoodieDeltaStreamer</code>�
 </code></pre></div></div>
 
 <h3 id="spark-rt-view">实时表</h3>
-<p>当前，实时表只能在Spark中作为Hive表进行查询。为了做到这一点，设置<code class="highlighter-rouge">spark.sql.hive.convertMetastoreParquet = false</code>，
+<p>将实时表在Spark中作为Hive表进行查询，设置<code class="highlighter-rouge">spark.sql.hive.convertMetastoreParquet = false</code>，
 迫使Spark回退到使用Hive Serde读取数据（计划/执行仍然是Spark）。</p>
 
 <div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">$</span> <span class="n">spark</span><span class="o">-</span><span class="n">shell</span> <span class="o">--</span><span class="n">jars</span> <span class="n">hudi</span><span class="o">-</span><span class="n">spark</span><span class="o">-</span><span class="n">bundle</span><span class="o">-</span><span class="nv">x</span><span class="o">.</span><span class="py">y</span><span class="o">.</span><span class="py">z</span><span class="o">-</span><span class="nv">SNAPSHOT</span><span class="o">.</span><span class="py">jar</span> <span class="o">--</span><span class="n">driver</span><span class="o">-</span><span class="n">class</span><span class="o">-</span><span class="n">path</span> <span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">hive</span><span class="o">/</span><span class="n">conf</span>  <span class="o">--</span><span class="n">packages</span> <span class="nv">com</span><span class="o">.</span><span class="py">databricks</span><span class="k">:</span><span class="kt">spark-avro_2.</span><span class="err">11</span><span class="kt">:</span><span class="err">4</span><span class="kt">.</span><span class="err">0</span><span class="kt">.</span><span class="err">0</span> <span class="kt">--conf</span> <span class="kt">spark.sql.hive.convertMetastoreParquet</span><span class="o">=</span><span class="kc">false</span> <span class="o">--</span><span class="n">num</span><span class="o">-</span><span class="n">executors</span> <span class="mi">10</span> <span class="o">--</span><span class="n">driver</span><span class="o">-</span><span class="n">memory</span> <span class="mi">7</span><span class="n">g</span> <span class="o">--</span><span class="n">executor</span><span class="o">-</span><span class="n">memory</span> <span class="mi">2</span><span class="n">g</span>  <span class="o">--</span><span class="n">master</span> <span class="n">yarn</span><span class="o">-</span><span class="n">client</span>
 
 <span class="n">scala</span><span class="o">&gt;</span> <span class="nv">sqlContext</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select count(*) from hudi_rt where datestr = '2016-10-02'"</span><span class="o">).</span><span class="py">show</span><span class="o">()</span>
+</code></pre></div></div>
+
+<p>如果您希望通过数据源在DFS上使用全局路径，则只需执行以下类似操作即可得到Spark DataFrame。</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nc">Dataset</span><span class="o">&lt;</span><span class="nc">Row</span><span class="o">&gt;</span> <span class="n">hoodieRealtimeViewDF</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">read</span><span class="o">().</span><span class="py">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
+<span class="c1">// pass any path glob, can include hudi &amp; non-hudi datasets
+</span><span class="o">.</span><span class="py">load</span><span class="o">(</span><span class="s">"/glob/path/pattern"</span><span class="o">);</span>
+</code></pre></div></div>
+
+<p>如果您希望只查询实时表的读优化视图</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nc">Dataset</span><span class="o">&lt;</span><span class="nc">Row</span><span class="o">&gt;</span> <span class="n">hoodieRealtimeViewDF</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">read</span><span class="o">().</span><span class="py">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">)</span>
+<span class="o">.</span><span class="py">option</span><span class="o">(</span><span class="nv">DataSourceReadOptions</span><span class="o">.</span><span class="py">QUERY_TYPE_OPT_KEY</span><span class="o">,</span> <span class="nv">DataSourceReadOptions</span><span class="o">.</span><span class="py">QUERY_TYPE_READ_OPTIMIZED_OPT_VAL</span><span class="o">)</span>
+<span class="c1">// pass any path glob, can include hudi &amp; non-hudi datasets
+</span><span class="o">.</span><span class="py">load</span><span class="o">(</span><span class="s">"/glob/path/pattern"</span><span class="o">);</span>
 </code></pre></div></div>
 
 <h3 id="spark-incr-pull">增量拉取</h3>

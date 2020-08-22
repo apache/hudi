@@ -489,7 +489,7 @@ with special configurations that indicates to query planning that only increment
     </tr>
     <tr>
       <td><strong>Spark Datasource</strong></td>
-      <td>N</td>
+      <td>Y</td>
       <td>N</td>
       <td>Y</td>
     </tr>
@@ -647,8 +647,8 @@ If using spark’s built in support, additionally a path filter needs to be push
 
 <h2 id="spark-datasource">Spark Datasource</h2>
 
-<p>The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi COPY_ON_WRITE tables can be queried via Spark datasource similar to how standard 
-datasources work (e.g: <code class="highlighter-rouge">spark.read.parquet</code>). Both snapshot querying and incremental querying are supported here. Typically spark jobs require adding <code class="highlighter-rouge">--jars &lt;path to jar&gt;/hudi-spark-bundle_2.11-&lt;hudi version&gt;.jar</code> to classpath of drivers 
+<p>The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi COPY_ON_WRITE and MERGE_ON_READ tables can be queried via Spark datasource similar to how standard 
+datasources work (e.g: <code class="highlighter-rouge">spark.read.parquet</code>). MERGE_ON_READ table supports snapshot querying and COPY_ON_WRITE table supports both snapshot and incremental querying via Spark datasource. Typically spark jobs require adding <code class="highlighter-rouge">--jars &lt;path to jar&gt;/hudi-spark-bundle_2.11-&lt;hudi version&gt;.jar</code> to classpath of drivers 
 and executors. Alternatively, hudi-spark-bundle can also fetched via the <code class="highlighter-rouge">--packages</code> options (e.g: <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3</code>).</p>
 
 <h3 id="spark-snap-query">Snapshot query</h3>
