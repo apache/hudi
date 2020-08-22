@@ -157,8 +157,7 @@ public class HiveSyncTool extends AbstractSyncTool {
     if (!tableExists) {
       LOG.info("Hive table " + tableName + " is not found. Creating it");
       HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(cfg.baseFileFormat.toUpperCase());
-      String inputFormatClassName = HoodieInputFormatUtils.getInputFormatClassName(baseFileFormat, useRealTimeInputFormat,
-          new Configuration());
+      String inputFormatClassName = HoodieInputFormatUtils.getInputFormatClassName(baseFileFormat, useRealTimeInputFormat);
 
       if (baseFileFormat.equals(HoodieFileFormat.PARQUET) && cfg.usePreApacheInputFormat) {
         // Parquet input format had an InputFormat class visible under the old naming scheme.

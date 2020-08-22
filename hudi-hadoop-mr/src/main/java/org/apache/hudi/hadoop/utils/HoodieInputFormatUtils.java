@@ -99,9 +99,23 @@ public class HoodieInputFormatUtils {
     }
   }
 
-  public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime, Configuration conf) {
-    FileInputFormat inputFormat = getInputFormat(baseFileFormat, realtime, conf);
-    return inputFormat.getClass().getName();
+  public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime) {
+    switch (baseFileFormat) {
+      case PARQUET:
+        if (realtime) {
+          return HoodieParquetRealtimeInputFormat.class.getName();
+        } else {
+          return HoodieParquetInputFormat.class.getName();
+        }
+      case HFILE:
+        if (realtime) {
+          return HoodieHFileRealtimeInputFormat.class.getName();
+        } else {
+          return HoodieHFileInputFormat.class.getName();
+        }
+      default:
+        throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
+    }
   }
 
   public static String getOutputFormatClassName(HoodieFileFormat baseFileFormat) {
