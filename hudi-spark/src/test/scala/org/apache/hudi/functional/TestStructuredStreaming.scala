@@ -36,8 +36,8 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
 /**
- * Basic tests on the spark datasource for structured streaming sink
- */
+  * Basic tests on the spark datasource for structured streaming sink
+  */
 class TestStructuredStreaming extends HoodieClientTestBase {
   private val log = LogManager.getLogger(getClass)
   var spark: SparkSession = null
@@ -89,8 +89,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     val f1 = Future {
       println("streaming starting")
       //'writeStream' can be called only on streaming Dataset/DataFrame
-      streamingInput
-        .writeStream
+      streamingInput.writeStream
         .format("org.apache.hudi")
         .options(commonOpts)
         .trigger(new ProcessingTime(100))
@@ -108,7 +107,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, destPath, "000"))
       val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, destPath)
       // Read RO View
-      val hoodieROViewDF1 = spark.read.format("org.apache.hudi")
+      val hoodieROViewDF1 = spark.read
+        .format("org.apache.hudi")
         .load(destPath + "/*/*/*/*")
       assert(hoodieROViewDF1.count() == 100)
 
@@ -118,16 +118,20 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, destPath)
       assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
       // Read RO View
-      val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
+      val hoodieROViewDF2 = spark.read
+        .format("org.apache.hudi")
         .load(destPath + "/*/*/*/*")
       assertEquals(100, hoodieROViewDF2.count()) // still 100, since we only updated
-
 
       // Read Incremental View
       // we have 2 commits, try pulling the first commit (which is not the latest)
       val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").get(0)
-      val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      val hoodieIncViewDF1 = spark.read
+        .format("org.apache.hudi")
+        .option(
+          DataSourceReadOptions.QUERY_TYPE_OPT_KEY,
+          DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
+        )
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "000")
         .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, firstCommit)
         .load(destPath)
@@ -138,8 +142,12 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       assertEquals(firstCommit, countsPerCommit(0).get(0))
 
       // pull the latest commit
-      val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      val hoodieIncViewDF2 = spark.read
+        .format("org.apache.hudi")
+        .option(
+          DataSourceReadOptions.QUERY_TYPE_OPT_KEY,
+          DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
+        )
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, commitInstantTime1)
         .load(destPath)
 
@@ -152,14 +160,19 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   }
 
   @throws[InterruptedException]
-  private def waitTillAtleastNCommits(fs: FileSystem, tablePath: String,
-                                      numCommits: Int, timeoutSecs: Int, sleepSecsAfterEachRun: Int) = {
+  private def waitTillAtleastNCommits(
+      fs: FileSystem,
+      tablePath: String,
+      numCommits: Int,
+      timeoutSecs: Int,
+      sleepSecsAfterEachRun: Int
+  ) = {
     val beginTime = System.currentTimeMillis
     var currTime = beginTime
     val timeoutMsecs = timeoutSecs * 1000
     var numInstants = 0
     var success = false
-    while ({!success && (currTime - beginTime) < timeoutMsecs}) try {
+    while ({ !success && (currTime - beginTime) < timeoutMsecs }) try {
       val timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, tablePath)
       log.info("Timeline :" + timeline.getInstants.toArray)
       if (timeline.countInstants >= numCommits) {
@@ -174,7 +187,10 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       Thread.sleep(sleepSecsAfterEachRun * 1000)
       currTime = System.currentTimeMillis
     }
-    if (!success) throw new IllegalStateException("Timed-out waiting for " + numCommits + " commits to appear in " + tablePath)
+    if (!success)
+      throw new IllegalStateException(
+        "Timed-out waiting for " + numCommits + " commits to appear in " + tablePath
+      )
     numInstants
   }
 }

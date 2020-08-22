@@ -31,23 +31,21 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
 import scala.collection.JavaConversions._
 import scala.collection.mutable._
 
-
 /**
   * Spark job to de-duplicate data present in a partition path
   */
-class DedupeSparkJob(basePath: String,
-                     duplicatedPartitionPath: String,
-                     repairOutputPath: String,
-                     sqlContext: SQLContext,
-                     fs: FileSystem) {
-
+class DedupeSparkJob(
+    basePath: String,
+    duplicatedPartitionPath: String,
+    repairOutputPath: String,
+    sqlContext: SQLContext,
+    fs: FileSystem
+) {
 
   val sparkHelper = new SparkHelper(sqlContext, fs)
   val LOG = Logger.getLogger(this.getClass)
 
-
   /**
-    *
     * @param tblName
     * @return
     */
@@ -63,9 +61,7 @@ class DedupeSparkJob(basePath: String,
     sqlContext.sql(dupeSql)
   }
 
-
   /**
-    *
     * Check a given partition for duplicates and suggest the deletions that need to be done in each file,
     * in order to set things right.
     *
@@ -78,9 +74,15 @@ class DedupeSparkJob(basePath: String,
 
     val metadata = new HoodieTableMetaClient(fs.getConf, basePath)
 
-    val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"$basePath/$duplicatedPartitionPath"))
-    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
-    val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
+    val allFiles =
+      fs.listStatus(new org.apache.hadoop.fs.Path(s"$basePath/$duplicatedPartitionPath"))
+    val fsView = new HoodieTableFileSystemView(
+      metadata,
+      metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(),
+      allFiles
+    )
+    val latestFiles: java.util.List[HoodieBaseFile] =
+      fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
     val filteredStatuses = latestFiles.map(f => f.getPath)
     LOG.info(s" List of files under partition: ${} =>  ${filteredStatuses.mkString(" ")}")
 
@@ -125,34 +127,46 @@ class DedupeSparkJob(basePath: String,
     fileToDeleteKeyMap
   }
 
-
   def fixDuplicates(dryRun: Boolean = true) = {
     val metadata = new HoodieTableMetaClient(fs.getConf, basePath)
 
     val allFiles = fs.listStatus(new Path(s"$basePath/$duplicatedPartitionPath"))
-    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
+    val fsView = new HoodieTableFileSystemView(
+      metadata,
+      metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(),
+      allFiles
+    )
 
-    val latestFiles: java.util.List[HoodieBaseFile] = fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
+    val latestFiles: java.util.List[HoodieBaseFile] =
+      fsView.getLatestBaseFiles().collect(Collectors.toList[HoodieBaseFile]())
 
     val fileNameToPathMap = latestFiles.map(f => (f.getFileId, new Path(f.getPath))).toMap
     val dupeFixPlan = planDuplicateFix()
 
     // 1. Copy all latest files into the temp fix path
-    fileNameToPathMap.foreach { case (fileName, filePath) =>
-      val badSuffix = if (dupeFixPlan.contains(fileName)) ".bad" else ""
-      val dstPath = new Path(s"$repairOutputPath/${filePath.getName}$badSuffix")
-      LOG.info(s"Copying from $filePath to $dstPath")
-      FileUtil.copy(fs, filePath, fs, dstPath, false, true, fs.getConf)
+    fileNameToPathMap.foreach {
+      case (fileName, filePath) =>
+        val badSuffix = if (dupeFixPlan.contains(fileName)) ".bad" else ""
+        val dstPath = new Path(s"$repairOutputPath/${filePath.getName}$badSuffix")
+        LOG.info(s"Copying from $filePath to $dstPath")
+        FileUtil.copy(fs, filePath, fs, dstPath, false, true, fs.getConf)
     }
 
     // 2. Remove duplicates from the bad files
-    dupeFixPlan.foreach { case (fileName, keysToSkip) =>
-      val instantTime = FSUtils.getCommitTime(fileNameToPathMap(fileName).getName)
-      val badFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}.bad")
-      val newFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}")
-      LOG.info(" Skipping and writing new file for : " + fileName)
-      SparkHelpers.skipKeysAndWriteNewFile(instantTime, fs, badFilePath, newFilePath, dupeFixPlan(fileName))
-      fs.delete(badFilePath, false)
+    dupeFixPlan.foreach {
+      case (fileName, keysToSkip) =>
+        val instantTime = FSUtils.getCommitTime(fileNameToPathMap(fileName).getName)
+        val badFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}.bad")
+        val newFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}")
+        LOG.info(" Skipping and writing new file for : " + fileName)
+        SparkHelpers.skipKeysAndWriteNewFile(
+          instantTime,
+          fs,
+          badFilePath,
+          newFilePath,
+          dupeFixPlan(fileName)
+        )
+        fs.delete(badFilePath, false)
     }
 
     // 3. Check that there are no duplicates anymore.
@@ -167,27 +181,31 @@ class DedupeSparkJob(basePath: String,
 
     // 4. Additionally ensure no record keys are left behind.
     val sourceDF = sparkHelper.getDistinctKeyDF(fileNameToPathMap.map(t => t._2.toString).toList)
-    val fixedDF = sparkHelper.getDistinctKeyDF(fileNameToPathMap.map(t => s"$repairOutputPath/${t._2.getName}").toList)
+    val fixedDF = sparkHelper.getDistinctKeyDF(
+      fileNameToPathMap.map(t => s"$repairOutputPath/${t._2.getName}").toList
+    )
     val missedRecordKeysDF = sourceDF.except(fixedDF)
     val missedCnt = missedRecordKeysDF.count()
     if (missedCnt != 0) {
       missedRecordKeysDF.show()
-      throw new HoodieException("Some records in source are not found in fixed files. Inspect output!!")
+      throw new HoodieException(
+        "Some records in source are not found in fixed files. Inspect output!!"
+      )
     }
-
 
     println("No duplicates found & counts are in check!!!! ")
     // 4. Prepare to copy the fixed files back.
-    fileNameToPathMap.foreach { case (_, filePath) =>
-      val srcPath = new Path(s"$repairOutputPath/${filePath.getName}")
-      val dstPath = new Path(s"$basePath/$duplicatedPartitionPath/${filePath.getName}")
-      if (dryRun) {
-        LOG.info(s"[JUST KIDDING!!!] Copying from $srcPath to $dstPath")
-      } else {
-        // for real
-        LOG.info(s"[FOR REAL!!!] Copying from $srcPath to $dstPath")
-        FileUtil.copy(fs, srcPath, fs, dstPath, false, true, fs.getConf)
-      }
+    fileNameToPathMap.foreach {
+      case (_, filePath) =>
+        val srcPath = new Path(s"$repairOutputPath/${filePath.getName}")
+        val dstPath = new Path(s"$basePath/$duplicatedPartitionPath/${filePath.getName}")
+        if (dryRun) {
+          LOG.info(s"[JUST KIDDING!!!] Copying from $srcPath to $dstPath")
+        } else {
+          // for real
+          LOG.info(s"[FOR REAL!!!] Copying from $srcPath to $dstPath")
+          FileUtil.copy(fs, srcPath, fs, dstPath, false, true, fs.getConf)
+        }
     }
   }
 }

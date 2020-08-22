@@ -22,7 +22,9 @@ import java.util
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{EmptyHoodieRecordPayload, HoodieKey, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model.{
+  EmptyHoodieRecordPayload, HoodieKey, OverwriteWithLatestAvroPayload
+}
 import org.apache.hudi.common.testutils.SchemaTestUtil
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
@@ -34,8 +36,8 @@ import org.junit.jupiter.api.{BeforeEach, Test}
 import org.scalatest.Assertions.fail
 
 /**
- * Tests on the default key generator, payload classes.
- */
+  * Tests on the default key generator, payload classes.
+  */
 class TestDataSourceDefaults {
 
   val schema = SchemaTestUtil.getComplexEvolvedSchema
@@ -51,7 +53,11 @@ class TestDataSourceDefaults {
     baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
   }
 
-  private def getKeyConfig(recordKeyFieldName: String, partitionPathField: String, hiveStylePartitioning: String): TypedProperties = {
+  private def getKeyConfig(
+      recordKeyFieldName: String,
+      partitionPathField: String,
+      hiveStylePartitioning: String
+  ): TypedProperties = {
     val props = new TypedProperties()
     props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, recordKeyFieldName)
     props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, partitionPathField)
@@ -117,14 +123,18 @@ class TestDataSourceDefaults {
     }
 
     // nested field as record key and partition path
-    val hk2 = new SimpleKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.isAdmin", "false"))
+    val hk2 = new SimpleKeyGenerator(
+      getKeyConfig("testNestedRecord.userId", "testNestedRecord.isAdmin", "false")
+    )
       .getKey(baseRecord)
     assertEquals("UserId1@001", hk2.getRecordKey)
     assertEquals("false", hk2.getPartitionPath)
 
     // Nested record key not found
     try {
-      new SimpleKeyGenerator(getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false"))
+      new SimpleKeyGenerator(
+        getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false")
+      )
         .getKey(baseRecord)
       fail("Should have errored out")
     } catch {
@@ -133,12 +143,16 @@ class TestDataSourceDefaults {
     }
 
     // if partition path can't be found, return default partition path
-    val hk3 = new SimpleKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere", "false"))
+    val hk3 = new SimpleKeyGenerator(
+      getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere", "false")
+    )
       .getKey(baseRecord)
     assertEquals("default", hk3.getPartitionPath)
 
     // if partition path can't be found, return default partition path using row
-    keyGen = new SimpleKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere", "false"))
+    keyGen = new SimpleKeyGenerator(
+      getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere", "false")
+    )
     val hk3_row = keyGen.getPartitionPath(baseRow)
     assertEquals("default", hk3_row)
 
@@ -238,11 +252,14 @@ class TestDataSourceDefaults {
 
   class UserDefinedKeyGenerator(props: TypedProperties) extends KeyGenerator(props) {
     val recordKeyProp: String = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY)
-    val partitionPathProp: String = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY)
+    val partitionPathProp: String =
+      props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY)
 
     override def getKey(record: GenericRecord): HoodieKey = {
-      new HoodieKey(HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyProp, true),
-        HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathProp, true))
+      new HoodieKey(
+        HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyProp, true),
+        HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathProp, true)
+      )
     }
   }
 
@@ -304,18 +321,32 @@ class TestDataSourceDefaults {
     }
 
     // nested field as record key and partition path
-    keyGen = new ComplexKeyGenerator(getKeyConfig("testNestedRecord.userId,testNestedRecord.isAdmin", "testNestedRecord.userId,testNestedRecord.isAdmin", "false"))
+    keyGen = new ComplexKeyGenerator(
+      getKeyConfig(
+        "testNestedRecord.userId,testNestedRecord.isAdmin",
+        "testNestedRecord.userId,testNestedRecord.isAdmin",
+        "false"
+      )
+    )
     val hk2 = keyGen.getKey(baseRecord)
-    assertEquals("testNestedRecord.userId:UserId1@001,testNestedRecord.isAdmin:false", hk2.getRecordKey)
+    assertEquals(
+      "testNestedRecord.userId:UserId1@001,testNestedRecord.isAdmin:false",
+      hk2.getRecordKey
+    )
     assertEquals("UserId1@001/false", hk2.getPartitionPath)
 
     // nested field as record key and partition path
-    assertEquals("testNestedRecord.userId:UserId1@001,testNestedRecord.isAdmin:false", keyGen.getRecordKey(baseRow))
+    assertEquals(
+      "testNestedRecord.userId:UserId1@001,testNestedRecord.isAdmin:false",
+      keyGen.getRecordKey(baseRow)
+    )
     assertEquals("UserId1@001/false", keyGen.getPartitionPath(baseRow))
 
     // Nested record key not found
     try {
-      new ComplexKeyGenerator(getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false"))
+      new ComplexKeyGenerator(
+        getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false")
+      )
         .getKey(baseRecord)
       fail("Should have errored out")
     } catch {
@@ -325,7 +356,9 @@ class TestDataSourceDefaults {
 
     // Nested record key not found
     try {
-      val keyGen = new ComplexKeyGenerator(getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false"))
+      val keyGen = new ComplexKeyGenerator(
+        getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false")
+      )
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
     } catch {
@@ -334,7 +367,9 @@ class TestDataSourceDefaults {
     }
 
     // if partition path can't be found, return default partition path
-    keyGen = new ComplexKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere", "false"))
+    keyGen = new ComplexKeyGenerator(
+      getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere", "false")
+    )
     val hk3 = keyGen.getKey(baseRecord)
     assertEquals("default", hk3.getPartitionPath)
 
@@ -490,7 +525,9 @@ class TestDataSourceDefaults {
 
     // Nested record key not found
     try {
-      new GlobalDeleteKeyGenerator(getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false"))
+      new GlobalDeleteKeyGenerator(
+        getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false")
+      )
         .getKey(baseRecord)
       fail("Should have errored out")
     } catch {
@@ -500,7 +537,9 @@ class TestDataSourceDefaults {
 
     // Nested record key not found
     try {
-      val keyGen = new GlobalDeleteKeyGenerator(getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false"))
+      val keyGen = new GlobalDeleteKeyGenerator(
+        getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin", "false")
+      )
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
     } catch {

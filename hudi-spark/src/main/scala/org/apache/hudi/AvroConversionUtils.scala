@@ -36,44 +36,63 @@ object AvroConversionUtils {
     createRdd(df, avroSchema, structName, recordNamespace)
   }
 
-  def createRdd(df: DataFrame, avroSchema: Schema, structName: String, recordNamespace: String)
-  : RDD[GenericRecord] = {
+  def createRdd(
+      df: DataFrame,
+      avroSchema: Schema,
+      structName: String,
+      recordNamespace: String
+  ): RDD[GenericRecord] = {
     // Use the Avro schema to derive the StructType which has the correct nullability information
     val dataType = SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
     val encoder = RowEncoder.apply(dataType).resolveAndBind()
-    df.queryExecution.toRdd.map(encoder.fromRow)
+    df.queryExecution.toRdd
+      .map(encoder.fromRow)
       .mapPartitions { records =>
         if (records.isEmpty) Iterator.empty
         else {
-          val convertor = AvroConversionHelper.createConverterToAvro(dataType, structName, recordNamespace)
+          val convertor =
+            AvroConversionHelper.createConverterToAvro(dataType, structName, recordNamespace)
           records.map { x => convertor(x).asInstanceOf[GenericRecord] }
         }
       }
   }
 
-  def createRddForDeletes(df: DataFrame, rowField: String, partitionField: String): RDD[HoodieKey] = {
+  def createRddForDeletes(
+      df: DataFrame,
+      rowField: String,
+      partitionField: String
+  ): RDD[HoodieKey] = {
     df.rdd.map(row => new HoodieKey(row.getAs[String](rowField), row.getAs[String](partitionField)))
   }
 
-  def createDataFrame(rdd: RDD[GenericRecord], schemaStr: String, ss: SparkSession): Dataset[Row] = {
+  def createDataFrame(
+      rdd: RDD[GenericRecord],
+      schemaStr: String,
+      ss: SparkSession
+  ): Dataset[Row] = {
     if (rdd.isEmpty()) {
       ss.emptyDataFrame
     } else {
-      ss.createDataFrame(rdd.mapPartitions { records =>
-        if (records.isEmpty) Iterator.empty
-        else {
-          val schema = new Schema.Parser().parse(schemaStr)
-          val dataType = convertAvroSchemaToStructType(schema)
-          val convertor = AvroConversionHelper.createConverterToRow(schema, dataType)
-          records.map { x => convertor(x).asInstanceOf[Row] }
-        }
-      }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr)))
+      ss.createDataFrame(
+        rdd.mapPartitions { records =>
+          if (records.isEmpty) Iterator.empty
+          else {
+            val schema = new Schema.Parser().parse(schemaStr)
+            val dataType = convertAvroSchemaToStructType(schema)
+            val convertor = AvroConversionHelper.createConverterToRow(schema, dataType)
+            records.map { x => convertor(x).asInstanceOf[Row] }
+          }
+        },
+        convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr))
+      )
     }
   }
 
-  def convertStructTypeToAvroSchema(structType: StructType,
-                                    structName: String,
-                                    recordNamespace: String): Schema = {
+  def convertStructTypeToAvroSchema(
+      structType: StructType,
+      structName: String,
+      recordNamespace: String
+  ): Schema = {
     SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
   }
 
@@ -81,10 +100,12 @@ object AvroConversionUtils {
     SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
   }
 
-  def buildAvroRecordBySchema(record: IndexedRecord,
-                              requiredSchema: Schema,
-                              requiredPos: List[Int],
-                              recordBuilder: GenericRecordBuilder): GenericRecord = {
+  def buildAvroRecordBySchema(
+      record: IndexedRecord,
+      requiredSchema: Schema,
+      requiredPos: List[Int],
+      recordBuilder: GenericRecordBuilder
+  ): GenericRecord = {
     val requiredFields = requiredSchema.getFields.asScala
     assert(requiredFields.length == requiredPos.length)
     val positionIterator = requiredPos.iterator

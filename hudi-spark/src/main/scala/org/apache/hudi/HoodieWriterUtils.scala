@@ -24,11 +24,13 @@ import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 
 /**
- * WriterUtils to assist in write path in Datasource and tests.
- */
+  * WriterUtils to assist in write path in Datasource and tests.
+  */
 object HoodieWriterUtils {
 
-  def javaParametersWithWriteDefaults(parameters: java.util.Map[String, String]): java.util.Map[String, String] = {
+  def javaParametersWithWriteDefaults(
+      parameters: java.util.Map[String, String]
+  ): java.util.Map[String, String] = {
     mapAsJavaMap(parametersWithWriteDefaults(parameters.asScala.toMap))
   }
 
@@ -39,7 +41,8 @@ object HoodieWriterUtils {
     * @return
     */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
-    Map(OPERATION_OPT_KEY -> DEFAULT_OPERATION_OPT_VAL,
+    Map(
+      OPERATION_OPT_KEY -> DEFAULT_OPERATION_OPT_VAL,
       TABLE_TYPE_OPT_KEY -> DEFAULT_TABLE_TYPE_OPT_VAL,
       PRECOMBINE_FIELD_OPT_KEY -> DEFAULT_PRECOMBINE_FIELD_OPT_VAL,
       PAYLOAD_CLASS_OPT_KEY -> DEFAULT_PAYLOAD_OPT_VAL,

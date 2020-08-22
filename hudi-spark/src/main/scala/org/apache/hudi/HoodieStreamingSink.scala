@@ -36,19 +36,24 @@ import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 import scala.util.{Failure, Success, Try}
 import scala.collection.JavaConversions._
 
-class HoodieStreamingSink(sqlContext: SQLContext,
-                          options: Map[String, String],
-                          partitionColumns: Seq[String],
-                          outputMode: OutputMode)
-  extends Sink
+class HoodieStreamingSink(
+    sqlContext: SQLContext,
+    options: Map[String, String],
+    partitionColumns: Seq[String],
+    outputMode: OutputMode
+) extends Sink
     with Serializable {
   @volatile private var latestBatchId = -1L
 
   private val log = LogManager.getLogger(classOf[HoodieStreamingSink])
 
   private val retryCnt = options(DataSourceWriteOptions.STREAMING_RETRY_CNT_OPT_KEY).toInt
-  private val retryIntervalMs = options(DataSourceWriteOptions.STREAMING_RETRY_INTERVAL_MS_OPT_KEY).toLong
-  private val ignoreFailedBatch = options(DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH_OPT_KEY).toBoolean
+  private val retryIntervalMs = options(
+    DataSourceWriteOptions.STREAMING_RETRY_INTERVAL_MS_OPT_KEY
+  ).toLong
+  private val ignoreFailedBatch = options(
+    DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH_OPT_KEY
+  ).toBoolean
 
   private var isAsyncCompactorServiceShutdownAbnormally = false
 
@@ -59,83 +64,109 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       SaveMode.Overwrite
     }
 
-  private var asyncCompactorService : AsyncCompactService = _
-  private var writeClient : Option[HoodieWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty
-  private var hoodieTableConfig : Option[HoodieTableConfig] = Option.empty
+  private var asyncCompactorService: AsyncCompactService = _
+  private var writeClient: Option[HoodieWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty
+  private var hoodieTableConfig: Option[HoodieTableConfig] = Option.empty
 
-  override def addBatch(batchId: Long, data: DataFrame): Unit = this.synchronized {
-    if (isAsyncCompactorServiceShutdownAbnormally)  {
-      throw new IllegalStateException("Async Compactor shutdown unexpectedly")
-    }
-
-    retry(retryCnt, retryIntervalMs)(
-      Try(
-        HoodieSparkSqlWriter.write(
-          sqlContext, mode, options, data, hoodieTableConfig, writeClient, Some(triggerAsyncCompactor))
-      ) match {
-        case Success((true, commitOps, compactionInstantOps, client, tableConfig)) =>
-          log.info(s"Micro batch id=$batchId succeeded"
-            + (commitOps.isPresent match {
-                case true => s" for commit=${commitOps.get()}"
-                case _ => s" with no new commits"
-            }))
-          writeClient = Some(client)
-          hoodieTableConfig = Some(tableConfig)
-          if (compactionInstantOps.isPresent) {
-            asyncCompactorService.enqueuePendingCompaction(
-              new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionInstantOps.get()))
-          }
-          Success((true, commitOps, compactionInstantOps))
-        case Failure(e) =>
-          // clean up persist rdds in the write process
-          data.sparkSession.sparkContext.getPersistentRDDs
-            .foreach {
-              case (id, rdd) =>
-                try {
-                  rdd.unpersist()
-                } catch {
-                  case t: Exception => log.warn("Got excepting trying to unpersist rdd", t)
-                }
-            }
-          log.error(s"Micro batch id=$batchId threw following exception: ", e)
-          if (ignoreFailedBatch) {
-            log.info(s"Ignore the exception and move on streaming as per " +
-              s"${DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH_OPT_KEY} configuration")
-            Success((true, None, None))
-          } else {
-            if (retryCnt > 1) log.info(s"Retrying the failed micro batch id=$batchId ...")
-            Failure(e)
-          }
-        case Success((false, commitOps, compactionInstantOps, client, tableConfig)) =>
-          log.error(s"Micro batch id=$batchId ended up with errors"
-            + (commitOps.isPresent match {
-              case true =>  s" for commit=${commitOps.get()}"
-              case _ => s""
-            }))
-          if (ignoreFailedBatch) {
-            log.info(s"Ignore the errors and move on streaming as per " +
-              s"${DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH_OPT_KEY} configuration")
-            Success((true, None, None))
-          } else {
-            if (retryCnt > 1) log.info(s"Retrying the failed micro batch id=$batchId ...")
-            Failure(new HoodieCorruptedDataException(s"Micro batch id=$batchId ended up with errors"))
-          }
+  override def addBatch(batchId: Long, data: DataFrame): Unit =
+    this.synchronized {
+      if (isAsyncCompactorServiceShutdownAbnormally) {
+        throw new IllegalStateException("Async Compactor shutdown unexpectedly")
       }
-    ) match {
-      case Failure(e) =>
-        if (!ignoreFailedBatch) {
-          log.error(s"Micro batch id=$batchId threw following expections," +
-            s"aborting streaming app to avoid data loss: ", e)
-          // spark sometimes hangs upon exceptions and keep on hold of the executors
-          // this is to force exit upon errors / exceptions and release all executors
-          // will require redeployment / supervise mode to restart the streaming
-          reset(true)
-          System.exit(1)
+
+      retry(retryCnt, retryIntervalMs)(
+        Try(
+          HoodieSparkSqlWriter.write(
+            sqlContext,
+            mode,
+            options,
+            data,
+            hoodieTableConfig,
+            writeClient,
+            Some(triggerAsyncCompactor)
+          )
+        ) match {
+          case Success((true, commitOps, compactionInstantOps, client, tableConfig)) =>
+            log.info(
+              s"Micro batch id=$batchId succeeded"
+                + (commitOps.isPresent match {
+                  case true => s" for commit=${commitOps.get()}"
+                  case _    => s" with no new commits"
+                })
+            )
+            writeClient = Some(client)
+            hoodieTableConfig = Some(tableConfig)
+            if (compactionInstantOps.isPresent) {
+              asyncCompactorService.enqueuePendingCompaction(
+                new HoodieInstant(
+                  State.REQUESTED,
+                  HoodieTimeline.COMPACTION_ACTION,
+                  compactionInstantOps.get()
+                )
+              )
+            }
+            Success((true, commitOps, compactionInstantOps))
+          case Failure(e) =>
+            // clean up persist rdds in the write process
+            data.sparkSession.sparkContext.getPersistentRDDs
+              .foreach {
+                case (id, rdd) =>
+                  try {
+                    rdd.unpersist()
+                  } catch {
+                    case t: Exception => log.warn("Got excepting trying to unpersist rdd", t)
+                  }
+              }
+            log.error(s"Micro batch id=$batchId threw following exception: ", e)
+            if (ignoreFailedBatch) {
+              log.info(
+                s"Ignore the exception and move on streaming as per " +
+                  s"${DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH_OPT_KEY} configuration"
+              )
+              Success((true, None, None))
+            } else {
+              if (retryCnt > 1) log.info(s"Retrying the failed micro batch id=$batchId ...")
+              Failure(e)
+            }
+          case Success((false, commitOps, compactionInstantOps, client, tableConfig)) =>
+            log.error(
+              s"Micro batch id=$batchId ended up with errors"
+                + (commitOps.isPresent match {
+                  case true => s" for commit=${commitOps.get()}"
+                  case _    => s""
+                })
+            )
+            if (ignoreFailedBatch) {
+              log.info(
+                s"Ignore the errors and move on streaming as per " +
+                  s"${DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH_OPT_KEY} configuration"
+              )
+              Success((true, None, None))
+            } else {
+              if (retryCnt > 1) log.info(s"Retrying the failed micro batch id=$batchId ...")
+              Failure(
+                new HoodieCorruptedDataException(s"Micro batch id=$batchId ended up with errors")
+              )
+            }
         }
-      case Success(_) =>
-        log.info(s"Micro batch id=$batchId succeeded")
+      ) match {
+        case Failure(e) =>
+          if (!ignoreFailedBatch) {
+            log.error(
+              s"Micro batch id=$batchId threw following expections," +
+                s"aborting streaming app to avoid data loss: ",
+              e
+            )
+            // spark sometimes hangs upon exceptions and keep on hold of the executors
+            // this is to force exit upon errors / exceptions and release all executors
+            // will require redeployment / supervise mode to restart the streaming
+            reset(true)
+            System.exit(1)
+          }
+        case Success(_) =>
+          log.info(s"Micro batch id=$batchId succeeded")
+      }
     }
-  }
 
   override def toString: String = s"HoodieStreamingSink[${options("path")}]"
 
@@ -153,11 +184,13 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
-  protected def triggerAsyncCompactor(client: HoodieWriteClient[HoodieRecordPayload[Nothing]]): Unit = {
+  protected def triggerAsyncCompactor(
+      client: HoodieWriteClient[HoodieRecordPayload[Nothing]]
+  ): Unit = {
     if (null == asyncCompactorService) {
       log.info("Triggering Async compaction !!")
-      asyncCompactorService = new SparkStreamingAsyncCompactService(new JavaSparkContext(sqlContext.sparkContext),
-        client)
+      asyncCompactorService =
+        new SparkStreamingAsyncCompactService(new JavaSparkContext(sqlContext.sparkContext), client)
       asyncCompactorService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
         override def apply(errored: lang.Boolean): lang.Boolean = {
           log.info(s"Async Compactor shutdown. Errored ? $errored")
@@ -174,23 +207,28 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       }))
 
       // First time, scan .hoodie folder and get all pending compactions
-      val metaClient = new HoodieTableMetaClient(sqlContext.sparkContext.hadoopConfiguration,
-        client.getConfig.getBasePath)
-      val pendingInstants :java.util.List[HoodieInstant] =
+      val metaClient = new HoodieTableMetaClient(
+        sqlContext.sparkContext.hadoopConfiguration,
+        client.getConfig.getBasePath
+      )
+      val pendingInstants: java.util.List[HoodieInstant] =
         CompactionUtils.getPendingCompactionInstantTimes(metaClient)
-      pendingInstants.foreach((h : HoodieInstant) => asyncCompactorService.enqueuePendingCompaction(h))
+      pendingInstants.foreach((h: HoodieInstant) =>
+        asyncCompactorService.enqueuePendingCompaction(h)
+      )
     }
   }
 
-  private def reset(force: Boolean) : Unit = this.synchronized {
-    if (asyncCompactorService != null) {
-      asyncCompactorService.shutdown(force)
-      asyncCompactorService = null
-    }
+  private def reset(force: Boolean): Unit =
+    this.synchronized {
+      if (asyncCompactorService != null) {
+        asyncCompactorService.shutdown(force)
+        asyncCompactorService = null
+      }
 
-    if (writeClient.isDefined) {
-      writeClient.get.close()
-      writeClient = Option.empty
+      if (writeClient.isDefined) {
+        writeClient.get.close()
+        writeClient = Option.empty
+      }
     }
-  }
 }

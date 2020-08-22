@@ -52,8 +52,8 @@ object DataSourceReadOptions {
   val DEFAULT_QUERY_TYPE_OPT_VAL: String = QUERY_TYPE_SNAPSHOT_OPT_VAL
 
   /**
-   * For Snapshot query on merge on read table. Use this key to define the payload class.
-   */
+    * For Snapshot query on merge on read table. Use this key to define the payload class.
+    */
   val REALTIME_MERGE_OPT_KEY = "hoodie.datasource.merge.type"
   val REALTIME_SKIP_MERGE_OPT_VAL = "skip_merge"
   val REALTIME_PAYLOAD_COMBINE_OPT_VAL = "payload_combine"
@@ -75,12 +75,16 @@ object DataSourceReadOptions {
   /**
     * This eases migration from old configs to new configs.
     */
-  def translateViewTypesToQueryTypes(optParams: Map[String, String]) : Map[String, String] = {
-    val translation = Map(VIEW_TYPE_READ_OPTIMIZED_OPT_VAL -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
-                          VIEW_TYPE_INCREMENTAL_OPT_VAL -> QUERY_TYPE_INCREMENTAL_OPT_VAL,
-                          VIEW_TYPE_REALTIME_OPT_VAL -> QUERY_TYPE_SNAPSHOT_OPT_VAL)
+  def translateViewTypesToQueryTypes(optParams: Map[String, String]): Map[String, String] = {
+    val translation = Map(
+      VIEW_TYPE_READ_OPTIMIZED_OPT_VAL -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
+      VIEW_TYPE_INCREMENTAL_OPT_VAL -> QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      VIEW_TYPE_REALTIME_OPT_VAL -> QUERY_TYPE_SNAPSHOT_OPT_VAL
+    )
     if (optParams.contains(VIEW_TYPE_OPT_KEY) && !optParams.contains(QUERY_TYPE_OPT_KEY)) {
-      log.warn(VIEW_TYPE_OPT_KEY + " is deprecated and will be removed in a later release. Please use " + QUERY_TYPE_OPT_KEY)
+      log.warn(
+        VIEW_TYPE_OPT_KEY + " is deprecated and will be removed in a later release. Please use " + QUERY_TYPE_OPT_KEY
+      )
       optParams ++ Map(QUERY_TYPE_OPT_KEY -> translation(optParams(VIEW_TYPE_OPT_KEY)))
     } else {
       optParams
@@ -97,13 +101,11 @@ object DataSourceReadOptions {
     */
   val BEGIN_INSTANTTIME_OPT_KEY = "hoodie.datasource.read.begin.instanttime"
 
-
   /**
     * Instant time to limit incrementally fetched data to. New data written with an
     * `instant_time <= END_INSTANTTIME` are fetched out.
     *
     * Default: latest instant (i.e fetches all new data since begin instant time)
-    *
     */
   val END_INSTANTTIME_OPT_KEY = "hoodie.datasource.read.end.instanttime"
 
@@ -116,9 +118,9 @@ object DataSourceReadOptions {
   val DEFAULT_PUSH_DOWN_FILTERS_OPT_VAL = ""
 
   /**
-   * For the use-cases like users only want to incremental pull from certain partitions instead of the full table.
-   * This option allows using glob pattern to directly filter on path.
-   */
+    * For the use-cases like users only want to incremental pull from certain partitions instead of the full table.
+    * This option allows using glob pattern to directly filter on path.
+    */
   val INCR_PATH_GLOB_OPT_KEY = "hoodie.datasource.read.incr.path.glob"
   val DEFAULT_INCR_PATH_GLOB_OPT_VAL = ""
 }
@@ -163,15 +165,16 @@ object DataSourceWriteOptions {
   @Deprecated
   val DEFAULT_STORAGE_TYPE_OPT_VAL = COW_STORAGE_TYPE_OPT_VAL
 
-  def translateStorageTypeToTableType(optParams: Map[String, String]) : Map[String, String] = {
+  def translateStorageTypeToTableType(optParams: Map[String, String]): Map[String, String] = {
     if (optParams.contains(STORAGE_TYPE_OPT_KEY) && !optParams.contains(TABLE_TYPE_OPT_KEY)) {
-      log.warn(STORAGE_TYPE_OPT_KEY + " is deprecated and will be removed in a later release; Please use " + TABLE_TYPE_OPT_KEY)
+      log.warn(
+        STORAGE_TYPE_OPT_KEY + " is deprecated and will be removed in a later release; Please use " + TABLE_TYPE_OPT_KEY
+      )
       optParams ++ Map(TABLE_TYPE_OPT_KEY -> optParams(STORAGE_TYPE_OPT_KEY))
     } else {
       optParams
     }
   }
-
 
   /**
     * Hive table name, to register the table into.
@@ -188,7 +191,6 @@ object DataSourceWriteOptions {
   val PRECOMBINE_FIELD_OPT_KEY = "hoodie.datasource.write.precombine.field"
   val DEFAULT_PRECOMBINE_FIELD_OPT_VAL = "ts"
 
-
   /**
     * Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
     * This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective
@@ -200,7 +202,6 @@ object DataSourceWriteOptions {
     * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value
     * will be obtained by invoking .toString() on the field value. Nested fields can be specified using
     * the dot notation eg: `a.b.c`
-    *
     */
   val RECORDKEY_FIELD_OPT_KEY = "hoodie.datasource.write.recordkey.field"
   val DEFAULT_RECORDKEY_FIELD_OPT_VAL = "uuid"
@@ -221,17 +222,17 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = "false"
   val URL_ENCODE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.partitionpath.urlencode"
   val DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL = "false"
+
   /**
     * Key generator class, that implements will extract the key out of incoming record
-    *
     */
   val KEYGENERATOR_CLASS_OPT_KEY = "hoodie.datasource.write.keygenerator.class"
   val DEFAULT_KEYGENERATOR_CLASS_OPT_VAL = classOf[SimpleKeyGenerator].getName
 
   /**
-   * When set to true, will perform write operations directly using the spark native `Row` representation.
-   * By default, false (will be enabled as default in a future release)
-   */
+    * When set to true, will perform write operations directly using the spark native `Row` representation.
+    * By default, false (will be enabled as default in a future release)
+    */
   val ENABLE_ROW_WRITER_OPT_KEY = "hoodie.datasource.write.row.writer.enable"
   val DEFAULT_ENABLE_ROW_WRITER_OPT_VAL = "false"
 
@@ -268,7 +269,8 @@ object DataSourceWriteOptions {
     * within a streaming microbatch
     * By default true (in favor of streaming progressing over data integrity)
     */
-  val STREAMING_IGNORE_FAILED_BATCH_OPT_KEY = "hoodie.datasource.write.streaming.ignore.failed.batch"
+  val STREAMING_IGNORE_FAILED_BATCH_OPT_KEY =
+    "hoodie.datasource.write.streaming.ignore.failed.batch"
   val DEFAULT_STREAMING_IGNORE_FAILED_BATCH_OPT_VAL = "true"
   val META_SYNC_CLIENT_TOOL_CLASS = "hoodie.meta.sync.client.tool.class"
   val DEFAULT_META_SYNC_CLIENT_TOOL_CLASS = classOf[HiveSyncTool].getName
@@ -285,9 +287,11 @@ object DataSourceWriteOptions {
   val HIVE_PASS_OPT_KEY = "hoodie.datasource.hive_sync.password"
   val HIVE_URL_OPT_KEY = "hoodie.datasource.hive_sync.jdbcurl"
   val HIVE_PARTITION_FIELDS_OPT_KEY = "hoodie.datasource.hive_sync.partition_fields"
-  val HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY = "hoodie.datasource.hive_sync.partition_extractor_class"
+  val HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY =
+    "hoodie.datasource.hive_sync.partition_extractor_class"
   val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = "hoodie.datasource.hive_sync.assume_date_partitioning"
-  val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = "hoodie.datasource.hive_sync.use_pre_apache_input_format"
+  val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY =
+    "hoodie.datasource.hive_sync.use_pre_apache_input_format"
   val HIVE_USE_JDBC_OPT_KEY = "hoodie.datasource.hive_sync.use_jdbc"
 
   // DEFAULT FOR HIVE SPECIFIC CONFIGS
@@ -300,7 +304,8 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_PASS_OPT_VAL = "hive"
   val DEFAULT_HIVE_URL_OPT_VAL = "jdbc:hive2://localhost:10000"
   val DEFAULT_HIVE_PARTITION_FIELDS_OPT_VAL = ""
-  val DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL = classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName
+  val DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL =
+    classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName
   val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = "false"
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
   val DEFAULT_HIVE_USE_JDBC_OPT_VAL = "true"

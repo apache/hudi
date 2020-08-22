@@ -28,8 +28,8 @@ import org.apache.spark.sql.types.StructType
   * @param sqlContext Spark SQL Context
   * @param userSchema Users data schema
   */
-class HoodieEmptyRelation(val sqlContext: SQLContext,
-                          val userSchema: StructType) extends BaseRelation {
+class HoodieEmptyRelation(val sqlContext: SQLContext, val userSchema: StructType)
+    extends BaseRelation {
 
   override def schema: StructType = userSchema
 }

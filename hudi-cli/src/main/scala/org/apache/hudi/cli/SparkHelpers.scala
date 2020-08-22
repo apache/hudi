@@ -36,21 +36,45 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
 import scala.collection.JavaConversions._
 import scala.collection.mutable._
 
-
 object SparkHelpers {
   @throws[Exception]
-  def skipKeysAndWriteNewFile(instantTime: String, fs: FileSystem, sourceFile: Path, destinationFile: Path, keysToSkip: Set[String]) {
+  def skipKeysAndWriteNewFile(
+      instantTime: String,
+      fs: FileSystem,
+      sourceFile: Path,
+      destinationFile: Path,
+      keysToSkip: Set[String]
+  ) {
     val sourceRecords = ParquetUtils.readAvroRecords(fs.getConf, sourceFile)
     val schema: Schema = sourceRecords.get(0).getSchema
-    val filter: BloomFilter = BloomFilterFactory.createBloomFilter(HoodieIndexConfig.DEFAULT_BLOOM_FILTER_NUM_ENTRIES.toInt, HoodieIndexConfig.DEFAULT_BLOOM_FILTER_FPP.toDouble,
-      HoodieIndexConfig.DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES.toInt, HoodieIndexConfig.DEFAULT_BLOOM_INDEX_FILTER_TYPE);
-    val writeSupport: HoodieAvroWriteSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter)
-    val parquetConfig: HoodieAvroParquetConfig = new HoodieAvroParquetConfig(writeSupport, CompressionCodecName.GZIP, HoodieStorageConfig.DEFAULT_PARQUET_BLOCK_SIZE_BYTES.toInt, HoodieStorageConfig.DEFAULT_PARQUET_PAGE_SIZE_BYTES.toInt, HoodieStorageConfig.DEFAULT_PARQUET_FILE_MAX_BYTES.toInt, fs.getConf, HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO.toDouble)
+    val filter: BloomFilter = BloomFilterFactory.createBloomFilter(
+      HoodieIndexConfig.DEFAULT_BLOOM_FILTER_NUM_ENTRIES.toInt,
+      HoodieIndexConfig.DEFAULT_BLOOM_FILTER_FPP.toDouble,
+      HoodieIndexConfig.DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES.toInt,
+      HoodieIndexConfig.DEFAULT_BLOOM_INDEX_FILTER_TYPE
+    );
+    val writeSupport: HoodieAvroWriteSupport =
+      new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter)
+    val parquetConfig: HoodieAvroParquetConfig = new HoodieAvroParquetConfig(
+      writeSupport,
+      CompressionCodecName.GZIP,
+      HoodieStorageConfig.DEFAULT_PARQUET_BLOCK_SIZE_BYTES.toInt,
+      HoodieStorageConfig.DEFAULT_PARQUET_PAGE_SIZE_BYTES.toInt,
+      HoodieStorageConfig.DEFAULT_PARQUET_FILE_MAX_BYTES.toInt,
+      fs.getConf,
+      HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO.toDouble
+    )
 
     // Add current classLoad for config, if not will throw classNotFound of 'HoodieWrapperFileSystem'.
     parquetConfig.getHadoopConf().setClassLoader(Thread.currentThread.getContextClassLoader)
 
-    val writer = new HoodieParquetWriter[HoodieJsonPayload, IndexedRecord](instantTime, destinationFile, parquetConfig, schema, new SparkTaskContextSupplier())
+    val writer = new HoodieParquetWriter[HoodieJsonPayload, IndexedRecord](
+      instantTime,
+      destinationFile,
+      parquetConfig,
+      schema,
+      new SparkTaskContextSupplier()
+    )
     for (rec <- sourceRecords) {
       val key: String = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
       if (!keysToSkip.contains(key)) {
@@ -62,12 +86,10 @@ object SparkHelpers {
   }
 }
 
-
 /**
   * Bunch of Spark Shell/Scala stuff useful for debugging
   */
 class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
-
 
   /**
     * Print keys from a file
@@ -79,14 +101,12 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
   }
 
   /**
-    *
     * @param file
     * @return
     */
   def getRowKeyDF(file: String): DataFrame = {
     sqlContext.read.parquet(file).select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`")
   }
-
 
   /**
     * Does the rowKey actually exist in the file.
@@ -113,9 +133,7 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
     keyCount
   }
 
-
   /**
-    *
     * Checks that all the keys in the file, have been added to the bloom filter
     * in the footer
     *
@@ -126,15 +144,20 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
     */
   def fileKeysAgainstBF(conf: Configuration, sqlContext: SQLContext, file: String): Boolean = {
     val bf = ParquetUtils.readBloomFilterFromParquetMetadata(conf, new Path(file))
-    val foundCount = sqlContext.parquetFile(file)
+    val foundCount = sqlContext
+      .parquetFile(file)
       .select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`")
-      .collect().count(r => !bf.mightContain(r.getString(0)))
+      .collect()
+      .count(r => !bf.mightContain(r.getString(0)))
     val totalCount = getKeyCount(file, sqlContext)
     println(s"totalCount: $totalCount, foundCount: $foundCount")
     totalCount == foundCount
   }
 
   def getDistinctKeyDF(paths: List[String]): DataFrame = {
-    sqlContext.read.parquet(paths: _*).select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`").distinct()
+    sqlContext.read
+      .parquet(paths: _*)
+      .select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`")
+      .distinct()
   }
 }

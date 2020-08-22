@@ -39,25 +39,32 @@ import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
 
-case class HoodieMergeOnReadFileSplit(dataFile: PartitionedFile,
-                                      logPaths: Option[List[String]],
-                                      latestCommit: String,
-                                      tablePath: String,
-                                      maxCompactionMemoryInBytes: Long,
-                                      mergeType: String)
+case class HoodieMergeOnReadFileSplit(
+    dataFile: PartitionedFile,
+    logPaths: Option[List[String]],
+    latestCommit: String,
+    tablePath: String,
+    maxCompactionMemoryInBytes: Long,
+    mergeType: String
+)
 
-case class HoodieMergeOnReadTableState(tableStructSchema: StructType,
-                                       requiredStructSchema: StructType,
-                                       tableAvroSchema: String,
-                                       requiredAvroSchema: String,
-                                       hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit])
+case class HoodieMergeOnReadTableState(
+    tableStructSchema: StructType,
+    requiredStructSchema: StructType,
+    tableAvroSchema: String,
+    requiredAvroSchema: String,
+    hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit]
+)
 
-class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
-                                  val optParams: Map[String, String],
-                                  val userSchema: StructType,
-                                  val globPaths: Seq[Path],
-                                  val metaClient: HoodieTableMetaClient)
-  extends BaseRelation with PrunedFilteredScan with Logging {
+class MergeOnReadSnapshotRelation(
+    val sqlContext: SQLContext,
+    val optParams: Map[String, String],
+    val userSchema: StructType,
+    val globPaths: Seq[Path],
+    val metaClient: HoodieTableMetaClient
+) extends BaseRelation
+    with PrunedFilteredScan
+    with Logging {
 
   private val conf = sqlContext.sparkContext.hadoopConfiguration
   private val jobConf = new JobConf(conf)
@@ -67,7 +74,8 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   private val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val mergeType = optParams.getOrElse(
     DataSourceReadOptions.REALTIME_MERGE_OPT_KEY,
-    DataSourceReadOptions.DEFAULT_REALTIME_MERGE_OPT_VAL)
+    DataSourceReadOptions.DEFAULT_REALTIME_MERGE_OPT_VAL
+  )
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
   private val fileIndex = buildFileIndex()
 
@@ -86,7 +94,11 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       }
     })
     val requiredAvroSchema = AvroConversionUtils
-      .convertStructTypeToAvroSchema(requiredStructSchema, tableAvroSchema.getName, tableAvroSchema.getNamespace)
+      .convertStructTypeToAvroSchema(
+        requiredStructSchema,
+        tableAvroSchema.getName,
+        tableAvroSchema.getNamespace
+      )
     val hoodieTableState = HoodieMergeOnReadTableState(
       tableStructSchema,
       requiredStructSchema,
@@ -127,25 +139,38 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   }
 
   def buildFileIndex(): List[HoodieMergeOnReadFileSplit] = {
-    val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths)
+    val inMemoryFileIndex =
+      HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths)
     val fileStatuses = inMemoryFileIndex.allFiles()
     if (fileStatuses.isEmpty) {
       throw new HoodieException("No files found for reading in user provided path.")
     }
 
-    val fsView = new HoodieTableFileSystemView(metaClient,
-      metaClient.getActiveTimeline.getCommitsTimeline
-        .filterCompletedInstants, fileStatuses.toArray)
+    val fsView = new HoodieTableFileSystemView(
+      metaClient,
+      metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants,
+      fileStatuses.toArray
+    )
     val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
     val latestCommit = fsView.getLastInstant.get().getTimestamp
-    val fileGroup = HoodieRealtimeInputFormatUtils.groupLogsByBaseFile(conf, latestFiles.asJava).asScala
-    val fileSplits = fileGroup.map(kv => {
-      val baseFile = kv._1
-      val logPaths = if (kv._2.isEmpty) Option.empty else Option(kv._2.asScala.toList)
-      val partitionedFile = PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen)
-      HoodieMergeOnReadFileSplit(partitionedFile, logPaths, latestCommit,
-        metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
-    }).toList
+    val fileGroup =
+      HoodieRealtimeInputFormatUtils.groupLogsByBaseFile(conf, latestFiles.asJava).asScala
+    val fileSplits = fileGroup
+      .map(kv => {
+        val baseFile = kv._1
+        val logPaths = if (kv._2.isEmpty) Option.empty else Option(kv._2.asScala.toList)
+        val partitionedFile =
+          PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen)
+        HoodieMergeOnReadFileSplit(
+          partitionedFile,
+          logPaths,
+          latestCommit,
+          metaClient.getBasePath,
+          maxCompactionMemoryInBytes,
+          mergeType
+        )
+      })
+      .toList
     fileSplits
   }
 }

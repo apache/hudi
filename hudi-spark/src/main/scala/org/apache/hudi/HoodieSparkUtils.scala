@@ -26,7 +26,6 @@ import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFile
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import scala.collection.JavaConverters._
 
-
 object HoodieSparkUtils {
 
   def getMetaSchema: StructType = {
@@ -43,7 +42,10 @@ object HoodieSparkUtils {
     })
   }
 
-  def createInMemoryFileIndex(sparkSession: SparkSession, globbedPaths: Seq[Path]): InMemoryFileIndex = {
+  def createInMemoryFileIndex(
+      sparkSession: SparkSession,
+      globbedPaths: Seq[Path]
+  ): InMemoryFileIndex = {
     val fileStatusCache = FileStatusCache.getOrCreate(sparkSession)
     new InMemoryFileIndex(sparkSession, globbedPaths, Map(), Option.empty, fileStatusCache)
   }

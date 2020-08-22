@@ -50,12 +50,15 @@ import scala.collection.JavaConverters._
   * @param metaClient Hoodie table meta client
   * @param optParams DataSource options passed by the user
   */
-class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
-                              val userSchema: StructType,
-                              val globPaths: Seq[Path],
-                              val metaClient: HoodieTableMetaClient,
-                              val optParams: Map[String, String]) extends BaseRelation
-  with PrunedFilteredScan with Logging {
+class HoodieBootstrapRelation(
+    @transient val _sqlContext: SQLContext,
+    val userSchema: StructType,
+    val globPaths: Seq[Path],
+    val metaClient: HoodieTableMetaClient,
+    val optParams: Map[String, String]
+) extends BaseRelation
+    with PrunedFilteredScan
+    with Logging {
 
   val skeletonSchema: StructType = HoodieSparkUtils.getMetaSchema
   var dataSchema: StructType = _
@@ -78,11 +81,18 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
       var dataFile: PartitionedFile = null
 
       if (hoodieBaseFile.getBootstrapBaseFile.isPresent) {
-        skeletonFile = Option(PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen))
-        dataFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getBootstrapBaseFile.get().getPath, 0,
-          hoodieBaseFile.getBootstrapBaseFile.get().getFileLen)
+        skeletonFile = Option(
+          PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen)
+        )
+        dataFile = PartitionedFile(
+          InternalRow.empty,
+          hoodieBaseFile.getBootstrapBaseFile.get().getPath,
+          0,
+          hoodieBaseFile.getBootstrapBaseFile.get().getFileLen
+        )
       } else {
-        dataFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen)
+        dataFile =
+          PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen)
       }
       HoodieBootstrapSplit(dataFile, skeletonFile)
     })
@@ -103,15 +113,15 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
 
     // Prepare readers for reading data file and skeleton files
     val dataReadFunction = new ParquetFileFormat()
-        .buildReaderWithPartitionValues(
-          sparkSession = _sqlContext.sparkSession,
-          dataSchema = dataSchema,
-          partitionSchema = StructType(Seq.empty),
-          requiredSchema = requiredDataSchema,
-          filters = if (requiredSkeletonSchema.isEmpty) filters else Seq() ,
-          options = Map.empty,
-          hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
-        )
+      .buildReaderWithPartitionValues(
+        sparkSession = _sqlContext.sparkSession,
+        dataSchema = dataSchema,
+        partitionSchema = StructType(Seq.empty),
+        requiredSchema = requiredDataSchema,
+        filters = if (requiredSkeletonSchema.isEmpty) filters else Seq(),
+        options = Map.empty,
+        hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
+      )
 
     val skeletonReadFunction = new ParquetFileFormat()
       .buildReaderWithPartitionValues(
@@ -132,10 +142,19 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
         requiredSchema = StructType(requiredSkeletonSchema.fields ++ requiredDataSchema.fields),
         filters = filters,
         options = Map.empty,
-        hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf())
+        hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf()
+      )
 
-    val rdd = new HoodieBootstrapRDD(_sqlContext.sparkSession, dataReadFunction, skeletonReadFunction,
-      regularReadFunction, requiredDataSchema, requiredSkeletonSchema, requiredColumns, tableState)
+    val rdd = new HoodieBootstrapRDD(
+      _sqlContext.sparkSession,
+      dataReadFunction,
+      skeletonReadFunction,
+      regularReadFunction,
+      requiredDataSchema,
+      requiredSkeletonSchema,
+      requiredColumns,
+      tableState
+    )
     rdd.asInstanceOf[RDD[Row]]
   }
 
@@ -152,22 +171,30 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
 
   def buildFileIndex(): HoodieBootstrapFileIndex = {
     logInfo("Building file index..")
-    val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(_sqlContext.sparkSession, globPaths)
+    val inMemoryFileIndex =
+      HoodieSparkUtils.createInMemoryFileIndex(_sqlContext.sparkSession, globPaths)
     val fileStatuses = inMemoryFileIndex.allFiles()
 
     if (fileStatuses.isEmpty) {
       throw new HoodieException("No files found for reading in user provided path.")
     }
 
-    val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitsTimeline
-      .filterCompletedInstants, fileStatuses.toArray)
+    val fsView = new HoodieTableFileSystemView(
+      metaClient,
+      metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants,
+      fileStatuses.toArray
+    )
     val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
 
     if (log.isDebugEnabled) {
       latestFiles.foreach(file => {
         logDebug("Printing indexed files:")
         if (file.getBootstrapBaseFile.isPresent) {
-          logDebug("Skeleton File: " + file.getPath + ", Data File: " + file.getBootstrapBaseFile.get().getPath)
+          logDebug(
+            "Skeleton File: " + file.getPath + ", Data File: " + file.getBootstrapBaseFile
+              .get()
+              .getPath
+          )
         } else {
           logDebug("Regular Hoodie File: " + file.getPath)
         }

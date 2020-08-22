@@ -35,27 +35,33 @@ import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 
 /**
   * Hoodie Spark Datasource, for reading and writing hoodie tables
-  *
   */
-class DefaultSource extends RelationProvider
-  with SchemaRelationProvider
-  with CreatableRelationProvider
-  with DataSourceRegister
-  with StreamSinkProvider
-  with Serializable {
+class DefaultSource
+    extends RelationProvider
+    with SchemaRelationProvider
+    with CreatableRelationProvider
+    with DataSourceRegister
+    with StreamSinkProvider
+    with Serializable {
 
   private val log = LogManager.getLogger(classOf[DefaultSource])
 
-  override def createRelation(sqlContext: SQLContext,
-                              parameters: Map[String, String]): BaseRelation = {
+  override def createRelation(
+      sqlContext: SQLContext,
+      parameters: Map[String, String]
+  ): BaseRelation = {
     createRelation(sqlContext, parameters, null)
   }
 
-  override def createRelation(sqlContext: SQLContext,
-                              optParams: Map[String, String],
-                              schema: StructType): BaseRelation = {
+  override def createRelation(
+      sqlContext: SQLContext,
+      optParams: Map[String, String],
+      schema: StructType
+  ): BaseRelation = {
     // Add default options for unspecified read options keys.
-    val parameters = Map(QUERY_TYPE_OPT_KEY -> DEFAULT_QUERY_TYPE_OPT_VAL) ++ translateViewTypesToQueryTypes(optParams)
+    val parameters = Map(
+      QUERY_TYPE_OPT_KEY -> DEFAULT_QUERY_TYPE_OPT_VAL
+    ) ++ translateViewTypesToQueryTypes(optParams)
 
     val path = parameters.get("path")
     val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS_OPT_KEY)
@@ -80,17 +86,35 @@ class DefaultSource extends RelationProvider
       if (metaClient.getTableType.equals(HoodieTableType.MERGE_ON_READ)) {
         if (isBootstrappedTable) {
           // Snapshot query is not supported for Bootstrapped MOR tables
-          log.warn("Snapshot query is not supported for Bootstrapped Merge-on-Read tables." +
-            " Falling back to Read Optimized query.")
+          log.warn(
+            "Snapshot query is not supported for Bootstrapped Merge-on-Read tables." +
+              " Falling back to Read Optimized query."
+          )
           new HoodieBootstrapRelation(sqlContext, schema, globPaths, metaClient, optParams)
         } else {
           new MergeOnReadSnapshotRelation(sqlContext, optParams, schema, globPaths, metaClient)
         }
       } else {
-        getBaseFileOnlyView(sqlContext, parameters, schema, readPaths, isBootstrappedTable, globPaths, metaClient)
+        getBaseFileOnlyView(
+          sqlContext,
+          parameters,
+          schema,
+          readPaths,
+          isBootstrappedTable,
+          globPaths,
+          metaClient
+        )
       }
-    } else if(parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)) {
-      getBaseFileOnlyView(sqlContext, parameters, schema, readPaths, isBootstrappedTable, globPaths, metaClient)
+    } else if (parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)) {
+      getBaseFileOnlyView(
+        sqlContext,
+        parameters,
+        schema,
+        readPaths,
+        isBootstrappedTable,
+        globPaths,
+        metaClient
+      )
     } else if (parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
       new IncrementalRelation(sqlContext, tablePath, optParams, schema)
     } else {
@@ -114,10 +138,12 @@ class DefaultSource extends RelationProvider
     * @param df Spark DataFrame to be written
     * @return Spark Relation
     */
-  override def createRelation(sqlContext: SQLContext,
-                              mode: SaveMode,
-                              optParams: Map[String, String],
-                              df: DataFrame): BaseRelation = {
+  override def createRelation(
+      sqlContext: SQLContext,
+      mode: SaveMode,
+      optParams: Map[String, String],
+      df: DataFrame
+  ): BaseRelation = {
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(optParams)
     if (parameters(OPERATION_OPT_KEY).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
       HoodieSparkSqlWriter.bootstrap(sqlContext, mode, parameters, df)
@@ -127,27 +153,27 @@ class DefaultSource extends RelationProvider
     new HoodieEmptyRelation(sqlContext, df.schema)
   }
 
-  override def createSink(sqlContext: SQLContext,
-                          optParams: Map[String, String],
-                          partitionColumns: Seq[String],
-                          outputMode: OutputMode): Sink = {
+  override def createSink(
+      sqlContext: SQLContext,
+      optParams: Map[String, String],
+      partitionColumns: Seq[String],
+      outputMode: OutputMode
+  ): Sink = {
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(optParams)
-    new HoodieStreamingSink(
-      sqlContext,
-      parameters,
-      partitionColumns,
-      outputMode)
+    new HoodieStreamingSink(sqlContext, parameters, partitionColumns, outputMode)
   }
 
   override def shortName(): String = "hudi"
 
-  private def getBaseFileOnlyView(sqlContext: SQLContext,
-                                  optParams: Map[String, String],
-                                  schema: StructType,
-                                  extraReadPaths: Seq[String],
-                                  isBootstrappedTable: Boolean,
-                                  globPaths: Seq[Path],
-                                  metaClient: HoodieTableMetaClient): BaseRelation = {
+  private def getBaseFileOnlyView(
+      sqlContext: SQLContext,
+      optParams: Map[String, String],
+      schema: StructType,
+      extraReadPaths: Seq[String],
+      isBootstrappedTable: Boolean,
+      globPaths: Seq[Path],
+      metaClient: HoodieTableMetaClient
+  ): BaseRelation = {
     log.warn("Loading Base File Only View.")
 
     if (isBootstrappedTable) {
@@ -159,16 +185,19 @@ class DefaultSource extends RelationProvider
       sqlContext.sparkContext.hadoopConfiguration.setClass(
         "mapreduce.input.pathFilter.class",
         classOf[HoodieROTablePathFilter],
-        classOf[org.apache.hadoop.fs.PathFilter])
+        classOf[org.apache.hadoop.fs.PathFilter]
+      )
 
       log.info("Constructing hoodie (as parquet) data source with options :" + optParams)
       // simply return as a regular parquet relation
-      DataSource.apply(
-        sparkSession = sqlContext.sparkSession,
-        paths = extraReadPaths,
-        userSpecifiedSchema = Option(schema),
-        className = "parquet",
-        options = optParams)
+      DataSource
+        .apply(
+          sparkSession = sqlContext.sparkSession,
+          paths = extraReadPaths,
+          userSpecifiedSchema = Option(schema),
+          className = "parquet",
+          options = optParams
+        )
         .resolveRelation()
     }
   }

@@ -39,14 +39,16 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.Try
 
-case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
+case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit)
+    extends Partition
 
-class HoodieMergeOnReadRDD(@transient sc: SparkContext,
-                           @transient config: Configuration,
-                           fullSchemaFileReader: PartitionedFile => Iterator[Any],
-                           requiredSchemaFileReader: PartitionedFile => Iterator[Any],
-                           tableState: HoodieMergeOnReadTableState)
-  extends RDD[InternalRow](sc, Nil) {
+class HoodieMergeOnReadRDD(
+    @transient sc: SparkContext,
+    @transient config: Configuration,
+    fullSchemaFileReader: PartitionedFile => Iterator[Any],
+    requiredSchemaFileReader: PartitionedFile => Iterator[Any],
+    tableState: HoodieMergeOnReadTableState
+) extends RDD[InternalRow](sc, Nil) {
 
   private val confBroadcast = sc.broadcast(new SerializableWritable(config))
 
@@ -55,34 +57,38 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     mergeParquetPartition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logPaths.isEmpty =>
         read(mergeParquetPartition.split.dataFile, requiredSchemaFileReader)
-      case skipMergeSplit if skipMergeSplit.mergeType
-        .equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
+      case skipMergeSplit
+          if skipMergeSplit.mergeType
+            .equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
         skipMergeFileIterator(
           skipMergeSplit,
           read(mergeParquetPartition.split.dataFile, requiredSchemaFileReader),
           getConfig
         )
-      case payloadCombineSplit if payloadCombineSplit.mergeType
-        .equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
+      case payloadCombineSplit
+          if payloadCombineSplit.mergeType
+            .equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
         payloadCombineFileIterator(
           payloadCombineSplit,
           read(mergeParquetPartition.split.dataFile, fullSchemaFileReader),
           getConfig
         )
-      case _ => throw new HoodieException(s"Unable to select an Iterator to read the Hoodie MOR File Split for " +
-        s"file path: ${mergeParquetPartition.split.dataFile.filePath}" +
-        s"log paths: ${mergeParquetPartition.split.logPaths.toString}" +
-        s"hoodie table path: ${mergeParquetPartition.split.tablePath}" +
-        s"spark partition Index: ${mergeParquetPartition.index}" +
-        s"merge type: ${mergeParquetPartition.split.mergeType}")
+      case _ =>
+        throw new HoodieException(
+          s"Unable to select an Iterator to read the Hoodie MOR File Split for " +
+            s"file path: ${mergeParquetPartition.split.dataFile.filePath}" +
+            s"log paths: ${mergeParquetPartition.split.logPaths.toString}" +
+            s"hoodie table path: ${mergeParquetPartition.split.tablePath}" +
+            s"spark partition Index: ${mergeParquetPartition.index}" +
+            s"merge type: ${mergeParquetPartition.split.mergeType}"
+        )
     }
   }
 
   override protected def getPartitions: Array[Partition] = {
-    tableState
-      .hoodieRealtimeFileSplits
-      .zipWithIndex
-      .map(file => HoodieMergeOnReadPartition(file._2, file._1)).toArray
+    tableState.hoodieRealtimeFileSplits.zipWithIndex
+      .map(file => HoodieMergeOnReadPartition(file._2, file._1))
+      .toArray
   }
 
   private def getConfig: Configuration = {
@@ -92,29 +98,36 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     }
   }
 
-  private def read(partitionedFile: PartitionedFile,
-                   readFileFunction: PartitionedFile => Iterator[Any]): Iterator[InternalRow] = {
+  private def read(
+      partitionedFile: PartitionedFile,
+      readFileFunction: PartitionedFile => Iterator[Any]
+  ): Iterator[InternalRow] = {
     val fileIterator = readFileFunction(partitionedFile)
     val rows = fileIterator.flatMap(_ match {
-      case r: InternalRow => Seq(r)
+      case r: InternalRow   => Seq(r)
       case b: ColumnarBatch => b.rowIterator().asScala
     })
     rows
   }
 
-  private def skipMergeFileIterator(split: HoodieMergeOnReadFileSplit,
-                                  baseFileIterator: Iterator[InternalRow],
-                                  config: Configuration): Iterator[InternalRow] =
+  private def skipMergeFileIterator(
+      split: HoodieMergeOnReadFileSplit,
+      baseFileIterator: Iterator[InternalRow],
+      config: Configuration
+  ): Iterator[InternalRow] =
     new Iterator[InternalRow] {
       private val tableAvroSchema = new Schema.Parser().parse(tableState.tableAvroSchema)
       private val requiredAvroSchema = new Schema.Parser().parse(tableState.requiredAvroSchema)
       private val requiredFieldPosition =
         tableState.requiredStructSchema
-          .map(f => tableAvroSchema.getField(f.name).pos()).toList
+          .map(f => tableAvroSchema.getField(f.name).pos())
+          .toList
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
-      private val deserializer = new AvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
+      private val deserializer =
+        new AvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
       private val unsafeProjection = UnsafeProjection.create(tableState.requiredStructSchema)
-      private val logRecords = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config).getRecords
+      private val logRecords =
+        HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config).getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
 
       private var recordToLoad: InternalRow = _
@@ -133,8 +146,15 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
               this.hasNext
             } else {
               val requiredAvroRecord = AvroConversionUtils
-                .buildAvroRecordBySchema(curAvroRecord.get(), requiredAvroSchema, requiredFieldPosition, recordBuilder)
-              recordToLoad = unsafeProjection(deserializer.deserialize(requiredAvroRecord).asInstanceOf[InternalRow])
+                .buildAvroRecordBySchema(
+                  curAvroRecord.get(),
+                  requiredAvroSchema,
+                  requiredFieldPosition,
+                  recordBuilder
+                )
+              recordToLoad = unsafeProjection(
+                deserializer.deserialize(requiredAvroRecord).asInstanceOf[InternalRow]
+              )
               true
             }
           } else {
@@ -148,20 +168,26 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       }
     }
 
-  private def payloadCombineFileIterator(split: HoodieMergeOnReadFileSplit,
-                                baseFileIterator: Iterator[InternalRow],
-                                config: Configuration): Iterator[InternalRow] =
+  private def payloadCombineFileIterator(
+      split: HoodieMergeOnReadFileSplit,
+      baseFileIterator: Iterator[InternalRow],
+      config: Configuration
+  ): Iterator[InternalRow] =
     new Iterator[InternalRow] {
       private val tableAvroSchema = new Schema.Parser().parse(tableState.tableAvroSchema)
       private val requiredAvroSchema = new Schema.Parser().parse(tableState.requiredAvroSchema)
       private val requiredFieldPosition =
         tableState.requiredStructSchema
-          .map(f => tableAvroSchema.getField(f.name).pos()).toList
-      private val serializer = new AvroSerializer(tableState.tableStructSchema, tableAvroSchema, false)
-      private val requiredDeserializer = new AvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
+          .map(f => tableAvroSchema.getField(f.name).pos())
+          .toList
+      private val serializer =
+        new AvroSerializer(tableState.tableStructSchema, tableAvroSchema, false)
+      private val requiredDeserializer =
+        new AvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
       private val unsafeProjection = UnsafeProjection.create(tableState.requiredStructSchema)
-      private val logRecords = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config).getRecords
+      private val logRecords =
+        HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config).getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
       private val keyToSkip = mutable.Set.empty[String]
 
@@ -188,8 +214,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                   requiredFieldPosition,
                   recordBuilder
                 )
-              recordToLoad = unsafeProjection(requiredDeserializer
-                .deserialize(requiredAvroRecord).asInstanceOf[InternalRow])
+              recordToLoad = unsafeProjection(
+                requiredDeserializer
+                  .deserialize(requiredAvroRecord)
+                  .asInstanceOf[InternalRow]
+              )
               true
             }
           } else {
@@ -216,8 +245,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                     requiredFieldPosition,
                     recordBuilder
                   )
-                recordToLoad = unsafeProjection(requiredDeserializer
-                  .deserialize(requiredAvroRecord).asInstanceOf[InternalRow])
+                recordToLoad = unsafeProjection(
+                  requiredDeserializer
+                    .deserialize(requiredAvroRecord)
+                    .asInstanceOf[InternalRow]
+                )
                 true
               }
             }
@@ -233,14 +265,12 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         val rowToReturn = new SpecificInternalRow(tableState.requiredStructSchema)
         val posIterator = requiredFieldPosition.iterator
         var curIndex = 0
-        tableState.requiredStructSchema.foreach(
-          f => {
-            val curPos = posIterator.next()
-            val curField = row.get(curPos, f.dataType)
-            rowToReturn.update(curIndex, curField)
-            curIndex = curIndex + 1
-          }
-        )
+        tableState.requiredStructSchema.foreach(f => {
+          val curPos = posIterator.next()
+          val curField = row.get(curPos, f.dataType)
+          rowToReturn.update(curIndex, curField)
+          curIndex = curIndex + 1
+        })
         rowToReturn
       }
 
@@ -254,7 +284,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 private object HoodieMergeOnReadRDD {
   val CONFIG_INSTANTIATION_LOCK = new Object()
 
-  def scanLog(split: HoodieMergeOnReadFileSplit, logSchema: Schema, config: Configuration): HoodieMergedLogRecordScanner = {
+  def scanLog(
+      split: HoodieMergeOnReadFileSplit,
+      logSchema: Schema,
+      config: Configuration
+  ): HoodieMergedLogRecordScanner = {
     val fs = FSUtils.getFs(split.tablePath, config)
     new HoodieMergedLogRecordScanner(
       fs,
@@ -263,12 +297,23 @@ private object HoodieMergeOnReadRDD {
       logSchema,
       split.latestCommit,
       split.maxCompactionMemoryInBytes,
-      Try(config.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
-        HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED).toBoolean).getOrElse(false),
+      Try(
+        config
+          .get(
+            HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
+            HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED
+          )
+          .toBoolean
+      ).getOrElse(false),
       false,
-      config.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
-        HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
-      config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
-        HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+      config.getInt(
+        HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
+        HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE
+      ),
+      config.get(
+        HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
+        HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH
+      )
+    )
   }
 }
