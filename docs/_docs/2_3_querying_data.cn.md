@@ -36,7 +36,7 @@ language: cn
 |**Hive**|Y|Y|
 |**Spark SQL**|Y|Y|
 |**Spark Datasource**|Y|Y|
-|**Presto**|Y|N|
+|**PrestoDB**|Y|N|
 |**Impala**|Y|N|
 
 
@@ -47,7 +47,7 @@ language: cn
 |**Hive**|Y|Y|Y|
 |**Spark SQL**|Y|Y|Y|
 |**Spark Datasource**|Y|N|Y|
-|**Presto**|N|N|Y|
+|**PrestoDB**|Y|N|Y|
 |**Impala**|N|N|Y|
 
 
@@ -187,9 +187,9 @@ Dataset<Row> hoodieRealtimeViewDF = spark.read().format("org.apache.hudi")
 | checkExists(keys) | 检查提供的键是否存在于Hudi数据集中 |
 
 
-## Presto
+## PrestoDB
 
-Presto是一种常用的查询引擎，可提供交互式查询性能。 Hudi RO表可以在Presto中无缝查询。
+PrestoDB是一种常用的查询引擎，可提供交互式查询性能。 Hudi RO表可以在Presto中无缝查询。
 这需要在整个安装过程中将`hudi-presto-bundle` jar放入`<presto_install>/plugin/hive-hadoop2/`中。
 
 ## Impala (3.4 or later)

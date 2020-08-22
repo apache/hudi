@@ -16,6 +16,6 @@ Hudi (pronounced “Hoodie”) ingests & manages storage of large analytical tab
     <img class="docimage" src="/assets/images/hudi_intro_1.png" alt="hudi_intro_1.png" />
 </figure>
 
-By carefully managing how data is laid out in storage & how it’s exposed to queries, Hudi is able to power a rich data ecosystem where external sources can be ingested in near real-time and made available for interactive SQL Engines like [Presto](https://prestodb.io) & [Spark](https://spark.apache.org/sql/), while at the same time capable of being consumed incrementally from processing/ETL frameworks like [Hive](https://hive.apache.org/) & [Spark](https://spark.apache.org/docs/latest/) to build derived (Hudi) tables.
+By carefully managing how data is laid out in storage & how it’s exposed to queries, Hudi is able to power a rich data ecosystem where external sources can be ingested in near real-time and made available for interactive SQL Engines like [PrestoDB](https://prestodb.io) & [Spark](https://spark.apache.org/sql/), while at the same time capable of being consumed incrementally from processing/ETL frameworks like [Hive](https://hive.apache.org/) & [Spark](https://spark.apache.org/docs/latest/) to build derived (Hudi) tables.
 
 Hudi broadly consists of a self contained Spark library to build tables and integrations with existing query engines for data access. See [quickstart](/docs/quick-start-guide) for a demo.

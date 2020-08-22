@@ -21,7 +21,7 @@ Specifically, we will cover the following aspects.
 
 All in all, Hudi deploys with no long running servers or additional infrastructure cost to your data lake. In fact, Hudi pioneered this model of building a transactional distributed storage layer
 using existing infrastructure and its heartening to see other systems adopting similar approaches as well. Hudi writing is done via Spark jobs (DeltaStreamer or custom Spark datasource jobs), deployed per standard Apache Spark [recommendations](https://spark.apache.org/docs/latest/cluster-overview.html).
-Querying Hudi tables happens via libraries installed into Apache Hive, Apache Spark or Presto and hence no additional infrastructure is necessary. 
+Querying Hudi tables happens via libraries installed into Apache Hive, Apache Spark or PrestoDB and hence no additional infrastructure is necessary. 
 
 A typical Hudi data ingestion can be achieved in 2 modes. In a singe run mode, Hudi ingestion reads next batch of data, ingest them to Hudi table and exits. In continuous mode, Hudi ingestion runs as a long-running service executing ingestion in a loop.
 
@@ -529,7 +529,7 @@ Compaction successfully repaired
 
 ## Troubleshooting
 
-Section below generally aids in debugging Hudi failures. Off the bat, the following metadata is added to every record to help triage  issues easily using standard Hadoop SQL engines (Hive/Presto/Spark)
+Section below generally aids in debugging Hudi failures. Off the bat, the following metadata is added to every record to help triage  issues easily using standard Hadoop SQL engines (Hive/PrestoDB/Spark)
 
  - **_hoodie_record_key** - Treated as a primary key within each DFS partition, basis of all updates/inserts
  - **_hoodie_commit_time** - Last commit that touched this record
