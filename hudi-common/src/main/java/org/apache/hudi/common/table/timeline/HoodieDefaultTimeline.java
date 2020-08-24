@@ -133,6 +133,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieDefaultTimeline findInstantsAfterOrEquals(String commitTime, int numCommits) {
+    return new HoodieDefaultTimeline(instants.stream()
+        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, commitTime))
+        .limit(numCommits), details);
+  }
+
+  @Override
   public HoodieDefaultTimeline findInstantsBefore(String instantTime) {
     return new HoodieDefaultTimeline(instants.stream()
             .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN, instantTime)),
