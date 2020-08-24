@@ -83,15 +83,17 @@ public class HoodieAvroUtils {
   /**
    * Convert a given avro record to bytes.
    */
-  public static byte[] avroToBytes(GenericRecord record) throws IOException {
+  public static byte[] avroToBytes(GenericRecord record) {
     GenericDatumWriter<GenericRecord> writer = new GenericDatumWriter<>(record.getSchema());
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, reuseEncoder.get());
-    reuseEncoder.set(encoder);
-    writer.write(record, encoder);
-    encoder.flush();
-    out.close();
-    return out.toByteArray();
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, reuseEncoder.get());
+      reuseEncoder.set(encoder);
+      writer.write(record, encoder);
+      encoder.flush();
+      return out.toByteArray();
+    } catch (IOException e) {
+      throw new HoodieIOException("Cannot convert GenericRecord to bytes", e);
+    }
   }
 
   /**
