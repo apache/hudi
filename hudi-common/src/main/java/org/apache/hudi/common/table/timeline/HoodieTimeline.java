@@ -141,6 +141,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingCompactionTimeline();
 
   /**
+   * Create a new Timeline with all the instants after startTs.
+   */
+  HoodieTimeline findInstantsAfterOrEquals(String commitTime, int numCommits);
+
+  /**
    * Create a new Timeline with instants after startTs and before or on endTs.
    */
   HoodieTimeline findInstantsInRange(String startTs, String endTs);
