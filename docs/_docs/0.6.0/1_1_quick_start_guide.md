@@ -1,13 +1,14 @@
 ---
+version: 0.6.0
 title: "Quick-Start Guide"
-permalink: /docs/quick-start-guide.html
+permalink: /docs/0.6.0-quick-start-guide.html
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 This guide provides a quick peek at Hudi's capabilities using spark-shell. Using Spark datasources, we will walk through 
 code snippets that allows you to insert and update a Hudi table of default table type: 
-[Copy on Write](/docs/concepts.html#copy-on-write-table). 
+[Copy on Write](/docs/0.6.0-concepts.html#copy-on-write-table). 
 After each write operation we will also show how to read the data both snapshot and incrementally.
 # Scala example
 
@@ -77,9 +78,9 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 (`uuid` in [schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/country/city`) and combine logic (`ts` in 
 [schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)) to ensure trip records are unique within each partition. For more info, refer to 
 [Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data.html).
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/0.6.0-writing_data.html).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
-`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/0.6.0-writing_data#write-operations)
 {: .notice--info}
 
 ## Query data 
@@ -101,7 +102,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 This query provides snapshot querying of the ingested data. Since our partition path (`region/country/city`) is 3 levels nested 
 from base path we ve used `load(basePath + "/*/*/*/*")`. 
-Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
+Refer to [Table types and queries](/docs/0.6.0-concepts#table-types--queries) for more info on all table types and query types supported.
 {: .notice--info}
 
 ## Update data
@@ -124,7 +125,7 @@ df.write.format("hudi").
 ```
 
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
-[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts.html) 
+[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/0.6.0-concepts.html) 
 denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit. 
 {: .notice--info}
 
@@ -216,7 +217,7 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
 Note: Only `Append` mode is supported for delete operation.
 
-See the [deletion section](/docs/writing_data.html#deletes) of the writing data page for more details.
+See the [deletion section](/docs/0.6.0-writing_data.html#deletes) of the writing data page for more details.
 
 
 # Pyspark example
@@ -288,9 +289,9 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 (`uuid` in [schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/county/city`) and combine logic (`ts` in 
 [schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)) to ensure trip records are unique within each partition. For more info, refer to 
 [Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data.html).
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/0.6.0-writing_data.html).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
-`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/0.6.0-writing_data#write-operations)
 {: .notice--info}
 
 ## Query data 
@@ -313,7 +314,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 This query provides snapshot querying of the ingested data. Since our partition path (`region/country/city`) is 3 levels nested 
 from base path we ve used `load(basePath + "/*/*/*/*")`. 
-Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
+Refer to [Table types and queries](/docs/0.6.0-concepts#table-types--queries) for more info on all table types and query types supported.
 {: .notice--info}
 
 ## Update data
@@ -332,7 +333,7 @@ df.write.format("hudi"). \
 ```
 
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
-[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts.html) 
+[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/0.6.0-concepts.html) 
 denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit. 
 {: .notice--info}
 
@@ -439,7 +440,7 @@ roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
 
-See the [deletion section](/docs/writing_data.html#deletes) of the writing data page for more details.
+See the [deletion section](/docs/0.6.0-writing_data.html#deletes) of the writing data page for more details.
 
 
 ## Where to go from here?
@@ -453,5 +454,5 @@ Also, we used Spark here to show case the capabilities of Hudi. However, Hudi ca
 Hudi tables can be queried from query engines like Hive, Spark, Presto and much more. We have put together a 
 [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that show cases all of this on a docker based setup with all 
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
-steps [here](/docs/docker_demo.html) to get a taste for it. Also, if you are looking for ways to migrate your existing data 
-to Hudi, refer to [migration guide](/docs/migration_guide.html). 
+steps [here](/docs/0.6.0-docker_demo.html) to get a taste for it. Also, if you are looking for ways to migrate your existing data 
+to Hudi, refer to [migration guide](/docs/0.6.0-migration_guide.html). 
