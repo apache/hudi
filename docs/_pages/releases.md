@@ -23,13 +23,13 @@ last_modified_at: 2020-05-28T08:40:00-07:00
 ### Release Highlights
 
 #### Writer side improvements:
-  - **Bootstrapping existing parquet datasets** :  Adds support for bootstrapping existing datasets into Hudi, via both Spark datasource writer and 
+  - Bootstrapping existing parquet datasets :  Adds support for bootstrapping existing datasets into Hudi, via both Spark datasource writer and 
      deltastreamer tool, with support for reading from Hive, SparkSQL, AWS Athena (prestoDB support coming soon). See [RFC-15](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+15%3A+HUDI+File+Listing+and+Query+Planning+Improvements) for technical details. 
      Note that this is an experimental feature, which will be improved upon further in the 0.6.x versions.
-  - **Native row writing for bulk_insert** : Avoids any dataframe-rdd conversion for bulk_insert path, which can improve performance of initial bulk loads.
+  - Native row writing for bulk_insert : Avoids any dataframe-rdd conversion for bulk_insert path, which can improve performance of initial bulk loads.
       Although, this is typically not the bottleneck for upsert/deletes, subsequent releases in 0.6.x versions will expand this to other write operations
       to make reasoning about schema management easier, avoiding the spark-avro conversion totally.
-  - **Bulk insert sort modes** : Hudi bulk_insert sorts the input globally to optimize file sizes and avoid out-of-memory issues encountered when writing parallely to multiple DFS partitions. 
+  - Bulk insert sort modes : Hudi bulk_insert sorts the input globally to optimize file sizes and avoid out-of-memory issues encountered when writing parallely to multiple DFS partitions. 
      For users who want to prepare the dataframe for writing outside of Hudi, we have made this configurable using `hoodie.bulkinsert.sort.mode`.
   - Cleaning can now be run concurrently with writing, using `hoodie.clean.async=true`which can speed up time taken to finish committing.
   - Async compaction for spark streaming writes to hudi table, is now self managed by default, controlling `hoodie.datasource.compaction.async.enable`.
