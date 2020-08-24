@@ -5,6 +5,75 @@ layout: releases
 toc: true
 last_modified_at: 2020-05-28T08:40:00-07:00
 ---
+## [Release 0.6.0](https://github.com/apache/hudi/releases/tag/release-0.6.0) ([docs](/docs/0.6.0-quick-start-guide.html))
+
+### Download Information
+ * Source Release : [Apache Hudi 0.6.0 Source Release](https://downloads.apache.org/hudi/0.6.0/hudi-0.6.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.6.0/hudi-0.6.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.6.0/hudi-0.6.0.src.tgz.sha512))
+ * Apache Hudi jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
+
+### Migration Guide for this release
+ - With 0.6.0 Hudi is moving from list based rollback to marker based rollbacks. To smoothly aid this transition a 
+ new property called `hoodie.table.version` is added to `hoodie.properties` file. Whenever Hudi is launched with 
+ newer table version i.e 1 (or moving from pre 0.6.0 to 0.6.0), an upgrade step will be executed automatically 
+ to adhere to marker based rollback. This automatic upgrade step will happen just once per Hudi table as the 
+ `hoodie.table.version` will be updated in property file after upgrade is completed.
+ - Similarly, a command line tool for Downgrading is added if in case some users want to downgrade Hudi from 
+ table version 1 to 0 or move from Hudi 0.6.0 to pre 0.6.0
+ - TODO add notes on bulk insert partitioner
+ 
+### Release Highlights
+
+#### Ingestion side improvements:
+  - Hudi now supports `Azure Data Lake Storage V2` , `Alluxio` and `Tencent Cloud Object Storage` storages.
+  - Add support for "bulk_insert" without converting to RDD. This has better performance compared to existing "bulk_insert".
+    This implementation uses Datasource for writing to storage with support for key generators to operate on Row 
+    (rather than HoodieRecords as per previous "bulk_insert") is added.
+  - # TODO Add more about bulk insert modes. 
+  - # TODO Add more on bootstrap.             
+  - In previous versions, auto clean runs synchronously after ingestion. Starting 0.6.0, Hudi does cleaning and ingestion in parallel.
+  - Support async compaction for spark streaming writes to hudi table. Previous versions supported only inline compactions.
+  - Implemented rollbacks using marker files instead of relying on commit metadata. Please check the migration guide for more details on this.
+  - A new InlineFileSystem has been added to support embedding any file format as an inline format within a regular file.
+
+#### Query side improvements:
+  - Starting 0.6.0, snapshot queries are feasible via spark datasource. 
+  - In prior versions we only supported HoodieCombineHiveInputFormat for CopyOnWrite tables to ensure that there is a limit on the number of mappers spawned for
+    any query. Hudi now supports Merge on Read tables also using HoodieCombineInputFormat.
+  - Speedup spark read queries by caching metaclient in HoodieROPathFilter. This helps reduce listing related overheads in S3 when filtering files for read-optimized queries. 
+
+#### DeltaStreamer improvements:
+  - HoodieMultiDeltaStreamer: adds support for ingesting multiple kafka streams in a single DeltaStreamer deployment
+  - Added a new tool - InitialCheckPointProvider, to set checkpoints when migrating to DeltaStreamer after an initial load of the table is complete..
+  - Add CSV source support.
+  - Added chained transformer that can add chain multiple transformers.
+
+#### Indexing improvements:
+  - Added a new index `HoodieSimpleIndex` which joins incoming records with base files to index records.
+  - Added ability to configure user defined indexes.
+
+#### Key generation improvements:
+  - Introduced `ComplexKeyGenerator` to support complex keys as record key and custom partition paths.
+  - Support for complex record keys with TimestampBasedKeyGenerator.
+  - Support more time units and dat/time formats in `TimestampBasedKeyGenerator`  
+
+#### Developer productivity and monitoring improvements:
+  - Spark DAGs are named to aid better debuggability
+  - Console, JMX, Prometheus and DataDog metric reporters have been added.
+  - Support pluggable metrics reporting by introducing proper abstraction for user defined metrics.
+
+#### CLI related features:
+  - Added support for deleting savepoints via CLI
+  - Added a new command - `export instants`, to export metadata of instants
+  - TODO add commands for upgrade/downgrade.
+
+#### Other features:
+  - Data snapshot exporter is added for usability. Latest version of records as of a certain point in time can be exported as plain parquet files with this tool.
+  - Introduce write committed callback hooks for incremental pipelines to be notified and act on new commits in the timeline.
+
+### Raw Release Notes
+   The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346663)
+
+
 ## [Release 0.5.3](https://github.com/apache/hudi/releases/tag/release-0.5.3) ([docs](/docs/0.5.3-quick-start-guide.html))
 
 ### Download Information
