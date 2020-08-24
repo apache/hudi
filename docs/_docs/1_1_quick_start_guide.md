@@ -192,27 +192,23 @@ val ds = spark.sql("select uuid, partitionpath from hudi_trips_snapshot").limit(
 
 // issue deletes
 val deletes = dataGen.generateDeletes(ds.collectAsList())
-val df = spark
-  .read
-  .json(spark.sparkContext.parallelize(deletes, 2))
+val df = spark.read.json(spark.sparkContext.parallelize(deletes, 2))
 
-df
-  .write
-  .format("hudi")
-  .options(getQuickstartWriteConfigs)
-  .option(OPERATION_OPT_KEY,"delete")
-  .option(PRECOMBINE_FIELD_OPT_KEY, "ts")
-  .option(RECORDKEY_FIELD_OPT_KEY, "uuid")
-  .option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath")
-  .option(TABLE_NAME, tableName)
-  .mode(Append)
-  .save(basePath)
+df.write.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(OPERATION_OPT_KEY,"delete").
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, tableName).
+  mode(Append).
+  save(basePath)
 
 // run the same read query as above.
-val roAfterDeleteViewDF = spark
-  .read
-  .format("hudi")
-  .load(basePath + "/*/*/*/*")
+val roAfterDeleteViewDF = spark.
+  read.
+  format("hudi").
+  load(basePath + "/*/*/*/*")
 
 roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 // fetch should return (total - 2) records
