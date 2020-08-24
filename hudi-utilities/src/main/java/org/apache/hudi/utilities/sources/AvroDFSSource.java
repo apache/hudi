@@ -47,8 +47,7 @@ public class AvroDFSSource extends AvroSource {
       SchemaProvider schemaProvider) throws IOException {
     super(props, sparkContext, sparkSession, schemaProvider);
     this.pathSelector = UtilHelpers
-        .createSourceSelector(DFSPathSelector.class.getName(), props, sparkContext
-        .hadoopConfiguration());
+        .createSourceSelector(props, sparkContext.hadoopConfiguration());
   }
 
   @Override

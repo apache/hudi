@@ -352,12 +352,17 @@ public class UtilHelpers {
     }
   }
 
-  public static DFSPathSelector createSourceSelector(String sourceSelectorClass, TypedProperties props,
+  public static DFSPathSelector createSourceSelector(TypedProperties props,
       Configuration conf) throws IOException {
+    String sourceSelectorClass =
+        props.getString(DFSPathSelector.Config.SOURCE_INPUT_SELECTOR, DFSPathSelector.class.getName());
     try {
-      return (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
+      DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
           new Class<?>[]{TypedProperties.class, Configuration.class},
           props, conf);
+
+      LOG.info("Using path selector " + selector.getClass().getName());
+      return selector;
     } catch (Throwable e) {
       throw new IOException("Could not load source selector class " + sourceSelectorClass, e);
     }
