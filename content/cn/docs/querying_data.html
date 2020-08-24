@@ -375,7 +375,7 @@
       <li><a href="#spark-incr-pull">增量拉取</a></li>
     </ul>
   </li>
-  <li><a href="#presto">Presto</a></li>
+  <li><a href="#prestodb">PrestoDB</a></li>
   <li><a href="#impala-34-or-later">Impala (3.4 or later)</a>
     <ul>
       <li><a href="#读优化表-1">读优化表</a></li>
@@ -434,7 +434,7 @@
       <td>Y</td>
     </tr>
     <tr>
-      <td><strong>Presto</strong></td>
+      <td><strong>PrestoDB</strong></td>
       <td>Y</td>
       <td>N</td>
     </tr>
@@ -477,8 +477,8 @@
       <td>Y</td>
     </tr>
     <tr>
-      <td><strong>Presto</strong></td>
-      <td>N</td>
+      <td><strong>PrestoDB</strong></td>
+      <td>Y</td>
       <td>N</td>
       <td>Y</td>
     </tr>
@@ -703,9 +703,9 @@ Upsert实用程序（<code class="highlighter-rouge">HoodieDeltaStreamer</code>�
   </tbody>
 </table>
 
-<h2 id="presto">Presto</h2>
+<h2 id="prestodb">PrestoDB</h2>
 
-<p>Presto是一种常用的查询引擎，可提供交互式查询性能。 Hudi RO表可以在Presto中无缝查询。
+<p>PrestoDB是一种常用的查询引擎，可提供交互式查询性能。 Hudi RO表可以在Presto中无缝查询。
 这需要在整个安装过程中将<code class="highlighter-rouge">hudi-presto-bundle</code> jar放入<code class="highlighter-rouge">&lt;presto_install&gt;/plugin/hive-hadoop2/</code>中。</p>
 
 <h2 id="impala-34-or-later">Impala (3.4 or later)</h2>
