@@ -194,11 +194,14 @@ Property: `hoodie.bulkinsert.shuffle.parallelism`<br/>
 
 #### withUserDefinedBulkInsertPartitionerClass(className = x.y.z.UserDefinedPatitionerClass) {#withUserDefinedBulkInsertPartitionerClass} 
 Property: `hoodie.bulkinsert.user.defined.partitioner.class`<br/>
-<span style="color:grey">If specified, this class will be used to re-partition input records before they are inserted into hoodie.</span>
+<span style="color:grey">If specified, this class will be used to re-partition input records before they are inserted.</span>
 
 #### withBulkInsertSortMode(mode = BulkInsertSortMode.GLOBAL_SORT) {#withBulkInsertSortMode} 
 Property: `hoodie.bulkinsert.sort.mode`<br/>
-<span style="color:grey">Sorting modes to use for sorting records for bulk insert. This is leveraged when user defined partitioner is not configured. Default is GLOBAL_SORT. Available values are - **GLOBAL_SORT**:  global sorting for the input records across partitions after repartition for bulk insert operation. **PARTITION_SORT**: local sorting for each RDD partition after coalesce for bulk insert operation. **NONE**: No sorting. Only does coalesce for input records for bulk insert operation 
+<span style="color:grey">Sorting modes to use for sorting records for bulk insert. This is leveraged when user defined partitioner is not configured. Default is GLOBAL_SORT. 
+   Available values are - **GLOBAL_SORT**:  this ensures best file sizes, with lowest memory overhead at cost of sorting. 
+  **PARTITION_SORT**: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing lowest and best effort file sizing. 
+  **NONE**: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads 
 </span>
 
 #### withParallelism(insert_shuffle_parallelism = 1500, upsert_shuffle_parallelism = 1500) {#withParallelism} 
@@ -227,11 +230,11 @@ Property: `hoodie.consistency.check.enabled`<br/>
 
 #### withRollbackParallelism(rollbackParallelism = 100) {#withRollbackParallelism} 
 Property: `hoodie.rollback.parallelism`<br/>
-<span style="color:grey">Determines the parallelism for rollback of records.</span>
+<span style="color:grey">Determines the parallelism for rollback of commits.</span>
 
 #### withRollbackUsingMarkers(rollbackUsingMarkers = false) {#withRollbackUsingMarkers} 
 Property: `hoodie.rollback.using.markers`<br/>
-<span style="color:grey">Enables a new mechanism for rollbacks based on the marker files generated during the writes. Turned off by default.</span>
+<span style="color:grey">Enables a more efficient mechanism for rollbacks based on the marker files generated during the writes. Turned off by default.</span>
 
 #### withMarkersDeleteParallelism(parallelism = 100) {#withMarkersDeleteParallelism} 
 Property: `hoodie.markers.delete.parallelism`<br/>
@@ -283,7 +286,7 @@ Property: `hoodie.bloom.index.bucketized.checking` <br/>
 
 #### bloomIndexFilterType(bucketizedChecking = BloomFilterTypeCode.SIMPLE) {#bloomIndexFilterType}
 Property: `hoodie.bloom.index.filter.type` <br/>
-<span style="color:grey">Filter type used. Default is BloomFilterTypeCode.SIMPLE. Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]</span>
+<span style="color:grey">Filter type used. Default is BloomFilterTypeCode.SIMPLE. Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. Dynamic bloom filters auto size themselves based on number of keys</span>
 
 #### bloomIndexFilterDynamicMaxEntries(maxNumberOfEntries = 100000) {#bloomIndexFilterDynamicMaxEntries}
 Property: `hoodie.bloom.index.filter.dynamic.max.entries` <br/>
@@ -331,11 +334,11 @@ Property: `hoodie.simple.index.input.storage.level` <br/>
 
 #### withSimpleIndexParallelism(parallelism = 50) {#withSimpleIndexParallelism}
 Property: `hoodie.simple.index.parallelism` <br/>
-<span style="color:grey">Only applies if index type is SIMPLE. <br/> This is the amount of parallelism for index lookup, which involves a Spark Shuffle. By default, this is auto computed based on input workload characteristics</span>
+<span style="color:grey">Only applies if index type is SIMPLE. <br/> This is the amount of parallelism for index lookup, which involves a Spark Shuffle.</span>
 
 #### withGlobalSimpleIndexParallelism(parallelism = 100) {#withGlobalSimpleIndexParallelism}
 Property: `hoodie.global.simple.index.parallelism` <br/>
-<span style="color:grey">Only applies if index type is GLOBAL_SIMPLE. <br/> This is the amount of parallelism for index lookup, which involves a Spark Shuffle. By default, this is auto computed based on input workload characteristics</span>
+<span style="color:grey">Only applies if index type is GLOBAL_SIMPLE. <br/> This is the amount of parallelism for index lookup, which involves a Spark Shuffle.</span>
 
 ### Storage configs
 Controls aspects around sizing parquet and log files.

@@ -113,7 +113,7 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 14. ["Apache Hudi - Design/Code Walkthrough Session for Contributors"](https://www.youtube.com/watch?v=N2eDfU_rQ_U) - By Vinoth Chandar, July 2020, Hudi community.
 
-15. ["PrestoDB and Apache hudi"](https://youtu.be/nA3rwOdmm3A).
+15. ["PrestoDB and Apache Hudi"](https://youtu.be/nA3rwOdmm3A) - By Bhavani Sudha Saktheeswaran and Brandon Scheller, Aug 2020, PrestoDB Community Meetup.
 
 ## Articles
 
