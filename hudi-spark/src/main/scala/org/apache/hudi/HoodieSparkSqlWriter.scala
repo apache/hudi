@@ -29,7 +29,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{HoodieWriteClient, WriteStatus}
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType}
+import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.ReflectionUtils
@@ -76,21 +76,19 @@ private[hudi] object HoodieSparkSqlWriter {
       case _ => throw new HoodieException("hoodie only support org.apache.spark.serializer.KryoSerializer as spark.serializer")
     }
     val tableType = parameters(TABLE_TYPE_OPT_KEY)
-    val operation =
+    var operation = WriteOperationType.fromValue(parameters(OPERATION_OPT_KEY))
     // It does not make sense to allow upsert() operation if INSERT_DROP_DUPS_OPT_KEY is true
     // Auto-correct the operation to "insert" if OPERATION_OPT_KEY is set to "upsert" wrongly
     // or not set (in which case it will be set as "upsert" by parametersWithWriteDefaults()) .
-      if (parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean &&
-        parameters(OPERATION_OPT_KEY) == UPSERT_OPERATION_OPT_VAL) {
+    if (parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean &&
+      operation == WriteOperationType.UPSERT) {
 
-        log.warn(s"$UPSERT_OPERATION_OPT_VAL is not applicable " +
-          s"when $INSERT_DROP_DUPS_OPT_KEY is set to be true, " +
-          s"overriding the $OPERATION_OPT_KEY to be $INSERT_OPERATION_OPT_VAL")
+      log.warn(s"$UPSERT_OPERATION_OPT_VAL is not applicable " +
+        s"when $INSERT_DROP_DUPS_OPT_KEY is set to be true, " +
+        s"overriding the $OPERATION_OPT_KEY to be $INSERT_OPERATION_OPT_VAL")
 
-        INSERT_OPERATION_OPT_VAL
-      } else {
-        parameters(OPERATION_OPT_KEY)
-      }
+      operation = WriteOperationType.INSERT
+    }
 
     val jsc = new JavaSparkContext(sparkContext)
     val basePath = new Path(path.get)
@@ -123,7 +121,7 @@ private[hudi] object HoodieSparkSqlWriter {
       // scalastyle:on
 
       val (writeStatuses, writeClient: HoodieWriteClient[HoodieRecordPayload[Nothing]]) =
-        if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
+        if (operation != WriteOperationType.DELETE) {
           // register classes & schemas
           val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
           sparkContext.getConf.registerKryoClasses(
@@ -242,7 +240,7 @@ private[hudi] object HoodieSparkSqlWriter {
       log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
       false
     } else {
-      handleSaveModes(mode, basePath, tableConfig, tableName, BOOTSTRAP_OPERATION_OPT_VAL, fs)
+      handleSaveModes(mode, basePath, tableConfig, tableName, WriteOperationType.BOOTSTRAP, fs)
     }
 
     if (!tableExists) {
@@ -290,7 +288,7 @@ private[hudi] object HoodieSparkSqlWriter {
   }
 
   private def handleSaveModes(mode: SaveMode, tablePath: Path, tableConfig: HoodieTableConfig, tableName: String,
-                              operation: String, fs: FileSystem): Unit = {
+                              operation: WriteOperationType, fs: FileSystem): Unit = {
     if (mode == SaveMode.Append && tableExists) {
       val existingTableName = tableConfig.getTableName
       if (!existingTableName.equals(tableName)) {
@@ -298,7 +296,7 @@ private[hudi] object HoodieSparkSqlWriter {
       }
     }
 
-    if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
+    if (operation != WriteOperationType.DELETE) {
       if (mode == SaveMode.ErrorIfExists && tableExists) {
         throw new HoodieException(s"hoodie table at $tablePath already exists.")
       } else if (mode == SaveMode.Overwrite && tableExists) {
@@ -309,7 +307,7 @@ private[hudi] object HoodieSparkSqlWriter {
     } else {
       // Delete Operation only supports Append mode
       if (mode != SaveMode.Append) {
-        throw new HoodieException(s"Append is the only save mode applicable for $operation operation")
+        throw new HoodieException(s"Append is the only save mode applicable for ${operation.toString} operation")
       }
     }
   }
@@ -384,7 +382,7 @@ private[hudi] object HoodieSparkSqlWriter {
                                              tableConfig: HoodieTableConfig,
                                              instantTime: String,
                                              basePath: Path,
-                                             operation: String,
+                                             operation: WriteOperationType,
                                              jsc: JavaSparkContext): (Boolean, common.util.Option[java.lang.String]) = {
     val errorCount = writeStatuses.rdd.filter(ws => ws.hasErrors).count()
     if (errorCount == 0) {
@@ -422,7 +420,7 @@ private[hudi] object HoodieSparkSqlWriter {
       }
       (commitSuccess && metaSyncSuccess, compactionInstant)
     } else {
-      log.error(s"$operation failed with $errorCount errors :")
+      log.error(s"${operation.toString} failed with $errorCount errors :")
       if (log.isTraceEnabled) {
         log.trace("Printing out the top 100 errors")
         writeStatuses.rdd.filter(ws => ws.hasErrors)

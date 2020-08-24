@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -248,15 +249,18 @@ public class DataSourceUtils {
   }
 
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-      String instantTime, String operation) throws HoodieException {
-    if (operation.equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL())) {
+      String instantTime, WriteOperationType operation) throws HoodieException {
+    if (operation == WriteOperationType.BULK_INSERT) {
       Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner =
           createUserDefinedBulkInsertPartitioner(client.getConfig());
       return client.bulkInsert(hoodieRecords, instantTime, userDefinedBulkInsertPartitioner);
-    } else if (operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())) {
+    } else if (operation == WriteOperationType.INSERT) {
       return client.insert(hoodieRecords, instantTime);
     } else {
       // default is upsert
+      if (operation != WriteOperationType.UPSERT) {
+        LOG.warn("Not a valid operation type for doWriteOperation: " + operation.toString() + " using default operation: UPSERT instead");
+      }
       return client.upsert(hoodieRecords, instantTime);
     }
   }
