@@ -62,9 +62,9 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
 
   private static Stream<Arguments> configParams() {
     Object[][] data = new Object[][] {
-        {BulkInsertInternalPartitionerFactory.BulkInsertSortMode.GLOBAL_SORT, true, true},
-        {BulkInsertInternalPartitionerFactory.BulkInsertSortMode.PARTITION_SORT, false, true},
-        {BulkInsertInternalPartitionerFactory.BulkInsertSortMode.NONE, false, false}
+        {BulkInsertSortMode.GLOBAL_SORT, true, true},
+        {BulkInsertSortMode.PARTITION_SORT, false, true},
+        {BulkInsertSortMode.NONE, false, false}
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -108,7 +108,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
 
   @ParameterizedTest(name = "[{index}] {0}")
   @MethodSource("configParams")
-  public void testBulkInsertInternalPartitioner(BulkInsertInternalPartitionerFactory.BulkInsertSortMode sortMode,
+  public void testBulkInsertInternalPartitioner(BulkInsertSortMode sortMode,
                                                 boolean isGloballySorted, boolean isLocallySorted)
       throws Exception {
     JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
