@@ -128,6 +128,11 @@ This is useful to store checkpointing information, in a consistent way with the 
 #### HIVE_ASSUME_DATE_PARTITION_OPT_KEY {#HIVE_ASSUME_DATE_PARTITION_OPT_KEY}
   Property: `hoodie.datasource.hive_sync.assume_date_partitioning`, Default: `false` <br/>
   <span style="color:grey">Assume partitioning is yyyy/mm/dd</span>
+  
+#### HIVE_USE_JDBC_OPT_KEY {#HIVE_USE_JDBC_OPT_KEY}
+  Property: `hoodie.datasource.hive_sync.use_jdbc`, Default: `true` <br/>
+  <span style="color:grey">Use JDBC when hive synchronization is enabled</span>
+
 
 ### Read Options
 
@@ -187,6 +192,18 @@ Property: `hoodie.table.name` [Required] <br/>
 Property: `hoodie.bulkinsert.shuffle.parallelism`<br/>
 <span style="color:grey">Bulk insert is meant to be used for large initial imports and this parallelism determines the initial number of files in your table. Tune this to achieve a desired optimal size during initial import.</span>
 
+#### withUserDefinedBulkInsertPartitionerClass(className = x.y.z.UserDefinedPatitionerClass) {#withUserDefinedBulkInsertPartitionerClass} 
+Property: `hoodie.bulkinsert.user.defined.partitioner.class`<br/>
+<span style="color:grey">If specified, this class will be used to re-partition input records before they are inserted.</span>
+
+#### withBulkInsertSortMode(mode = BulkInsertSortMode.GLOBAL_SORT) {#withBulkInsertSortMode} 
+Property: `hoodie.bulkinsert.sort.mode`<br/>
+<span style="color:grey">Sorting modes to use for sorting records for bulk insert. This is leveraged when user defined partitioner is not configured. Default is GLOBAL_SORT. 
+   Available values are - **GLOBAL_SORT**:  this ensures best file sizes, with lowest memory overhead at cost of sorting. 
+  **PARTITION_SORT**: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing lowest and best effort file sizing. 
+  **NONE**: No sorting. Fastest and matches `spark.write.parquet()` in terms of number of files, overheads 
+</span>
+
 #### withParallelism(insert_shuffle_parallelism = 1500, upsert_shuffle_parallelism = 1500) {#withParallelism} 
 Property: `hoodie.insert.shuffle.parallelism`, `hoodie.upsert.shuffle.parallelism`<br/>
 <span style="color:grey">Once data has been initially imported, this parallelism controls initial parallelism for reading input records. Ensure this value is high enough say: 1 partition for 1 GB of input data</span>
@@ -211,10 +228,22 @@ Property: `hoodie.assume.date.partitioning`<br/>
 Property: `hoodie.consistency.check.enabled`<br/>
 <span style="color:grey">Should HoodieWriteClient perform additional checks to ensure written files' are listable on the underlying filesystem/storage. Set this to true, to workaround S3's eventual consistency model and ensure all data written as a part of a commit is faithfully available for queries. </span>
 
+#### withRollbackParallelism(rollbackParallelism = 100) {#withRollbackParallelism} 
+Property: `hoodie.rollback.parallelism`<br/>
+<span style="color:grey">Determines the parallelism for rollback of commits.</span>
+
+#### withRollbackUsingMarkers(rollbackUsingMarkers = false) {#withRollbackUsingMarkers} 
+Property: `hoodie.rollback.using.markers`<br/>
+<span style="color:grey">Enables a more efficient mechanism for rollbacks based on the marker files generated during the writes. Turned off by default.</span>
+
+#### withMarkersDeleteParallelism(parallelism = 100) {#withMarkersDeleteParallelism} 
+Property: `hoodie.markers.delete.parallelism`<br/>
+<span style="color:grey">Determines the parallelism for deleting marker files.</span>
+
 ### Index configs
 Following configs control indexing behavior, which tags incoming records as either inserts or updates to older records. 
 
-[withIndexConfig](#withIndexConfig) (HoodieIndexConfig) <br/>
+[withIndexConfig](#index-configs) (HoodieIndexConfig) <br/>
 <span style="color:grey">This is pluggable to have a external index (HBase) or use the default bloom filter stored in the Parquet files</span>
 
 #### withIndexClass(indexClass = "x.y.z.UserDefinedIndex") {#withIndexClass}
@@ -223,7 +252,9 @@ Property: `hoodie.index.class` <br/>
 
 #### withIndexType(indexType = BLOOM) {#withIndexType}
 Property: `hoodie.index.type` <br/>
-<span style="color:grey">Type of index to use. Default is Bloom filter. Possible options are [BLOOM | HBASE | INMEMORY]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files</span>
+<span style="color:grey">Type of index to use. Default is Bloom filter. Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files</span>
+
+#### Bloom Index configs
 
 #### bloomFilterNumEntries(numEntries = 60000) {#bloomFilterNumEntries}
 Property: `hoodie.index.bloom.num_entries` <br/>
@@ -232,6 +263,10 @@ Property: `hoodie.index.bloom.num_entries` <br/>
 #### bloomFilterFPP(fpp = 0.000000001) {#bloomFilterFPP}
 Property: `hoodie.index.bloom.fpp` <br/>
 <span style="color:grey">Only applies if index type is BLOOM. <br/> Error rate allowed given the number of entries. This is used to calculate how many bits should be assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), we like to tradeoff disk space for lower false positives</span>
+
+#### bloomIndexParallelism(0) {#bloomIndexParallelism}
+Property: `hoodie.bloom.index.parallelism` <br/>
+<span style="color:grey">Only applies if index type is BLOOM. <br/> This is the amount of parallelism for index lookup, which involves a Spark Shuffle. By default, this is auto computed based on input workload characteristics</span>
 
 #### bloomIndexPruneByRanges(pruneRanges = true) {#bloomIndexPruneByRanges}
 Property: `hoodie.bloom.index.prune.by.ranges` <br/>
@@ -249,13 +284,27 @@ Property: `hoodie.bloom.index.use.treebased.filter` <br/>
 Property: `hoodie.bloom.index.bucketized.checking` <br/>
 <span style="color:grey">Only applies if index type is BLOOM. <br/> When true, bucketized bloom filtering is enabled. This reduces skew seen in sort based bloom index lookup</span>
 
+#### bloomIndexFilterType(bucketizedChecking = BloomFilterTypeCode.SIMPLE) {#bloomIndexFilterType}
+Property: `hoodie.bloom.index.filter.type` <br/>
+<span style="color:grey">Filter type used. Default is BloomFilterTypeCode.SIMPLE. Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. Dynamic bloom filters auto size themselves based on number of keys</span>
+
+#### bloomIndexFilterDynamicMaxEntries(maxNumberOfEntries = 100000) {#bloomIndexFilterDynamicMaxEntries}
+Property: `hoodie.bloom.index.filter.dynamic.max.entries` <br/>
+<span style="color:grey">The threshold for the maximum number of keys to record in a dynamic Bloom filter row. Only applies if filter type is BloomFilterTypeCode.DYNAMIC_V0.</span>
+
 #### bloomIndexKeysPerBucket(keysPerBucket = 10000000) {#bloomIndexKeysPerBucket}
 Property: `hoodie.bloom.index.keys.per.bucket` <br/>
 <span style="color:grey">Only applies if bloomIndexBucketizedChecking is enabled and index type is bloom. <br/> This configuration controls the "bucket" size which tracks the number of record-key checks made against a single file and is the unit of work allocated to each partition performing bloom filter lookup. A higher value would amortize the fixed cost of reading a bloom filter to memory. </span>
 
-#### bloomIndexParallelism(0) {#bloomIndexParallelism}
-Property: `hoodie.bloom.index.parallelism` <br/>
-<span style="color:grey">Only applies if index type is BLOOM. <br/> This is the amount of parallelism for index lookup, which involves a Spark Shuffle. By default, this is auto computed based on input workload characteristics</span>
+##### withBloomIndexInputStorageLevel(level = MEMORY_AND_DISK_SER) {#withBloomIndexInputStorageLevel}
+Property: `hoodie.bloom.index.input.storage.level` <br/>
+<span style="color:grey">Only applies when [#bloomIndexUseCaching](#bloomIndexUseCaching) is set. Determine what level of persistence is used to cache input RDDs.<br/> Refer to org.apache.spark.storage.StorageLevel for different values</span>
+
+##### bloomIndexUpdatePartitionPath(updatePartitionPath = false) {#bloomIndexUpdatePartitionPath}
+Property: `hoodie.bloom.index.update.partition.path` <br/>
+<span style="color:grey">Only applies if index type is GLOBAL_BLOOM. <br/>When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition.</span>
+
+#### HBase Index configs
 
 #### hbaseZkQuorum(zkString) [Required] {#hbaseZkQuorum}  
 Property: `hoodie.index.hbase.zkquorum` <br/>
@@ -273,10 +322,23 @@ Property: `hoodie.index.hbase.zknode.path` <br/>
 Property: `hoodie.index.hbase.table` <br/>
 <span style="color:grey">Only applies if index type is HBASE. HBase Table name to use as the index. Hudi stores the row_key and [partition_path, fileID, commitTime] mapping in the table.</span>
 
-##### bloomIndexUpdatePartitionPath(updatePartitionPath = false) {#bloomIndexUpdatePartitionPath}
-Property: `hoodie.bloom.index.update.partition.path` <br/>
-<span style="color:grey">Only applies if index type is GLOBAL_BLOOM. <br/>When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition.</span>
+#### Simple Index configs
 
+#### simpleIndexUseCaching(useCaching = true) {#simpleIndexUseCaching}
+Property: `hoodie.simple.index.use.caching` <br/>
+<span style="color:grey">Only applies if index type is SIMPLE. <br/> When true, the input RDD will cached to speed up index lookup by reducing IO for computing parallelism or affected partitions</span>
+
+##### withSimpleIndexInputStorageLevel(level = MEMORY_AND_DISK_SER) {#withSimpleIndexInputStorageLevel}
+Property: `hoodie.simple.index.input.storage.level` <br/>
+<span style="color:grey">Only applies when [#simpleIndexUseCaching](#simpleIndexUseCaching) is set. Determine what level of persistence is used to cache input RDDs.<br/> Refer to org.apache.spark.storage.StorageLevel for different values</span>
+
+#### withSimpleIndexParallelism(parallelism = 50) {#withSimpleIndexParallelism}
+Property: `hoodie.simple.index.parallelism` <br/>
+<span style="color:grey">Only applies if index type is SIMPLE. <br/> This is the amount of parallelism for index lookup, which involves a Spark Shuffle.</span>
+
+#### withGlobalSimpleIndexParallelism(parallelism = 100) {#withGlobalSimpleIndexParallelism}
+Property: `hoodie.global.simple.index.parallelism` <br/>
+<span style="color:grey">Only applies if index type is GLOBAL_SIMPLE. <br/> This is the amount of parallelism for index lookup, which involves a Spark Shuffle.</span>
 
 ### Storage configs
 Controls aspects around sizing parquet and log files.
@@ -331,6 +393,14 @@ Property: `hoodie.cleaner.policy` <br/>
 Property: `hoodie.cleaner.commits.retained` <br/>
 <span style="color:grey">Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much you can incrementally pull on this table</span>
 
+#### withAutoClean(autoClean = true) {#withAutoClean} 
+Property: `hoodie.clean.automatic` <br/>
+<span style="color:grey">Should cleanup if there is anything to cleanup immediately after the commit</span>
+
+#### withAsyncClean(asyncClean = false) {#withAsyncClean} 
+Property: `hoodie.clean.async` <br/>
+<span style="color:grey">Only applies when [#withAutoClean](#withAutoClean) is turned on. When turned on runs cleaner async with writing. </span>
+
 #### archiveCommitsWith(minCommits = 96, maxCommits = 128) {#archiveCommitsWith} 
 Property: `hoodie.keep.min.commits`, `hoodie.keep.max.commits` <br/>
 <span style="color:grey">Each commit is a small file in the `.hoodie` directory. Since DFS typically does not favor lots of small files, Hudi archives older commits into a sequential log. A commit is published atomically by a rename of the commit file.</span>
@@ -349,7 +419,7 @@ Property: `hoodie.copyonwrite.insert.split.size` <br/>
 
 #### autoTuneInsertSplits(true) {#autoTuneInsertSplits} 
 Property: `hoodie.copyonwrite.insert.auto.split` <br/>
-<span style="color:grey">Should hudi dynamically compute the insertSplitSize based on the last 24 commit's metadata. Turned off by default. </span>
+<span style="color:grey">Should hudi dynamically compute the insertSplitSize based on the last 24 commit's metadata. Turned on by default. </span>
 
 #### approxRecordSize(size = 1024) {#approxRecordSize} 
 Property: `hoodie.copyonwrite.record.size.estimate` <br/>

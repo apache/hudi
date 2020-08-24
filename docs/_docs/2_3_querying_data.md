@@ -9,7 +9,7 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 
 Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained [before](/docs/concepts.html#query-types). 
 Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi's custom inputformats. Once the proper hudi
-bundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and Presto.
+bundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and PrestoDB.
 
 Specifically, following Hive tables are registered based off [table name](/docs/configurations.html#TABLE_NAME_OPT_KEY) 
 and [table type](/docs/configurations.html#TABLE_TYPE_OPT_KEY) configs passed during write.   
@@ -40,7 +40,7 @@ Following tables show whether a given query is supported on specific query engin
 |**Hive**|Y|Y|
 |**Spark SQL**|Y|Y|
 |**Spark Datasource**|Y|Y|
-|**Presto**|Y|N|
+|**PrestoDB**|Y|N|
 |**Impala**|Y|N|
 
 
@@ -53,7 +53,7 @@ Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 |**Hive**|Y|Y|Y|
 |**Spark SQL**|Y|Y|Y|
 |**Spark Datasource**|Y|N|Y|
-|**Presto**|N|N|Y|
+|**PrestoDB**|Y|N|Y|
 |**Impala**|N|N|Y|
 
 
@@ -176,10 +176,19 @@ Additionally, `HoodieReadClient` offers the following functionality using Hudi's
 | filterExists() | Filter out already existing records from the provided `RDD[HoodieRecord]`. Useful for de-duplication |
 | checkExists(keys) | Check if the provided keys exist in a Hudi table |
 
-## Presto
+## PrestoDB
 
-Presto is a popular query engine, providing interactive query performance. Presto currently supports snapshot queries on COPY_ON_WRITE and read optimized queries 
-on MERGE_ON_READ Hudi tables. This requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation.
+PrestoDB is a popular query engine, providing interactive query performance. PrestoDB currently supports snapshot querying on COPY_ON_WRITE tables. 
+Both snapshot and read optimized queries are supported on MERGE_ON_READ Hudi tables. Since PrestoDB-Hudi integration has evolved over time, the installation
+instructions for PrestoDB would vary based on versions. Please check the below table for query types supported and installation instructions 
+for different versions of PrestoDB.
+
+
+| **PrestoDB Version** | **Installation description** | **Query types supported** |
+|----------------------|------------------------------|---------------------------|
+| < 0.233              | Requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
+| >= 0.233             | No action needed. Hudi (0.5.1-incubating) is a compile time dependency. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
+| >= 0.240             | No action needed. Hudi 0.5.3 version is a compile time dependency. | Snapshot querying on both COW and MOR tables |
 
 ## Impala (3.4 or later)
 
