@@ -85,9 +85,8 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder limitFileSize(long maxFileSize) {
+    public Builder parquetMaxFileSize(long maxFileSize) {
       props.setProperty(PARQUET_FILE_MAX_BYTES, String.valueOf(maxFileSize));
-      props.setProperty(HFILE_FILE_MAX_BYTES, String.valueOf(maxFileSize));
       return this;
     }
 
@@ -98,6 +97,11 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
 
     public Builder parquetPageSize(int pageSize) {
       props.setProperty(PARQUET_PAGE_SIZE_BYTES, String.valueOf(pageSize));
+      return this;
+    }
+
+    public Builder hfileMaxFileSize(long maxFileSize) {
+      props.setProperty(HFILE_FILE_MAX_BYTES, String.valueOf(maxFileSize));
       return this;
     }
 

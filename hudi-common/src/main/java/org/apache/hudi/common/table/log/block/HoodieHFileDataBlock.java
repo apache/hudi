@@ -98,7 +98,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         .withOutputStream(ostream).withFileContext(context).create();
 
     // Serialize records into bytes
-    Map<String, byte[]> recordMap = new TreeMap<>();
+    Map<String, byte[]> sortedRecordsMap = new TreeMap<>();
     Iterator<IndexedRecord> itr = records.iterator();
     boolean useIntegerKey = false;
     int key = 0;
@@ -118,11 +118,11 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         recordKey = record.get(keyField.pos()).toString();
       }
       byte[] recordBytes = HoodieAvroUtils.indexedRecordToBytes(record);
-      recordMap.put(recordKey, recordBytes);
+      sortedRecordsMap.put(recordKey, recordBytes);
     }
 
     // Write the records
-    recordMap.forEach((recordKey, recordBytes) -> {
+    sortedRecordsMap.forEach((recordKey, recordBytes) -> {
       try {
         KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, recordBytes);
         writer.append(kv);

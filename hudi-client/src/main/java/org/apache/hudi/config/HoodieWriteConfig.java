@@ -56,6 +56,8 @@ import java.util.stream.Collectors;
 @Immutable
 public class HoodieWriteConfig extends DefaultHoodieConfig {
 
+  private static final long serialVersionUID = 0L;
+
   public static final String TABLE_NAME = "hoodie.table.name";
   public static final String DEFAULT_ROLLBACK_USING_MARKERS = "false";
   public static final String ROLLBACK_USING_MARKERS = "hoodie.rollback.using.markers";

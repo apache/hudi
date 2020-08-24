@@ -23,6 +23,8 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -116,6 +118,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   @Test
+  @Disabled
   public void testHFileDemo() throws Exception {
     baseFileFormat = HoodieFileFormat.HFILE;
 

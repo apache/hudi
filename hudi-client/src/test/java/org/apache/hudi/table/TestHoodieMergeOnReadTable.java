@@ -170,7 +170,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       String latestCompactionCommitTime = timeline.lastInstant().get().getTimestamp();
       assertTrue(HoodieTimeline.compareTimestamps("000", HoodieTimeline.LESSER_THAN, latestCompactionCommitTime));
 
-      assertEquals(200, HoodieClientTestUtils.readSince(jsc, basePath, sqlContext, timeline, "000").count(),
+      assertEquals(200, HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, "000"),
           "Must contain 200 records");
     }
   }
@@ -218,7 +218,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       String latestCompactionCommitTime = timeline.lastInstant().get().getTimestamp();
       assertTrue(HoodieTimeline.compareTimestamps("000", HoodieTimeline.LESSER_THAN, latestCompactionCommitTime));
 
-      assertEquals(200, HoodieClientTestUtils.readSince(jsc, basePath, sqlContext, timeline, "000").count(),
+      assertEquals(200, HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, "000"),
           "Must contain 200 records");
     }
   }
@@ -807,7 +807,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withEmbeddedTimelineServerEnabled(true)
-        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024).build()).forTable("test-trip-table")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024).parquetMaxFileSize(1024).build()).forTable("test-trip-table")
         .build();
   }
 
@@ -1469,7 +1469,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
         .withAutoCommit(autoCommit).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024 * 1024).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024 * 1024).parquetMaxFileSize(1024 * 1024 * 1024).build())
         .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
             .withEnableBackupForRemoteFileSystemView(false).build())

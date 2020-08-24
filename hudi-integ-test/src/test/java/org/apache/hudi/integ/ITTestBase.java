@@ -252,7 +252,7 @@ public abstract class ITTestBase {
     try {
       // save up the Hive log files for introspection
       String hiveLogStr =
-          executeCommandStringInDocker(HIVESERVER, "cat /tmp/root/hive.log |  grep -i exception -A 10 -B 5", true).getStdout().toString();
+          executeCommandStringInDocker(HIVESERVER, "cat /tmp/root/hive.log |  grep -i exception -A 10 -B 5", false).getStdout().toString();
       String filePath = System.getProperty("java.io.tmpdir") + "/" + System.currentTimeMillis() + "-hive.log";
       FileIOUtils.writeStringToFile(hiveLogStr, filePath);
       LOG.info("Hive log saved up at  : " + filePath);
