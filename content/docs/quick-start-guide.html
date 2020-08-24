@@ -566,27 +566,23 @@ specific commit time and beginTime to “000” (denoting earliest possible comm
 
 <span class="c1">// issue deletes
 </span><span class="k">val</span> <span class="nv">deletes</span> <span class="k">=</span> <span class="nv">dataGen</span><span class="o">.</span><span class="py">generateDeletes</span><span class="o">(</span><span class="nv">ds</span><span class="o">.</span><span class="py">collectAsList</span><span class="o">())</span>
-<span class="k">val</span> <span class="nv">df</span> <span class="k">=</span> <span class="n">spark</span>
-  <span class="o">.</span><span class="py">read</span>
-  <span class="o">.</span><span class="py">json</span><span class="o">(</span><span class="nv">spark</span><span class="o">.</span><span class="py">sparkContext</span><span class="o">.</span><span class="py">parallelize</span><span class="o">(</span><span class="n">deletes</span><span class="o">,</span> <span class="mi">2</span><span class="o">))</span>
+<span class="k">val</span> <span class="nv">df</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">read</span><span class="o">.</span><span class="py">json</span><span class="o">(</span><span class="nv">spark</span><span class="o">.</span><span class="py">sparkContext</span><span class="o">.</span><span class="py">parallelize</span><span class="o">(</span><span class="n">deletes</span><span class="o">,</span> <span class="mi">2</span><span class="o">))</span>
 
-<span class="n">df</span>
-  <span class="o">.</span><span class="py">write</span>
-  <span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">option</span><span class="o">(</span><span class="nc">OPERATION_OPT_KEY</span><span class="o">,</span><span class="s">"delete"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">option</span><span class="o">(</span><span class="nc">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">option</span><span class="o">(</span><span class="nc">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">option</span><span class="o">(</span><span class="nc">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">option</span><span class="o">(</span><span class="nc">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">mode</span><span class="o">(</span><span class="nc">Append</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">)</span>
+<span class="nv">df</span><span class="o">.</span><span class="py">write</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+  <span class="nf">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">OPERATION_OPT_KEY</span><span class="o">,</span><span class="s">"delete"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">).</span>
+  <span class="nf">mode</span><span class="o">(</span><span class="nc">Append</span><span class="o">).</span>
+  <span class="nf">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">)</span>
 
 <span class="c1">// run the same read query as above.
-</span><span class="k">val</span> <span class="nv">roAfterDeleteViewDF</span> <span class="k">=</span> <span class="n">spark</span>
-  <span class="o">.</span><span class="py">read</span>
-  <span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">)</span>
+</span><span class="k">val</span> <span class="nv">roAfterDeleteViewDF</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span>
+  <span class="n">read</span><span class="o">.</span>
+  <span class="nf">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+  <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">)</span>
 
 <span class="nv">roAfterDeleteViewDF</span><span class="o">.</span><span class="py">registerTempTable</span><span class="o">(</span><span class="s">"hudi_trips_snapshot"</span><span class="o">)</span>
 <span class="c1">// fetch should return (total - 2) records
