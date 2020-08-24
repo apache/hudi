@@ -51,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
- * Base test class for IT Test. helps to run cmd and generate data.
+ * Base test class for IT Test helps to run command and generate data.
  */
 public abstract class ITTestBase {
 

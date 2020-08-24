@@ -49,10 +49,10 @@ public class TestUtils {
   }
 
   /**
-   * Method help to create avro files and save it to file.
+   * Method helps to create avro files and save it to file.
    *
-   * @param jsc               {@link JavaSparkContext}.
-   * @param sparkSession      {@link SparkSession}.
+   * @param jsc               Java Spark Context jsc.
+   * @param sparkSession      Spark Session, the entry point to programming Spark with the Dataset and DataFrame API.
    * @param basePath          The basePath where files are written.
    * @param numFiles          The number of files to create.
    * @param numRecordsPerFile The number of records per file.

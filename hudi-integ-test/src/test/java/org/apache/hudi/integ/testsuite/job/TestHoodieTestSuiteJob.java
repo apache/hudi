@@ -50,7 +50,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * Unit tests against {@link HoodieTestSuiteJob}.
+ * Unit test against {@link HoodieTestSuiteJob}.
  */
 public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
 

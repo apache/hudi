@@ -58,7 +58,7 @@ public class TestUpdateConverter {
    */
   @Test
   public void testGenerateUpdateRecordsFromInputRecords() throws Exception {
-    // 1. prepare input record
+    // 1. prepare input records
     JavaRDD<GenericRecord> inputRDD = TestUtils.makeRDD(jsc, 10);
     String schemaStr = inputRDD.take(1).get(0).getSchema().toString();
     int minPayloadSize = 1000;

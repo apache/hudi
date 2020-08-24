@@ -51,7 +51,7 @@ public class ComplexDagGenerator implements WorkflowDagGenerator {
         .withNumInsertPartitions(1)
         .withRecordSize(10000).build());
 
-    // function to build ValidateNode with
+    // function used to build ValidateNode
     Function<List<DagNode<JavaRDD<WriteStatus>>>, Boolean> function = (dagNodes) -> {
       DagNode<JavaRDD<WriteStatus>> parent1 = dagNodes.get(0);
       List<WriteStatus> statuses = parent1.getResult().collect();

@@ -53,7 +53,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 /**
- * {@link HoodieTestSuiteWriter}. Helps to test writing a DFS file.
+ * Unit test against DeltaWriterAdapter, by testing writing DFS files.
  */
 public class TestDFSHoodieTestSuiteWriterAdapter extends UtilitiesTestBase {
 
