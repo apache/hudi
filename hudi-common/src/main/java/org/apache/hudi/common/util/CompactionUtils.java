@@ -50,8 +50,6 @@ import java.util.stream.Stream;
  */
 public class CompactionUtils {
 
-  private static final Logger LOG = LogManager.getLogger(CompactionUtils.class);
-
   public static final Integer COMPACTION_METADATA_VERSION_1 = CompactionV1MigrationHandler.VERSION;
   public static final Integer COMPACTION_METADATA_VERSION_2 = CompactionV2MigrationHandler.VERSION;
   public static final Integer LATEST_COMPACTION_METADATA_VERSION = COMPACTION_METADATA_VERSION_2;

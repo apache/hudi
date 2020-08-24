@@ -290,7 +290,7 @@ public class ObjectSizeCalculator {
       }
       this.fieldsSize = fieldsSize;
       this.objectSize = roundTo(objectHeaderSize + fieldsSize, objectPadding);
-      this.referenceFields = referenceFields.toArray(new Field[referenceFields.size()]);
+      this.referenceFields = referenceFields.toArray(new Field[0]);
     }
 
     void visit(Object obj, ObjectSizeCalculator calc) {

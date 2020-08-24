@@ -138,7 +138,6 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       case HoodieTimeline.CLEAN_ACTION:
         return "hoodieCleanMetadata";
       case HoodieTimeline.COMMIT_ACTION:
-        return "hoodieCommitMetadata";
       case HoodieTimeline.DELTA_COMMIT_ACTION:
         return "hoodieCommitMetadata";
       case HoodieTimeline.ROLLBACK_ACTION:

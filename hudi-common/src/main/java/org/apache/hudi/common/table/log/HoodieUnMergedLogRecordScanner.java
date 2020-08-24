@@ -56,8 +56,8 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
    * A callback for log record scanner.
    */
   @FunctionalInterface
-  public static interface LogRecordScannerCallback {
+  public  interface LogRecordScannerCallback {
 
-    public void apply(HoodieRecord<? extends HoodieRecordPayload> record) throws Exception;
+     void apply(HoodieRecord<? extends HoodieRecordPayload> record) throws Exception;
   }
 }

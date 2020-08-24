@@ -456,7 +456,7 @@ public class HoodieTestUtils {
         returns.add(status);
       }
     }
-    return returns.toArray(new FileStatus[returns.size()]);
+    return returns.toArray(new FileStatus[0]);
   }
 
   public static FileStatus[] listAllLogFilesInPath(FileSystem fs, String basePath)
@@ -469,7 +469,7 @@ public class HoodieTestUtils {
         returns.add(status);
       }
     }
-    return returns.toArray(new FileStatus[returns.size()]);
+    return returns.toArray(new FileStatus[0]);
   }
 
   public static FileStatus[] listAllDataFilesAndLogFilesInPath(FileSystem fs, String basePath) throws IOException {

@@ -130,7 +130,7 @@ public class TestRocksDBDAO {
     colFamilies.forEach(family -> {
       dbManager.prefixDelete(family, prefix1);
 
-      int got = dbManager.prefixSearch(family, prefix1).collect(Collectors.toList()).size();
+      int got = (int) dbManager.prefixSearch(family, prefix1).count();
       assertEquals(countsMap.get(family).get(prefix1) == null ? 0 : 1, got,
           "Expected prefix delete to leave at least one item for family: " + family);
     });

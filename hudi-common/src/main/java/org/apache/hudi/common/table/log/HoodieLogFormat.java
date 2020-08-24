@@ -88,7 +88,7 @@ public interface HoodieLogFormat {
      * 
      * @return
      */
-    public boolean hasPrev();
+    boolean hasPrev();
 
     /**
      * Read log file in reverse order and return prev block if present.
@@ -96,7 +96,7 @@ public interface HoodieLogFormat {
      * @return
      * @throws IOException
      */
-    public HoodieLogBlock prev() throws IOException;
+    HoodieLogBlock prev() throws IOException;
   }
 
   /**

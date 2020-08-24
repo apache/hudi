@@ -57,7 +57,7 @@ import java.nio.ByteBuffer;
  *           License: http://www.apache.org/licenses/LICENSE-2.0
  */
 public final class BufferedRandomAccessFile extends RandomAccessFile {
-  private static final Logger LOG = Logger.getLogger(BufferedRandomAccessFile.class);
+
   static final int DEFAULT_BUFFER_SIZE = (1 << 16); // 64K buffer
   static final int BUFFER_BOUNDARY_MASK = -DEFAULT_BUFFER_SIZE;
 

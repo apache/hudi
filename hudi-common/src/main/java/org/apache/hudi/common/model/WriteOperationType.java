@@ -41,10 +41,7 @@ public enum WriteOperationType {
   // used for old version
   UNKNOWN("unknown");
 
-  private final String value;
-
   WriteOperationType(String value) {
-    this.value = value;
   }
 
   /**

@@ -534,7 +534,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       }
 
       fileSliceList = getLatestRawFileSlices(partitionPath).collect(Collectors.toList());
-      assertEquals(includeInvalidAndInflight ? 5 : 1, fileSliceList.size(),
+      assertEquals(5, fileSliceList.size(),
           "Expect both inflight and orphan file-slice to be included");
       Map<String, FileSlice> fileSliceMap =
           fileSliceList.stream().collect(Collectors.toMap(FileSlice::getFileId, r -> r));

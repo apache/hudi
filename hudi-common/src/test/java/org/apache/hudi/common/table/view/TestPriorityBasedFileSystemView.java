@@ -463,9 +463,9 @@ public class TestPriorityBasedFileSystemView {
   public void testGetAllFileGroups() {
     Stream<HoodieFileGroup> actual;
     String partitionPath = "/table2";
-    Stream<HoodieFileGroup> expected = Collections.singleton(
+    Stream<HoodieFileGroup> expected = Stream.of(
         new HoodieFileGroup(partitionPath, "id1",
-            new MockHoodieTimeline(Stream.empty(), Stream.empty()))).stream();
+            new MockHoodieTimeline(Stream.empty(), Stream.empty())));
 
     when(primary.getAllFileGroups(partitionPath)).thenReturn(expected);
     actual = fsView.getAllFileGroups(partitionPath);
@@ -492,9 +492,8 @@ public class TestPriorityBasedFileSystemView {
   @Test
   public void testGetPendingCompactionOperations() {
     Stream<Pair<String, CompactionOperation>> actual;
-    Stream<Pair<String, CompactionOperation>> expected = Collections.singleton(
-        (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()))
-        .stream();
+    Stream<Pair<String, CompactionOperation>> expected = Stream.of(
+        (Pair<String, CompactionOperation>) new ImmutablePair<>("test", new CompactionOperation()));
 
     when(primary.getPendingCompactionOperations()).thenReturn(expected);
     actual = fsView.getPendingCompactionOperations();

@@ -123,7 +123,7 @@ public interface TableFileSystemView {
      * @param maxInstantTime Max Instant Time
      * @return
      */
-    public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime);
+     Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime);
 
     /**
      * Stream all the latest file slices, in the given range.

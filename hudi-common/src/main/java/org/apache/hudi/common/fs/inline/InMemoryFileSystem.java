@@ -41,7 +41,6 @@ public class InMemoryFileSystem extends FileSystem {
 
   // TODO: this needs to be per path to support num_cores > 1, and we should release the buffer once done
   private ByteArrayOutputStream bos;
-  private Configuration conf = null;
   public static final String SCHEME = "inmemfs";
   private URI uri;
 
@@ -51,7 +50,6 @@ public class InMemoryFileSystem extends FileSystem {
   @Override
   public void initialize(URI name, Configuration conf) throws IOException {
     super.initialize(name, conf);
-    this.conf = conf;
     this.uri = name;
   }
 

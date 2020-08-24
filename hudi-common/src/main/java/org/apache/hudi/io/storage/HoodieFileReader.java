@@ -28,13 +28,13 @@ import org.apache.hudi.common.bloom.BloomFilter;
 
 public interface HoodieFileReader<R extends IndexedRecord> {
 
-  public String[] readMinMaxRecordKeys();
+  String[] readMinMaxRecordKeys();
 
-  public BloomFilter readBloomFilter();
+  BloomFilter readBloomFilter();
 
-  public Set<String> filterRowKeys(Set<String> candidateRowKeys);
+  Set<String> filterRowKeys(Set<String> candidateRowKeys);
 
-  public Iterator<R> getRecordIterator(Schema schema) throws IOException;
+  Iterator<R> getRecordIterator(Schema schema) throws IOException;
 
   Schema getSchema();
 

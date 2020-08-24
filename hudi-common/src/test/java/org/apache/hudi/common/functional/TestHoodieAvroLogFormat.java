@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.functional;
 
+import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 
 /**

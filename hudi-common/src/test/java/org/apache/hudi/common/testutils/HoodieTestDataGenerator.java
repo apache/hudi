@@ -470,12 +470,10 @@ public class HoodieTestDataGenerator {
   Takes care of populating keys schema wise
    */
   private void populateKeysBySchema(String schemaStr, int i, KeyPartition kp) {
-    if (existingKeysBySchema.containsKey(schemaStr)) {
-      existingKeysBySchema.get(schemaStr).put(i, kp);
-    } else {
+    if (!existingKeysBySchema.containsKey(schemaStr)) {
       existingKeysBySchema.put(schemaStr, new HashMap<>());
-      existingKeysBySchema.get(schemaStr).put(i, kp);
     }
+    existingKeysBySchema.get(schemaStr).put(i, kp);
   }
 
   private void incrementNumExistingKeysBySchema(String schemaStr) {

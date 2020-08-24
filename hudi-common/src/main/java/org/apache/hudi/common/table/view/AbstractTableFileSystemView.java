@@ -296,8 +296,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
     Option<Pair<String, CompactionOperation>> compactionWithInstantTime =
         getPendingCompactionOperationWithInstant(new HoodieFileGroupId(partitionPath, baseFile.getFileId()));
-    return (compactionWithInstantTime.isPresent()) && (null != compactionWithInstantTime.get().getKey())
-        && baseFile.getCommitTime().equals(compactionWithInstantTime.get().getKey());
+    return (!compactionWithInstantTime.isPresent()) || (null == compactionWithInstantTime.get().getKey())
+            || !baseFile.getCommitTime().equals(compactionWithInstantTime.get().getKey());
   }
 
   /**
@@ -411,7 +411,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           .map(fileGroup -> Option.fromJavaOptional(fileGroup.getAllBaseFiles()
               .filter(baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, maxCommitTime
               ))
-              .filter(df -> !isBaseFileDueToPendingCompaction(df)).findFirst()))
+              .filter(df -> isBaseFileDueToPendingCompaction(df)).findFirst()))
           .filter(Option::isPresent).map(Option::get)
           .map(df -> addBootstrapBaseFileIfPresent(new HoodieFileGroupId(partitionPath, df.getFileId()), df));
     } finally {
@@ -427,7 +427,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       ensurePartitionLoadedCorrectly(partitionPath);
       return fetchHoodieFileGroup(partitionPath, fileId).map(fileGroup -> fileGroup.getAllBaseFiles()
           .filter(baseFile -> HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), HoodieTimeline.EQUALS,
-              instantTime)).filter(df -> !isBaseFileDueToPendingCompaction(df)).findFirst().orElse(null))
+              instantTime)).filter(df -> isBaseFileDueToPendingCompaction(df)).findFirst().orElse(null))
           .map(df -> addBootstrapBaseFileIfPresent(new HoodieFileGroupId(partitionPath, fileId), df));
     } finally {
       readLock.unlock();
@@ -456,7 +456,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       readLock.lock();
       return fetchAllStoredFileGroups().map(fileGroup -> Pair.of(fileGroup.getFileGroupId(), Option.fromJavaOptional(
           fileGroup.getAllBaseFiles().filter(baseFile -> commitsToReturn.contains(baseFile.getCommitTime())
-              && !isBaseFileDueToPendingCompaction(baseFile)).findFirst()))).filter(p -> p.getValue().isPresent())
+              && isBaseFileDueToPendingCompaction(baseFile)).findFirst()))).filter(p -> p.getValue().isPresent())
           .map(p -> addBootstrapBaseFileIfPresent(p.getKey(), p.getValue().get()));
     } finally {
       readLock.unlock();
@@ -471,7 +471,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       ensurePartitionLoadedCorrectly(partitionPath);
       return fetchAllBaseFiles(partitionPath)
           .filter(df -> visibleCommitsAndCompactionTimeline.containsOrBeforeTimelineStarts(df.getCommitTime()))
-          .filter(df -> !isBaseFileDueToPendingCompaction(df))
+          .filter(df -> isBaseFileDueToPendingCompaction(df))
           .map(df -> addBootstrapBaseFileIfPresent(new HoodieFileGroupId(partitionPath, df.getFileId()), df));
     } finally {
       readLock.unlock();
@@ -765,7 +765,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   protected Option<HoodieBaseFile> getLatestBaseFile(HoodieFileGroup fileGroup) {
     return Option
-        .fromJavaOptional(fileGroup.getAllBaseFiles().filter(df -> !isBaseFileDueToPendingCompaction(df)).findFirst());
+        .fromJavaOptional(fileGroup.getAllBaseFiles().filter(df -> isBaseFileDueToPendingCompaction(df)).findFirst());
   }
 
   /**
