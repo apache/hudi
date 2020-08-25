@@ -64,4 +64,23 @@ public class TestComplexKeyGenerator {
     assertEquals(partitionPath, hoodieKey.getPartitionPath());
   }
 
+  @Test
+  public void testMultipleValueKeyGeneratorNonPartitioned() {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key,timestamp");
+    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "");
+    ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
+    assertEquals(compositeKeyGenerator.getRecordKeyFields().size(), 2);
+    assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 0);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    GenericRecord record = dataGenerator.generateGenericRecords(1).get(0);
+    String rowKey =
+        "_row_key" + ComplexKeyGenerator.DEFAULT_RECORD_KEY_SEPARATOR + record.get("_row_key").toString() + ","
+            + "timestamp" + ComplexKeyGenerator.DEFAULT_RECORD_KEY_SEPARATOR + record.get("timestamp").toString();
+    String partitionPath = "";
+    HoodieKey hoodieKey = compositeKeyGenerator.getKey(record);
+    assertEquals(rowKey, hoodieKey.getRecordKey());
+    assertEquals(partitionPath, hoodieKey.getPartitionPath());
+  }
+
 }

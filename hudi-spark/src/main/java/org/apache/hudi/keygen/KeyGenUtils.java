@@ -59,6 +59,10 @@ public class KeyGenUtils {
 
   public static String getRecordPartitionPath(GenericRecord record, List<String> partitionPathFields,
       boolean hiveStylePartitioning, boolean encodePartitionPath) {
+    if (partitionPathFields.isEmpty()) {
+      return "";
+    }
+
     StringBuilder partitionPath = new StringBuilder();
     for (String partitionPathField : partitionPathFields) {
       String fieldVal = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true);
