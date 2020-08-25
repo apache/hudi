@@ -3,17 +3,17 @@
   <head>
     <meta charset="utf-8">
 
-<!-- begin _includes/seo.html --><title>文档版本 - Apache Hudi</title>
-<meta name="description" content="                              Latest            英文版            中文版                                  0.6.0            英文版            中文版                                  0.5.3            英文版            中文版                                  0.5.2            英文版            中文版                                  0.5.1            英文版            中文版                                  0.5.0            英文版            中文版                  ">
+<!-- begin _includes/seo.html --><title>性能 - Apache Hudi</title>
+<meta name="description" content="在本节中，我们将介绍一些有关Hudi插入更新、增量提取的实际性能数据，并将其与实现这些任务的其它传统工具进行比较。">
 
 <meta property="og:type" content="article">
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="">
-<meta property="og:title" content="文档版本">
-<meta property="og:url" content="https://hudi.apache.org/cn/docs/0.5.1-docs-versions.html">
+<meta property="og:title" content="性能">
+<meta property="og:url" content="https://hudi.apache.org/cn/docs/0.6.0-performance.html">
 
 
-  <meta property="og:description" content="                              Latest            英文版            中文版                                  0.6.0            英文版            中文版                                  0.5.3            英文版            中文版                                  0.5.2            英文版            中文版                                  0.5.1            英文版            中文版                                  0.5.0            英文版            中文版                  ">
+  <meta property="og:description" content="在本节中，我们将介绍一些有关Hudi插入更新、增量提取的实际性能数据，并将其与实现这些任务的其它传统工具进行比较。">
 
 
 
@@ -151,7 +151,7 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-quick-start-guide.html" class="">快速开始</a></li>
+              <li><a href="/cn/docs/0.6.0-quick-start-guide.html" class="">快速开始</a></li>
             
 
           
@@ -162,7 +162,7 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-use_cases.html" class="">使用案例</a></li>
+              <li><a href="/cn/docs/0.6.0-use_cases.html" class="">使用案例</a></li>
             
 
           
@@ -173,7 +173,7 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-powered_by.html" class="">演讲 & hudi 用户</a></li>
+              <li><a href="/cn/docs/0.6.0-powered_by.html" class="">演讲 & hudi 用户</a></li>
             
 
           
@@ -184,7 +184,7 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-comparison.html" class="">对比</a></li>
+              <li><a href="/cn/docs/0.6.0-comparison.html" class="">对比</a></li>
             
 
           
@@ -195,7 +195,7 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-docker_demo.html" class="">Docker 示例</a></li>
+              <li><a href="/cn/docs/0.6.0-docker_demo.html" class="">Docker 示例</a></li>
             
 
           
@@ -218,7 +218,7 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-concepts.html" class="">概念</a></li>
+              <li><a href="/cn/docs/0.6.0-concepts.html" class="">概念</a></li>
             
 
           
@@ -229,7 +229,7 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-writing_data.html" class="">写入数据</a></li>
+              <li><a href="/cn/docs/0.6.0-writing_data.html" class="">写入数据</a></li>
             
 
           
@@ -240,7 +240,7 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-querying_data.html" class="">查询数据</a></li>
+              <li><a href="/cn/docs/0.6.0-querying_data.html" class="">查询数据</a></li>
             
 
           
@@ -251,7 +251,7 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-configurations.html" class="">配置</a></li>
+              <li><a href="/cn/docs/0.6.0-configurations.html" class="">配置</a></li>
             
 
           
@@ -262,7 +262,7 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-performance.html" class="">性能</a></li>
+              <li><a href="/cn/docs/0.6.0-performance.html" class="active">性能</a></li>
             
 
           
@@ -273,7 +273,18 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-deployment.html" class="">管理</a></li>
+              <li><a href="/cn/docs/0.6.0-deployment.html" class="">管理</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-cloud.html" class="">云储存</a></li>
             
 
           
@@ -296,7 +307,7 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-docs-versions.html" class="active">文档版本</a></li>
+              <li><a href="/cn/docs/0.6.0-docs-versions.html" class="">文档版本</a></li>
             
 
           
@@ -307,7 +318,7 @@
             
 
             
-              <li><a href="/cn/docs/0.5.1-privacy.html" class="">版权信息</a></li>
+              <li><a href="/cn/docs/0.6.0-privacy.html" class="">版权信息</a></li>
             
 
           
@@ -331,7 +342,7 @@
     <div class="page__inner-wrap">
       
         <header>
-          <h1 id="page-title" class="page__title" itemprop="headline">文档版本
+          <h1 id="page-title" class="page__title" itemprop="headline">性能
 </h1>
           <!-- Output author details if some exist. -->
           
@@ -346,48 +357,60 @@
             }
           </style>
         
-        <table class="docversions">
-    <tbody>
-      
-        <tr>
-            <th>Latest</th>
-            <td><a href="/docs/quick-start-guide.html">英文版</a></td>
-            <td><a href="/cn/docs/quick-start-guide.html">中文版</a></td>
-        </tr>
-      
-        <tr>
-            <th>0.6.0</th>
-            <td><a href="/docs/0.6.0-quick-start-guide.html">英文版</a></td>
-            <td><a href="/cn/docs/0.6.0-quick-start-guide.html">中文版</a></td>
-        </tr>
-      
-        <tr>
-            <th>0.5.3</th>
-            <td><a href="/docs/0.5.3-quick-start-guide.html">英文版</a></td>
-            <td><a href="/cn/docs/0.5.3-quick-start-guide.html">中文版</a></td>
-        </tr>
-      
-        <tr>
-            <th>0.5.2</th>
-            <td><a href="/docs/0.5.2-quick-start-guide.html">英文版</a></td>
-            <td><a href="/cn/docs/0.5.2-quick-start-guide.html">中文版</a></td>
-        </tr>
-      
-        <tr>
-            <th>0.5.1</th>
-            <td><a href="/docs/0.5.1-quick-start-guide.html">英文版</a></td>
-            <td><a href="/cn/docs/0.5.1-quick-start-guide.html">中文版</a></td>
-        </tr>
-      
-        <tr>
-            <th>0.5.0</th>
-            <td><a href="/docs/0.5.0-quick-start-guide.html">英文版</a></td>
-            <td><a href="/cn/docs/0.5.0-quick-start-guide.html">中文版</a></td>
-        </tr>
-      
-    </tbody>
-</table>
+        <p>在本节中，我们将介绍一些有关Hudi插入更新、增量提取的实际性能数据，并将其与实现这些任务的其它传统工具进行比较。</p>
 
+<h2 id="插入更新">插入更新</h2>
+
+<p>下面显示了从NoSQL数据库摄取获得的速度提升，这些速度提升数据是通过在写入时复制存储上的Hudi数据集上插入更新而获得的，
+数据集包括5个从小到大的表（相对于批量加载表）。</p>
+
+<figure>
+    <img class="docimage" src="/assets/images/hudi_upsert_perf1.png" alt="hudi_upsert_perf1.png" style="max-width: 1000px" />
+</figure>
+
+<p>由于Hudi可以通过增量构建数据集，它也为更频繁地调度摄取提供了可能性，从而减少了延迟，并显著节省了总体计算成本。</p>
+
+<figure>
+    <img class="docimage" src="/assets/images/hudi_upsert_perf2.png" alt="hudi_upsert_perf2.png" style="max-width: 1000px" />
+</figure>
+
+<p>Hudi插入更新在t1表的一次提交中就进行了高达4TB的压力测试。
+有关一些调优技巧，请参见<a href="https://cwiki.apache.org/confluence/display/HUDI/Tuning+Guide">这里</a>。</p>
+
+<h2 id="索引">索引</h2>
+
+<p>为了有效地插入更新数据，Hudi需要将要写入的批量数据中的记录分类为插入和更新（并标记它所属的文件组）。
+为了加快此操作的速度，Hudi采用了可插拔索引机制，该机制存储了recordKey和它所属的文件组ID之间的映射。
+默认情况下，Hudi使用内置索引，该索引使用文件范围和布隆过滤器来完成此任务，相比于Spark Join，其速度最高可提高10倍。</p>
+
+<p>当您将recordKey建模为单调递增时（例如时间戳前缀），Hudi提供了最佳的索引性能，从而进行范围过滤来避免与许多文件进行比较。
+即使对于基于UUID的键，也有<a href="https://www.percona.com/blog/2014/12/19/store-uuid-optimized-way/">已知技术</a>来达到同样目的。
+例如，在具有80B键、3个分区、11416个文件、10TB数据的事件表上使用100M个时间戳前缀的键（5％的更新，95％的插入）时，
+相比于原始Spark Join，Hudi索引速度的提升<strong>约为7倍（440秒相比于2880秒）</strong>。
+即使对于具有挑战性的工作负载，如使用300个核对3.25B UUID键、30个分区、6180个文件的“100％更新”的数据库摄取工作负载，Hudi索引也可以提供<strong>80-100％的加速</strong>。</p>
+
+<h2 id="读优化查询">读优化查询</h2>
+
+<p>读优化视图的主要设计目标是在不影响查询的情况下实现上一节中提到的延迟减少和效率提高。
+下图比较了对Hudi和非Hudi数据集的Hive、Presto、Spark查询，并对此进行说明。</p>
+
+<p><strong>Hive</strong></p>
+
+<figure>
+    <img class="docimage" src="/assets/images/hudi_query_perf_hive.png" alt="hudi_query_perf_hive.png" style="max-width: 800px" />
+</figure>
+
+<p><strong>Spark</strong></p>
+
+<figure>
+    <img class="docimage" src="/assets/images/hudi_query_perf_spark.png" alt="hudi_query_perf_spark.png" style="max-width: 1000px" />
+</figure>
+
+<p><strong>Presto</strong></p>
+
+<figure>
+    <img class="docimage" src="/assets/images/hudi_query_perf_presto.png" alt="hudi_query_perf_presto.png" style="max-width: 1000px" />
+</figure>
 
       </section>
 

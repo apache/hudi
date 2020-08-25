@@ -3,23 +3,23 @@
   <head>
     <meta charset="utf-8">
 
-<!-- begin _includes/seo.html --><title>文档版本 - Apache Hudi</title>
-<meta name="description" content="                              Latest            英文版            中文版                                  0.6.0            英文版            中文版                                  0.5.3            英文版            中文版                                  0.5.2            英文版            中文版                                  0.5.1            英文版            中文版                                  0.5.0            英文版            中文版                  ">
+<!-- begin _includes/seo.html --><title>COS Filesystem - Apache Hudi</title>
+<meta name="description" content="In this page, we explain how to get your Hudi spark job to store into Tencent Cloud COS.">
 
 <meta property="og:type" content="article">
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="">
-<meta property="og:title" content="文档版本">
-<meta property="og:url" content="https://hudi.apache.org/cn/docs/docs-versions.html">
+<meta property="og:title" content="COS Filesystem">
+<meta property="og:url" content="https://hudi.apache.org/docs/0.6.0-cos_hoodie.html">
 
 
-  <meta property="og:description" content="                              Latest            英文版            中文版                                  0.6.0            英文版            中文版                                  0.5.3            英文版            中文版                                  0.5.2            英文版            中文版                                  0.5.1            英文版            中文版                                  0.5.0            英文版            中文版                  ">
+  <meta property="og:description" content="In this page, we explain how to get your Hudi spark job to store into Tencent Cloud COS.">
 
 
 
 
 
-  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+  <meta property="article:modified_time" content="2020-04-21T17:38:24-04:00">
 
 
 
@@ -87,15 +87,15 @@
           
         </a>
         <ul class="visible-links"><li class="masthead__menu-item">
-              <a href="/cn/docs/quick-start-guide.html" target="_self" >文档</a>
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
             </li><li class="masthead__menu-item">
-              <a href="/cn/community.html" target="_self" >社区</a>
+              <a href="/community.html" target="_self" >Community</a>
             </li><li class="masthead__menu-item">
-              <a href="/cn/activity.html" target="_self" >动态</a>
+              <a href="/blog.html" target="_self" >Blog</a>
             </li><li class="masthead__menu-item">
               <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
             </li><li class="masthead__menu-item">
-              <a href="/cn/releases.html" target="_self" >发布</a>
+              <a href="/releases.html" target="_self" >Releases</a>
             </li></ul>
         <button class="greedy-nav__toggle hidden" type="button">
           <span class="visually-hidden">Toggle menu</span>
@@ -133,12 +133,12 @@
 <nav class="nav__list">
   
   <input id="ac-toc" name="accordion-toc" type="checkbox" />
-  <label for="ac-toc">文档菜单</label>
+  <label for="ac-toc">Toggle Menu</label>
   <ul class="nav__items">
     
       <li>
         
-          <span class="nav__sub-title">入门指南</span>
+          <span class="nav__sub-title">Getting Started</span>
         
 
         
@@ -151,7 +151,7 @@
             
 
             
-              <li><a href="/cn/docs/quick-start-guide.html" class="">快速开始</a></li>
+              <li><a href="/docs/0.6.0-quick-start-guide.html" class="">Quick Start</a></li>
             
 
           
@@ -162,7 +162,7 @@
             
 
             
-              <li><a href="/cn/docs/use_cases.html" class="">使用案例</a></li>
+              <li><a href="/docs/0.6.0-use_cases.html" class="">Use Cases</a></li>
             
 
           
@@ -173,7 +173,7 @@
             
 
             
-              <li><a href="/cn/docs/powered_by.html" class="">演讲 & hudi 用户</a></li>
+              <li><a href="/docs/0.6.0-powered_by.html" class="">Talks & Powered By</a></li>
             
 
           
@@ -184,7 +184,7 @@
             
 
             
-              <li><a href="/cn/docs/comparison.html" class="">对比</a></li>
+              <li><a href="/docs/0.6.0-comparison.html" class="">Comparison</a></li>
             
 
           
@@ -195,7 +195,7 @@
             
 
             
-              <li><a href="/cn/docs/docker_demo.html" class="">Docker 示例</a></li>
+              <li><a href="/docs/0.6.0-docker_demo.html" class="">Docker Demo</a></li>
             
 
           
@@ -205,7 +205,7 @@
     
       <li>
         
-          <span class="nav__sub-title">帮助文档</span>
+          <span class="nav__sub-title">Documentation</span>
         
 
         
@@ -218,7 +218,7 @@
             
 
             
-              <li><a href="/cn/docs/concepts.html" class="">概念</a></li>
+              <li><a href="/docs/0.6.0-concepts.html" class="">Concepts</a></li>
             
 
           
@@ -229,7 +229,7 @@
             
 
             
-              <li><a href="/cn/docs/writing_data.html" class="">写入数据</a></li>
+              <li><a href="/docs/0.6.0-writing_data.html" class="">Writing Data</a></li>
             
 
           
@@ -240,7 +240,7 @@
             
 
             
-              <li><a href="/cn/docs/querying_data.html" class="">查询数据</a></li>
+              <li><a href="/docs/0.6.0-querying_data.html" class="">Querying Data</a></li>
             
 
           
@@ -251,7 +251,7 @@
             
 
             
-              <li><a href="/cn/docs/configurations.html" class="">配置</a></li>
+              <li><a href="/docs/0.6.0-configurations.html" class="">Configuration</a></li>
             
 
           
@@ -262,7 +262,7 @@
             
 
             
-              <li><a href="/cn/docs/performance.html" class="">性能</a></li>
+              <li><a href="/docs/0.6.0-performance.html" class="">Performance</a></li>
             
 
           
@@ -273,7 +273,7 @@
             
 
             
-              <li><a href="/cn/docs/deployment.html" class="">管理</a></li>
+              <li><a href="/docs/0.6.0-deployment.html" class="">Deployment</a></li>
             
 
           
@@ -284,7 +284,7 @@
             
 
             
-              <li><a href="/cn/docs/cloud.html" class="">云储存</a></li>
+              <li><a href="/docs/0.6.0-cloud.html" class="">Cloud Storage</a></li>
             
 
           
@@ -294,7 +294,7 @@
     
       <li>
         
-          <span class="nav__sub-title">其他信息</span>
+          <span class="nav__sub-title">INFO</span>
         
 
         
@@ -307,7 +307,7 @@
             
 
             
-              <li><a href="/cn/docs/docs-versions.html" class="active">文档版本</a></li>
+              <li><a href="/docs/0.6.0-docs-versions.html" class="">Docs Versions</a></li>
             
 
           
@@ -318,7 +318,7 @@
             
 
             
-              <li><a href="/cn/docs/privacy.html" class="">版权信息</a></li>
+              <li><a href="/docs/0.6.0-privacy.html" class="">Privacy Policy</a></li>
             
 
           
@@ -342,7 +342,7 @@
     <div class="page__inner-wrap">
       
         <header>
-          <h1 id="page-title" class="page__title" itemprop="headline">文档版本
+          <h1 id="page-title" class="page__title" itemprop="headline">COS Filesystem
 </h1>
           <!-- Output author details if some exist. -->
           
@@ -357,48 +357,74 @@
             }
           </style>
         
-        <table class="docversions">
-    <tbody>
-      
-        <tr>
-            <th>Latest</th>
-            <td><a href="/docs/quick-start-guide.html">英文版</a></td>
-            <td><a href="/cn/docs/quick-start-guide.html">中文版</a></td>
-        </tr>
-      
-        <tr>
-            <th>0.6.0</th>
-            <td><a href="/docs/0.6.0-quick-start-guide.html">英文版</a></td>
-            <td><a href="/cn/docs/0.6.0-quick-start-guide.html">中文版</a></td>
-        </tr>
-      
-        <tr>
-            <th>0.5.3</th>
-            <td><a href="/docs/0.5.3-quick-start-guide.html">英文版</a></td>
-            <td><a href="/cn/docs/0.5.3-quick-start-guide.html">中文版</a></td>
-        </tr>
-      
-        <tr>
-            <th>0.5.2</th>
-            <td><a href="/docs/0.5.2-quick-start-guide.html">英文版</a></td>
-            <td><a href="/cn/docs/0.5.2-quick-start-guide.html">中文版</a></td>
-        </tr>
-      
-        <tr>
-            <th>0.5.1</th>
-            <td><a href="/docs/0.5.1-quick-start-guide.html">英文版</a></td>
-            <td><a href="/cn/docs/0.5.1-quick-start-guide.html">中文版</a></td>
-        </tr>
-      
-        <tr>
-            <th>0.5.0</th>
-            <td><a href="/docs/0.5.0-quick-start-guide.html">英文版</a></td>
-            <td><a href="/cn/docs/0.5.0-quick-start-guide.html">中文版</a></td>
-        </tr>
-      
-    </tbody>
-</table>
+        <p>In this page, we explain how to get your Hudi spark job to store into Tencent Cloud COS.</p>
 
+<h2 id="tencent-cloud-cos-configs">Tencent Cloud COS configs</h2>
+
+<p>There are two configurations required for Hudi-COS compatibility:</p>
+
+<ul>
+  <li>Adding Tencent Cloud COS Credentials for Hudi</li>
+  <li>Adding required Jars to classpath</li>
+</ul>
+
+<h3 id="tencent-cloud-cos-credentials">Tencent Cloud COS Credentials</h3>
+
+<p>Add the required configs in your core-site.xml from where Hudi can fetch them. Replace the <code class="highlighter-rouge">fs.defaultFS</code> with your COS bucket name, replace <code class="highlighter-rouge">fs.cosn.userinfo.secretId</code> with your COS secret Id, replace <code class="highlighter-rouge">fs.cosn.userinfo.secretKey</code> with your COS key. Hudi should be able to read/write from the bucket.</p>
+
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.defaultFS<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>cosn://bucketname<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>COS bucket name<span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.cosn.userinfo.secretId<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>cos-secretId<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>Tencent Cloud Secret Id<span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.cosn.userinfo.secretKey<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>cos-secretkey<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>Tencent Cloud Secret Key<span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.cosn.bucket.region<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>ap-region<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>The region where the bucket is located.<span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.cosn.bucket.endpoint_suffix<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>cos.endpoint.suffix<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>
+          COS endpoint to connect to. 
+          For public cloud users, it is recommended not to set this option, and only the correct area field is required.
+        <span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.cosn.impl<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>org.apache.hadoop.fs.CosFileSystem<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>The implementation class of the CosN Filesystem.<span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+    <span class="nt">&lt;property&gt;</span>
+        <span class="nt">&lt;name&gt;</span>fs.AbstractFileSystem.cosn.impl<span class="nt">&lt;/name&gt;</span>
+        <span class="nt">&lt;value&gt;</span>org.apache.hadoop.fs.CosN<span class="nt">&lt;/value&gt;</span>
+        <span class="nt">&lt;description&gt;</span>The implementation class of the CosN AbstractFileSystem.<span class="nt">&lt;/description&gt;</span>
+    <span class="nt">&lt;/property&gt;</span>
+
+</code></pre></div></div>
+
+<h3 id="tencent-cloud-cos-libs">Tencent Cloud COS Libs</h3>
+<p>COS hadoop libraries to add to our classpath</p>
+
+<ul>
+  <li>org.apache.hadoop:hadoop-cos:2.8.5</li>
+</ul>
 
       </section>
 
