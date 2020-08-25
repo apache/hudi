@@ -36,7 +36,7 @@ public abstract class BulkInsertInternalPartitionerFactory {
       case PARTITION_SORT:
         return new RDDPartitionSortPartitioner();
       default:
-        throw new HoodieException("The bulk insert mode \"" + sortMode.name() + "\" is not supported.");
+        throw new HoodieException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
     }
   }
 }
