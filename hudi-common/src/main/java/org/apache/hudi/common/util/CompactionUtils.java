@@ -34,9 +34,6 @@ import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV2M
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;

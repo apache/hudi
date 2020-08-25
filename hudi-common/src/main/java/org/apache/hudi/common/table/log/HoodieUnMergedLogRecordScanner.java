@@ -58,6 +58,6 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
   @FunctionalInterface
   public  interface LogRecordScannerCallback {
 
-     void apply(HoodieRecord<? extends HoodieRecordPayload> record) throws Exception;
+    void apply(HoodieRecord<? extends HoodieRecordPayload> record) throws Exception;
   }
 }

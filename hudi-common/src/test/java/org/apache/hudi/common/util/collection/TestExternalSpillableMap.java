@@ -46,7 +46,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests external spillable map {@link ExternalSpillableMap}.
@@ -161,11 +164,11 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
     // remove (from inMemory and onDisk)
     HoodieRecord removedRecord = records.remove(ikey);
-    assertNotNull(removedRecord);
+    assertTrue(removedRecord != null);
     assertFalse(records.containsKey(ikey));
 
     removedRecord = records.remove(dkey);
-    assertNotNull(removedRecord);
+    assertTrue(removedRecord != null);
     assertFalse(records.containsKey(dkey));
 
     // test clear
