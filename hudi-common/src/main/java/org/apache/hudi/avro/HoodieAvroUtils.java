@@ -425,9 +425,6 @@ public class HoodieAvroUtils {
   /**
    * This method converts values for fields with certain Avro/Parquet data types that require special handling.
    *
-   * Logical Date Type is converted to actual Date value instead of Epoch Integer which is how it is
-   * represented/stored in parquet.
-   *
    * @param fieldSchema avro field schema
    * @param fieldValue avro field value
    * @return field value either converted (for certain data types) or as it is.
@@ -439,15 +436,31 @@ public class HoodieAvroUtils {
 
     if (fieldSchema.getType() == Schema.Type.UNION) {
       for (Schema schema : fieldSchema.getTypes()) {
-        if (schema.getLogicalType() == LogicalTypes.date() || schema.getLogicalType() instanceof LogicalTypes.Decimal) {
-          return convertValueForSpecificDataTypes(schema, fieldValue);
+        if (schema.getType() != Schema.Type.NULL) {
+          return convertValueForAvroLogicalTypes(schema, fieldValue);
         }
       }
-    } else if (fieldSchema.getLogicalType() == LogicalTypes.date()) {
-      // special handle for Logical Date type
+    }
+    return convertValueForAvroLogicalTypes(fieldSchema, fieldValue);
+  }
+
+  /**
+   * This method converts values for fields with certain Avro Logical data types that require special handling.
+   *
+   * Logical Date Type is converted to actual Date value instead of Epoch Integer which is how it is
+   * represented/stored in parquet.
+   *
+   * Decimal Data Type is converted to actual decimal value instead of bytes/fixed which is how it is
+   * represented/stored in parquet.
+   *
+   * @param fieldSchema avro field schema
+   * @param fieldValue avro field value
+   * @return field value either converted (for certain data types) or as it is.
+   */
+  private static Object convertValueForAvroLogicalTypes(Schema fieldSchema, Object fieldValue) {
+    if (fieldSchema.getLogicalType() == LogicalTypes.date()) {
       return LocalDate.ofEpochDay(Long.parseLong(fieldValue.toString()));
     } else if (fieldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
-      // special handle for Logical Decimal type
       Decimal dc = (Decimal) fieldSchema.getLogicalType();
       DecimalConversion decimalConversion = new DecimalConversion();
       if (fieldSchema.getType() == Schema.Type.FIXED) {

@@ -80,15 +80,20 @@ public class TestDataSourceUtils {
   public void testAvroRecordsFieldConversion() {
     // There are fields event_date1, event_date2, event_date3 with logical type as Date. event_date1 & event_date3 are
     // of UNION schema type, which is a union of null and date type in different orders. event_date2 is non-union
-    // date type
+    // date type. event_cost1, event_cost2, event3 are decimal logical types with UNION schema, which is similar to
+    // the event_date.
     String avroSchemaString = "{\"type\": \"record\"," + "\"name\": \"events\"," + "\"fields\": [ "
         + "{\"name\": \"event_date1\", \"type\" : [{\"type\" : \"int\", \"logicalType\" : \"date\"}, \"null\"]},"
         + "{\"name\": \"event_date2\", \"type\" : {\"type\": \"int\", \"logicalType\" : \"date\"}},"
         + "{\"name\": \"event_date3\", \"type\" : [\"null\", {\"type\" : \"int\", \"logicalType\" : \"date\"}]},"
         + "{\"name\": \"event_name\", \"type\": \"string\"},"
         + "{\"name\": \"event_organizer\", \"type\": \"string\"},"
-        + "{\"name\": \"event_cost\", \"type\": "
-        + "{\"type\": \"fixed\", \"name\": \"dc\", \"size\": 5, \"logicalType\": \"decimal\", \"precision\": 10, \"scale\": 6}}"
+        + "{\"name\": \"event_cost1\", \"type\": "
+        + "[{\"type\": \"fixed\", \"name\": \"dc\", \"size\": 5, \"logicalType\": \"decimal\", \"precision\": 10, \"scale\": 6}, \"null\"]},"
+        + "{\"name\": \"event_cost2\", \"type\": "
+        + "{\"type\": \"fixed\", \"name\": \"ef\", \"size\": 5, \"logicalType\": \"decimal\", \"precision\": 10, \"scale\": 6}},"
+        + "{\"name\": \"event_cost3\", \"type\": "
+        + "[\"null\", {\"type\": \"fixed\", \"name\": \"fg\", \"size\": 5, \"logicalType\": \"decimal\", \"precision\": 10, \"scale\": 6}]}"
         + "]}";
 
     Schema avroSchema = new Schema.Parser().parse(avroSchemaString);
@@ -99,11 +104,13 @@ public class TestDataSourceUtils {
     record.put("event_name", "Hudi Meetup");
     record.put("event_organizer", "Hudi PMC");
 
-    BigDecimal bigDecimal = new BigDecimal("0.184331");
-    Schema decimalSchema = avroSchema.getField("event_cost").schema();
+    BigDecimal bigDecimal = new BigDecimal("123.184331");
+    Schema decimalSchema = avroSchema.getField("event_cost1").schema().getTypes().get(0);
     Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
     GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
-    record.put("event_cost", genericFixed);
+    record.put("event_cost1", genericFixed);
+    record.put("event_cost2", genericFixed);
+    record.put("event_cost3", genericFixed);
 
     assertEquals(LocalDate.ofEpochDay(18000).toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_date1",
         true));
@@ -113,7 +120,9 @@ public class TestDataSourceUtils {
         true));
     assertEquals("Hudi Meetup", HoodieAvroUtils.getNestedFieldValAsString(record, "event_name", true));
     assertEquals("Hudi PMC", HoodieAvroUtils.getNestedFieldValAsString(record, "event_organizer", true));
-    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost", true));
+    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost1", true));
+    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost2", true));
+    assertEquals(bigDecimal.toString(), HoodieAvroUtils.getNestedFieldValAsString(record, "event_cost3", true));
   }
 
   @Test
