@@ -60,7 +60,7 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
   public static final String WRITESTATUS_FAILURE_FRACTION_PROP = "hoodie.memory.writestatus.failure.fraction";
   // Default is 10%. If set to 100%, with lot of failures, this can cause memory pressure, cause OOMs and
   // mask actual data errors.
-  public static final double DEFAULT_WRITESTATUS_FAILURE_FRACTION = 0.1;
+  public static final double DEFAULT_WRITESTATUS_FAILURE_FRACTION = 1.0;
 
   private HoodieMemoryConfig(Properties props) {
     super(props);

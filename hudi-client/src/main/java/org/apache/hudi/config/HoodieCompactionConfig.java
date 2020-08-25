@@ -57,7 +57,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   // Upsert uses this file size to compact new data onto existing files..
   public static final String PARQUET_SMALL_FILE_LIMIT_BYTES = "hoodie.parquet.small.file.limit";
   // By default, treat any file <= 100MB as a small file.
-  public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = String.valueOf(104857600);
+  public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = String.valueOf(0);
   // Hudi will use the previous commit to calculate the estimated record size by totalBytesWritten/totalRecordsWritten.
   // If the previous commit is too small to make an accurate estimation, Hudi will search commits in the reverse order,
   // until find a commit has totalBytesWritten larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * RECORD_SIZE_ESTIMATION_THRESHOLD)
@@ -110,9 +110,9 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_INCREMENTAL_CLEANER = "true";
   private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "5";
   private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
-  private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "10";
-  private static final String DEFAULT_MAX_COMMITS_TO_KEEP = "30";
-  private static final String DEFAULT_MIN_COMMITS_TO_KEEP = "20";
+  private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "24";
+  private static final String DEFAULT_MAX_COMMITS_TO_KEEP = "128";
+  private static final String DEFAULT_MIN_COMMITS_TO_KEEP = "96";
   private static final String DEFAULT_COMMITS_ARCHIVAL_BATCH_SIZE = String.valueOf(10);
   private static final String DEFAULT_CLEANER_BOOTSTRAP_BASE_FILE_ENABLED = "false";
   public static final String TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP =
