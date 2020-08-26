@@ -32,6 +32,9 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Unit test for {@link GenericRecordFullPayloadGenerator} and {@link GenericRecordPartialPayloadGenerator}.
+ */
 public class TestGenericRecordPayloadGenerator {
 
   private static final String SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH = "/docker/demo/config/test-suite/source.avsc";

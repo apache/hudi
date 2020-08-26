@@ -28,6 +28,9 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
+/**
+ * A utility class for testing purpose.
+ */
 public class TestUtils {
 
   /**
@@ -45,6 +48,15 @@ public class TestUtils {
     return dataGenerator.generateGenericRecords(numRecords);
   }
 
+  /**
+   * Method helps to create avro files and save it to file.
+   *
+   * @param jsc               Java Spark Context jsc.
+   * @param sparkSession      Spark Session, the entry point to programming Spark with the Dataset and DataFrame API.
+   * @param basePath          The basePath where files are written.
+   * @param numFiles          The number of files to create.
+   * @param numRecordsPerFile The number of records per file.
+   */
   public static void createAvroFiles(JavaSparkContext jsc, SparkSession sparkSession, String basePath, int numFiles,
       int numRecordsPerFile) {
     Schema schema = HoodieTestDataGenerator.AVRO_SCHEMA;
