@@ -355,19 +355,37 @@
           <nav class="toc">
             <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
             <ul class="toc__menu">
-  <li><a href="#设置spark-shell">设置spark-shell</a></li>
-  <li><a href="#inserts">插入数据</a></li>
-  <li><a href="#query">查询数据</a></li>
-  <li><a href="#updates">更新数据</a></li>
-  <li><a href="#增量查询">增量查询</a></li>
-  <li><a href="#特定时间点查询">特定时间点查询</a></li>
-  <li><a href="#从这开始下一步">从这开始下一步？</a></li>
+  <li><a href="#scala-示例">Scala 示例</a>
+    <ul>
+      <li><a href="#设置spark-shell">设置spark-shell</a></li>
+      <li><a href="#inserts">插入数据</a></li>
+      <li><a href="#query">查询数据</a></li>
+      <li><a href="#updates">更新数据</a></li>
+      <li><a href="#增量查询">增量查询</a></li>
+      <li><a href="#特定时间点查询">特定时间点查询</a></li>
+      <li><a href="#deletes">删除数据</a></li>
+    </ul>
+  </li>
+  <li><a href="#pyspark-示例">Pyspark 示例</a>
+    <ul>
+      <li><a href="#设置spark-shell-1">设置spark-shell</a></li>
+      <li><a href="#inserts">插入数据</a></li>
+      <li><a href="#query">查询数据</a></li>
+      <li><a href="#updates">更新数据</a></li>
+      <li><a href="#增量查询-1">增量查询</a></li>
+      <li><a href="#特定时间点查询-1">特定时间点查询</a></li>
+      <li><a href="#deletes">删除数据</a></li>
+      <li><a href="#从这开始下一步">从这开始下一步？</a></li>
+    </ul>
+  </li>
 </ul>
           </nav>
         </aside>
         
         <p>本指南通过使用spark-shell简要介绍了Hudi功能。使用Spark数据源，我们将通过代码段展示如何插入和更新Hudi的默认存储类型数据集：
 <a href="/cn/docs/0.5.3-concepts.html#copy-on-write-storage">写时复制</a>。每次写操作之后，我们还将展示如何读取快照和增量数据。</p>
+
+<h1 id="scala-示例">Scala 示例</h1>
 
 <h2 id="设置spark-shell">设置spark-shell</h2>
 <p>Hudi适用于Spark-2.x版本。您可以按照<a href="https://spark.apache.org/downloads.html">此处</a>的说明设置spark。
@@ -501,6 +519,245 @@
     <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
 <span class="nv">incViewDF</span><span class="o">.</span><span class="py">registerTempTable</span><span class="o">(</span><span class="s">"hudi_incr_table"</span><span class="o">)</span>
 <span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare &gt; 20.0"</span><span class="o">).</span><span class="py">show</span><span class="o">()</span>
+</code></pre></div></div>
+
+<h2 id="deletes">删除数据</h2>
+<p>删除传入的 HoodieKeys 的记录。</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// spark-shell
+// 获取记录总数
+</span><span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select uuid, partitionpath from hudi_trips_snapshot"</span><span class="o">).</span><span class="py">count</span><span class="o">()</span>
+<span class="c1">// 拿到两条将要删除的数据
+</span><span class="k">val</span> <span class="nv">ds</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select uuid, partitionpath from hudi_trips_snapshot"</span><span class="o">).</span><span class="py">limit</span><span class="o">(</span><span class="mi">2</span><span class="o">)</span>
+
+<span class="c1">// 执行删除
+</span><span class="k">val</span> <span class="nv">deletes</span> <span class="k">=</span> <span class="nv">dataGen</span><span class="o">.</span><span class="py">generateDeletes</span><span class="o">(</span><span class="nv">ds</span><span class="o">.</span><span class="py">collectAsList</span><span class="o">())</span>
+<span class="k">val</span> <span class="nv">df</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">read</span><span class="o">.</span><span class="py">json</span><span class="o">(</span><span class="nv">spark</span><span class="o">.</span><span class="py">sparkContext</span><span class="o">.</span><span class="py">parallelize</span><span class="o">(</span><span class="n">deletes</span><span class="o">,</span> <span class="mi">2</span><span class="o">))</span>
+
+<span class="nv">df</span><span class="o">.</span><span class="py">write</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+  <span class="nf">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">OPERATION_OPT_KEY</span><span class="o">,</span><span class="s">"delete"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">).</span>
+  <span class="nf">mode</span><span class="o">(</span><span class="nc">Append</span><span class="o">).</span>
+  <span class="nf">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">)</span>
+
+<span class="c1">// 向之前一样运行查询
+</span><span class="k">val</span> <span class="nv">roAfterDeleteViewDF</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span>
+  <span class="n">read</span><span class="o">.</span>
+  <span class="nf">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+  <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">)</span>
+
+<span class="nv">roAfterDeleteViewDF</span><span class="o">.</span><span class="py">registerTempTable</span><span class="o">(</span><span class="s">"hudi_trips_snapshot"</span><span class="o">)</span>
+<span class="c1">// 应返回 (total - 2) 条记录
+</span><span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select uuid, partitionpath from hudi_trips_snapshot"</span><span class="o">).</span><span class="py">count</span><span class="o">()</span>
+</code></pre></div></div>
+<p>注意: 删除操作只支持 <code class="highlighter-rouge">Append</code> 模式。</p>
+
+<h1 id="pyspark-示例">Pyspark 示例</h1>
+
+<h2 id="设置spark-shell-1">设置spark-shell</h2>
+<p>Hudi适用于Spark-2.x版本。您可以按照<a href="https://spark.apache.org/downloads.html">此处</a>的说明设置spark。
+在提取的目录中，使用spark-shell运行Hudi：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># pyspark
+</span><span class="n">export</span> <span class="n">PYSPARK_PYTHON</span><span class="o">=</span><span class="err">$</span><span class="p">(</span><span class="n">which</span> <span class="n">python3</span><span class="p">)</span>
+<span class="n">spark</span><span class="o">-</span><span class="mf">2.4.4</span><span class="o">-</span><span class="nb">bin</span><span class="o">-</span><span class="n">hadoop2</span><span class="mf">.7</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">pyspark</span> \
+  <span class="o">--</span><span class="n">packages</span> <span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="p">:</span><span class="n">hudi</span><span class="o">-</span><span class="n">spark</span><span class="o">-</span><span class="n">bundle_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">0.5.3</span><span class="p">,</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">spark</span><span class="p">:</span><span class="n">spark</span><span class="o">-</span><span class="n">avro_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">2.4.4</span> \
+  <span class="o">--</span><span class="n">conf</span> <span class="s">'spark.serializer=org.apache.spark.serializer.KryoSerializer'</span>
+</code></pre></div></div>
+
+<div class="notice--info">
+  <h4>请注意以下事项: </h4>
+<ul>
+  <li>需要通过 --packages 指定 spark-avro, 因为默认情况下 spark-shell 不包含该模块</li>
+  <li>spark-avro 和 spark 的版本必须匹配 (上面两个我们都使用了2.4.4)</li>
+  <li>我们使用了基于 scala 2.11 构建的 hudi-spark-bundle, 因为使用的 spark-avro 也是基于 scala 2.11的. 
+         如果使用了 spark-avro_2.12, 相应的, 需要使用 hudi-spark-bundle_2.12. </li>
+</ul>
+</div>
+
+<p>设置表名、基本路径和数据生成器来为本指南生成记录。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># pyspark
+</span><span class="n">tableName</span> <span class="o">=</span> <span class="s">"hudi_trips_cow"</span>
+<span class="n">basePath</span> <span class="o">=</span> <span class="s">"file:///tmp/hudi_trips_cow"</span>
+<span class="n">dataGen</span> <span class="o">=</span> <span class="n">sc</span><span class="o">.</span><span class="n">_jvm</span><span class="o">.</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="o">.</span><span class="n">QuickstartUtils</span><span class="o">.</span><span class="n">DataGenerator</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p class="notice--info"><a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50">数据生成器</a>
+可以基于<a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57">行程样本模式</a>
+生成插入和更新的样本。</p>
+
+<h2 id="inserts">插入数据</h2>
+
+<p>生成一些新的行程样本，将其加载到DataFrame中，然后将DataFrame写入Hudi数据集中，如下所示。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># pyspark
+</span><span class="n">inserts</span> <span class="o">=</span> <span class="n">sc</span><span class="o">.</span><span class="n">_jvm</span><span class="o">.</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="o">.</span><span class="n">QuickstartUtils</span><span class="o">.</span><span class="n">convertToStringList</span><span class="p">(</span><span class="n">dataGen</span><span class="o">.</span><span class="n">generateInserts</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">json</span><span class="p">(</span><span class="n">spark</span><span class="o">.</span><span class="n">sparkContext</span><span class="o">.</span><span class="n">parallelize</span><span class="p">(</span><span class="n">inserts</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+
+<span class="n">hudi_options</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="s">'hoodie.table.name'</span><span class="p">:</span> <span class="n">tableName</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.write.recordkey.field'</span><span class="p">:</span> <span class="s">'uuid'</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.write.partitionpath.field'</span><span class="p">:</span> <span class="s">'partitionpath'</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.write.table.name'</span><span class="p">:</span> <span class="n">tableName</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.write.operation'</span><span class="p">:</span> <span class="s">'insert'</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.write.precombine.field'</span><span class="p">:</span> <span class="s">'ts'</span><span class="p">,</span>
+  <span class="s">'hoodie.upsert.shuffle.parallelism'</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> 
+  <span class="s">'hoodie.insert.shuffle.parallelism'</span><span class="p">:</span> <span class="mi">2</span>
+<span class="p">}</span>
+
+<span class="n">df</span><span class="o">.</span><span class="n">write</span><span class="o">.</span><span class="nb">format</span><span class="p">(</span><span class="s">"hudi"</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">options</span><span class="p">(</span><span class="o">**</span><span class="n">hudi_options</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">mode</span><span class="p">(</span><span class="s">"overwrite"</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">save</span><span class="p">(</span><span class="n">basePath</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p class="notice--info"><code class="highlighter-rouge">mode(Overwrite)</code> 覆盖并重新创建数据集(如果已经存在)。
+您可以检查在<code class="highlighter-rouge">/tmp/hudi_cow_table/&lt;region&gt;/&lt;country&gt;/&lt;city&gt;/</code>下生成的数据。我们提供了一个记录键
+(<a href="#sample-schema">schema</a>中的<code class="highlighter-rouge">uuid</code>)，分区字段(<code class="highlighter-rouge">region/country/city</code>）和组合逻辑(<a href="#sample-schema">schema</a>中的<code class="highlighter-rouge">ts</code>)
+以确保行程记录在每个分区中都是唯一的。更多信息请参阅
+<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi">对Hudi中的数据进行建模</a>，
+有关将数据提取到Hudi中的方法的信息，请参阅<a href="/cn/docs/0.5.3-writing_data.html">写入Hudi数据集</a>。
+这里我们使用默认的写操作：<code class="highlighter-rouge">插入更新</code>。 如果您的工作负载没有<code class="highlighter-rouge">更新</code>，也可以使用更快的<code class="highlighter-rouge">插入</code>或<code class="highlighter-rouge">批量插入</code>操作。
+想了解更多信息，请参阅<a href="/cn/docs/0.5.3-writing_data.html#write-operations">写操作</a></p>
+
+<h2 id="query">查询数据</h2>
+
+<p>将数据文件加载到DataFrame中。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># pyspark
+</span><span class="n">tripsSnapshotDF</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span> \
+  <span class="n">read</span><span class="o">.</span> \
+  <span class="nb">format</span><span class="p">(</span><span class="s">"hudi"</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">load</span><span class="p">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="p">)</span>
+<span class="c1"># load(basePath) use "/partitionKey=partitionValue" folder structure for Spark auto partition discovery
+</span>
+<span class="n">tripsSnapshotDF</span><span class="o">.</span><span class="n">createOrReplaceTempView</span><span class="p">(</span><span class="s">"hudi_trips_snapshot"</span><span class="p">)</span>
+
+<span class="n">spark</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s">"select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare &gt; 20.0"</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="n">spark</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s">"select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot"</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p class="notice--info">该查询提供已提取数据的读取优化视图。由于我们的分区路径(<code class="highlighter-rouge">region/country/city</code>)是嵌套的3个级别
+从基本路径开始，我们使用了<code class="highlighter-rouge">load(basePath + "/*/*/*/*")</code>。
+有关支持的所有存储类型和视图的更多信息，请参考<a href="/cn/docs/0.5.3-concepts.html#storage-types--views">存储类型和视图</a>。</p>
+
+<h2 id="updates">更新数据</h2>
+
+<p>这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到DataFrame中并将DataFrame写入hudi数据集。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># pyspark
+</span><span class="n">updates</span> <span class="o">=</span> <span class="n">sc</span><span class="o">.</span><span class="n">_jvm</span><span class="o">.</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="o">.</span><span class="n">QuickstartUtils</span><span class="o">.</span><span class="n">convertToStringList</span><span class="p">(</span><span class="n">dataGen</span><span class="o">.</span><span class="n">generateUpdates</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="n">json</span><span class="p">(</span><span class="n">spark</span><span class="o">.</span><span class="n">sparkContext</span><span class="o">.</span><span class="n">parallelize</span><span class="p">(</span><span class="n">updates</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+<span class="n">df</span><span class="o">.</span><span class="n">write</span><span class="o">.</span><span class="nb">format</span><span class="p">(</span><span class="s">"hudi"</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">options</span><span class="p">(</span><span class="o">**</span><span class="n">hudi_options</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">mode</span><span class="p">(</span><span class="s">"append"</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">save</span><span class="p">(</span><span class="n">basePath</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p class="notice--info">注意，保存模式现在为<code class="highlighter-rouge">追加</code>。通常，除非您是第一次尝试创建数据集，否则请始终使用追加模式。
+<a href="#query">查询</a>现在再次查询数据将显示更新的行程。每个写操作都会生成一个新的由时间戳表示的<a href="/cn/docs/0.5.3-concepts.html">commit</a>
+。在之前提交的相同的<code class="highlighter-rouge">_hoodie_record_key</code>中寻找<code class="highlighter-rouge">_hoodie_commit_time</code>, <code class="highlighter-rouge">rider</code>, <code class="highlighter-rouge">driver</code>字段变更。</p>
+
+<h2 id="增量查询-1">增量查询</h2>
+
+<p>Hudi还提供了获取给定提交时间戳以来已更改的记录流的功能。
+这可以通过使用Hudi的增量视图并提供所需更改的开始时间来实现。
+如果我们需要给定提交之后的所有更改(这是常见的情况)，则无需指定结束时间。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># pyspark
+# 加载数据
+</span><span class="n">spark</span><span class="o">.</span> \
+  <span class="n">read</span><span class="o">.</span> \
+  <span class="nb">format</span><span class="p">(</span><span class="s">"hudi"</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">load</span><span class="p">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">createOrReplaceTempView</span><span class="p">(</span><span class="s">"hudi_trips_snapshot"</span><span class="p">)</span>
+
+<span class="n">commits</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">spark</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s">"select distinct(_hoodie_commit_time) as commitTime from  hudi_trips_snapshot order by commitTime"</span><span class="p">)</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">50</span><span class="p">)</span><span class="o">.</span><span class="n">collect</span><span class="p">()))</span>
+<span class="n">beginTime</span> <span class="o">=</span> <span class="n">commits</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">commits</span><span class="p">)</span> <span class="o">-</span> <span class="mi">2</span><span class="p">]</span> <span class="c1"># commit time we are interested in
+</span>
+<span class="c1"># 增量的查询数据
+</span><span class="n">incremental_read_options</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="s">'hoodie.datasource.query.type'</span><span class="p">:</span> <span class="s">'incremental'</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.read.begin.instanttime'</span><span class="p">:</span> <span class="n">beginTime</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">tripsIncrementalDF</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="nb">format</span><span class="p">(</span><span class="s">"hudi"</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">options</span><span class="p">(</span><span class="o">**</span><span class="n">incremental_read_options</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">load</span><span class="p">(</span><span class="n">basePath</span><span class="p">)</span>
+<span class="n">tripsIncrementalDF</span><span class="o">.</span><span class="n">createOrReplaceTempView</span><span class="p">(</span><span class="s">"hudi_trips_incremental"</span><span class="p">)</span>
+
+<span class="n">spark</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s">"select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare &gt; 20.0"</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p class="notice--info">这将提供在开始时间提交之后发生的所有更改，其中包含票价大于20.0的过滤器。关于此功能的独特之处在于，它现在使您可以在批量数据上创作流式管道。</p>
+
+<h2 id="特定时间点查询-1">特定时间点查询</h2>
+
+<p>让我们看一下如何查询特定时间的数据。可以通过将结束时间指向特定的提交时间，将开始时间指向”000”(表示最早的提交时间)来表示特定时间。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># pyspark
+</span><span class="n">beginTime</span> <span class="o">=</span> <span class="s">"000"</span> <span class="c1"># 代表所有大于该时间的 commits.
+</span><span class="n">endTime</span> <span class="o">=</span> <span class="n">commits</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">commits</span><span class="p">)</span> <span class="o">-</span> <span class="mi">2</span><span class="p">]</span> <span class="c1"># 我们感兴趣的提交时间
+</span>
+<span class="c1"># 特定时间查询
+</span><span class="n">point_in_time_read_options</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="s">'hoodie.datasource.query.type'</span><span class="p">:</span> <span class="s">'incremental'</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.read.end.instanttime'</span><span class="p">:</span> <span class="n">endTime</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.read.begin.instanttime'</span><span class="p">:</span> <span class="n">beginTime</span>
+<span class="p">}</span>
+
+<span class="n">tripsPointInTimeDF</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">read</span><span class="o">.</span><span class="nb">format</span><span class="p">(</span><span class="s">"hudi"</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">options</span><span class="p">(</span><span class="o">**</span><span class="n">point_in_time_read_options</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">load</span><span class="p">(</span><span class="n">basePath</span><span class="p">)</span>
+
+<span class="n">tripsPointInTimeDF</span><span class="o">.</span><span class="n">createOrReplaceTempView</span><span class="p">(</span><span class="s">"hudi_trips_point_in_time"</span><span class="p">)</span>
+<span class="n">spark</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s">"select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hudi_trips_point_in_time where fare &gt; 20.0"</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</code></pre></div></div>
+
+<h2 id="deletes">删除数据</h2>
+<p>删除传入的 HoodieKeys 的记录。</p>
+
+<p>注意: 删除操作只支持 <code class="highlighter-rouge">Append</code> 模式。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># pyspark
+# 获取记录总数
+</span><span class="n">spark</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s">"select uuid, partitionPath from hudi_trips_snapshot"</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+<span class="c1"># 拿到两条将被删除的记录
+</span><span class="n">ds</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s">"select uuid, partitionPath from hudi_trips_snapshot"</span><span class="p">)</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="c1"># 执行删除
+</span><span class="n">hudi_delete_options</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="s">'hoodie.table.name'</span><span class="p">:</span> <span class="n">tableName</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.write.recordkey.field'</span><span class="p">:</span> <span class="s">'uuid'</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.write.partitionpath.field'</span><span class="p">:</span> <span class="s">'partitionpath'</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.write.table.name'</span><span class="p">:</span> <span class="n">tableName</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.write.operation'</span><span class="p">:</span> <span class="s">'delete'</span><span class="p">,</span>
+  <span class="s">'hoodie.datasource.write.precombine.field'</span><span class="p">:</span> <span class="s">'ts'</span><span class="p">,</span>
+  <span class="s">'hoodie.upsert.shuffle.parallelism'</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> 
+  <span class="s">'hoodie.insert.shuffle.parallelism'</span><span class="p">:</span> <span class="mi">2</span>
+<span class="p">}</span>
+
+<span class="kn">from</span> <span class="nn">pyspark.sql.functions</span> <span class="kn">import</span> <span class="n">lit</span>
+<span class="n">deletes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">ds</span><span class="o">.</span><span class="n">collect</span><span class="p">()))</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">sparkContext</span><span class="o">.</span><span class="n">parallelize</span><span class="p">(</span><span class="n">deletes</span><span class="p">)</span><span class="o">.</span><span class="n">toDF</span><span class="p">([</span><span class="s">'uuid'</span><span class="p">,</span> <span class="s">'partitionpath'</span><span class="p">])</span><span class="o">.</span><span class="n">withColumn</span><span class="p">(</span><span class="s">'ts'</span><span class="p">,</span> <span class="n">lit</span><span class="p">(</span><span class="mf">0.0</span><span class="p">))</span>
+<span class="n">df</span><span class="o">.</span><span class="n">write</span><span class="o">.</span><span class="nb">format</span><span class="p">(</span><span class="s">"hudi"</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">options</span><span class="p">(</span><span class="o">**</span><span class="n">hudi_delete_options</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">mode</span><span class="p">(</span><span class="s">"append"</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">save</span><span class="p">(</span><span class="n">basePath</span><span class="p">)</span>
+
+<span class="c1"># 向之前一样运行查询
+</span><span class="n">roAfterDeleteViewDF</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span> \
+  <span class="n">read</span><span class="o">.</span> \
+  <span class="nb">format</span><span class="p">(</span><span class="s">"hudi"</span><span class="p">)</span><span class="o">.</span> \
+  <span class="n">load</span><span class="p">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="p">)</span> 
+<span class="n">roAfterDeleteViewDF</span><span class="o">.</span><span class="n">registerTempTable</span><span class="p">(</span><span class="s">"hudi_trips_snapshot"</span><span class="p">)</span>
+<span class="c1"># 应返回 (total - 2) 条记录
+</span><span class="n">spark</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s">"select uuid, partitionPath from hudi_trips_snapshot"</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
 </code></pre></div></div>
 
 <h2 id="从这开始下一步">从这开始下一步？</h2>
