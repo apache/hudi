@@ -30,7 +30,6 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
-//import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -189,5 +188,23 @@ public class HoodieHiveJDBCClient extends HoodieHiveClient {
       hiveJdbcUrl = hiveJdbcUrl + "/";
     }
     return hiveJdbcUrl + (urlAppend == null ? "" : urlAppend);
+  }
+
+  @Override
+  public void createHiveDatabase(String dbName) {
+    LOG.info("Creating database " + dbName);
+    updateHiveSQLUsingJDBC("CREATE DATABASE IF NOT EXISTS " + dbName);
+  }
+
+  @Override
+  public void dropHiveDatabase(String dbName) {
+    LOG.info("Dropping database " + dbName);
+    updateHiveSQLUsingJDBC("DROP DATABASE IF EXISTS " + dbName);
+  }
+
+  @Override
+  public void dropHiveTable(String dbName, String tableName) {
+    LOG.info("Dropping table " + tableName);
+    updateHiveSQLUsingJDBC("DROP TABLE IF EXISTS " + dbName + "." + tableName);
   }
 }

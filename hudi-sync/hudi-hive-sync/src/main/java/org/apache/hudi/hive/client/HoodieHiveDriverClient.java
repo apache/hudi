@@ -156,4 +156,22 @@ public class HoodieHiveDriverClient extends HoodieHiveClient {
     }
     return responses;
   }
+
+  @Override
+  public void createHiveDatabase(String dbName) {
+    LOG.info("Creating database " + dbName);
+    runHiveSQLUsingHiveDriver("CREATE DATABASE IF NOT EXISTS " + dbName);
+  }
+
+  @Override
+  public void dropHiveDatabase(String dbName) {
+    LOG.info("Dropping database " + dbName);
+    runHiveSQLUsingHiveDriver("DROP DATABASE IF EXISTS " + dbName);
+  }
+
+  @Override
+  public void dropHiveTable(String dbName, String tableName) {
+    LOG.info("Dropping table " + tableName);
+    runHiveSQLUsingHiveDriver("DROP TABLE IF EXISTS " + dbName + "." + tableName);
+  }
 }

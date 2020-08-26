@@ -32,9 +32,11 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.TableType;
+import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
@@ -94,7 +96,6 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       LOG.info("Creating hive connection " + cfg.jdbcUrl);
       createHiveConnection();
     }
-
     try {
       this.client = Hive.get(configuration).getMSC();
     } catch (MetaException | HiveException e) {
@@ -466,5 +467,42 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       hiveJdbcUrl = hiveJdbcUrl + "/";
     }
     return hiveJdbcUrl + (urlAppend == null ? "" : urlAppend);
+  }
+
+  public void createHiveDatabase(String dbName) throws HiveException {
+    LOG.info("Creating database " + dbName);
+    try {
+      Hive.get(configuration).createDatabase(new Database(dbName, "", null, null), true);
+    } catch (AlreadyExistsException e) {
+      LOG.warn("Database " + dbName + " already exists");
+    }
+  }
+
+  public void dropHiveDatabase(String dbName) throws TException {
+    LOG.info("Dropping database " + dbName);
+    try {
+      client.dropDatabase(dbName);
+    } catch (NoSuchObjectException e) {
+      LOG.warn("Database " + dbName + " does not exist. No need to drop it");
+    }
+  }
+
+  public void dropHiveTable(String dbName, String tableName) throws TException {
+    LOG.info("Dropping table " + tableName);
+    try {
+      client.dropTable(dbName, tableName);
+    } catch (NoSuchObjectException e) {
+      LOG.warn("Table " + tableName + " does not exist. No need to drop it");
+    }
+  }
+
+  public void updatePartitionLocation(String dbName, String tableName, String changedPartition, String partitionPath) {
+    try {
+      Partition newPartition = client.getPartition(dbName, tableName, changedPartition);
+      newPartition.getSd().setLocation(partitionPath);
+      client.alter_partition(dbName, tableName, newPartition);
+    } catch (TException e) {
+      throw new HoodieHiveSyncException("Failed to change partition for " + tableName, e);
+    }
   }
 }

@@ -53,10 +53,12 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.thrift.TException;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
@@ -92,7 +94,7 @@ public class HiveTestUtil {
   public static FileSystem fileSystem;
   private static Set<String> createdTablesSet = new HashSet<>();
 
-  public static void setUp() throws IOException, InterruptedException {
+  public static void setUp() throws IOException, InterruptedException, TException, HiveException {
     if (dfsCluster == null) {
       HdfsTestService service = new HdfsTestService();
       dfsCluster = service.start(true);
@@ -124,18 +126,18 @@ public class HiveTestUtil {
     clear();
   }
 
-  public static void clear() throws IOException {
+  public static void clear() throws IOException, TException, HiveException {
     fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
     HoodieTableMetaClient.initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
         hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
 
     HoodieHiveClient client = HiveSyncTool.loadHoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), fileSystem);
     for (String tableName : createdTablesSet) {
-      client.updateHiveSQL("drop table if exists " + tableName);
+      client.dropHiveTable(tableName.split("\\.")[0], tableName.split("\\.")[1]);
     }
     createdTablesSet.clear();
-    client.updateHiveSQL("drop database if exists " + hiveSyncConfig.databaseName);
-    client.updateHiveSQL("create database " + hiveSyncConfig.databaseName);
+    client.dropHiveDatabase(hiveSyncConfig.databaseName);
+    client.createHiveDatabase(hiveSyncConfig.databaseName);
   }
 
   public static HiveConf getHiveConf() {

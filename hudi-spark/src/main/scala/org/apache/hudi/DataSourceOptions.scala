@@ -333,6 +333,7 @@ object DataSourceWriteOptions {
   def translateUseJDBCToHiveClientClass(optParams: Map[String, String]) : Map[String, String] = {
     if (optParams.contains(HIVE_USE_JDBC_OPT_KEY) && !optParams.contains(HIVE_CLIENT_CLASS_OPT_KEY)) {
       log.warn(HIVE_USE_JDBC_OPT_KEY + " is deprecated and will be removed in a later release; Please use " + HIVE_CLIENT_CLASS_OPT_KEY)
+      // The following logic is to make useJDBC have the same code logic as 0.6.0 and its previous version
       if (optParams(HIVE_USE_JDBC_OPT_KEY).equals("true")) {
         optParams ++ Map(HIVE_CLIENT_CLASS_OPT_KEY -> DEFAULT_HIVE_CLIENT_CLASS_OPT_VAL)
       } else if (optParams(HIVE_USE_JDBC_OPT_KEY).equals("false")) {

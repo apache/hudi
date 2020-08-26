@@ -31,10 +31,12 @@ import org.apache.hudi.hive.util.HiveSchemaUtil;
 
 import org.apache.hadoop.hive.metastore.MetaStoreUtils;
 import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.apache.parquet.schema.Types;
+import org.apache.thrift.TException;
 import org.joda.time.DateTime;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -71,12 +73,12 @@ public class TestHiveSyncTool {
   }
 
   @BeforeEach
-  public void setUp() throws IOException, InterruptedException {
+  public void setUp() throws IOException, InterruptedException, TException, HiveException {
     HiveTestUtil.setUp();
   }
 
   @AfterEach
-  public void teardown() throws IOException {
+  public void teardown() throws IOException, TException, HiveException {
     HiveTestUtil.clear();
   }
 
@@ -270,8 +272,8 @@ public class TestHiveSyncTool {
     // Alter partitions
     // Manually change a hive partition location to check if the sync will detect
     // it and generage a partition update event for it.
-    hiveClient.updateHiveSQL("ALTER TABLE `" + HiveTestUtil.hiveSyncConfig.tableName
-        + "` PARTITION (`datestr`='2050-01-01') SET LOCATION '/some/new/location'");
+    hiveClient.updatePartitionLocation(HiveTestUtil.hiveSyncConfig.databaseName, HiveTestUtil.hiveSyncConfig.tableName,
+        "datestr=2050-01-01", "/some/new/location");
 
     hiveClient = HiveSyncTool.loadHoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     List<Partition> hivePartitions = hiveClient.scanTablePartitions(HiveTestUtil.hiveSyncConfig.tableName);
