@@ -30,6 +30,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
@@ -64,6 +65,9 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private String minRecordKey;
   private String maxRecordKey;
 
+  // This is private in CacheConfig so have been copied here.
+  private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
+
   public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
       SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
 
@@ -83,6 +87,10 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
           .withCompression(hfileConfig.getCompressionAlgorithm())
           .build();
+
+    conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
+    conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
+    conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY, String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
     CacheConfig cacheConfig = new CacheConfig(conf);
     this.writer = HFile.getWriterFactory(conf, cacheConfig).withPath(this.fs, this.file).withFileContext(context).create();
 

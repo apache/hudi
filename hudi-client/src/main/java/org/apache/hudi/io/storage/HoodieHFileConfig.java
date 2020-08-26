@@ -19,7 +19,9 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.io.compress.Compression;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hudi.common.bloom.BloomFilter;
 
 public class HoodieHFileConfig {
@@ -27,16 +29,36 @@ public class HoodieHFileConfig {
   private Compression.Algorithm compressionAlgorithm;
   private int blockSize;
   private long maxFileSize;
+  private boolean prefetchBlocksOnOpen;
+  private boolean cacheDataInL1;
+  private boolean dropBehindCacheCompaction;
   private Configuration hadoopConf;
   private BloomFilter bloomFilter;
 
-  public HoodieHFileConfig(Compression.Algorithm compressionAlgorithm, int blockSize, long maxFileSize,
-                           Configuration hadoopConf, BloomFilter bloomFilter) {
+  // This is private in CacheConfig so have been copied here.
+  private static boolean DROP_BEHIND_CACHE_COMPACTION_DEFAULT = true;
+
+  public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
+                           long maxFileSize, BloomFilter bloomFilter) {
+    this(hadoopConf, compressionAlgorithm, blockSize, maxFileSize, CacheConfig.DEFAULT_PREFETCH_ON_OPEN,
+        HColumnDescriptor.DEFAULT_CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION_DEFAULT, bloomFilter);
+  }
+
+  public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
+                           long maxFileSize, boolean prefetchBlocksOnOpen, boolean cacheDataInL1,
+                           boolean dropBehindCacheCompaction, BloomFilter bloomFilter) {
+    this.hadoopConf = hadoopConf;
     this.compressionAlgorithm = compressionAlgorithm;
     this.blockSize = blockSize;
     this.maxFileSize = maxFileSize;
-    this.hadoopConf = hadoopConf;
+    this.prefetchBlocksOnOpen = prefetchBlocksOnOpen;
+    this.cacheDataInL1 = cacheDataInL1;
+    this.dropBehindCacheCompaction = dropBehindCacheCompaction;
     this.bloomFilter = bloomFilter;
+  }
+
+  public Configuration getHadoopConf() {
+    return hadoopConf;
   }
 
   public Compression.Algorithm getCompressionAlgorithm() {
@@ -51,8 +73,16 @@ public class HoodieHFileConfig {
     return maxFileSize;
   }
 
-  public Configuration getHadoopConf() {
-    return hadoopConf;
+  public boolean shouldPrefetchBlocksOnOpen() {
+    return prefetchBlocksOnOpen;
+  }
+
+  public boolean shouldCacheDataInL1() {
+    return cacheDataInL1;
+  }
+
+  public boolean shouldDropBehindCacheCompaction() {
+    return dropBehindCacheCompaction;
   }
 
   public boolean useBloomFilter() {

@@ -71,8 +71,8 @@ public class HoodieFileWriterFactory {
       SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
 
     BloomFilter filter = createBloomFilter(config);
-    HoodieHFileConfig hfileConfig = new HoodieHFileConfig(config.getHFileCompressionAlgorithm(),
-        config.getHFileBlockSize(), config.getHFileMaxFileSize(), hoodieTable.getHadoopConf(), filter);
+    HoodieHFileConfig hfileConfig = new HoodieHFileConfig(hoodieTable.getHadoopConf(),
+        config.getHFileCompressionAlgorithm(), config.getHFileBlockSize(), config.getHFileMaxFileSize(), filter);
 
     return new HoodieHFileWriter<>(instantTime, path, hfileConfig, schema, sparkTaskContextSupplier);
   }

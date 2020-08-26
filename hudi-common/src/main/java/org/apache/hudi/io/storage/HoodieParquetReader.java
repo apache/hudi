@@ -79,9 +79,4 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
     // TODO Auto-generated method stub
     return 0;
   }
-
-  @Override
-  public Option getRecordByKey(String key, Schema schema) throws IOException {
-    throw new HoodieException("HoodieParquetReader does not support reading records by key");
-  }
 }

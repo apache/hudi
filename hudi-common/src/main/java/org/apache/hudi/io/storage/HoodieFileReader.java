@@ -41,7 +41,9 @@ public interface HoodieFileReader<R extends IndexedRecord> {
     return getRecordIterator(getSchema());
   }
 
-  public Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException;
+  default Option<R> getRecordByKey(String key, Schema readerSchema) throws IOException {
+    throw new UnsupportedOperationException();
+  };
 
   default Option<R> getRecordByKey(String key) throws IOException {
     return getRecordByKey(key, getSchema());
