@@ -49,18 +49,28 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   private static Logger LOG = LoggerFactory.getLogger(GenericRecordFullPayloadGenerator.class);
 
   public static final int DEFAULT_PAYLOAD_SIZE = 1024 * 10; // 10 KB
+  public static final int DEFAULT_NUM_DATE_PARTITIONS = 50;
   public static final String DEFAULT_HOODIE_IS_DELETED_COL = "_hoodie_is_deleted";
   protected final Random random = new Random();
   // The source schema used to generate a payload
   private final transient Schema baseSchema;
   // Used to validate a generic record
   private final transient GenericData genericData = new GenericData();
+  // Number of extra entries to add in a complex/collection field to achieve the desired record size
+  Map<String, Integer> extraEntriesMap = new HashMap<>();
+
+  // The number of unique dates to create
+  private int numDatePartitions = DEFAULT_NUM_DATE_PARTITIONS;
+  // Number of more bytes to add based on the estimated full record payload size and min payload size
+  private int numberOfBytesToAdd;
+  // If more elements should be packed to meet the minPayloadSize
+  private boolean shouldAddMore;
+  // How many complex fields have we visited that can help us pack more entries and increase the size of the record
+  private int numberOfComplexFields;
   // The index of partition for which records are being generated
   private int partitionIndex = 0;
   // The size of a full record where every field of a generic record created contains 1 random value
   private final int estimatedFullPayloadSize;
-  // Number of extra entries to add in a complex/collection field to achieve the desired record size
-  Map<String, Integer> extraEntriesMap = new HashMap<>();
 
   // LogicalTypes in Avro 1.8.2
   private static final String DECIMAL = "decimal";
@@ -73,6 +83,11 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
 
   public GenericRecordFullPayloadGenerator(Schema schema) {
     this(schema, DEFAULT_PAYLOAD_SIZE);
+  }
+
+  public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize, int numDatePartitions) {
+    this(schema, DEFAULT_PAYLOAD_SIZE);
+    this.numDatePartitions = numDatePartitions;
   }
 
   public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize) {
@@ -89,11 +104,6 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
 
       determineExtraEntriesRequired(numberOfComplexFields, minPayloadSize - estimatedFullPayloadSize);
     }
-  }
-
-  public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize, int partitionIndex) {
-    this(schema, minPayloadSize);
-    this.partitionIndex = partitionIndex;
   }
 
   protected static boolean isPrimitive(Schema localSchema) {
@@ -129,6 +139,15 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
    */
   public GenericRecord getNewPayload(Set<String> partitionPathFieldNames) {
     return create(baseSchema, partitionPathFieldNames);
+  }
+
+  public GenericRecord getNewPayloadWithTimestamp(String tsFieldName) {
+    return updateTimestamp(create(baseSchema, null), tsFieldName);
+  }
+
+  public GenericRecord getUpdatePayloadWithTimestamp(GenericRecord record, Set<String> blacklistFields,
+                                                     String tsFieldName) {
+    return updateTimestamp(randomize(record, blacklistFields), tsFieldName);
   }
 
   protected GenericRecord create(Schema schema, Set<String> partitionPathFieldNames) {
@@ -312,6 +331,17 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
    */
   public boolean validate(GenericRecord record) {
     return genericData.validate(baseSchema, record);
+  }
+
+  /*
+   * Generates a sequential timestamp (daily increment), and updates the timestamp field of the record.
+   * Note: When generating records, number of records to be generated must be more than numDatePartitions * parallelism,
+   * to guarantee that at least numDatePartitions are created.
+   */
+  public GenericRecord updateTimestamp(GenericRecord record, String fieldName) {
+    long delta = TimeUnit.MILLISECONDS.convert(++partitionIndex % numDatePartitions, TimeUnit.DAYS);
+    record.put(fieldName, System.currentTimeMillis() - delta);
+    return record;
   }
 
   /**
