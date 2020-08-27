@@ -19,6 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 import org.apache.hudi.keygen.SimpleKeyGenerator
@@ -136,11 +137,11 @@ object DataSourceWriteOptions {
     * Default: upsert()
     */
   val OPERATION_OPT_KEY = "hoodie.datasource.write.operation"
-  val BULK_INSERT_OPERATION_OPT_VAL = "bulk_insert"
-  val INSERT_OPERATION_OPT_VAL = "insert"
-  val UPSERT_OPERATION_OPT_VAL = "upsert"
-  val DELETE_OPERATION_OPT_VAL = "delete"
-  val BOOTSTRAP_OPERATION_OPT_VAL = "bootstrap"
+  val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.name
+  val INSERT_OPERATION_OPT_VAL = WriteOperationType.INSERT.name
+  val UPSERT_OPERATION_OPT_VAL = WriteOperationType.UPSERT.name
+  val DELETE_OPERATION_OPT_VAL = WriteOperationType.DELETE.name
+  val BOOTSTRAP_OPERATION_OPT_VAL = WriteOperationType.BOOTSTRAP.name
   val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL
 
   /**
