@@ -26,12 +26,17 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
+import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerRowsFactory;
+import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.table.BulkInsertPartitionerRows;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -65,7 +70,8 @@ public class HoodieDatasetBulkInsertHelper {
    * @return hoodie dataset which is ready for bulk insert.
    */
   public static Dataset<Row> prepareHoodieDatasetForBulkInsert(SQLContext sqlContext,
-      HoodieWriteConfig config, Dataset<Row> rows, String structName, String recordNamespace) {
+      HoodieWriteConfig config, Dataset<Row> rows, String structName, String recordNamespace,
+      Option<BulkInsertPartitionerRows> userDefinedBulkInsertPartitionerOpt) {
     List<Column> originalFields =
         Arrays.stream(rows.schema().fields()).map(f -> new Column(f.name())).collect(Collectors.toList());
 
@@ -101,8 +107,9 @@ public class HoodieDatasetBulkInsertHelper {
     Dataset<Row> colOrderedDataset = rowDatasetWithHoodieColumns.select(
         JavaConverters.collectionAsScalaIterableConverter(orderedFields).asScala().toSeq());
 
-    return colOrderedDataset
-        .sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
-        .coalesce(config.getBulkInsertShuffleParallelism());
+    BulkInsertPartitionerRows bulkInsertPartitionerRows =
+        userDefinedBulkInsertPartitionerOpt.isPresent()? userDefinedBulkInsertPartitionerOpt.get():
+            BulkInsertInternalPartitionerRowsFactory.get(config.getBulkInsertSortMode());
+    return bulkInsertPartitionerRows.repartitionRecords(colOrderedDataset, config.getBulkInsertShuffleParallelism());
   }
 }
