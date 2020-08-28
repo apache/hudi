@@ -41,7 +41,7 @@ Depending on the type of workload generated, data is either ingested into the ta
 dataset or the corresponding workload operation is executed. For example compaction does not necessarily need a workload
 to be generated/ingested but can require an execution.
 
-## Other actions/operatons
+## Other actions/operations
 
 The test suite supports different types of operations besides ingestion such as Hive Query execution, Clean action etc.
 
@@ -66,9 +66,9 @@ link#HudiDeltaStreamer page to learn about all the available configs applicable 
 
 There are 2 ways to generate a workload pattern
 
- 1.Programatically
+ 1.Programmatically
 
-Choose to write up the entire DAG of operations programatically, take a look at `WorkflowDagGenerator` class.
+Choose to write up the entire DAG of operations programmatically, take a look at `WorkflowDagGenerator` class.
 Once you're ready with the DAG you want to execute, simply pass the class name as follows:
 
 ```

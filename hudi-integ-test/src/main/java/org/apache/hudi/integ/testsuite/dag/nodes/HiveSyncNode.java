@@ -22,6 +22,9 @@ import org.apache.hudi.integ.testsuite.helpers.HiveServiceProvider;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
+/**
+ * Represents a hive sync node in the DAG of operations for a workflow. Helps to sync hoodie data to hive table.
+ */
 public class HiveSyncNode extends DagNode<Boolean> {
 
   private HiveServiceProvider hiveServiceProvider;

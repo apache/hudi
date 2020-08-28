@@ -25,6 +25,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
+/**
+ * A schedule node in the DAG of operations for a workflow helps to schedule compact operation.
+ */
 public class ScheduleCompactNode extends DagNode<Option<String>> {
 
   public ScheduleCompactNode(Config config) {
