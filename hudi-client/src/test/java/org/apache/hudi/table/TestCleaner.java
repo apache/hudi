@@ -580,7 +580,7 @@ public class TestCleaner extends HoodieClientTestBase {
     // make next commit, with 2 updates to existing files, and 1 insert
     String file3P0C2 = testTable.addCommit("00000000000003")
         .withUpdates(p0, file1P0C0, file2P0C1)
-        .withInserts(p0, "00000000000003").get(p0);
+        .withInserts(p0).get(p0);
     List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config);
     assertEquals(2,
         getCleanStat(hoodieCleanStatsThree, p0)
@@ -685,30 +685,30 @@ public class TestCleaner extends HoodieClientTestBase {
     // NOw upgrade and check
     CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
     metadata = metadataMigrator.upgradeToLatest(metadata, metadata.getVersion());
-    testCleanMetadataPathEquality(metadata, newExpected);
+    assertCleanMetadataPathEquals(newExpected, metadata);
 
     CleanMetadataMigrator migrator = new CleanMetadataMigrator(metaClient);
     HoodieCleanMetadata oldMetadata =
         migrator.migrateToVersion(metadata, metadata.getVersion(), CleanerUtils.CLEAN_METADATA_VERSION_1);
     assertEquals(CleanerUtils.CLEAN_METADATA_VERSION_1, oldMetadata.getVersion());
-    testCleanMetadataEquality(metadata, oldMetadata);
-    testCleanMetadataPathEquality(oldMetadata, oldExpected);
+    assertCleanMetadataEquals(metadata, oldMetadata);
+    assertCleanMetadataPathEquals(oldExpected, oldMetadata);
 
     HoodieCleanMetadata newMetadata = migrator.upgradeToLatest(oldMetadata, oldMetadata.getVersion());
     assertEquals(CleanerUtils.LATEST_CLEAN_METADATA_VERSION, newMetadata.getVersion());
-    testCleanMetadataEquality(oldMetadata, newMetadata);
-    testCleanMetadataPathEquality(newMetadata, newExpected);
-    testCleanMetadataPathEquality(oldMetadata, oldExpected);
+    assertCleanMetadataEquals(oldMetadata, newMetadata);
+    assertCleanMetadataPathEquals(newExpected, newMetadata);
+    assertCleanMetadataPathEquals(oldExpected, oldMetadata);
   }
 
-  public void testCleanMetadataEquality(HoodieCleanMetadata input1, HoodieCleanMetadata input2) {
-    assertEquals(input1.getEarliestCommitToRetain(), input2.getEarliestCommitToRetain());
-    assertEquals(input1.getStartCleanTime(), input2.getStartCleanTime());
-    assertEquals(input1.getTimeTakenInMillis(), input2.getTimeTakenInMillis());
-    assertEquals(input1.getTotalFilesDeleted(), input2.getTotalFilesDeleted());
+  private static void assertCleanMetadataEquals(HoodieCleanMetadata expected, HoodieCleanMetadata actual) {
+    assertEquals(expected.getEarliestCommitToRetain(), actual.getEarliestCommitToRetain());
+    assertEquals(expected.getStartCleanTime(), actual.getStartCleanTime());
+    assertEquals(expected.getTimeTakenInMillis(), actual.getTimeTakenInMillis());
+    assertEquals(expected.getTotalFilesDeleted(), actual.getTotalFilesDeleted());
 
-    Map<String, HoodieCleanPartitionMetadata> map1 = input1.getPartitionMetadata();
-    Map<String, HoodieCleanPartitionMetadata> map2 = input2.getPartitionMetadata();
+    Map<String, HoodieCleanPartitionMetadata> map1 = expected.getPartitionMetadata();
+    Map<String, HoodieCleanPartitionMetadata> map2 = actual.getPartitionMetadata();
 
     assertEquals(map1.keySet(), map2.keySet());
 
@@ -785,9 +785,9 @@ public class TestCleaner extends HoodieClientTestBase {
     assertNull(version1Plan.getFilePathsToBeDeletedPerPartition());
   }
 
-  private void testCleanMetadataPathEquality(HoodieCleanMetadata metadata, Map<String, Tuple3> expected) {
+  private static void assertCleanMetadataPathEquals(Map<String, Tuple3> expected, HoodieCleanMetadata actual) {
 
-    Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = metadata.getPartitionMetadata();
+    Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = actual.getPartitionMetadata();
 
     for (Map.Entry<String, HoodieCleanPartitionMetadata> entry : partitionMetadataMap.entrySet()) {
       String partitionPath = entry.getKey();
@@ -1027,24 +1027,11 @@ public class TestCleaner extends HoodieClientTestBase {
   }
 
   /**
-   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files. Here the operations are simulated
-   * such that first clean attempt failed after files were cleaned and a subsequent cleanup succeeds.
-   */
-  @Test
-  public void testKeepLatestVersionsWithPendingCompactions() throws IOException {
-    testKeepLatestVersionsWithPendingCompactions(false);
-  }
-
-
-  /**
    * Test Keep Latest Versions when there are pending compactions.
    */
-  @Test
-  public void testKeepLatestVersionsWithPendingCompactionsAndFailureRetry() throws IOException {
-    testKeepLatestVersionsWithPendingCompactions(true);
-  }
-
-  private void testKeepLatestVersionsWithPendingCompactions(boolean retryFailure) throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testKeepLatestVersionsWithPendingCompactions(boolean retryFailure) throws IOException {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
