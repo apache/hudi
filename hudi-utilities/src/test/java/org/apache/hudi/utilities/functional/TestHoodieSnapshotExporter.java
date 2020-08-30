@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.functional;
 
+import com.beust.jcommander.ParameterException;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -51,6 +52,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -58,6 +60,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -267,6 +270,34 @@ public class TestHoodieSnapshotExporter extends FunctionalTestHarness {
       assertEquals(NUM_RECORDS, sqlContext().read().format("json").load(targetPath).count());
       assertTrue(dfs().exists(new Path(targetPath + "/_SUCCESS")));
       assertTrue(dfs().exists(new Path(String.format("%s/%s=%s", targetPath, UserDefinedPartitioner.PARTITION_NAME, PARTITION_PATH))));
+    }
+  }
+
+  @Nested
+  public class TestOutputFormatValidator {
+
+    @ParameterizedTest
+    @ValueSource(strings = {"json", "parquet", "hudi"})
+    public void testValidateOutputFormatWithValidFormat(String format) {
+      assertDoesNotThrow(() -> {
+        new OutputFormatValidator().validate(null, format);
+      });
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "JSON"})
+    public void testValidateOutputFormatWithInvalidFormat(String format) {
+      assertThrows(ParameterException.class, () -> {
+        new OutputFormatValidator().validate(null, format);
+      });
+    }
+
+    @ParameterizedTest
+    @NullSource
+    public void testValidateOutputFormatWithNullFormat(String format) {
+      assertThrows(ParameterException.class, () -> {
+        new OutputFormatValidator().validate(null, format);
+      });
     }
   }
 }
