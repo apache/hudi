@@ -41,10 +41,6 @@ public enum WriteOperationType {
   // used for old version
   UNKNOWN("unknown");
 
-  public String value() {
-    return value;
-  }
-
   private final String value;
 
   WriteOperationType(String value) {
@@ -73,6 +69,15 @@ public enum WriteOperationType {
       default:
         throw new HoodieException("Invalid value of Type.");
     }
+  }
+
+  /**
+   * Returns the name of this enum constant, as contained in the declaration.
+   * @return string form of WriteOperationType
+   */
+  @Override
+  public String toString() {
+    return value;
   }
 
   public static boolean isChangingRecords(WriteOperationType operationType) {
