@@ -29,75 +29,75 @@ import java.util.Arrays;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class TestOverwriteMulColAvroPayload {
-    private Schema schema;
+  private Schema schema;
 
-    @BeforeEach
-    public void setUp() throws Exception {
-        schema = Schema.createRecord(Arrays.asList(
-                new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
-                new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", ""),
-                new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
-                new Schema.Field("_hoodie_is_deleted", Schema.create(Schema.Type.BOOLEAN), "", false)
-        ));
-    }
+  @BeforeEach
+  public void setUp() throws Exception {
+    schema = Schema.createRecord(Arrays.asList(
+            new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
+            new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", ""),
+            new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
+            new Schema.Field("_hoodie_is_deleted", Schema.create(Schema.Type.BOOLEAN), "", false)
+    ));
+  }
 
-    @Test
-    public void testActiveRecords() throws IOException {
-        GenericRecord record1 = new GenericData.Record(schema);
-        record1.put("id", "1");
-        record1.put("partition", "partition1");
-        record1.put("ts", 0L);
-        record1.put("_hoodie_is_deleted", false);
+  @Test
+  public void testActiveRecords() throws IOException {
+    GenericRecord record1 = new GenericData.Record(schema);
+    record1.put("id", "1");
+    record1.put("partition", "partition1");
+    record1.put("ts", 0L);
+    record1.put("_hoodie_is_deleted", false);
 
-        GenericRecord record2 = new GenericData.Record(schema);
-        record2.put("id", "2");
-        record2.put("partition", "");
-        record2.put("ts", 1L);
-        record2.put("_hoodie_is_deleted", false);
+    GenericRecord record2 = new GenericData.Record(schema);
+    record2.put("id", "2");
+    record2.put("partition", "");
+    record2.put("ts", 1L);
+    record2.put("_hoodie_is_deleted", false);
 
-        GenericRecord record3 = new GenericData.Record(schema);
-        record3.put("id", "2");
-        record3.put("partition", "partition1");
-        record3.put("ts", 1L);
-        record3.put("_hoodie_is_deleted", false);
+    GenericRecord record3 = new GenericData.Record(schema);
+    record3.put("id", "2");
+    record3.put("partition", "partition1");
+    record3.put("ts", 1L);
+    record3.put("_hoodie_is_deleted", false);
 
 
-        OverwriteMulColAvroPayload payload1 = new OverwriteMulColAvroPayload(record1, 1);
-        OverwriteMulColAvroPayload payload2 = new OverwriteMulColAvroPayload(record2, 2);
-        assertEquals(payload1.preCombine(payload2), payload2);
-        assertEquals(payload2.preCombine(payload1), payload2);
+    OverwriteMulColAvroPayload payload1 = new OverwriteMulColAvroPayload(record1, 1);
+    OverwriteMulColAvroPayload payload2 = new OverwriteMulColAvroPayload(record2, 2);
+    assertEquals(payload1.preCombine(payload2), payload2);
+    assertEquals(payload2.preCombine(payload1), payload2);
 
-        assertEquals(record1, payload1.getInsertValue(schema).get());
-        assertEquals(record2, payload2.getInsertValue(schema).get());
+    assertEquals(record1, payload1.getInsertValue(schema).get());
+    assertEquals(record2, payload2.getInsertValue(schema).get());
 
-        assertEquals(payload1.combineAndGetUpdateValue(record2, schema).get(), record1);
-        assertEquals(payload2.combineAndGetUpdateValue(record1, schema).get(), record3);
-    }
+    assertEquals(payload1.combineAndGetUpdateValue(record2, schema).get(), record1);
+    assertEquals(payload2.combineAndGetUpdateValue(record1, schema).get(), record3);
+  }
 
-    @Test
-    public void testDeletedRecord() throws IOException {
-        GenericRecord record1 = new GenericData.Record(schema);
-        record1.put("id", "1");
-        record1.put("partition", "partition0");
-        record1.put("ts", 0L);
-        record1.put("_hoodie_is_deleted", false);
+  @Test
+  public void testDeletedRecord() throws IOException {
+    GenericRecord record1 = new GenericData.Record(schema);
+    record1.put("id", "1");
+    record1.put("partition", "partition0");
+    record1.put("ts", 0L);
+    record1.put("_hoodie_is_deleted", false);
 
-        GenericRecord delRecord1 = new GenericData.Record(schema);
-        delRecord1.put("id", "2");
-        delRecord1.put("partition", "partition1");
-        delRecord1.put("ts", 1L);
-        delRecord1.put("_hoodie_is_deleted", true);
+    GenericRecord delRecord1 = new GenericData.Record(schema);
+    delRecord1.put("id", "2");
+    delRecord1.put("partition", "partition1");
+    delRecord1.put("ts", 1L);
+    delRecord1.put("_hoodie_is_deleted", true);
 
-        OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1);
-        OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(delRecord1, 2);
+    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1);
+    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(delRecord1, 2);
 
-        assertEquals(payload1.preCombine(payload2), payload2);
-        assertEquals(payload2.preCombine(payload1), payload2);
+    assertEquals(payload1.preCombine(payload2), payload2);
+    assertEquals(payload2.preCombine(payload1), payload2);
 
-        assertEquals(record1, payload1.getInsertValue(schema).get());
-        assertFalse(payload2.getInsertValue(schema).isPresent());
+    assertEquals(record1, payload1.getInsertValue(schema).get());
+    assertFalse(payload2.getInsertValue(schema).isPresent());
 
-        assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), record1);
-        assertFalse(payload2.combineAndGetUpdateValue(record1, schema).isPresent());
-    }
+    assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), record1);
+    assertFalse(payload2.combineAndGetUpdateValue(record1, schema).isPresent());
+  }
 }
