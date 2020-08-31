@@ -2,7 +2,7 @@
 permalink: /cn/community
 title: "Community"
 toc: true
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2020-09-01T15:59:57-04:00
 language: cn
 ---
 
@@ -15,7 +15,7 @@ There are several ways to get in touch with the Hudi community.
 | For development discussions | Dev Mailing list ([Subscribe](mailto:dev-subscribe@hudi.apache.org), [Unsubscribe](mailto:dev-unsubscribe@hudi.apache.org), [Archives](https://lists.apache.org/list.html?dev@hudi.apache.org)). Empty email works for subscribe/unsubscribe. Please use [gists](https://gist.github.com) to share code/stacktraces on the email. |
 | For any general questions, user support | Users Mailing list ([Subscribe](mailto:users-subscribe@hudi.apache.org), [Unsubscribe](mailto:users-unsubscribe@hudi.apache.org), [Archives](https://lists.apache.org/list.html?users@hudi.apache.org)). Empty email works for subscribe/unsubscribe. Please use [gists](https://gist.github.com) to share code/stacktraces on the email. |
 | For reporting bugs or issues or discover known issues | Please use [ASF Hudi JIRA](https://issues.apache.org/jira/projects/HUDI/summary). See [#here](#accounts) for access |
-| For quick pings & 1-1 chats | Join our [slack group](https://join.slack.com/t/apache-hudi/signup). In case your mail domain is not there in pre-approved list for joining slack group, please check out the [github issue](https://github.com/apache/hudi/issues/143) |
+| For quick pings & 1-1 chats | Join our [slack group](https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE). In case this does not work, please leave a comment on this [github issue](https://github.com/apache/hudi/issues/143) |
 | For proposing large features, changes | Start a RFC. Instructions [here](https://cwiki.apache.org/confluence/display/HUDI/RFC+Process).
  See [#here](#accounts) for wiki access |
 | For stream of commits, pull requests etc | Commits Mailing list ([Subscribe](mailto:commits-subscribe@hudi.apache.org), [Unsubscribe](mailto:commits-unsubscribe@hudi.apache.org), [Archives](https://lists.apache.org/list.html?commits@hudi.apache.org)) |
@@ -50,26 +50,27 @@ Committers are chosen by a majority vote of the Apache Hudi [PMC](https://www.ap
  - Great citizenship in helping with all peripheral (but very critical) work like site maintenance, wiki/jira cleanups and so on.
  - Proven commitment to the project by way of upholding all agreed upon processes, conventions and principles of the community.
 
-### The Committers
+### The Team
 
 | Image                                                        | Name                                                         | Role            | Apache ID    |
 | ------------------------------------------------------------ | ------------------------------------------------------------ | --------------- | ------------ |
-| <img src="https://avatars.githubusercontent.com/alunarbeach" style="max-width: 100px" alt="alunarbeach" align="middle" /> | [Anbu Cheeralan](https://github.com/alunarbeach)             | PPMC, Committer | anchee       |
-| <img src="https://avatars.githubusercontent.com/bhasudha" style="max-width: 100px" alt="bhasudha" align="middle" /> | [Bhavani Sudha](https://github.com/bhasudha)                 | PPMC, Committer | bhavanisudha |
-| <img src="https://avatars.githubusercontent.com/bvaradar" style="max-width: 100px" alt="bvaradar" align="middle" /> | [Balaji Varadarajan](https://github.com/bvaradar)            | PPMC, Committer | vbalaji      |
-| <img src="https://avatars.githubusercontent.com/kishoreg" style="max-width: 100px" alt="kishoreg" align="middle" /> | [Kishore Gopalakrishna](https://github.com/kishoreg)         | PPMC, Committer | kishoreg     |
-| <img src="https://avatars.githubusercontent.com/lresende" style="max-width: 100px" alt="lresende" align="middle" /> | [Luciano Resende](https://github.com/lresende)               | PPMC, Committer | lresende     |
-| <img src="https://avatars.githubusercontent.com/n3nash" style="max-width: 100px" alt="n3nash" align="middle" /> | [Nishith Agarwal](https://github.com/n3nash)                 | PPMC, Committer | nagarwal     |
-| <img src="https://avatars.githubusercontent.com/prasannarajaperumal" style="max-width: 100px" alt="prasannarajaperumal" align="middle" /> | [Prasanna Rajaperumal](https://github.com/prasannarajaperumal) | PPMC, Committer | prasanna     |
-| <img src="https://avatars.githubusercontent.com/leesf" style="max-width: 100px" alt="leesf" align="middle" /> | [Shaofeng Li](https://github.com/leesf)                      | PPMC, Committer       | leesf        |
-| <img src="https://avatars.githubusercontent.com/nsivabalan" style="max-width: 100px" alt="nsivabalan" align="middle" /> | [Sivabalan Narayanan](https://github.com/nsivabalan)         | Committer | sivabalan      |
-| <img src="https://avatars.githubusercontent.com/smarthi" style="max-width: 100px" alt="smarthi" align="middle" /> | [Suneel Marthi](https://github.com/smarthi)                  | PPMC, Committer | smarthi      |
-| <img src="https://avatars.githubusercontent.com/tweise" style="max-width: 100px" alt="tweise" align="middle" /> | [Thomas Weise](https://github.com/tweise)                    | PPMC, Committer | thw          |
-| <img src="https://avatars.githubusercontent.com/vinothchandar" style="max-width: 100px" alt="vinothchandar" align="middle" /> | [vinoth chandar](https://github.com/vinothchandar)           | PPMC, Committer | vinoth       |
-| <img src="https://avatars.githubusercontent.com/yanghua" style="max-width: 100px" alt="yanghua" /> | [vinoyang](https://github.com/yanghua)                       | PPMC, Committer       | vinoyang     |
-| <img src="https://avatars.githubusercontent.com/zqureshi" alt="zqureshi" style="max-width: 100px;" align="middle" /> | [Zeeshan Qureshi](https://github.com/zqureshi)               | PPMC, Committer | zqureshi     |
+| <img src="https://avatars.githubusercontent.com/alunarbeach" style="max-width: 100px" alt="alunarbeach" align="middle" /> | [Anbu Cheeralan](https://github.com/alunarbeach)             | PMC, Committer | anchee       |
+| <img src="https://avatars.githubusercontent.com/bhasudha" style="max-width: 100px" alt="bhasudha" align="middle" /> | [Bhavani Sudha](https://github.com/bhasudha)                 | PMC, Committer | bhavanisudha |
+| <img src="https://avatars.githubusercontent.com/bvaradar" style="max-width: 100px" alt="bvaradar" align="middle" /> | [Balaji Varadarajan](https://github.com/bvaradar)            | PMC, Committer | vbalaji      |
+| <img src="https://avatars.githubusercontent.com/garyli1019" style="max-width: 100px" alt="garyli1019" align="middle" /> | [Gary Li](https://github.com/garyli1019)                      | Committer       | garyli        |
+| <img src="https://avatars.githubusercontent.com/lresende" style="max-width: 100px" alt="lresende" align="middle" /> | [Luciano Resende](https://github.com/lresende)               | PMC, Committer | lresende     |
 | <img src="https://avatars.githubusercontent.com/lamber-ken" alt="lamber-ken" style="max-width: 100px;" align="middle" /> | [lamber-ken](https://github.com/lamber-ken)               | Committer | lamberken     |
-
+| <img src="https://avatars.githubusercontent.com/n3nash" style="max-width: 100px" alt="n3nash" align="middle" /> | [Nishith Agarwal](https://github.com/n3nash)                 | PMC, Committer | nagarwal     |
+| <img src="https://avatars.githubusercontent.com/prasannarajaperumal" style="max-width: 100px" alt="prasannarajaperumal" align="middle" /> | [Prasanna Rajaperumal](https://github.com/prasannarajaperumal) | PMC, Committer | prasanna     |
+| <img src="https://avatars.githubusercontent.com/pratyakshsharma" style="max-width: 100px" alt="pratyakshsharma" align="middle" /> | [Pratyaksh Sharma](https://github.com/pratyakshsharma)                      | Committer       | pratyaksh13        |
+| <img src="https://avatars.githubusercontent.com/xushiyan" style="max-width: 100px" alt="xushiyan" align="middle" /> | [Raymond Xu](https://github.com/xushiyan)                      | Committer       | xushiyan        |
+| <img src="https://avatars.githubusercontent.com/leesf" style="max-width: 100px" alt="leesf" align="middle" /> | [Shaofeng Li](https://github.com/leesf)                      | PMC, Committer       | leesf        |
+| <img src="https://avatars.githubusercontent.com/nsivabalan" style="max-width: 100px" alt="nsivabalan" align="middle" /> | [Sivabalan Narayanan](https://github.com/nsivabalan)         | Committer | sivabalan      |
+| <img src="https://avatars.githubusercontent.com/smarthi" style="max-width: 100px" alt="smarthi" align="middle" /> | [Suneel Marthi](https://github.com/smarthi)                  | PMC, Committer | smarthi      |
+| <img src="https://avatars.githubusercontent.com/tweise" style="max-width: 100px" alt="tweise" align="middle" /> | [Thomas Weise](https://github.com/tweise)                    | PMC, Committer | thw          |
+| <img src="https://avatars.githubusercontent.com/umehrot2" style="max-width: 100px" alt="umehrot2" align="middle" /> | [Udit Mehrotra](https://github.com/umehrot2)                      | Committer       | uditme        |
+| <img src="https://avatars.githubusercontent.com/vinothchandar" style="max-width: 100px" alt="vinothchandar" align="middle" /> | [Vinoth Chandar](https://github.com/vinothchandar)           | PMC, Committer | vinoth       |
+| <img src="https://avatars.githubusercontent.com/yanghua" style="max-width: 100px" alt="yanghua" /> | [vinoyang](https://github.com/yanghua)                       | PMC, Committer       | vinoyang     |
 
 ## Code Contributions
 
