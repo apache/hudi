@@ -90,7 +90,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * @param defaultValue defaultValue of the field
    * @return {@code true} if value equals defaultValue {@code false} otherwise.
    */
-  public Boolean fieldJudge(Object value,Object defaultValue){
+  public Boolean fieldJudge(Object value,Object defaultValue) {
     return  defaultValue == null ? value == defaultValue : value.toString().equals(defaultValue.toString());
   }
 }
