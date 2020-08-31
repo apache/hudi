@@ -137,11 +137,11 @@ object DataSourceWriteOptions {
     * Default: upsert()
     */
   val OPERATION_OPT_KEY = "hoodie.datasource.write.operation"
-  val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.name
-  val INSERT_OPERATION_OPT_VAL = WriteOperationType.INSERT.name
-  val UPSERT_OPERATION_OPT_VAL = WriteOperationType.UPSERT.name
-  val DELETE_OPERATION_OPT_VAL = WriteOperationType.DELETE.name
-  val BOOTSTRAP_OPERATION_OPT_VAL = WriteOperationType.BOOTSTRAP.name
+  val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.value
+  val INSERT_OPERATION_OPT_VAL = WriteOperationType.INSERT.value
+  val UPSERT_OPERATION_OPT_VAL = WriteOperationType.UPSERT.value
+  val DELETE_OPERATION_OPT_VAL = WriteOperationType.DELETE.value
+  val BOOTSTRAP_OPERATION_OPT_VAL = WriteOperationType.BOOTSTRAP.value
   val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL
 
   /**

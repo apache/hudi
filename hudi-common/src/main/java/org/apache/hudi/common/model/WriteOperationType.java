@@ -41,6 +41,10 @@ public enum WriteOperationType {
   // used for old version
   UNKNOWN("unknown");
 
+  public String value() {
+    return value;
+  }
+
   private final String value;
 
   WriteOperationType(String value) {
