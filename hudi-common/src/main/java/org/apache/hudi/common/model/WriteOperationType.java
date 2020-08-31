@@ -77,6 +77,14 @@ public enum WriteOperationType {
    */
   @Override
   public String toString() {
+    return value();
+  }
+
+  /**
+   * Getter for value
+   * @return string form of WriteOperationType
+   */
+  public String value() {
     return value;
   }
 
