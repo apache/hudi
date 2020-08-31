@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
@@ -26,8 +27,12 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.Arrays;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
+/**
+ * Unit tests {@link TestOverwriteMulColAvroPayload}.
+ */
 public class TestOverwriteMulColAvroPayload {
   private Schema schema;
 
