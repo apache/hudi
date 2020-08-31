@@ -45,6 +45,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Map;
 
 public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
 
@@ -55,7 +56,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
   private long recordsWritten = 0;
   private long insertRecordsWritten = 0;
   private long recordsDeleted = 0;
-  private Iterator<HoodieRecord<T>> recordIterator;
+  private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
@@ -90,9 +91,10 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
    * Called by the compactor code path.
    */
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
-      String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordIterator, SparkTaskContextSupplier sparkTaskContextSupplier) {
+      String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
+      SparkTaskContextSupplier sparkTaskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, sparkTaskContextSupplier);
-    this.recordIterator = recordIterator;
+    this.recordMap = recordMap;
     this.useWriterSchema = true;
   }
 
@@ -138,9 +140,17 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
    * Writes all records passed.
    */
   public void write() {
+    Iterator<String> keyIterator;
+    if (hoodieTable.requireSortedRecords()) {
+      // Sorting the keys limits the amount of extra memory required for writing sorted records
+      keyIterator = recordMap.keySet().stream().sorted().iterator();
+    } else {
+      keyIterator = recordMap.keySet().stream().iterator();
+    }
     try {
-      while (recordIterator.hasNext()) {
-        HoodieRecord<T> record = recordIterator.next();
+      while (keyIterator.hasNext()) {
+        final String key = keyIterator.next();
+        HoodieRecord<T> record = recordMap.get(key);
         if (useWriterSchema) {
           write(record, record.getData().getInsertValue(writerSchemaWithMetafields));
         } else {

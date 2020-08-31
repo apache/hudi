@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.SpillableMapUtils;
@@ -145,6 +146,7 @@ public abstract class AbstractHoodieLogRecordScanner {
           break;
         }
         switch (r.getBlockType()) {
+          case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
             LOG.info("Reading a data block from file " + logFile.getPath());
             if (isNewInstantBlock(r) && !readBlocksLazily) {
@@ -304,6 +306,9 @@ public abstract class AbstractHoodieLogRecordScanner {
       switch (lastBlock.getBlockType()) {
         case AVRO_DATA_BLOCK:
           processDataBlock((HoodieAvroDataBlock) lastBlock);
+          break;
+        case HFILE_DATA_BLOCK:
+          processDataBlock((HoodieHFileDataBlock) lastBlock);
           break;
         case DELETE_BLOCK:
           Arrays.stream(((HoodieDeleteBlock) lastBlock).getKeysToDelete()).forEach(this::processNextDeletedKey);
