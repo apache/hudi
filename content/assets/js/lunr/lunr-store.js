@@ -1158,4 +1158,9 @@ var store = [{
         "excerpt":"Availability 0.6.0 (unreleased) Introduction Datadog is a popular monitoring service. In the upcoming 0.6.0 release of Apache Hudi, we will introduce the feature of reporting Hudi metrics via Datadog HTTP API, in addition to the current reporter types: Graphite and JMX. Configurations Similar to other supported reporters, turning on Datadog...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/monitoring-hudi-metrics-with-datadog/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Incremental Processing on the Data Lake",
+        "excerpt":"NOTE: This article is a translation of the infoq.cn article, found here, with minor edits Apache Hudi is a data lake framework which provides the ability to ingest, manage and query large analytical data sets on a distributed file system/cloud stores. Hudi joined the Apache incubator for incubation in January...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/hudi-incremental-processing-on-data-lakes/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]
