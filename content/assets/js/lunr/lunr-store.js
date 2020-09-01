@@ -1163,4 +1163,14 @@ var store = [{
         "excerpt":"NOTE: This article is a translation of the infoq.cn article, found here, with minor edits Apache Hudi is a data lake framework which provides the ability to ingest, manage and query large analytical data sets on a distributed file system/cloud stores. Hudi joined the Apache incubator for incubation in January...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/hudi-incremental-processing-on-data-lakes/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Efficient Migration of Large Parquet Tables to Apache Hudi",
+        "excerpt":"We will look at how to migrate a large parquet table to Hudi without having to rewrite the entire dataset. Motivation: Apache Hudi maintains per record metadata to perform core operations such as upserts and incremental pull. To take advantage of Hudi’s upsert and incremental processing support, users would need...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/efficient-migration-of-large-parquet-tables/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Async Compaction Deployment Models",
+        "excerpt":"We will look at different deployment models for executing compactions asynchronously. Compaction For Merge-On-Read table, data is stored using a combination of columnar (e.g parquet) + row based (e.g avro) file formats. Updates are logged to delta files &amp; later compacted to produce new versions of columnar files synchronously or...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/async-compaction-deployment-model/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]

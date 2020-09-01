@@ -933,6 +933,14 @@
 <lastmod>2020-08-18T00:00:00-04:00</lastmod>
 </url>
 <url>
+<loc>https://hudi.apache.org/blog/efficient-migration-of-large-parquet-tables/</loc>
+<lastmod>2020-08-20T00:00:00-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog/async-compaction-deployment-model/</loc>
+<lastmod>2020-08-21T00:00:00-04:00</lastmod>
+</url>
+<url>
 <loc>https://hudi.apache.org/cn/activity</loc>
 <lastmod>2019-12-30T14:59:57-05:00</lastmod>
 </url>
