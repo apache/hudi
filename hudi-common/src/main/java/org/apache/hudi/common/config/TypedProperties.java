@@ -19,9 +19,7 @@
 package org.apache.hudi.common.config;
 
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -37,10 +35,12 @@ public class TypedProperties extends Properties implements Serializable {
     super(defaults);
   }
 
-  private void checkKey(String property) {
-    if (!containsKey(property)) {
+  private boolean checkKey(String property) {
+    Set<String> keys = super.stringPropertyNames();
+    if(!keys.contains(property)){
       throw new IllegalArgumentException("Property " + property + " not found");
     }
+    return true;
   }
 
   public String getString(String property) {
@@ -49,11 +49,11 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public String getString(String property, String defaultValue) {
-    return containsKey(property) ? getProperty(property) : defaultValue;
+    return checkKey(property) ? getProperty(property) : defaultValue;
   }
 
   public List<String> getStringList(String property, String delimiter, List<String> defaultVal) {
-    if (!containsKey(property)) {
+    if (checkKey(property)) {
       return defaultVal;
     }
     return Arrays.stream(getProperty(property).split(delimiter)).map(String::trim).collect(Collectors.toList());
@@ -65,7 +65,7 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public int getInteger(String property, int defaultValue) {
-    return containsKey(property) ? Integer.parseInt(getProperty(property)) : defaultValue;
+    return checkKey(property) ? Integer.parseInt(getProperty(property)) : defaultValue;
   }
 
   public long getLong(String property) {
@@ -74,7 +74,7 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public long getLong(String property, long defaultValue) {
-    return containsKey(property) ? Long.parseLong(getProperty(property)) : defaultValue;
+    return checkKey(property) ? Long.parseLong(getProperty(property)) : defaultValue;
   }
 
   public boolean getBoolean(String property) {
@@ -83,7 +83,7 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public boolean getBoolean(String property, boolean defaultValue) {
-    return containsKey(property) ? Boolean.parseBoolean(getProperty(property)) : defaultValue;
+    return checkKey(property) ? Boolean.parseBoolean(getProperty(property)) : defaultValue;
   }
 
   public double getDouble(String property) {
@@ -92,6 +92,6 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public double getDouble(String property, double defaultValue) {
-    return containsKey(property) ? Double.parseDouble(getProperty(property)) : defaultValue;
+    return checkKey(property) ? Double.parseDouble(getProperty(property)) : defaultValue;
   }
 }
