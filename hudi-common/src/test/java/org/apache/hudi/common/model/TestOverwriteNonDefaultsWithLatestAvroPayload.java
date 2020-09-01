@@ -93,6 +93,12 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     delRecord1.put("ts", 1L);
     delRecord1.put("_hoodie_is_deleted", true);
 
+    GenericRecord record2 = new GenericData.Record(schema);
+    record2.put("id", "1");
+    record2.put("partition", "partition0");
+    record2.put("ts", 0L);
+    record2.put("_hoodie_is_deleted", true);
+
     OverwriteNonDefaultsWithLatestAvroPayload payload1 = new OverwriteNonDefaultsWithLatestAvroPayload(record1, 1);
     OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(delRecord1, 2);
 
@@ -102,7 +108,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     assertEquals(record1, payload1.getInsertValue(schema).get());
     assertFalse(payload2.getInsertValue(schema).isPresent());
 
-    assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), record1);
+    assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), record2);
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema).isPresent());
   }
 }
