@@ -79,7 +79,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * @param genericRecord instance of {@link GenericRecord} of interest.
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */
-  public boolean isDeleteRecord(GenericRecord genericRecord) {
+  protected boolean isDeleteRecord(GenericRecord genericRecord) {
     Object deleteMarker = genericRecord.get("_hoodie_is_deleted");
     return (deleteMarker instanceof Boolean && (boolean) deleteMarker);
   }
@@ -90,7 +90,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * @param defaultValue defaultValue of the field
    * @return {@code true} if value equals defaultValue {@code false} otherwise.
    */
-  public Boolean fieldJudge(Object value,Object defaultValue){
-    return  defaultValue == null ? value == defaultValue : value.toString().equals(defaultValue.toString());
+  public Boolean ovewriteField(Object value, Object defaultValue){
+    return  defaultValue == null ? value == defaultValue : defaultValue.toString().equals(value.toString());
   }
 }

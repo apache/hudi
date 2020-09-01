@@ -34,18 +34,18 @@ import java.util.List;
  * 2. combineAndGetUpdateValue/getInsertValue - overwrite storage for specified fields
  * that doesn't equal defaultValue.
  */
-public class OverwriteMulColAvroPayload extends OverwriteWithLatestAvroPayload {
+public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLatestAvroPayload {
 
   /**
    * @param record      Generic record for the payload.
    * @param orderingVal {@link Comparable} to be used in pre combine.
    */
-  public OverwriteMulColAvroPayload(GenericRecord record, Comparable orderingVal) {
+  public OverwriteNonDefaultsWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
 
-  public OverwriteMulColAvroPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, (record1) -> 0); // natural order
+  public OverwriteNonDefaultsWithLatestAvroPayload(Option<GenericRecord> record) {
+    super(record); // natural order
   }
 
   @Override
@@ -59,15 +59,14 @@ public class OverwriteMulColAvroPayload extends OverwriteWithLatestAvroPayload {
     GenericRecord insertRecord = (GenericRecord) recordOption.get();
     GenericRecord currentRecord = (GenericRecord) currentValue;
 
-    Object deleteMarker = insertRecord.get("_hoodie_is_deleted");
-    if (deleteMarker instanceof Boolean && (boolean) deleteMarker) {
+    if (isDeleteRecord(insertRecord)) {
       return Option.empty();
     } else {
       List<Schema.Field> fields = schema.getFields();
       for (int i = 0; i < fields.size(); i++) {
         Object value = insertRecord.get(fields.get(i).name());
         Object defaultValue = fields.get(i).defaultVal();
-        if (fieldJudge(value, defaultValue)) {
+        if (ovewriteField(value, defaultValue)) {
           continue;
         } else {
           currentRecord.put(fields.get(i).name(), value);

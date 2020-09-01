@@ -28,7 +28,7 @@ import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class TestOverwriteMulColAvroPayload {
+public class TestOverwriteNonDefaultsWithLatestAvroPayload {
   private Schema schema;
 
   @BeforeEach
@@ -62,8 +62,8 @@ public class TestOverwriteMulColAvroPayload {
     record3.put("_hoodie_is_deleted", false);
 
 
-    OverwriteMulColAvroPayload payload1 = new OverwriteMulColAvroPayload(record1, 1);
-    OverwriteMulColAvroPayload payload2 = new OverwriteMulColAvroPayload(record2, 2);
+    OverwriteNonDefaultsWithLatestAvroPayload payload1 = new OverwriteNonDefaultsWithLatestAvroPayload(record1, 1);
+    OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(record2, 2);
     assertEquals(payload1.preCombine(payload2), payload2);
     assertEquals(payload2.preCombine(payload1), payload2);
 
@@ -88,8 +88,8 @@ public class TestOverwriteMulColAvroPayload {
     delRecord1.put("ts", 1L);
     delRecord1.put("_hoodie_is_deleted", true);
 
-    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1);
-    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(delRecord1, 2);
+    OverwriteNonDefaultsWithLatestAvroPayload payload1 = new OverwriteNonDefaultsWithLatestAvroPayload(record1, 1);
+    OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(delRecord1, 2);
 
     assertEquals(payload1.preCombine(payload2), payload2);
     assertEquals(payload2.preCombine(payload1), payload2);
