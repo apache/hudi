@@ -45,6 +45,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -89,8 +92,10 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
       insertRecords
           .add(new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
+      Map<String, HoodieRecord> insertRecordMap = insertRecords.stream()
+          .collect(Collectors.toMap(r -> r.getRecordKey(), Function.identity()));
       HoodieCreateHandle createHandle =
-          new HoodieCreateHandle(config, "100", table, rowChange1.getPartitionPath(), "f1-0", insertRecords.iterator(), supplier);
+          new HoodieCreateHandle(config, "100", table, rowChange1.getPartitionPath(), "f1-0", insertRecordMap, supplier);
       createHandle.write();
       return createHandle.close();
     }).collect();

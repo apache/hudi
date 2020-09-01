@@ -37,6 +37,10 @@ import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * The Dag scheduler schedules the workflow DAGs. It will convert DAG to node set and execute the nodes according to
+ * the relations between nodes.
+ */
 public class DagScheduler {
 
   private static Logger log = LoggerFactory.getLogger(DagScheduler.class);
@@ -48,6 +52,11 @@ public class DagScheduler {
     this.executionContext = new ExecutionContext(null, hoodieTestSuiteWriter, deltaGenerator);
   }
 
+  /**
+   * Method to start executing workflow DAGs.
+   *
+   * @throws Exception Thrown if schedule failed.
+   */
   public void schedule() throws Exception {
     ExecutorService service = Executors.newFixedThreadPool(2);
     try {
@@ -61,6 +70,13 @@ public class DagScheduler {
     }
   }
 
+  /**
+   * Method to start executing the nodes in workflow DAGs.
+   *
+   * @param service ExecutorService
+   * @param nodes   Nodes to be executed
+   * @throws Exception will be thrown if ant error occurred
+   */
   private void execute(ExecutorService service, List<DagNode> nodes) throws Exception {
     // Nodes at the same level are executed in parallel
     Queue<DagNode> queue = new PriorityQueue<>(nodes);
@@ -84,6 +100,11 @@ public class DagScheduler {
     log.info("Finished workloads");
   }
 
+  /**
+   * Execute the given node.
+   *
+   * @param node The node to be executed
+   */
   private void executeNode(DagNode node) {
     if (node.isCompleted()) {
       throw new RuntimeException("DagNode already completed! Cannot re-execute");

@@ -23,6 +23,9 @@ import java.util.Iterator;
 import java.util.List;
 import org.apache.spark.api.java.JavaRDD;
 
+/**
+ * Adapter use Delta Writer.
+ */
 public interface DeltaWriterAdapter<I> {
 
   List<DeltaWriteStats> write(Iterator<I> input) throws IOException;

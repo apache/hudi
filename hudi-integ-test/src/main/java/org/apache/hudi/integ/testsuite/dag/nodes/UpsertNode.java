@@ -25,6 +25,9 @@ import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
 import org.apache.spark.api.java.JavaRDD;
 
+/**
+ * Represents an upsert node in the DAG of operations for a workflow.
+ */
 public class UpsertNode extends InsertNode {
 
   public UpsertNode(Config config) {

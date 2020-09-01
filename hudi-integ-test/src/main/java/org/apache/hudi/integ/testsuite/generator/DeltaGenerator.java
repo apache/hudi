@@ -57,7 +57,7 @@ import scala.Tuple2;
  */
 public class DeltaGenerator implements Serializable {
 
-  private static Logger log = LoggerFactory.getLogger(DFSHoodieDatasetInputReader.class);
+  private static Logger log = LoggerFactory.getLogger(DeltaGenerator.class);
 
   private DeltaConfig deltaOutputConfig;
   private transient JavaSparkContext jsc;

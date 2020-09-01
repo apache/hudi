@@ -35,6 +35,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
@@ -83,15 +84,21 @@ public class HoodieAvroUtils {
   /**
    * Convert a given avro record to bytes.
    */
-  public static byte[] avroToBytes(GenericRecord record) throws IOException {
-    GenericDatumWriter<GenericRecord> writer = new GenericDatumWriter<>(record.getSchema());
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, reuseEncoder.get());
-    reuseEncoder.set(encoder);
-    writer.write(record, encoder);
-    encoder.flush();
-    out.close();
-    return out.toByteArray();
+  public static byte[] avroToBytes(GenericRecord record) {
+    return indexedRecordToBytes(record);
+  }
+
+  public static <T extends IndexedRecord> byte[] indexedRecordToBytes(T record) {
+    GenericDatumWriter<T> writer = new GenericDatumWriter<>(record.getSchema());
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, reuseEncoder.get());
+      reuseEncoder.set(encoder);
+      writer.write(record, encoder);
+      encoder.flush();
+      return out.toByteArray();
+    } catch (IOException e) {
+      throw new HoodieIOException("Cannot convert GenericRecord to bytes", e);
+    }
   }
 
   /**
@@ -113,9 +120,16 @@ public class HoodieAvroUtils {
    * Convert serialized bytes back into avro record.
    */
   public static GenericRecord bytesToAvro(byte[] bytes, Schema schema) throws IOException {
+    return bytesToAvro(bytes, schema, schema);
+  }
+
+  /**
+   * Convert serialized bytes back into avro record.
+   */
+  public static GenericRecord bytesToAvro(byte[] bytes, Schema writerSchema, Schema readerSchema) throws IOException {
     BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, reuseDecoder.get());
     reuseDecoder.set(decoder);
-    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     return reader.read(null, decoder);
   }
 

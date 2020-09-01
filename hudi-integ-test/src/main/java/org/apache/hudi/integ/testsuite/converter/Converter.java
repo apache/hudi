@@ -29,5 +29,11 @@ import org.apache.spark.api.java.JavaRDD;
  */
 public interface Converter<I, O> extends Serializable {
 
+  /**
+   * Convert data from one format to another.
+   *
+   * @param inputRDD Input data
+   * @return Data in target format
+   */
   JavaRDD<O> convert(JavaRDD<I> inputRDD);
 }

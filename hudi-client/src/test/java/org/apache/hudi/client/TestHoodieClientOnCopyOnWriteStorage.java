@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -47,7 +48,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.io.IOType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.commit.WriteHelper;
@@ -80,6 +80,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
+import static org.apache.hudi.common.testutils.FileCreateUtils.getBaseFileCountsForPaths;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
@@ -506,8 +507,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // verify one basefile per partition
     String[] fullExpectedPartitionPaths = getFullPartitionPaths(expectedPartitionPathRecKeyPairs.stream().map(Pair::getLeft).toArray(String[]::new));
-    Map<String, Integer> baseFileCounts = getBaseFileCounts(fullExpectedPartitionPaths);
-    for (Map.Entry<String, Integer> entry : baseFileCounts.entrySet()) {
+    Map<String, Long> baseFileCounts = getBaseFileCountsForPaths(basePath, fs, fullExpectedPartitionPaths);
+    for (Map.Entry<String, Long> entry : baseFileCounts.entrySet()) {
       assertEquals(1, entry.getValue());
     }
     assertTrue(baseFileCounts.entrySet().stream().allMatch(entry -> entry.getValue() == 1));
@@ -532,9 +533,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // verify that there are more than 1 basefiles per partition
     // we can't guarantee randomness in partitions where records are distributed. So, verify atleast one partition has more than 1 basefile.
-    baseFileCounts = getBaseFileCounts(fullPartitionPaths);
+    baseFileCounts = getBaseFileCountsForPaths(basePath, fs, fullPartitionPaths);
     assertTrue(baseFileCounts.entrySet().stream().filter(entry -> entry.getValue() > 1).count() >= 1,
-        "Atleast one partition should have more than 1 base file after 2nd batch of writes");
+        "At least one partition should have more than 1 base file after 2nd batch of writes");
 
     // Write 3 (upserts to records from batch 1 with diff partition path)
     newCommitTime = "003";
@@ -603,10 +604,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, relativePartitionPaths[i]);
     }
     return fullPartitionPaths;
-  }
-
-  private Map<String, Integer> getBaseFileCounts(String[] fullPartitionPaths) {
-    return HoodieClientTestUtils.getBaseFileCountForPaths(basePath, fs, fullPartitionPaths);
   }
 
   private void assertActualAndExpectedPartitionPathRecordKeyMatches(Set<Pair<String, String>> expectedPartitionPathRecKeyPairs,
@@ -1264,7 +1261,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
                 .insertSplitSize(insertSplitSize).build())
         .withStorageConfig(
             HoodieStorageConfig.newBuilder()
-                .limitFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
+                .hfileMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200))
+                .parquetMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
         .build();
   }
 }

@@ -39,7 +39,7 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
-import org.apache.hudi.keygen.parser.HoodieDateTimeParser;
+import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.LogicalTypes;
@@ -172,9 +172,9 @@ public class DataSourceUtils {
   /**
    * Create a date time parser class for TimestampBasedKeyGenerator, passing in any configs needed.
    */
-  public static HoodieDateTimeParser createDateTimeParser(TypedProperties props, String parserClass) throws IOException {
+  public static AbstractHoodieDateTimeParser createDateTimeParser(TypedProperties props, String parserClass) throws IOException {
     try {
-      return (HoodieDateTimeParser) ReflectionUtils.loadClass(parserClass, props);
+      return (AbstractHoodieDateTimeParser) ReflectionUtils.loadClass(parserClass, props);
     } catch (Throwable e) {
       throw new IOException("Could not load date time parser class " + parserClass, e);
     }

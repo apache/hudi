@@ -557,7 +557,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
       LOG.info("Cleaned " + metadata.getTotalFilesDeleted() + " files"
           + " Earliest Retained Instant :" + metadata.getEarliestCommitToRetain()
-          + " cleanerElaspsedMs" + durationMs);
+          + " cleanerElapsedMs" + durationMs);
     }
     return metadata;
   }

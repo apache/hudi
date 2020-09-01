@@ -26,6 +26,9 @@ import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
 import org.apache.spark.api.java.JavaRDD;
 
+/**
+ * An insert node in the DAG of operations for a workflow.
+ */
 public class InsertNode extends DagNode<JavaRDD<WriteStatus>> {
 
   public InsertNode(Config config) {

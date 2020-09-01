@@ -24,12 +24,21 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
+/**
+ * A rollback node in the DAG helps to perform rollback operations.
+ */
 public class RollbackNode extends DagNode<Option<HoodieInstant>> {
 
   public RollbackNode(Config config) {
     this.config = config;
   }
 
+  /**
+   * Method helps to rollback the last commit instant in the timeline, if it has one.
+   *
+   * @param executionContext Execution context to perform this rollback
+   * @throws Exception will be thrown if any error occurred
+   */
   @Override
   public void execute(ExecutionContext executionContext) throws Exception {
     log.info("Executing rollback node {}", this.getName());

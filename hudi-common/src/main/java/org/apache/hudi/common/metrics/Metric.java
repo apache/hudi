@@ -16,15 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.functional;
-
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
+package org.apache.hudi.common.metrics;
 
 /**
- * Tests Avro log format {@link HoodieAvroDataBlock}.
+ * Interface for Hudi Metric Types.
  */
-public class TestHoodieAvroLogFormat extends TestHoodieLogFormat {
-  public TestHoodieAvroLogFormat() {
-    super(HoodieLogBlockType.AVRO_DATA_BLOCK);
-  }
+public interface Metric {
+  Long getValue();
 }

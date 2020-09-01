@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -38,7 +39,6 @@ import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.IOType;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
 import org.apache.hudi.io.storage.HoodieParquetWriter;
 
@@ -46,6 +46,10 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.hadoop.hbase.io.hfile.HFile;
+import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -57,16 +61,16 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Utility methods to aid testing inside the HoodieClient module.
@@ -74,57 +78,6 @@ import java.util.stream.Collectors;
 public class HoodieClientTestUtils {
 
   private static final Logger LOG = LogManager.getLogger(HoodieClientTestUtils.class);
-  public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
-
-  private static void fakeMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    String parentPath = basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME;
-    new File(parentPath).mkdirs();
-    new File(parentPath + "/" + instantTime + suffix).createNewFile();
-  }
-
-  public static void fakeCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
-  }
-
-  public static void fakeDeltaCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION);
-  }
-
-  public static void fakeInflightDeltaCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
-  }
-
-  public static void fakeInFlightCommit(String basePath, String instantTime) throws IOException {
-    fakeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_EXTENSION);
-  }
-
-  public static void fakeDataFile(String basePath, String partitionPath, String instantTime, String fileId)
-      throws Exception {
-    fakeDataFile(basePath, partitionPath, instantTime, fileId, 0);
-  }
-
-  public static void fakeDataFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
-      throws Exception {
-    String parentPath = String.format("%s/%s", basePath, partitionPath);
-    new File(parentPath).mkdirs();
-    String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(instantTime, "1-0-1", fileId));
-    new File(path).createNewFile();
-    new RandomAccessFile(path, "rw").setLength(length);
-  }
-
-  public static void fakeLogFile(String basePath, String partitionPath, String baseInstantTime, String fileId, int version)
-          throws Exception {
-    fakeLogFile(basePath, partitionPath, baseInstantTime, fileId, version, 0);
-  }
-
-  public static void fakeLogFile(String basePath, String partitionPath, String baseInstantTime, String fileId, int version, int length)
-          throws Exception {
-    String parentPath = String.format("%s/%s", basePath, partitionPath);
-    new File(parentPath).mkdirs();
-    String path = String.format("%s/%s", parentPath, FSUtils.makeLogFileName(fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseInstantTime, version, "1-0-1"));
-    new File(path).createNewFile();
-    new RandomAccessFile(path, "rw").setLength(length);
-  }
 
   /**
    * Returns a Spark config for this test.
@@ -153,8 +106,8 @@ public class HoodieClientTestUtils {
     return HoodieReadClient.addHoodieSupport(sparkConf);
   }
 
-  public static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,
-                                                                   List<HoodieInstant> commitsToReturn) throws IOException {
+  private static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,
+                                                                    List<HoodieInstant> commitsToReturn) throws IOException {
     HashMap<String, String> fileIdToFullPath = new HashMap<>();
     for (HoodieInstant commit : commitsToReturn) {
       HoodieCommitMetadata metadata =
@@ -184,7 +137,7 @@ public class HoodieClientTestUtils {
   /**
    * Obtain all new data written into the Hoodie table since the given timestamp.
    */
-  public static Dataset<Row> readSince(String basePath, SQLContext sqlContext,
+  public static long countRecordsSince(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
                                        HoodieTimeline commitTimeline, String lastCommitTime) {
     List<HoodieInstant> commitsToReturn =
         commitTimeline.findInstantsAfter(lastCommitTime, Integer.MAX_VALUE).getInstants().collect(Collectors.toList());
@@ -192,12 +145,17 @@ public class HoodieClientTestUtils {
       // Go over the commit metadata, and obtain the new files that need to be read.
       HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
       String[] paths = fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]);
-      Dataset<Row> rows = null;
       if (paths[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-        rows = sqlContext.read().parquet(paths);
+        return sqlContext.read().parquet(paths)
+            .filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime))
+            .count();
+      } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
+        return readHFile(jsc, paths)
+            .filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTime, HoodieActiveTimeline.LESSER_THAN,
+                gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
+            .count();
       }
-
-      return rows.filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime));
+      throw new HoodieException("Unsupported base file format for file :" + paths[0]);
     } catch (IOException e) {
       throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTime, e);
     }
@@ -225,26 +183,40 @@ public class HoodieClientTestUtils {
     }
   }
 
-  /**
-   * Find total basefiles for passed in paths.
-   */
-  public static Map<String, Integer> getBaseFileCountForPaths(String basePath, FileSystem fs,
-      String... paths) {
-    Map<String, Integer> toReturn = new HashMap<>();
-    try {
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
-      for (String path : paths) {
-        BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
-            metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new Path(path)));
-        List<HoodieBaseFile> latestFiles = fileSystemView.getLatestBaseFiles().collect(Collectors.toList());
-        toReturn.put(path, latestFiles.size());
+  public static Stream<GenericRecord> readHFile(JavaSparkContext jsc, String[] paths) {
+    // TODO: this should be ported to use HoodieStorageReader
+    List<GenericRecord> valuesAsList = new LinkedList<>();
+
+    FileSystem fs = FSUtils.getFs(paths[0], jsc.hadoopConfiguration());
+    CacheConfig cacheConfig = new CacheConfig(fs.getConf());
+    Schema schema = null;
+    for (String path : paths) {
+      try {
+        HFile.Reader reader = HFile.createReader(fs, new Path(path), cacheConfig, fs.getConf());
+        if (schema == null) {
+          schema = new Schema.Parser().parse(new String(reader.loadFileInfo().get("schema".getBytes())));
+        }
+        HFileScanner scanner = reader.getScanner(false, false);
+        if (!scanner.seekTo()) {
+          // EOF reached
+          continue;
+        }
+
+        do {
+          Cell c = scanner.getKeyValue();
+          byte[] value = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
+          valuesAsList.add(HoodieAvroUtils.bytesToAvro(value, schema));
+        } while (scanner.next());
+      } catch (IOException e) {
+        throw new HoodieException("Error reading hfile " + path + " as a dataframe", e);
       }
-      return toReturn;
-    } catch (Exception e) {
-      throw new HoodieException("Error reading hoodie table as a dataframe", e);
     }
+    return valuesAsList.stream();
   }
 
+  /**
+   * TODO Incorporate into {@link org.apache.hudi.common.testutils.HoodieTestTable}.
+   */
   public static String writeParquetFile(String basePath, String partitionPath, String filename,
                                         List<HoodieRecord> records, Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException {
 
@@ -278,6 +250,9 @@ public class HoodieClientTestUtils {
     return filename;
   }
 
+  /**
+   * TODO Incorporate into {@link org.apache.hudi.common.testutils.HoodieTestTable}.
+   */
   public static String writeParquetFile(String basePath, String partitionPath, List<HoodieRecord> records,
                                         Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException, InterruptedException {
     Thread.sleep(1000);
@@ -289,49 +264,4 @@ public class HoodieClientTestUtils {
         createCommitTime);
   }
 
-  public static String createNewMarkerFile(String basePath, String partitionPath, String instantTime)
-      throws IOException {
-    return createMarkerFile(basePath, partitionPath, instantTime);
-  }
-
-  public static String createMarkerFile(String basePath, String partitionPath, String instantTime)
-          throws IOException {
-    return createMarkerFile(basePath, partitionPath, instantTime, UUID.randomUUID().toString(), IOType.MERGE);
-  }
-
-  public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileID, IOType ioType)
-          throws IOException {
-    String folderPath = basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME + "/" + instantTime + "/" + partitionPath + "/";
-    new File(folderPath).mkdirs();
-    String markerFileName = String.format("%s_%s_%s%s%s.%s", fileID, DEFAULT_WRITE_TOKEN, instantTime,
-        HoodieFileFormat.PARQUET.getFileExtension(), HoodieTableMetaClient.MARKER_EXTN, ioType);
-    File f = new File(folderPath + markerFileName);
-    f.createNewFile();
-    return f.getAbsolutePath();
-  }
-
-  public static void createMarkerFile(String basePath, String partitionPath, String instantTime, String dataFileName) throws IOException {
-    createTempFolderForMarkerFiles(basePath);
-    String folderPath = getTempFolderName(basePath);
-    // create dir for this instant
-    new File(folderPath + "/" + instantTime + "/" + partitionPath).mkdirs();
-    new File(folderPath + "/" + instantTime + "/" + partitionPath + "/" + dataFileName + ".marker.MERGE").createNewFile();
-  }
-
-  public static int getTotalMarkerFileCount(String basePath, String partitionPath, String instantTime) {
-    String folderPath = getTempFolderName(basePath);
-    File markerDir = new File(folderPath + "/" + instantTime + "/" + partitionPath);
-    if (markerDir.exists()) {
-      return markerDir.listFiles((dir, name) -> name.contains(".marker.MERGE")).length;
-    }
-    return 0;
-  }
-
-  public static void createTempFolderForMarkerFiles(String basePath) {
-    new File(basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME).mkdirs();
-  }
-
-  public static String getTempFolderName(String basePath) {
-    return basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME;
-  }
 }

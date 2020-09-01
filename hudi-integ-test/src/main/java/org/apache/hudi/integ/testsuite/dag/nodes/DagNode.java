@@ -29,7 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Represents a Node in the DAG of operations for a workflow.
+ * Base abstraction of an compute node in the DAG of operations for a workflow.
  */
 public abstract class DagNode<O> implements Comparable<DagNode<O>> {
 
@@ -76,6 +76,12 @@ public abstract class DagNode<O> implements Comparable<DagNode<O>> {
     this.parentNodes = parentNodes;
   }
 
+  /**
+   * Execute the {@link DagNode}.
+   *
+   * @param context The context needed for an execution of a node.
+   * @throws Exception Thrown if the execution failed.
+   */
   public abstract void execute(ExecutionContext context) throws Exception;
 
   public boolean isCompleted() {

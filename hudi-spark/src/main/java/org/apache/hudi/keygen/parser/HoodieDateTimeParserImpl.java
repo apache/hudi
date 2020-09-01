@@ -19,6 +19,7 @@ package org.apache.hudi.keygen.parser;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator.Config;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator.TimestampType;
 import org.joda.time.DateTimeZone;
@@ -27,41 +28,22 @@ import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.DateTimeFormatterBuilder;
 import org.joda.time.format.DateTimeParser;
 
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.TimeZone;
 
-public class HoodieDateTimeParserImpl implements HoodieDateTimeParser, Serializable {
+public class HoodieDateTimeParserImpl extends AbstractHoodieDateTimeParser {
 
   private String configInputDateFormatList;
-  private final String configInputDateFormatDelimiter;
-  private final TypedProperties config;
-  private DateTimeFormatter inputFormatter;
 
   // TimeZone detailed settings reference
   // https://docs.oracle.com/javase/8/docs/api/java/util/TimeZone.html
   private final DateTimeZone inputDateTimeZone;
 
   public HoodieDateTimeParserImpl(TypedProperties config) {
-    this.config = config;
+    super(config);
     DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.TIMESTAMP_TYPE_FIELD_PROP, Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP));
     this.inputDateTimeZone = getInputDateTimeZone();
-    this.configInputDateFormatDelimiter = getConfigInputDateFormatDelimiter();
-
-    TimestampType timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
-    if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
-      DataSourceUtils.checkRequiredProperties(config,
-          Collections.singletonList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
-      this.configInputDateFormatList = config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "");
-      inputFormatter = getInputDateFormatter();
-    }
-  }
-
-  private String getConfigInputDateFormatDelimiter() {
-    String inputDateFormatDelimiter = config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP, ",").trim();
-    inputDateFormatDelimiter = inputDateFormatDelimiter.isEmpty() ? "," : inputDateFormatDelimiter;
-    return inputDateFormatDelimiter;
   }
 
   private DateTimeFormatter getInputDateFormatter() {
@@ -73,7 +55,7 @@ public class HoodieDateTimeParserImpl implements HoodieDateTimeParser, Serializa
         .append(
         null,
         Arrays.stream(
-          this.configInputDateFormatList.split(this.configInputDateFormatDelimiter))
+          this.configInputDateFormatList.split(super.configInputDateFormatDelimiter))
           .map(String::trim)
           .map(DateTimeFormat::forPattern)
           .map(DateTimeFormatter::getParser)
@@ -94,8 +76,16 @@ public class HoodieDateTimeParserImpl implements HoodieDateTimeParser, Serializa
   }
 
   @Override
-  public DateTimeFormatter getInputFormatter() {
-    return this.inputFormatter;
+  public Option<DateTimeFormatter> getInputFormatter() {
+    TimestampType timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
+    if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
+      DataSourceUtils.checkRequiredProperties(config,
+          Collections.singletonList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
+      this.configInputDateFormatList = config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "");
+      return Option.of(getInputDateFormatter());
+    }
+
+    return Option.empty();
   }
 
   @Override
@@ -119,4 +109,5 @@ public class HoodieDateTimeParserImpl implements HoodieDateTimeParser, Serializa
     }
     return !outputTimeZone.trim().isEmpty() ? DateTimeZone.forTimeZone(TimeZone.getTimeZone(outputTimeZone)) : null;
   }
+
 }
