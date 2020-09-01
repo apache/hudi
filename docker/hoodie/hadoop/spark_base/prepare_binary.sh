@@ -17,19 +17,20 @@
 # limitations under the License.
 
 SCRIPT_PATH=$(cd `dirname $0`; pwd)
+# set up root directory
 WS_ROOT=`dirname $SCRIPT_PATH`
 
-#check if the relevant binaries have been cached, if not, download them firstly
-sh prepare_binaries.sh
+echo "Preparing Spark binary file."
+SPARK_VERSION=2.4.4
+HADOOP_VERSION=2.8.4
+SPARK_HADOOP_VERSION=2.7
 
-while true; do
-    read -p  "Docker images can be downloaded from docker hub and seamlessly mounted with latest HUDI jars. Do you still want to build docker images from scratch ?" yn
-    case $yn in
-        [Yy]* ) make install; break;;
-        [Nn]* ) exit;;
-        * ) echo "Please answer yes or no.";;
-    esac
-done
-pushd ${WS_ROOT}
-mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false
-popd
+SPARK_BINARY_FILE_NAME=spark-${SPARK_VERSION}-bin-hadoop${SPARK_HADOOP_VERSION}.tgz
+SPARK_BINARY_CACHE_FILE_PATH=$SCRIPT_PATH/binarycache/$SPARK_BINARY_FILE_NAME
+
+if [ -f $SPARK_BINARY_CACHE_FILE_PATH ]; then
+  echo "The binary file $SPARK_BINARY_FILE_NAME has been cached in the binary cache directory!"
+else
+  echo "The binary file $SPARK_BINARY_FILE_NAME did not exist in the binary cache directory, try to download."
+  wget http://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_BINARY_FILE_NAME} -O ${SPARK_BINARY_CACHE_FILE_PATH}
+fi

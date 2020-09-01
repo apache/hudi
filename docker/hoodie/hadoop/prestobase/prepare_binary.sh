@@ -17,19 +17,17 @@
 # limitations under the License.
 
 SCRIPT_PATH=$(cd `dirname $0`; pwd)
+# set up root directory
 WS_ROOT=`dirname $SCRIPT_PATH`
 
-#check if the relevant binaries have been cached, if not, download them firstly
-sh prepare_binaries.sh
+echo "Preparing Presto server binary file."
+PRESTO_VERSION=0.217
+PRESTO_BINARY_FILE_NAME=presto-server-${PRESTO_VERSION}.tar.gz
+PRESTO_BINARY_CACHE_FILE_PATH=$SCRIPT_PATH/binarycache/$PRESTO_BINARY_FILE_NAME
 
-while true; do
-    read -p  "Docker images can be downloaded from docker hub and seamlessly mounted with latest HUDI jars. Do you still want to build docker images from scratch ?" yn
-    case $yn in
-        [Yy]* ) make install; break;;
-        [Nn]* ) exit;;
-        * ) echo "Please answer yes or no.";;
-    esac
-done
-pushd ${WS_ROOT}
-mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false
-popd
+if [ -f $PRESTO_BINARY_CACHE_FILE_PATH ]; then
+  echo "The binary file $PRESTO_BINARY_FILE_NAME has been cached in the binary cache directory!"
+else
+  echo "The binary file $PRESTO_BINARY_FILE_NAME did not exist in the binary cache directory, try to download."
+  wget https://repo1.maven.org/maven2/com/facebook/presto/presto-server/${PRESTO_VERSION}/${PRESTO_BINARY_FILE_NAME} -O ${PRESTO_BINARY_CACHE_FILE_PATH}
+fi

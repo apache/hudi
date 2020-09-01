@@ -17,19 +17,17 @@
 # limitations under the License.
 
 SCRIPT_PATH=$(cd `dirname $0`; pwd)
+# set up root directory
 WS_ROOT=`dirname $SCRIPT_PATH`
 
-#check if the relevant binaries have been cached, if not, download them firstly
-sh prepare_binaries.sh
+echo "Preparing Hive binary file."
+HIVE_VERSION=2.3.3
+HIVE_BINARY_FILE_NAME=hive.tar.gz
+HIVE_BINARY_CACHE_FILE_PATH=$SCRIPT_PATH/binarycache/$HIVE_BINARY_FILE_NAME
 
-while true; do
-    read -p  "Docker images can be downloaded from docker hub and seamlessly mounted with latest HUDI jars. Do you still want to build docker images from scratch ?" yn
-    case $yn in
-        [Yy]* ) make install; break;;
-        [Nn]* ) exit;;
-        * ) echo "Please answer yes or no.";;
-    esac
-done
-pushd ${WS_ROOT}
-mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false
-popd
+if [ -f $HIVE_BINARY_CACHE_FILE_PATH ]; then
+  echo "The binary file $HIVE_BINARY_FILE_NAME has been cached in the binary cache directory!"
+else
+  echo "The binary file $HIVE_BINARY_FILE_NAME did not exist in the binary cache directory, try to download."
+  wget https://archive.apache.org/dist/hive/hive-$HIVE_VERSION/apache-hive-$HIVE_VERSION-bin.tar.gz -O ${HIVE_BINARY_CACHE_FILE_PATH}
+fi

@@ -17,19 +17,26 @@
 # limitations under the License.
 
 SCRIPT_PATH=$(cd `dirname $0`; pwd)
+# set up root directory
 WS_ROOT=`dirname $SCRIPT_PATH`
 
-#check if the relevant binaries have been cached, if not, download them firstly
-sh prepare_binaries.sh
+function prepare_binaries_recursively() {
+    scriptlist=$(ls | grep '\prepare_binary.sh$')
+    for script in $scriptlist
+     do
+        fullpath=$(cd `dirname $0`; pwd)/$script
+        sh $fullpath
+     done
 
-while true; do
-    read -p  "Docker images can be downloaded from docker hub and seamlessly mounted with latest HUDI jars. Do you still want to build docker images from scratch ?" yn
-    case $yn in
-        [Yy]* ) make install; break;;
-        [Nn]* ) exit;;
-        * ) echo "Please answer yes or no.";;
-    esac
-done
-pushd ${WS_ROOT}
-mvn clean pre-integration-test -DskipTests -Ddocker.compose.skip=true -Ddocker.build.skip=false
-popd
+    dirlist=$(ls)
+    for dirname in $dirlist
+     do
+        if [ -d "$dirname" ]; then
+            cd $dirname
+            prepare_binaries_recursively
+            cd ..
+        fi
+     done
+}
+
+prepare_binaries_recursively

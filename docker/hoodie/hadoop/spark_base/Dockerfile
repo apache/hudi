@@ -32,9 +32,9 @@ ENV HADOOP_VERSION ${SPARK_HADOOP_VERSION}
 COPY wait-for-step.sh /
 COPY execute-step.sh /
 COPY finish-step.sh /
+COPY binarycache/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz .
 
 RUN echo "Installing Spark-version (${SPARK_VERSION})" \
-      &&  wget http://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
       && tar -xvzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
       && mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} /opt/spark \
       && rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \

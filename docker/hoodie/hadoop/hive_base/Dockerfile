@@ -29,8 +29,10 @@ ARG HIVE_URL=https://archive.apache.org/dist/hive/hive-$HIVE_VERSION/apache-hive
 ENV HIVE_VERSION ${HIVE_VERSION}
 ENV HIVE_URL ${HIVE_URL}
 
+COPY binarycache/hive.tar.gz .
+
 #Install Hive MySQL, PostgreSQL JDBC
-RUN echo "Hive URL is :${HIVE_URL}" && wget ${HIVE_URL} -O hive.tar.gz && \
+RUN echo "Hive URL is :${HIVE_URL}" && \
 	tar -xzvf hive.tar.gz && mv *hive*-bin hive && \
         ln -s /usr/share/java/mysql-connector-java.jar $HIVE_HOME/lib/mysql-connector-java.jar && \
 	wget https://jdbc.postgresql.org/download/postgresql-9.4.1212.jar -O $HIVE_HOME/lib/postgresql-jdbc.jar && \

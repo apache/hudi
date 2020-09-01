@@ -34,6 +34,8 @@ ENV PRESTO_QUERY_MAX_MEMORY_PER_NODE 512MB
 ENV PRESTO_DISCOVERY_URI  http://presto-coordinator-1:8090
 ENV PATH        $PATH:${PRESTO_HOME}/bin
 
+COPY binarycache/presto-server-${PRESTO_VERSION}.tar.gz .
+
 RUN set -x \
     && DEBIAN_FRONTEND=noninteractive apt-get -yq update \
     && apt-get -yq install \
@@ -53,8 +55,7 @@ RUN set -x \
         gosu \
     && rm -rf /var/lib/apt/lists/* \
     ## presto-server
-    && wget -q -O - https://repo1.maven.org/maven2/com/facebook/presto/presto-server/${PRESTO_VERSION}/presto-server-${PRESTO_VERSION}.tar.gz \
-        | tar -xzf - -C /opt/  \
+    && tar -xzf presto-server-${PRESTO_VERSION}.tar.gz -C /opt/  \
     && mkdir -p /var/hoodie/ws/docker/hoodie/hadoop/prestobase/target/ \
     ## presto-client
     && wget -q -O /usr/local/bin/presto https://repo1.maven.org/maven2/com/facebook/presto/presto-cli/${PRESTO_VERSION}/presto-cli-${PRESTO_VERSION}-executable.jar \
