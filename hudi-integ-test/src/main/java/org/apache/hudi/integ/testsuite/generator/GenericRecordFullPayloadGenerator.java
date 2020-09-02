@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
@@ -44,6 +46,7 @@ import org.slf4j.LoggerFactory;
 public class GenericRecordFullPayloadGenerator implements Serializable {
 
   public static final int DEFAULT_PAYLOAD_SIZE = 1024 * 10; // 10 KB
+  public static final int DEFAULT_NUM_DATE_PARTITIONS = 50;
   private static Logger log = LoggerFactory.getLogger(GenericRecordFullPayloadGenerator.class);
   protected final Random random = new Random();
   // The source schema used to generate a payload
@@ -58,6 +61,8 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   private int numberOfComplexFields;
   // The size of a full record where every field of a generic record created contains 1 random value
   private int estimatedFullPayloadSize;
+  // The number of unique dates to create
+  private int numDatePartitions = DEFAULT_NUM_DATE_PARTITIONS;
   // LogicalTypes in Avro 1.8.2
   private static final String DECIMAL = "decimal";
   private static final String UUID_NAME = "uuid";
@@ -85,6 +90,10 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
             minPayloadSize);
       }
     }
+  }
+  public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize, int numDatePartitions) {
+    this(schema, minPayloadSize);
+    this.numDatePartitions = numDatePartitions;
   }
 
   protected static boolean isPrimitive(Schema localSchema) {
@@ -170,6 +179,12 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     return record;
   }
 
+  private long getNextConstrainedLong() {
+    int numPartitions = random.nextInt(numDatePartitions);
+    long unixTimeStamp = TimeUnit.SECONDS.convert(numPartitions, TimeUnit.DAYS);
+    return unixTimeStamp;
+  }
+
   /**
    * Generate random value according to their type.
    */
@@ -188,7 +203,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
       case INT:
         return random.nextInt();
       case LONG:
-        return random.nextLong();
+        return getNextConstrainedLong();
       case STRING:
         return UUID.randomUUID().toString();
       case ENUM:

@@ -80,7 +80,7 @@ public class DagScheduler {
   private void execute(ExecutorService service, List<DagNode> nodes) throws Exception {
     // Nodes at the same level are executed in parallel
     Queue<DagNode> queue = new PriorityQueue<>(nodes);
-    log.info("Running workloads");
+    log.warn("Running workloads");
     do {
       List<Future> futures = new ArrayList<>();
       Set<DagNode> childNodes = new HashSet<>();
@@ -110,6 +110,7 @@ public class DagScheduler {
       throw new RuntimeException("DagNode already completed! Cannot re-execute");
     }
     try {
+      log.warn("executing node: " + node.getName() + " of type: " + node.getClass());
       node.execute(executionContext);
       node.setCompleted(true);
       log.info("Finished executing {}", node.getName());
