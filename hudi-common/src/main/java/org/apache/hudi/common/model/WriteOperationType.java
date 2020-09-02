@@ -72,15 +72,6 @@ public enum WriteOperationType {
   }
 
   /**
-   * Returns the name of this enum constant, as contained in the declaration.
-   * @return string form of WriteOperationType
-   */
-  @Override
-  public String toString() {
-    return value();
-  }
-
-  /**
    * Getter for value.
    * @return string form of WriteOperationType
    */
