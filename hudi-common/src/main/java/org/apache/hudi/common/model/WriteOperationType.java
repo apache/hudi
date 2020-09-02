@@ -81,7 +81,7 @@ public enum WriteOperationType {
   }
 
   /**
-   * Getter for value
+   * Getter for value.
    * @return string form of WriteOperationType
    */
   public String value() {
