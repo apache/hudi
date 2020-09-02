@@ -19,7 +19,10 @@
 package org.apache.hudi.common.config;
 
 import java.io.Serializable;
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -37,7 +40,7 @@ public class TypedProperties extends Properties implements Serializable {
 
   private boolean checkKey(String property) {
     Set<String> keys = super.stringPropertyNames();
-    if(!keys.contains(property)){
+    if (!keys.contains(property)) {
       throw new IllegalArgumentException("Property " + property + " not found");
     }
     return true;
