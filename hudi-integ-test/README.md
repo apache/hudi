@@ -51,13 +51,13 @@ The test suite supports different types of operations besides ingestion such as 
 ## Entry class to the test suite
 
 ```
-org.apache.hudi.testsuite.HoodieTestSuiteJob.java - Entry Point of the hudi test suite job. This 
+org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.java - Entry Point of the hudi test suite job. This  
 class wraps all the functionalities required to run a configurable integration suite.
 ```
 
 ## Configurations required to run the job
 ```
-org.apache.hudi.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig - Config class that drives the behavior of the 
+org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig - Config class that drives the behavior of the  
 integration test suite. This class extends from com.uber.hoodie.utilities.DeltaStreamerConfig. Look at 
 link#HudiDeltaStreamer page to learn about all the available configs applicable to your test suite.
 ```
@@ -68,29 +68,29 @@ There are 2 ways to generate a workload pattern
 
  1.Programmatically
 
-Choose to write up the entire DAG of operations programmatically, take a look at `WorkflowDagGenerator` class.
+You can create a DAG of operations programmatically - take a look at `WorkflowDagGenerator` class.
 Once you're ready with the DAG you want to execute, simply pass the class name as follows:
 
 ```
 spark-submit
 ...
 ...
---class org.apache.hudi.testsuite.HoodieTestSuiteJob 
---workload-generator-classname org.apache.hudi.testsuite.dag.scheduler.<your_workflowdaggenerator>
+--class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob 
+--workload-generator-classname org.apache.hudi.integ.testsuite.dag.scheduler.<your_workflowdaggenerator>
 ...
 ```
 
  2.YAML file
 
-Choose to write up the entire DAG of operations in YAML, take a look at `complex-workload-dag-cow.yaml` or 
-`complex-workload-dag-mor.yaml`.
+Choose to write up the entire DAG of operations in YAML, take a look at `complex-dag-cow.yaml` or 
+`complex-dag-mor.yaml`.
 Once you're ready with the DAG you want to execute, simply pass the yaml file path as follows:
 
 ```
 spark-submit
 ...
 ...
---class org.apache.hudi.testsuite.HoodieTestSuiteJob 
+--class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob  
 --workload-yaml-path /path/to/your-workflow-dag.yaml
 ...
 ```
@@ -136,127 +136,161 @@ Take a look at the `TestHoodieTestSuiteJob` to check how you can run the entire 
 
 ## Running an end to end test suite in Local Docker environment
 
+Start the Hudi Docker demo:
+
+```
+docker/setup_demo.sh
+```
+
+NOTE: We need to make a couple of environment changes for Hive 2.x support. This will be fixed once Hudi moves to Spark 3.x
+
+```
+docker exec -it adhoc-2 bash
+
+cd /opt/spark/jars
+rm /opt/spark/jars/hive*
+rm spark-hive-thriftserver_2.11-2.4.4.jar
+
+wget https://repo1.maven.org/maven2/org/apache/spark/spark-hive-thriftserver_2.12/3.0.0-preview2/spark-hive-thriftserver_2.12-3.0.0-preview2.jar
+wget https://repo1.maven.org/maven2/org/apache/hive/hive-common/2.3.1/hive-common-2.3.1.jar
+wget https://repo1.maven.org/maven2/org/apache/hive/hive-exec/2.3.1/hive-exec-2.3.1-core.jar
+wget https://repo1.maven.org/maven2/org/apache/hive/hive-jdbc/2.3.1/hive-jdbc-2.3.1.jar
+wget https://repo1.maven.org/maven2/org/apache/hive/hive-llap-common/2.3.1/hive-llap-common-2.3.1.jar
+wget https://repo1.maven.org/maven2/org/apache/hive/hive-metastore/2.3.1/hive-metastore-2.3.1.jar
+wget https://repo1.maven.org/maven2/org/apache/hive/hive-serde/2.3.1/hive-serde-2.3.1.jar
+wget https://repo1.maven.org/maven2/org/apache/hive/hive-service/2.3.1/hive-service-2.3.1.jar
+wget https://repo1.maven.org/maven2/org/apache/hive/hive-service-rpc/2.3.1/hive-service-rpc-2.3.1.jar
+wget https://repo1.maven.org/maven2/org/apache/hive/shims/hive-shims-0.23/2.3.1/hive-shims-0.23-2.3.1.jar
+wget https://repo1.maven.org/maven2/org/apache/hive/shims/hive-shims-common/2.3.1/hive-shims-common-2.3.1.jar
+wget https://repo1.maven.org/maven2/org/apache/hive/hive-storage-api/2.3.1/hive-storage-api-2.3.1.jar
+wget https://repo1.maven.org/maven2/org/apache/hive/hive-shims/2.3.1/hive-shims-2.3.1.jar
+wget https://repo1.maven.org/maven2/org/json/json/20090211/json-20090211.jar
+cp /opt/hive/lib/log* /opt/spark/jars/
+rm log4j-slf4j-impl-2.6.2.jar
+
+cd /opt
+
+```
+
+Copy the integration tests jar into the docker container
+
+```
+docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar adhoc-2:/opt
+```
+
+Copy the following test properties file:
+```
+echo '
+hoodie.deltastreamer.source.test.num_partitions=100
+hoodie.deltastreamer.source.test.datagen.use_rocksdb_for_storing_existing_keys=false
+hoodie.deltastreamer.source.test.max_unique_records=100000000
+hoodie.embed.timeline.server=false
+
+hoodie.datasource.write.recordkey.field=_row_key
+hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.TimestampBasedKeyGenerator
+hoodie.datasource.write.partitionpath.field=timestamp
+
+hoodie.deltastreamer.source.dfs.root=/user/hive/warehouse/hudi-integ-test-suite/input
+hoodie.deltastreamer.schemaprovider.target.schema.file=file:/var/hoodie/ws/docker/demo/config/test-suite/source.avsc
+hoodie.deltastreamer.schemaprovider.source.schema.file=file:/var/hoodie/ws/docker/demo/config/test-suite/source.avsc
+hoodie.deltastreamer.keygen.timebased.timestamp.type=UNIX_TIMESTAMP
+hoodie.deltastreamer.keygen.timebased.output.dateformat=yyyy/MM/dd
+
+hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000/
+hoodie.datasource.hive_sync.database=testdb
+hoodie.datasource.hive_sync.table=table1
+hoodie.datasource.hive_sync.assume_date_partitioning=false
+hoodie.datasource.hive_sync.partition_fields=_hoodie_partition_path
+hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor 
+' > test.properties
+
+docker cp test.properties adhoc-2:/opt
+```
+
+Clean the working directories before starting a new test:
+
+```
+hdfs dfs -rm -r /user/hive/warehouse/hudi-integ-test-suite/output/
+hdfs dfs -rm -r /user/hive/warehouse/hudi-integ-test-suite/input/
+```
+
+Launch a Copy-on-Write job:
+
 ```
 docker exec -it adhoc-2 /bin/bash
 # COPY_ON_WRITE tables
 =========================
 ## Run the following command to start the test suite
-spark-submit \ 
---packages com.databricks:spark-avro_2.11:4.0.0 \ 
---conf spark.task.cpus=1 \ 
---conf spark.executor.cores=1 \ 
---conf spark.task.maxFailures=100 \ 
---conf spark.memory.fraction=0.4 \ 
---conf spark.rdd.compress=true \ 
---conf spark.kryoserializer.buffer.max=2000m \ 
---conf spark.serializer=org.apache.spark.serializer.KryoSerializer \ 
---conf spark.memory.storageFraction=0.1 \ 
---conf spark.shuffle.service.enabled=true \ 
---conf spark.sql.hive.convertMetastoreParquet=false \ 
---conf spark.ui.port=5555 \ 
---conf spark.driver.maxResultSize=12g \ 
---conf spark.executor.heartbeatInterval=120s \ 
---conf spark.network.timeout=600s \ 
---conf spark.eventLog.overwrite=true \ 
---conf spark.eventLog.enabled=true \ 
---conf spark.yarn.max.executor.failures=10 \ 
---conf spark.sql.catalogImplementation=hive \ 
---conf spark.sql.shuffle.partitions=1000 \ 
---class org.apache.hudi.testsuite.HoodieTestSuiteJob $HUDI_TEST_SUITE_BUNDLE \
---source-ordering-field timestamp \ 
---target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \ 
---input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \ 
---target-table test_table \ 
---props /var/hoodie/ws/docker/demo/config/testsuite/test-source.properties \ 
---schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \ 
---source-limit 300000 \ 
---source-class org.apache.hudi.utilities.sources.AvroDFSSource \ 
---input-file-size 125829120 \ 
---workload-yaml-path /var/hoodie/ws/docker/demo/config/testsuite/complex-workflow-dag-cow.yaml \ 
---storage-type COPY_ON_WRITE \ 
---compact-scheduling-minshare 1 \ 
---hoodie-conf "hoodie.deltastreamer.source.test.num_partitions=100" \ 
---hoodie-conf "hoodie.deltastreamer.source.test.datagen.use_rocksdb_for_storing_existing_keys=false" \ 
---hoodie-conf "hoodie.deltastreamer.source.test.max_unique_records=100000000" \ 
---hoodie-conf "hoodie.embed.timeline.server=false" \ 
---hoodie-conf "hoodie.datasource.write.recordkey.field=_row_key" \ 
---hoodie-conf "hoodie.deltastreamer.source.dfs.root=/user/hive/warehouse/hudi-integ-test-suite/input" \ 
---hoodie-conf "hoodie.datasource.write.keygenerator.class=org.apache.hudi.ComplexKeyGenerator" \ 
---hoodie-conf "hoodie.datasource.write.partitionpath.field=timestamp" \ 
---hoodie-conf "hoodie.deltastreamer.schemaprovider.source.schema.file=/var/hoodie/ws/docker/demo/config/testsuite/source.avsc" \ 
---hoodie-conf "hoodie.datasource.hive_sync.assume_date_partitioning=false" \ 
---hoodie-conf "hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000/" \ 
---hoodie-conf "hoodie.datasource.hive_sync.database=testdb" \ 
---hoodie-conf "hoodie.datasource.hive_sync.table=test_table" \ 
---hoodie-conf "hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.NonPartitionedExtractor" \ 
---hoodie-conf "hoodie.datasource.hive_sync.assume_date_partitioning=true" \ 
---hoodie-conf "hoodie.datasource.write.keytranslator.class=org.apache.hudi.DayBasedPartitionPathKeyTranslator" \ 
---hoodie-conf "hoodie.deltastreamer.schemaprovider.target.schema.file=/var/hoodie/ws/docker/demo/config/testsuite/source.avsc"
-...
-...
-2019-11-03 05:44:47 INFO  DagScheduler:69 - ----------- Finished workloads ----------
-2019-11-03 05:44:47 INFO  HoodieTestSuiteJob:138 - Finished scheduling all tasks
-...
-2019-11-03 05:44:48 INFO  SparkContext:54 - Successfully stopped SparkContext
+spark-submit \
+--packages org.apache.spark:spark-avro_2.11:2.4.0 \
+--conf spark.task.cpus=1 \
+--conf spark.executor.cores=1 \
+--conf spark.task.maxFailures=100 \
+--conf spark.memory.fraction=0.4  \
+--conf spark.rdd.compress=true  \
+--conf spark.kryoserializer.buffer.max=2000m \
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.memory.storageFraction=0.1 \
+--conf spark.shuffle.service.enabled=true  \
+--conf spark.sql.hive.convertMetastoreParquet=false  \
+--conf spark.driver.maxResultSize=12g \
+--conf spark.executor.heartbeatInterval=120s \
+--conf spark.network.timeout=600s \
+--conf spark.yarn.max.executor.failures=10 \
+--conf spark.sql.catalogImplementation=hive \
+--class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
+/opt/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar \
+--source-ordering-field timestamp \
+--use-deltastreamer \
+--target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
+--input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
+--target-table table1 \
+--props test.properties \
+--schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
+--source-class org.apache.hudi.utilities.sources.AvroDFSSource \
+--input-file-size 125829120 \
+--workload-yaml-path file:/var/hoodie/ws/docker/demo/config/test-suite/complex-dag-cow.yaml \
+--workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
+--table-type COPY_ON_WRITE \
+--compact-scheduling-minshare 1
+```
+
+Or a Merge-on-Read job:
+```
 # MERGE_ON_READ tables
 =========================
 ## Run the following command to start the test suite
-spark-submit \ 
---packages com.databricks:spark-avro_2.11:4.0.0 \ 
---conf spark.task.cpus=1 \ 
---conf spark.executor.cores=1 \ 
---conf spark.task.maxFailures=100 \ 
---conf spark.memory.fraction=0.4 \ 
---conf spark.rdd.compress=true \ 
---conf spark.kryoserializer.buffer.max=2000m \ 
---conf spark.serializer=org.apache.spark.serializer.KryoSerializer \ 
---conf spark.memory.storageFraction=0.1 \ 
---conf spark.shuffle.service.enabled=true \ 
---conf spark.sql.hive.convertMetastoreParquet=false \ 
---conf spark.ui.port=5555 \ 
---conf spark.driver.maxResultSize=12g \ 
---conf spark.executor.heartbeatInterval=120s \ 
---conf spark.network.timeout=600s \ 
---conf spark.eventLog.overwrite=true \ 
---conf spark.eventLog.enabled=true \ 
---conf spark.yarn.max.executor.failures=10 \ 
---conf spark.sql.catalogImplementation=hive \ 
---conf spark.sql.shuffle.partitions=1000 \ 
---class org.apache.hudi.testsuite.HoodieTestSuiteJob $HUDI_TEST_SUITE_BUNDLE \
---source-ordering-field timestamp \ 
---target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \ 
---input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \ 
---target-table test_table \ 
---props /var/hoodie/ws/docker/demo/config/testsuite/test-source.properties \ 
---schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \ 
---source-limit 300000 \ 
---source-class org.apache.hudi.utilities.sources.AvroDFSSource \ 
---input-file-size 125829120 \ 
---workload-yaml-path /var/hoodie/ws/docker/demo/config/testsuite/complex-workflow-dag-mor.yaml \ 
---storage-type MERGE_ON_READ \ 
---compact-scheduling-minshare 1 \ 
---hoodie-conf "hoodie.deltastreamer.source.test.num_partitions=100" \ 
---hoodie-conf "hoodie.deltastreamer.source.test.datagen.use_rocksdb_for_storing_existing_keys=false" \ 
---hoodie-conf "hoodie.deltastreamer.source.test.max_unique_records=100000000" \ 
---hoodie-conf "hoodie.embed.timeline.server=false" \ 
---hoodie-conf "hoodie.datasource.write.recordkey.field=_row_key" \ 
---hoodie-conf "hoodie.deltastreamer.source.dfs.root=/user/hive/warehouse/hudi-integ-test-suite/input" \ 
---hoodie-conf "hoodie.datasource.write.keygenerator.class=org.apache.hudi.ComplexKeyGenerator" \ 
---hoodie-conf "hoodie.datasource.write.partitionpath.field=timestamp" \ 
---hoodie-conf "hoodie.deltastreamer.schemaprovider.source.schema.file=/var/hoodie/ws/docker/demo/config/testsuite/source.avsc" \ 
---hoodie-conf "hoodie.datasource.hive_sync.assume_date_partitioning=false" \ 
---hoodie-conf "hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000/" \ 
---hoodie-conf "hoodie.datasource.hive_sync.database=testdb" \ 
---hoodie-conf "hoodie.datasource.hive_sync.table=test_table" \ 
---hoodie-conf "hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.NonPartitionedExtractor" \ 
---hoodie-conf "hoodie.datasource.hive_sync.assume_date_partitioning=true" \ 
---hoodie-conf "hoodie.datasource.write.keytranslator.class=org.apache.hudi.DayBasedPartitionPathKeyTranslator" \ 
---hoodie-conf "hoodie.deltastreamer.schemaprovider.target.schema.file=/var/hoodie/ws/docker/demo/config/testsuite/source.avsc"
-...
-...
-2019-11-03 05:44:47 INFO  DagScheduler:69 - ----------- Finished workloads ----------
-2019-11-03 05:44:47 INFO  HoodieTestSuiteJob:138 - Finished scheduling all tasks
-...
-2019-11-03 05:44:48 INFO  SparkContext:54 - Successfully stopped SparkContext
+spark-submit \
+--packages org.apache.spark:spark-avro_2.11:2.4.0 \
+--conf spark.task.cpus=1 \
+--conf spark.executor.cores=1 \
+--conf spark.task.maxFailures=100 \
+--conf spark.memory.fraction=0.4  \
+--conf spark.rdd.compress=true  \
+--conf spark.kryoserializer.buffer.max=2000m \
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.memory.storageFraction=0.1 \
+--conf spark.shuffle.service.enabled=true  \
+--conf spark.sql.hive.convertMetastoreParquet=false  \
+--conf spark.driver.maxResultSize=12g \
+--conf spark.executor.heartbeatInterval=120s \
+--conf spark.network.timeout=600s \
+--conf spark.yarn.max.executor.failures=10 \
+--conf spark.sql.catalogImplementation=hive \
+--class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
+/opt/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar \
+--source-ordering-field timestamp \
+--use-deltastreamer \
+--target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
+--input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
+--target-table table1 \
+--props test.properties \
+--schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
+--source-class org.apache.hudi.utilities.sources.AvroDFSSource \
+--input-file-size 125829120 \
+--workload-yaml-path file:/var/hoodie/ws/docker/demo/config/test-suite/complex-dag-mor.yaml \
+--workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
+--table-type MERGE_ON_READ \
+--compact-scheduling-minshare 1
 ```
  
