@@ -42,8 +42,9 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
             new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
             new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", ""),
             new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
-            new Schema.Field("_hoodie_is_deleted", Schema.create(Schema.Type.BOOLEAN), "", false)
-    ));
+            new Schema.Field("_hoodie_is_deleted", Schema.create(Schema.Type.BOOLEAN), "", false),
+            new Schema.Field("city", Schema.create(Schema.Type.STRING), "", "NY")
+            ));
   }
 
   @Test
@@ -53,18 +54,21 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record1.put("partition", "partition1");
     record1.put("ts", 0L);
     record1.put("_hoodie_is_deleted", false);
+    record1.put("city", "NY0");
 
     GenericRecord record2 = new GenericData.Record(schema);
     record2.put("id", "2");
     record2.put("partition", "");
     record2.put("ts", 1L);
     record2.put("_hoodie_is_deleted", false);
+    record2.put("city", "NY");
 
     GenericRecord record3 = new GenericData.Record(schema);
     record3.put("id", "2");
     record3.put("partition", "partition1");
     record3.put("ts", 1L);
     record3.put("_hoodie_is_deleted", false);
+    record3.put("city", "NY0");
 
 
     OverwriteNonDefaultsWithLatestAvroPayload payload1 = new OverwriteNonDefaultsWithLatestAvroPayload(record1, 1);
@@ -86,18 +90,21 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     record1.put("partition", "partition0");
     record1.put("ts", 0L);
     record1.put("_hoodie_is_deleted", false);
+    record1.put("city", "NY0");
 
     GenericRecord delRecord1 = new GenericData.Record(schema);
     delRecord1.put("id", "2");
     delRecord1.put("partition", "partition1");
     delRecord1.put("ts", 1L);
     delRecord1.put("_hoodie_is_deleted", true);
+    delRecord1.put("city", "NY0");
 
     GenericRecord record2 = new GenericData.Record(schema);
     record2.put("id", "1");
     record2.put("partition", "partition0");
     record2.put("ts", 0L);
     record2.put("_hoodie_is_deleted", true);
+    record2.put("city", "NY0");
 
     OverwriteNonDefaultsWithLatestAvroPayload payload1 = new OverwriteNonDefaultsWithLatestAvroPayload(record1, 1);
     OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(delRecord1, 2);

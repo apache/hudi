@@ -36,10 +36,6 @@ import java.util.List;
  */
 public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLatestAvroPayload {
 
-  /**
-   * @param record      Generic record for the payload.
-   * @param orderingVal {@link Comparable} to be used in pre combine.
-   */
   public OverwriteNonDefaultsWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
@@ -66,7 +62,7 @@ public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLate
       for (int i = 0; i < fields.size(); i++) {
         Object value = insertRecord.get(fields.get(i).name());
         Object defaultValue = fields.get(i).defaultVal();
-        if (ovewriteField(value, defaultValue)) {
+        if (overwriteField(value, defaultValue)) {
           continue;
         } else {
           currentRecord.put(fields.get(i).name(), value);

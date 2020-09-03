@@ -85,12 +85,9 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   }
 
   /**
-   *
-   * @param value value in Insert Value
-   * @param defaultValue defaultValue of the field
-   * @return {@code true} if value equals defaultValue {@code false} otherwise.
+   * Return true if value equals defaultValue otherwise false.
    */
-  public Boolean ovewriteField(Object value, Object defaultValue) {
-    return defaultValue == null ? value == defaultValue : defaultValue.toString().equals(value.toString());
+  public Boolean overwriteField(Object value, Object defaultValue) {
+    return defaultValue == null ? value == null : defaultValue.toString().equals(value.toString());
   }
 }
