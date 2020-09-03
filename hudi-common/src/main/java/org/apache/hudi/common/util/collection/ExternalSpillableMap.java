@@ -52,7 +52,7 @@ import java.util.stream.Stream;
  * map may occupy more memory than is available, resulting in OOM. However, if the spill threshold is too low, we spill
  * frequently and incur unnecessary disk writes.
  */
-public class ExternalSpillableMap<T extends Serializable, R extends Serializable> implements Map<T, R> {
+public class ExternalSpillableMap<K extends Serializable, V extends Serializable> implements Map<K, V> {
 
   // Find the actual estimated payload size after inserting N records
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE = 100;
@@ -60,16 +60,16 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   // maximum space allowed in-memory for this map
   private final long maxInMemorySizeInBytes;
   // Map to store key-values in memory until it hits maxInMemorySizeInBytes
-  private final Map<T, R> inMemoryMap;
-  // Map to store key-valuemetadata important to find the values spilled to disk
-  private transient volatile DiskBasedMap<T, R> diskBasedMap;
+  private final Map<K, V> inMemoryMap;
+  // Map to store key-value metadata important to find the values spilled to disk
+  private transient volatile DiskBasedMap<K, V> diskBasedMap;
   // TODO(na) : a dynamic sizing factor to ensure we have space for other objects in memory and
   // incorrect payload estimation
   private final Double sizingFactorForInMemoryMap = 0.8;
   // Size Estimator for key type
-  private final SizeEstimator<T> keySizeEstimator;
-  // Size Estimator for key types
-  private final SizeEstimator<R> valueSizeEstimator;
+  private final SizeEstimator<K> keySizeEstimator;
+  // Size Estimator for value type
+  private final SizeEstimator<V> valueSizeEstimator;
   // current space occupied by this map in-memory
   private Long currentInMemoryMapSize;
   // An estimate of the size of each payload written to this map
@@ -79,8 +79,8 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   // Base File Path
   private final String baseFilePath;
 
-  public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
-      SizeEstimator<R> valueSizeEstimator) throws IOException {
+  public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<K> keySizeEstimator,
+      SizeEstimator<V> valueSizeEstimator) throws IOException {
     this.inMemoryMap = new HashMap<>();
     this.baseFilePath = baseFilePath;
     this.diskBasedMap = new DiskBasedMap<>(baseFilePath);
@@ -90,7 +90,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     this.valueSizeEstimator = valueSizeEstimator;
   }
 
-  private DiskBasedMap<T, R> getDiskBasedMap() {
+  private DiskBasedMap<K, V> getDiskBasedMap() {
     if (null == diskBasedMap) {
       synchronized (this) {
         if (null == diskBasedMap) {
@@ -108,7 +108,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   /**
    * A custom iterator to wrap over iterating in-memory + disk spilled data.
    */
-  public Iterator<R> iterator() {
+  public Iterator<V> iterator() {
     return new IteratorWrapper<>(inMemoryMap.values().iterator(), getDiskBasedMap().iterator());
   }
 
@@ -161,7 +161,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   }
 
   @Override
-  public R get(Object key) {
+  public V get(Object key) {
     if (inMemoryMap.containsKey(key)) {
       return inMemoryMap.get(key);
     } else if (getDiskBasedMap().containsKey(key)) {
@@ -171,36 +171,38 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   }
 
   @Override
-  public R put(T key, R value) {
-    if (this.currentInMemoryMapSize < maxInMemorySizeInBytes || inMemoryMap.containsKey(key)) {
+  public V put(K key, V value) {
+    if (currentInMemoryMapSize < maxInMemorySizeInBytes || inMemoryMap.containsKey(key)) {
+      // put to inMemoryMap
       if (shouldEstimatePayloadSize && estimatedPayloadSize == 0) {
         // At first, use the sizeEstimate of a record being inserted into the spillable map.
         // Note, the converter may over estimate the size of a record in the JVM
-        this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
-        LOG.info("Estimated Payload size => " + estimatedPayloadSize);
+        estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
+        LOG.debug("Estimated Payload size => " + estimatedPayloadSize);
       } else if (shouldEstimatePayloadSize && inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
         // Re-estimate the size of a record by calculating the size of the entire map containing
         // N entries and then dividing by the number of entries present (N). This helps to get a
         // correct estimation of the size of each record in the JVM.
         long totalMapSize = ObjectSizeCalculator.getObjectSize(inMemoryMap);
-        this.currentInMemoryMapSize = totalMapSize;
-        this.estimatedPayloadSize = totalMapSize / inMemoryMap.size();
+        currentInMemoryMapSize = totalMapSize;
+        estimatedPayloadSize = totalMapSize / inMemoryMap.size();
         shouldEstimatePayloadSize = false;
-        LOG.info("New Estimated Payload size => " + this.estimatedPayloadSize);
+        LOG.debug("New Estimated Payload size => " + estimatedPayloadSize);
       }
       if (!inMemoryMap.containsKey(key)) {
         // TODO : Add support for adjusting payloadSize for updates to the same key
-        currentInMemoryMapSize += this.estimatedPayloadSize;
+        currentInMemoryMapSize += estimatedPayloadSize;
       }
       inMemoryMap.put(key, value);
     } else {
+      // put to DiskBasedMap
       getDiskBasedMap().put(key, value);
     }
     return value;
   }
 
   @Override
-  public R remove(Object key) {
+  public V remove(Object key) {
     // NOTE : getDiskBasedMap().remove does not delete the data from disk
     if (inMemoryMap.containsKey(key)) {
       currentInMemoryMapSize -= estimatedPayloadSize;
@@ -212,8 +214,8 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   }
 
   @Override
-  public void putAll(Map<? extends T, ? extends R> m) {
-    for (Map.Entry<? extends T, ? extends R> entry : m.entrySet()) {
+  public void putAll(Map<? extends K, ? extends V> m) {
+    for (Map.Entry<? extends K, ? extends V> entry : m.entrySet()) {
       put(entry.getKey(), entry.getValue());
     }
   }
@@ -226,30 +228,30 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   }
 
   @Override
-  public Set<T> keySet() {
-    Set<T> keySet = new HashSet<T>();
+  public Set<K> keySet() {
+    Set<K> keySet = new HashSet<K>();
     keySet.addAll(inMemoryMap.keySet());
     keySet.addAll(getDiskBasedMap().keySet());
     return keySet;
   }
 
   @Override
-  public Collection<R> values() {
+  public Collection<V> values() {
     if (getDiskBasedMap().isEmpty()) {
       return inMemoryMap.values();
     }
-    List<R> result = new ArrayList<>(inMemoryMap.values());
+    List<V> result = new ArrayList<>(inMemoryMap.values());
     result.addAll(getDiskBasedMap().values());
     return result;
   }
 
-  public Stream<R> valueStream() {
+  public Stream<V> valueStream() {
     return Stream.concat(inMemoryMap.values().stream(), getDiskBasedMap().valueStream());
   }
 
   @Override
-  public Set<Entry<T, R>> entrySet() {
-    Set<Entry<T, R>> entrySet = new HashSet<>();
+  public Set<Entry<K, V>> entrySet() {
+    Set<Entry<K, V>> entrySet = new HashSet<>();
     entrySet.addAll(inMemoryMap.entrySet());
     entrySet.addAll(getDiskBasedMap().entrySet());
     return entrySet;
