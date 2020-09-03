@@ -59,15 +59,13 @@ public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLate
       return Option.empty();
     } else {
       List<Schema.Field> fields = schema.getFields();
-      for (int i = 0; i < fields.size(); i++) {
-        Object value = insertRecord.get(fields.get(i).name());
-        Object defaultValue = fields.get(i).defaultVal();
-        if (overwriteField(value, defaultValue)) {
-          continue;
-        } else {
-          currentRecord.put(fields.get(i).name(), value);
+      fields.forEach(field -> {
+        Object value = insertRecord.get(field.name());
+        Object defaultValue = field.defaultVal();
+        if (!overwriteField(value, defaultValue)) {
+          currentRecord.put(field.name(), value);
         }
-      }
+      });
       return Option.of(currentRecord);
     }
   }
