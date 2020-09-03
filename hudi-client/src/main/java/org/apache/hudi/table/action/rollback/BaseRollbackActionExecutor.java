@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.metadata.HoodieMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.BaseActionExecutor;
@@ -112,6 +113,8 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
         Collections.singletonList(instantToRollback),
         stats);
     if (!skipTimelinePublish) {
+      // Update Metadata Table
+      HoodieMetadata.update(config, rollbackMetadata, instantTime);
       finishRollback(rollbackMetadata);
     }
 

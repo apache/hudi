@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -42,6 +43,8 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -115,6 +118,17 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   // maximum number of checks, for consistency of written data. Will wait upto 256 Secs
   public static final String MAX_CONSISTENCY_CHECKS_PROP = "hoodie.consistency.check.max_checks";
   public static int DEFAULT_MAX_CONSISTENCY_CHECKS = 7;
+
+  // Enable the internal Metadata Table which saves file listings
+  private static final String USE_FILE_LISTING_METADATA = "hoodie.metadata.enable";
+  private static final String DEFAULT_USE_FILE_LISTING_METADATA = "false";
+
+  // Validate contents of Metadata Table on each access against the actual filesystem
+  private static final String FILE_LISTING_METADATA_VERIFY = "hoodie.metadata.verify";
+  private static final String DEFAULT_FILE_LISTING_METADATA_VERIFY = "false";
+
+  // Serialized compaction config to be used for Metadata Table
+  public static final String HOODIE_METADATA_COMPACTION_CONFIG = "hoodie.metadata.compaction.config";
 
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
@@ -755,6 +769,29 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM));
   }
 
+  /**
+   * File listing metadata configs.
+   */
+  public boolean useFileListingMetadata() {
+    return Boolean.parseBoolean(props.getProperty(USE_FILE_LISTING_METADATA));
+  }
+
+  public boolean getFileListingMetadataVerify() {
+    return Boolean.parseBoolean(props.getProperty(FILE_LISTING_METADATA_VERIFY));
+  }
+
+  public Option<HoodieCompactionConfig> getMetadataCompactionConfig() throws IOException {
+    String serializedCompactionConfig = props.getProperty(HOODIE_METADATA_COMPACTION_CONFIG);
+    if (serializedCompactionConfig == null) {
+      return Option.empty();
+    }
+
+    StringReader reader = new StringReader(serializedCompactionConfig);
+    Properties loadedProps = new Properties();
+    loadedProps.load(reader);
+    return Option.of(HoodieCompactionConfig.newBuilder().fromProperties(loadedProps).build());
+  }
+
   public static class Builder {
 
     protected final Properties props = new Properties();
@@ -884,6 +921,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withMetadataCompactionConfig(HoodieCompactionConfig compactionConfig) throws IOException {
+      // Since the property names from HoodieCompactionConfig are already used in withCompactionConfig,
+      // metadata compaction config can only be saved serialized.
+      StringWriter writer = new StringWriter();
+      compactionConfig.getProps().store(writer, "metadata compaction config");
+      props.setProperty(HOODIE_METADATA_COMPACTION_CONFIG, writer.toString());
+      return this;
+    }
+
     public Builder withMetricsConfig(HoodieMetricsConfig metricsConfig) {
       props.putAll(metricsConfig.getProps());
       isMetricsConfigSet = true;
@@ -970,6 +1016,16 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withUseFileListingMetadata(boolean enable) {
+      props.setProperty(USE_FILE_LISTING_METADATA, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withFileListingMetadataVerify(boolean enable) {
+      props.setProperty(FILE_LISTING_METADATA_VERIFY, String.valueOf(enable));
+      return this;
+    }
+
     protected void setDefaults() {
       // Check for mandatory properties
       setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM, DEFAULT_PARALLELISM);
@@ -1014,6 +1070,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(AVRO_SCHEMA_VALIDATE), AVRO_SCHEMA_VALIDATE, DEFAULT_AVRO_SCHEMA_VALIDATE);
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_SORT_MODE),
           BULKINSERT_SORT_MODE, DEFAULT_BULKINSERT_SORT_MODE);
+
+      setDefaultOnCondition(props, !props.containsKey(USE_FILE_LISTING_METADATA), USE_FILE_LISTING_METADATA,
+          DEFAULT_USE_FILE_LISTING_METADATA);
+      setDefaultOnCondition(props, !props.containsKey(FILE_LISTING_METADATA_VERIFY), FILE_LISTING_METADATA_VERIFY,
+          DEFAULT_FILE_LISTING_METADATA_VERIFY);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());

@@ -44,7 +44,7 @@ import java.util.stream.Stream;
 
 /**
  * TableFileSystemView Implementations based on in-memory storage.
- * 
+ *
  * @see TableFileSystemView
  * @since 0.3.0
  */

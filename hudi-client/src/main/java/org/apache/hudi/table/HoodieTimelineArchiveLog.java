@@ -53,6 +53,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieMetadata;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -194,6 +196,35 @@ public class HoodieTimelineArchiveLog {
     Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstants()
         .collect(Collectors.groupingBy(i -> Pair.of(i.getTimestamp(),
             HoodieInstant.getComparableAction(i.getAction()))));
+
+    // If metadata table is enabled, do not archive instants which are more recent that the latest compaction
+    // of the metadata table. This is required for metadata table sync.
+    if (config.useFileListingMetadata()) {
+      Option<String> latestCompaction = HoodieMetadata.getLatestCompactionTimestamp(config.getBasePath());
+      if (latestCompaction.isPresent()) {
+        LOG.info("Limiting archiving of instants to last compaction on metadata table at " + latestCompaction.get());
+        instants = instants.filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.LESSER_THAN,
+            latestCompaction.get()));
+      } else {
+        LOG.info("Not arching instants as there is no compaction yet of the metadata table");
+        instants = instants.filter(i -> false);
+      }
+    }
+
+    // For metadata tables, ensure commits >= latest compaction commit are retained. This is required for
+    // metadata table sync.
+    if (HoodieMetadata.isMetadataTable(config.getBasePath())) {
+      Option<HoodieInstant> latestCompactionInstant =
+          table.getActiveTimeline().filterPendingCompactionTimeline().lastInstant();
+      if (latestCompactionInstant.isPresent()) {
+        LOG.info("Limiting archiving of instants on metadata table to last compaction at " + latestCompactionInstant.get());
+        instants = instants.filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.LESSER_THAN,
+            latestCompactionInstant.get().getTimestamp()));
+      } else {
+        LOG.info("Not archiving instants on metdata table as there is no compaction yet");
+        instants = instants.filter(i -> false);
+      }
+    }
 
     return instants.flatMap(hoodieInstant ->
         groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.metrics;
 
+import java.util.Map;
+
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -49,6 +51,7 @@ public class HoodieMetrics {
   private Timer finalizeTimer = null;
   private Timer compactionTimer = null;
   private Timer indexTimer = null;
+  private Map<String, Timer> metadataTimer = null;
 
   public HoodieMetrics(HoodieWriteConfig config, String tableName) {
     this.config = config;
@@ -118,6 +121,13 @@ public class HoodieMetrics {
     return indexTimer == null ? null : indexTimer.time();
   }
 
+  public Timer.Context getMetadataCtx(String action) {
+    if (config.isMetricsOn()) {
+      return createTimer(getMetricsName("timer", String.format("%s.%s", "metadata", action))).time();
+    }
+    return null;
+  }
+
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
       String actionType) {
     if (config.isMetricsOn()) {
@@ -183,6 +193,27 @@ public class HoodieMetrics {
     if (config.isMetricsOn()) {
       LOG.info(String.format("Sending index metrics (%s.duration, %d)", action, durationInMs));
       Metrics.registerGauge(getMetricsName("index", String.format("%s.duration", action)), durationInMs);
+    }
+  }
+
+  public void updateMetadataMetrics(String action, long durationInMs, long count) {
+    if (config.isMetricsOn()) {
+      LOG.info(String.format("Sending metadata metrics (%s.duration=%d, %s.count=%d)", action, durationInMs, action,
+          count));
+      Metrics.registerGauge(getMetricsName("metadata", String.format("%s.duration", action)), durationInMs);
+      Metrics.registerGauge(getMetricsName("metadata", String.format("%s.count", action)), count);
+    }
+  }
+
+  public void updateMetadataSizeMetrics(long totalBaseFileSizeInBytes, long totalLogFileSizeInBytes, int baseFileCount,
+                                        int logFileCount) {
+    if (config.isMetricsOn()) {
+      LOG.info(String.format("Sending metadata size metrics (basefile.size=%d, logfile.size=%d, basefile.count=%d, "
+          + "logfile.count=%d)", totalBaseFileSizeInBytes, totalLogFileSizeInBytes, baseFileCount, logFileCount));
+      Metrics.registerGauge(getMetricsName("metadata", "basefile.size"), totalBaseFileSizeInBytes);
+      Metrics.registerGauge(getMetricsName("metadata", "logfile.size"), totalLogFileSizeInBytes);
+      Metrics.registerGauge(getMetricsName("metadata", "basefile.count"), baseFileCount);
+      Metrics.registerGauge(getMetricsName("metadata", "logfile.count"), logFileCount);
     }
   }
 
