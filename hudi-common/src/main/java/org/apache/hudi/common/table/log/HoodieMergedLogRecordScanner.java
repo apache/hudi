@@ -128,5 +128,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   public long getTotalTimeTakenToReadAndMergeBlocks() {
     return totalTimeTakenToReadAndMergeBlocks;
   }
+
+  @Override
+  public void finalize() {
+    records.clear();
+  }
 }
 

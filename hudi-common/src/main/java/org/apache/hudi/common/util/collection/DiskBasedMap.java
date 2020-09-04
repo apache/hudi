@@ -127,33 +127,7 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
    * (typically 4 KB) to disk.
    */
   private void addShutDownHook() {
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      @Override
-      public void run() {
-        try {
-          if (writeOnlyFileHandle != null) {
-            writeOnlyFileHandle.flush();
-            fileOutputStream.getChannel().force(false);
-            writeOnlyFileHandle.close();
-          }
-
-          while (!openedAccessFiles.isEmpty()) {
-            BufferedRandomAccessFile file = openedAccessFiles.poll();
-            if (null != file) {
-              try {
-                file.close();
-              } catch (IOException ioe) {
-                // skip exception
-              }
-            }
-          }
-          writeOnlyFile.delete();
-        } catch (Exception e) {
-          // delete the file for any sort of exception
-          writeOnlyFile.delete();
-        }
-      }
-    });
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> cleanup()));
   }
 
   private void flushToDisk() {
@@ -227,6 +201,9 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
       Integer valueSize = val.length;
       Long timestamp = System.currentTimeMillis();
       byte[] serializedKey = SerializationUtils.serialize(key);
+      if (!writeOnlyFile.exists()) {
+        initFile(writeOnlyFile);
+      }
       filePosition
           .set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle, new FileEntry(SpillableMapUtils.generateChecksum(val),
               serializedKey.length, valueSize, serializedKey, val, timestamp)));
@@ -261,11 +238,38 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
     flushToDisk();
   }
 
+  private void cleanup() {
+    try {
+      if (writeOnlyFileHandle != null) {
+        writeOnlyFileHandle.flush();
+        fileOutputStream.getChannel().force(false);
+        writeOnlyFileHandle.close();
+      }
+
+      while (!openedAccessFiles.isEmpty()) {
+        BufferedRandomAccessFile file = openedAccessFiles.poll();
+        if (null != file) {
+          try {
+            file.close();
+          } catch (IOException ioe) {
+            // skip exception
+          }
+        }
+      }
+      writeOnlyFile.delete();
+    } catch (Exception e) {
+      // delete the file for any sort of exception
+      writeOnlyFile.delete();
+    }
+  }
+
   @Override
-  public void clear() {
+  public synchronized void clear() throws HoodieException {
+    // Clearing valueMetadataMap first would ensure none of the gets would attempt to read the file/file-handles
     valueMetadataMap.clear();
-    // Do not delete file-handles & file as there is no way to do it without synchronizing get/put(and
-    // reducing concurrency). Instead, just clear the pointer map. The file will be removed on exit.
+
+    cleanup();
+    randomAccessFile = new ThreadLocal<>();
   }
 
   @Override
@@ -279,8 +283,7 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
   }
 
   public Stream<V> valueStream() {
-    final BufferedRandomAccessFile file = getRandomAccessFile();
-    return valueMetadataMap.values().stream().sorted().sequential().map(valueMetaData -> (V) get(valueMetaData, file));
+    return valueMetadataMap.values().stream().sorted().sequential().map(valueMetaData -> (V) get(valueMetaData));
   }
 
   @Override
