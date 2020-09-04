@@ -71,6 +71,14 @@ public enum WriteOperationType {
     }
   }
 
+  /**
+   * Getter for value.
+   * @return string form of WriteOperationType
+   */
+  public String value() {
+    return value;
+  }
+
   public static boolean isChangingRecords(WriteOperationType operationType) {
     return operationType == UPSERT || operationType == UPSERT_PREPPED || operationType == DELETE;
   }

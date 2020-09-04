@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -248,16 +249,18 @@ public class DataSourceUtils {
   }
 
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-      String instantTime, String operation) throws HoodieException {
-    if (operation.equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL())) {
-      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner =
-          createUserDefinedBulkInsertPartitioner(client.getConfig());
-      return client.bulkInsert(hoodieRecords, instantTime, userDefinedBulkInsertPartitioner);
-    } else if (operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())) {
-      return client.insert(hoodieRecords, instantTime);
-    } else {
-      // default is upsert
-      return client.upsert(hoodieRecords, instantTime);
+      String instantTime, WriteOperationType operation) throws HoodieException {
+    switch (operation) {
+      case BULK_INSERT:
+        Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner =
+                createUserDefinedBulkInsertPartitioner(client.getConfig());
+        return client.bulkInsert(hoodieRecords, instantTime, userDefinedBulkInsertPartitioner);
+      case INSERT:
+        return client.insert(hoodieRecords, instantTime);
+      case UPSERT:
+        return client.upsert(hoodieRecords, instantTime);
+      default:
+        throw new HoodieException("Not a valid operation type for doWriteOperation: " + operation.toString());
     }
   }
 
