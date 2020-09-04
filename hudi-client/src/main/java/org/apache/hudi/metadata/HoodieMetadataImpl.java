@@ -597,12 +597,14 @@ public class HoodieMetadataImpl {
 
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileDeleteCount = {0};
-    cleanerPlan.getFilesToBeDeletedPerPartition().forEach((partition, deletedFiles) -> {
-      fileDeleteCount[0] += deletedFiles.size();
+    cleanerPlan.getFilePathsToBeDeletedPerPartition().forEach((partition, deletedPathInfo) -> {
+      fileDeleteCount[0] += deletedPathInfo.size();
 
       // Files deleted from a partition
+      List<String> deletedFilenames = deletedPathInfo.stream().map(p -> new Path(p.getFilePath()).getName())
+          .collect(Collectors.toList());
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(),
-          Option.of(new ArrayList<>(deletedFiles)));
+          Option.of(deletedFilenames));
       records.add(record);
     });
 
