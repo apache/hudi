@@ -39,15 +39,17 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   private void checkKey(String property) {
-    Set<String> keys = super.stringPropertyNames();
-    if (!keys.contains(property)) {
+    if (!keyExists(property)) {
       throw new IllegalArgumentException("Property " + property + " not found");
     }
   }
 
   private boolean keyExists(String property) {
-    checkKey(property);
-    return true;
+    Set<String> keys = super.stringPropertyNames();
+    if (keys.contains(property)) {
+      return true;
+    }
+    return false;
   }
 
   public String getString(String property) {
