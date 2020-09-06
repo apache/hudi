@@ -401,7 +401,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+    Schema schema = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/testDataGeneratorSchema.txt");
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schema.toString())
             .withStorageConfig(HoodieStorageConfig.newBuilder()
                 .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build()).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
