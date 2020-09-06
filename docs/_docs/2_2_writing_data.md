@@ -210,6 +210,8 @@ Sample config files for table wise overridden properties can be found under `hud
   --op BULK_INSERT
 ```
 
+For detailed information on how to configure and use `HoodieMultiTableDeltaStreamer`, please refer blog section.
+
 ## Datasource Writer
 
 The `hudi-spark` module offers the DataSource API to write (and read) a Spark DataFrame into a Hudi table. There are a number of options available:
