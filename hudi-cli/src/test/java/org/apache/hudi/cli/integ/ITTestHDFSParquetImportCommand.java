@@ -163,12 +163,12 @@ public class ITTestHDFSParquetImportCommand extends AbstractShellIntegrationTest
 
     List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
     List<HoodieTripModel> result = readData.stream().map(row ->
-        new HoodieTripModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
+        new HoodieTripModel(row.getLong(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
             row.getDouble(5), row.getDouble(6), row.getDouble(7)))
         .collect(Collectors.toList());
 
     List<HoodieTripModel> expected = expectData.stream().map(g ->
-        new HoodieTripModel(Double.parseDouble(g.get("timestamp").toString()),
+        new HoodieTripModel(Long.parseLong(g.get("timestamp").toString()),
             g.get("_row_key").toString(),
             g.get("rider").toString(),
             g.get("driver").toString(),
