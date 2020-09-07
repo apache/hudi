@@ -181,6 +181,7 @@ public class KafkaOffsetGen {
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty()) {
         fromOffsets = checkupValidOffsets(consumer, lastCheckpointStr, topicPartitions);
+        metrics.updateDeltaStreamerKafkaDelayCountMetrics(delayOffectCalculation(lastCheckpointStr, topicPartitions, consumer));
       } else {
         KafkaResetOffsetStrategies autoResetValue = KafkaResetOffsetStrategies
                 .valueOf(props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
@@ -195,7 +196,6 @@ public class KafkaOffsetGen {
             throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' ");
         }
       }
-      metrics.updateDeltaStreamerKafkaDelayCountMetrics(delayOffectCalculation(lastCheckpointStr, topicPartitions, consumer));
       // Obtain the latest offsets.
       toOffsets = consumer.endOffsets(topicPartitions);
     }
@@ -233,14 +233,12 @@ public class KafkaOffsetGen {
 
   private Long delayOffectCalculation(Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions, KafkaConsumer consumer) {
     Long delayCount = 0L;
-    if (!lastCheckpointStr.get().isEmpty()) {
-      Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
-      Map<TopicPartition, Long> lastOffsets = consumer.endOffsets(topicPartitions);
+    Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
+    Map<TopicPartition, Long> lastOffsets = consumer.endOffsets(topicPartitions);
 
-      for (Map.Entry<TopicPartition, Long> entry : lastOffsets.entrySet()) {
-        Long offect = checkpointOffsets.getOrDefault(entry.getKey(), 0L);
-        delayCount += entry.getValue() - offect > 0 ? entry.getValue() - offect : 0L;
-      }
+    for (Map.Entry<TopicPartition, Long> entry : lastOffsets.entrySet()) {
+      Long offect = checkpointOffsets.getOrDefault(entry.getKey(), 0L);
+      delayCount += entry.getValue() - offect > 0 ? entry.getValue() - offect : 0L;
     }
     return delayCount;
   }
