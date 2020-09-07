@@ -27,11 +27,56 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestTypedProperties {
   @Test
-  public void testNewTypedProperties() {
+  public void testGetString() {
     Properties properties = new Properties();
     properties.put("key1", "value1");
 
     TypedProperties typedProperties = new TypedProperties(properties);
     assertEquals("value1", typedProperties.getString("key1"));
+    assertEquals("value1", typedProperties.getString("key1", "default"));
+    assertEquals("default", typedProperties.getString("key2", "default"));
+  }
+
+  @Test
+  public void testGetInteger() {
+    Properties properties = new Properties();
+    properties.put("key1", "123");
+
+    TypedProperties typedProperties = new TypedProperties(properties);
+    assertEquals(123, typedProperties.getInteger("key1"));
+    assertEquals(123, typedProperties.getInteger("key1",456));
+    assertEquals(456, typedProperties.getInteger("key2",456));
+
+  }
+  @Test
+  public void testGetDouble() {
+    Properties properties = new Properties();
+    properties.put("key1", "123.4");
+
+    TypedProperties typedProperties = new TypedProperties(properties);
+    assertEquals(123.4, typedProperties.getDouble("key1"));
+    assertEquals(123.4, typedProperties.getDouble("key1",0.001D));
+    assertEquals(0.001D, typedProperties.getDouble("key2",0.001D));
+  }
+  @Test
+  public void testGetLong() {
+    Properties properties = new Properties();
+    properties.put("key1", "1354354354");
+
+    TypedProperties typedProperties = new TypedProperties(properties);
+    assertEquals(1354354354, typedProperties.getLong("key1"));
+    assertEquals(1354354354, typedProperties.getLong("key1",8578494434L));
+    assertEquals(8578494434L, typedProperties.getLong("key2",8578494434L));
+  }
+
+  @Test
+  public void testBoolean() {
+    Properties properties = new Properties();
+    properties.put("key1", "true");
+
+    TypedProperties typedProperties = new TypedProperties(properties);
+    assertEquals(true, typedProperties.getBoolean("key1"));
+    assertEquals(true, typedProperties.getBoolean("key1",false));
+    assertEquals(false, typedProperties.getBoolean("key2",false));
   }
 }
