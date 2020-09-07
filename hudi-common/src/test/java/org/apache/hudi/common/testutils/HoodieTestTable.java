@@ -19,8 +19,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -39,6 +37,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCommit;
@@ -46,15 +45,16 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDel
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 
 public class HoodieTestTable {
 
-  private final String basePath;
-  private final FileSystem fs;
-  private HoodieTableMetaClient metaClient;
-  private String currentInstantTime;
+  protected final String basePath;
+  protected final FileSystem fs;
+  protected HoodieTableMetaClient metaClient;
+  protected String currentInstantTime;
 
-  private HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient) {
+  protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient) {
     ValidationUtils.checkArgument(Objects.equals(basePath, metaClient.getBasePath()));
     ValidationUtils.checkArgument(Objects.equals(fs, metaClient.getRawFs()));
     this.basePath = basePath;
@@ -124,6 +124,13 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable withPartitionMetaFiles(String... partitionPaths) throws IOException {
+    for (String partitionPath : partitionPaths) {
+      FileCreateUtils.createPartitionMetaFile(basePath, partitionPath);
+    }
+    return this;
+  }
+
   public HoodieTestTable withMarkerFile(String partitionPath, IOType ioType) throws IOException {
     return withMarkerFile(partitionPath, UUID.randomUUID().toString(), ioType);
   }
@@ -150,19 +157,19 @@ public class HoodieTestTable {
    *
    * @return A {@link Map} of partition and its newly inserted file's id.
    */
-  public Map<String, String> withInserts(String... partitions) throws Exception {
+  public Map<String, String> withBaseFilesInPartitions(String... partitions) throws Exception {
     Map<String, String> partitionFileIdMap = new HashMap<>();
     for (String p : partitions) {
       String fileId = UUID.randomUUID().toString();
-      FileCreateUtils.createDataFile(basePath, p, currentInstantTime, fileId);
+      FileCreateUtils.createBaseFile(basePath, p, currentInstantTime, fileId);
       partitionFileIdMap.put(p, fileId);
     }
     return partitionFileIdMap;
   }
 
-  public HoodieTestTable withUpdates(String partition, String... fileIds) throws Exception {
+  public HoodieTestTable withBaseFilesInPartition(String partition, String... fileIds) throws Exception {
     for (String f : fileIds) {
-      FileCreateUtils.createDataFile(basePath, partition, currentInstantTime, f);
+      FileCreateUtils.createBaseFile(basePath, partition, currentInstantTime, f);
     }
     return this;
   }
@@ -182,25 +189,28 @@ public class HoodieTestTable {
     return this;
   }
 
-  public boolean filesExist(Map<String, String> partitionAndFileId, String instantTime) {
+  public boolean baseFilesExist(Map<String, String> partitionAndFileId, String instantTime) {
     return partitionAndFileId.entrySet().stream().allMatch(entry -> {
       String partition = entry.getKey();
       String fileId = entry.getValue();
-      return fileExists(partition, instantTime, fileId);
+      return baseFileExists(partition, instantTime, fileId);
     });
   }
 
-  public boolean filesExist(String partition, String instantTime, String... fileIds) {
-    return Arrays.stream(fileIds).allMatch(f -> fileExists(partition, instantTime, f));
+  public boolean baseFilesExist(String partition, String instantTime, String... fileIds) {
+    return Arrays.stream(fileIds).allMatch(f -> baseFileExists(partition, instantTime, f));
   }
 
-  public boolean fileExists(String partition, String instantTime, String fileId) {
+  public boolean baseFileExists(String partition, String instantTime, String fileId) {
     try {
-      return fs.exists(new Path(Paths.get(basePath, partition,
-          FSUtils.makeDataFileName(instantTime, "1-0-1", fileId)).toString()));
+      return fs.exists(new Path(Paths.get(basePath, partition, baseFileName(instantTime, fileId)).toString()));
     } catch (IOException e) {
       throw new HoodieTestTableException(e);
     }
+  }
+
+  public String getBaseFileNameById(String fileId) {
+    return baseFileName(currentInstantTime, fileId);
   }
 
   public boolean logFilesExist(String partition, String instantTime, String fileId, int... versions) {
@@ -209,8 +219,7 @@ public class HoodieTestTable {
 
   public boolean logFileExists(String partition, String instantTime, String fileId, int version) {
     try {
-      return fs.exists(new Path(Paths.get(basePath, partition,
-          FSUtils.makeLogFileName(fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), instantTime, version, "1-0-1")).toString()));
+      return fs.exists(new Path(Paths.get(basePath, partition, logFileName(instantTime, fileId, version)).toString()));
     } catch (IOException e) {
       throw new HoodieTestTableException(e);
     }
