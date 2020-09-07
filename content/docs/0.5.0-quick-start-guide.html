@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Quick-Start Guide - Apache Hudi</title>
+<meta name="description" content="This guide provides a quick peek at Hudi’s capabilities using spark-shell. Using Spark datasources, we will walk through code snippets that allows you to insert and update a Hudi dataset of default storage type: Copy on Write. After each write operation we will also show how to read the data both snapshot and incrementally.">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Quick-Start Guide">
+<meta property="og:url" content="https://hudi.apache.org/docs/0.5.0-quick-start-guide.html">
+
+
+  <meta property="og:description" content="This guide provides a quick peek at Hudi’s capabilities using spark-shell. Using Spark datasources, we will walk through code snippets that allows you to insert and update a Hudi dataset of default storage type: Copy on Write. After each write operation we will also show how to read the data both snapshot and incrementally.">
+
+
+
+
+
+  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/blog.html" target="_self" >Blog</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+
+  
+
+    
+      
+
+
+
+
+
+
+
+<nav class="nav__list">
+  
+  <input id="ac-toc" name="accordion-toc" type="checkbox" />
+  <label for="ac-toc">Toggle Menu</label>
+  <ul class="nav__items">
+    
+      <li>
+        
+          <span class="nav__sub-title">Getting Started</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-quick-start-guide.html" class="active">Quick Start</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-use_cases.html" class="">Use Cases</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-powered_by.html" class="">Talks & Powered By</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-comparison.html" class="">Comparison</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-docker_demo.html" class="">Docker Demo</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">Documentation</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-concepts.html" class="">Concepts</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-writing_data.html" class="">Writing Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-querying_data.html" class="">Querying Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-configurations.html" class="">Configuration</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-performance.html" class="">Performance</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-admin_guide.html" class="">Administering</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">INFO</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-docs-versions.html" class="">Docs Versions</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.5.0-privacy.html" class="">Privacy Policy</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+  </ul>
+</nav>
+
+    
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Quick-Start Guide
+</h1>
+          <!-- Output author details if some exist. -->
+          
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#setup-spark-shell">Setup spark-shell</a></li>
+  <li><a href="#insert-data">Insert data</a></li>
+  <li><a href="#query-data">Query data</a></li>
+  <li><a href="#update-data">Update data</a></li>
+  <li><a href="#incremental-query">Incremental query</a></li>
+  <li><a href="#point-in-time-query">Point in time query</a></li>
+  <li><a href="#where-to-go-from-here">Where to go from here?</a></li>
+</ul>
+          </nav>
+        </aside>
+        
+        <p>This guide provides a quick peek at Hudi’s capabilities using spark-shell. Using Spark datasources, we will walk through 
+code snippets that allows you to insert and update a Hudi dataset of default storage type: 
+<a href="/docs/0.5.0-concepts.html#copy-on-write-storage">Copy on Write</a>. 
+After each write operation we will also show how to read the data both snapshot and incrementally.</p>
+
+<h2 id="setup-spark-shell">Setup spark-shell</h2>
+
+<p>Hudi works with Spark-2.x versions. You can follow instructions <a href="https://spark.apache.org/downloads.html">here</a> for setting up spark. 
+From the extracted directory run spark-shell with Hudi as:</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">bin</span><span class="o">/</span><span class="n">spark</span><span class="o">-</span><span class="n">shell</span> <span class="o">--</span><span class="n">packages</span> <span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">hudi</span><span class="k">:</span><span class="kt">hudi-spark-bundle:</span><span class="err">0</span><span class="kt">.</span><span class="err">5</span><span class="kt">.</span><span class="err">0</span><span class="kt">-incubating</span> <span class="kt">\</span>
+    <span class="kt">--conf</span> <span class="kt">'spark.serializer</span><span class="o">=</span><span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">spark</span><span class="o">.</span><span class="py">serializer</span><span class="o">.</span><span class="py">KryoSerializer</span><span class="o">'</span>
+</code></pre></div></div>
+
+<p>Setup table name, base path and a data generator to generate records for this guide.</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="nn">org.apache.hudi.QuickstartUtils._</span>
+<span class="k">import</span> <span class="nn">scala.collection.JavaConversions._</span>
+<span class="k">import</span> <span class="nn">org.apache.spark.sql.SaveMode._</span>
+<span class="k">import</span> <span class="nn">org.apache.hudi.DataSourceReadOptions._</span>
+<span class="k">import</span> <span class="nn">org.apache.hudi.DataSourceWriteOptions._</span>
+<span class="k">import</span> <span class="nn">org.apache.hudi.config.HoodieWriteConfig._</span>
+
+<span class="k">val</span> <span class="nv">tableName</span> <span class="k">=</span> <span class="s">"hudi_cow_table"</span>
+<span class="k">val</span> <span class="nv">basePath</span> <span class="k">=</span> <span class="s">"file:///tmp/hudi_cow_table"</span>
+<span class="k">val</span> <span class="nv">dataGen</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">DataGenerator</span>
+</code></pre></div></div>
+
+<p class="notice--info">The <a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50">DataGenerator</a> 
+can generate sample inserts and updates based on the the sample trip schema <a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57">here</a></p>
+
+<h2 id="insert-data">Insert data</h2>
+
+<p>Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi dataset as below.</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">val</span> <span class="nv">inserts</span> <span class="k">=</span> <span class="nf">convertToStringList</span><span class="o">(</span><span class="nv">dataGen</span><span class="o">.</span><span class="py">generateInserts</span><span class="o">(</span><span class="mi">10</span><span class="o">))</span>
+<span class="k">val</span> <span class="nv">df</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">read</span><span class="o">.</span><span class="py">json</span><span class="o">(</span><span class="nv">spark</span><span class="o">.</span><span class="py">sparkContext</span><span class="o">.</span><span class="py">parallelize</span><span class="o">(</span><span class="n">inserts</span><span class="o">,</span> <span class="mi">2</span><span class="o">))</span>
+<span class="nv">df</span><span class="o">.</span><span class="py">write</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">).</span>
+    <span class="nf">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">).</span>
+    <span class="nf">mode</span><span class="o">(</span><span class="nc">Overwrite</span><span class="o">).</span>
+    <span class="nf">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
+</code></pre></div></div>
+
+<p class="notice--info"><code class="highlighter-rouge">mode(Overwrite)</code> overwrites and recreates the dataset if it already exists.
+You can check the data generated under <code class="highlighter-rouge">/tmp/hudi_cow_table/&lt;region&gt;/&lt;country&gt;/&lt;city&gt;/</code>. We provided a record key 
+(<code class="highlighter-rouge">uuid</code> in <a href="#sample-schema">schema</a>), partition field (<code class="highlighter-rouge">region/county/city</code>) and combine logic (<code class="highlighter-rouge">ts</code> in 
+<a href="#sample-schema">schema</a>) to ensure trip records are unique within each partition. For more info, refer to 
+<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi">Modeling data stored in Hudi</a>
+and for info on ways to ingest data into Hudi, refer to <a href="/docs/0.5.0-writing_data.html">Writing Hudi Datasets</a>.
+Here we are using the default write operation : <code class="highlighter-rouge">upsert</code>. If you have a workload without updates, you can also issue 
+<code class="highlighter-rouge">insert</code> or <code class="highlighter-rouge">bulk_insert</code> operations which could be faster. To know more, refer to <a href="/docs/0.5.0-writing_data#write-operations">Write operations</a></p>
+
+<h2 id="query-data">Query data</h2>
+
+<p>Load the data files into a DataFrame.</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">val</span> <span class="nv">roViewDF</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span>
+    <span class="n">read</span><span class="o">.</span>
+    <span class="nf">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">).</span>
+    <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">)</span>
+<span class="nv">roViewDF</span><span class="o">.</span><span class="py">createOrReplaceTempView</span><span class="o">(</span><span class="s">"hudi_ro_table"</span><span class="o">)</span>
+<span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select fare, begin_lon, begin_lat, ts from  hudi_ro_table where fare &gt; 20.0"</span><span class="o">).</span><span class="py">show</span><span class="o">()</span>
+<span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table"</span><span class="o">).</span><span class="py">show</span><span class="o">()</span>
+</code></pre></div></div>
+
+<p class="notice--info">This query provides a read optimized view of the ingested data. Since our partition path (<code class="highlighter-rouge">region/country/city</code>) is 3 levels nested 
+from base path we ve used <code class="highlighter-rouge">load(basePath + "/*/*/*/*")</code>. 
+Refer to <a href="/docs/0.5.0-concepts#storage-types--views">Storage Types and Views</a> for more info on all storage types and views supported.</p>
+
+<h2 id="update-data">Update data</h2>
+
+<p>This is similar to inserting new data. Generate updates to existing trips using the data generator, load into a DataFrame 
+and write DataFrame into the hudi dataset.</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">val</span> <span class="nv">updates</span> <span class="k">=</span> <span class="nf">convertToStringList</span><span class="o">(</span><span class="nv">dataGen</span><span class="o">.</span><span class="py">generateUpdates</span><span class="o">(</span><span class="mi">10</span><span class="o">))</span>
+<span class="k">val</span> <span class="nv">df</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">read</span><span class="o">.</span><span class="py">json</span><span class="o">(</span><span class="nv">spark</span><span class="o">.</span><span class="py">sparkContext</span><span class="o">.</span><span class="py">parallelize</span><span class="o">(</span><span class="n">updates</span><span class="o">,</span> <span class="mi">2</span><span class="o">));</span>
+<span class="nv">df</span><span class="o">.</span><span class="py">write</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">).</span>
+    <span class="nf">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">).</span>
+    <span class="nf">mode</span><span class="o">(</span><span class="nc">Append</span><span class="o">).</span>
+    <span class="nf">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
+</code></pre></div></div>
+
+<p class="notice--info">Notice that the save mode is now <code class="highlighter-rouge">Append</code>. In general, always use append mode unless you are trying to create the dataset for the first time.
+<a href="#query-data">Querying</a> the data again will now show updated trips. Each write operation generates a new <a href="http://hudi.incubator.apache.org/concepts.html">commit</a> 
+denoted by the timestamp. Look for changes in <code class="highlighter-rouge">_hoodie_commit_time</code>, <code class="highlighter-rouge">rider</code>, <code class="highlighter-rouge">driver</code> fields for the same <code class="highlighter-rouge">_hoodie_record_key</code>s in previous commit.</p>
+
+<h2 id="incremental-query">Incremental query</h2>
+
+<p>Hudi also provides capability to obtain a stream of records that changed since given commit timestamp. 
+This can be achieved using Hudi’s incremental view and providing a begin time from which changes need to be streamed. 
+We do not need to specify endTime, if we want all changes after the given commit (as is the common case).</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// reload data
+</span><span class="n">spark</span><span class="o">.</span>
+    <span class="n">read</span><span class="o">.</span>
+    <span class="nf">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">).</span>
+    <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">).</span>
+    <span class="nf">createOrReplaceTempView</span><span class="o">(</span><span class="s">"hudi_ro_table"</span><span class="o">)</span>
+
+<span class="k">val</span> <span class="nv">commits</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime"</span><span class="o">).</span><span class="py">map</span><span class="o">(</span><span class="n">k</span> <span class="k">=&gt;</span> <span class="nv">k</span><span class="o">.</span><span class="py">getString</span><span class="o">(</span><span class="mi">0</span><span class="o">)).</span><span class="py">take</span><span class="o">(</span><span class="mi">50</span><span class="o">)</span>
+<span class="k">val</span> <span class="nv">beginTime</span> <span class="k">=</span> <span class="nf">commits</span><span class="o">(</span><span class="nv">commits</span><span class="o">.</span><span class="py">length</span> <span class="o">-</span> <span class="mi">2</span><span class="o">)</span> <span class="c1">// commit time we are interested in
+</span>
+<span class="c1">// incrementally query data
+</span><span class="k">val</span> <span class="nv">incViewDF</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span>
+    <span class="n">read</span><span class="o">.</span>
+    <span class="nf">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">VIEW_TYPE_OPT_KEY</span><span class="o">,</span> <span class="nc">VIEW_TYPE_INCREMENTAL_OPT_VAL</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">BEGIN_INSTANTTIME_OPT_KEY</span><span class="o">,</span> <span class="n">beginTime</span><span class="o">).</span>
+    <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
+<span class="nv">incViewDF</span><span class="o">.</span><span class="py">registerTempTable</span><span class="o">(</span><span class="s">"hudi_incr_table"</span><span class="o">)</span>
+<span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare &gt; 20.0"</span><span class="o">).</span><span class="py">show</span><span class="o">()</span>
+</code></pre></div></div>
+
+<p class="notice--info">This will give all changes that happened after the beginTime commit with the filter of fare &gt; 20.0. The unique thing about this
+feature is that it now lets you author streaming pipelines on batch data.</p>
+
+<h2 id="point-in-time-query">Point in time query</h2>
+
+<p>Lets look at how to query data as of a specific time. The specific time can be represented by pointing endTime to a 
+specific commit time and beginTime to “000” (denoting earliest possible commit time).</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">val</span> <span class="nv">beginTime</span> <span class="k">=</span> <span class="s">"000"</span> <span class="c1">// Represents all commits &gt; this time.
+</span><span class="k">val</span> <span class="nv">endTime</span> <span class="k">=</span> <span class="nf">commits</span><span class="o">(</span><span class="nv">commits</span><span class="o">.</span><span class="py">length</span> <span class="o">-</span> <span class="mi">2</span><span class="o">)</span> <span class="c1">// commit time we are interested in
+</span>
+<span class="c1">//incrementally query data
+</span><span class="k">val</span> <span class="nv">incViewDF</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">read</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">VIEW_TYPE_OPT_KEY</span><span class="o">,</span> <span class="nc">VIEW_TYPE_INCREMENTAL_OPT_VAL</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">BEGIN_INSTANTTIME_OPT_KEY</span><span class="o">,</span> <span class="n">beginTime</span><span class="o">).</span>
+    <span class="nf">option</span><span class="o">(</span><span class="nc">END_INSTANTTIME_OPT_KEY</span><span class="o">,</span> <span class="n">endTime</span><span class="o">).</span>
+    <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
+<span class="nv">incViewDF</span><span class="o">.</span><span class="py">registerTempTable</span><span class="o">(</span><span class="s">"hudi_incr_table"</span><span class="o">)</span>
+<span class="nv">spark</span><span class="o">.</span><span class="py">sql</span><span class="o">(</span><span class="s">"select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare &gt; 20.0"</span><span class="o">).</span><span class="py">show</span><span class="o">()</span>
+</code></pre></div></div>
+
+<h2 id="where-to-go-from-here">Where to go from here?</h2>
+
+<p>You can also do the quickstart by <a href="https://github.com/apache/hudi#building-apache-hudi-from-source">building hudi yourself</a>, 
+and using <code class="highlighter-rouge">--jars &lt;path to hudi_code&gt;/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar</code> in the spark-shell command above
+instead of <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating</code></p>
+
+<p>Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple storage types/views and 
+Hudi datasets can be queried from query engines like Hive, Spark, Presto and much more. We have put together a 
+<a href="https://www.youtube.com/watch?v=VhNgUsxdrD0">demo video</a> that show cases all of this on a docker based setup with all 
+dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
+steps <a href="/docs/0.5.0-docker_demo.html">here</a> to get a taste for it. Also, if you are looking for ways to migrate your existing data 
+to Hudi, refer to <a href="/docs/0.5.0-migration_guide.html">migration guide</a>.</p>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+
+  </body>
+</html>

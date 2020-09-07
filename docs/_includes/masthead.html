@@ -1,0 +1,47 @@
+
+{%- if page.language == "cn" -%}
+  {%- assign mainmenu = site.data.navigation.cn_main -%}
+{%- else -%}
+  {%- assign mainmenu = site.data.navigation.main -%}
+{%- endif -%}
+
+<div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        {% unless logo_path == empty %}
+          <a class="site-logo" href="{{ '/' | relative_url }}">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        {% endunless %}
+        <a class="site-title" href="{{ '/' | relative_url }}">
+          {{ site.masthead_title | default: site.title }}
+        </a>
+        <ul class="visible-links">
+          {%- for link in mainmenu -%}
+            {%- if link.url contains '://' -%}
+              {%- assign url = link.url -%}
+              {%- assign target = "_blank" -%}
+            {%- else -%}
+              {%- assign url = link.url | relative_url -%}
+              {%- assign target = "_self" -%}
+            {%- endif -%}
+            <li class="masthead__menu-item">
+              <a href="{{ url }}" target="{{ target }}" {% if link.description %}title="{{ link.description }}"{% endif %}>{{ link.title }}</a>
+            </li>
+          {%- endfor -%}
+        </ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">{{ site.data.ui-text[site.locale].menu_label | default: "Toggle menu" }}</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->

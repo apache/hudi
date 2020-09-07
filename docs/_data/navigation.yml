@@ -1,0 +1,450 @@
+
+# main links
+main:
+  - title: "Documentation"
+    url: /docs/quick-start-guide.html
+  - title: "Community"
+    url: /community.html
+  - title: "Blog"
+    url: /blog.html
+  - title: "FAQ"
+    url: https://cwiki.apache.org/confluence/display/HUDI/FAQ
+  - title: "Releases"
+    url: /releases.html
+
+# doc links
+docs:
+  - title: Getting Started
+    children:
+      - title: "Quick Start"
+        url: /docs/quick-start-guide.html
+      - title: "Use Cases"
+        url: /docs/use_cases.html
+      - title: "Talks & Powered By"
+        url: /docs/powered_by.html
+      - title: "Comparison"
+        url: /docs/comparison.html
+      - title: "Docker Demo"
+        url: /docs/docker_demo.html
+  - title: Documentation
+    children:
+      - title: "Concepts"
+        url: /docs/concepts.html
+      - title: "Writing Data"
+        url: /docs/writing_data.html
+      - title: "Querying Data"
+        url: /docs/querying_data.html
+      - title: "Configuration"
+        url: /docs/configurations.html
+      - title: "Performance"
+        url: /docs/performance.html
+      - title: "Deployment"
+        url: /docs/deployment.html
+      - title: "Cloud Storage"
+        url: /docs/cloud.html
+      - title: "Metrics"
+        url: /docs/metrics.html
+  - title: INFO
+    children:
+      - title: "Docs Versions"
+        url: /docs/docs-versions.html
+      - title: "Privacy Policy"
+        url: /docs/privacy.html
+
+cn_main:
+  - title: "文档"
+    url: /cn/docs/quick-start-guide.html
+  - title: "社区"
+    url: /cn/community.html
+  - title: "动态"
+    url: /cn/activity.html
+  - title: "FAQ"
+    url: https://cwiki.apache.org/confluence/display/HUDI/FAQ
+  - title: "发布"
+    url: /cn/releases.html
+
+# doc links
+cn_docs:
+  - title: 入门指南
+    children:
+      - title: "快速开始"
+        url: /cn/docs/quick-start-guide.html
+      - title: "使用案例"
+        url: /cn/docs/use_cases.html
+      - title: "演讲 & hudi 用户"
+        url: /cn/docs/powered_by.html
+      - title: "对比"
+        url: /cn/docs/comparison.html
+      - title: "Docker 示例"
+        url: /cn/docs/docker_demo.html
+  - title: 帮助文档
+    children:
+      - title: "概念"
+        url: /cn/docs/concepts.html
+      - title: "写入数据"
+        url: /cn/docs/writing_data.html
+      - title: "查询数据"
+        url: /cn/docs/querying_data.html
+      - title: "配置"
+        url: /cn/docs/configurations.html
+      - title: "性能"
+        url: /cn/docs/performance.html
+      - title: "管理"
+        url: /cn/docs/deployment.html
+      - title: "云储存"
+        url: /cn/docs/cloud.html
+  - title: 其他信息
+    children:
+      - title: "文档版本"
+        url: /cn/docs/docs-versions.html
+      - title: "版权信息"
+        url: /cn/docs/privacy.html
+
+
+0.5.0_docs:
+  - title: Getting Started
+    children:
+      - title: "Quick Start"
+        url: /docs/0.5.0-quick-start-guide.html
+      - title: "Use Cases"
+        url: /docs/0.5.0-use_cases.html
+      - title: "Talks & Powered By"
+        url: /docs/0.5.0-powered_by.html
+      - title: "Comparison"
+        url: /docs/0.5.0-comparison.html
+      - title: "Docker Demo"
+        url: /docs/0.5.0-docker_demo.html
+  - title: Documentation
+    children:
+      - title: "Concepts"
+        url: /docs/0.5.0-concepts.html
+      - title: "Writing Data"
+        url: /docs/0.5.0-writing_data.html
+      - title: "Querying Data"
+        url: /docs/0.5.0-querying_data.html
+      - title: "Configuration"
+        url: /docs/0.5.0-configurations.html
+      - title: "Performance"
+        url: /docs/0.5.0-performance.html
+      - title: "Administering"
+        url: /docs/0.5.0-admin_guide.html
+  - title: INFO
+    children:
+      - title: "Docs Versions"
+        url: /docs/0.5.0-docs-versions.html
+      - title: "Privacy Policy"
+        url: /docs/0.5.0-privacy.html
+
+0.5.0_cn_docs:
+  - title: 入门指南
+    children:
+      - title: "快速开始"
+        url: /cn/docs/0.5.0-quick-start-guide.html
+      - title: "使用案例"
+        url: /cn/docs/0.5.0-use_cases.html
+      - title: "演讲 & hudi 用户"
+        url: /cn/docs/0.5.0-powered_by.html
+      - title: "对比"
+        url: /cn/docs/0.5.0-comparison.html
+      - title: "Docker 示例"
+        url: /cn/docs/0.5.0-docker_demo.html
+  - title: 帮助文档
+    children:
+      - title: "概念"
+        url: /cn/docs/0.5.0-concepts.html
+      - title: "写入数据"
+        url: /cn/docs/0.5.0-writing_data.html
+      - title: "查询数据"
+        url: /cn/docs/0.5.0-querying_data.html
+      - title: "配置"
+        url: /cn/docs/0.5.0-configurations.html
+      - title: "性能"
+        url: /cn/docs/0.5.0-performance.html
+      - title: "管理"
+        url: /cn/docs/0.5.0-admin_guide.html
+  - title: 其他信息
+    children:
+      - title: "文档版本"
+        url: /cn/docs/0.5.0-docs-versions.html
+      - title: "版权信息"
+        url: /cn/docs/0.5.0-privacy.html
+
+0.5.1_docs:
+  - title: Getting Started
+    children:
+      - title: "Quick Start"
+        url: /docs/0.5.1-quick-start-guide.html
+      - title: "Use Cases"
+        url: /docs/0.5.1-use_cases.html
+      - title: "Talks & Powered By"
+        url: /docs/0.5.1-powered_by.html
+      - title: "Comparison"
+        url: /docs/0.5.1-comparison.html
+      - title: "Docker Demo"
+        url: /docs/0.5.1-docker_demo.html
+  - title: Documentation
+    children:
+      - title: "Concepts"
+        url: /docs/0.5.1-concepts.html
+      - title: "Writing Data"
+        url: /docs/0.5.1-writing_data.html
+      - title: "Querying Data"
+        url: /docs/0.5.1-querying_data.html
+      - title: "Configuration"
+        url: /docs/0.5.1-configurations.html
+      - title: "Performance"
+        url: /docs/0.5.1-performance.html
+      - title: "Deployment"
+        url: /docs/0.5.1-deployment.html
+  - title: INFO
+    children:
+      - title: "Docs Versions"
+        url: /docs/0.5.1-docs-versions.html
+      - title: "Privacy Policy"
+        url: /docs/0.5.1-privacy.html
+
+0.5.1_cn_docs:
+  - title: 入门指南
+    children:
+      - title: "快速开始"
+        url: /cn/docs/0.5.1-quick-start-guide.html
+      - title: "使用案例"
+        url: /cn/docs/0.5.1-use_cases.html
+      - title: "演讲 & hudi 用户"
+        url: /cn/docs/0.5.1-powered_by.html
+      - title: "对比"
+        url: /cn/docs/0.5.1-comparison.html
+      - title: "Docker 示例"
+        url: /cn/docs/0.5.1-docker_demo.html
+  - title: 帮助文档
+    children:
+      - title: "概念"
+        url: /cn/docs/0.5.1-concepts.html
+      - title: "写入数据"
+        url: /cn/docs/0.5.1-writing_data.html
+      - title: "查询数据"
+        url: /cn/docs/0.5.1-querying_data.html
+      - title: "配置"
+        url: /cn/docs/0.5.1-configurations.html
+      - title: "性能"
+        url: /cn/docs/0.5.1-performance.html
+      - title: "管理"
+        url: /cn/docs/0.5.1-deployment.html
+  - title: 其他信息
+    children:
+      - title: "文档版本"
+        url: /cn/docs/0.5.1-docs-versions.html
+      - title: "版权信息"
+        url: /cn/docs/0.5.1-privacy.html
+
+0.5.2_docs:
+  - title: Getting Started
+    children:
+      - title: "Quick Start"
+        url: /docs/0.5.2-quick-start-guide.html
+      - title: "Use Cases"
+        url: /docs/0.5.2-use_cases.html
+      - title: "Talks & Powered By"
+        url: /docs/0.5.2-powered_by.html
+      - title: "Comparison"
+        url: /docs/0.5.2-comparison.html
+      - title: "Docker Demo"
+        url: /docs/0.5.2-docker_demo.html
+  - title: Documentation
+    children:
+      - title: "Concepts"
+        url: /docs/0.5.2-concepts.html
+      - title: "Writing Data"
+        url: /docs/0.5.2-writing_data.html
+      - title: "Querying Data"
+        url: /docs/0.5.2-querying_data.html
+      - title: "Configuration"
+        url: /docs/0.5.2-configurations.html
+      - title: "Performance"
+        url: /docs/0.5.2-performance.html
+      - title: "Deployment"
+        url: /docs/0.5.2-deployment.html
+  - title: INFO
+    children:
+      - title: "Docs Versions"
+        url: /docs/0.5.2-docs-versions.html
+      - title: "Privacy Policy"
+        url: /docs/0.5.2-privacy.html
+
+0.5.2_cn_docs:
+  - title: 入门指南
+    children:
+      - title: "快速开始"
+        url: /cn/docs/0.5.2-quick-start-guide.html
+      - title: "使用案例"
+        url: /cn/docs/0.5.2-use_cases.html
+      - title: "演讲 & hudi 用户"
+        url: /cn/docs/0.5.2-powered_by.html
+      - title: "对比"
+        url: /cn/docs/0.5.2-comparison.html
+      - title: "Docker 示例"
+        url: /cn/docs/0.5.2-docker_demo.html
+  - title: 帮助文档
+    children:
+      - title: "概念"
+        url: /cn/docs/0.5.2-concepts.html
+      - title: "写入数据"
+        url: /cn/docs/0.5.2-writing_data.html
+      - title: "查询数据"
+        url: /cn/docs/0.5.2-querying_data.html
+      - title: "配置"
+        url: /cn/docs/0.5.2-configurations.html
+      - title: "性能"
+        url: /cn/docs/0.5.2-performance.html
+      - title: "管理"
+        url: /cn/docs/0.5.2-deployment.html
+  - title: 其他信息
+    children:
+      - title: "文档版本"
+        url: /cn/docs/0.5.2-docs-versions.html
+      - title: "版权信息"
+        url: /cn/docs/0.5.2-privacy.html
+
+0.5.3_docs:
+  - title: Getting Started
+    children:
+      - title: "Quick Start"
+        url: /docs/0.5.3-quick-start-guide.html
+      - title: "Use Cases"
+        url: /docs/0.5.3-use_cases.html
+      - title: "Talks & Powered By"
+        url: /docs/0.5.3-powered_by.html
+      - title: "Comparison"
+        url: /docs/0.5.3-comparison.html
+      - title: "Docker Demo"
+        url: /docs/0.5.3-docker_demo.html
+  - title: Documentation
+    children:
+      - title: "Concepts"
+        url: /docs/0.5.3-concepts.html
+      - title: "Writing Data"
+        url: /docs/0.5.3-writing_data.html
+      - title: "Querying Data"
+        url: /docs/0.5.3-querying_data.html
+      - title: "Configuration"
+        url: /docs/0.5.3-configurations.html
+      - title: "Performance"
+        url: /docs/0.5.3-performance.html
+      - title: "Deployment"
+        url: /docs/0.5.3-deployment.html
+      - title: "Cloud Storage"
+        url: /docs/0.5.3-cloud.html
+  - title: INFO
+    children:
+      - title: "Docs Versions"
+        url: /docs/0.5.3-docs-versions.html
+      - title: "Privacy Policy"
+        url: /docs/0.5.3-privacy.html
+
+0.5.3_cn_docs:
+  - title: 入门指南
+    children:
+      - title: "快速开始"
+        url: /cn/docs/0.5.3-quick-start-guide.html
+      - title: "使用案例"
+        url: /cn/docs/0.5.3-use_cases.html
+      - title: "演讲 & hudi 用户"
+        url: /cn/docs/0.5.3-powered_by.html
+      - title: "对比"
+        url: /cn/docs/0.5.3-comparison.html
+      - title: "Docker 示例"
+        url: /cn/docs/0.5.3-docker_demo.html
+  - title: 帮助文档
+    children:
+      - title: "概念"
+        url: /cn/docs/0.5.3-concepts.html
+      - title: "写入数据"
+        url: /cn/docs/0.5.3-writing_data.html
+      - title: "查询数据"
+        url: /cn/docs/0.5.3-querying_data.html
+      - title: "配置"
+        url: /cn/docs/0.5.3-configurations.html
+      - title: "性能"
+        url: /cn/docs/0.5.3-performance.html
+      - title: "管理"
+        url: /cn/docs/0.5.3-deployment.html
+      - title: "云储存"
+        url: /cn/docs/0.5.3-cloud.html
+  - title: 其他信息
+    children:
+      - title: "文档版本"
+        url: /cn/docs/0.5.3-docs-versions.html
+      - title: "版权信息"
+        url: /cn/docs/0.5.3-privacy.html
+
+0.6.0_docs:
+  - title: Getting Started
+    children:
+      - title: "Quick Start"
+        url: /docs/0.6.0-quick-start-guide.html
+      - title: "Use Cases"
+        url: /docs/0.6.0-use_cases.html
+      - title: "Talks & Powered By"
+        url: /docs/0.6.0-powered_by.html
+      - title: "Comparison"
+        url: /docs/0.6.0-comparison.html
+      - title: "Docker Demo"
+        url: /docs/0.6.0-docker_demo.html
+  - title: Documentation
+    children:
+      - title: "Concepts"
+        url: /docs/0.6.0-concepts.html
+      - title: "Writing Data"
+        url: /docs/0.6.0-writing_data.html
+      - title: "Querying Data"
+        url: /docs/0.6.0-querying_data.html
+      - title: "Configuration"
+        url: /docs/0.6.0-configurations.html
+      - title: "Performance"
+        url: /docs/0.6.0-performance.html
+      - title: "Deployment"
+        url: /docs/0.6.0-deployment.html
+      - title: "Cloud Storage"
+        url: /docs/0.6.0-cloud.html
+  - title: INFO
+    children:
+      - title: "Docs Versions"
+        url: /docs/0.6.0-docs-versions.html
+      - title: "Privacy Policy"
+        url: /docs/0.6.0-privacy.html
+
+0.6.0_cn_docs:
+  - title: 入门指南
+    children:
+      - title: "快速开始"
+        url: /cn/docs/0.6.0-quick-start-guide.html
+      - title: "使用案例"
+        url: /cn/docs/0.6.0-use_cases.html
+      - title: "演讲 & hudi 用户"
+        url: /cn/docs/0.6.0-powered_by.html
+      - title: "对比"
+        url: /cn/docs/0.6.0-comparison.html
+      - title: "Docker 示例"
+        url: /cn/docs/0.6.0-docker_demo.html
+  - title: 帮助文档
+    children:
+      - title: "概念"
+        url: /cn/docs/0.6.0-concepts.html
+      - title: "写入数据"
+        url: /cn/docs/0.6.0-writing_data.html
+      - title: "查询数据"
+        url: /cn/docs/0.6.0-querying_data.html
+      - title: "配置"
+        url: /cn/docs/0.6.0-configurations.html
+      - title: "性能"
+        url: /cn/docs/0.6.0-performance.html
+      - title: "管理"
+        url: /cn/docs/0.6.0-deployment.html
+      - title: "云储存"
+        url: /cn/docs/0.6.0-cloud.html
+  - title: 其他信息
+    children:
+      - title: "文档版本"
+        url: /cn/docs/0.6.0-docs-versions.html
+      - title: "版权信息"
+        url: /cn/docs/0.6.0-privacy.html

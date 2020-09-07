@@ -1,0 +1,8 @@
+---
+# Only the main Sass file needs front matter (the dashes are enough)
+---
+
+@charset "utf-8";
+
+@import "hudi_style/skins/{{ site.hudi_style_skin | default: 'default' }}"; // skin
+@import "hudi_style"; // main partials

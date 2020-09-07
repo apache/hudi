@@ -1,26 +1,23 @@
-FROM ruby:2.6
-
-RUN apt-get clean \
-  && mv /var/lib/apt/lists /var/lib/apt/lists.broke \
-  && mkdir -p /var/lib/apt/lists/partial
-
-RUN apt-get update
-
-RUN apt-get install -y \
-    nodejs \
-    python-pygments \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/
+FROM jekyll/jekyll:3.8
 
 WORKDIR /tmp
 ADD Gemfile /tmp/
 ADD Gemfile.lock /tmp/
+RUN chmod a+w Gemfile.lock
 
-RUN gem install bundler
-RUN gem install jekyll
-RUN bundle install
-RUN bundle update --bundler
- 
+
+## pick up speed in china
+#RUN gem sources -l \
+# && gem sources --add https://gems.ruby-china.com/ --remove https://rubygems.org/ \
+# && gem sources -u \
+# && bundle config mirror.https://rubygems.org https://gems.ruby-china.com \
+# && bundle config --delete 'mirror.https://rubygems.org/' \
+# && sed -i "s/rubygems.org/gems.ruby-china.com/" Gemfile \
+# && sed -i "s/rubygems.org/gems.ruby-china.com/" Gemfile.lock
+
+
+RUN bundle install \
+ && bundle update --bundler
 
 VOLUME /src
 EXPOSE 4000

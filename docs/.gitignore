@@ -1,7 +1,7 @@
 _site
 .sass-cache
+.jekyll-cache
 .jekyll-metadata
-.ruby-version
+.idea/
+*.iml
 .DS_Store
-.bundle/
-.rubydeps

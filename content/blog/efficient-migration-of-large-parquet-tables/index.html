@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Efficient Migration of Large Parquet Tables to Apache Hudi - Apache Hudi</title>
+<meta name="description" content="Migrating a large parquet table to Apache Hudi without having to rewrite the entire dataset.">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Efficient Migration of Large Parquet Tables to Apache Hudi">
+<meta property="og:url" content="https://hudi.apache.org/blog/efficient-migration-of-large-parquet-tables/">
+
+
+  <meta property="og:description" content="Migrating a large parquet table to Apache Hudi without having to rewrite the entire dataset.">
+
+
+
+
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/blog.html" target="_self" >Blog</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+    <div itemscope itemtype="https://schema.org/Person">
+
+  <div class="author__content">
+    
+      <h3 class="author__name" itemprop="name">Quick Links</h3>
+    
+    
+      <div class="author__bio" itemprop="description">
+        <p>Hudi <em>ingests</em> &amp; <em>manages</em> storage of large analytical datasets over DFS.</p>
+
+      </div>
+    
+  </div>
+
+  <div class="author__urls-wrapper">
+    <ul class="author__urls social-icons">
+      
+        
+          <li><a href="/docs/quick-start-guide" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-book" aria-hidden="true"></i> Documentation</a></li>
+
+          
+        
+          <li><a href="https://cwiki.apache.org/confluence/display/HUDI" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-wikipedia-w" aria-hidden="true"></i> Technical Wiki</a></li>
+
+          
+        
+          <li><a href="/contributing" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-thumbs-o-up" aria-hidden="true"></i> Contribution Guide</a></li>
+
+          
+        
+          <li><a href="https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-slack" aria-hidden="true"></i> Join on Slack</a></li>
+
+          
+        
+          <li><a href="https://github.com/apache/hudi" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-github" aria-hidden="true"></i> Fork on GitHub</a></li>
+
+          
+        
+          <li><a href="https://issues.apache.org/jira/projects/HUDI/summary" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Issues</a></li>
+
+          
+        
+          <li><a href="/security" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Security Issues</a></li>
+
+          
+        
+      
+    </ul>
+  </div>
+</div>
+
+  
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Efficient Migration of Large Parquet Tables to Apache Hudi
+</h1>
+          <!-- Output author details if some exist. -->
+          <div class="page__author"><a href="https://cwiki.apache.org/confluence/display/~vbalaji">Balaji Varadarajan</a> posted on <time datetime="2020-08-20">August 20, 2020</time></span>
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+          <style>
+            .page {
+              padding-right: 0 !important;
+            }
+          </style>
+        
+        <p>We will look at how to migrate a large parquet table to Hudi without having to rewrite the entire dataset.</p>
+
+<h1 id="motivation">Motivation:</h1>
+
+<p>Apache Hudi maintains per record metadata to perform core operations such as upserts and incremental pull. To take advantage of Hudi’s upsert and incremental processing support, users would need to rewrite their whole dataset to make it an Apache Hudi table.  Hudi 0.6.0 comes with an <strong><em>experimental feature</em></strong> to support efficient migration of large Parquet tables to Hudi without the need to rewrite the entire dataset.</p>
+
+<h1 id="high-level-idea">High Level Idea:</h1>
+
+<h2 id="per-record-metadata">Per Record Metadata:</h2>
+
+<p>Apache Hudi maintains record level metadata for perform efficient upserts and incremental pull.</p>
+
+<p><img src="/assets/images/blog/2020-08-20-per-record.png" alt="Per Record Metadata" /></p>
+
+<p>Apache HUDI physical file contains 3 parts</p>
+
+<ol>
+  <li>For each record, 5 HUDI metadata fields with column indices 0 to 4</li>
+  <li>For each record, the original data columns that comprises the record (Original Data)</li>
+  <li>Additional Hudi Metadata at file footer for index lookup</li>
+</ol>
+
+<p>The parts (1) and (3) constitute what we term as  “Hudi skeleton”. Hudi skeleton contains additional metadata that it maintains in each physical parquet file for supporting Hudi primitives. The conceptual idea is to decouple Hudi skeleton data from original data (2). Hudi skeleton can be stored in a Hudi file while the original data is stored in an external non-Hudi file. A migration of large parquet would result in creating only Hudi skeleton files without having to rewrite original data.</p>
+
+<p><img src="/assets/images/blog/2020-08-20-skeleton.png" alt="skeleton" /></p>
+
+<h1 id="design-deep-dive">Design Deep Dive:</h1>
+
+<p>For a deep dive on the internals, please take a look at the <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+-+12+%3A+Efficient+Migration+of+Large+Parquet+Tables+to+Apache+Hudi">RFC document</a></p>
+
+<h1 id="migration">Migration:</h1>
+
+<p>Hudi supports 2 modes when migrating parquet tables.  We will use the term bootstrap and migration interchangeably in this document.</p>
+
+<ul>
+  <li>METADATA_ONLY : In this mode, record level metadata alone is generated for each source record and stored in new bootstrap location.</li>
+  <li>FULL_RECORD : In this mode, record level metadata is generated for each source record and both original record and metadata for each record copied</li>
+</ul>
+
+<p>You can pick and choose these modes at partition level. One of the common strategy would be to use FULL_RECORD mode for a small set of “hot” partitions which are accessed more frequently and METADATA_ONLY for a larger set of “warm” partitions.</p>
+
+<h2 id="query-engine-support">Query Engine Support:</h2>
+<p>For a METADATA_ONLY bootstrapped table, Spark - data source, Spark-Hive and native Hive query engines are supported. Presto support is in the works.</p>
+
+<h2 id="ways-to-migrate-">Ways To Migrate :</h2>
+
+<p>There are 2 ways to migrate a large parquet table to Hudi.</p>
+
+<ul>
+  <li>Spark Datasource Write</li>
+  <li>Hudi DeltaStreamer</li>
+</ul>
+
+<p>We will look at how to migrate using both these approaches.</p>
+
+<h2 id="configurations">Configurations:</h2>
+
+<p>These are bootstrap specific configurations that needs to be set in addition to regular hudi write configurations.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Configuration Name</th>
+      <th>Default</th>
+      <th>Mandatory ?</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>hoodie.bootstrap.base.path</td>
+      <td> </td>
+      <td>Yes</td>
+      <td>Base Path of  source parquet table.</td>
+    </tr>
+    <tr>
+      <td>hoodie.bootstrap.parallelism</td>
+      <td>1500</td>
+      <td>Yes</td>
+      <td>Spark Parallelism used when running bootstrap</td>
+    </tr>
+    <tr>
+      <td>hoodie.bootstrap.keygen.class</td>
+      <td> </td>
+      <td>Yes</td>
+      <td>Bootstrap Index internally used by Hudi to map Hudi skeleton and source parquet files.</td>
+    </tr>
+    <tr>
+      <td>hoodie.bootstrap.mode.selector</td>
+      <td>org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector</td>
+      <td>Yes</td>
+      <td>Bootstap Mode Selector class. By default, Hudi employs METADATA_ONLY boostrap for all partitions.</td>
+    </tr>
+    <tr>
+      <td>hoodie.bootstrap.partitionpath.translator.class</td>
+      <td>org.apache.hudi.client.bootstrap.translator. IdentityBootstrapPartitionPathTranslator</td>
+      <td>No</td>
+      <td>For METADATA_ONLY bootstrap, this class allows customization of partition paths used in Hudi target dataset. By default, no customization is done and the partition paths reflects what is available in source parquet table.</td>
+    </tr>
+    <tr>
+      <td>hoodie.bootstrap.full.input.provider</td>
+      <td>org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider</td>
+      <td>No</td>
+      <td>For FULL_RECORD bootstrap, this class provides the input RDD of Hudi records to write.</td>
+    </tr>
+    <tr>
+      <td>hoodie.bootstrap.mode.selector.regex.mode</td>
+      <td>METADATA_ONLY</td>
+      <td>No</td>
+      <td>Bootstrap Mode used when the partition matches the regex pattern in hoodie.bootstrap.mode.selector.regex . Used only when hoodie.bootstrap.mode.selector set to BootstrapRegexModeSelector.</td>
+    </tr>
+    <tr>
+      <td>hoodie.bootstrap.mode.selector.regex</td>
+      <td>.*</td>
+      <td>No</td>
+      <td>Partition Regex used when  hoodie.bootstrap.mode.selector set to BootstrapRegexModeSelector.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="spark-data-source">Spark Data Source:</h2>
+
+<p>Here, we use a Spark Datasource Write to perform bootstrap. 
+Here is an example code snippet to perform METADATA_ONLY bootstrap.</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">import</span> <span class="err">org.apache.hudi.{DataSourceWriteOptions,</span> <span class="err">HoodieDataSourceHelpers}</span>
+<span class="err">import</span> <span class="err">org.apache.hudi.config.{HoodieBootstrapConfig,</span> <span class="err">HoodieWriteConfig}</span>
+<span class="err">import</span> <span class="err">org.apache.hudi.keygen.SimpleKeyGenerator</span>
+<span class="err">import</span> <span class="err">org.apache.spark.sql.SaveMode</span>
+ 
+<span class="err">val</span> <span class="py">bootstrapDF</span> <span class="p">=</span> <span class="s">spark.emptyDataFrame</span>
+<span class="err">bootstrapDF.write</span>
+      <span class="err">.format("hudi")</span>
+      <span class="err">.option(HoodieWriteConfig.TABLE_NAME,</span> <span class="err">"hoodie_test")</span>
+      <span class="err">.option(DataSourceWriteOptions.OPERATION_OPT_KEY,</span> <span class="err">DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)</span>
+      <span class="err">.option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY,</span> <span class="err">"_row_key")</span>
+      <span class="err">.option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY,</span> <span class="err">"datestr")</span>
+      <span class="err">.option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP,</span> <span class="err">srcPath)</span>
+      <span class="err">.option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS,</span> <span class="err">classOf[SimpleKeyGenerator].getName)</span>
+      <span class="err">.mode(SaveMode.Overwrite)</span>
+      <span class="err">.save(basePath)</span>
+</code></pre></div></div>
+
+<p>Here is an example code snippet to perform METADATA_ONLY bootstrap for August 20 2020 - August 29 2020 partitions and FULL_RECORD bootstrap for other partitions.</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">import</span> <span class="err">org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider</span>
+<span class="err">import</span> <span class="err">org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector</span>
+<span class="err">import</span> <span class="err">org.apache.hudi.{DataSourceWriteOptions,</span> <span class="err">HoodieDataSourceHelpers}</span>
+<span class="err">import</span> <span class="err">org.apache.hudi.config.{HoodieBootstrapConfig,</span> <span class="err">HoodieWriteConfig}</span>
+<span class="err">import</span> <span class="err">org.apache.hudi.keygen.SimpleKeyGenerator</span>
+<span class="err">import</span> <span class="err">org.apache.spark.sql.SaveMode</span>
+ 
+<span class="err">val</span> <span class="py">bootstrapDF</span> <span class="p">=</span> <span class="s">spark.emptyDataFrame</span>
+<span class="err">bootstrapDF.write</span>
+      <span class="err">.format("hudi")</span>
+      <span class="err">.option(HoodieWriteConfig.TABLE_NAME,</span> <span class="err">"hoodie_test")</span>
+      <span class="err">.option(DataSourceWriteOptions.OPERATION_OPT_KEY,</span> <span class="err">DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)</span>
+      <span class="err">.option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY,</span> <span class="err">"_row_key")</span>
+      <span class="err">.option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY,</span> <span class="err">"datestr")</span>
+      <span class="err">.option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY,</span> <span class="err">"timestamp")</span>
+      <span class="err">.option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP,</span> <span class="err">srcPath)</span>
+      <span class="err">.option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS,</span> <span class="err">classOf[SimpleKeyGenerator].getName)</span>
+      <span class="err">.option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR,</span> <span class="err">classOf[BootstrapRegexModeSelector].getName)</span>
+      <span class="err">.option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_REGEX,</span> <span class="err">"2020/08/2[0-9]")</span>
+      <span class="err">.option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_REGEX_MODE,</span> <span class="err">"METADATA_ONLY")</span>
+      <span class="err">.option(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER,</span> <span class="err">classOf[SparkParquetBootstrapDataProvider].getName)</span>
+      <span class="err">.mode(SaveMode.Overwrite)</span>
+      <span class="err">.save(basePath)</span>
+</code></pre></div></div>
+
+<h2 id="hoodie-deltastreamer">Hoodie DeltaStreamer:</h2>
+
+<p>Hoodie Deltastreamer allows bootstrap to be performed using –run-bootstrap command line option.</p>
+
+<p>If you are planning to use delta-streamer after the initial boostrap to incrementally ingest data to the new hudi dataset, you need to pass either –checkpoint or –initial-checkpoint-provider to set the initial checkpoint for the deltastreamer.</p>
+
+<p>Here is an example for running METADATA_ONLY bootstrap using Delta Streamer.</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">spark-submit</span> <span class="err">--package</span> <span class="py">org.apache.hudi</span><span class="p">:</span><span class="s">hudi-spark-bundle_2.11:0.6.0</span>
+<span class="err">--conf</span> <span class="err">'</span><span class="py">spark.serializer</span><span class="p">=</span><span class="s">org.apache.spark.serializer.KryoSerializer' </span><span class="se">\
+</span><span class="s">--class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer  </span><span class="se">\
+</span><span class="s">--run-bootstrap </span><span class="se">\
+</span><span class="s">--target-base-path &lt;Hudi_Base_Path&gt; </span><span class="se">\
+</span><span class="s">--target-table &lt;Hudi_Table_Name&gt; </span><span class="se">\
+</span><span class="s">--props &lt;props_file&gt; </span><span class="se">\
+</span><span class="s">--checkpoint &lt;initial_checkpoint_if_you_are_going_to_use_deltastreamer_to_incrementally_ingest&gt; </span><span class="se">\
+</span><span class="s">--hoodie-conf hoodie.bootstrap.base.path=&lt;Parquet_Source_base_Path&gt; </span><span class="se">\
+</span><span class="s">--hoodie-conf hoodie.datasource.write.recordkey.field=_row_key </span><span class="se">\
+</span><span class="s">--hoodie-conf hoodie.datasource.write.partitionpath.field=datestr </span><span class="se">\
+</span><span class="s">--hoodie-conf hoodie.bootstrap.keygen.class=org.apache.hudi.keygen.SimpleKeyGenerator</span>
+</code></pre></div></div>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">spark-submit</span> <span class="err">--package</span> <span class="py">org.apache.hudi</span><span class="p">:</span><span class="s">hudi-spark-bundle_2.11:0.6.0</span>
+<span class="err">--conf</span> <span class="err">'</span><span class="py">spark.serializer</span><span class="p">=</span><span class="s">org.apache.spark.serializer.KryoSerializer' </span><span class="se">\
+</span><span class="s">--class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer  </span><span class="se">\
+</span><span class="s">--run-bootstrap </span><span class="se">\
+</span><span class="s">--target-base-path &lt;Hudi_Base_Path&gt; </span><span class="se">\
+</span><span class="s">--target-table &lt;Hudi_Table_Name&gt; </span><span class="se">\
+</span><span class="s">--props &lt;props_file&gt; </span><span class="se">\
+</span><span class="s">--checkpoint &lt;initial_checkpoint_if_you_are_going_to_use_deltastreamer_to_incrementally_ingest&gt; </span><span class="se">\
+</span><span class="s">--hoodie-conf hoodie.bootstrap.base.path=&lt;Parquet_Source_base_Path&gt; </span><span class="se">\
+</span><span class="s">--hoodie-conf hoodie.datasource.write.recordkey.field=_row_key </span><span class="se">\
+</span><span class="s">--hoodie-conf hoodie.datasource.write.partitionpath.field=datestr </span><span class="se">\
+</span><span class="s">--hoodie-conf hoodie.bootstrap.keygen.class=org.apache.hudi.keygen.SimpleKeyGenerator </span><span class="se">\
+</span><span class="s">--hoodie-conf hoodie.bootstrap.full.input.provider=org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider </span><span class="se">\
+</span><span class="s">--hoodie-conf hoodie.bootstrap.mode.selector=org.apache.hudi.client.bootstrap.selector.BootstrapRegexModeSelector </span><span class="se">\
+</span><span class="s">--hoodie-conf hoodie.bootstrap.mode.selector.regex="2020/08/2[0-9]" </span><span class="se">\
+</span><span class="s">--hoodie-conf hoodie.bootstrap.mode.selector.regex.mode=METADATA_ONLY</span>
+</code></pre></div></div>
+
+<h2 id="known-caveats">Known Caveats</h2>
+<ol>
+  <li>Need proper defaults for the bootstrap config : hoodie.bootstrap.full.input.provider. Here is the <a href="https://issues.apache.org/jira/browse/HUDI-1213">ticket</a></li>
+  <li>DeltaStreamer manages checkpoints inside hoodie commit files and expects checkpoints in previously committed metadata. Users are expected to pass checkpoint or initial checkpoint provider when performing bootstrap through deltastreamer. Such support is not present when doing bootstrap using Spark Datasource. Here is the <a href="https://issues.apache.org/jira/browse/HUDI-1214">ticket</a>.</li>
+</ol>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+
+  </body>
+</html>

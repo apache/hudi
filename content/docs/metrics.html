@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>HoodieMetrics Guide - Apache Hudi</title>
+<meta name="description" content="In this section, we will introduce the MetricsReporter and HoodieMetrics in Hudi. You can view the metrics-related configurations here.">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="HoodieMetrics Guide">
+<meta property="og:url" content="https://hudi.apache.org/docs/metrics.html">
+
+
+  <meta property="og:description" content="In this section, we will introduce the MetricsReporter and HoodieMetrics in Hudi. You can view the metrics-related configurations here.">
+
+
+
+
+
+  <meta property="article:modified_time" content="2020-06-20T15:59:57-04:00">
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/blog.html" target="_self" >Blog</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+
+  
+
+    
+      
+
+
+
+
+
+
+
+<nav class="nav__list">
+  
+  <input id="ac-toc" name="accordion-toc" type="checkbox" />
+  <label for="ac-toc">Toggle Menu</label>
+  <ul class="nav__items">
+    
+      <li>
+        
+          <span class="nav__sub-title">Getting Started</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/quick-start-guide.html" class="">Quick Start</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/use_cases.html" class="">Use Cases</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/powered_by.html" class="">Talks & Powered By</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/comparison.html" class="">Comparison</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/docker_demo.html" class="">Docker Demo</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">Documentation</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/concepts.html" class="">Concepts</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/writing_data.html" class="">Writing Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/querying_data.html" class="">Querying Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/configurations.html" class="">Configuration</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/performance.html" class="">Performance</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/deployment.html" class="">Deployment</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/cloud.html" class="">Cloud Storage</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/metrics.html" class="active">Metrics</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">INFO</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/docs-versions.html" class="">Docs Versions</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/privacy.html" class="">Privacy Policy</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+  </ul>
+</nav>
+
+    
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">HoodieMetrics Guide
+</h1>
+          <!-- Output author details if some exist. -->
+          
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#metricsreporter">MetricsReporter</a>
+    <ul>
+      <li><a href="#jmxmetricsreporter">JmxMetricsReporter</a></li>
+      <li><a href="#metricsgraphitereporter">MetricsGraphiteReporter</a></li>
+      <li><a href="#datadogmetricsreporter">DatadogMetricsReporter</a></li>
+      <li><a href="#userdefinedmetricsreporter">UserDefinedMetricsReporter</a></li>
+    </ul>
+  </li>
+  <li><a href="#hoodiemetrics">HoodieMetrics</a></li>
+</ul>
+          </nav>
+        </aside>
+        
+        <p>In this section, we will introduce the <code class="highlighter-rouge">MetricsReporter</code> and <code class="highlighter-rouge">HoodieMetrics</code> in Hudi. You can view the metrics-related configurations <a href="configurations.html#metrics-configs">here</a>.</p>
+
+<h2 id="metricsreporter">MetricsReporter</h2>
+
+<p>MetricsReporter provides APIs for reporting <code class="highlighter-rouge">HoodieMetrics</code> to user-specified backends. Currently, the implementations include InMemoryMetricsReporter, JmxMetricsReporter, MetricsGraphiteReporter and DatadogMetricsReporter. Since InMemoryMetricsReporter is only used for testing, we will introduce the other three implementations.</p>
+
+<h3 id="jmxmetricsreporter">JmxMetricsReporter</h3>
+
+<p>JmxMetricsReporter is an implementation of JMX reporter, which used to report JMX metrics.</p>
+
+<h4 id="configurations">Configurations</h4>
+<p>The following is an example of <code class="highlighter-rouge">JmxMetricsReporter</code>. More detaile configurations can be referenced <a href="configurations.html#jmx">here</a>.</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  <span class="py">hoodie.metrics.on</span><span class="p">=</span><span class="s">true</span>
+  <span class="py">hoodie.metrics.reporter.type</span><span class="p">=</span><span class="s">JMX</span>
+  <span class="py">hoodie.metrics.jmx.host</span><span class="p">=</span><span class="s">192.168.0.106</span>
+  <span class="py">hoodie.metrics.jmx.port</span><span class="p">=</span><span class="s">4001</span>
+</code></pre></div></div>
+
+<h4 id="demo">Demo</h4>
+<p>As configured above, JmxMetricsReporter will started JMX server on port 4001. We can start a jconsole to connect to 192.168.0.106:4001. Below is an illustration of monitoring Hudi JMX metrics through jconsole.</p>
+<figure>
+    <img class="docimage" src="/assets/images/hudi_jxm_metrics.png" alt="hudi_jxm_metrics.png" style="max-width: 100%" />
+</figure>
+
+<h3 id="metricsgraphitereporter">MetricsGraphiteReporter</h3>
+
+<p>MetricsGraphiteReporter is an implementation of Graphite reporter, which connects to a Graphite server, and send <code class="highlighter-rouge">HoodieMetrics</code> to it.</p>
+
+<h4 id="configurations-1">Configurations</h4>
+<p>The following is an example of <code class="highlighter-rouge">MetricsGraphiteReporter</code>. More detaile configurations can be referenced <a href="configurations.html#graphite">here</a>.</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  <span class="py">hoodie.metrics.on</span><span class="p">=</span><span class="s">true</span>
+  <span class="py">hoodie.metrics.reporter.type</span><span class="p">=</span><span class="s">GRAPHITE</span>
+  <span class="py">hoodie.metrics.graphite.host</span><span class="p">=</span><span class="s">192.168.0.106</span>
+  <span class="py">hoodie.metrics.graphite.port</span><span class="p">=</span><span class="s">2003</span>
+  <span class="py">hoodie.metrics.graphite.metric.prefix</span><span class="p">=</span><span class="s">&lt;your metrics prefix&gt;</span>
+</code></pre></div></div>
+<h4 id="demo-1">Demo</h4>
+<p>As configured above, assuming a Graphite server is running on host 192.168.0.106 and port 2003, a running Hudi job will connect and report metrics data to it. Below is an illustration of monitoring hudi metrics through Graphite.</p>
+<figure>
+      <img class="docimage" src="/assets/images/hudi_graphite_metrics.png" alt="hudi_graphite_metrics.png" style="max-width: 100%" />
+  </figure>
+
+<h3 id="datadogmetricsreporter">DatadogMetricsReporter</h3>
+
+<p>DatadogMetricsReporter is an implementation of Datadog reporter.
+A reporter which publishes metric values to Datadog monitoring service via Datadog HTTP API.</p>
+
+<h4 id="configurations-2">Configurations</h4>
+<p>The following is an example of <code class="highlighter-rouge">DatadogMetricsReporter</code>. More detailed configurations can be referenced <a href="configurations.html#datadog">here</a>.</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">hoodie.metrics.on</span><span class="p">=</span><span class="s">true</span>
+<span class="py">hoodie.metrics.reporter.type</span><span class="p">=</span><span class="s">DATADOG</span>
+<span class="py">hoodie.metrics.datadog.api.site</span><span class="p">=</span><span class="s">EU # or US</span>
+<span class="py">hoodie.metrics.datadog.api.key</span><span class="p">=</span><span class="s">&lt;your api key&gt;</span>
+<span class="py">hoodie.metrics.datadog.metric.prefix</span><span class="p">=</span><span class="s">&lt;your metrics prefix&gt;</span>
+</code></pre></div></div>
+
+<ul>
+  <li><code class="highlighter-rouge">hoodie.metrics.datadog.api.site</code> will set the Datadog API site, which determines whether the requests will be sent to api.datadoghq.eu (EU) or api.datadoghq.com (US). Set this according to your Datadog account settings.</li>
+  <li><code class="highlighter-rouge">hoodie.metrics.datadog.api.key</code> will set the api key.</li>
+  <li><code class="highlighter-rouge">hoodie.metrics.datadog.metric.prefix</code> will help segregate metrics by setting different prefixes for different jobs. Note that it will use <code class="highlighter-rouge">.</code> to delimit the prefix and the metric name. For example, if the prefix is set to <code class="highlighter-rouge">foo</code>, then <code class="highlighter-rouge">foo.</code> will be prepended to the metric name.</li>
+</ul>
+
+<h4 id="demo-2">Demo</h4>
+<p>In this demo, we ran a <code class="highlighter-rouge">HoodieDeltaStreamer</code> job with <code class="highlighter-rouge">HoodieMetrics</code> turned on and other configurations set properly.</p>
+
+<figure>
+    <img class="docimage" src="/assets/images/blog/2020-05-28-datadog-metrics-demo.png" alt="hudi_datadog_metrics.png" style="max-width: 100%" />
+</figure>
+
+<p>As shown above, we were able to collect Hudi’s action-related metrics like</p>
+
+<ul>
+  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.commit.totalScanTime</code></li>
+  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.clean.duration</code></li>
+  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.index.lookup.duration</code></li>
+</ul>
+
+<p>as well as <code class="highlighter-rouge">HoodieDeltaStreamer</code>-specific metrics</p>
+
+<ul>
+  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.deltastreamer.duration</code></li>
+  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.deltastreamer.hiveSyncDuration</code></li>
+</ul>
+
+<h3 id="userdefinedmetricsreporter">UserDefinedMetricsReporter</h3>
+
+<p>Allows users to define a custom metrics reporter.</p>
+
+<h4 id="configurations-3">Configurations</h4>
+<p>The following is an example of <code class="highlighter-rouge">UserDefinedMetricsReporter</code>. More detailed configurations can be referenced <a href="configurations.html#user-defined-reporter">here</a>.</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">hoodie.metrics.on</span><span class="p">=</span><span class="s">true</span>
+<span class="py">hoodie.metrics.reporter.class</span><span class="p">=</span><span class="s">test.TestUserDefinedMetricsReporter</span>
+</code></pre></div></div>
+
+<h4 id="demo-3">Demo</h4>
+<p>In this simple demo, TestMetricsReporter will print all gauges every 10 seconds</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">public</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">TestUserDefinedMetricsReporter</span> 
+    <span class="kd">extends</span> <span class="nc">AbstractUserDefinedMetricsReporter</span> <span class="o">{</span>
+  <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="nc">Logger</span> <span class="n">log</span> <span class="o">=</span> <span class="nc">LogManager</span><span class="o">.</span><span class="na">getLogger</span><span class="o">(</span><span class="nc">DummyMetricsReporter</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+
+  <span class="kd">private</span> <span class="nc">ScheduledExecutorService</span> <span class="n">exec</span> <span class="o">=</span> <span class="nc">Executors</span><span class="o">.</span><span class="na">newScheduledThreadPool</span><span class="o">(</span><span class="mi">1</span><span class="o">,</span> <span class="n">r</span> <span class="o">-&gt;</span> <span class="o">{</span>
+      <span class="nc">Thread</span> <span class="n">t</span> <span class="o">=</span> <span class="nc">Executors</span><span class="o">.</span><span class="na">defaultThreadFactory</span><span class="o">().</span><span class="na">newThread</span><span class="o">(</span><span class="n">r</span><span class="o">);</span>
+      <span class="n">t</span><span class="o">.</span><span class="na">setDaemon</span><span class="o">(</span><span class="kc">true</span><span class="o">);</span>
+      <span class="k">return</span> <span class="n">t</span><span class="o">;</span>
+  <span class="o">});</span>
+
+  <span class="kd">public</span> <span class="nf">TestUserDefinedMetricsReporter</span><span class="o">(</span><span class="nc">Properties</span> <span class="n">props</span><span class="o">,</span> <span class="nc">MetricRegistry</span> <span class="n">registry</span><span class="o">)</span> <span class="o">{</span>
+    <span class="kd">super</span><span class="o">(</span><span class="n">props</span><span class="o">,</span> <span class="n">registry</span><span class="o">);</span>
+  <span class="o">}</span>
+
+  <span class="nd">@Override</span>
+  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">start</span><span class="o">()</span> <span class="o">{</span>
+    <span class="n">exec</span><span class="o">.</span><span class="na">schedule</span><span class="o">(</span><span class="k">this</span><span class="o">::</span><span class="n">report</span><span class="o">,</span> <span class="mi">10</span><span class="o">,</span> <span class="nc">TimeUnit</span><span class="o">.</span><span class="na">SECONDS</span><span class="o">);</span>
+  <span class="o">}</span>
+
+  <span class="nd">@Override</span>
+  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">report</span><span class="o">()</span> <span class="o">{</span>
+    <span class="k">this</span><span class="o">.</span><span class="na">getRegistry</span><span class="o">().</span><span class="na">getGauges</span><span class="o">().</span><span class="na">forEach</span><span class="o">((</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)</span> <span class="o">-&gt;</span> 
+      <span class="n">log</span><span class="o">.</span><span class="na">info</span><span class="o">(</span><span class="s">"key: "</span> <span class="o">+</span> <span class="n">key</span> <span class="o">+</span> <span class="s">" value: "</span> <span class="o">+</span> <span class="n">value</span><span class="o">.</span><span class="na">getValue</span><span class="o">().</span><span class="na">toString</span><span class="o">()));</span>
+  <span class="o">}</span>
+
+  <span class="nd">@Override</span>
+  <span class="kd">public</span> <span class="nc">Closeable</span> <span class="nf">getReporter</span><span class="o">()</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="kc">null</span><span class="o">;</span>
+  <span class="o">}</span>
+
+  <span class="nd">@Override</span>
+  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">stop</span><span class="o">()</span> <span class="o">{</span>
+    <span class="n">exec</span><span class="o">.</span><span class="na">shutdown</span><span class="o">();</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h2 id="hoodiemetrics">HoodieMetrics</h2>
+
+<p>Once the Hudi writer is configured with the right table and environment for <code class="highlighter-rouge">HoodieMetrics</code>, it produces the following <code class="highlighter-rouge">HoodieMetrics</code>, that aid in debugging hudi tables</p>
+
+<ul>
+  <li><strong>Commit Duration</strong> - The amount of time it took to successfully commit a batch of records</li>
+  <li><strong>Rollback Duration</strong> - Similarly, the amount of time taken to undo partial data left over by a failed commit (rollback happens automatically after a failing write)</li>
+  <li><strong>File Level metrics</strong> - Shows the amount of new files added, versions, deleted (cleaned) in each commit</li>
+  <li><strong>Record Level Metrics</strong> - Total records inserted/updated etc per commit</li>
+  <li><strong>Partition Level metrics</strong> - number of partitions upserted (super useful to understand sudden spikes in commit duration)</li>
+</ul>
+
+<p>These <code class="highlighter-rouge">HoodieMetrics</code> can then be plotted on a standard tool like grafana. Below is a sample commit duration chart.</p>
+
+<figure>
+    <img class="docimage" src="/assets/images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 100%" />
+</figure>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+
+  </body>
+</html>

@@ -1,89 +1,395 @@
+# Welcome to Jekyll!
+#
+# This config file is meant for settings that affect your entire site, values
+# which you are expected to set up once and rarely need to edit after that.
+# For technical reasons, this file is *NOT* reloaded automatically when you use
+# `jekyll serve`. If you change this file, please restart the server process.
 
-output: web
-# this property is useful for conditional filtering of content that is separate from the PDF.
+#
+hudi_style_skin          : "hudi"
 
-topnav_title: Hudi
-# this appears on the top navigation bar next to the home button
+version : &version "0.5.1-SNAPSHOT"
 
-site_title: Hudi
-# this appears in the html browser tab for the site title (seen mostly by search engines, not users)
+previous_docs:
+  - version: Latest
+    en: /docs/quick-start-guide.html
+    cn: /cn/docs/quick-start-guide.html
+  - version: 0.6.0
+    en: /docs/0.6.0-quick-start-guide.html
+    cn: /cn/docs/0.6.0-quick-start-guide.html
+  - version: 0.5.3
+    en: /docs/0.5.3-quick-start-guide.html
+    cn: /cn/docs/0.5.3-quick-start-guide.html
+  - version: 0.5.2
+    en: /docs/0.5.2-quick-start-guide.html
+    cn: /cn/docs/0.5.2-quick-start-guide.html
+  - version: 0.5.1
+    en: /docs/0.5.1-quick-start-guide.html
+    cn: /cn/docs/0.5.1-quick-start-guide.html
+  - version: 0.5.0
+    en: /docs/0.5.0-quick-start-guide.html
+    cn: /cn/docs/0.5.0-quick-start-guide.html
 
-github_editme_path:
-# if you're using Github, provide the basepath to the branch you've created for reviews, following the sample here. if not, leave this value blank.
+#  0.5.0-incubating: /versions/0.5.0-incubating/docs/quick-start-guide.html
 
-disqus_shortname:
-# if you're using disqus for comments, add the shortname here. if not, leave this value blank.
 
-host: 127.0.0.1
-# the preview server used. Leave as is.
+# Site Settings
+locale                   : "en-US"
+title                    : # "Apache Hudi"
+title_separator          : "-"
+subtitle                 : "" # *version
+description              : "Apache Hudi brings upserts, deletes and stream processing to data lakes built on HDFS or cloud storage."
+url                      : https://hudi.apache.org # the base hostname & protocol for your site e.g. "https://github.com/apache/hudi.git"
+repository               : "apache/incubator-hudi"
+teaser                   : "/assets/images/500x300.png" # path of fallback teaser image, e.g. "/assets/images/500x300.png"
+logo                     : "/assets/images/hudi.png" # path of logo image to display in the masthead, e.g. "/assets/images/88x88.png"
+masthead_title           : # overrides the website title displayed in the masthead, use " " for no title
+host                     : 0.0.0.0
+site_url                 : https://hudi.apache.org
 
-port: 4000
-# the port where the preview is rendered. You can leave this as is unless you have other Jekyll builds using this same port that might cause conflicts. in that case, use another port such as 4006.
+# Site QuickLinks
+author:
+  name             : "Quick Links"
+  bio              : "Hudi *ingests* & *manages* storage of large analytical datasets over DFS."
+  links:
+    - label: "Documentation"
+      icon: "fa fa-book"
+      url: "/docs/quick-start-guide"
+    - label: "Technical Wiki"
+      icon: "fa fa-wikipedia-w"
+      url: "https://cwiki.apache.org/confluence/display/HUDI"
+    - label: "Contribution Guide"
+      icon: "fa fa-thumbs-o-up"
+      url: "/contributing"
+    - label: "Join on Slack"
+      icon: "fa fa-slack"
+      url: "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"
+    - label: "Fork on GitHub"
+      icon: "fa fa-github"
+      url: "https://github.com/apache/hudi"
+    - label: "Report Issues"
+      icon: "fa fa-navicon"
+      url: "https://issues.apache.org/jira/projects/HUDI/summary"
+    - label: "Report Security Issues"
+      icon: "fa fa-navicon"
+      url: "/security"
 
-exclude:
-  - .idea/
-  - .gitignore
-# these are the files and directories that jekyll will exclude from the build
+cn_author:
+  name             : "Quick Links"
+  bio              : "Hudi *ingests* & *manages* storage of large analytical datasets over DFS."
+  links:
+    - label: "Documentation"
+      icon: "fa fa-book"
+      url: "/cn/docs/quick-start-guide"
+    - label: "Technical Wiki"
+      icon: "fa fa-wikipedia-w"
+      url: "https://cwiki.apache.org/confluence/display/HUDI"
+    - label: "Contribution Guide"
+      icon: "fa fa-thumbs-o-up"
+      url: "/cn/contributing"
+    - label: "Join on Slack"
+      icon: "fa fa-slack"
+      url: "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"
+    - label: "Fork on GitHub"
+      icon: "fa fa-github"
+      url: "https://github.com/apache/hudi"
+    - label: "Report Issues"
+      icon: "fa fa-navicon"
+      url: "https://issues.apache.org/jira/projects/HUDI/summary"
+    - label: "Report Security Issues"
+      icon: "fa fa-navicon"
+      url: "/cn/security"
 
-feedback_subject_line: Hudi Documentation
 
-feedback_email: dev@hudi.apache.org
-# used as a contact email for the Feedback link in the top navigation bar
+0.5.0_author:
+  name             : "Quick Links"
+  bio              : "Hudi *ingests* & *manages* storage of large analytical datasets over DFS."
+  links:
+    - label: "Documentation"
+      icon: "fa fa-book"
+      url: "/docs/0.5.0-quick-start-guide"
+    - label: "Technical Wiki"
+      icon: "fa fa-wikipedia-w"
+      url: "https://cwiki.apache.org/confluence/display/HUDI"
+    - label: "Contribution Guide"
+      icon: "fa fa-thumbs-o-up"
+      url: "/contributing"
+    - label: "Join on Slack"
+      icon: "fa fa-slack"
+      url: "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"
+    - label: "Fork on GitHub"
+      icon: "fa fa-github"
+      url: "https://github.com/apache/hudi"
+    - label: "Report Issues"
+      icon: "fa fa-navicon"
+      url: "https://issues.apache.org/jira/projects/HUDI/summary"
+    - label: "Report Security Issues"
+      icon: "fa fa-navicon"
+      url: "/security"
 
-# feedback_disable: true
-# if you uncomment the previous line, the Feedback link gets removed
+0.5.1_author:
+  name             : "Quick Links"
+  bio              : "Hudi *ingests* & *manages* storage of large analytical datasets over DFS."
+  links:
+    - label: "Documentation"
+      icon: "fa fa-book"
+      url: "/docs/0.5.1-quick-start-guide"
+    - label: "Technical Wiki"
+      icon: "fa fa-wikipedia-w"
+      url: "https://cwiki.apache.org/confluence/display/HUDI"
+    - label: "Contribution Guide"
+      icon: "fa fa-thumbs-o-up"
+      url: "/contributing"
+    - label: "Join on Slack"
+      icon: "fa fa-slack"
+      url: "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"
+    - label: "Fork on GitHub"
+      icon: "fa fa-github"
+      url: "https://github.com/apache/hudi"
+    - label: "Report Issues"
+      icon: "fa fa-navicon"
+      url: "https://issues.apache.org/jira/projects/HUDI/summary"
+    - label: "Report Security Issues"
+      icon: "fa fa-navicon"
+      url: "/security"
 
-# feedback_text: "Need help?"
-# if you uncomment the previous line, it changes the Feedback text
+0.5.2_author:
+  name             : "Quick Links"
+  bio              : "Hudi *ingests* & *manages* storage of large analytical datasets over DFS."
+  links:
+    - label: "Documentation"
+      icon: "fa fa-book"
+      url: "/docs/0.5.2-quick-start-guide"
+    - label: "Technical Wiki"
+      icon: "fa fa-wikipedia-w"
+      url: "https://cwiki.apache.org/confluence/display/HUDI"
+    - label: "Contribution Guide"
+      icon: "fa fa-thumbs-o-up"
+      url: "/contributing"
+    - label: "Join on Slack"
+      icon: "fa fa-slack"
+      url: "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"
+    - label: "Fork on GitHub"
+      icon: "fa fa-github"
+      url: "https://github.com/apache/hudi"
+    - label: "Report Issues"
+      icon: "fa fa-navicon"
+      url: "https://issues.apache.org/jira/projects/HUDI/summary"
+    - label: "Report Security Issues"
+      icon: "fa fa-navicon"
+      url: "/security"
 
-# feedback_link: "http://helpy.io/"
-# if you uncomment the previous line, it changes where the feedback link points to
+0.5.3_author:
+  name             : "Quick Links"
+  bio              : "Hudi *ingests* & *manages* storage of large analytical datasets over DFS."
+  links:
+    - label: "Documentation"
+      icon: "fa fa-book"
+      url: "/docs/0.5.3-quick-start-guide"
+    - label: "Technical Wiki"
+      icon: "fa fa-wikipedia-w"
+      url: "https://cwiki.apache.org/confluence/display/HUDI"
+    - label: "Contribution Guide"
+      icon: "fa fa-thumbs-o-up"
+      url: "/contributing"
+    - label: "Join on Slack"
+      icon: "fa fa-slack"
+      url: "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"
+    - label: "Fork on GitHub"
+      icon: "fa fa-github"
+      url: "https://github.com/apache/hudi"
+    - label: "Report Issues"
+      icon: "fa fa-navicon"
+      url: "https://issues.apache.org/jira/projects/HUDI/summary"
+    - label: "Report Security Issues"
+      icon: "fa fa-navicon"
+      url: "/security"
 
-highlighter: rouge
-# library used for syntax highlighting
+0.6.0_author:
+  name             : "Quick Links"
+  bio              : "Hudi *ingests* & *manages* storage of large analytical datasets over DFS."
+  links:
+    - label: "Documentation"
+      icon: "fa fa-book"
+      url: "/docs/0.6.0-quick-start-guide"
+    - label: "Technical Wiki"
+      icon: "fa fa-wikipedia-w"
+      url: "https://cwiki.apache.org/confluence/display/HUDI"
+    - label: "Contribution Guide"
+      icon: "fa fa-thumbs-o-up"
+      url: "/contributing"
+    - label: "Join on Slack"
+      icon: "fa fa-slack"
+      url: "https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE"
+    - label: "Fork on GitHub"
+      icon: "fa fa-github"
+      url: "https://github.com/apache/hudi"
+    - label: "Report Issues"
+      icon: "fa fa-navicon"
+      url: "https://issues.apache.org/jira/projects/HUDI/summary"
+    - label: "Report Security Issues"
+      icon: "fa fa-navicon"
+      url: "/security"
 
-markdown: kramdown
-kramdown:
- input: GFM
- auto_ids: true
- hard_wrap: false
- syntax_highlighter: rouge
-
-# filter used to process markdown. note that kramdown differs from github-flavored markdown in some subtle ways
-
+# Layout Defaults
 defaults:
-  -
-    scope:
+  # _posts
+  - scope:
       path: ""
-      type: "pages"
+      type: posts
     values:
-      layout: "page"
-      comments: true
-      search: true
-      sidebar: mydoc_sidebar
-
-  -
-    scope:
+      layout: single
+      quick_link: true
+      related: true
+  # _pages
+  - scope:
+      path: "_pages"
+      type: pages
+    values:
+      layout: single
+      quick_link: true
+  # _docs
+  - scope:
       path: ""
-      type: "posts"
+      type: docs
     values:
-      layout: "post"
-      comments: true
-      search: true
-      sidebar: mydoc_sidebar
+      layout: single
+      quick_link: false
+      sidebar:
+        nav: "docs"
 
-# these are defaults used for the frontmatter for these file types
 
-sidebars:
-- mydoc_sidebar
+# Reading Files
+include:
+  - .htaccess
+  - _pages
+exclude:
+  - "*.sublime-project"
+  - "*.sublime-workspace"
+  - vendor
+  - .asset-cache
+  - .bundle
+  - .jekyll-assets-cache
+  - .sass-cache
+  - assets/js/plugins
+  - assets/js/_main.js
+  - assets/js/vendor
+  - Capfile
+  - CHANGELOG
+  - config
+  - Gemfile
+  - Gruntfile.js
+  - gulpfile.js
+  - LICENSE
+  - log
+  - node_modules
+  - package.json
+  - Rakefile
+  - README
+  - tmp
+keep_files:
+  - .git
+  - .svn
+encoding: "utf-8"
+markdown_ext: "markdown,mkdown,mkdn,mkd,md"
 
-description: "Apache Hudi (pronounced “Hoodie”) provides upserts and incremental processing capaibilities on Big Data"
-# the description is used in the feed.xml file
 
-# needed for sitemap.xml file only
-url: https://github.com/apache/incubator-hudi
+# Conversion
+markdown: kramdown
+highlighter: rouge
+lsi: false
+excerpt_separator: "\n\n"
+incremental: false
 
-# The all languages used
-languages: ['en', 'cn']
 
-plugins: ['jekyll-paginate', 'jekyll-multiple-languages']
+# Markdown Processing
+kramdown:
+  input: GFM
+  hard_wrap: false
+  auto_ids: true
+  footnote_nr: 1
+  entity_output: as_char
+  toc_levels: 1..6
+  smart_quotes: lsquo,rsquo,ldquo,rdquo
+  enable_coderay: false
+
+
+# Collections
+collections:
+  docs:
+    output: true
+    permalink: /:collection/:path/
+  recipes:
+    output: true
+    permalink: /:collection/:path/
+  pets:
+    output: true
+    permalink: /:collection/:path/
+  portfolio:
+    output: true
+    permalink: /:collection/:path/
+
+
+# Sass/SCSS
+sass:
+  sass_dir: _sass
+  style: compressed # http://sass-lang.com/documentation/file.SASS_REFERENCE.html#output_style
+
+
+# Outputting
+permalink: /:categories/:title/
+# paginate: 5 # amount of posts to show
+# paginate_path: /page:num/
+timezone: America/New_York # https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+
+
+# Plugins (previously gems:)
+plugins:
+  - jekyll-paginate
+  - jekyll-sitemap
+  - jemoji
+  - jekyll-include-cache
+
+# mimic GitHub Pages with --safe
+whitelist:
+  - jekyll-paginate
+  - jekyll-sitemap
+  - jemoji
+  - jekyll-include-cache
+
+
+# Archives
+#  Type
+#  - GitHub Pages compatible archive pages built with Liquid ~> type: liquid (default)
+#  - Jekyll Archives plugin archive pages ~> type: jekyll-archives
+#  Path (examples)
+#  - Archive page should exist at path when using Liquid method or you can
+#    expect broken links (especially with breadcrumbs enabled)
+#  - <base_path>/tags/my-awesome-tag/index.html ~> path: /tags/
+#  - <base_path/categories/my-awesome-category/index.html ~> path: /categories/
+#  - <base_path/my-awesome-category/index.html ~> path: /
+category_archive:
+  type: liquid
+  path: /categories/
+tag_archive:
+  type: liquid
+  path: /tags/
+# https://github.com/jekyll/jekyll-archives
+# jekyll-archives:
+#   enabled:
+#     - categories
+#     - tags
+#   layouts:
+#     category: archive-taxonomy
+#     tag: archive-taxonomy
+#   permalinks:
+#     category: /categories/:name/
+#     tag: /tags/:name/
+
+
+# HTML Compression
+# - http://jch.penibelst.de/
+compress_html:
+  clippings: all
+  ignore:
+    envs: development
