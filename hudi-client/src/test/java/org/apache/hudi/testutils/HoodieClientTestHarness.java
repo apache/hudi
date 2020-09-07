@@ -38,18 +38,17 @@ import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
-import org.apache.log4j.Logger;
-import org.apache.log4j.LogManager;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The test harness for resource initialization and cleanup.
@@ -66,16 +65,11 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient HoodieTestDataGenerator dataGen = null;
   protected transient ExecutorService executorService;
   protected transient HoodieTableMetaClient metaClient;
-  private static AtomicInteger instantGen = new AtomicInteger(1);
   protected transient HoodieWriteClient writeClient;
   protected transient HoodieReadClient readClient;
   protected transient HoodieTableFileSystemView tableView;
 
   protected final SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
-
-  public String getNextInstant() {
-    return String.format("%09d", instantGen.getAndIncrement());
-  }
 
   // dfs
   protected String dfsBasePath;

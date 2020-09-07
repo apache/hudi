@@ -20,84 +20,78 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- *
- */
 public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
+
+  private HoodieROTablePathFilter pathFilter;
+  private HoodieTestTable testTable;
 
   @BeforeEach
   public void setUp() throws Exception {
     initMetaClient();
+    pathFilter = new HoodieROTablePathFilter(metaClient.getHadoopConf());
+    testTable = HoodieTestTable.of(metaClient);
   }
 
   @Test
-  public void testHoodiePaths() throws IOException {
-    // Create a temp folder as the base path
-    String basePath = metaClient.getBasePath();
+  public void testHoodiePaths() throws Exception {
+    final String p1 = "2017/01/01";
+    final String p2 = "2017/01/02";
+    testTable.addCommit("001")
+        .withBaseFilesInPartition(p1, "f1", "f2")
+        .withBaseFilesInPartition(p2, "f3")
+        .addCommit("002")
+        .withBaseFilesInPartition(p1, "f2")
+        .addInflightCommit("003")
+        .withBaseFilesInPartition(p2, "f3")
+        .addRequestedCompaction("004");
 
-    HoodieTestUtils.createCommitFiles(basePath, "001", "002");
-    HoodieTestUtils.createInflightCommitFiles(basePath, "003");
-    HoodieTestUtils.createCompactionRequest(metaClient, "004", new ArrayList<>());
+    assertTrue(pathFilter.accept(testTable.forCommit("002").getBaseFilePath(p1, "f2")));
+    assertFalse(pathFilter.accept(testTable.forCommit("003").getBaseFilePath(p2, "f3")));
+    assertFalse(pathFilter.accept(testTable.forCommit("003").getBaseFilePath(p1, "f3")));
 
-    HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f1");
-    HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f2");
-    HoodieTestUtils.createDataFile(basePath, "2017/01/02", "001", "f3");
-    HoodieTestUtils.createDataFile(basePath, "2017/01/01", "002", "f2");
-    HoodieTestUtils.createDataFile(basePath, "2017/01/02", "003", "f3");
-
-    HoodieROTablePathFilter pathFilter = new HoodieROTablePathFilter();
-    Path partitionPath = new Path("file://" + basePath + File.separator + "2017/01/01");
-    assertTrue(pathFilter.accept(partitionPath), "Directories should be accepted");
-
-    assertTrue(
-        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f1"))));
-    assertFalse(
-        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f2"))));
-    assertTrue(
-        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/02", "001", "f3"))));
-    assertTrue(
-        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "002", "f2"))));
-    assertFalse(
-        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/02", "003", "f3"))));
-    assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getCommitFilePath(basePath, "001"))));
-    assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getCommitFilePath(basePath, "002"))));
-    assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getInflightCommitFilePath(basePath, "003"))));
-    assertFalse(
-        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getRequestedCompactionFilePath(basePath, "004"))));
+    assertFalse(pathFilter.accept(testTable.getCommitFilePath("001")));
+    assertFalse(pathFilter.accept(testTable.getCommitFilePath("002")));
+    assertFalse(pathFilter.accept(testTable.getInflightCommitFilePath("003")));
+    assertFalse(pathFilter.accept(testTable.getRequestedCompactionFilePath("004")));
     assertFalse(pathFilter.accept(new Path("file:///" + basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/")));
     assertFalse(pathFilter.accept(new Path("file:///" + basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME)));
 
-    assertFalse(
-        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
     assertEquals(1, pathFilter.metaClientCache.size());
   }
 
   @Test
-  public void testNonHoodiePaths(@TempDir java.nio.file.Path tempDir) throws IOException {
-    String basePath = tempDir.toAbsolutePath().toString();
-    HoodieROTablePathFilter pathFilter = new HoodieROTablePathFilter();
+  public void testNonHoodiePaths() throws IOException {
+    java.nio.file.Path path1 = Paths.get(basePath, "nonhoodiefolder");
+    Files.createDirectories(path1);
+    assertTrue(pathFilter.accept(new Path(path1.toUri())));
 
-    String path = basePath + File.separator + "nonhoodiefolder";
-    new File(path).mkdirs();
-    assertTrue(pathFilter.accept(new Path("file:///" + path)));
+    java.nio.file.Path path2 = Paths.get(basePath, "nonhoodiefolder/somefile");
+    Files.createFile(path2);
+    assertTrue(pathFilter.accept(new Path(path2.toUri())));
+  }
 
-    path = basePath + File.separator + "nonhoodiefolder/somefile";
-    new File(path).createNewFile();
-    assertTrue(pathFilter.accept(new Path("file:///" + path)));
+  @Test
+  public void testPartitionPathsAsNonHoodiePaths() throws Exception {
+    final String p1 = "2017/01/01";
+    final String p2 = "2017/01/02";
+    testTable.addCommit("001").withBaseFilesInPartitions(p1, p2);
+    Path partitionPath1 = testTable.getPartitionPath(p1).getParent();
+    Path partitionPath2 = testTable.getPartitionPath(p2).getParent();
+    assertTrue(pathFilter.accept(partitionPath1), "Directories should be accepted");
+    assertTrue(pathFilter.accept(partitionPath2), "Directories should be accepted");
   }
 }
