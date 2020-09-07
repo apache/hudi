@@ -48,6 +48,7 @@ public class TestTypedProperties {
     assertEquals(456, typedProperties.getInteger("key2",456));
 
   }
+
   @Test
   public void testGetDouble() {
     Properties properties = new Properties();
@@ -58,6 +59,7 @@ public class TestTypedProperties {
     assertEquals(123.4, typedProperties.getDouble("key1",0.001D));
     assertEquals(0.001D, typedProperties.getDouble("key2",0.001D));
   }
+
   @Test
   public void testGetLong() {
     Properties properties = new Properties();
