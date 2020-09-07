@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -166,7 +167,7 @@ public class KafkaOffsetGen {
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
   }
 
-  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit) {
+  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieDeltaStreamerMetrics metrics) {
 
     // Obtain current metadata for the topic
     Map<TopicPartition, Long> fromOffsets;
@@ -194,7 +195,7 @@ public class KafkaOffsetGen {
             throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' ");
         }
       }
-
+      metrics.updateDeltaStreamerKafkaDelayCountMetrics(delayOffectCalculation(lastCheckpointStr, topicPartitions, consumer));
       // Obtain the latest offsets.
       toOffsets = consumer.endOffsets(topicPartitions);
     }
@@ -228,6 +229,20 @@ public class KafkaOffsetGen {
     boolean checkpointOffsetReseter = checkpointOffsets.entrySet().stream()
             .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
     return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
+  }
+
+  private Long delayOffectCalculation(Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions, KafkaConsumer consumer) {
+    Long delayCount = 0L;
+    if (!lastCheckpointStr.get().isEmpty()) {
+      Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
+      Map<TopicPartition, Long> lastOffsets = consumer.endOffsets(topicPartitions);
+
+      for (Map.Entry<TopicPartition, Long> entry : lastOffsets.entrySet()) {
+        Long offect = checkpointOffsets.getOrDefault(entry.getKey(), 0L);
+        delayCount += entry.getValue() - offect > 0 ? entry.getValue() - offect : 0L;
+      }
+    }
+    return delayCount;
   }
 
   public String getTopicName() {
