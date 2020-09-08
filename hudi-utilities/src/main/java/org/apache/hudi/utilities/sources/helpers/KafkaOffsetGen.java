@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -166,7 +167,7 @@ public class KafkaOffsetGen {
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
   }
 
-  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit) {
+  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieDeltaStreamerMetrics metrics) {
 
     // Obtain current metadata for the topic
     Map<TopicPartition, Long> fromOffsets;
@@ -180,6 +181,7 @@ public class KafkaOffsetGen {
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty()) {
         fromOffsets = checkupValidOffsets(consumer, lastCheckpointStr, topicPartitions);
+        metrics.updateDeltaStreamerKafkaDelayCountMetrics(delayOffectCalculation(lastCheckpointStr, topicPartitions, consumer));
       } else {
         KafkaResetOffsetStrategies autoResetValue = KafkaResetOffsetStrategies
                 .valueOf(props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
@@ -228,6 +230,18 @@ public class KafkaOffsetGen {
     boolean checkpointOffsetReseter = checkpointOffsets.entrySet().stream()
             .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
     return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
+  }
+
+  private Long delayOffectCalculation(Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions, KafkaConsumer consumer) {
+    Long delayCount = 0L;
+    Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
+    Map<TopicPartition, Long> lastOffsets = consumer.endOffsets(topicPartitions);
+
+    for (Map.Entry<TopicPartition, Long> entry : lastOffsets.entrySet()) {
+      Long offect = checkpointOffsets.getOrDefault(entry.getKey(), 0L);
+      delayCount += entry.getValue() - offect > 0 ? entry.getValue() - offect : 0L;
+    }
+    return delayCount;
   }
 
   public String getTopicName() {
