@@ -227,6 +227,8 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
             String partitionPath = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN));
             if (!checkIfValidCommit(metaClient, commitTs)) {
               // if commit is invalid, treat this as a new taggedRecord
+              LOG.info(String.format("Failed to validate commitTs stored in HBase: %s -> (%s %s %s)",
+                  keyFromResult, commitTs, fileId, partitionPath));
               taggedRecords.add(currentRecord);
               continue;
             }
@@ -251,7 +253,9 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
               currentRecord.seal();
               taggedRecords.add(currentRecord);
               // the key from Result and the key being processed should be same
-              assert (currentRecord.getRecordKey().contentEquals(keyFromResult));
+              if (!currentRecord.getRecordKey().contentEquals(keyFromResult)) {
+                throw new HoodieIndexException("Key from HBase index lookup does not match the Hoodie record key");
+              }
             }
           }
         }
