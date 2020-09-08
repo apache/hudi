@@ -26,6 +26,7 @@ HADOOP_VERSION=2.8.4
 SPARK_HADOOP_VERSION=2.7
 
 SPARK_BINARY_FILE_NAME=spark-${SPARK_VERSION}-bin-hadoop${SPARK_HADOOP_VERSION}.tgz
+SPARK_BINARY_CHECKSUM_FILE_NAME=${SPARK_BINARY_FILE_NAME}.sha512
 SPARK_BINARY_CACHE_FILE_PATH=$SCRIPT_PATH/binarycache/$SPARK_BINARY_FILE_NAME
 
 if [ -f $SPARK_BINARY_CACHE_FILE_PATH ]; then
@@ -33,4 +34,12 @@ if [ -f $SPARK_BINARY_CACHE_FILE_PATH ]; then
 else
   echo "The binary file $SPARK_BINARY_FILE_NAME did not exist in the binary cache directory, try to download."
   wget http://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_BINARY_FILE_NAME} -O ${SPARK_BINARY_CACHE_FILE_PATH}
+fi
+
+# check signature to verify the completeness
+if [[ $(cat ./${SPARK_BINARY_CHECKSUM_FILE_NAME}) == $(shasum -a 512 ./binarycache/${SPARK_BINARY_FILE_NAME} | awk '{print $1}') ]]; then
+  echo "The checksum is matched!"
+else
+  echo "The checksum is not matched, Removing the incompleted file, please download it again."
+  rm -f ./binarycache/${SPARK_BINARY_FILE_NAME}
 fi

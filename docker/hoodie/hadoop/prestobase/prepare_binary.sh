@@ -23,6 +23,7 @@ WS_ROOT=`dirname $SCRIPT_PATH`
 echo "Preparing Presto server binary file."
 PRESTO_VERSION=0.217
 PRESTO_BINARY_FILE_NAME=presto-server-${PRESTO_VERSION}.tar.gz
+HIVE_BINARY_CHECKSUM_FILE_NAME=${PRESTO_BINARY_FILE_NAME}.sha1
 PRESTO_BINARY_CACHE_FILE_PATH=$SCRIPT_PATH/binarycache/$PRESTO_BINARY_FILE_NAME
 
 if [ -f $PRESTO_BINARY_CACHE_FILE_PATH ]; then
@@ -30,4 +31,12 @@ if [ -f $PRESTO_BINARY_CACHE_FILE_PATH ]; then
 else
   echo "The binary file $PRESTO_BINARY_FILE_NAME did not exist in the binary cache directory, try to download."
   wget https://repo1.maven.org/maven2/com/facebook/presto/presto-server/${PRESTO_VERSION}/${PRESTO_BINARY_FILE_NAME} -O ${PRESTO_BINARY_CACHE_FILE_PATH}
+fi
+
+# check signature to verify the completeness
+if [[ $(cat ./${HIVE_BINARY_CHECKSUM_FILE_NAME}) == $(shasum -a 1 ./binarycache/${PRESTO_BINARY_FILE_NAME} | awk '{print $1}') ]]; then
+  echo "The checksum is matched!"
+else
+  echo "The checksum is not matched, Removing the incompleted file, please download it again."
+  rm -f ./binarycache/${PRESTO_BINARY_FILE_NAME}
 fi
