@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -108,7 +109,7 @@ public class TestDataSourceUtils {
     when(hoodieWriteClient.getConfig()).thenReturn(config);
 
     DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
-            DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+            WriteOperationType.BULK_INSERT);
 
     verify(hoodieWriteClient, times(1)).bulkInsert(any(hoodieRecords.getClass()), anyString(),
             optionCaptor.capture());
@@ -121,7 +122,7 @@ public class TestDataSourceUtils {
 
     Exception exception = assertThrows(HoodieException.class, () -> {
       DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
-              DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+              WriteOperationType.BULK_INSERT);
     });
 
     assertThat(exception.getMessage(), containsString("Could not create UserDefinedBulkInsertPartitioner"));
@@ -132,7 +133,7 @@ public class TestDataSourceUtils {
     setAndVerifyHoodieWriteClientWith(NoOpBulkInsertPartitioner.class.getName());
 
     DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
-        DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL());
+            WriteOperationType.BULK_INSERT);
 
     verify(hoodieWriteClient, times(1)).bulkInsert(any(hoodieRecords.getClass()), anyString(),
         optionCaptor.capture());
