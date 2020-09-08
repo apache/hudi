@@ -102,7 +102,7 @@
                   <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern> org.apache.hadoop.hbase.</pattern>
+                  <pattern>org.apache.hadoop.hbase.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
                   <excludes>
                     <!-- Hive 2.3.3 brings in Hbase 1.1.1 which conflicts with our version even with shading -->
@@ -112,7 +112,7 @@
                   </excludes>
                 </relocation>
                 <relocation>
-                  <pattern> org.apache.htrace.</pattern>
+                  <pattern>org.apache.htrace.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
                 </relocation>
               </relocations>
