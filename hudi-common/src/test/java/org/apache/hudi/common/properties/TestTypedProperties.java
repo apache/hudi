@@ -30,6 +30,7 @@ public class TestTypedProperties {
   public void testGetString() {
     Properties properties = new Properties();
     properties.put("key1", "value1");
+
     TypedProperties typedProperties = new TypedProperties(properties);
     assertEquals("value1", typedProperties.getString("key1"));
     assertEquals("value1", typedProperties.getString("key1", "default"));
