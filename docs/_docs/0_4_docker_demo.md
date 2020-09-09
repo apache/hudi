@@ -85,7 +85,6 @@ Creating adhoc-2                   ... done
 Creating spark-worker-1            ... done
 Copying spark default config and setting up configs
 Copying spark default config and setting up configs
-Copying spark default config and setting up configs
 $ docker ps
 ```
 
