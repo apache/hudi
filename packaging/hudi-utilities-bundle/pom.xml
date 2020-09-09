@@ -174,7 +174,7 @@
                 </relocation>
                 <relocation>
                   <pattern>org.eclipse.jetty.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.jetty.</shadedPattern>
+                  <shadedPattern>org.apache.hudi.org.eclipse.jetty.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>
