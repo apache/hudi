@@ -29,8 +29,7 @@ public class TestTypedProperties {
   @Test
   public void testGetString() {
     Properties properties = new Properties();
-    properties.put("key1","value1");
-
+    properties.put("key1", "value1");
     TypedProperties typedProperties = new TypedProperties(properties);
     assertEquals("value1", typedProperties.getString("key1"));
     assertEquals("value1", typedProperties.getString("key1", "default"));
@@ -40,7 +39,7 @@ public class TestTypedProperties {
   @Test
   public void testGetInteger() {
     Properties properties = new Properties();
-    properties.put("key1","123");
+    properties.put("key1", "123");
 
     TypedProperties typedProperties = new TypedProperties(properties);
     assertEquals(123, typedProperties.getInteger("key1"));
@@ -52,7 +51,7 @@ public class TestTypedProperties {
   @Test
   public void testGetDouble() {
     Properties properties = new Properties();
-    properties.put("key1","123.4");
+    properties.put("key1", "123.4");
 
     TypedProperties typedProperties = new TypedProperties(properties);
     assertEquals(123.4, typedProperties.getDouble("key1"));
@@ -63,7 +62,7 @@ public class TestTypedProperties {
   @Test
   public void testGetLong() {
     Properties properties = new Properties();
-    properties.put("key1","1354354354");
+    properties.put("key1", "1354354354");
 
     TypedProperties typedProperties = new TypedProperties(properties);
     assertEquals(1354354354, typedProperties.getLong("key1"));
@@ -74,7 +73,7 @@ public class TestTypedProperties {
   @Test
   public void testGetBoolean() {
     Properties properties = new Properties();
-    properties.put("key1","true");
+    properties.put("key1", "true");
 
     TypedProperties typedProperties = new TypedProperties(properties);
     assertEquals(true, typedProperties.getBoolean("key1"));
