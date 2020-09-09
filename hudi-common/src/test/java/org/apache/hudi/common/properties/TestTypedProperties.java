@@ -43,8 +43,8 @@ public class TestTypedProperties {
 
     TypedProperties typedProperties = new TypedProperties(properties);
     assertEquals(123, typedProperties.getInteger("key1"));
-    assertEquals(123, typedProperties.getInteger("key1",456));
-    assertEquals(456, typedProperties.getInteger("key2",456));
+    assertEquals(123, typedProperties.getInteger("key1", 456));
+    assertEquals(456, typedProperties.getInteger("key2", 456));
 
   }
 
@@ -55,8 +55,8 @@ public class TestTypedProperties {
 
     TypedProperties typedProperties = new TypedProperties(properties);
     assertEquals(123.4, typedProperties.getDouble("key1"));
-    assertEquals(123.4, typedProperties.getDouble("key1",0.001D));
-    assertEquals(0.001D, typedProperties.getDouble("key2",0.001D));
+    assertEquals(123.4, typedProperties.getDouble("key1", 0.001D));
+    assertEquals(0.001D, typedProperties.getDouble("key2", 0.001D));
   }
 
   @Test
@@ -66,8 +66,8 @@ public class TestTypedProperties {
 
     TypedProperties typedProperties = new TypedProperties(properties);
     assertEquals(1354354354, typedProperties.getLong("key1"));
-    assertEquals(1354354354, typedProperties.getLong("key1",8578494434L));
-    assertEquals(8578494434L, typedProperties.getLong("key2",8578494434L));
+    assertEquals(1354354354, typedProperties.getLong("key1", 8578494434L));
+    assertEquals(8578494434L, typedProperties.getLong("key2", 8578494434L));
   }
 
   @Test
@@ -77,7 +77,7 @@ public class TestTypedProperties {
 
     TypedProperties typedProperties = new TypedProperties(properties);
     assertEquals(true, typedProperties.getBoolean("key1"));
-    assertEquals(true, typedProperties.getBoolean("key1",false));
-    assertEquals(false, typedProperties.getBoolean("key2",false));
+    assertEquals(true, typedProperties.getBoolean("key1", false));
+    assertEquals(false, typedProperties.getBoolean("key2", false));
   }
 }
