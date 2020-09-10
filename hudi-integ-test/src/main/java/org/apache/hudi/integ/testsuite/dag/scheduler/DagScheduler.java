@@ -30,10 +30,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
-import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
-import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
+import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,9 +46,9 @@ public class DagScheduler {
   private WorkflowDag workflowDag;
   private ExecutionContext executionContext;
 
-  public DagScheduler(WorkflowDag workflowDag, HoodieTestSuiteWriter hoodieTestSuiteWriter, DeltaGenerator deltaGenerator) {
+  public DagScheduler(WorkflowDag workflowDag, WriterContext writerContext) {
     this.workflowDag = workflowDag;
-    this.executionContext = new ExecutionContext(null, hoodieTestSuiteWriter, deltaGenerator);
+    this.executionContext = new ExecutionContext(null, writerContext);
   }
 
   /**
@@ -80,7 +79,7 @@ public class DagScheduler {
   private void execute(ExecutorService service, List<DagNode> nodes) throws Exception {
     // Nodes at the same level are executed in parallel
     Queue<DagNode> queue = new PriorityQueue<>(nodes);
-    log.info("Running workloads");
+    log.warn("Running workloads");
     do {
       List<Future> futures = new ArrayList<>();
       Set<DagNode> childNodes = new HashSet<>();
@@ -110,6 +109,7 @@ public class DagScheduler {
       throw new RuntimeException("DagNode already completed! Cannot re-execute");
     }
     try {
+      log.warn("executing node: " + node.getName() + " of type: " + node.getClass());
       node.execute(executionContext);
       node.setCompleted(true);
       log.info("Finished executing {}", node.getName());

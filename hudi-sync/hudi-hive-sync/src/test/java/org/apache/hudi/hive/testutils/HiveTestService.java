@@ -171,6 +171,8 @@ public class HiveTestService {
         Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath());
     conf.set("datanucleus.schema.autoCreateTables", "true");
     conf.set("hive.metastore.schema.verification", "false");
+    conf.set("datanucleus.autoCreateSchema", "true");
+    conf.set("datanucleus.fixedDatastore", "false");
     setSystemProperty("derby.stream.error.file", derbyLogFile.getPath());
 
     return new HiveConf(conf, this.getClass());

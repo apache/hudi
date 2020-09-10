@@ -209,7 +209,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getDeleteShuffleParallelism() {
-    return Integer.parseInt(props.getProperty(DELETE_PARALLELISM));
+    return Math.max(Integer.parseInt(props.getProperty(DELETE_PARALLELISM)), 1);
   }
 
   public int getRollbackParallelism() {
@@ -824,6 +824,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withDeleteParallelism(int parallelism) {
+      props.setProperty(DELETE_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
     public Builder withParallelism(int insertShuffleParallelism, int upsertShuffleParallelism) {
       props.setProperty(INSERT_PARALLELISM, String.valueOf(insertShuffleParallelism));
       props.setProperty(UPSERT_PARALLELISM, String.valueOf(upsertShuffleParallelism));
@@ -848,6 +853,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public Builder combineInput(boolean onInsert, boolean onUpsert) {
       props.setProperty(COMBINE_BEFORE_INSERT_PROP, String.valueOf(onInsert));
       props.setProperty(COMBINE_BEFORE_UPSERT_PROP, String.valueOf(onUpsert));
+      return this;
+    }
+
+    public Builder combineDeleteInput(boolean onDelete) {
+      props.setProperty(COMBINE_BEFORE_DELETE_PROP, String.valueOf(onDelete));
       return this;
     }
 

@@ -26,21 +26,19 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.integ.testsuite.dag.DagUtils;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator;
 import org.apache.hudi.integ.testsuite.dag.scheduler.DagScheduler;
-import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
+import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
@@ -65,10 +63,6 @@ public class HoodieTestSuiteJob {
    */
   TypedProperties props;
   /**
-   * Schema provider that supplies the command for writing out the generated payloads.
-   */
-  private transient SchemaProvider schemaProvider;
-  /**
    * Filesystem used.
    */
   private transient FileSystem fs;
@@ -90,11 +84,11 @@ public class HoodieTestSuiteJob {
   public HoodieTestSuiteJob(HoodieTestSuiteConfig cfg, JavaSparkContext jsc) throws IOException {
     this.cfg = cfg;
     this.jsc = jsc;
+    cfg.propsFilePath = FSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
     this.sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
     this.fs = FSUtils.getFs(cfg.inputBasePath, jsc.hadoopConfiguration());
     this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
     log.info("Creating workload generator with configs : {}", props.toString());
-    this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jsc);
     this.hiveConf = getDefaultHiveConf(jsc.hadoopConfiguration());
     this.keyGenerator = (BuiltinKeyGenerator) DataSourceUtils.createKeyGenerator(props);
 
@@ -123,26 +117,30 @@ public class HoodieTestSuiteJob {
     new HoodieTestSuiteJob(cfg, jssc).runTestSuite();
   }
 
+  public WorkflowDag createWorkflowDag() throws IOException {
+    WorkflowDag workflowDag = this.cfg.workloadYamlPath == null ? ((WorkflowDagGenerator) ReflectionUtils
+      .loadClass((this.cfg).workloadDagGenerator)).build()
+      : DagUtils.convertYamlPathToDag(
+          FSUtils.getFs(this.cfg.workloadYamlPath, jsc.hadoopConfiguration(), true),
+          this.cfg.workloadYamlPath);
+    return workflowDag;
+  }
+
   public void runTestSuite() {
     try {
-      WorkflowDag workflowDag = this.cfg.workloadYamlPath == null ? ((WorkflowDagGenerator) ReflectionUtils
-          .loadClass((this.cfg).workloadDagGenerator)).build()
-          : DagUtils.convertYamlPathToDag(this.fs, this.cfg.workloadYamlPath);
+      WorkflowDag workflowDag = createWorkflowDag();
       log.info("Workflow Dag => " + DagUtils.convertDagToYaml(workflowDag));
       long startTime = System.currentTimeMillis();
-      String schemaStr = schemaProvider.getSourceSchema().toString();
-      final HoodieTestSuiteWriter writer = new HoodieTestSuiteWriter(jsc, props, cfg, schemaStr);
-      final DeltaGenerator deltaGenerator = new DeltaGenerator(
-          new DFSDeltaConfig(DeltaOutputMode.valueOf(cfg.outputTypeName), DeltaInputType.valueOf(cfg.inputFormatName),
-              new SerializableConfiguration(jsc.hadoopConfiguration()), cfg.inputBasePath, cfg.targetBasePath,
-              schemaStr, cfg.limitFileSize), jsc, sparkSession, schemaStr, keyGenerator);
-      DagScheduler dagScheduler = new DagScheduler(workflowDag, writer, deltaGenerator);
+      WriterContext writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
+      writerContext.initContext(jsc);
+      DagScheduler dagScheduler = new DagScheduler(workflowDag, writerContext);
       dagScheduler.schedule();
       log.info("Finished scheduling all tasks, Time taken {}", System.currentTimeMillis() - startTime);
     } catch (Exception e) {
       log.error("Failed to run Test Suite ", e);
       throw new HoodieException("Failed to run Test Suite ", e);
     } finally {
+      sparkSession.stop();
       jsc.stop();
     }
   }

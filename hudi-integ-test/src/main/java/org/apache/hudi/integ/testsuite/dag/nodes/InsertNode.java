@@ -37,6 +37,11 @@ public class InsertNode extends DagNode<JavaRDD<WriteStatus>> {
 
   @Override
   public void execute(ExecutionContext executionContext) throws Exception {
+    // if the insert node has schema override set, reinitialize the table with new schema.
+    if (this.config.getReinitContext()) {
+      log.info(String.format("Reinitializing table with %s", this.config.getOtherConfigs().toString()));
+      executionContext.getWriterContext().reinitContext(this.config.getOtherConfigs());
+    }
     generate(executionContext.getDeltaGenerator());
     log.info("Configs : {}", this.config);
     if (!config.isDisableIngest()) {

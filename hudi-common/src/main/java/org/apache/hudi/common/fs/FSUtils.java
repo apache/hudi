@@ -101,6 +101,25 @@ public class FSUtils {
     return fs;
   }
 
+  public static FileSystem getFs(String path, Configuration conf, boolean localByDefault) {
+    if (localByDefault) {
+      return getFs(addSchemeIfLocalPath(path).toString(), conf);
+    }
+    return getFs(path, conf);
+  }
+
+  public static Path addSchemeIfLocalPath(String path) {
+    Path providedPath = new Path(path);
+    File localFile = new File(path);
+    if (!providedPath.isAbsolute() && localFile.exists()) {
+      Path resolvedPath = new Path("file://" + localFile.getAbsolutePath());
+      LOG.info("Resolving file " + path + " to be a local file.");
+      return resolvedPath;
+    }
+    LOG.info("Resolving file " + path + "to be a remote file.");
+    return providedPath;
+  }
+
   /**
    * A write token uniquely identifies an attempt at one of the IOHandle operations (Merge/Create/Append).
    */

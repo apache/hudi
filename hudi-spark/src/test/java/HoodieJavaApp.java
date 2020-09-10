@@ -199,6 +199,7 @@ public class HoodieJavaApp {
     Dataset<Row> inputDF3 = spark.read().json(jssc.parallelize(deletes, 2));
     writer = inputDF3.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
+        .option("hoodie.delete.shuffle.parallelism", "2")
         .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY(), tableType) // Hoodie Table Type
         .option(DataSourceWriteOptions.OPERATION_OPT_KEY(), "delete")
         .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")

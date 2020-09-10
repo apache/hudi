@@ -1,4 +1,3 @@
-#
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -14,9 +13,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-hoodie.upsert.shuffle.parallelism=2
-hoodie.insert.shuffle.parallelism=2
-hoodie.delete.shuffle.parallelism=2
-hoodie.bulkinsert.shuffle.parallelism=2
-hoodie.datasource.write.partitionpath.field=timestamp
+first_insert:
+  config:
+    record_size: 70000
+    num_insert_partitions: 1
+    repeat_count: 1
+    num_records_insert: 100
+  type: InsertNode
+  deps: none
+first_hive_sync:
+  config:
+    queue_name: "adhoc"
+    engine: "mr"
+  type: HiveSyncNode
+  deps: first_insert
+first_hive_query:
+  config:
+    hive_props:
+      prop2: "set spark.yarn.queue="
+      prop3: "set hive.strict.checks.large.query=false"
+      prop4: "set hive.stats.autogather=false"
+    hive_queries:
+      query2: "select count(*) from testdb1.table1 group   by `_row_key` having count(*) > 1"
+      result2: 0
+  type: HiveQueryNode
+  deps: first_hive_sync
