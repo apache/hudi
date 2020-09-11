@@ -151,7 +151,12 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
    */
   @Override
   public Iterator<V> iterator() {
-    return new LazyFileIterable(filePath, valueMetadataMap).iterator();
+    try {
+      readLock.lock();
+      return new LazyFileIterable(filePath, valueMetadataMap).iterator();
+    } finally {
+      readLock.unlock();
+    }
   }
 
   /**
@@ -183,12 +188,12 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
 
   @Override
   public V get(Object key) {
-    ValueMetadata entry = valueMetadataMap.get(key);
-    if (entry == null) {
-      return null;
-    }
     try {
       readLock.lock();
+      ValueMetadata entry = valueMetadataMap.get(key);
+      if (entry == null) {
+        return null;
+      }
       return get(entry);
     } finally {
       readLock.unlock();
@@ -221,7 +226,7 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
           .set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle, new FileEntry(SpillableMapUtils.generateChecksum(val),
               serializedKey.length, valueSize, serializedKey, val, timestamp)));
       valueMetadataMap.put(key,
-              new DiskBasedMap.ValueMetadata(filePath, valueSize, filePosition.get(), timestamp));
+              new DiskBasedMap.ValueMetadata(valueSize, filePosition.get(), timestamp));
       if (flush) {
         flushToDisk();
       }
@@ -252,7 +257,10 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
   }
 
   private void cleanup() {
+    // Clearing valueMetadataMap first would ensure none of the future gets would attempt to read the file/file-handles
+    valueMetadataMap.clear();
     try {
+      writeLock.lock();
       if (writeOnlyFileHandle != null) {
         writeOnlyFileHandle.flush();
         fileOutputStream.getChannel().force(false);
@@ -270,23 +278,20 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
         }
       }
       writeOnlyFile.delete();
+      randomAccessFile = new ThreadLocal<>();
     } catch (Exception e) {
       // delete the file for any sort of exception
       writeOnlyFile.delete();
+    } finally {
+      writeLock.unlock();
     }
   }
 
   @Override
   public synchronized void clear() throws HoodieException {
-    // Clearing valueMetadataMap first would ensure none of the gets would attempt to read the file/file-handles
-      valueMetadataMap.clear();
-    try {
-      writeLock.lock();
-      cleanup();
-      randomAccessFile = new ThreadLocal<>();
-    } finally {
-      writeLock.unlock();
-    }
+    // Clear is synchronized alongside put
+    // Get and clear have a readwrite lock to maintain synchronization
+    cleanup();
   }
 
   @Override
@@ -380,7 +385,7 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
     // Current timestamp when the value was written to disk
     private Long timestamp;
 
-    protected ValueMetadata(String filePath, int sizeOfValue, long offsetOfValue, long timestamp) {
+    protected ValueMetadata(int sizeOfValue, long offsetOfValue, long timestamp) {
       this.sizeOfValue = sizeOfValue;
       this.offsetOfValue = offsetOfValue;
       this.timestamp = timestamp;
