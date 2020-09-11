@@ -305,6 +305,62 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     assertEquals(0, records3.stream().filter(record -> record.getCurrentLocation() != null).count());
   }
 
+  /*
+   * Test case to verify that for taglocation entries present in HBase, if the corresponding commit instant is missing
+   * in timeline and the commit is not archived, taglocation would reset the current record location to null.
+   */
+  @Test
+  public void testSimpleTagLocationWithInvalidCommit() throws Exception {
+    // Load to memory
+    HoodieWriteConfig config = getConfig();
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
+
+    String newCommitTime = writeClient.startCommit();
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 199);
+    JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    // Insert 199 records
+    JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
+    assertNoWriteErrors(writeStatues.collect());
+
+    // commit this upsert
+    writeClient.commit(newCommitTime, writeStatues);
+
+    // insert 1 record
+    String invalidCommit = writeClient.startCommit();
+    List<HoodieRecord> invalidRecs = dataGen.generateInserts(invalidCommit, 1);
+    JavaRDD<HoodieRecord> invalidWriteRecords = jsc().parallelize(invalidRecs, 1);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    JavaRDD<WriteStatus> invalidWriteStatues = writeClient.upsert(invalidWriteRecords, invalidCommit);
+    assertNoWriteErrors(invalidWriteStatues.collect());
+
+    writeClient.commit(invalidCommit, invalidWriteStatues);
+
+    // verify location is tagged.
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    JavaRDD<HoodieRecord> javaRDD0 = index.tagLocation(invalidWriteRecords, context(), hoodieTable);
+    assert (javaRDD0.collect().size() == 1);   // one record present
+    assert (javaRDD0.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 1); // it is tagged
+    assert (javaRDD0.collect().get(0).getCurrentLocation().getInstantTime().equals(invalidCommit));
+
+    // rollback the invalid commit, so that hbase will be left with a stale entry.
+    writeClient.rollback(invalidCommit);
+
+    // Now tagLocation for the valid records, hbaseIndex should tag them
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    JavaRDD<HoodieRecord> javaRDD1 = index.tagLocation(writeRecords, context(), hoodieTable);
+    assert (javaRDD1.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 199);
+
+    // tagLocation for the invalid record - commit is not present in timeline due to rollback.
+    JavaRDD<HoodieRecord> javaRDD2 = index.tagLocation(invalidWriteRecords, context(), hoodieTable);
+    assert (javaRDD2.collect().size() == 1);   // one record present
+    assert (javaRDD2.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 0); // it is not tagged
+  }
+
   @Test
   public void testTotalGetsBatching() throws Exception {
     HoodieWriteConfig config = getConfig();
