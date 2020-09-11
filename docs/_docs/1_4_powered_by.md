@@ -7,6 +7,7 @@ power_items:
   - img_path: /assets/images/powers/uber.png
   - img_path: /assets/images/powers/aws.jpg
   - img_path: /assets/images/powers/alibaba.png
+  - img_path: /assets/images/powers/clinbrain.png
   - img_path: /assets/images/powers/emis.jpg
   - img_path: /assets/images/powers/yield.png
   - img_path: /assets/images/powers/qq.png
@@ -27,6 +28,9 @@ offering real-time analysis on hudi dataset.
 ### Amazon Web Services
 Amazon Web Services is the World's leading cloud services provider. Apache Hudi is [pre-installed](https://aws.amazon.com/emr/features/hudi/) with the AWS Elastic Map Reduce 
 offering, providing means for AWS users to perform record-level updates/deletes and manage storage efficiently.
+
+### Clinbrain
+[Clinbrain](https://www.clinbrain.com/)  is the leader of big data platform and usage in medical industry. We have built 200 medical big data centers by integrating Hudi Data Lake solution in numerous hospitals. Hudi provides the ability to upsert and delete on hdfs, at the same time, it can make the fresh data-stream up-to-date efficiently in hadoop system with the hudi incremental view.
 
 ### EMIS Health
 
