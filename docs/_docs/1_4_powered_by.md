@@ -30,7 +30,7 @@ Amazon Web Services is the World's leading cloud services provider. Apache Hudi 
 offering, providing means for AWS users to perform record-level updates/deletes and manage storage efficiently.
 
 ### Clinbrain
-[Clinbrain](https://www.clinbrain.com/) is the leading of big data platform on medical industry, we have built 200 medical big data centers by integrating Hudi Data Lake solution in numerous hospitals, hudi provides the abablility to upsert and deletes on hdfs, at the same time, it can make the fresh data-stream up-to-date effcienctlly in hadoop system with the hudi incremental view.
+[Clinbrain](https://www.clinbrain.com/)  is the leader of big data platform and usage in medical industry. We have built 200 medical big data centers by integrating Hudi Data Lake solution in numerous hospitals. Hudi provides the ability to upsert and delete on hdfs, at the same time, it can make the fresh data-stream up-to-date efficiently in hadoop system with the hudi incremental view.
 
 ### EMIS Health
 
