@@ -74,7 +74,6 @@ public class WriteHelper<T extends HoodieRecordPayload<T>> {
     return condition ? deduplicateRecords(records, table, parallelism) : records;
   }
 
-
   /**
    * Deduplicate Hoodie records, using the given deduplication function.
    *
