@@ -46,6 +46,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
 
 /**
@@ -73,6 +74,13 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
   // Thread-safe random access file
   private ThreadLocal<BufferedRandomAccessFile> randomAccessFile = new ThreadLocal<>();
   private Queue<BufferedRandomAccessFile> openedAccessFiles = new ConcurrentLinkedQueue<>();
+
+  // Locks to control concurrency.
+  // Cleanup operations use a write lock read operations use a read lock
+  // Adding this to ensure read operations are n
+  private final ReentrantReadWriteLock globalLock = new ReentrantReadWriteLock();
+  private final ReentrantReadWriteLock.ReadLock readLock = globalLock.readLock();
+  private final ReentrantReadWriteLock.WriteLock writeLock = globalLock.writeLock();
 
   public DiskBasedMap(String baseFilePath) throws IOException {
     this.valueMetadataMap = new ConcurrentHashMap<>();
@@ -179,7 +187,12 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
     if (entry == null) {
       return null;
     }
-    return get(entry);
+    try {
+      readLock.lock();
+      return get(entry);
+    } finally {
+      readLock.unlock();
+    }
   }
 
   private V get(ValueMetadata entry) {
@@ -266,10 +279,14 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
   @Override
   public synchronized void clear() throws HoodieException {
     // Clearing valueMetadataMap first would ensure none of the gets would attempt to read the file/file-handles
-    valueMetadataMap.clear();
-
-    cleanup();
-    randomAccessFile = new ThreadLocal<>();
+      valueMetadataMap.clear();
+    try {
+      writeLock.lock();
+      cleanup();
+      randomAccessFile = new ThreadLocal<>();
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   @Override
@@ -283,7 +300,12 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
   }
 
   public Stream<V> valueStream() {
-    return valueMetadataMap.values().stream().sorted().sequential().map(valueMetaData -> (V) get(valueMetaData));
+    try {
+      readLock.lock();
+      return valueMetadataMap.values().stream().sorted().sequential().map(valueMetaData -> (V) get(valueMetaData));
+    } finally {
+      readLock.unlock();
+    }
   }
 
   @Override
@@ -351,9 +373,6 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
    * The value relevant metadata.
    */
   public static final class ValueMetadata implements Comparable<ValueMetadata> {
-
-    // FilePath to store the spilled data
-    private String filePath;
     // Size (numberOfBytes) of the value written to disk
     private Integer sizeOfValue;
     // FilePosition of the value written to disk
@@ -362,14 +381,9 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
     private Long timestamp;
 
     protected ValueMetadata(String filePath, int sizeOfValue, long offsetOfValue, long timestamp) {
-      this.filePath = filePath;
       this.sizeOfValue = sizeOfValue;
       this.offsetOfValue = offsetOfValue;
       this.timestamp = timestamp;
-    }
-
-    public String getFilePath() {
-      return filePath;
     }
 
     public int getSizeOfValue() {
