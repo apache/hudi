@@ -64,6 +64,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
   public static final String BASE_PATH_PROP = "hoodie.base.path";
   public static final String AVRO_SCHEMA = "hoodie.avro.schema";
+  public static final String LAST_AVRO_SCHEMA = "hoodie.last.avro.schema";
   public static final String AVRO_SCHEMA_VALIDATE = "hoodie.avro.schema.validate";
   public static final String DEFAULT_AVRO_SCHEMA_VALIDATE = "false";
   public static final String DEFAULT_PARALLELISM = "1500";
@@ -97,6 +98,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String BULKINSERT_SORT_MODE = "hoodie.bulkinsert.sort.mode";
   public static final String DEFAULT_BULKINSERT_SORT_MODE = BulkInsertSortMode.GLOBAL_SORT
       .toString();
+  public static final String DELETE_MARKER_FIELD_PROP = "hoodie.write.delete.marker.field";
+  public static final String DEFAULT_DELETE_MARKER_FIELD = "_hoodie_is_deleted";
+
+  public static final String UPDATE_PARTIAL_FIELDS = "hoodie.update.partial.fields";
+  public static final String DEFAULT_UPDATE_PARTIAL_FIELDS = "false";
 
   public static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";
   public static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "true";
@@ -164,8 +170,16 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(AVRO_SCHEMA);
   }
 
+  public String getLastSchema() {
+    return props.getProperty(LAST_AVRO_SCHEMA);
+  }
+
   public void setSchema(String schemaStr) {
     props.setProperty(AVRO_SCHEMA, schemaStr);
+  }
+
+  public void setLastSchema(String schemaStr) {
+    props.setProperty(LAST_AVRO_SCHEMA, schemaStr);
   }
 
   public boolean getAvroSchemaValidate() {
@@ -275,6 +289,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public BulkInsertSortMode getBulkInsertSortMode() {
     String sortMode = props.getProperty(BULKINSERT_SORT_MODE);
     return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
+  }
+
+  public String getDeleteMarkerField() {
+    return props.getProperty(DELETE_MARKER_FIELD_PROP);
+  }
+
+  public Boolean updatePartialFields() {
+    return Boolean.parseBoolean(props.getProperty(UPDATE_PARTIAL_FIELDS));
   }
 
   /**
@@ -799,6 +821,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withLastSchema(String schemaStr) {
+      props.setProperty(LAST_AVRO_SCHEMA, schemaStr);
+      return this;
+    }
+
     public Builder withAvroSchemaValidate(boolean enable) {
       props.setProperty(AVRO_SCHEMA_VALIDATE, String.valueOf(enable));
       return this;
@@ -965,6 +992,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withUpdatePartialFields(boolean updatePartialFields) {
+      props.setProperty(UPDATE_PARTIAL_FIELDS, String.valueOf(updatePartialFields));
+      return this;
+    }
+
     public Builder withProperties(Properties properties) {
       this.props.putAll(properties);
       return this;
@@ -975,6 +1007,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_PARALLELISM), BULKINSERT_PARALLELISM,
           DEFAULT_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(UPDATE_PARTIAL_FIELDS), UPDATE_PARTIAL_FIELDS, DEFAULT_UPDATE_PARTIAL_FIELDS);
       setDefaultOnCondition(props, !props.containsKey(UPSERT_PARALLELISM), UPSERT_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(DELETE_PARALLELISM), DELETE_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(ROLLBACK_PARALLELISM), ROLLBACK_PARALLELISM,

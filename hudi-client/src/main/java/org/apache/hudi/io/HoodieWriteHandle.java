@@ -25,9 +25,11 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -65,7 +67,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T> hoodieTable, SparkTaskContextSupplier sparkTaskContextSupplier) {
     this(config, instantTime, partitionPath, fileId, hoodieTable,
-        getWriterSchemaIncludingAndExcludingMetadataPair(config), sparkTaskContextSupplier);
+        getWriterSchemaIncludingAndExcludingMetadataPair(config, hoodieTable), sparkTaskContextSupplier);
   }
 
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
@@ -90,9 +92,19 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
    * @param config Write Config
    * @return
    */
-  protected static Pair<Schema, Schema> getWriterSchemaIncludingAndExcludingMetadataPair(HoodieWriteConfig config) {
+  protected static Pair<Schema, Schema> getWriterSchemaIncludingAndExcludingMetadataPair(HoodieWriteConfig config, HoodieTable hoodieTable) {
     Schema originalSchema = new Schema.Parser().parse(config.getSchema());
     Schema hoodieSchema = HoodieAvroUtils.addMetadataFields(originalSchema);
+    boolean updatePartialFields = config.updatePartialFields();
+    if (updatePartialFields) {
+      try {
+        TableSchemaResolver resolver = new TableSchemaResolver(hoodieTable.getMetaClient());
+        Schema lastSchema = resolver.getTableAvroSchema();
+        config.setLastSchema(lastSchema.toString());
+      } catch (Exception e) {
+        // Ignore exception.
+      }
+    }
     return Pair.of(originalSchema, hoodieSchema);
   }
 
@@ -164,7 +176,11 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
    * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
    */
   protected GenericRecord rewriteRecord(GenericRecord record) {
-    return HoodieAvroUtils.rewriteRecord(record, writerSchemaWithMetafields);
+    if (config.updatePartialFields() && !StringUtils.isNullOrEmpty(config.getLastSchema())) {
+      return HoodieAvroUtils.rewriteRecord(record, new Schema.Parser().parse(config.getLastSchema()));
+    } else {
+      return HoodieAvroUtils.rewriteRecord(record, writerSchemaWithMetafields);
+    }
   }
 
   public abstract WriteStatus close();
@@ -192,6 +208,10 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
 
   protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T> hoodieTable,
       HoodieWriteConfig config, Schema schema, SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
-    return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, sparkTaskContextSupplier);
+    if (config.updatePartialFields() && !StringUtils.isNullOrEmpty(config.getLastSchema())) {
+      return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, new Schema.Parser().parse(config.getLastSchema()), sparkTaskContextSupplier);
+    } else {
+      return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, sparkTaskContextSupplier);
+    }
   }
 }
