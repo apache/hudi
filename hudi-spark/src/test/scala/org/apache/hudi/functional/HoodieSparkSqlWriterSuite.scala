@@ -123,7 +123,6 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         HoodieWriteConfig.TABLE_NAME -> hoodieFooTableName,
         "hoodie.bulkinsert.shuffle.parallelism" -> "4",
         DataSourceWriteOptions.OPERATION_OPT_KEY -> DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
-        DataSourceWriteOptions.ENABLE_ROW_WRITER_OPT_KEY -> "true",
         DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "_row_key",
         DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
         DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY -> "org.apache.hudi.keygen.SimpleKeyGenerator")
@@ -137,6 +136,63 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       val df = session.createDataFrame(sc.parallelize(recordsSeq), structType)
       // write to Hudi
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df)
+
+      // collect all parition paths to issue read of parquet files
+      val partitions = Seq(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
+        HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
+      // Check the entire dataset has all records still
+      val fullPartitionPaths = new Array[String](3)
+      for (i <- 0 until fullPartitionPaths.length) {
+        fullPartitionPaths(i) = String.format("%s/%s/*", path.toAbsolutePath.toString, partitions(i))
+      }
+
+      // fetch all records from parquet files generated from write to hudi
+      val actualDf = session.sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
+
+      // remove metadata columns so that expected and actual DFs can be compared as is
+      val trimmedDf = actualDf.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
+        .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
+        .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
+
+      assert(df.except(trimmedDf).count() == 0)
+    } finally {
+      session.stop()
+      FileUtils.deleteDirectory(path.toFile)
+    }
+  }
+
+  test("test insert dataset without precombine field") {
+    val session = SparkSession.builder()
+      .appName("test_insert_without_precombine")
+      .master("local[2]")
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .getOrCreate()
+    val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
+    try {
+
+      val sqlContext = session.sqlContext
+      val sc = session.sparkContext
+      val hoodieFooTableName = "hoodie_foo_tbl"
+
+      //create a new table
+      val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
+        HoodieWriteConfig.TABLE_NAME -> hoodieFooTableName,
+        "hoodie.bulkinsert.shuffle.parallelism" -> "1",
+        DataSourceWriteOptions.OPERATION_OPT_KEY -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+        DataSourceWriteOptions.INSERT_DROP_DUPS_OPT_KEY -> "false",
+        DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "_row_key",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+      val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
+
+      // generate the inserts
+      val schema = DataSourceTestUtils.getStructTypeExampleSchema
+      val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+      val records = DataSourceTestUtils.generateRandomRows(100)
+      val recordsSeq = convertRowListToSeq(records)
+      val df = session.createDataFrame(sc.parallelize(recordsSeq), structType)
+      // write to Hudi
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams - DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY, df)
 
       // collect all parition paths to issue read of parquet files
       val partitions = Seq(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
