@@ -215,18 +215,20 @@ public final class DiskBasedMap<K extends Serializable, V extends Serializable> 
 
   private synchronized V put(K key, V value, boolean flush) {
     try {
-      byte[] val = SerializationUtils.serialize(value);
-      Integer valueSize = val.length;
-      Long timestamp = System.currentTimeMillis();
-      byte[] serializedKey = SerializationUtils.serialize(key);
       if (!writeOnlyFile.exists()) {
         initFile(writeOnlyFile);
       }
+      byte[] val = SerializationUtils.serialize(value);
+      Integer valueSize = val.length;
+      Long timestamp = System.currentTimeMillis();
+      Long currentOffset = filePosition.get();
+      byte[] serializedKey = SerializationUtils.serialize(key);
       filePosition
           .set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle, new FileEntry(SpillableMapUtils.generateChecksum(val),
               serializedKey.length, valueSize, serializedKey, val, timestamp)));
+      // Do not change order to update metadata map after writing to disk
       valueMetadataMap.put(key,
-              new DiskBasedMap.ValueMetadata(valueSize, filePosition.get(), timestamp));
+              new DiskBasedMap.ValueMetadata(valueSize, currentOffset, timestamp));
       if (flush) {
         flushToDisk();
       }
