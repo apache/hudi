@@ -1069,7 +1069,7 @@ public class TestCleaner extends HoodieClientTestBase {
         HoodieWriteConfig.newBuilder()
             .withPath(basePath).withAssumeDatePartitioning(true)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
             .build();
 
     String commitTime = makeNewCommitTime(1);

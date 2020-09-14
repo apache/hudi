@@ -291,7 +291,7 @@ public class HoodieTestUtils {
   public static boolean doesCommitExist(String basePath, String instantTime) {
     return new File(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instantTime + HoodieTimeline.COMMIT_EXTENSION)
-        .exists();
+            .exists();
   }
 
   /**
@@ -353,8 +353,8 @@ public class HoodieTestUtils {
       Writer logWriter;
       try {
         logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
-            .overBaseCommit(location.getInstantTime()).withFs(fs).build();
+          .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
+          .overBaseCommit(location.getInstantTime()).withFs(fs).build();
 
         Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
         header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, location.getInstantTime());
