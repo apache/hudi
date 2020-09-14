@@ -361,6 +361,56 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     assert (javaRDD2.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 0); // it is not tagged
   }
 
+  /*
+   * Test case to verify that taglocation() uses the commit timeline to validate the commitTS stored in hbase.
+   * When CheckIfValidCommit() in HbaseIndex uses the incorrect timeline filtering, this test would fail.
+   * Note: Not catching this issue earlier resulted in Dupes in Hbase indexed tables, twice.
+   */
+  @Test
+  public void testEnsureTagLocationUsesCommitTimeline() throws Exception {
+    // Load to memory
+    HoodieWriteConfig config = getConfig();
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
+
+    String commitTime1 = writeClient.startCommit();
+    List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 20);
+    JavaRDD<HoodieRecord> writeRecords1 = jsc().parallelize(records1, 1);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    // Insert 20 records
+    JavaRDD<WriteStatus> writeStatues1 = writeClient.upsert(writeRecords1, commitTime1);
+    assertNoWriteErrors(writeStatues1.collect());
+
+    // commit this upsert
+    writeClient.commit(commitTime1, writeStatues1);
+
+    // rollback the commit - leaves a clean file in timeline.
+    writeClient.rollback(commitTime1);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assert (metaClient.getActiveTimeline().getCleanerTimeline().firstInstant().isPresent());
+    assert (metaClient.getActiveTimeline().getCleanerTimeline().firstInstant().get().getTimestamp().equals(commitTime1));
+
+    String commitTime2 = writeClient.startCommit();
+    List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 20);
+    JavaRDD<HoodieRecord> writeRecords2 = jsc().parallelize(records2, 1);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    // Insert 20 records
+    JavaRDD<WriteStatus> writeStatues2 = writeClient.upsert(writeRecords2, commitTime2);
+    assertNoWriteErrors(writeStatues2.collect());
+
+    // commit this upsert
+    writeClient.commit(commitTime2, writeStatues2);
+
+    // Now tagLocation for the first set of rolledback records, hbaseIndex should tag them
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    JavaRDD<HoodieRecord> javaRDD1 = index.tagLocation(writeRecords1, context(), hoodieTable);
+    assert (javaRDD1.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 20);
+  }
+
   @Test
   public void testTotalGetsBatching() throws Exception {
     HoodieWriteConfig config = getConfig();
