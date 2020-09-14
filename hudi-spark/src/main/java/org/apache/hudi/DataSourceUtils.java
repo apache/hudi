@@ -255,7 +255,7 @@ public class DataSourceUtils {
     hiveSyncConfig.useJdbc = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_USE_JDBC_OPT_KEY(),
         DataSourceWriteOptions.DEFAULT_HIVE_USE_JDBC_OPT_VAL()));
     hiveSyncConfig.autoCreateDatabase = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_AUTO_CREATE_DATABASE_OPT_KEY(),
-        DataSourceWriteOptions.DEFAULT_HIVE_CREATE_DATABASE_ENABLED_OPT_VAL()));
+        DataSourceWriteOptions.DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY()));
     hiveSyncConfig.skipROSuffix = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX(),
         DataSourceWriteOptions.DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL()));
     return hiveSyncConfig;
