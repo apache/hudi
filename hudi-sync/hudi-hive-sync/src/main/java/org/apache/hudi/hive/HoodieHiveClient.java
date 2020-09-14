@@ -344,7 +344,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   public boolean doesDataBaseExist(String databaseName) {
     try {
       Database database = client.getDatabase(databaseName);
-      if (database!=null && databaseName.equals(database.getName())) {
+      if (database != null && databaseName.equals(database.getName())) {
         return true;
       }
     } catch (TException e) {
