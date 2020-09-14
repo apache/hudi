@@ -333,7 +333,10 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
-  @Override
+  /**
+   * @param databaseName
+   * @return  true if the configured database exists
+   */
   public boolean doesDataBaseExist(String databaseName) {
     try {
       Database database = client.getDatabase(databaseName);

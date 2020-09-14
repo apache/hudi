@@ -60,8 +60,6 @@ public abstract class AbstractSyncHoodieClient {
 
   public abstract boolean doesTableExist(String tableName);
 
-  public abstract boolean doesDataBaseExist(String databaseName);
-
   public abstract Option<String> getLastCommitTimeSynced(String tableName);
 
   public abstract void updateLastCommitTimeSynced(String tableName);
