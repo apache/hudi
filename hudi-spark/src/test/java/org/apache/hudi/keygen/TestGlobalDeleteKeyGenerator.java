@@ -23,10 +23,13 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieKeyException;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
+import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-public class TestGlobalDeleteKeyGenerator extends TestKeyGeneratorUtilities {
+public class TestGlobalDeleteKeyGenerator extends KeyGeneratorTestUtilities {
 
   private TypedProperties getCommonProps(boolean getComplexRecordKey) {
     TypedProperties properties = new TypedProperties();
@@ -66,13 +69,19 @@ public class TestGlobalDeleteKeyGenerator extends TestKeyGeneratorUtilities {
   public void testWrongRecordKeyField() {
     GlobalDeleteKeyGenerator keyGenerator = new GlobalDeleteKeyGenerator(getWrongRecordKeyFieldProps());
     Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));
+    Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.buildFieldPositionMapIfNeeded(KeyGeneratorTestUtilities.structType));
   }
 
   @Test
   public void testHappyFlow() {
     GlobalDeleteKeyGenerator keyGenerator = new GlobalDeleteKeyGenerator(getProps());
-    HoodieKey key = keyGenerator.getKey(getRecord());
+    GenericRecord record = getRecord();
+    HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "_row_key:key1,pii_col:pi");
     Assertions.assertEquals(key.getPartitionPath(), "");
+    keyGenerator.buildFieldPositionMapIfNeeded(KeyGeneratorTestUtilities.structType);
+    Row row = KeyGeneratorTestUtilities.getRow(record);
+    Assertions.assertEquals(keyGenerator.getRecordKey(row), "_row_key:key1,pii_col:pi");
+    Assertions.assertEquals(keyGenerator.getPartitionPath(row), "");
   }
 }

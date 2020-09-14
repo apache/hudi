@@ -30,6 +30,9 @@ import org.apache.hudi.integ.testsuite.dag.nodes.UpsertNode;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Unit test for the build process of {@link DagNode} and {@link WorkflowDag}.
+ */
 public class TestWorkflowBuilder {
 
   @Test

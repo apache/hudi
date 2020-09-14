@@ -72,7 +72,8 @@ public class CompactionTestBase extends HoodieClientTestBase {
         .withAutoCommit(autoCommit).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024 * 1024).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .hfileMaxFileSize(1024 * 1024 * 1024).parquetMaxFileSize(1024 * 1024 * 1024).build())
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
@@ -194,7 +195,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     assertEquals(latestCompactionCommitTime, compactionInstantTime,
         "Expect compaction instant time to be the latest commit time");
     assertEquals(expectedNumRecs,
-        HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, "000").count(),
+        HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, "000"),
         "Must contain expected records");
 
   }

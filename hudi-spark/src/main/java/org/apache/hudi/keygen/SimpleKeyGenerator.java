@@ -22,54 +22,52 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
 
-import java.util.Arrays;
-import java.util.List;
+import java.util.Collections;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
 public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
-  protected final String recordKeyField;
-
-  protected final String partitionPathField;
-
-  protected final boolean hiveStylePartitioning;
-
-  protected final boolean encodePartitionPath;
-
   public SimpleKeyGenerator(TypedProperties props) {
-    this(props, props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()));
+    this(props, props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()),
+        props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()));
   }
 
-  public SimpleKeyGenerator(TypedProperties props, String partitionPathField) {
+  SimpleKeyGenerator(TypedProperties props, String partitionPathField) {
+    this(props, null, partitionPathField);
+  }
+
+  SimpleKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
     super(props);
-    this.recordKeyField = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
-    this.partitionPathField = partitionPathField;
-    this.hiveStylePartitioning = props.getBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
-        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
-    this.encodePartitionPath = props.getBoolean(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY(),
-        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL()));
+    this.recordKeyFields = recordKeyField == null
+        ? Collections.emptyList()
+        : Collections.singletonList(recordKeyField);
+    this.partitionPathFields = Collections.singletonList(partitionPathField);
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return KeyGenUtils.getRecordKey(record, recordKeyField);
+    return KeyGenUtils.getRecordKey(record, getRecordKeyFields().get(0));
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return KeyGenUtils.getPartitionPath(record, partitionPathField, hiveStylePartitioning, encodePartitionPath);
+    return KeyGenUtils.getPartitionPath(record, getPartitionPathFields().get(0), hiveStylePartitioning, encodePartitionPath);
   }
 
   @Override
-  public List<String> getRecordKeyFields() {
-    return Arrays.asList(recordKeyField);
+  public String getRecordKey(Row row) {
+    buildFieldPositionMapIfNeeded(row.schema());
+    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, false);
   }
 
   @Override
-  public List<String> getPartitionPathFields() {
-    return Arrays.asList(partitionPathField);
+  public String getPartitionPath(Row row) {
+    buildFieldPositionMapIfNeeded(row.schema());
+    return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(),
+        hiveStylePartitioning, partitionPathPositions);
   }
 }

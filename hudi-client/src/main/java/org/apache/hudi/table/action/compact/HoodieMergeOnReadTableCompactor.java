@@ -135,15 +135,14 @@ public class HoodieMergeOnReadTableCompactor implements HoodieCompactor {
 
     // Compacting is very similar to applying updates to existing file
     Iterator<List<WriteStatus>> result;
-    // If the dataFile is present, there is a base parquet file present, perform updates else perform inserts into a
-    // new base parquet file.
+    // If the dataFile is present, perform updates else perform inserts into a new base file.
     if (oldDataFileOpt.isPresent()) {
       result = hoodieCopyOnWriteTable.handleUpdate(instantTime, operation.getPartitionPath(),
               operation.getFileId(), scanner.getRecords(),
           oldDataFileOpt.get());
     } else {
       result = hoodieCopyOnWriteTable.handleInsert(instantTime, operation.getPartitionPath(), operation.getFileId(),
-          scanner.iterator());
+          scanner.getRecords());
     }
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {

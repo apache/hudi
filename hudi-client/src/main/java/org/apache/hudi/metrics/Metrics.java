@@ -18,6 +18,8 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
@@ -26,6 +28,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.Closeable;
+import java.util.Map;
 
 /**
  * This is the main class of the metrics system.
@@ -50,6 +53,7 @@ public class Metrics {
 
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       try {
+        registerHoodieCommonMetrics();
         reporter.report();
         if (getReporter() != null) {
           getReporter().close();
@@ -58,6 +62,10 @@ public class Metrics {
         LOG.warn("Error while closing reporter", e);
       }
     }));
+  }
+
+  private void registerHoodieCommonMetrics() {
+    registerGauges(Registry.getAllMetrics(true, true), Option.empty());
   }
 
   public static Metrics getInstance() {
@@ -75,6 +83,11 @@ public class Metrics {
       throw new HoodieException(e);
     }
     initialized = true;
+  }
+
+  public static void registerGauges(Map<String, Long> metricsMap, Option<String> prefix) {
+    String metricPrefix = prefix.isPresent() ? prefix.get() + "." : "";
+    metricsMap.forEach((k, v) -> registerGauge(metricPrefix + k, v));
   }
 
   public static void registerGauge(String metricName, final long value) {

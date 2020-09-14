@@ -95,20 +95,19 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
    */
   public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata) {
-    HoodieTableMetaClient metaClient = createMetaClient(false);
-    return commit(instantTime, writeStatuses, extraMetadata, metaClient.getCommitActionType());
+    List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();
+    return commitStats(instantTime, stats, extraMetadata);
   }
 
-  private boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses,
-      Option<Map<String, String>> extraMetadata, String actionType) {
-
+  public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata) {
     LOG.info("Committing " + instantTime);
+    HoodieTableMetaClient metaClient = createMetaClient(false);
+    String actionType = metaClient.getCommitActionType();
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.create(config, hadoopConf);
 
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-    List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();
     stats.forEach(stat -> metadata.addWriteStat(stat.getPartitionPath(), stat));
 
     // Finalize write

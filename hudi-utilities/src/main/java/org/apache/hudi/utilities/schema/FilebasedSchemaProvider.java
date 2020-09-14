@@ -53,9 +53,10 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   public FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_FILE_PROP));
-    this.fs = FSUtils.getFs(props.getString(Config.SOURCE_SCHEMA_FILE_PROP), jssc.hadoopConfiguration());
+    String sourceFile = props.getString(Config.SOURCE_SCHEMA_FILE_PROP);
+    this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
     try {
-      this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(props.getString(Config.SOURCE_SCHEMA_FILE_PROP))));
+      this.sourceSchema = new Schema.Parser().parse(this.fs.open(new Path(sourceFile)));
       if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {
         this.targetSchema =
             new Schema.Parser().parse(fs.open(new Path(props.getString(Config.TARGET_SCHEMA_FILE_PROP))));

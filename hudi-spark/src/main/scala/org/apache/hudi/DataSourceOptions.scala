@@ -19,6 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 import org.apache.hudi.keygen.SimpleKeyGenerator
@@ -136,11 +137,11 @@ object DataSourceWriteOptions {
     * Default: upsert()
     */
   val OPERATION_OPT_KEY = "hoodie.datasource.write.operation"
-  val BULK_INSERT_OPERATION_OPT_VAL = "bulk_insert"
-  val INSERT_OPERATION_OPT_VAL = "insert"
-  val UPSERT_OPERATION_OPT_VAL = "upsert"
-  val DELETE_OPERATION_OPT_VAL = "delete"
-  val BOOTSTRAP_OPERATION_OPT_VAL = "bootstrap"
+  val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.value
+  val INSERT_OPERATION_OPT_VAL = WriteOperationType.INSERT.value
+  val UPSERT_OPERATION_OPT_VAL = WriteOperationType.UPSERT.value
+  val DELETE_OPERATION_OPT_VAL = WriteOperationType.DELETE.value
+  val BOOTSTRAP_OPERATION_OPT_VAL = WriteOperationType.BOOTSTRAP.value
   val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL
 
   /**
@@ -229,6 +230,13 @@ object DataSourceWriteOptions {
   val DEFAULT_KEYGENERATOR_CLASS_OPT_VAL = classOf[SimpleKeyGenerator].getName
 
   /**
+   * When set to true, will perform write operations directly using the spark native `Row` representation.
+   * By default, false (will be enabled as default in a future release)
+   */
+  val ENABLE_ROW_WRITER_OPT_KEY = "hoodie.datasource.write.row.writer.enable"
+  val DEFAULT_ENABLE_ROW_WRITER_OPT_VAL = "false"
+
+  /**
     * Option keys beginning with this prefix, are automatically added to the commit/deltacommit metadata.
     * This is useful to store checkpointing information, in a consistent way with the hoodie timeline
     */
@@ -283,6 +291,7 @@ object DataSourceWriteOptions {
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = "hoodie.datasource.hive_sync.use_pre_apache_input_format"
   val HIVE_USE_JDBC_OPT_KEY = "hoodie.datasource.hive_sync.use_jdbc"
   val HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "hoodie.datasource.hive_sync.auto.create.database"
+  val HIVE_SKIP_RO_SUFFIX = "hoodie.datasource.hive_sync.skip_ro_suffix"
 
   // DEFAULT FOR HIVE SPECIFIC CONFIGS
   val DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL = "false"
@@ -299,8 +308,9 @@ object DataSourceWriteOptions {
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
   val DEFAULT_HIVE_USE_JDBC_OPT_VAL = "true"
   val DEFAULT_HIVE_CREATE_DATABASE_ENABLED_OPT_VAL = "true"
+  val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = "false"
 
   // Async Compaction - Enabled by default for MOR
-  val ASYNC_COMPACT_ENABLE_KEY = "hoodie.datasource.compaction.async.enable"
-  val DEFAULT_ASYNC_COMPACT_ENABLE_VAL = "true"
+  val ASYNC_COMPACT_ENABLE_OPT_KEY = "hoodie.datasource.compaction.async.enable"
+  val DEFAULT_ASYNC_COMPACT_ENABLE_OPT_VAL = "true"
 }

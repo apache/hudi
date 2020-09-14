@@ -79,7 +79,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
    */
   public BufferedRandomAccessFile(File file, String mode) throws IOException {
     super(file, mode);
-    this.init(0);
+    this.init(DEFAULT_BUFFER_SIZE);
   }
 
   /**
@@ -102,7 +102,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
    */
   public BufferedRandomAccessFile(String name, String mode) throws IOException {
     super(name, mode);
-    this.init(0);
+    this.init(DEFAULT_BUFFER_SIZE);
   }
 
   /**

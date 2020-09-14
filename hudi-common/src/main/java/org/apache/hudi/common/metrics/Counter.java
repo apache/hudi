@@ -16,17 +16,28 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.upgrade;
+package org.apache.hudi.common.metrics;
 
-import org.apache.hudi.exception.HoodieException;
+import java.util.concurrent.atomic.AtomicLong;
 
-public class HoodieUpgradeDowngradeException extends HoodieException {
+/**
+ * Lightweight Counter for Hudi Metrics.
+ */
+public class Counter implements Metric {
 
-  public HoodieUpgradeDowngradeException(String msg, Throwable t) {
-    super(msg, t);
+  private final AtomicLong count = new AtomicLong();
+
+  public void increment() {
+    this.add(1);
   }
 
-  public HoodieUpgradeDowngradeException(int fromVersion, int toVersion, boolean upgrade) {
-    super(String.format("Cannot %s from version %s -> %s", upgrade ? "upgrade" : "downgrade", fromVersion, toVersion), null);
+  public void add(long n) {
+    this.count.addAndGet(n);
   }
+
+  @Override
+  public Long getValue() {
+    return count.get();
+  }
+
 }

@@ -273,7 +273,9 @@ public class HoodieJavaStreamingApp {
   public int addInputAndValidateIngestion(SparkSession spark, FileSystem fs, String srcPath,
       int initialCommits, int expRecords,
       Dataset<Row> inputDF1, Dataset<Row> inputDF2, boolean instantTimeValidation) throws Exception {
-    inputDF1.write().mode(SaveMode.Append).json(srcPath);
+    // Ensure, we always write only one file. This is very important to ensure a single batch is reliably read
+    // atomically by one iteration of spark streaming.
+    inputDF1.coalesce(1).write().mode(SaveMode.Append).json(srcPath);
 
     int numExpCommits = initialCommits + 1;
     // wait for spark streaming to process one microbatch
@@ -352,13 +354,14 @@ public class HoodieJavaStreamingApp {
 
     DataStreamWriter<Row> writer = streamingInput.writeStream().format("org.apache.hudi")
         .option("hoodie.insert.shuffle.parallelism", "2").option("hoodie.upsert.shuffle.parallelism", "2")
+        .option("hoodie.delete.shuffle.parallelism", "2")
         .option(DataSourceWriteOptions.OPERATION_OPT_KEY(), operationType)
         .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY(), tableType)
         .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, "1")
-        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_KEY(), "true")
+        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(), "true")
         .option(HoodieWriteConfig.TABLE_NAME, tableName).option("checkpointLocation", checkpointLocation)
         .outputMode(OutputMode.Append());
 

@@ -32,12 +32,17 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A custom dfs path selector used only for the hudi test suite. To be used only if workload is not run inline.
  */
 public class DFSTestSuitePathSelector extends DFSPathSelector {
+  private static volatile Logger log = LoggerFactory.getLogger(HoodieTestSuiteJob.class);
 
   public DFSTestSuitePathSelector(TypedProperties props, Configuration hadoopConf) {
     super(props, hadoopConf);
@@ -54,9 +59,12 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
         lastBatchId = Integer.parseInt(lastCheckpointStr.get());
         nextBatchId = lastBatchId + 1;
       } else {
-        lastBatchId = -1;
-        nextBatchId = 0;
+        lastBatchId = 0;
+        nextBatchId = 1;
       }
+
+      log.info("Using DFSTestSuitePathSelector, checkpoint: " + lastCheckpointStr + " sourceLimit: " + sourceLimit
+          + " lastBatchId: " + lastBatchId + " nextBatchId: " + nextBatchId);
       // obtain all eligible files for the batch
       List<FileStatus> eligibleFiles = new ArrayList<>();
       FileStatus[] fileStatuses = fs.globStatus(
@@ -73,6 +81,8 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
           }
         }
       }
+
+      log.info("Reading " + eligibleFiles.size() + " files. ");
       // no data to readAvro
       if (eligibleFiles.size() == 0) {
         return new ImmutablePair<>(Option.empty(),

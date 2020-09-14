@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
@@ -120,6 +121,9 @@ public class HoodieJavaApp {
       dataGen = new HoodieTestDataGenerator();
     }
 
+    // Explicitly clear up the hoodie table path if it exists.
+    fs.delete(new Path(tablePath), true);
+
     /**
      * Commit with only inserts
      */
@@ -151,7 +155,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName())
-        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_KEY(), "false")
+        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(), "false")
         // This will remove any existing data at path below, and create a
         .mode(SaveMode.Overwrite);
 
@@ -178,7 +182,7 @@ public class HoodieJavaApp {
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, "1")
-        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_KEY(), "false")
+        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(), "false")
         .option(HoodieWriteConfig.TABLE_NAME, tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);
@@ -195,6 +199,7 @@ public class HoodieJavaApp {
     Dataset<Row> inputDF3 = spark.read().json(jssc.parallelize(deletes, 2));
     writer = inputDF3.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
+        .option("hoodie.delete.shuffle.parallelism", "2")
         .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY(), tableType) // Hoodie Table Type
         .option(DataSourceWriteOptions.OPERATION_OPT_KEY(), "delete")
         .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
@@ -204,7 +209,7 @@ public class HoodieJavaApp {
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, "1")
-        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_KEY(), "false")
+        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(), "false")
         .option(HoodieWriteConfig.TABLE_NAME, tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);

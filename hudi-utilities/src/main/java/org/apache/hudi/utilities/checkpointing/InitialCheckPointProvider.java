@@ -22,12 +22,17 @@ import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 
 /**
  * Provide the initial checkpoint for delta streamer.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class InitialCheckPointProvider {
   protected transient Path path;
   protected transient FileSystem fs;
@@ -62,5 +67,6 @@ public abstract class InitialCheckPointProvider {
   /**
    * Get checkpoint string recognizable for delta streamer.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract String getCheckpoint() throws HoodieException;
 }

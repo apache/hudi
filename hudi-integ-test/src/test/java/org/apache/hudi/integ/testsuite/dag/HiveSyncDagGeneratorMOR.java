@@ -28,6 +28,10 @@ import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.nodes.HiveQueryNode;
 
+/**
+ * An implementation of {@link WorkflowDagGenerator}, that generates workflowDag with hive nodes as child node
+ * for MOR table.
+ */
 public class HiveSyncDagGeneratorMOR implements WorkflowDagGenerator {
 
   @Override

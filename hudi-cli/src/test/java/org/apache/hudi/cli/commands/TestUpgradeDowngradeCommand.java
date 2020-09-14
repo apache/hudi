@@ -21,13 +21,14 @@ package org.apache.hudi.cli.commands;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -77,11 +78,11 @@ public class TestUpgradeDowngradeCommand extends AbstractShellIntegrationTest {
     // generate commit and marker files for inflight commit 101
     for (String commitTime : Arrays.asList(commitTime2)) {
       HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, commitTime, "file-1");
-      HoodieClientTestUtils.createMarkerFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, commitTime, "file-1");
+      FileCreateUtils.createMarkerFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, commitTime, "file-1", IOType.MERGE);
       HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime, "file-2");
-      HoodieClientTestUtils.createMarkerFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime, "file-2");
+      FileCreateUtils.createMarkerFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime, "file-2", IOType.MERGE);
       HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, commitTime, "file-3");
-      HoodieClientTestUtils.createMarkerFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, commitTime, "file-3");
+      FileCreateUtils.createMarkerFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, commitTime, "file-3", IOType.MERGE);
     }
   }
 
@@ -98,7 +99,7 @@ public class TestUpgradeDowngradeCommand extends AbstractShellIntegrationTest {
 
     // verify marker files for inflight commit exists
     for (String partitionPath : HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS) {
-      assertEquals(1, HoodieClientTestUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101"));
+      assertEquals(1, FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
     }
 
     SparkMain.upgradeOrDowngradeTable(jsc, tablePath, HoodieTableVersion.ZERO.name());
@@ -112,7 +113,7 @@ public class TestUpgradeDowngradeCommand extends AbstractShellIntegrationTest {
 
     // verify marker files are non existant
     for (String partitionPath : HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS) {
-      assertEquals(0, HoodieClientTestUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101"));
+      assertEquals(0, FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
     }
   }
 

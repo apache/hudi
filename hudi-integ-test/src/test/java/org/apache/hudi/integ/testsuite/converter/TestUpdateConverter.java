@@ -23,6 +23,7 @@ import static junit.framework.TestCase.assertTrue;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.integ.testsuite.utils.TestUtils;
@@ -34,6 +35,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import scala.Tuple2;
 
+/**
+ * Test Cases for {@link UpdateConverter} APIs.
+ */
 public class TestUpdateConverter {
 
   private JavaSparkContext jsc;
@@ -49,11 +53,16 @@ public class TestUpdateConverter {
     jsc.stop();
   }
 
+  /**
+   * Test {@link UpdateConverter} by generates random updates from existing records.
+   */
   @Test
   public void testGenerateUpdateRecordsFromInputRecords() throws Exception {
+    // 1. prepare input records
     JavaRDD<GenericRecord> inputRDD = TestUtils.makeRDD(jsc, 10);
     String schemaStr = inputRDD.take(1).get(0).getSchema().toString();
     int minPayloadSize = 1000;
+
     // 2. DFS converter reads existing records and generates random updates for the same row keys
     UpdateConverter updateConverter = new UpdateConverter(schemaStr, minPayloadSize,
         Arrays.asList("timestamp"), Arrays.asList("_row_key"));

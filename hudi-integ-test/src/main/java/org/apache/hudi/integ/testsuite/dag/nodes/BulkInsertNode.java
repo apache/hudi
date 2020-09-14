@@ -24,6 +24,9 @@ import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.spark.api.java.JavaRDD;
 
+/**
+ * Represents a bulk insert node in the DAG of operations for a workflow.
+ */
 public class BulkInsertNode extends InsertNode {
 
   public BulkInsertNode(Config config) {

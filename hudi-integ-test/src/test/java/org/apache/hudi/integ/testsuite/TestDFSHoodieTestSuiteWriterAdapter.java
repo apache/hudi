@@ -52,6 +52,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+/**
+ * Unit test against DeltaWriterAdapter, by testing writing DFS files.
+ */
 public class TestDFSHoodieTestSuiteWriterAdapter extends UtilitiesTestBase {
 
   private FilebasedSchemaProvider schemaProvider;

@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
@@ -57,16 +58,17 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergeHandle.class);
 
-  private Map<String, HoodieRecord<T>> keyToNewRecords;
-  private Set<String> writtenRecordKeys;
+  protected Map<String, HoodieRecord<T>> keyToNewRecords;
+  protected Set<String> writtenRecordKeys;
   private HoodieFileWriter<IndexedRecord> fileWriter;
+
   private Path newFilePath;
   private Path oldFilePath;
   private long recordsWritten = 0;
   private long recordsDeleted = 0;
   private long updatedRecordsWritten = 0;
-  private long insertRecordsWritten = 0;
-  private boolean useWriterSchema;
+  protected long insertRecordsWritten = 0;
+  protected boolean useWriterSchema;
   private HoodieBaseFile baseFileToMerge;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
@@ -178,7 +180,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     return writeRecord(hoodieRecord, indexedRecord);
   }
 
-  private boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
+  protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
     Option recordMetadata = hoodieRecord.getData().getMetadata();
     if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "

@@ -16,13 +16,15 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.exception;
 
-/**
- * Types of lower level I/O operations done on each file slice.
- */
-public enum IOType {
-  MERGE,
-  CREATE,
-  APPEND
+public class HoodieUpgradeDowngradeException extends HoodieException {
+
+  public HoodieUpgradeDowngradeException(String msg, Throwable t) {
+    super(msg, t);
+  }
+
+  public HoodieUpgradeDowngradeException(int fromVersion, int toVersion, boolean upgrade) {
+    super(String.format("Cannot %s from version %s -> %s", upgrade ? "upgrade" : "downgrade", fromVersion, toVersion), null);
+  }
 }

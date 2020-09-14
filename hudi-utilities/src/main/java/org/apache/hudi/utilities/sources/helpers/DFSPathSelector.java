@@ -52,6 +52,7 @@ public class DFSPathSelector {
   public static class Config {
 
     public static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.dfs.root";
+    public static final String SOURCE_INPUT_SELECTOR = "hoodie.deltastreamer.source.input.selector";
   }
 
   protected static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
