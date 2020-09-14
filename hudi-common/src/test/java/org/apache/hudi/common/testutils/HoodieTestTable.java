@@ -86,11 +86,11 @@ public class HoodieTestTable {
     return COMMIT_FORMATTER.format(Date.from(dateTime));
   }
 
-  public static List<String> makeNewCommitTimes(int num) {
-    return makeNewCommitTimes(num, 1);
+  public static List<String> makeIncrementalCommitTimes(int num) {
+    return makeIncrementalCommitTimes(num, 1);
   }
 
-  public static List<String> makeNewCommitTimes(int num, int firstOffsetSeconds) {
+  public static List<String> makeIncrementalCommitTimes(int num, int firstOffsetSeconds) {
     final Instant now = Instant.now();
     return IntStream.range(0, num)
         .mapToObj(i ->
