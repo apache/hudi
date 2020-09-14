@@ -126,7 +126,7 @@ public class HiveSyncTool extends AbstractSyncTool {
       }
     } else {
       if (!hoodieHiveClient.doesDataBaseExist(cfg.databaseName)) {
-        throw new HoodieHiveSyncException("hive database does not exist");
+        throw new HoodieHiveSyncException("hive database does not exist " + cfg.databaseName);
       }
     }
 

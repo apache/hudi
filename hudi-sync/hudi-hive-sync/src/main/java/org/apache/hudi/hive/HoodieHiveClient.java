@@ -349,9 +349,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       }
     } catch (TException e) {
       throw new HoodieHiveSyncException("Failed to check if database exists " + databaseName, e);
-    } finally {
-      return false;
     }
+    return false;
   }
 
   /**
