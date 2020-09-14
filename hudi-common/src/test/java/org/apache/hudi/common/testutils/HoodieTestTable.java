@@ -93,8 +93,7 @@ public class HoodieTestTable {
   public static List<String> makeIncrementalCommitTimes(int num, int firstOffsetSeconds) {
     final Instant now = Instant.now();
     return IntStream.range(0, num)
-        .mapToObj(i ->
-            makeNewCommitTime(now.plus(i == 0 ? firstOffsetSeconds : firstOffsetSeconds + i, SECONDS)))
+        .mapToObj(i -> makeNewCommitTime(now.plus(firstOffsetSeconds + i, SECONDS)))
         .collect(Collectors.toList());
   }
 
