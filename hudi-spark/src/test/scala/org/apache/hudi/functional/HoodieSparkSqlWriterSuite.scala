@@ -22,7 +22,7 @@ import java.util.{Date, UUID}
 
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
@@ -217,6 +217,53 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         // find mismatch between actual and expected df
         assert(totalExpectedDf.except(trimmedDf).count() == 0)
       }
+    } finally {
+      session.stop()
+      FileUtils.deleteDirectory(path.toFile)
+    }
+  }
+
+  test("test upsert dataset with specified columns") {
+    val session = SparkSession.builder()
+      .appName("test_upsert_with_specified_columns")
+      .master("local[2]")
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .getOrCreate()
+    val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
+    try {
+
+      val sqlContext = session.sqlContext
+      val sc = session.sparkContext
+      val hoodieFooTableName = "hoodie_foo_tbl"
+
+      //create a new table
+      val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
+        HoodieWriteConfig.TABLE_NAME -> hoodieFooTableName,
+        "hoodie.upsert.shuffle.parallelism" -> "4",
+        DataSourceWriteOptions.OPERATION_OPT_KEY -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+        DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "id",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "dt",
+        DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY -> "ts",
+        DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY -> classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName,
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+      val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
+
+      val data = List(
+        """{"id" : 1,  "name": "Jack", "age" : 10, "ts" : 1, "dt" : "20191212"}""",
+        """{"id" : 2, "name": "Tom", "age" : 11, "ts" : 1, "dt" : "20191213"}""",
+        """{"id" : 3, "name": "Bill", "age" : 12, "ts" : 1, "dt" : "20191212"}""")
+      val df = session.read.json(session.sparkContext.parallelize(data, 2))
+
+      // write to Hudi
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df)
+
+      val update = List(
+        """{"id" : 1,   "age" : 22, "ts" : 2, "dt" : "20191212"}""")
+      val dfUpdate = session.read.json(session.sparkContext.parallelize(update, 2))
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, dfUpdate)
+
+      val dfSaved = session.read.format("org.apache.hudi").load(path.toAbsolutePath.toAbsolutePath + "/*")
+      assert(1 == dfSaved.filter("name = 'Jack' and age = 22").count())
     } finally {
       session.stop()
       FileUtils.deleteDirectory(path.toFile)
