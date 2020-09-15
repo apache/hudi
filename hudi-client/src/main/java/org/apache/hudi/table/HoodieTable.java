@@ -593,6 +593,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     switch (getBaseFileFormat()) {
       case PARQUET:
         return HoodieLogBlockType.AVRO_DATA_BLOCK;
+      case HFILE:
+        return HoodieLogBlockType.HFILE_DATA_BLOCK;
       default:
         throw new HoodieException("Base file format " + getBaseFileFormat()
             + " does not have associated log block format");
@@ -601,5 +603,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   public String getBaseFileExtension() {
     return getBaseFileFormat().getFileExtension();
+  }
+
+  public boolean requireSortedRecords() {
+    return getBaseFileFormat() == HoodieFileFormat.HFILE;
   }
 }

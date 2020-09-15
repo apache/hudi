@@ -111,6 +111,7 @@ public class TestHoodieSnapshotExporter extends FunctionalTestHarness {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2)
+        .withDeleteParallelism(2)
         .forTable(TABLE_NAME)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
         .build();

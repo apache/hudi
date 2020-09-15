@@ -53,10 +53,12 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
     this(record.get(), (record1) -> 0); // natural order
   }
 
-  @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
-      throws IOException {
-    IndexedRecord insertValue = getInsertValue(schema).get();
+  /**
+   *
+   * Handle a possible delete - check for "D" in Op column and return empty row if found.
+   * @param insertValue The new row that is being "inserted".
+   */
+  private Option<IndexedRecord> handleDeleteOperation(IndexedRecord insertValue) throws IOException {
     boolean delete = false;
     if (insertValue instanceof GenericRecord) {
       GenericRecord record = (GenericRecord) insertValue;
@@ -64,5 +66,18 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
     }
 
     return delete ? Option.empty() : Option.of(insertValue);
+  }
+
+  @Override
+  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+    IndexedRecord insertValue = super.getInsertValue(schema).get();
+    return handleDeleteOperation(insertValue);
+  }
+
+  @Override
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
+      throws IOException {
+    IndexedRecord insertValue = super.getInsertValue(schema).get();
+    return handleDeleteOperation(insertValue);
   }
 }

@@ -82,6 +82,7 @@ public class DeltaConfig implements Serializable {
     private static String DISABLE_GENERATE = "disable_generate";
     private static String DISABLE_INGEST = "disable_ingest";
     private static String HIVE_LOCAL = "hive_local";
+    private static String REINIT_CONTEXT = "reinitialize_context";
 
     private Map<String, Object> configsMap;
 
@@ -131,6 +132,10 @@ public class DeltaConfig implements Serializable {
 
     public boolean isDisableIngest() {
       return Boolean.valueOf(configsMap.getOrDefault(DISABLE_INGEST, false).toString());
+    }
+
+    public boolean getReinitContext() {
+      return Boolean.valueOf(configsMap.getOrDefault(REINIT_CONTEXT, false).toString());
     }
 
     public Map<String, Object> getOtherConfigs() {
@@ -219,6 +224,11 @@ public class DeltaConfig implements Serializable {
 
       public Builder disableIngest(boolean ingest) {
         this.configsMap.put(DISABLE_INGEST, ingest);
+        return this;
+      }
+
+      public Builder reinitializeContext(boolean reinitContext) {
+        this.configsMap.put(REINIT_CONTEXT, reinitContext);
         return this;
       }
 

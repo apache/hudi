@@ -20,10 +20,8 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -39,7 +37,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.HoodieWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
@@ -50,7 +48,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -67,6 +64,7 @@ import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestHoodieIndex extends HoodieClientTestHarness {
 
@@ -247,6 +245,8 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   @EnumSource(value = IndexType.class, names = {"BLOOM", "SIMPLE",})
   public void testTagLocationAndFetchRecordLocations(IndexType indexType) throws Exception {
     setUp(indexType);
+    String p1 = "2016/01/31";
+    String p2 = "2015/01/31";
     String rowKey1 = UUID.randomUUID().toString();
     String rowKey2 = UUID.randomUUID().toString();
     String rowKey3 = UUID.randomUUID().toString();
@@ -279,12 +279,10 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     }
 
     // We create three parquet file, each having one record. (two different partitions)
-    String filename1 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Collections.singletonList(record1), SCHEMA, null, true);
-    String filename2 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Collections.singletonList(record2), SCHEMA, null, true);
-    String filename3 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Collections.singletonList(record4), SCHEMA, null, true);
+    HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(hoodieTable, SCHEMA);
+    String fileId1 = testTable.addCommit("001").withInserts(p1, record1);
+    String fileId2 = testTable.addCommit("002").withInserts(p1, record2);
+    String fileId3 = testTable.addCommit("003").withInserts(p2, record4);
 
     // We do the tag again
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -295,13 +293,13 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     // Check results
     for (HoodieRecord record : taggedRecordRDD.collect()) {
       if (record.getRecordKey().equals(rowKey1)) {
-        if (record.getPartitionPath().equals("2015/01/31")) {
-          assertEquals(record.getCurrentLocation().getFileId(), FSUtils.getFileId(filename3));
+        if (record.getPartitionPath().equals(p2)) {
+          assertEquals(record.getCurrentLocation().getFileId(), fileId3);
         } else {
-          assertEquals(record.getCurrentLocation().getFileId(), FSUtils.getFileId(filename1));
+          assertEquals(record.getCurrentLocation().getFileId(), fileId1);
         }
       } else if (record.getRecordKey().equals(rowKey2)) {
-        assertEquals(record.getCurrentLocation().getFileId(), FSUtils.getFileId(filename2));
+        assertEquals(record.getCurrentLocation().getFileId(), fileId2);
       } else if (record.getRecordKey().equals(rowKey3)) {
         assertFalse(record.isCurrentLocationKnown());
       }
@@ -312,15 +310,15 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     for (Tuple2<HoodieKey, Option<Pair<String, String>>> entry : recordLocations.collect()) {
       if (entry._1.getRecordKey().equals(rowKey1)) {
         assertTrue(entry._2.isPresent(), "Row1 should have been present ");
-        if (entry._1.getPartitionPath().equals("2015/01/31")) {
+        if (entry._1.getPartitionPath().equals(p2)) {
           assertTrue(entry._2.isPresent(), "Row1 should have been present ");
-          assertEquals(entry._2.get().getRight(), FSUtils.getFileId(filename3));
+          assertEquals(entry._2.get().getRight(), fileId3);
         } else {
-          assertEquals(entry._2.get().getRight(), FSUtils.getFileId(filename1));
+          assertEquals(entry._2.get().getRight(), fileId1);
         }
       } else if (entry._1.getRecordKey().equals(rowKey2)) {
         assertTrue(entry._2.isPresent(), "Row2 should have been present ");
-        assertEquals(entry._2.get().getRight(), FSUtils.getFileId(filename2));
+        assertEquals(entry._2.get().getRight(), fileId2);
       } else if (entry._1.getRecordKey().equals(rowKey3)) {
         assertFalse(entry._2.isPresent(), "Row3 should have been absent ");
       }
@@ -338,12 +336,13 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
             .build()).build();
     writeClient = getHoodieWriteClient(config);
     index = writeClient.getIndex();
+    HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc.hadoopConfiguration());
+    HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(hoodieTable, SCHEMA);
+    final String p1 = "2016/01/31";
+    final String p2 = "2016/02/28";
 
     // Create the original partition, and put a record, along with the meta file
     // "2016/01/31": 1 file (1_0_20160131101010.parquet)
-    new File(basePath + "/2016/01/31").mkdirs();
-    new File(basePath + "/2016/01/31/" + HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE).createNewFile();
-
     // this record will be saved in table and will be tagged to an empty record
     RawTripTestPayload originalPayload =
         new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
@@ -359,7 +358,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     - tag the new partition of the incomingRecord
     */
     RawTripTestPayload incomingPayload =
-        new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-02-31T03:16:41.415Z\",\"number\":12}");
+        new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-02-28T03:16:41.415Z\",\"number\":12}");
     HoodieRecord incomingRecord =
         new HoodieRecord(new HoodieKey(incomingPayload.getRowKey(), incomingPayload.getPartitionPath()),
             incomingPayload);
@@ -376,72 +375,47 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
             incomingPayloadSamePartition);
 
     // We have some records to be tagged (two different partitions)
-    HoodieClientTestUtils
-        .writeParquetFile(basePath, "2016/01/31", Collections.singletonList(originalRecord), SCHEMA, null, false);
-
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.create(metaClient, config, jsc.hadoopConfiguration());
-
-    // Add some commits
-    new File(basePath + "/.hoodie").mkdirs();
+    testTable.addCommit("1000").withInserts(p1, originalRecord);
 
     // test against incoming record with a different partition
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Collections.singletonList(incomingRecord));
-    JavaRDD<HoodieRecord> taggedRecordRDD = index.tagLocation(recordRDD, jsc, table);
+    JavaRDD<HoodieRecord> taggedRecordRDD = index.tagLocation(recordRDD, jsc, hoodieTable);
 
     assertEquals(2, taggedRecordRDD.count());
     for (HoodieRecord record : taggedRecordRDD.collect()) {
       switch (record.getPartitionPath()) {
-        case "2016/01/31":
+        case p1:
           assertEquals("000", record.getRecordKey());
           assertTrue(record.getData() instanceof EmptyHoodieRecordPayload);
           break;
-        case "2016/02/31":
+        case p2:
           assertEquals("000", record.getRecordKey());
           assertEquals(incomingPayload.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
           break;
         default:
-          assertFalse(true, String.format("Should not get partition path: %s", record.getPartitionPath()));
+          fail(String.format("Should not get partition path: %s", record.getPartitionPath()));
       }
     }
 
     // test against incoming record with the same partition
     JavaRDD<HoodieRecord> recordRDDSamePartition = jsc
         .parallelize(Collections.singletonList(incomingRecordSamePartition));
-    JavaRDD<HoodieRecord> taggedRecordRDDSamePartition = index.tagLocation(recordRDDSamePartition, jsc, table);
+    JavaRDD<HoodieRecord> taggedRecordRDDSamePartition = index.tagLocation(recordRDDSamePartition, jsc, hoodieTable);
 
     assertEquals(1, taggedRecordRDDSamePartition.count());
     HoodieRecord record = taggedRecordRDDSamePartition.first();
     assertEquals("000", record.getRecordKey());
-    assertEquals("2016/01/31", record.getPartitionPath());
+    assertEquals(p1, record.getPartitionPath());
     assertEquals(incomingPayloadSamePartition.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
   }
 
-  /**
-   * Get Config builder with default configs set.
-   *
-   * @return Config Builder
-   */
-  public HoodieWriteConfig.Builder getConfigBuilder() {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-  }
-
-  HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
-    return getConfigBuilder(schemaStr, indexType);
-  }
-
-  /**
-   * Get Config builder with default configs set.
-   *
-   * @return Config Builder
-   */
-  private HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, IndexType indexType) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
-        .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2)
+  private HoodieWriteConfig.Builder getConfigBuilder() {
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()

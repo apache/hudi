@@ -21,11 +21,14 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -97,5 +100,32 @@ public class TimelineUtils {
       }
 
     }).distinct().filter(s -> !s.isEmpty()).collect(Collectors.toList());
+  }
+
+  /**
+   * Get extra metadata for specified key from latest commit/deltacommit instant.
+   */
+  public static Option<String> getExtraMetadataFromLatest(HoodieTableMetaClient metaClient, String extraMetadataKey) {
+    return metaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants().findFirst().map(instant ->
+        getMetadataValue(metaClient, extraMetadataKey, instant)).orElse(Option.empty());
+  }
+
+  /**
+   * Get extra metadata for specified key from all active commit/deltacommit instants.
+   */
+  public static Map<String, Option<String>> getAllExtraMetadataForKey(HoodieTableMetaClient metaClient, String extraMetadataKey) {
+    return metaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants().collect(Collectors.toMap(
+          HoodieInstant::getTimestamp, instant -> getMetadataValue(metaClient, extraMetadataKey, instant)));
+  }
+
+  private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
+    try {
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+          metaClient.getCommitsTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+
+      return Option.ofNullable(commitMetadata.getExtraMetadata().get(extraMetadataKey));
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to parse instant metadata " + instant, e);
+    }
   }
 }

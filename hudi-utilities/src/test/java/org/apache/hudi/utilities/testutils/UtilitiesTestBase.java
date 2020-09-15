@@ -96,7 +96,7 @@ public class UtilitiesTestBase {
     Logger rootLogger = Logger.getRootLogger();
     rootLogger.setLevel(Level.ERROR);
     Logger.getLogger("org.apache.spark").setLevel(Level.WARN);
-    initClass(false);
+    initClass(true);
   }
 
   public static void initClass(boolean startHiveService) throws Exception {

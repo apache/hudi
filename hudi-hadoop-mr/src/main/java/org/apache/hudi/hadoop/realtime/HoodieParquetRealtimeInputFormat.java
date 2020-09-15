@@ -18,10 +18,8 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
@@ -43,9 +41,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.stream.Stream;
 
 /**
@@ -83,68 +79,6 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     return timeline;
   }
 
-  /**
-   * Add a field to the existing fields projected.
-   */
-  private static Configuration addProjectionField(Configuration conf, String fieldName, int fieldIndex) {
-    String readColNames = conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "");
-    String readColIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "");
-
-    String readColNamesPrefix = readColNames + ",";
-    if (readColNames == null || readColNames.isEmpty()) {
-      readColNamesPrefix = "";
-    }
-    String readColIdsPrefix = readColIds + ",";
-    if (readColIds == null || readColIds.isEmpty()) {
-      readColIdsPrefix = "";
-    }
-
-    if (!readColNames.contains(fieldName)) {
-      // If not already in the list - then add it
-      conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNamesPrefix + fieldName);
-      conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, readColIdsPrefix + fieldIndex);
-      if (LOG.isDebugEnabled()) {
-        LOG.debug(String.format("Adding extra column " + fieldName + ", to enable log merging cols (%s) ids (%s) ",
-            conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
-            conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR)));
-      }
-    }
-    return conf;
-  }
-
-  private static void addRequiredProjectionFields(Configuration configuration) {
-    List<Integer> projectedIds = new ArrayList<>(HoodieColumnProjectionUtils.getReadColumnIDs(configuration));
-    List<String> projectedNames = new ArrayList<>(Arrays.asList(HoodieColumnProjectionUtils.getReadColumnNames(configuration)));
-    projectedIds.addAll(Arrays.asList(
-        HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS,
-        HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS,
-        HoodieInputFormatUtils.HOODIE_PARTITION_PATH_COL_POS)
-    );
-    projectedNames.addAll(Arrays.asList(
-        HoodieRecord.RECORD_KEY_METADATA_FIELD,
-        HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-        HoodieRecord.PARTITION_PATH_METADATA_FIELD)
-    );
-
-    HoodieColumnProjectionUtils.setReadColumns(configuration, projectedIds, projectedNames);
-  }
-
-  /**
-   * Hive will append read columns' ids to old columns' ids during getRecordReader. In some cases, e.g. SELECT COUNT(*),
-   * the read columns' id is an empty string and Hive will combine it with Hoodie required projection ids and becomes
-   * e.g. ",2,0,3" and will cause an error. Actually this method is a temporary solution because the real bug is from
-   * Hive. Hive has fixed this bug after 3.0.0, but the version before that would still face this problem. (HIVE-22438)
-   */
-  private static void cleanProjectionColumnIds(Configuration conf) {
-    String columnIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR);
-    if (!columnIds.isEmpty() && columnIds.charAt(0) == ',') {
-      conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, columnIds.substring(1));
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("The projection Ids: {" + columnIds + "} start with ','. First comma is removed");
-      }
-    }
-  }
-
   @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf jobConf,
                                                                    final Reporter reporter) throws IOException {
@@ -166,8 +100,8 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
           // For e:g _hoodie_record_key would be missing and merge step would throw exceptions.
           // TO fix this, hoodie columns are appended late at the time record-reader gets built instead of construction
           // time.
-          cleanProjectionColumnIds(jobConf);
-          addRequiredProjectionFields(jobConf);
+          HoodieRealtimeInputFormatUtils.cleanProjectionColumnIds(jobConf);
+          HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf);
 
           this.conf = jobConf;
           this.conf.set(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP, "true");

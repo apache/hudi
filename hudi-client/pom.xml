@@ -206,6 +206,12 @@
       <artifactId>hbase-client</artifactId>
       <version>${hbase.version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-server</artifactId>
+      <version>${hbase.version}</version>
+      <scope>provided</scope>
+    </dependency>
 
     <!-- Hoodie - Tests -->
     <dependency>

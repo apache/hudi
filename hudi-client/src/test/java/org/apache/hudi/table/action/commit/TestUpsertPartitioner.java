@@ -71,10 +71,11 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(smallFileSize)
             .insertSplitSize(100).autoTuneInsertSplits(autoSplitInserts).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1000 * 1024).parquetMaxFileSize(1000 * 1024).build())
+        .build();
 
     FileCreateUtils.createCommit(basePath, "001");
-    FileCreateUtils.createDataFile(basePath, testPartitionPath, "001", "file1", fileSize);
+    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "001", "file1", fileSize);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, hadoopConf);
 
