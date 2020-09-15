@@ -51,7 +51,7 @@ public class InputPathHandler {
   private final List<Path> snapshotPaths;
   private final List<Path> nonHoodieInputPaths;
 
-  InputPathHandler(Configuration conf, Path[] inputPaths, List<String> incrementalTables) throws IOException {
+  public InputPathHandler(Configuration conf, Path[] inputPaths, List<String> incrementalTables) throws IOException {
     this.conf = conf;
     tableMetaClientMap = new HashMap<>();
     snapshotPaths = new ArrayList<>();

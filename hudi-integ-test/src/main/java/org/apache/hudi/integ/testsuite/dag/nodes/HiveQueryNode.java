@@ -30,6 +30,9 @@ import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.helpers.HiveServiceProvider;
 
+/**
+ * A hive query node in the DAG of operations for a workflow. used to perform a hive query with given config.
+ */
 public class HiveQueryNode extends DagNode<Boolean> {
 
   private HiveServiceProvider hiveServiceProvider;

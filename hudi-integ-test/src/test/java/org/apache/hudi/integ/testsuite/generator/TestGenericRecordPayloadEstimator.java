@@ -25,6 +25,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Unit test for {@link GenericRecordFullPayloadSizeEstimator}.
+ */
 public class TestGenericRecordPayloadEstimator {
 
   private static final String SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH = "/docker/demo/config/test-suite/source.avsc";

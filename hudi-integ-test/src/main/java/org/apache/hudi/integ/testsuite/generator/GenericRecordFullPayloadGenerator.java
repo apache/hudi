@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
@@ -44,6 +46,7 @@ import org.slf4j.LoggerFactory;
 public class GenericRecordFullPayloadGenerator implements Serializable {
 
   public static final int DEFAULT_PAYLOAD_SIZE = 1024 * 10; // 10 KB
+  public static final int DEFAULT_NUM_DATE_PARTITIONS = 50;
   private static Logger log = LoggerFactory.getLogger(GenericRecordFullPayloadGenerator.class);
   protected final Random random = new Random();
   // The source schema used to generate a payload
@@ -58,6 +61,8 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   private int numberOfComplexFields;
   // The size of a full record where every field of a generic record created contains 1 random value
   private int estimatedFullPayloadSize;
+  // The number of unique dates to create
+  private int numDatePartitions = DEFAULT_NUM_DATE_PARTITIONS;
   // LogicalTypes in Avro 1.8.2
   private static final String DECIMAL = "decimal";
   private static final String UUID_NAME = "uuid";
@@ -86,6 +91,10 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
       }
     }
   }
+  public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize, int numDatePartitions) {
+    this(schema, minPayloadSize);
+    this.numDatePartitions = numDatePartitions;
+  }
 
   protected static boolean isPrimitive(Schema localSchema) {
     if (localSchema.getType() != Type.ARRAY
@@ -98,14 +107,32 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     }
   }
 
+  /**
+   * Create a new {@link GenericRecord} with random value according to given schema.
+   *
+   * @return {@link GenericRecord} with random value
+   */
   public GenericRecord getNewPayload() {
     return convert(baseSchema);
   }
 
+  /**
+   * Update a given {@link GenericRecord} with random value. The fields in {@code blacklistFields} will not be updated.
+   *
+   * @param record          GenericRecord to update
+   * @param blacklistFields Fields whose value should not be touched
+   * @return The updated {@link GenericRecord}
+   */
   public GenericRecord getUpdatePayload(GenericRecord record, List<String> blacklistFields) {
     return randomize(record, blacklistFields);
   }
 
+  /**
+   * Create a {@link GenericRecord} with random value according to given schema.
+   *
+   * @param schema Schema to create record with
+   * @return {@link GenericRecord} with random value
+   */
   protected GenericRecord convert(Schema schema) {
     GenericRecord result = new GenericData.Record(schema);
     for (Schema.Field f : schema.getFields()) {
@@ -114,6 +141,13 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     return result;
   }
 
+  /**
+   * Create a new {@link GenericRecord} with random values. Not all the fields have value, it is random, and its value
+   * is random too.
+   *
+   * @param schema Schema to create with.
+   * @return A {@link GenericRecord} with random value.
+   */
   protected GenericRecord convertPartial(Schema schema) {
     GenericRecord result = new GenericData.Record(schema);
     for (Schema.Field f : schema.getFields()) {
@@ -128,6 +162,14 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     return result;
   }
 
+  /**
+   * Set random value to {@link GenericRecord} according to the schema type of field.
+   * The field in blacklist will not be set.
+   *
+   * @param record          GenericRecord to randomize.
+   * @param blacklistFields blacklistFields where the filed will not be randomized.
+   * @return Randomized GenericRecord.
+   */
   protected GenericRecord randomize(GenericRecord record, List<String> blacklistFields) {
     for (Schema.Field f : record.getSchema().getFields()) {
       if (blacklistFields == null || !blacklistFields.contains(f.name())) {
@@ -137,6 +179,15 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     return record;
   }
 
+  private long getNextConstrainedLong() {
+    int numPartitions = random.nextInt(numDatePartitions);
+    long unixTimeStamp = TimeUnit.SECONDS.convert(numPartitions, TimeUnit.DAYS);
+    return unixTimeStamp;
+  }
+
+  /**
+   * Generate random value according to their type.
+   */
   private Object typeConvert(Schema schema) {
     Schema localSchema = schema;
     if (isOption(schema)) {
@@ -152,7 +203,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
       case INT:
         return random.nextInt();
       case LONG:
-        return random.nextLong();
+        return getNextConstrainedLong();
       case STRING:
         return UUID.randomUUID().toString();
       case ENUM:
@@ -215,10 +266,26 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     }
   }
 
+  /**
+   * Validate whether the record match schema.
+   *
+   * @param record Record to validate.
+   * @return True if matches.
+   */
   public boolean validate(GenericRecord record) {
     return genericData.validate(baseSchema, record);
   }
 
+  /**
+   * Check whether a schema is option.
+   * return true if it match the follows:
+   * 1. Its type is Type.UNION
+   * 2. Has two types
+   * 3. Has a NULL type.
+   *
+   * @param schema
+   * @return
+   */
   protected boolean isOption(Schema schema) {
     return schema.getType().equals(Schema.Type.UNION)
         && schema.getTypes().size() == 2
@@ -260,6 +327,12 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     }
   }
 
+  /**
+   * Method help to calculate the number of entries to add.
+   *
+   * @param elementSchema
+   * @return Number of entries to add
+   */
   private int numEntriesToAdd(Schema elementSchema) {
     // Find the size of the primitive data type in bytes
     int primitiveDataTypeSize = getSize(elementSchema);

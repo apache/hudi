@@ -49,6 +49,9 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+/**
+ * Base test class for IT Test helps to run command and generate data.
+ */
 public abstract class ITTestBase {
 
   public static final Logger LOG = LogManager.getLogger(ITTestBase.class);
@@ -252,7 +255,7 @@ public abstract class ITTestBase {
     try {
       // save up the Hive log files for introspection
       String hiveLogStr =
-          executeCommandStringInDocker(HIVESERVER, "cat /tmp/root/hive.log |  grep -i exception -A 10 -B 5", true).getStdout().toString();
+          executeCommandStringInDocker(HIVESERVER, "cat /tmp/root/hive.log |  grep -i exception -A 10 -B 5", false).getStdout().toString();
       String filePath = System.getProperty("java.io.tmpdir") + "/" + System.currentTimeMillis() + "-hive.log";
       FileIOUtils.writeStringToFile(hiveLogStr, filePath);
       LOG.info("Hive log saved up at  : " + filePath);

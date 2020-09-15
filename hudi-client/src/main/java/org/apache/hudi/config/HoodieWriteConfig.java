@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
@@ -27,7 +28,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerFactory.BulkInsertSortMode;
+import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
@@ -54,6 +55,8 @@ import java.util.stream.Collectors;
  */
 @Immutable
 public class HoodieWriteConfig extends DefaultHoodieConfig {
+
+  private static final long serialVersionUID = 0L;
 
   public static final String TABLE_NAME = "hoodie.table.name";
   public static final String DEFAULT_ROLLBACK_USING_MARKERS = "false";
@@ -206,7 +209,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getDeleteShuffleParallelism() {
-    return Integer.parseInt(props.getProperty(DELETE_PARALLELISM));
+    return Math.max(Integer.parseInt(props.getProperty(DELETE_PARALLELISM)), 1);
   }
 
   public int getRollbackParallelism() {
@@ -556,6 +559,18 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Double.parseDouble(props.getProperty(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO));
   }
 
+  public long getHFileMaxFileSize() {
+    return Long.parseLong(props.getProperty(HoodieStorageConfig.HFILE_FILE_MAX_BYTES));
+  }
+
+  public int getHFileBlockSize() {
+    return Integer.parseInt(props.getProperty(HoodieStorageConfig.HFILE_BLOCK_SIZE_BYTES));
+  }
+
+  public Compression.Algorithm getHFileCompressionAlgorithm() {
+    return Compression.Algorithm.valueOf(props.getProperty(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM));
+  }
+
   /**
    * metrics properties.
    */
@@ -809,6 +824,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withDeleteParallelism(int parallelism) {
+      props.setProperty(DELETE_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
     public Builder withParallelism(int insertShuffleParallelism, int upsertShuffleParallelism) {
       props.setProperty(INSERT_PARALLELISM, String.valueOf(insertShuffleParallelism));
       props.setProperty(UPSERT_PARALLELISM, String.valueOf(upsertShuffleParallelism));
@@ -833,6 +853,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public Builder combineInput(boolean onInsert, boolean onUpsert) {
       props.setProperty(COMBINE_BEFORE_INSERT_PROP, String.valueOf(onInsert));
       props.setProperty(COMBINE_BEFORE_UPSERT_PROP, String.valueOf(onUpsert));
+      return this;
+    }
+
+    public Builder combineDeleteInput(boolean onDelete) {
+      props.setProperty(COMBINE_BEFORE_DELETE_PROP, String.valueOf(onDelete));
       return this;
     }
 

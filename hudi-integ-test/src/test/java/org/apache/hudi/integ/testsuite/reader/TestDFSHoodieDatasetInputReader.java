@@ -40,6 +40,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Unit test for {@link DFSHoodieDatasetInputReader}.
+ */
 public class TestDFSHoodieDatasetInputReader extends UtilitiesTestBase {
 
   @BeforeAll
@@ -110,6 +113,7 @@ public class TestDFSHoodieDatasetInputReader extends UtilitiesTestBase {
     // Prepare the AvroParquetIO
     return HoodieWriteConfig.newBuilder().withPath(dfsBasePath)
         .withParallelism(2, 2)
+        .withDeleteParallelism(2)
         .withSchema(HoodieTestDataGenerator
             .TRIP_EXAMPLE_SCHEMA);
   }

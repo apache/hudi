@@ -30,6 +30,7 @@ import org.apache.avro.generic.{GenericData, GenericFixed, GenericRecord}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.avro.{IncompatibleSchemaException, SchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.GenericRow
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types._
 
 import scala.collection.JavaConverters._
@@ -110,10 +111,9 @@ object AvroConversionHelper {
             if (item == null) {
               null
             } else {
-              if (item.isInstanceOf[Integer]) {
-                new Date(item.asInstanceOf[Integer].longValue())
-              } else {
-                new Date(item.asInstanceOf[Long])
+              item match {
+                case integer: Integer => DateTimeUtils.toJavaDate(integer)
+                case _ => new Date(item.asInstanceOf[Long])
               }
             }
         case (TimestampType, LONG) =>

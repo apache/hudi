@@ -16,15 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.functional;
-
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
+package org.apache.hudi.execution.bulkinsert;
 
 /**
- * Tests Avro log format {@link HoodieAvroDataBlock}.
+ * Bulk insert sort mode.
  */
-public class TestHoodieAvroLogFormat extends TestHoodieLogFormat {
-  public TestHoodieAvroLogFormat() {
-    super(HoodieLogBlockType.AVRO_DATA_BLOCK);
-  }
+public enum BulkInsertSortMode {
+    NONE,
+    GLOBAL_SORT,
+    PARTITION_SORT
 }

@@ -29,9 +29,12 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+/**
+ * A utility class for DAG test.
+ */
 public class TestDagUtils {
 
-  private static final String COW_DAG_DOCKER_DEMO_RELATIVE_PATH = "/docker/demo/config/test-suite/complex-dag-cow.yaml";
+  private static final String COW_DAG_DOCKER_DEMO_RELATIVE_PATH = "/hudi-integ-test/src/test/resources/unit-test-cow-dag.yaml";
 
   @Test
   public void testConvertDagToYaml() throws Exception {

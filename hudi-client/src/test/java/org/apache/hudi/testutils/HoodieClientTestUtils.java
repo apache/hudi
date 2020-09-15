@@ -19,37 +19,30 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.client.HoodieReadClient;
-import org.apache.hudi.client.SparkTaskContextSupplier;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterFactory;
-import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
-import org.apache.hudi.io.storage.HoodieParquetWriter;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.hadoop.hbase.io.hfile.HFile;
+import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -60,9 +53,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Utility methods to aid testing inside the HoodieClient module.
@@ -129,7 +123,7 @@ public class HoodieClientTestUtils {
   /**
    * Obtain all new data written into the Hoodie table since the given timestamp.
    */
-  public static Dataset<Row> readSince(String basePath, SQLContext sqlContext,
+  public static long countRecordsSince(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
                                        HoodieTimeline commitTimeline, String lastCommitTime) {
     List<HoodieInstant> commitsToReturn =
         commitTimeline.findInstantsAfter(lastCommitTime, Integer.MAX_VALUE).getInstants().collect(Collectors.toList());
@@ -137,12 +131,17 @@ public class HoodieClientTestUtils {
       // Go over the commit metadata, and obtain the new files that need to be read.
       HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
       String[] paths = fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]);
-      Dataset<Row> rows = null;
       if (paths[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-        rows = sqlContext.read().parquet(paths);
+        return sqlContext.read().parquet(paths)
+            .filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime))
+            .count();
+      } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
+        return readHFile(jsc, paths)
+            .filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTime, HoodieActiveTimeline.LESSER_THAN,
+                gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
+            .count();
       }
-
-      return rows.filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime));
+      throw new HoodieException("Unsupported base file format for file :" + paths[0]);
     } catch (IOException e) {
       throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTime, e);
     }
@@ -170,54 +169,35 @@ public class HoodieClientTestUtils {
     }
   }
 
-  /**
-   * TODO Incorporate into {@link org.apache.hudi.common.testutils.HoodieTestTable}.
-   */
-  public static String writeParquetFile(String basePath, String partitionPath, String filename,
-                                        List<HoodieRecord> records, Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException {
+  public static Stream<GenericRecord> readHFile(JavaSparkContext jsc, String[] paths) {
+    // TODO: this should be ported to use HoodieStorageReader
+    List<GenericRecord> valuesAsList = new LinkedList<>();
 
-    if (filter == null) {
-      filter = BloomFilterFactory
-          .createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
-    }
-    HoodieAvroWriteSupport writeSupport =
-        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
-    String instantTime = FSUtils.getCommitTime(filename);
-    HoodieAvroParquetConfig config = new HoodieAvroParquetConfig(writeSupport, CompressionCodecName.GZIP,
-        ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
-        HoodieTestUtils.getDefaultHadoopConf(), Double.valueOf(HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO));
-    HoodieParquetWriter writer =
-        new HoodieParquetWriter(instantTime, new Path(basePath + "/" + partitionPath + "/" + filename), config,
-                schema, new SparkTaskContextSupplier());
-    int seqId = 1;
-    for (HoodieRecord record : records) {
-      GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
-      HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, instantTime, "" + seqId++);
-      HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), filename);
-      writer.writeAvro(record.getRecordKey(), avroRecord);
-      filter.add(record.getRecordKey());
-    }
-    writer.close();
+    FileSystem fs = FSUtils.getFs(paths[0], jsc.hadoopConfiguration());
+    CacheConfig cacheConfig = new CacheConfig(fs.getConf());
+    Schema schema = null;
+    for (String path : paths) {
+      try {
+        HFile.Reader reader = HFile.createReader(fs, new Path(path), cacheConfig, fs.getConf());
+        if (schema == null) {
+          schema = new Schema.Parser().parse(new String(reader.loadFileInfo().get("schema".getBytes())));
+        }
+        HFileScanner scanner = reader.getScanner(false, false);
+        if (!scanner.seekTo()) {
+          // EOF reached
+          continue;
+        }
 
-    if (createCommitTime) {
-      HoodieTestUtils.createMetadataFolder(basePath);
-      HoodieTestUtils.createCommitFiles(basePath, instantTime);
+        do {
+          Cell c = scanner.getKeyValue();
+          byte[] value = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
+          valuesAsList.add(HoodieAvroUtils.bytesToAvro(value, schema));
+        } while (scanner.next());
+      } catch (IOException e) {
+        throw new HoodieException("Error reading hfile " + path + " as a dataframe", e);
+      }
     }
-    return filename;
-  }
-
-  /**
-   * TODO Incorporate into {@link org.apache.hudi.common.testutils.HoodieTestTable}.
-   */
-  public static String writeParquetFile(String basePath, String partitionPath, List<HoodieRecord> records,
-                                        Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException, InterruptedException {
-    Thread.sleep(1000);
-    String instantTime = HoodieTestUtils.makeNewCommitTime();
-    String fileId = UUID.randomUUID().toString();
-    String filename = FSUtils.makeDataFileName(instantTime, "1-0-1", fileId);
-    HoodieTestUtils.createCommitFiles(basePath, instantTime);
-    return HoodieClientTestUtils.writeParquetFile(basePath, partitionPath, filename, records, schema, filter,
-        createCommitTime);
+    return valuesAsList.stream();
   }
 
 }

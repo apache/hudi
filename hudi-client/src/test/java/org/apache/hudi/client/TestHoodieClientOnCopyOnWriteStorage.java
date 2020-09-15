@@ -1261,7 +1261,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
                 .insertSplitSize(insertSplitSize).build())
         .withStorageConfig(
             HoodieStorageConfig.newBuilder()
-                .limitFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
+                .hfileMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200))
+                .parquetMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
         .build();
   }
 }

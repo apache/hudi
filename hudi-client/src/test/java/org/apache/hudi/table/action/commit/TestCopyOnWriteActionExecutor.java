@@ -366,7 +366,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
   @Test
   public void testFileSizeUpsertRecords() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().withStorageConfig(HoodieStorageConfig.newBuilder()
-        .limitFileSize(64 * 1024).parquetBlockSize(64 * 1024).parquetPageSize(64 * 1024).build()).build();
+        .parquetMaxFileSize(64 * 1024).hfileMaxFileSize(64 * 1024)
+        .parquetBlockSize(64 * 1024).parquetPageSize(64 * 1024).build()).build();
     String instantTime = HoodieTestUtils.makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, hadoopConf);
@@ -401,7 +402,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
-            .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
+            .withStorageConfig(HoodieStorageConfig.newBuilder()
+                .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build()).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     final HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, hadoopConf);
     String instantTime = "000";
