@@ -111,8 +111,7 @@ private[hudi] object HoodieSparkSqlWriter {
         tableConfig = tableMetaClient.getTableConfig
         df
       } else {
-        val tableMetaClient =  HoodieTableMetaClient.initTableAndGetMetaClient(sqlContext.sparkContext.hadoopConfiguration,
-          path.get, toProperties(parameters))
+        val tableMetaClient = new HoodieTableMetaClient(sparkContext.hadoopConfiguration, path.get)
         val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
         val oldSchema = tableSchemaResolver.getTableAvroSchemaWithoutMetadataFields
         val oldStructType = AvroConversionUtils.convertAvroSchemaToStructType(oldSchema)
