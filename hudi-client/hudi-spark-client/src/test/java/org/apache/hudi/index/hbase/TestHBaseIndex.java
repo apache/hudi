@@ -18,6 +18,7 @@
 
 package org.apache.hudi.index.hbase;
 
+import avro.shaded.com.google.common.collect.Maps;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -62,6 +63,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -317,27 +319,12 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
 
     String newCommitTime = writeClient.startCommit();
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 199);
-    JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
+    // make a commit with 199 records
+    JavaRDD<HoodieRecord> writeRecords = generateAndCommitRecords(writeClient, 199);
 
-    // Insert 199 records
-    JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
-    assertNoWriteErrors(writeStatues.collect());
-
-    // commit this upsert
-    writeClient.commit(newCommitTime, writeStatues);
-
-    // insert 1 record
+    // make a second commit with a single record
     String invalidCommit = writeClient.startCommit();
-    List<HoodieRecord> invalidRecs = dataGen.generateInserts(invalidCommit, 1);
-    JavaRDD<HoodieRecord> invalidWriteRecords = jsc().parallelize(invalidRecs, 1);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-
-    JavaRDD<WriteStatus> invalidWriteStatues = writeClient.upsert(invalidWriteRecords, invalidCommit);
-    assertNoWriteErrors(invalidWriteStatues.collect());
-
-    writeClient.commit(invalidCommit, invalidWriteStatues);
+    JavaRDD<HoodieRecord> invalidWriteRecords = generateAndCommitRecords(writeClient, 1, invalidCommit);
 
     // verify location is tagged.
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
@@ -374,16 +361,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
 
     String commitTime1 = writeClient.startCommit();
-    List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 20);
-    JavaRDD<HoodieRecord> writeRecords1 = jsc().parallelize(records1, 1);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-
-    // Insert 20 records
-    JavaRDD<WriteStatus> writeStatues1 = writeClient.upsert(writeRecords1, commitTime1);
-    assertNoWriteErrors(writeStatues1.collect());
-
-    // commit this upsert
-    writeClient.commit(commitTime1, writeStatues1);
+    JavaRDD<HoodieRecord> writeRecords1 = generateAndCommitRecords(writeClient, 20, commitTime1);
 
     // rollback the commit - leaves a clean file in timeline.
     writeClient.rollback(commitTime1);
@@ -392,23 +370,64 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     assert (metaClient.getActiveTimeline().getCleanerTimeline().firstInstant().isPresent());
     assert (metaClient.getActiveTimeline().getCleanerTimeline().firstInstant().get().getTimestamp().equals(commitTime1));
 
-    String commitTime2 = writeClient.startCommit();
-    List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 20);
-    JavaRDD<HoodieRecord> writeRecords2 = jsc().parallelize(records2, 1);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-
-    // Insert 20 records
-    JavaRDD<WriteStatus> writeStatues2 = writeClient.upsert(writeRecords2, commitTime2);
-    assertNoWriteErrors(writeStatues2.collect());
-
-    // commit this upsert
-    writeClient.commit(commitTime2, writeStatues2);
+    // create a second commit with 20 records
+    generateAndCommitRecords(writeClient, 20);
 
     // Now tagLocation for the first set of rolledback records, hbaseIndex should tag them
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     JavaRDD<HoodieRecord> javaRDD1 = index.tagLocation(writeRecords1, context(), hoodieTable);
     assert (javaRDD1.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 20);
+  }
+
+  private JavaRDD<HoodieRecord>  generateAndCommitRecords(SparkRDDWriteClient writeClient, int numRecs) throws Exception {
+    String commitTime = writeClient.startCommit();
+    return generateAndCommitRecords(writeClient, numRecs, commitTime);
+  }
+
+  private JavaRDD<HoodieRecord> generateAndCommitRecords(SparkRDDWriteClient writeClient,
+                                                         int numRecs, String commitTime) throws Exception {
+    // first batch of records
+    List<HoodieRecord> records = dataGen.generateInserts(commitTime, numRecs);
+    JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    // Insert records
+    JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, commitTime);
+    assertNoWriteErrors(writeStatues.collect());
+
+    // commit this upsert
+    writeClient.commit(commitTime, writeStatues);
+
+    return writeRecords;
+  }
+
+  // Verify hbase is tagging records belonging to an archived commit as valid.
+  @Test
+  public void testHbaseTagLocationForArchivedCommits() throws Exception {
+    // Load to memory
+    Map<String, String> params = Maps.newHashMap();
+    params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP, "1");
+    params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP, "3");
+    params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP, "2");
+    HoodieWriteConfig config = getConfigBuilder(100, false).withProps(params).build();
+
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
+
+    // make first commit with 20 records
+    JavaRDD<HoodieRecord> writeRecords1 = generateAndCommitRecords(writeClient, 20);
+
+    // Make 3 additional commits, so that first commit is archived
+    for (int nCommit = 0; nCommit < 3; nCommit++) {
+      generateAndCommitRecords(writeClient, 20);
+    }
+
+    // tagLocation for the first set of records (for the archived commit), hbaseIndex should tag them as valid
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    JavaRDD<HoodieRecord> javaRDD1 = index.tagLocation(writeRecords1, context(), hoodieTable);
+    assertEquals(20, javaRDD1.filter(HoodieRecord::isCurrentLocationKnown).collect().size());
   }
 
   @Test

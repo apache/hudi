@@ -324,6 +324,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
             Exception we = new Exception("Error updating index for " + writeStatus, e);
             LOG.error(we);
             writeStatus.setGlobalError(we);
+            throw new RuntimeException("Error updating index for " + writeStatus, e);
           }
           writeStatusList.add(writeStatus);
         }
