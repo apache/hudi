@@ -173,7 +173,7 @@ public class KafkaOffsetGen {
     Map<TopicPartition, Long> toOffsets;
     try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
       if (!checkTopicExists(consumer)) {
-        throw new HoodieException("Kafka topic:" + topicName + " does not exist" );
+        throw new HoodieException("Kafka topic:" + topicName + " does not exist");
       }
       List<PartitionInfo> partitionInfoList;
       partitionInfoList = consumer.partitionsFor(topicName);
