@@ -54,7 +54,7 @@ Prerequisites for building Apache Hudi:
 ```
 # Checkout code and build
 git clone https://github.com/apache/hudi.git && cd hudi
-mvn clean package -DskipTests -DskipITs
+mvn clean package -DskipTests
 
 # Start command
 spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
@@ -73,7 +73,7 @@ mvn clean javadoc:aggregate -Pjavadocs
 The default Scala version supported is 2.11. To build for Scala 2.12 version, build using `scala-2.12` profile
 
 ```
-mvn clean package -DskipTests -DskipITs -Dscala-2.12
+mvn clean package -DskipTests -Dscala-2.12
 ```
 
 ### Build without spark-avro module
@@ -83,13 +83,30 @@ The default hudi-jar bundles spark-avro module. To build without spark-avro modu
 ```
 # Checkout code and build
 git clone https://github.com/apache/hudi.git && cd hudi
-mvn clean package -DskipTests -DskipITs -Pspark-shade-unbundle-avro
+mvn clean package -DskipTests -Pspark-shade-unbundle-avro
 
 # Start command
 spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
   --packages org.apache.spark:spark-avro_2.11:2.4.4 \
   --jars `ls packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar` \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+```
+
+## Running Tests
+
+Unit tests can be run with maven profile `unit-tests`.
+```
+mvn -Punit-tests test
+```
+
+Functional tests, which are tagged with `@Tag("functional")`, can be run with maven profile `functional-tests`.
+```
+mvn -Pfunctional-tests test
+```
+
+To run tests with spark event logging enabled, define the Spark event log directory. This allows visualizing test DAG and stages using Spark History Server UI.
+```
+mvn -Punit-tests test -DSPARK_EVLOG_DIR=/path/for/spark/event/log
 ```
 
 ## Quickstart

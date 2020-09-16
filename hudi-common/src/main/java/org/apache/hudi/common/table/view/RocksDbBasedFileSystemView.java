@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -265,6 +266,62 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   Stream<HoodieBaseFile> fetchAllBaseFiles(String partitionPath) {
     return rocksDB.<HoodieBaseFile>prefixSearch(schemaHelper.getColFamilyForView(),
         schemaHelper.getPrefixForDataFileViewByPartition(partitionPath)).map(Pair::getValue);
+  }
+
+  @Override
+  protected boolean isBootstrapBaseFilePresentForFileId(HoodieFileGroupId fgId) {
+    return getBootstrapBaseFile(fgId).isPresent();
+  }
+
+  @Override
+  void resetBootstrapBaseFileMapping(Stream<BootstrapBaseFileMapping> bootstrapBaseFileStream) {
+    rocksDB.writeBatch(batch -> {
+      bootstrapBaseFileStream.forEach(externalBaseFile -> {
+        rocksDB.putInBatch(batch, schemaHelper.getColFamilyForBootstrapBaseFile(),
+            schemaHelper.getKeyForBootstrapBaseFile(externalBaseFile.getFileGroupId()), externalBaseFile);
+      });
+      LOG.info("Initializing external data file mapping. Count=" + batch.count());
+    });
+  }
+
+  @Override
+  void addBootstrapBaseFileMapping(Stream<BootstrapBaseFileMapping> bootstrapBaseFileStream) {
+    rocksDB.writeBatch(batch -> {
+      bootstrapBaseFileStream.forEach(externalBaseFile -> {
+        ValidationUtils.checkArgument(!isBootstrapBaseFilePresentForFileId(externalBaseFile.getFileGroupId()),
+            "Duplicate FileGroupId found in external data file. FgId :" + externalBaseFile.getFileGroupId());
+        rocksDB.putInBatch(batch, schemaHelper.getColFamilyForBootstrapBaseFile(),
+            schemaHelper.getKeyForBootstrapBaseFile(externalBaseFile.getFileGroupId()), externalBaseFile);
+      });
+    });
+  }
+
+  @Override
+  void removeBootstrapBaseFileMapping(Stream<BootstrapBaseFileMapping> bootstrapBaseFileStream) {
+    rocksDB.writeBatch(batch -> {
+      bootstrapBaseFileStream.forEach(externalBaseFile -> {
+        ValidationUtils.checkArgument(
+            getBootstrapBaseFile(externalBaseFile.getFileGroupId()) != null,
+            "Trying to remove a FileGroupId which is not found in external data file mapping. FgId :"
+                + externalBaseFile.getFileGroupId());
+        rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForBootstrapBaseFile(),
+            schemaHelper.getKeyForBootstrapBaseFile(externalBaseFile.getFileGroupId()));
+      });
+    });
+  }
+
+  @Override
+  protected Option<BootstrapBaseFileMapping> getBootstrapBaseFile(HoodieFileGroupId fileGroupId) {
+    String lookupKey = schemaHelper.getKeyForBootstrapBaseFile(fileGroupId);
+    BootstrapBaseFileMapping externalBaseFile =
+        rocksDB.get(schemaHelper.getColFamilyForBootstrapBaseFile(), lookupKey);
+    return Option.ofNullable(externalBaseFile);
+  }
+
+  @Override
+  Stream<BootstrapBaseFileMapping> fetchBootstrapBaseFiles() {
+    return rocksDB.<BootstrapBaseFileMapping>prefixSearch(schemaHelper.getColFamilyForBootstrapBaseFile(), "")
+        .map(Pair::getValue);
   }
 
   @Override

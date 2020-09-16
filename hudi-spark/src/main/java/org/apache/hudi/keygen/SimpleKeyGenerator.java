@@ -18,54 +18,56 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
+
+import java.util.Collections;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
-public class SimpleKeyGenerator extends KeyGenerator {
-
-  private static final String DEFAULT_PARTITION_PATH = "default";
-
-  protected final String recordKeyField;
-
-  protected final String partitionPathField;
-
-  protected final boolean hiveStylePartitioning;
+public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   public SimpleKeyGenerator(TypedProperties props) {
+    this(props, props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()),
+        props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()));
+  }
+
+  SimpleKeyGenerator(TypedProperties props, String partitionPathField) {
+    this(props, null, partitionPathField);
+  }
+
+  SimpleKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
     super(props);
-    this.recordKeyField = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
-    this.partitionPathField = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY());
-    this.hiveStylePartitioning = props.getBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
-        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
+    this.recordKeyFields = recordKeyField == null
+        ? Collections.emptyList()
+        : Collections.singletonList(recordKeyField);
+    this.partitionPathFields = Collections.singletonList(partitionPathField);
   }
 
   @Override
-  public HoodieKey getKey(GenericRecord record) {
-    if (recordKeyField == null || partitionPathField == null) {
-      throw new HoodieKeyException("Unable to find field names for record key or partition path in cfg");
-    }
+  public String getRecordKey(GenericRecord record) {
+    return KeyGenUtils.getRecordKey(record, getRecordKeyFields().get(0));
+  }
 
-    String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
-    if (recordKey == null || recordKey.isEmpty()) {
-      throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
-    }
+  @Override
+  public String getPartitionPath(GenericRecord record) {
+    return KeyGenUtils.getPartitionPath(record, getPartitionPathFields().get(0), hiveStylePartitioning, encodePartitionPath);
+  }
 
-    String partitionPath = DataSourceUtils.getNestedFieldValAsString(record, partitionPathField, true);
-    if (partitionPath == null || partitionPath.isEmpty()) {
-      partitionPath = DEFAULT_PARTITION_PATH;
-    }
-    if (hiveStylePartitioning) {
-      partitionPath = partitionPathField + "=" + partitionPath;
-    }
+  @Override
+  public String getRecordKey(Row row) {
+    buildFieldPositionMapIfNeeded(row.schema());
+    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, false);
+  }
 
-    return new HoodieKey(recordKey, partitionPath);
+  @Override
+  public String getPartitionPath(Row row) {
+    buildFieldPositionMapIfNeeded(row.schema());
+    return RowKeyGeneratorHelper.getPartitionPathFromRow(row, getPartitionPathFields(),
+        hiveStylePartitioning, partitionPathPositions);
   }
 }

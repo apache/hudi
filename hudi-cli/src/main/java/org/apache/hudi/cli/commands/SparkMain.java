@@ -19,16 +19,23 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.DeDupeType;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.HDFSParquetImporter.Config;
@@ -36,11 +43,16 @@ import org.apache.hudi.utilities.HoodieCleaner;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool.Operation;
 import org.apache.hudi.utilities.HoodieCompactor;
+import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.deltastreamer.BootstrapExecutor;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -56,8 +68,8 @@ public class SparkMain {
    * Commands.
    */
   enum SparkCommand {
-    ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN,
-    COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLEAN, DELETE_SAVEPOINT
+    BOOTSTRAP, ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN,
+    COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLEAN, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE
   }
 
   public static void main(String[] args) throws Exception {
@@ -165,6 +177,24 @@ public class SparkMain {
         assert (args.length == 5);
         returnCode = deleteSavepoint(jsc, args[3], args[4]);
         break;
+      case BOOTSTRAP:
+        assert (args.length >= 18);
+        propsFilePath = null;
+        if (!StringUtils.isNullOrEmpty(args[17])) {
+          propsFilePath = args[17];
+        }
+        configs = new ArrayList<>();
+        if (args.length > 18) {
+          configs.addAll(Arrays.asList(args).subList(18, args.length));
+        }
+        returnCode = doBootstrap(jsc, args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10],
+            args[11], args[12], args[13], args[14], args[15], args[16], propsFilePath, configs);
+        break;
+      case UPGRADE:
+      case DOWNGRADE:
+        assert (args.length == 5);
+        returnCode = upgradeOrDowngradeTable(jsc, args[3], args[4]);
+        break;
       default:
         break;
     }
@@ -175,7 +205,7 @@ public class SparkMain {
     List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
         SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN,
         SparkCommand.IMPORT, SparkCommand.UPSERT, SparkCommand.DEDUPLICATE, SparkCommand.SAVEPOINT,
-        SparkCommand.DELETE_SAVEPOINT, SparkCommand.ROLLBACK_TO_SAVEPOINT, SparkCommand.ROLLBACK);
+        SparkCommand.DELETE_SAVEPOINT, SparkCommand.ROLLBACK_TO_SAVEPOINT, SparkCommand.ROLLBACK, SparkCommand.BOOTSTRAP);
     return masterContained.contains(command);
   }
 
@@ -282,6 +312,36 @@ public class SparkMain {
     return 0;
   }
 
+  private static int doBootstrap(JavaSparkContext jsc, String tableName, String tableType, String basePath,
+      String sourcePath, String recordKeyCols, String partitionFields, String parallelism, String schemaProviderClass,
+      String bootstrapIndexClass, String selectorClass, String keyGeneratorClass, String fullBootstrapInputProvider,
+      String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
+
+    TypedProperties properties = propsFilePath == null ? UtilHelpers.buildProperties(configs)
+        : UtilHelpers.readConfig(FSUtils.getFs(propsFilePath, jsc.hadoopConfiguration()), new Path(propsFilePath), configs).getConfig();
+
+    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP, sourcePath);
+    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS, keyGeneratorClass);
+    properties.setProperty(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER, fullBootstrapInputProvider);
+    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM, parallelism);
+    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR, selectorClass);
+    properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), recordKeyCols);
+    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), partitionFields);
+
+    HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
+    cfg.targetTableName = tableName;
+    cfg.targetBasePath = basePath;
+    cfg.tableType = tableType;
+    cfg.schemaProviderClassName = schemaProviderClass;
+    cfg.bootstrapIndexClass = bootstrapIndexClass;
+    cfg.payloadClassName = payloadClassName;
+    cfg.enableHiveSync = Boolean.valueOf(enableHiveSync);
+
+    new BootstrapExecutor(cfg, jsc, FSUtils.getFs(basePath, jsc.hadoopConfiguration()),
+        jsc.hadoopConfiguration(), properties).execute();
+    return 0;
+  }
+
   private static int rollback(JavaSparkContext jsc, String instantTime, String basePath) throws Exception {
     HoodieWriteClient client = createHoodieClient(jsc, basePath);
     if (client.rollback(instantTime)) {
@@ -330,9 +390,35 @@ public class SparkMain {
     }
   }
 
+  /**
+   * Upgrade or downgrade table.
+   *
+   * @param jsc instance of {@link JavaSparkContext} to use.
+   * @param basePath base path of the dataset.
+   * @param toVersion version to which upgrade/downgrade to be done.
+   * @return 0 if success, else -1.
+   * @throws Exception
+   */
+  protected static int upgradeOrDowngradeTable(JavaSparkContext jsc, String basePath, String toVersion) {
+    HoodieWriteConfig config = getWriteConfig(basePath);
+    HoodieTableMetaClient metaClient = ClientUtils.createMetaClient(jsc.hadoopConfiguration(), config, false);
+    try {
+      UpgradeDowngrade.run(metaClient, HoodieTableVersion.valueOf(toVersion), config, jsc, null);
+      LOG.info(String.format("Table at \"%s\" upgraded / downgraded to version \"%s\".", basePath, toVersion));
+      return 0;
+    } catch (Exception e) {
+      LOG.warn(String.format("Failed: Could not upgrade/downgrade table at \"%s\" to version \"%s\".", basePath, toVersion), e);
+      return -1;
+    }
+  }
+
   private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+    HoodieWriteConfig config = getWriteConfig(basePath);
     return new HoodieWriteClient(jsc, config);
+  }
+
+  private static HoodieWriteConfig getWriteConfig(String basePath) {
+    return HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
   }
 }

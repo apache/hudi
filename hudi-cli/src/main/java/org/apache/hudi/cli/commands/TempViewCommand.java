@@ -20,12 +20,11 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
 
+import org.apache.hudi.exception.HoodieException;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
-
-import java.io.IOException;
 
 /**
  * CLI command to query/delete temp views.
@@ -33,23 +32,43 @@ import java.io.IOException;
 @Component
 public class TempViewCommand implements CommandMarker {
 
-  private static final String EMPTY_STRING = "";
+  public static final String QUERY_SUCCESS = "Query ran successfully!";
+  public static final String QUERY_FAIL = "Query ran failed!";
+  public static final String SHOW_SUCCESS = "Show all views name successfully!";
 
-  @CliCommand(value = "temp_query", help = "query against created temp view")
+  @CliCommand(value = {"temp_query", "temp query"}, help = "query against created temp view")
   public String query(
-          @CliOption(key = {"sql"}, mandatory = true, help = "select query to run against view") final String sql)
-          throws IOException {
+          @CliOption(key = {"sql"}, mandatory = true, help = "select query to run against view") final String sql) {
 
-    HoodieCLI.getTempViewProvider().runQuery(sql);
-    return EMPTY_STRING;
+    try {
+      HoodieCLI.getTempViewProvider().runQuery(sql);
+      return QUERY_SUCCESS;
+    } catch (HoodieException ex) {
+      return QUERY_FAIL;
+    }
+
   }
 
-  @CliCommand(value = "temp_delete", help = "Delete view name")
-  public String delete(
-          @CliOption(key = {"view"}, mandatory = true, help = "view name") final String tableName)
-          throws IOException {
+  @CliCommand(value = {"temps_show", "temps show"}, help = "Show all views name")
+  public String showAll() {
 
-    HoodieCLI.getTempViewProvider().deleteTable(tableName);
-    return EMPTY_STRING;
+    try {
+      HoodieCLI.getTempViewProvider().showAllViews();
+      return SHOW_SUCCESS;
+    } catch (HoodieException ex) {
+      return "Show all views name failed!";
+    }
+  }
+
+  @CliCommand(value = {"temp_delete", "temp delete"}, help = "Delete view name")
+  public String delete(
+          @CliOption(key = {"view"}, mandatory = true, help = "view name") final String tableName) {
+
+    try {
+      HoodieCLI.getTempViewProvider().deleteTable(tableName);
+      return String.format("Delete view %s successfully!", tableName);
+    } catch (HoodieException ex) {
+      return String.format("Delete view %s failed!", tableName);
+    }
   }
 }

@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
@@ -56,6 +57,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -82,20 +84,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests hoodie log format {@link HoodieLogFormat}.
  */
 @SuppressWarnings("Duplicates")
-public abstract class TestHoodieLogFormat extends HoodieCommonTestHarness {
+public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   private static String BASE_OUTPUT_PATH = "/tmp/";
   private FileSystem fs;
   private Path partitionPath;
   private int bufferSize = 4096;
-  private HoodieLogBlockType dataBlockType;
-
-  public TestHoodieLogFormat(HoodieLogBlockType dataBlockType) {
-    this.dataBlockType = dataBlockType;
-  }
-
-  private TestHoodieLogFormat() {
-  }
+  private HoodieLogBlockType dataBlockType = HoodieLogBlockType.AVRO_DATA_BLOCK;
 
   @BeforeAll
   public static void setUpClass() throws IOException, InterruptedException {
@@ -133,8 +128,9 @@ public abstract class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(1, writer.getLogFile().getLogVersion(), "Version should be 1 for new log created");
   }
 
-  @Test
-  public void testBasicAppend() throws IOException, InterruptedException, URISyntaxException {
+  @ParameterizedTest
+  @EnumSource(names = { "AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK" })
+  public void testBasicAppend(HoodieLogBlockType dataBlockType) throws IOException, InterruptedException, URISyntaxException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
@@ -142,7 +138,7 @@ public abstract class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    HoodieDataBlock dataBlock = getDataBlock(records, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records, header);
     writer = writer.appendBlock(dataBlock);
     long size = writer.getCurrentSize();
     assertTrue(size > 0, "We just wrote a block - size should be > 0");
@@ -151,7 +147,8 @@ public abstract class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.close();
   }
 
-  @Test
+  @ParameterizedTest
+  @EnumSource(names = { "AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK" })
   public void testRollover() throws IOException, InterruptedException, URISyntaxException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
@@ -335,7 +332,8 @@ public abstract class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(2, statuses.length);
   }
 
-  @Test
+  @ParameterizedTest
+  @EnumSource(names = { "AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK" })
   public void testBasicWriteAndScan() throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
@@ -363,7 +361,8 @@ public abstract class TestHoodieLogFormat extends HoodieCommonTestHarness {
     reader.close();
   }
 
-  @Test
+  @ParameterizedTest
+  @EnumSource(names = { "AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK" })
   public void testBasicAppendAndRead() throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
@@ -1440,9 +1439,16 @@ public abstract class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   private HoodieDataBlock getDataBlock(List<IndexedRecord> records, Map<HeaderMetadataType, String> header) {
+    return getDataBlock(dataBlockType, records, header);
+  }
+
+  private HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<IndexedRecord> records,
+                                       Map<HeaderMetadataType, String> header) {
     switch (dataBlockType) {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(records, header);
+      case HFILE_DATA_BLOCK:
+        return new HoodieHFileDataBlock(records, header);
       default:
         throw new RuntimeException("Unknown data block type " + dataBlockType);
     }

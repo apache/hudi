@@ -18,12 +18,13 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Simple Key generator for unpartitioned Hive Tables.
@@ -31,17 +32,24 @@ import org.apache.avro.generic.GenericRecord;
 public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
 
   private static final String EMPTY_PARTITION = "";
+  private static final List<String> EMPTY_PARTITION_FIELD_LIST = new ArrayList<>();
 
   public NonpartitionedKeyGenerator(TypedProperties props) {
     super(props);
   }
 
   @Override
-  public HoodieKey getKey(GenericRecord record) {
-    String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
-    if (recordKey == null || recordKey.isEmpty()) {
-      throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
-    }
-    return new HoodieKey(recordKey, EMPTY_PARTITION);
+  public String getPartitionPath(GenericRecord record) {
+    return EMPTY_PARTITION;
+  }
+
+  @Override
+  public List<String> getPartitionPathFields() {
+    return EMPTY_PARTITION_FIELD_LIST;
+  }
+
+  @Override
+  public String getPartitionPath(Row row) {
+    return EMPTY_PARTITION;
   }
 }

@@ -49,6 +49,7 @@ public class HoodieIndexUtils {
   public static List<Pair<String, HoodieBaseFile>> getLatestBaseFilesForAllPartitions(final List<String> partitions,
                                                                                       final JavaSparkContext jsc,
                                                                                       final HoodieTable hoodieTable) {
+    jsc.setJobGroup(HoodieIndexUtils.class.getSimpleName(), "Load latest base files from all partitions");
     return jsc.parallelize(partitions, Math.max(partitions.size(), 1))
         .flatMap(partitionPath -> {
           Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()

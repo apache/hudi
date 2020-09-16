@@ -93,7 +93,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     try {
       BufferedRandomAccessFile readHandle = randomAccessFile.get();
       if (readHandle == null) {
-        readHandle = new BufferedRandomAccessFile(filePath, "r");
+        readHandle = new BufferedRandomAccessFile(filePath, "r", BUFFER_SIZE);
         readHandle.seek(0);
         randomAccessFile.set(readHandle);
         openedAccessFiles.offer(readHandle);

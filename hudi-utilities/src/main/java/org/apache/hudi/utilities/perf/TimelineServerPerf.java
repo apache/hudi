@@ -132,6 +132,7 @@ public class TimelineServerPerf implements Serializable {
 
   public List<PerfStats> runLookups(JavaSparkContext jsc, List<String> partitionPaths, SyncableFileSystemView fsView,
       int numIterations, int concurrency) {
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Lookup all performance stats");
     return jsc.parallelize(partitionPaths, cfg.numExecutors).flatMap(p -> {
       ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(100);
       final List<PerfStats> result = new ArrayList<>();

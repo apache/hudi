@@ -115,4 +115,16 @@ public class HoodieCLI {
     return tempViewProvider;
   }
 
+  /**
+   * Close tempViewProvider.
+   * <p/>
+   * For test, avoid multiple SparkContexts.
+   */
+  public static synchronized void closeTempViewProvider() {
+    if (tempViewProvider != null) {
+      tempViewProvider.close();
+      tempViewProvider = null;
+    }
+  }
+
 }

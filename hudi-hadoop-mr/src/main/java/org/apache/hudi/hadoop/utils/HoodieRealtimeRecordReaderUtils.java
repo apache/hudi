@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.avro.LogicalTypes;
@@ -33,6 +34,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
+import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.HiveDecimalUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.BytesWritable;
@@ -41,6 +44,7 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapred.JobConf;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -65,6 +69,17 @@ public class HoodieRealtimeRecordReaderUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read schema from " + filePath, e);
     }
+  }
+
+  /**
+   * get the max compaction memory in bytes from JobConf.
+   */
+  public static long getMaxCompactionMemoryInBytes(JobConf jobConf) {
+    // jobConf.getMemoryForMapTask() returns in MB
+    return (long) Math
+        .ceil(Double.parseDouble(jobConf.get(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP,
+            HoodieRealtimeConfig.DEFAULT_COMPACTION_MEMORY_FRACTION))
+            * jobConf.getMemoryForMapTask() * 1024 * 1024L);
   }
 
   /**
@@ -210,9 +225,8 @@ public class HoodieRealtimeRecordReaderUtils {
           LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) LogicalTypes.fromSchema(schema);
           HiveDecimalWritable writable = new HiveDecimalWritable(((GenericFixed) value).bytes(),
               decimal.getScale());
-          return HiveDecimalWritable.enforcePrecisionScale(writable,
-              decimal.getPrecision(),
-              decimal.getScale());
+          return HiveDecimalUtils.enforcePrecisionScale(writable,
+              new DecimalTypeInfo(decimal.getPrecision(), decimal.getScale()));
         }
         return new BytesWritable(((GenericFixed) value).bytes());
       default:

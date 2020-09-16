@@ -19,6 +19,11 @@
 # Check if this file is valid by running in bash:
 # curl -X POST --data-binary @.codecov.yml https://codecov.io/validate
 
+coverage:
+  precision: 2
+  round: down
+  range: "50...100"
+
 # Ignoring Paths
 # --------------
 # which folders/files to ignore
@@ -42,3 +47,43 @@ ignore:
   - "hudi-hadoop-mr/src/main/java/com/uber/hoodie/hadoop/HoodieInputFormat.java"
   - "hudi-hadoop-mr/src/main/java/com/uber/hoodie/hadoop/realtime/HoodieRealtimeInputFormat.java"
 
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false  # if true: only post the comment if coverage changes
+  require_base: no        # [yes :: must have a base report to post]
+  require_head: no        # [yes :: must have a head report to post]
+  branches:               # https://docs.codecov.io/docs/pull-request-comments#branches
+    - "master"
+
+flags:
+  hudicli:
+    paths:
+      - hudi-cli/src/main/
+  hudiclient:
+    paths:
+      - hudi-client/src/main/
+  hudicommon:
+    paths:
+      - hudi-common/src/main/
+  hudiexamples:
+    paths:
+      - hudi-examples/src/main/
+  hudihadoopmr:
+    paths:
+      - hudi-hadoop-mr/src/main/
+  hudihivesync:
+    paths:
+      - hudi-hive-sync/src/main/
+  hudiintegtest:
+    paths:
+      - hudi-integ-test/src/main/
+  hudispark:
+    paths:
+      - hudi-spark/src/main/
+  huditimelineservice:
+    paths:
+      - hudi-timeline-service/src/main/
+  hudiutilities:
+    paths:
+      - hudi-utilities/src/main/

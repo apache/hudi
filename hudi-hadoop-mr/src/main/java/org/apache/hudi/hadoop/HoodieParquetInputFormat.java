@@ -19,21 +19,28 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
+import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
+import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
@@ -47,12 +54,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * HoodieInputFormat which understands the Hoodie File Structure and filters files based on the Hoodie Mode. If paths
  * that does not correspond to a hoodie table then they are passed in as is (as what FileInputFormat.listStatus()
  * would do). The JobConf could have paths from multipe Hoodie/Non-Hoodie tables
  */
+@UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
 public class HoodieParquetInputFormat extends MapredParquetInputFormat implements Configurable {
 
@@ -115,6 +125,8 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     return returns.toArray(new FileStatus[returns.size()]);
   }
 
+
+
   /**
    * Achieves listStatus functionality for an incrementally queried table. Instead of listing all
    * partitions and then filtering based on the commits of interest, this logic first extracts the
@@ -153,7 +165,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
 
   @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
-      final Reporter reporter) throws IOException {
+                                                                   final Reporter reporter) throws IOException {
     // TODO enable automatic predicate pushdown after fixing issues
     // FileSplit fileSplit = (FileSplit) split;
     // HoodieTableMetadata metadata = getTableMetadata(fileSplit.getPath().getParent());
@@ -166,7 +178,91 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     // ParquetInputFormat.setFilterPredicate(job, predicate);
     // clearOutExistingPredicate(job);
     // }
+    if (split instanceof BootstrapBaseFileSplit) {
+      BootstrapBaseFileSplit eSplit = (BootstrapBaseFileSplit) split;
+      String[] rawColNames = HoodieColumnProjectionUtils.getReadColumnNames(job);
+      List<Integer> rawColIds = HoodieColumnProjectionUtils.getReadColumnIDs(job);
+      List<Pair<Integer, String>> projectedColsWithIndex =
+          IntStream.range(0, rawColIds.size()).mapToObj(idx -> Pair.of(rawColIds.get(idx), rawColNames[idx]))
+              .collect(Collectors.toList());
+
+      List<Pair<Integer, String>> hoodieColsProjected = projectedColsWithIndex.stream()
+          .filter(idxWithName -> HoodieRecord.HOODIE_META_COLUMNS.contains(idxWithName.getValue()))
+          .collect(Collectors.toList());
+      List<Pair<Integer, String>> externalColsProjected = projectedColsWithIndex.stream()
+          .filter(idxWithName -> !HoodieRecord.HOODIE_META_COLUMNS.contains(idxWithName.getValue())
+              && !HoodieHiveUtils.VIRTUAL_COLUMN_NAMES.contains(idxWithName.getValue()))
+          .collect(Collectors.toList());
+
+      // This always matches hive table description
+      List<Pair<String, String>> colNameWithTypes = HoodieColumnProjectionUtils.getIOColumnNameAndTypes(job);
+      List<Pair<String, String>> colNamesWithTypesForExternal = colNameWithTypes.stream()
+          .filter(p -> !HoodieRecord.HOODIE_META_COLUMNS.contains(p.getKey())).collect(Collectors.toList());
+      LOG.info("colNameWithTypes =" + colNameWithTypes + ", Num Entries =" + colNameWithTypes.size());
+      if (hoodieColsProjected.isEmpty()) {
+        return super.getRecordReader(eSplit.getBootstrapFileSplit(), job, reporter);
+      } else if (externalColsProjected.isEmpty()) {
+        return super.getRecordReader(split, job, reporter);
+      } else {
+        FileSplit rightSplit = eSplit.getBootstrapFileSplit();
+        // Hive PPD works at row-group level and only enabled when hive.optimize.index.filter=true;
+        // The above config is disabled by default. But when enabled, would cause misalignment between
+        // skeleton and bootstrap file. We will disable them specifically when query needs bootstrap and skeleton
+        // file to be stitched.
+        // This disables row-group filtering
+        JobConf jobConfCopy = new JobConf(job);
+        jobConfCopy.unset(TableScanDesc.FILTER_EXPR_CONF_STR);
+        jobConfCopy.unset(ConvertAstToSearchArg.SARG_PUSHDOWN);
+
+        LOG.info("Generating column stitching reader for " + eSplit.getPath() + " and " + rightSplit.getPath());
+        return new BootstrapColumnStichingRecordReader(super.getRecordReader(eSplit, jobConfCopy, reporter),
+            HoodieRecord.HOODIE_META_COLUMNS.size(),
+            super.getRecordReader(rightSplit, jobConfCopy, reporter),
+            colNamesWithTypesForExternal.size(),
+            true);
+      }
+    }
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("EMPLOYING DEFAULT RECORD READER - " + split);
+    }
     return super.getRecordReader(split, job, reporter);
   }
 
+  @Override
+  protected boolean isSplitable(FileSystem fs, Path filename) {
+    return !(filename instanceof PathWithBootstrapFileStatus);
+  }
+
+  @Override
+  protected FileSplit makeSplit(Path file, long start, long length,
+                                String[] hosts) {
+    FileSplit split = new FileSplit(file, start, length, hosts);
+
+    if (file instanceof PathWithBootstrapFileStatus) {
+      return makeExternalFileSplit((PathWithBootstrapFileStatus)file, split);
+    }
+    return split;
+  }
+
+  @Override
+  protected FileSplit makeSplit(Path file, long start, long length,
+                                String[] hosts, String[] inMemoryHosts) {
+    FileSplit split = new FileSplit(file, start, length, hosts, inMemoryHosts);
+    if (file instanceof PathWithBootstrapFileStatus) {
+      return makeExternalFileSplit((PathWithBootstrapFileStatus)file, split);
+    }
+    return split;
+  }
+
+  private BootstrapBaseFileSplit makeExternalFileSplit(PathWithBootstrapFileStatus file, FileSplit split) {
+    try {
+      LOG.info("Making external data split for " + file);
+      FileStatus externalFileStatus = file.getBootstrapFileStatus();
+      FileSplit externalFileSplit = makeSplit(externalFileStatus.getPath(), 0, externalFileStatus.getLen(),
+          new String[0], new String[0]);
+      return new BootstrapBaseFileSplit(split, externalFileSplit);
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
+    }
+  }
 }

@@ -91,7 +91,6 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
       LOG.error("Got exception trying to perform incremental sync. Reverting to complete sync", ioe);
     }
 
-    LOG.warn("Incremental Sync of timeline is turned off or deemed unsafe. Will revert to full syncing");
     super.runSync(oldTimeline, newTimeline);
   }
 
@@ -253,7 +252,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   /**
-   * Add newly found clean instant.
+   * Add newly found clean instant. Note that cleaner metadata (.clean.completed)
+   * contains only relative paths unlike clean plans (.clean.requested) which contains absolute paths.
    *
    * @param timeline Timeline
    * @param instant Clean instant

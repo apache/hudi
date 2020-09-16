@@ -18,13 +18,13 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -46,7 +46,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedList;
+
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -54,6 +54,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -100,6 +101,25 @@ public class FSUtils {
     return fs;
   }
 
+  public static FileSystem getFs(String path, Configuration conf, boolean localByDefault) {
+    if (localByDefault) {
+      return getFs(addSchemeIfLocalPath(path).toString(), conf);
+    }
+    return getFs(path, conf);
+  }
+
+  public static Path addSchemeIfLocalPath(String path) {
+    Path providedPath = new Path(path);
+    File localFile = new File(path);
+    if (!providedPath.isAbsolute() && localFile.exists()) {
+      Path resolvedPath = new Path("file://" + localFile.getAbsolutePath());
+      LOG.info("Resolving file " + path + " to be a local file.");
+      return resolvedPath;
+    }
+    LOG.info("Resolving file " + path + "to be a remote file.");
+    return providedPath;
+  }
+
   /**
    * A write token uniquely identifies an attempt at one of the IOHandle operations (Merge/Create/Append).
    */
@@ -116,20 +136,8 @@ public class FSUtils {
     return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, fileExtension);
   }
 
-  public static String makeMarkerFile(String instantTime, String writeToken, String fileId) {
-    return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, HoodieTableMetaClient.MARKER_EXTN);
-  }
-
-  public static String translateMarkerToDataPath(String basePath, String markerPath, String instantTs,
-                                                 String baseFileExtension) {
-    ValidationUtils.checkArgument(markerPath.endsWith(HoodieTableMetaClient.MARKER_EXTN));
-    String markerRootPath = Path.getPathWithoutSchemeAndAuthority(
-        new Path(String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTs))).toString();
-    int begin = markerPath.indexOf(markerRootPath);
-    ValidationUtils.checkArgument(begin >= 0,
-        "Not in marker dir. Marker Path=" + markerPath + ", Expected Marker Root=" + markerRootPath);
-    String rPath = markerPath.substring(begin + markerRootPath.length() + 1);
-    return String.format("%s/%s%s", basePath, rPath.replace(HoodieTableMetaClient.MARKER_EXTN, ""), baseFileExtension);
+  public static String makeBootstrapIndexFileName(String instantTime, String fileId, String ext) {
+    return String.format("%s_%s_%s%s", fileId, "1-0-1", instantTime, ext);
   }
 
   public static String maskWithoutFileId(String instantTime, int taskPartitionId) {
@@ -171,15 +179,15 @@ public class FSUtils {
   /**
    * Given a base partition and a partition path, return relative path of partition path to the base path.
    */
-  public static String getRelativePartitionPath(Path basePath, Path partitionPath) {
+  public static String getRelativePartitionPath(Path basePath, Path fullPartitionPath) {
     basePath = Path.getPathWithoutSchemeAndAuthority(basePath);
-    partitionPath = Path.getPathWithoutSchemeAndAuthority(partitionPath);
-    String partitionFullPath = partitionPath.toString();
-    int partitionStartIndex = partitionFullPath.indexOf(basePath.getName(),
+    fullPartitionPath = Path.getPathWithoutSchemeAndAuthority(fullPartitionPath);
+    String fullPartitionPathStr = fullPartitionPath.toString();
+    int partitionStartIndex = fullPartitionPathStr.indexOf(basePath.getName(),
         basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
     // Partition-Path could be empty for non-partitioned tables
-    return partitionStartIndex + basePath.getName().length() == partitionFullPath.length() ? ""
-        : partitionFullPath.substring(partitionStartIndex + basePath.getName().length() + 1);
+    return partitionStartIndex + basePath.getName().length() == fullPartitionPathStr.length() ? ""
+        : fullPartitionPathStr.substring(partitionStartIndex + basePath.getName().length() + 1);
   }
 
   /**
@@ -199,19 +207,6 @@ public class FSUtils {
     return partitions;
   }
 
-  public static List<String> getAllDataFilesForMarkers(FileSystem fs, String basePath, String instantTs,
-      String markerDir, String baseFileExtension) throws IOException {
-    List<String> dataFiles = new LinkedList<>();
-    processFiles(fs, markerDir, (status) -> {
-      String pathStr = status.getPath().toString();
-      if (pathStr.endsWith(HoodieTableMetaClient.MARKER_EXTN)) {
-        dataFiles.add(FSUtils.translateMarkerToDataPath(basePath, pathStr, instantTs, baseFileExtension));
-      }
-      return true;
-    }, false);
-    return dataFiles;
-  }
-
   /**
    * Recursively processes all files in the base-path. If excludeMetaFolder is set, the meta-folder and all its subdirs
    * are skipped
@@ -222,8 +217,8 @@ public class FSUtils {
    * @param excludeMetaFolder Exclude .hoodie folder
    * @throws IOException -
    */
-  static void processFiles(FileSystem fs, String basePathStr, Function<FileStatus, Boolean> consumer,
-      boolean excludeMetaFolder) throws IOException {
+  public static void processFiles(FileSystem fs, String basePathStr, Function<FileStatus, Boolean> consumer,
+                                  boolean excludeMetaFolder) throws IOException {
     PathFilter pathFilter = excludeMetaFolder ? getExcludeMetaPathFilter() : ALLOW_ALL_FILTER;
     FileStatus[] topLevelStatuses = fs.listStatus(new Path(basePathStr));
     for (FileStatus child : topLevelStatuses) {
@@ -256,18 +251,14 @@ public class FSUtils {
 
   public static String getFileExtension(String fullName) {
     Objects.requireNonNull(fullName);
-    String fileName = (new File(fullName)).getName();
-    int dotIndex = fileName.indexOf('.');
+    String fileName = new File(fullName).getName();
+    int dotIndex = fileName.lastIndexOf('.');
     return dotIndex == -1 ? "" : fileName.substring(dotIndex);
   }
 
   private static PathFilter getExcludeMetaPathFilter() {
     // Avoid listing and including any folders under the metafolder
     return (path) -> !path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME);
-  }
-
-  public static String getInstantTime(String name) {
-    return name.replace(getFileExtension(name), "");
   }
 
   /**
@@ -390,7 +381,7 @@ public class FSUtils {
 
   public static boolean isLogFile(Path logPath) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
-    return matcher.find();
+    return matcher.find() && logPath.getName().contains(".log");
   }
 
   /**
@@ -501,18 +492,6 @@ public class FSUtils {
     }
   }
 
-  public static void deleteOlderRestoreMetaFiles(FileSystem fs, String metaPath, Stream<HoodieInstant> instants) {
-    // TODO - this should be archived when archival is made general for all meta-data
-    // skip MIN_ROLLBACK_TO_KEEP and delete rest
-    instants.skip(MIN_ROLLBACK_TO_KEEP).map(s -> {
-      try {
-        return fs.delete(new Path(metaPath, s.getFileName()), false);
-      } catch (IOException e) {
-        throw new HoodieIOException("Could not delete restore meta files " + s.getFileName(), e);
-      }
-    });
-  }
-
   public static void createPathIfNotExists(FileSystem fs, Path partitionPath) throws IOException {
     if (!fs.exists(partitionPath)) {
       fs.mkdirs(partitionPath);
@@ -535,8 +514,8 @@ public class FSUtils {
   /**
    * Get DFS full partition path (e.g. hdfs://ip-address:8020:/<absolute path>)
    */
-  public static String getDFSFullPartitionPath(FileSystem fs, Path partitionPath) {
-    return fs.getUri() + partitionPath.toUri().getRawPath();
+  public static String getDFSFullPartitionPath(FileSystem fs, Path fullPartitionPath) {
+    return fs.getUri() + fullPartitionPath.toUri().getRawPath();
   }
 
   /**
@@ -559,4 +538,33 @@ public class FSUtils {
     return returnConf;
   }
 
+  /**
+   * Get the FS implementation for this table.
+   * @param path  Path String
+   * @param hadoopConf  Serializable Hadoop Configuration
+   * @param consistencyGuardConfig Consistency Guard Config
+   * @return HoodieWrapperFileSystem
+   */
+  public static HoodieWrapperFileSystem getFs(String path, SerializableConfiguration hadoopConf,
+      ConsistencyGuardConfig consistencyGuardConfig) {
+    FileSystem fileSystem = FSUtils.getFs(path, hadoopConf.newCopy());
+    return new HoodieWrapperFileSystem(fileSystem,
+        consistencyGuardConfig.isConsistencyCheckEnabled()
+            ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig)
+            : new NoOpConsistencyGuard());
+  }
+
+  /**
+   * Helper to filter out paths under metadata folder when running fs.globStatus.
+   * @param fs  File System
+   * @param globPath Glob Path
+   * @return
+   * @throws IOException
+   */
+  public static List<FileStatus> getGlobStatusExcludingMetaFolder(FileSystem fs, Path globPath) throws IOException {
+    FileStatus[] statuses = fs.globStatus(globPath);
+    return Arrays.stream(statuses)
+        .filter(fileStatus -> !fileStatus.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME))
+        .collect(Collectors.toList());
+  }
 }

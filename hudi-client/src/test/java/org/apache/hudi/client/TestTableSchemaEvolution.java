@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -34,8 +36,6 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.testutils.TestRawTripPayload;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -46,13 +46,13 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_1;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.EXTRA_TYPE_SCHEMA;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.FARE_NESTED_SCHEMA;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.MAP_TYPE_SCHEMA;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.TIP_NESTED_SCHEMA;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.TRIP_SCHEMA_PREFIX;
-import static org.apache.hudi.testutils.HoodieTestDataGenerator.TRIP_SCHEMA_SUFFIX;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.EXTRA_TYPE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.FARE_NESTED_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.MAP_TYPE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TIP_NESTED_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA_PREFIX;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA_SUFFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -411,7 +411,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   private void checkReadRecords(String instantTime, int numExpectedRecords) throws IOException {
     if (tableType == HoodieTableType.COPY_ON_WRITE) {
       HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitTimeline();
-      assertEquals(numExpectedRecords, HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, instantTime).count());
+      assertEquals(numExpectedRecords, HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, instantTime));
     } else {
       // TODO: This code fails to read records under the following conditions:
       // 1. No parquet files yet (i.e. no compaction done yet)
@@ -459,7 +459,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       try {
         payload = (GenericRecord)r.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get();
         GenericRecord newPayload = HoodieAvroUtils.rewriteRecordWithOnlyNewSchemaFields(payload, newSchema);
-        return new HoodieRecord(key, new TestRawTripPayload(newPayload.toString(), key.getRecordKey(), key.getPartitionPath(), schemaStr));
+        return new HoodieRecord(key, new RawTripTestPayload(newPayload.toString(), key.getRecordKey(), key.getPartitionPath(), schemaStr));
       } catch (IOException e) {
         throw new RuntimeException("Conversion to new schema failed");
       }

@@ -115,6 +115,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private final HoodieTableMetaClient metaClient;
   private final HoodieTimeline timeline;
   private final ObjectMapper mapper;
+  private final int timeoutSecs;
 
   private boolean closed = false;
 
@@ -123,12 +124,17 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   public RemoteHoodieTableFileSystemView(String server, int port, HoodieTableMetaClient metaClient) {
+    this(server, port, metaClient, 300);
+  }
+
+  public RemoteHoodieTableFileSystemView(String server, int port, HoodieTableMetaClient metaClient, int timeoutSecs) {
     this.basePath = metaClient.getBasePath();
     this.serverHost = server;
     this.serverPort = port;
     this.mapper = new ObjectMapper();
     this.metaClient = metaClient;
     this.timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    this.timeoutSecs = timeoutSecs;
   }
 
   private <T> T executeRequest(String requestPath, Map<String, String> queryParameters, TypeReference reference,
@@ -147,7 +153,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     String url = builder.toString();
     LOG.info("Sending request : (" + url + ")");
     Response response;
-    int timeout = 1000 * 300; // 5 min timeout
+    int timeout = this.timeoutSecs * 1000; // msec
     switch (method) {
       case GET:
         response = Request.Get(url).connectTimeout(timeout).socketTimeout(timeout).execute();

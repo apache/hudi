@@ -18,11 +18,14 @@
 
 package org.apache.hudi.utilities.testutils;
 
+import java.io.FileInputStream;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -30,8 +33,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.hive.testutils.HiveTestService;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.testutils.TestRawTripPayload;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
 
@@ -51,6 +52,8 @@ import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.service.server.HiveServer2;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter.Mode;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -89,7 +92,11 @@ public class UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    initClass(false);
+    // Set log level to WARN for spark logs to avoid exceeding log limit in travis
+    Logger rootLogger = Logger.getRootLogger();
+    rootLogger.setLevel(Level.ERROR);
+    Logger.getLogger("org.apache.spark").setLevel(Level.WARN);
+    initClass(true);
   }
 
   public static void initClass(boolean startHiveService) throws Exception {
@@ -189,9 +196,28 @@ public class UtilitiesTestBase {
       return sb.toString();
     }
 
+    public static String readFileFromAbsolutePath(String absolutePathForResource) throws IOException {
+      BufferedReader reader =
+          new BufferedReader(new InputStreamReader(new FileInputStream(absolutePathForResource)));
+      StringBuffer sb = new StringBuffer();
+      String line;
+      while ((line = reader.readLine()) != null) {
+        sb.append(line + "\n");
+      }
+      return sb.toString();
+    }
+
     public static void copyToDFS(String testResourcePath, FileSystem fs, String targetPath) throws IOException {
       PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
       os.print(readFile(testResourcePath));
+      os.flush();
+      os.close();
+    }
+
+    public static void copyToDFSFromAbsolutePath(String absolutePathForResource, FileSystem fs, String targetPath)
+        throws IOException {
+      PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
+      os.print(readFileFromAbsolutePath(absolutePathForResource));
       os.flush();
       os.close();
     }
@@ -258,11 +284,18 @@ public class UtilitiesTestBase {
     }
 
     public static TypedProperties setupSchemaOnDFS() throws IOException {
-      return setupSchemaOnDFS("source.avsc");
+      return setupSchemaOnDFS("delta-streamer-config", "source.avsc");
     }
 
-    public static TypedProperties setupSchemaOnDFS(String filename) throws IOException {
-      UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/" + filename, dfs, dfsBasePath + "/" + filename);
+    public static TypedProperties setupSchemaOnDFS(String scope, String filename) throws IOException {
+      UtilitiesTestBase.Helpers.copyToDFS(scope + "/" + filename, dfs, dfsBasePath + "/" + filename);
+      TypedProperties props = new TypedProperties();
+      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/" + filename);
+      return props;
+    }
+
+    public static TypedProperties setupSchemaOnDFSWithAbsoluteScope(String scope, String filename) throws IOException {
+      UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(scope + "/" + filename, dfs, dfsBasePath + "/" + filename);
       TypedProperties props = new TypedProperties();
       props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/" + filename);
       return props;
@@ -278,7 +311,7 @@ public class UtilitiesTestBase {
     }
 
     public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords) {
-      List<GenericRecord> records = new ArrayList<GenericRecord>();
+      List<GenericRecord> records = new ArrayList<>();
       for (HoodieRecord hoodieRecord : hoodieRecords) {
         records.add(toGenericRecord(hoodieRecord));
       }
@@ -287,7 +320,7 @@ public class UtilitiesTestBase {
 
     public static String toJsonString(HoodieRecord hr) {
       try {
-        return ((TestRawTripPayload) hr.getData()).getJsonData();
+        return ((RawTripTestPayload) hr.getData()).getJsonData();
       } catch (IOException ioe) {
         return null;
       }

@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 
+import org.apache.hudi.exception.HoodieIOException;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -42,7 +43,13 @@ public class HoodieCommonTestHarness {
    * Initializes basePath.
    */
   protected void initPath() {
-    this.basePath = tempDir.toAbsolutePath().toString();
+    try {
+      java.nio.file.Path basePath = tempDir.resolve("dataset");
+      java.nio.file.Files.createDirectories(basePath);
+      this.basePath = basePath.toString();
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
   }
 
   /**
@@ -75,6 +82,17 @@ public class HoodieCommonTestHarness {
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline)
       throws IOException {
     return getFileSystemView(timeline, true);
+  }
+
+  protected SyncableFileSystemView getFileSystemViewWithUnCommittedSlices(HoodieTableMetaClient metaClient) {
+    try {
+      return new HoodieTableFileSystemView(metaClient,
+              metaClient.getActiveTimeline(),
+              HoodieTestUtils.listAllDataFilesAndLogFilesInPath(metaClient.getFs(), metaClient.getBasePath())
+      );
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Error getting file system view", ioe);
+    }
   }
 
   /**

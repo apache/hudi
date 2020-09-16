@@ -27,7 +27,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -167,10 +167,10 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
     assertEquals(expected, result);
 
     // check result
-    List<String> allPropsStr = Arrays.asList("hoodie.table.name", "hoodie.table.type",
+    List<String> allPropsStr = Arrays.asList("hoodie.table.name", "hoodie.table.type", "hoodie.table.version",
         "hoodie.archivelog.folder", "hoodie.timeline.layout.version");
     String[][] rows = allPropsStr.stream().sorted().map(key -> new String[]{key,
-        oldProps.getOrDefault(key, null), result.getOrDefault(key, null)})
+        oldProps.getOrDefault(key, "null"), result.getOrDefault(key, "null")})
         .toArray(String[][]::new);
     String expect = HoodiePrintHelper.print(new String[] {HoodieTableHeaderFields.HEADER_HOODIE_PROPERTY,
         HoodieTableHeaderFields.HEADER_OLD_VALUE, HoodieTableHeaderFields.HEADER_NEW_VALUE}, rows);

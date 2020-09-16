@@ -52,6 +52,14 @@ public class FileSlice implements Serializable {
    */
   private final TreeSet<HoodieLogFile> logFiles;
 
+  public FileSlice(FileSlice fileSlice) {
+    this.baseInstantTime = fileSlice.baseInstantTime;
+    this.baseFile = fileSlice.baseFile != null ? new HoodieBaseFile(fileSlice.baseFile) : null;
+    this.fileGroupId = fileSlice.fileGroupId;
+    this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
+    fileSlice.logFiles.forEach(lf -> this.logFiles.add(new HoodieLogFile(lf)));
+  }
+
   public FileSlice(String partitionPath, String baseInstantTime, String fileId) {
     this(new HoodieFileGroupId(partitionPath, fileId), baseInstantTime);
   }

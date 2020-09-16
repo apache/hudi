@@ -18,14 +18,17 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
@@ -53,7 +56,11 @@ import java.util.stream.Collectors;
 @Immutable
 public class HoodieWriteConfig extends DefaultHoodieConfig {
 
+  private static final long serialVersionUID = 0L;
+
   public static final String TABLE_NAME = "hoodie.table.name";
+  public static final String DEFAULT_ROLLBACK_USING_MARKERS = "false";
+  public static final String ROLLBACK_USING_MARKERS = "hoodie.rollback.using.markers";
   public static final String TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
   public static final String BASE_PATH_PROP = "hoodie.base.path";
   public static final String AVRO_SCHEMA = "hoodie.avro.schema";
@@ -85,6 +92,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_HOODIE_WRITE_STATUS_CLASS = WriteStatus.class.getName();
   public static final String FINALIZE_WRITE_PARALLELISM = "hoodie.finalize.write.parallelism";
   public static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = DEFAULT_PARALLELISM;
+  public static final String MARKERS_DELETE_PARALLELISM = "hoodie.markers.delete.parallelism";
+  public static final String DEFAULT_MARKERS_DELETE_PARALLELISM = "100";
+  public static final String BULKINSERT_SORT_MODE = "hoodie.bulkinsert.sort.mode";
+  public static final String DEFAULT_BULKINSERT_SORT_MODE = BulkInsertSortMode.GLOBAL_SORT
+      .toString();
 
   public static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";
   public static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "true";
@@ -118,6 +130,9 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       "_.hoodie.allow.multi.write.on.same.instant";
   public static final String DEFAULT_ALLOW_MULTI_WRITE_ON_SAME_INSTANT = "false";
 
+  public static final String EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION = AVRO_SCHEMA + ".externalTransformation";
+  public static final String DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION = "false";
+
   private ConsistencyGuardConfig consistencyGuardConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
@@ -125,7 +140,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private final FileSystemViewStorageConfig clientSpecifiedViewStorageConfig;
   private FileSystemViewStorageConfig viewStorageConfig;
 
-  private HoodieWriteConfig(Properties props) {
+  protected HoodieWriteConfig(Properties props) {
     super(props);
     Properties newProps = new Properties();
     newProps.putAll(props);
@@ -169,6 +184,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HOODIE_ASSUME_DATE_PARTITIONING_PROP));
   }
 
+  public boolean shouldUseExternalSchemaTransformation() {
+    return Boolean.parseBoolean(props.getProperty(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION));
+  }
+
   public Integer getTimelineLayoutVersion() {
     return Integer.parseInt(props.getProperty(TIMELINE_LAYOUT_VERSION));
   }
@@ -190,11 +209,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getDeleteShuffleParallelism() {
-    return Integer.parseInt(props.getProperty(DELETE_PARALLELISM));
+    return Math.max(Integer.parseInt(props.getProperty(DELETE_PARALLELISM)), 1);
   }
 
   public int getRollbackParallelism() {
     return Integer.parseInt(props.getProperty(ROLLBACK_PARALLELISM));
+  }
+
+  public boolean shouldRollbackUsingMarkers() {
+    return Boolean.parseBoolean(props.getProperty(ROLLBACK_USING_MARKERS));
   }
 
   public int getWriteBufferLimitBytes() {
@@ -225,6 +248,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(FINALIZE_WRITE_PARALLELISM));
   }
 
+  public int getMarkersDeleteParallelism() {
+    return Integer.parseInt(props.getProperty(MARKERS_DELETE_PARALLELISM));
+  }
+
   public boolean isEmbeddedTimelineServerEnabled() {
     return Boolean.parseBoolean(props.getProperty(EMBEDDED_TIMELINE_SERVER_ENABLED));
   }
@@ -243,6 +270,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public int getMaxConsistencyCheckIntervalMs() {
     return Integer.parseInt(props.getProperty(MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP));
+  }
+
+  public BulkInsertSortMode getBulkInsertSortMode() {
+    String sortMode = props.getProperty(BULKINSERT_SORT_MODE);
+    return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
   }
 
   /**
@@ -296,6 +328,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.AUTO_CLEAN_PROP));
   }
 
+  public boolean isAsyncClean() {
+    return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.ASYNC_CLEAN_PROP));
+  }
+
   public boolean incrementalCleanerModeEnabled() {
     return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.CLEANER_INCREMENTAL_MODE));
   }
@@ -334,6 +370,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public int getCommitArchivalBatchSize() {
     return Integer.parseInt(props.getProperty(HoodieCompactionConfig.COMMITS_ARCHIVAL_BATCH_SIZE_PROP));
+  }
+
+  public Boolean shouldCleanBootstrapBaseFile() {
+    return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.CLEANER_BOOTSTRAP_BASE_FILE_ENABLED));
   }
 
   /**
@@ -519,6 +559,18 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Double.parseDouble(props.getProperty(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO));
   }
 
+  public long getHFileMaxFileSize() {
+    return Long.parseLong(props.getProperty(HoodieStorageConfig.HFILE_FILE_MAX_BYTES));
+  }
+
+  public int getHFileBlockSize() {
+    return Integer.parseInt(props.getProperty(HoodieStorageConfig.HFILE_BLOCK_SIZE_BYTES));
+  }
+
+  public Compression.Algorithm getHFileCompressionAlgorithm() {
+    return Compression.Algorithm.valueOf(props.getProperty(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM));
+  }
+
   /**
    * metrics properties.
    */
@@ -589,6 +641,38 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
         HoodieMetricsDatadogConfig.DATADOG_METRIC_TAGS).split("\\s*,\\s*")).collect(Collectors.toList());
   }
 
+  public String getMetricReporterClassName() {
+    return props.getProperty(HoodieMetricsConfig.METRICS_REPORTER_CLASS);
+  }
+
+  public int getPrometheusPort() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsPrometheusConfig.PROMETHEUS_PORT));
+  }
+
+  public String getPushGatewayHost() {
+    return props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_HOST);
+  }
+
+  public int getPushGatewayPort() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_PORT));
+  }
+
+  public int getPushGatewayReportPeriodSeconds() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_REPORT_PERIOD_SECONDS));
+  }
+
+  public boolean getPushGatewayDeleteOnShutdown() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_DELETE_ON_SHUTDOWN));
+  }
+
+  public String getPushGatewayJobName() {
+    return props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_JOB_NAME);
+  }
+
+  public boolean getPushGatewayRandomJobNameSuffix() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX));
+  }
+  
   /**
    * memory configs.
    */
@@ -628,16 +712,61 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return clientSpecifiedViewStorageConfig;
   }
 
+  /**
+   * Commit call back configs.
+   */
+  public boolean writeCommitCallbackOn() {
+    return Boolean.parseBoolean(props.getProperty(HoodieWriteCommitCallbackConfig.CALLBACK_ON));
+  }
+
+  public String getCallbackClass() {
+    return props.getProperty(HoodieWriteCommitCallbackConfig.CALLBACK_CLASS_PROP);
+  }
+
+  public String getBootstrapSourceBasePath() {
+    return props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP);
+  }
+
+  public String getBootstrapModeSelectorClass() {
+    return props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR);
+  }
+
+  public String getFullBootstrapInputProvider() {
+    return props.getProperty(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER);
+  }
+
+  public String getBootstrapKeyGeneratorClass() {
+    return props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS);
+  }
+
+  public String getBootstrapModeSelectorRegex() {
+    return props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_REGEX);
+  }
+
+  public BootstrapMode getBootstrapModeForRegexMatch() {
+    return BootstrapMode.valueOf(props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_REGEX_MODE));
+  }
+
+  public String getBootstrapPartitionPathTranslatorClass() {
+    return props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS);
+  }
+
+  public int getBootstrapParallelism() {
+    return Integer.parseInt(props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM));
+  }
+
   public static class Builder {
 
-    private final Properties props = new Properties();
+    protected final Properties props = new Properties();
     private boolean isIndexConfigSet = false;
     private boolean isStorageConfigSet = false;
     private boolean isCompactionConfigSet = false;
     private boolean isMetricsConfigSet = false;
+    private boolean isBootstrapConfigSet = false;
     private boolean isMemoryConfigSet = false;
     private boolean isViewConfigSet = false;
     private boolean isConsistencyGuardSet = false;
+    private boolean isCallbackConfigSet = false;
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -695,6 +824,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withDeleteParallelism(int parallelism) {
+      props.setProperty(DELETE_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
     public Builder withParallelism(int insertShuffleParallelism, int upsertShuffleParallelism) {
       props.setProperty(INSERT_PARALLELISM, String.valueOf(insertShuffleParallelism));
       props.setProperty(UPSERT_PARALLELISM, String.valueOf(upsertShuffleParallelism));
@@ -706,6 +840,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withRollbackUsingMarkers(boolean rollbackUsingMarkers) {
+      props.setProperty(ROLLBACK_USING_MARKERS, String.valueOf(rollbackUsingMarkers));
+      return this;
+    }
+
     public Builder withWriteBufferLimitBytes(int writeBufferLimit) {
       props.setProperty(WRITE_BUFFER_LIMIT_BYTES, String.valueOf(writeBufferLimit));
       return this;
@@ -714,6 +853,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public Builder combineInput(boolean onInsert, boolean onUpsert) {
       props.setProperty(COMBINE_BEFORE_INSERT_PROP, String.valueOf(onInsert));
       props.setProperty(COMBINE_BEFORE_UPSERT_PROP, String.valueOf(onUpsert));
+      return this;
+    }
+
+    public Builder combineDeleteInput(boolean onDelete) {
+      props.setProperty(COMBINE_BEFORE_DELETE_PROP, String.valueOf(onDelete));
       return this;
     }
 
@@ -752,6 +896,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withBootstrapConfig(HoodieBootstrapConfig bootstrapConfig) {
+      props.putAll(bootstrapConfig.getProps());
+      isBootstrapConfigSet = true;
+      return this;
+    }
+
     public Builder withAutoCommit(boolean autoCommit) {
       props.setProperty(HOODIE_AUTO_COMMIT_PROP, String.valueOf(autoCommit));
       return this;
@@ -779,8 +929,19 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withCallbackConfig(HoodieWriteCommitCallbackConfig callbackConfig) {
+      props.putAll(callbackConfig.getProps());
+      isCallbackConfigSet = true;
+      return this;
+    }
+
     public Builder withFinalizeWriteParallelism(int parallelism) {
       props.setProperty(FINALIZE_WRITE_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withMarkersDeleteParallelism(int parallelism) {
+      props.setProperty(MARKERS_DELETE_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 
@@ -789,12 +950,27 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withBulkInsertSortMode(String mode) {
+      props.setProperty(BULKINSERT_SORT_MODE, mode);
+      return this;
+    }
+
     public Builder withAllowMultiWriteOnSameInstant(boolean allow) {
       props.setProperty(ALLOW_MULTI_WRITE_ON_SAME_INSTANT, String.valueOf(allow));
       return this;
     }
 
-    public HoodieWriteConfig build() {
+    public Builder withExternalSchemaTrasformation(boolean enabled) {
+      props.setProperty(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withProperties(Properties properties) {
+      this.props.putAll(properties);
+      return this;
+    }
+
+    protected void setDefaults() {
       // Check for mandatory properties
       setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_PARALLELISM), BULKINSERT_PARALLELISM,
@@ -803,6 +979,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(DELETE_PARALLELISM), DELETE_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(ROLLBACK_PARALLELISM), ROLLBACK_PARALLELISM,
           DEFAULT_ROLLBACK_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(ROLLBACK_USING_MARKERS), ROLLBACK_USING_MARKERS,
+          DEFAULT_ROLLBACK_USING_MARKERS);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_INSERT_PROP), COMBINE_BEFORE_INSERT_PROP,
           DEFAULT_COMBINE_BEFORE_INSERT);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_UPSERT_PROP), COMBINE_BEFORE_UPSERT_PROP,
@@ -821,6 +999,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           DEFAULT_HOODIE_WRITE_STATUS_CLASS);
       setDefaultOnCondition(props, !props.containsKey(FINALIZE_WRITE_PARALLELISM), FINALIZE_WRITE_PARALLELISM,
           DEFAULT_FINALIZE_WRITE_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(MARKERS_DELETE_PARALLELISM), MARKERS_DELETE_PARALLELISM,
+          DEFAULT_MARKERS_DELETE_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(EMBEDDED_TIMELINE_SERVER_ENABLED),
           EMBEDDED_TIMELINE_SERVER_ENABLED, DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED);
       setDefaultOnCondition(props, !props.containsKey(INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP),
@@ -832,6 +1012,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP),
           FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP, DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED);
       setDefaultOnCondition(props, !props.containsKey(AVRO_SCHEMA_VALIDATE), AVRO_SCHEMA_VALIDATE, DEFAULT_AVRO_SCHEMA_VALIDATE);
+      setDefaultOnCondition(props, !props.containsKey(BULKINSERT_SORT_MODE),
+          BULKINSERT_SORT_MODE, DEFAULT_BULKINSERT_SORT_MODE);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());
@@ -839,21 +1021,34 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !isCompactionConfigSet,
           HoodieCompactionConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMetricsConfigSet, HoodieMetricsConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isBootstrapConfigSet,
+          HoodieBootstrapConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMemoryConfigSet, HoodieMemoryConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isViewConfigSet,
           FileSystemViewStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isConsistencyGuardSet,
           ConsistencyGuardConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isCallbackConfigSet,
+          HoodieWriteCommitCallbackConfig.newBuilder().fromProperties(props).build());
 
+      setDefaultOnCondition(props, !props.containsKey(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION),
+          EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
       setDefaultOnCondition(props, !props.containsKey(TIMELINE_LAYOUT_VERSION), TIMELINE_LAYOUT_VERSION,
           String.valueOf(TimelineLayoutVersion.CURR_VERSION));
+    }
+
+    private void validate() {
       String layoutVersion = props.getProperty(TIMELINE_LAYOUT_VERSION);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
+      Objects.requireNonNull(props.getProperty(BASE_PATH_PROP));
+    }
 
+    public HoodieWriteConfig build() {
+      setDefaults();
+      validate();
       // Build WriteConfig at the end
       HoodieWriteConfig config = new HoodieWriteConfig(props);
-      Objects.requireNonNull(config.getBasePath());
       return config;
     }
   }

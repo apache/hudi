@@ -18,19 +18,21 @@
 
 package org.apache.hudi.table.action.deltacommit;
 
+import java.util.Map;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.LazyInsertIterable;
-import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.io.AppendHandleFactory;
+import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
-
 import org.apache.hudi.table.action.commit.CommitActionExecutor;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -48,10 +50,15 @@ public abstract class DeltaCommitActionExecutor<T extends HoodieRecordPayload<T>
   // UpsertPartitioner for MergeOnRead table type
   private UpsertDeltaCommitPartitioner mergeOnReadUpsertPartitioner;
 
-  public DeltaCommitActionExecutor(JavaSparkContext jsc,
-      HoodieWriteConfig config, HoodieTable table,
-      String instantTime, WriteOperationType operationType) {
-    super(jsc, config, table, instantTime, operationType);
+  public DeltaCommitActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable table,
+                                   String instantTime, WriteOperationType operationType) {
+    this(jsc, config, table, instantTime, operationType, Option.empty());
+  }
+
+  public DeltaCommitActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config, HoodieTable table,
+                                   String instantTime, WriteOperationType operationType,
+                                   Option<Map<String, String>> extraMetadata) {
+    super(jsc, config, table, instantTime, operationType, extraMetadata);
   }
 
   @Override
@@ -85,8 +92,8 @@ public abstract class DeltaCommitActionExecutor<T extends HoodieRecordPayload<T>
       throws Exception {
     // If canIndexLogFiles, write inserts to log files else write inserts to base files
     if (table.getIndex().canIndexLogFiles()) {
-      return new LazyInsertIterable<>(recordItr, config, instantTime, (HoodieTable<T>)table, idPfx,
-          sparkTaskContextSupplier, new AppendHandleFactory<>());
+      return new LazyInsertIterable<>(recordItr, true, config, instantTime, (HoodieTable<T>) table,
+          idPfx, sparkTaskContextSupplier, new AppendHandleFactory<>());
     } else {
       return super.handleInsert(idPfx, recordItr);
     }

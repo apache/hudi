@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkConfigUtils;
@@ -30,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
@@ -58,16 +58,18 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergeHandle.class);
 
-  private Map<String, HoodieRecord<T>> keyToNewRecords;
-  private Set<String> writtenRecordKeys;
+  protected Map<String, HoodieRecord<T>> keyToNewRecords;
+  protected Set<String> writtenRecordKeys;
   private HoodieFileWriter<IndexedRecord> fileWriter;
+
   private Path newFilePath;
   private Path oldFilePath;
   private long recordsWritten = 0;
   private long recordsDeleted = 0;
   private long updatedRecordsWritten = 0;
-  private long insertRecordsWritten = 0;
-  private boolean useWriterSchema;
+  protected long insertRecordsWritten = 0;
+  protected boolean useWriterSchema;
+  private HoodieBaseFile baseFileToMerge;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
        Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, SparkTaskContextSupplier sparkTaskContextSupplier) {
@@ -88,11 +90,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     init(fileId, this.partitionPath, dataFileToBeMerged);
   }
 
-  public static Schema createHoodieWriteSchema(Schema originalSchema) {
-    return HoodieAvroUtils.addMetadataFields(originalSchema);
+  @Override
+  public Schema getWriterSchemaWithMetafields() {
+    return writerSchemaWithMetafields;
   }
 
-  @Override
   public Schema getWriterSchema() {
     return writerSchema;
   }
@@ -100,12 +102,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
-  private void init(String fileId, String partitionPath, HoodieBaseFile dataFileToBeMerged) {
+  private void init(String fileId, String partitionPath, HoodieBaseFile baseFileToMerge) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
+    this.baseFileToMerge = baseFileToMerge;
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
     try {
-      String latestValidFilePath = dataFileToBeMerged.getFileName();
+      String latestValidFilePath = baseFileToMerge.getFileName();
       writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
@@ -113,8 +116,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       partitionMetadata.trySave(getPartitionId());
 
       oldFilePath = new Path(config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
+      String newFileName = FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
       String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
-          + FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension())).toString();
+          + newFileName).toString();
       newFilePath = new Path(config.getBasePath(), relativePath);
 
       LOG.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFilePath.toString(),
@@ -127,11 +131,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       writeStatus.getStat().setPath(new Path(config.getBasePath()), newFilePath);
 
       // Create Marker file
-      createMarkerFile(partitionPath);
+      createMarkerFile(partitionPath, newFileName);
 
       // Create the writer for writing the new version file
-      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, writerSchema, sparkTaskContextSupplier);
-
+      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, writerSchemaWithMetafields, sparkTaskContextSupplier);
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
@@ -149,7 +152,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       long memoryForMerge = SparkConfigUtils.getMaxMemoryPerPartitionMerge(config.getProps());
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(originalSchema));
+          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(writerSchema));
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
@@ -177,7 +180,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     return writeRecord(hoodieRecord, indexedRecord);
   }
 
-  private boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
+  protected boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
     Option recordMetadata = hoodieRecord.getData().getMetadata();
     if (!partitionPath.equals(hoodieRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
@@ -220,7 +223,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(key));
       try {
         Option<IndexedRecord> combinedAvroRecord =
-            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchema : originalSchema);
+            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchemaWithMetafields : writerSchema);
         if (writeUpdateRecord(hoodieRecord, combinedAvroRecord)) {
           /*
            * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully write the the combined new
@@ -245,7 +248,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
         fileWriter.writeAvro(key, oldRecord);
       } catch (ClassCastException e) {
         LOG.error("Schema mismatch when rewriting old record " + oldRecord + " from file " + getOldFilePath()
-            + " to file " + newFilePath + " with writerSchema " + writerSchema.toString(true));
+            + " to file " + newFilePath + " with writerSchema " + writerSchemaWithMetafields.toString(true));
         throw new HoodieUpsertException(errMsg, e);
       } catch (IOException e) {
         LOG.error("Failed to merge old record into new file for key " + key + " from old file " + getOldFilePath()
@@ -266,9 +269,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
         HoodieRecord<T> hoodieRecord = newRecordsItr.next();
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
           if (useWriterSchema) {
-            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchema));
+            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchemaWithMetafields));
           } else {
-            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(originalSchema));
+            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchema));
           }
           insertRecordsWritten++;
         }
@@ -310,5 +313,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   @Override
   public WriteStatus getWriteStatus() {
     return writeStatus;
+  }
+
+  @Override
+  public IOType getIOType() {
+    return IOType.MERGE;
+  }
+
+  public HoodieBaseFile baseFileForMerge() {
+    return baseFileToMerge;
   }
 }

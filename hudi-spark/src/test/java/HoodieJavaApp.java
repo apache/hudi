@@ -16,20 +16,19 @@
  * limitations under the License.
  */
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
-import org.apache.hudi.testutils.DataSourceTestUtils;
-import org.apache.hudi.testutils.HoodieClientTestUtils;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -45,6 +44,10 @@ import org.apache.spark.sql.SparkSession;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
+import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 
 /**
  * Sample program that writes & reads hoodie tables via the Spark datasource.
@@ -118,12 +121,15 @@ public class HoodieJavaApp {
       dataGen = new HoodieTestDataGenerator();
     }
 
+    // Explicitly clear up the hoodie table path if it exists.
+    fs.delete(new Path(tablePath), true);
+
     /**
      * Commit with only inserts
      */
     // Generate some input..
     List<HoodieRecord> recordsSoFar = new ArrayList<>(dataGen.generateInserts("001"/* ignore */, 100));
-    List<String> records1 = DataSourceTestUtils.convertToStringList(recordsSoFar);
+    List<String> records1 = recordsToStrings(recordsSoFar);
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));
 
     // Save as hoodie dataset (copy on write)
@@ -149,6 +155,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName())
+        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(), "false")
         // This will remove any existing data at path below, and create a
         .mode(SaveMode.Overwrite);
 
@@ -163,7 +170,7 @@ public class HoodieJavaApp {
      */
     List<HoodieRecord> recordsToBeUpdated = dataGen.generateUpdates("002"/* ignore */, 100);
     recordsSoFar.addAll(recordsToBeUpdated);
-    List<String> records2 = DataSourceTestUtils.convertToStringList(recordsToBeUpdated);
+    List<String> records2 = recordsToStrings(recordsToBeUpdated);
     Dataset<Row> inputDF2 = spark.read().json(jssc.parallelize(records2, 2));
     writer = inputDF2.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
@@ -175,6 +182,7 @@ public class HoodieJavaApp {
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, "1")
+        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(), "false")
         .option(HoodieWriteConfig.TABLE_NAME, tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);
@@ -185,12 +193,13 @@ public class HoodieJavaApp {
     /**
      * Commit that Deletes some records
      */
-    List<String> deletes = DataSourceTestUtils.convertKeysToStringList(
-        HoodieClientTestUtils
-            .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(recordsSoFar), 20));
+    List<String> deletes = randomSelectAsHoodieKeys(recordsSoFar, 20).stream()
+        .map(hr -> "{\"_row_key\":\"" + hr.getRecordKey() + "\",\"partition\":\"" + hr.getPartitionPath() + "\"}")
+        .collect(Collectors.toList());
     Dataset<Row> inputDF3 = spark.read().json(jssc.parallelize(deletes, 2));
     writer = inputDF3.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
+        .option("hoodie.delete.shuffle.parallelism", "2")
         .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY(), tableType) // Hoodie Table Type
         .option(DataSourceWriteOptions.OPERATION_OPT_KEY(), "delete")
         .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
@@ -200,6 +209,7 @@ public class HoodieJavaApp {
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, "1")
+        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(), "false")
         .option(HoodieWriteConfig.TABLE_NAME, tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);

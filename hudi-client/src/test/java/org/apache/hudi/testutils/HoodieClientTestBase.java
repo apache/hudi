@@ -33,6 +33,8 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -41,7 +43,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.TestRawTripPayload.MetadataMergeWriteStatus;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -60,6 +61,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -69,7 +71,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class HoodieClientTestBase extends HoodieClientTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieClientTestBase.class);
+  protected static final Logger LOG = LogManager.getLogger(HoodieClientTestBase.class);
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -123,12 +125,12 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    */
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, IndexType indexType) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
-        .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2)
+        .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
@@ -140,18 +142,6 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
     ((SyncableFileSystemView) (table.getSliceView())).reset();
     return table;
-  }
-
-  /**
-   * Assert no failures in writing hoodie files.
-   *
-   * @param statuses List of Write Status
-   */
-  public static void assertNoWriteErrors(List<WriteStatus> statuses) {
-    // Verify there are no errors
-    for (WriteStatus status : statuses) {
-      assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId());
-    }
   }
 
   public void assertPartitionMetadataForRecords(List<HoodieRecord> inputRecords, FileSystem fs) throws IOException {
@@ -203,7 +193,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    *
    * @param records List of Hoodie records
    */
-  public void assertNodupesWithinPartition(List<HoodieRecord<TestRawTripPayload>> records) {
+  public void assertNodupesWithinPartition(List<HoodieRecord<RawTripTestPayload>> records) {
     Map<String, Set<String>> partitionToKeys = new HashMap<>();
     for (HoodieRecord r : records) {
       String key = r.getRecordKey();
@@ -469,12 +459,12 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
 
       // Check that the incremental consumption from prevCommitTime
       assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-          HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, prevCommitTime).count(),
+          HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, prevCommitTime),
           "Incremental consumption from " + prevCommitTime + " should give all records in latest commit");
       if (commitTimesBetweenPrevAndNew.isPresent()) {
         commitTimesBetweenPrevAndNew.get().forEach(ct -> {
           assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-              HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, ct).count(),
+              HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, ct),
               "Incremental consumption from " + ct + " should give all records in latest commit");
         });
       }
@@ -537,7 +527,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
 
       // Check that the incremental consumption from prevCommitTime
       assertEquals(HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-          HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, prevCommitTime).count(),
+          HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, prevCommitTime),
           "Incremental consumption from " + prevCommitTime + " should give no records in latest commit,"
               + " since it is a delete operation");
     }

@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
@@ -226,7 +227,8 @@ public class HoodieMultiTableDeltaStreamer {
         "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter")
+        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
+            splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
 
     @Parameter(names = {"--source-class"},
@@ -260,7 +262,7 @@ public class HoodieMultiTableDeltaStreamer {
     public List<String> transformerClassNames = null;
 
     @Parameter(names = {"--source-limit"}, description = "Maximum amount of data to read from source. "
-        + "Default: No limit For e.g: DFS-Source => max bytes to read, Kafka-Source => max events to read")
+        + "Default: No limit, e.g: DFS-Source => max bytes to read, Kafka-Source => max events to read")
     public long sourceLimit = Long.MAX_VALUE;
 
     @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "

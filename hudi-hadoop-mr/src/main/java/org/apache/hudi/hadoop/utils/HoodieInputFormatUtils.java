@@ -32,11 +32,16 @@ import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.HoodieHFileInputFormat;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
+import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
@@ -79,19 +84,45 @@ public class HoodieInputFormatUtils {
           inputFormat.setConf(conf);
           return inputFormat;
         }
+      case HFILE:
+        if (realtime) {
+          HoodieHFileRealtimeInputFormat inputFormat = new HoodieHFileRealtimeInputFormat();
+          inputFormat.setConf(conf);
+          return inputFormat;
+        } else {
+          HoodieHFileInputFormat inputFormat = new HoodieHFileInputFormat();
+          inputFormat.setConf(conf);
+          return inputFormat;
+        }
       default:
         throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
     }
   }
 
-  public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime, Configuration conf) {
-    FileInputFormat inputFormat = getInputFormat(baseFileFormat, realtime, conf);
-    return inputFormat.getClass().getName();
+  public static String getInputFormatClassName(HoodieFileFormat baseFileFormat, boolean realtime) {
+    switch (baseFileFormat) {
+      case PARQUET:
+        if (realtime) {
+          return HoodieParquetRealtimeInputFormat.class.getName();
+        } else {
+          return HoodieParquetInputFormat.class.getName();
+        }
+      case HFILE:
+        if (realtime) {
+          return HoodieHFileRealtimeInputFormat.class.getName();
+        } else {
+          return HoodieHFileInputFormat.class.getName();
+        }
+      default:
+        throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
+    }
   }
 
   public static String getOutputFormatClassName(HoodieFileFormat baseFileFormat) {
     switch (baseFileFormat) {
       case PARQUET:
+        return MapredParquetOutputFormat.class.getName();
+      case HFILE:
         return MapredParquetOutputFormat.class.getName();
       default:
         throw new HoodieIOException("No OutputFormat for base file format " + baseFileFormat);
@@ -102,15 +133,20 @@ public class HoodieInputFormatUtils {
     switch (baseFileFormat) {
       case PARQUET:
         return ParquetHiveSerDe.class.getName();
+      case HFILE:
+        return ParquetHiveSerDe.class.getName();
       default:
         throw new HoodieIOException("No SerDe for base file format " + baseFileFormat);
     }
   }
 
   public static FileInputFormat getInputFormat(String path, boolean realtime, Configuration conf) {
-    final String extension = FSUtils.getFileExtension(path.toString());
+    final String extension = FSUtils.getFileExtension(path);
     if (extension.equals(HoodieFileFormat.PARQUET.getFileExtension())) {
       return getInputFormat(HoodieFileFormat.PARQUET, realtime, conf);
+    }
+    if (extension.equals(HoodieFileFormat.HFILE.getFileExtension())) {
+      return getInputFormat(HoodieFileFormat.HFILE, realtime, conf);
     }
     throw new HoodieIOException("Hoodie InputFormat not implemented for base file of type " + extension);
   }
@@ -281,6 +317,19 @@ public class HoodieInputFormatUtils {
     return new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
   }
 
+  public static FileStatus getFileStatus(HoodieBaseFile baseFile) throws IOException {
+    if (baseFile.getBootstrapBaseFile().isPresent()) {
+      if (baseFile.getFileStatus() instanceof LocatedFileStatus) {
+        return new LocatedFileStatusWithBootstrapBaseFile((LocatedFileStatus)baseFile.getFileStatus(),
+            baseFile.getBootstrapBaseFile().get().getFileStatus());
+      } else {
+        return new FileStatusWithBootstrapBaseFile(baseFile.getFileStatus(),
+            baseFile.getBootstrapBaseFile().get().getFileStatus());
+      }
+    }
+    return baseFile.getFileStatus();
+  }
+
   /**
    * Filter a list of FileStatus based on commitsToCheck for incremental view.
    * @param job
@@ -291,7 +340,7 @@ public class HoodieInputFormatUtils {
    * @return
    */
   public static List<FileStatus> filterIncrementalFileStatus(Job job, HoodieTableMetaClient tableMetaClient,
-      HoodieTimeline timeline, FileStatus[] fileStatuses, List<HoodieInstant> commitsToCheck) {
+      HoodieTimeline timeline, FileStatus[] fileStatuses, List<HoodieInstant> commitsToCheck) throws IOException {
     TableFileSystemView.BaseFileOnlyView roView = new HoodieTableFileSystemView(tableMetaClient, timeline, fileStatuses);
     List<String> commitsList = commitsToCheck.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
@@ -299,7 +348,7 @@ public class HoodieInputFormatUtils {
     for (HoodieBaseFile filteredFile : filteredFiles) {
       LOG.debug("Processing incremental hoodie file - " + filteredFile.getPath());
       filteredFile = refreshFileStatus(job.getConfiguration(), filteredFile);
-      returns.add(filteredFile.getFileStatus());
+      returns.add(getFileStatus(filteredFile));
     }
     LOG.info("Total paths to process after hoodie incremental filter " + filteredFiles.size());
     return returns;
@@ -350,7 +399,7 @@ public class HoodieInputFormatUtils {
    * @return
    */
   public static List<FileStatus> filterFileStatusForSnapshotMode(
-      JobConf job, HoodieTableMetaClient metadata, List<FileStatus> fileStatuses) {
+      JobConf job, HoodieTableMetaClient metadata, List<FileStatus> fileStatuses) throws IOException {
     FileStatus[] statuses = fileStatuses.toArray(new FileStatus[0]);
     if (LOG.isDebugEnabled()) {
       LOG.debug("Hoodie Metadata initialized with completed commit Ts as :" + metadata);
@@ -367,7 +416,7 @@ public class HoodieInputFormatUtils {
         LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
       }
       filteredFile = refreshFileStatus(job, filteredFile);
-      returns.add(filteredFile.getFileStatus());
+      returns.add(getFileStatus(filteredFile));
     }
     return returns;
   }
@@ -386,7 +435,7 @@ public class HoodieInputFormatUtils {
       if (dataFile.getFileSize() == 0) {
         FileSystem fs = dataPath.getFileSystem(conf);
         LOG.info("Refreshing file status " + dataFile.getPath());
-        return new HoodieBaseFile(fs.getFileStatus(dataPath));
+        return new HoodieBaseFile(fs.getFileStatus(dataPath), dataFile.getBootstrapBaseFile().orElse(null));
       }
       return dataFile;
     } catch (IOException e) {

@@ -22,13 +22,14 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.hadoop.InputSplitUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -46,7 +47,7 @@ import java.util.stream.Collectors;
 public abstract class AbstractRealtimeRecordReader {
   private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
 
-  protected final HoodieRealtimeFileSplit split;
+  protected final RealtimeSplit split;
   protected final JobConf jobConf;
   protected final boolean usesCustomPayload;
   // Schema handles
@@ -54,7 +55,7 @@ public abstract class AbstractRealtimeRecordReader {
   private Schema writerSchema;
   private Schema hiveSchema;
 
-  public AbstractRealtimeRecordReader(HoodieRealtimeFileSplit split, JobConf job) {
+  public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
     this.split = split;
     this.jobConf = job;
     LOG.info("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
@@ -81,14 +82,13 @@ public abstract class AbstractRealtimeRecordReader {
    * job conf.
    */
   private void init() throws IOException {
-    Schema schemaFromLogFile =
-        LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaLogPaths(), jobConf);
+    Schema schemaFromLogFile = LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaLogPaths(), jobConf);
     if (schemaFromLogFile == null) {
-      writerSchema = HoodieRealtimeRecordReaderUtils.readSchema(jobConf, split.getPath());
-      LOG.debug("Writer Schema From Parquet => " + writerSchema.getFields());
+      writerSchema = InputSplitUtils.getBaseFileSchema((FileSplit)split, jobConf);
+      LOG.info("Writer Schema From Parquet => " + writerSchema.getFields());
     } else {
       writerSchema = schemaFromLogFile;
-      LOG.debug("Writer Schema From Log => " + writerSchema.getFields());
+      LOG.info("Writer Schema From Log => " + writerSchema.toString(true));
     }
     // Add partitioning fields to writer schema for resulting row to contain null values for these fields
     String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
@@ -132,7 +132,7 @@ public abstract class AbstractRealtimeRecordReader {
     Schema hiveSchema = Schema.createRecord(writerSchema.getName(), writerSchema.getDoc(), writerSchema.getNamespace(),
         writerSchema.isError());
     hiveSchema.setFields(hiveSchemaFields);
-    LOG.info("HIVE Schema is :" + hiveSchema.toString(true));
+    LOG.debug("HIVE Schema is :" + hiveSchema.toString(true));
     return hiveSchema;
   }
 
@@ -146,13 +146,5 @@ public abstract class AbstractRealtimeRecordReader {
 
   public Schema getHiveSchema() {
     return hiveSchema;
-  }
-
-  public long getMaxCompactionMemoryInBytes() {
-    // jobConf.getMemoryForMapTask() returns in MB
-    return (long) Math
-        .ceil(Double.parseDouble(jobConf.get(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP,
-            HoodieRealtimeConfig.DEFAULT_COMPACTION_MEMORY_FRACTION))
-            * jobConf.getMemoryForMapTask() * 1024 * 1024L);
   }
 }

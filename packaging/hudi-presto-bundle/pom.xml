@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.6.0-SNAPSHOT</version>
+    <version>0.6.1-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -72,6 +72,16 @@
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
+                  <include>org.apache.hbase:hbase-client</include>
+                  <include>org.apache.hbase:hbase-common</include>
+                  <include>org.apache.hbase:hbase-protocol</include>
+                  <include>org.apache.hbase:hbase-server</include>
+                  <include>org.apache.hbase:hbase-annotations</include>
+                  <include>org.apache.htrace:htrace-core</include>
+                  <include>com.yammer.metrics:metrics-core</include>
+                  <include>com.google.guava:guava</include>
+                  <include>commons-lang:commons-lang</include>
+                  <include>com.google.protobuf:protobuf-java</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -91,6 +101,30 @@
                 <relocation>
                   <pattern>com.esotericsoftware.minlog.</pattern>
                   <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hbase.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.htrace.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.yammer.metrics.</pattern>
+                  <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.common.</pattern>
+                  <shadedPattern>${presto.bundle.bootstrap.shade.prefix}com.google.common.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.lang.</pattern>
+                  <shadedPattern>${presto.bundle.bootstrap.shade.prefix}org.apache.commons.lang.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.protobuf.</pattern>
+                  <shadedPattern>${presto.bundle.bootstrap.shade.prefix}com.google.protobuf.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
@@ -146,5 +180,42 @@
       <artifactId>avro</artifactId>
       <scope>compile</scope>
     </dependency>
+
+    <!--Guava needs to be shaded because HBase 1.2.3 depends on an earlier guava version i.e 12.0.1 and hits runtime
+    issues with the guava version present in Presto runtime-->
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>12.0.1</version>
+      <scope>${presto.bundle.bootstrap.scope}</scope>
+    </dependency>
+
+    <!--commons-lang needs to be shaded because HBase 1.2.3 needs it at runtime, but Presto runtime does not have this
+    dependency-->
+    <dependency>
+      <groupId>commons-lang</groupId>
+      <artifactId>commons-lang</artifactId>
+      <version>2.6</version>
+      <scope>${presto.bundle.bootstrap.scope}</scope>
+    </dependency>
+
+    <!--protobuf needs to be shaded because HBase 1.2.3 needs it at runtime, but Presto runtime does not have this
+    dependency-->
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+      <version>2.5.0</version>
+      <scope>${presto.bundle.bootstrap.scope}</scope>
+    </dependency>
+
   </dependencies>
+  <profiles>
+    <profile>
+      <id>presto-shade-unbundle-bootstrap</id>
+      <properties>
+        <presto.bundle.bootstrap.scope>provided</presto.bundle.bootstrap.scope>
+        <presto.bundle.bootstrap.shade.prefix></presto.bundle.bootstrap.shade.prefix>
+      </properties>
+    </profile>
+  </profiles>
 </project>

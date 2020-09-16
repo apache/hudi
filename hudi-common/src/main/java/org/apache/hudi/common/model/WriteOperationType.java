@@ -37,6 +37,7 @@ public enum WriteOperationType {
   BULK_INSERT_PREPPED("bulk_insert_prepped"),
   // delete
   DELETE("delete"),
+  BOOTSTRAP("bootstrap"),
   // used for old version
   UNKNOWN("unknown");
 
@@ -68,6 +69,14 @@ public enum WriteOperationType {
       default:
         throw new HoodieException("Invalid value of Type.");
     }
+  }
+
+  /**
+   * Getter for value.
+   * @return string form of WriteOperationType
+   */
+  public String value() {
+    return value;
   }
 
   public static boolean isChangingRecords(WriteOperationType operationType) {

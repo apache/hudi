@@ -62,6 +62,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     // Create table and connect
     String tableName = "test_table";
     tablePath = basePath + File.separator + tableName;
+
     new TableCommand().createTable(
         tablePath, tableName,
         "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
@@ -91,8 +92,8 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
 
     // archive
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, metaClient);
-    archiveLog.archiveIfRequired(hadoopConf);
+    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, hadoopConf);
+    archiveLog.archiveIfRequired(jsc);
   }
 
   @AfterEach

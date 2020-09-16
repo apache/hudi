@@ -20,8 +20,8 @@ package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;

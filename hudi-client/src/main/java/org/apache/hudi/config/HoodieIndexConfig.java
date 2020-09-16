@@ -65,9 +65,9 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String SIMPLE_INDEX_USE_CACHING_PROP = "hoodie.simple.index.use.caching";
   public static final String DEFAULT_SIMPLE_INDEX_USE_CACHING = "true";
   public static final String SIMPLE_INDEX_PARALLELISM_PROP = "hoodie.simple.index.parallelism";
-  public static final String DEFAULT_SIMPLE_INDEX_PARALLELISM = "0";
+  public static final String DEFAULT_SIMPLE_INDEX_PARALLELISM = "50";
   public static final String GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP = "hoodie.global.simple.index.parallelism";
-  public static final String DEFAULT_GLOBAL_SIMPLE_INDEX_PARALLELISM = "0";
+  public static final String DEFAULT_GLOBAL_SIMPLE_INDEX_PARALLELISM = "100";
 
   // 1B bloom filter checks happen in 250 seconds. 500ms to read a bloom filter.
   // 10M checks in 2500ms, thus amortizing the cost of reading bloom filter across partitions.

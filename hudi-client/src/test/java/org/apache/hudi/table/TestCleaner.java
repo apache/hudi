@@ -18,14 +18,19 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieCleanStat;
+import org.apache.hudi.common.bootstrap.TestBootstrapIndex;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -35,6 +40,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -42,7 +48,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -51,19 +61,25 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -74,6 +90,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -81,8 +98,10 @@ import java.util.stream.Stream;
 import scala.Tuple3;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -128,15 +147,8 @@ public class TestCleaner extends HoodieClientTestBase {
     HoodieTable table = HoodieTable.create(metaClient, client.getConfig(), hadoopConf);
 
     assertFalse(table.getCompletedCommitsTimeline().empty());
-    if (cleaningPolicy.equals(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)) {
-      // We no longer write empty cleaner plans when there are not enough commits present
-      assertTrue(table.getCompletedCleanTimeline().empty());
-    } else {
-      String instantTime = table.getCompletedCommitsTimeline().getInstants().findFirst().get().getTimestamp();
-      assertFalse(table.getCompletedCleanTimeline().empty());
-      assertEquals(instantTime, table.getCompletedCleanTimeline().getInstants().findFirst().get().getTimestamp(),
-          "The clean instant should be the same as the commit instant");
-    }
+    // We no longer write empty cleaner plans when there is nothing to be cleaned.
+    assertTrue(table.getCompletedCleanTimeline().empty());
 
     HoodieIndex index = HoodieIndex.createIndex(cfg);
     List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), jsc, table).collect();
@@ -195,7 +207,7 @@ public class TestCleaner extends HoodieClientTestBase {
     HoodieWriteConfig cfg = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(maxVersions).build())
-        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1)
+        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .build();
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
@@ -356,7 +368,7 @@ public class TestCleaner extends HoodieClientTestBase {
     HoodieWriteConfig cfg = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(maxCommits).build())
-        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1)
+        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
@@ -439,23 +451,38 @@ public class TestCleaner extends HoodieClientTestBase {
 
     if (simulateRetryFailure) {
       HoodieInstant completedCleanInstant = new HoodieInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, cleanInstantTs);
+      HoodieCleanMetadata metadata = CleanerUtils.getCleanerMetadata(metaClient, completedCleanInstant);
+      metadata.getPartitionMetadata().values().forEach(p -> {
+        String dirPath = metaClient.getBasePath() + "/" + p.getPartitionPath();
+        p.getSuccessDeleteFiles().forEach(p2 -> {
+          try {
+            metaClient.getFs().create(new Path(dirPath, p2), true);
+          } catch (IOException e) {
+            throw new HoodieIOException(e.getMessage(), e);
+          }
+        });
+      });
       metaClient.reloadActiveTimeline().revertToInflight(completedCleanInstant);
-      HoodieCleanMetadata cleanMetadata2 = writeClient.clean(getNextInstant());
+      HoodieCleanMetadata newCleanMetadata = writeClient.clean(getNextInstant());
+      // No new clean metadata would be created. Only the previous one will be retried
+      assertNull(newCleanMetadata);
+      HoodieCleanMetadata cleanMetadata2 = CleanerUtils.getCleanerMetadata(metaClient, completedCleanInstant);
       assertEquals(cleanMetadata1.getEarliestCommitToRetain(), cleanMetadata2.getEarliestCommitToRetain());
-      assertEquals(new Integer(0), cleanMetadata2.getTotalFilesDeleted());
+      assertEquals(cleanMetadata1.getTotalFilesDeleted(), cleanMetadata2.getTotalFilesDeleted());
       assertEquals(cleanMetadata1.getPartitionMetadata().keySet(), cleanMetadata2.getPartitionMetadata().keySet());
       final HoodieCleanMetadata retriedCleanMetadata = CleanerUtils.getCleanerMetadata(HoodieTableMetaClient.reload(metaClient), completedCleanInstant);
       cleanMetadata1.getPartitionMetadata().keySet().forEach(k -> {
         HoodieCleanPartitionMetadata p1 = cleanMetadata1.getPartitionMetadata().get(k);
         HoodieCleanPartitionMetadata p2 = retriedCleanMetadata.getPartitionMetadata().get(k);
         assertEquals(p1.getDeletePathPatterns(), p2.getDeletePathPatterns());
-        assertEquals(p1.getSuccessDeleteFiles(), p2.getFailedDeleteFiles());
+        assertEquals(p1.getSuccessDeleteFiles(), p2.getSuccessDeleteFiles());
+        assertEquals(p1.getFailedDeleteFiles(), p2.getFailedDeleteFiles());
         assertEquals(p1.getPartitionPath(), p2.getPartitionPath());
         assertEquals(k, p1.getPartitionPath());
       });
     }
 
-    return cleanMetadata1.getPartitionMetadata().values().stream()
+    Map<String, HoodieCleanStat> cleanStatMap = cleanMetadata1.getPartitionMetadata().values().stream()
         .map(x -> new HoodieCleanStat.Builder().withPartitionPath(x.getPartitionPath())
             .withFailedDeletes(x.getFailedDeleteFiles()).withSuccessfulDeletes(x.getSuccessDeleteFiles())
             .withPolicy(HoodieCleaningPolicy.valueOf(x.getPolicy())).withDeletePathPattern(x.getDeletePathPatterns())
@@ -463,103 +490,117 @@ public class TestCleaner extends HoodieClientTestBase {
                 ? new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "000")
                 : null))
             .build())
-        .collect(Collectors.toList());
+        .collect(Collectors.toMap(HoodieCleanStat::getPartitionPath, x -> x));
+    cleanMetadata1.getBootstrapPartitionMetadata().values().forEach(x -> {
+      HoodieCleanStat s = cleanStatMap.get(x.getPartitionPath());
+      cleanStatMap.put(x.getPartitionPath(), new HoodieCleanStat.Builder().withPartitionPath(x.getPartitionPath())
+          .withFailedDeletes(s.getFailedDeleteFiles()).withSuccessfulDeletes(s.getSuccessDeleteFiles())
+          .withPolicy(HoodieCleaningPolicy.valueOf(x.getPolicy())).withDeletePathPattern(s.getDeletePathPatterns())
+          .withEarliestCommitRetained(Option.ofNullable(s.getEarliestCommitToRetain())
+              .map(y -> new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, y)))
+          .withSuccessfulDeleteBootstrapBaseFiles(x.getSuccessDeleteFiles())
+          .withFailedDeleteBootstrapBaseFiles(x.getFailedDeleteFiles())
+          .withDeleteBootstrapBasePathPatterns(x.getDeletePathPatterns()).build());
+    });
+    return new ArrayList<>(cleanStatMap.values());
   }
 
   /**
    * Test HoodieTable.clean() Cleaning by versions logic.
    */
-  @Test
-  public void testKeepLatestFileVersions() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testKeepLatestFileVersions(Boolean enableBootstrapSourceClean) throws Exception {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                .withCleanBootstrapBaseFileEnabled(enableBootstrapSourceClean)
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
             .build();
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    String p0 = "2020/01/01";
+    String p1 = "2020/01/02";
+    Map<String, List<BootstrapFileMapping>> bootstrapMapping = enableBootstrapSourceClean ? generateBootstrapIndexAndSourceData(p0, p1) : null;
 
     // make 1 commit, with 1 file per partition
-    HoodieTestUtils.createCommitFiles(basePath, "000");
-
-    String file1P0C0 =
-        HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000");
-    String file1P1C0 =
-        HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "000");
-    metaClient = HoodieTableMetaClient.reload(metaClient);
+    String file1P0C0 = enableBootstrapSourceClean ? bootstrapMapping.get(p0).get(0).getFileId()
+        : UUID.randomUUID().toString();
+    String file1P1C0 = enableBootstrapSourceClean ? bootstrapMapping.get(p1).get(0).getFileId()
+        : UUID.randomUUID().toString();
+    testTable.addCommit("00000000000001").withBaseFilesInPartition(p0, file1P0C0).withBaseFilesInPartition(p1, file1P1C0);
 
     List<HoodieCleanStat> hoodieCleanStatsOne = runCleaner(config);
-    assertEquals(0,
-        getCleanStat(hoodieCleanStatsOne, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).getSuccessDeleteFiles()
-            .size(), "Must not clean any files");
-    assertEquals(0,
-        getCleanStat(hoodieCleanStatsOne, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).getSuccessDeleteFiles()
-            .size(), "Must not clean any files");
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000",
-        file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "000",
-        file1P1C0));
+    assertEquals(0, hoodieCleanStatsOne.size(), "Must not clean any files");
+    assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+    assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
 
     // make next commit, with 1 insert & 1 update per partition
-    HoodieTestUtils.createCommitFiles(basePath, "001");
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-
-    String file2P0C1 =
-        HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001"); // insert
-    String file2P1C1 =
-        HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "001"); // insert
-    HoodieTestUtils.createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001", file1P0C0); // update
-    HoodieTestUtils.createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "001", file1P1C0); // update
+    Map<String, String> partitionAndFileId002 = testTable.addCommit("00000000000002")
+        .withBaseFilesInPartition(p0, file1P0C0)
+        .withBaseFilesInPartition(p1, file1P1C0)
+        .withBaseFilesInPartitions(p0, p1);
 
     List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config);
-    assertEquals(1,
-        getCleanStat(hoodieCleanStatsTwo, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).getSuccessDeleteFiles()
-            .size(), "Must clean 1 file");
-    assertEquals(1,
-        getCleanStat(hoodieCleanStatsTwo, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).getSuccessDeleteFiles()
-            .size(), "Must clean 1 file");
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001",
-        file2P0C1));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "001",
-        file2P1C1));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000",
-        file1P0C0));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
-        "000", file1P1C0));
+    // enableBootstrapSourceClean would delete the bootstrap base file as the same time
+    HoodieCleanStat cleanStat = getCleanStat(hoodieCleanStatsTwo, p0);
+    assertEquals(enableBootstrapSourceClean ? 2 : 1, cleanStat.getSuccessDeleteFiles().size()
+        + (cleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
+        : cleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least 1 file");
+    if (enableBootstrapSourceClean) {
+      HoodieFileStatus fstatus =
+          bootstrapMapping.get(p0).get(0).getBoostrapFileStatus();
+      // This ensures full path is recorded in metadata.
+      assertTrue(cleanStat.getSuccessDeleteBootstrapBaseFiles().contains(fstatus.getPath().getUri()),
+          "Successful delete files were " + cleanStat.getSuccessDeleteBootstrapBaseFiles()
+              + " but did not contain " + fstatus.getPath().getUri());
+      assertFalse(Files.exists(Paths.get(bootstrapMapping.get(
+          p0).get(0).getBoostrapFileStatus().getPath().getUri())));
+    }
+    cleanStat = getCleanStat(hoodieCleanStatsTwo, p1);
+    String file2P0C1 = partitionAndFileId002.get(p0);
+    String file2P1C1 = partitionAndFileId002.get(p1);
+    assertTrue(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
+    assertTrue(testTable.baseFileExists(p1, "00000000000002", file2P1C1));
+    assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+    assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
+    assertEquals(enableBootstrapSourceClean ? 2 : 1, cleanStat.getSuccessDeleteFiles().size()
+        + (cleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
+        : cleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least 1 file");
+    if (enableBootstrapSourceClean) {
+      HoodieFileStatus fstatus =
+          bootstrapMapping.get(p1).get(0).getBoostrapFileStatus();
+      // This ensures full path is recorded in metadata.
+      assertTrue(cleanStat.getSuccessDeleteBootstrapBaseFiles().contains(fstatus.getPath().getUri()),
+          "Successful delete files were " + cleanStat.getSuccessDeleteBootstrapBaseFiles()
+              + " but did not contain " + fstatus.getPath().getUri());
+      assertFalse(Files.exists(Paths.get(bootstrapMapping.get(
+          p1).get(0).getBoostrapFileStatus().getPath().getUri())));
+    }
 
     // make next commit, with 2 updates to existing files, and 1 insert
-    HoodieTestUtils.createCommitFiles(basePath, "002");
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-
-    HoodieTestUtils.createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002", file1P0C0); // update
-    HoodieTestUtils.createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002", file2P0C1); // update
-    String file3P0C2 =
-        HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002");
-
+    String file3P0C2 = testTable.addCommit("00000000000003")
+        .withBaseFilesInPartition(p0, file1P0C0, file2P0C1)
+        .withBaseFilesInPartitions(p0).get(p0);
     List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config);
     assertEquals(2,
-        getCleanStat(hoodieCleanStatsThree, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
+        getCleanStat(hoodieCleanStatsThree, p0)
             .getSuccessDeleteFiles().size(), "Must clean two files");
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001",
-        file1P0C0));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001",
-        file2P0C1));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002",
-        file3P0C2));
+    assertFalse(testTable.baseFileExists(p0, "00000000000002", file1P0C0));
+    assertFalse(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000003", file3P0C2));
 
     // No cleaning on partially written file, with no commit.
-    HoodieTestUtils.createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "003", file3P0C2); // update
+    testTable.forCommit("00000000000004").withBaseFilesInPartition(p0, file3P0C2);
     List<HoodieCleanStat> hoodieCleanStatsFour = runCleaner(config);
-    assertEquals(0,
-        getCleanStat(hoodieCleanStatsFour, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).getSuccessDeleteFiles()
-            .size(), "Must not clean any files");
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002",
-        file3P0C2));
+    assertEquals(0, hoodieCleanStatsFour.size(), "Must not clean any files");
+    assertTrue(testTable.baseFileExists(p0, "00000000000003", file3P0C2));
   }
 
   /**
    * Test HoodieTable.clean() Cleaning by versions logic for MOR table with Log files.
    */
   @Test
-  public void testKeepLatestFileVersionsMOR() throws IOException {
+  public void testKeepLatestFileVersionsMOR() throws Exception {
 
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
@@ -567,39 +608,33 @@ public class TestCleaner extends HoodieClientTestBase {
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
             .build();
 
-    HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    String p0 = "2020/01/01";
 
     // Make 3 files, one base file and 2 log files associated with base file
-    String file1P0 =
-        HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000");
-    String file2P0L0 = HoodieTestUtils.createNewLogFile(fs, basePath,
-        HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000", file1P0, Option.empty());
-    HoodieTestUtils.createNewLogFile(fs, basePath,
-        HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000", file1P0, Option.of(2));
-    // make 1 compaction commit
-    HoodieTestUtils.createCompactionCommitFiles(fs, basePath, "000");
+    String file1P0 = testTable.addDeltaCommit("000").withBaseFilesInPartitions(p0).get(p0);
+    testTable.forDeltaCommit("000")
+        .withLogFile(p0, file1P0, 1)
+        .withLogFile(p0, file1P0, 2);
 
-    // Make 4 files, one base file and 3 log files associated with base file
-    HoodieTestUtils.createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001", file1P0);
-    file2P0L0 = HoodieTestUtils.createNewLogFile(fs, basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
-        "001", file1P0, Option.of(3));
-    // make 1 compaction commit
-    HoodieTestUtils.createCompactionCommitFiles(fs, basePath, "001");
+    // Make 2 files, one base file and 1 log files associated with base file
+    testTable.addDeltaCommit("001")
+        .withBaseFilesInPartition(p0, file1P0)
+        .withLogFile(p0, file1P0, 3);
 
     List<HoodieCleanStat> hoodieCleanStats = runCleaner(config);
     assertEquals(3,
-        getCleanStat(hoodieCleanStats, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).getSuccessDeleteFiles()
+        getCleanStat(hoodieCleanStats, p0).getSuccessDeleteFiles()
             .size(), "Must clean three files, one parquet and 2 log files");
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000",
-        file1P0));
-    assertFalse(HoodieTestUtils.doesLogFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000",
-        file2P0L0, Option.empty()));
-    assertFalse(HoodieTestUtils.doesLogFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000",
-        file2P0L0, Option.of(2)));
+    assertFalse(testTable.baseFileExists(p0, "000", file1P0));
+    assertFalse(testTable.logFilesExist(p0, "000", file1P0, 1, 2));
+    assertTrue(testTable.baseFileExists(p0, "001", file1P0));
+    assertTrue(testTable.logFileExists(p0, "001", file1P0, 3));
   }
 
   @Test
-  public void testUpgradeDowngrade() {
+  public void testCleanMetadataUpgradeDowngrade() {
     String instantTime = "000";
 
     String partition1 = DEFAULT_PARTITION_PATHS[0];
@@ -650,30 +685,30 @@ public class TestCleaner extends HoodieClientTestBase {
     // NOw upgrade and check
     CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
     metadata = metadataMigrator.upgradeToLatest(metadata, metadata.getVersion());
-    testCleanMetadataPathEquality(metadata, newExpected);
+    assertCleanMetadataPathEquals(newExpected, metadata);
 
     CleanMetadataMigrator migrator = new CleanMetadataMigrator(metaClient);
     HoodieCleanMetadata oldMetadata =
         migrator.migrateToVersion(metadata, metadata.getVersion(), CleanerUtils.CLEAN_METADATA_VERSION_1);
     assertEquals(CleanerUtils.CLEAN_METADATA_VERSION_1, oldMetadata.getVersion());
-    testCleanMetadataEquality(metadata, oldMetadata);
-    testCleanMetadataPathEquality(oldMetadata, oldExpected);
+    assertCleanMetadataEquals(metadata, oldMetadata);
+    assertCleanMetadataPathEquals(oldExpected, oldMetadata);
 
     HoodieCleanMetadata newMetadata = migrator.upgradeToLatest(oldMetadata, oldMetadata.getVersion());
     assertEquals(CleanerUtils.LATEST_CLEAN_METADATA_VERSION, newMetadata.getVersion());
-    testCleanMetadataEquality(oldMetadata, newMetadata);
-    testCleanMetadataPathEquality(newMetadata, newExpected);
-    testCleanMetadataPathEquality(oldMetadata, oldExpected);
+    assertCleanMetadataEquals(oldMetadata, newMetadata);
+    assertCleanMetadataPathEquals(newExpected, newMetadata);
+    assertCleanMetadataPathEquals(oldExpected, oldMetadata);
   }
 
-  public void testCleanMetadataEquality(HoodieCleanMetadata input1, HoodieCleanMetadata input2) {
-    assertEquals(input1.getEarliestCommitToRetain(), input2.getEarliestCommitToRetain());
-    assertEquals(input1.getStartCleanTime(), input2.getStartCleanTime());
-    assertEquals(input1.getTimeTakenInMillis(), input2.getTimeTakenInMillis());
-    assertEquals(input1.getTotalFilesDeleted(), input2.getTotalFilesDeleted());
+  private static void assertCleanMetadataEquals(HoodieCleanMetadata expected, HoodieCleanMetadata actual) {
+    assertEquals(expected.getEarliestCommitToRetain(), actual.getEarliestCommitToRetain());
+    assertEquals(expected.getStartCleanTime(), actual.getStartCleanTime());
+    assertEquals(expected.getTimeTakenInMillis(), actual.getTimeTakenInMillis());
+    assertEquals(expected.getTotalFilesDeleted(), actual.getTotalFilesDeleted());
 
-    Map<String, HoodieCleanPartitionMetadata> map1 = input1.getPartitionMetadata();
-    Map<String, HoodieCleanPartitionMetadata> map2 = input2.getPartitionMetadata();
+    Map<String, HoodieCleanPartitionMetadata> map1 = expected.getPartitionMetadata();
+    Map<String, HoodieCleanPartitionMetadata> map2 = actual.getPartitionMetadata();
 
     assertEquals(map1.keySet(), map2.keySet());
 
@@ -688,9 +723,71 @@ public class TestCleaner extends HoodieClientTestBase {
     assertEquals(policies1, policies2);
   }
 
-  private void testCleanMetadataPathEquality(HoodieCleanMetadata metadata, Map<String, Tuple3> expected) {
+  @Test
+  public void testCleanPlanUpgradeDowngrade() {
+    String instantTime = "000";
 
-    Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = metadata.getPartitionMetadata();
+    String partition1 = DEFAULT_PARTITION_PATHS[0];
+    String partition2 = DEFAULT_PARTITION_PATHS[1];
+
+    String fileName1 = "data1_1_000.parquet";
+    String fileName2 = "data2_1_000.parquet";
+
+    Map<String, List<String>> filesToBeCleanedPerPartition = new HashMap<>();
+    filesToBeCleanedPerPartition.put(partition1, Arrays.asList(fileName1));
+    filesToBeCleanedPerPartition.put(partition2, Arrays.asList(fileName2));
+
+    HoodieCleanerPlan version1Plan =
+        HoodieCleanerPlan.newBuilder().setEarliestInstantToRetain(HoodieActionInstant.newBuilder()
+            .setAction(HoodieTimeline.COMMIT_ACTION)
+            .setTimestamp(instantTime).setState(State.COMPLETED.name()).build())
+            .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+            .setFilesToBeDeletedPerPartition(filesToBeCleanedPerPartition)
+            .setVersion(CleanPlanV1MigrationHandler.VERSION)
+            .build();
+
+    // Upgrade and Verify version 2 plan
+    HoodieCleanerPlan version2Plan =
+        new CleanPlanMigrator(metaClient).upgradeToLatest(version1Plan, version1Plan.getVersion());
+    assertEquals(version1Plan.getEarliestInstantToRetain(), version2Plan.getEarliestInstantToRetain());
+    assertEquals(version1Plan.getPolicy(), version2Plan.getPolicy());
+    assertEquals(CleanPlanner.LATEST_CLEAN_PLAN_VERSION, version2Plan.getVersion());
+    // Deprecated Field is not used.
+    assertEquals(0, version2Plan.getFilesToBeDeletedPerPartition().size());
+    assertEquals(version1Plan.getFilesToBeDeletedPerPartition().size(),
+        version2Plan.getFilePathsToBeDeletedPerPartition().size());
+    assertEquals(version1Plan.getFilesToBeDeletedPerPartition().get(partition1).size(),
+        version2Plan.getFilePathsToBeDeletedPerPartition().get(partition1).size());
+    assertEquals(version1Plan.getFilesToBeDeletedPerPartition().get(partition2).size(),
+        version2Plan.getFilePathsToBeDeletedPerPartition().get(partition2).size());
+    assertEquals(new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), partition1), fileName1).toString(),
+        version2Plan.getFilePathsToBeDeletedPerPartition().get(partition1).get(0).getFilePath());
+    assertEquals(new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), partition2), fileName2).toString(),
+        version2Plan.getFilePathsToBeDeletedPerPartition().get(partition2).get(0).getFilePath());
+
+    // Downgrade and verify version 1 plan
+    HoodieCleanerPlan gotVersion1Plan = new CleanPlanMigrator(metaClient).migrateToVersion(version2Plan,
+        version2Plan.getVersion(), version1Plan.getVersion());
+    assertEquals(version1Plan.getEarliestInstantToRetain(), gotVersion1Plan.getEarliestInstantToRetain());
+    assertEquals(version1Plan.getPolicy(), version2Plan.getPolicy());
+    assertEquals(version1Plan.getVersion(), gotVersion1Plan.getVersion());
+    assertEquals(version1Plan.getFilesToBeDeletedPerPartition().size(),
+        gotVersion1Plan.getFilesToBeDeletedPerPartition().size());
+    assertEquals(version1Plan.getFilesToBeDeletedPerPartition().get(partition1).size(),
+        gotVersion1Plan.getFilesToBeDeletedPerPartition().get(partition1).size());
+    assertEquals(version1Plan.getFilesToBeDeletedPerPartition().get(partition2).size(),
+        gotVersion1Plan.getFilesToBeDeletedPerPartition().get(partition2).size());
+    assertEquals(version1Plan.getFilesToBeDeletedPerPartition().get(partition1).get(0),
+        gotVersion1Plan.getFilesToBeDeletedPerPartition().get(partition1).get(0));
+    assertEquals(version1Plan.getFilesToBeDeletedPerPartition().get(partition2).get(0),
+        gotVersion1Plan.getFilesToBeDeletedPerPartition().get(partition2).get(0));
+    assertTrue(gotVersion1Plan.getFilePathsToBeDeletedPerPartition().isEmpty());
+    assertNull(version1Plan.getFilePathsToBeDeletedPerPartition());
+  }
+
+  private static void assertCleanMetadataPathEquals(Map<String, Tuple3> expected, HoodieCleanMetadata actual) {
+
+    Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = actual.getPartitionMetadata();
 
     for (Map.Entry<String, HoodieCleanPartitionMetadata> entry : partitionMetadataMap.entrySet()) {
       String partitionPath = entry.getKey();
@@ -702,213 +799,196 @@ public class TestCleaner extends HoodieClientTestBase {
     }
   }
 
-  /**
-   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files.
-   */
-  @Test
-  public void testKeepLatestCommits() throws IOException {
-    testKeepLatestCommits(false, false);
+  private static Stream<Arguments> argumentsForTestKeepLatestCommits() {
+    return Stream.of(
+        Arguments.of(false, false, false),
+        Arguments.of(true, false, false),
+        Arguments.of(false, true, false),
+        Arguments.of(false, false, true)
+    );
   }
 
   /**
-   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files. Here the operations are simulated
-   * such that first clean attempt failed after files were cleaned and a subsequent cleanup succeeds.
+   * Test HoodieTable.clean() Cleaning by commit logic for COW table.
    */
-  @Test
-  public void testKeepLatestCommitsWithFailureRetry() throws IOException {
-    testKeepLatestCommits(true, false);
-  }
-
-  /**
-   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files.
-   */
-  @Test
-  public void testKeepLatestCommitsIncrMode() throws IOException {
-    testKeepLatestCommits(false, true);
-  }
-
-  /**
-   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files.
-   */
-  private void testKeepLatestCommits(boolean simulateFailureRetry, boolean enableIncrementalClean) throws IOException {
+  @ParameterizedTest
+  @MethodSource("argumentsForTestKeepLatestCommits")
+  public void testKeepLatestCommits(boolean simulateFailureRetry, boolean enableIncrementalClean, boolean enableBootstrapSourceClean) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withIncrementalCleaningMode(enableIncrementalClean)
+            .withCleanBootstrapBaseFileEnabled(enableBootstrapSourceClean)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
 
-    // make 1 commit, with 1 file per partition
-    HoodieTestUtils.createInflightCommitFiles(basePath, "000");
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    String p0 = "2020/01/01";
+    String p1 = "2020/01/02";
+    Map<String, List<BootstrapFileMapping>> bootstrapMapping = enableBootstrapSourceClean ? generateBootstrapIndexAndSourceData(p0, p1) : null;
 
-    String file1P0C0 =
-        HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000");
-    String file1P1C0 =
-        HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "000");
+    // make 1 commit, with 1 file per partition
+    String file1P0C0 = enableBootstrapSourceClean ? bootstrapMapping.get(p0).get(0).getFileId()
+        : UUID.randomUUID().toString();
+    String file1P1C0 = enableBootstrapSourceClean ? bootstrapMapping.get(p1).get(0).getFileId()
+        : UUID.randomUUID().toString();
+    testTable.addInflightCommit("00000000000001").withBaseFilesInPartition(p0, file1P0C0).withBaseFilesInPartition(p1, file1P1C0);
 
     HoodieCommitMetadata commitMetadata = generateCommitMetadata(
         Collections.unmodifiableMap(new HashMap<String, List<String>>() {
           {
-            put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, CollectionUtils.createImmutableList(file1P0C0));
-            put(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, CollectionUtils.createImmutableList(file1P1C0));
+            put(p0, CollectionUtils.createImmutableList(file1P0C0));
+            put(p1, CollectionUtils.createImmutableList(file1P1C0));
           }
         })
     );
     metaClient.getActiveTimeline().saveAsComplete(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "000"),
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000001"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     List<HoodieCleanStat> hoodieCleanStatsOne = runCleaner(config, simulateFailureRetry);
     assertEquals(0, hoodieCleanStatsOne.size(), "Must not scan any partitions and clean any files");
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000",
-        file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "000",
-        file1P1C0));
+    assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+    assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
 
     // make next commit, with 1 insert & 1 update per partition
-    HoodieTestUtils.createInflightCommitFiles(basePath, "001");
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-
-    String file2P0C1 =
-        HoodieTestUtils
-            .createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001"); // insert
-    String file2P1C1 =
-        HoodieTestUtils
-            .createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "001"); // insert
-    HoodieTestUtils
-        .createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001", file1P0C0); // update
-    HoodieTestUtils
-        .createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "001", file1P1C0); // update
+    Map<String, String> partitionAndFileId002 = testTable.addInflightCommit("00000000000002").withBaseFilesInPartitions(p0, p1);
+    String file2P0C1 = partitionAndFileId002.get(p0);
+    String file2P1C1 = partitionAndFileId002.get(p1);
+    testTable.forCommit("00000000000002").withBaseFilesInPartition(p0, file1P0C0).withBaseFilesInPartition(p1, file1P1C0);
     commitMetadata = generateCommitMetadata(new HashMap<String, List<String>>() {
       {
-        put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, CollectionUtils.createImmutableList(file1P0C0, file2P0C1));
-        put(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, CollectionUtils.createImmutableList(file1P1C0, file2P1C1));
+        put(p0, CollectionUtils.createImmutableList(file1P0C0, file2P0C1));
+        put(p1, CollectionUtils.createImmutableList(file1P1C0, file2P1C1));
       }
     });
     metaClient.getActiveTimeline().saveAsComplete(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"),
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000002"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
     List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config, simulateFailureRetry);
     assertEquals(0, hoodieCleanStatsTwo.size(), "Must not scan any partitions and clean any files");
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001",
-        file2P0C1));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "001",
-        file2P1C1));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000",
-        file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "000",
-        file1P1C0));
+    assertTrue(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
+    assertTrue(testTable.baseFileExists(p1, "00000000000002", file2P1C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+    assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
 
     // make next commit, with 2 updates to existing files, and 1 insert
-    HoodieTestUtils.createInflightCommitFiles(basePath, "002");
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-
-    HoodieTestUtils
-        .createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002", file1P0C0); // update
-    HoodieTestUtils
-        .createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002", file2P0C1); // update
-    String file3P0C2 =
-        HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002");
-
+    String file3P0C2 = testTable.addInflightCommit("00000000000003")
+        .withBaseFilesInPartition(p0, file1P0C0)
+        .withBaseFilesInPartition(p0, file2P0C1)
+        .withBaseFilesInPartitions(p0).get(p0);
     commitMetadata = generateCommitMetadata(CollectionUtils
-        .createImmutableMap(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
+        .createImmutableMap(p0,
             CollectionUtils.createImmutableList(file1P0C0, file2P0C1, file3P0C2)));
     metaClient.getActiveTimeline().saveAsComplete(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "002"),
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000003"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
 
     List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config, simulateFailureRetry);
-    assertEquals(0,
-        getCleanStat(hoodieCleanStatsThree, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
-            .getSuccessDeleteFiles().size(),
+    assertEquals(0, hoodieCleanStatsThree.size(),
         "Must not clean any file. We have to keep 1 version before the latest commit time to keep");
-
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000",
-        file1P0C0));
+    assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
 
     // make next commit, with 2 updates to existing files, and 1 insert
-    HoodieTestUtils.createInflightCommitFiles(basePath, "003");
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-
-    HoodieTestUtils
-        .createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "003", file1P0C0); // update
-    HoodieTestUtils
-        .createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "003", file2P0C1); // update
-    String file4P0C3 =
-        HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "003");
+    String file4P0C3 = testTable.addInflightCommit("00000000000004")
+        .withBaseFilesInPartition(p0, file1P0C0)
+        .withBaseFilesInPartition(p0, file2P0C1)
+        .withBaseFilesInPartitions(p0).get(p0);
     commitMetadata = generateCommitMetadata(CollectionUtils.createImmutableMap(
-        HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, CollectionUtils.createImmutableList(file1P0C0, file2P0C1, file4P0C3)));
+        p0, CollectionUtils.createImmutableList(file1P0C0, file2P0C1, file4P0C3)));
     metaClient.getActiveTimeline().saveAsComplete(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "003"),
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000004"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
 
     List<HoodieCleanStat> hoodieCleanStatsFour = runCleaner(config, simulateFailureRetry);
-    assertEquals(1,
-        getCleanStat(hoodieCleanStatsFour, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).getSuccessDeleteFiles()
-            .size(), "Must not clean one old file");
+    // enableBootstrapSourceClean would delete the bootstrap base file as the same time
+    HoodieCleanStat partitionCleanStat = getCleanStat(hoodieCleanStatsFour, p0);
 
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000",
-        file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001",
-        file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002",
-        file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001",
-        file2P0C1));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002",
-        file2P0C1));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002",
-        file3P0C2));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "003",
-        file4P0C3));
+    assertEquals(enableBootstrapSourceClean ? 2 : 1, partitionCleanStat.getSuccessDeleteFiles().size()
+        + (partitionCleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
+        : partitionCleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least one old file");
+    assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+    assertTrue(testTable.baseFileExists(p0, "00000000000002", file1P0C0));
+    assertTrue(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
+    assertTrue(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000003", file3P0C2));
+    assertTrue(testTable.baseFileExists(p0, "00000000000004", file4P0C3));
+    if (enableBootstrapSourceClean) {
+      assertFalse(Files.exists(Paths.get(bootstrapMapping.get(
+          p0).get(0).getBoostrapFileStatus().getPath().getUri())));
+    }
 
     // No cleaning on partially written file, with no commit.
-    HoodieTestUtils
-        .createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "004", file3P0C2); // update
-    commitMetadata = generateCommitMetadata(CollectionUtils.createImmutableMap(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
+    testTable.forCommit("00000000000005").withBaseFilesInPartition(p0, file3P0C2);
+    commitMetadata = generateCommitMetadata(CollectionUtils.createImmutableMap(p0,
         CollectionUtils.createImmutableList(file3P0C2)));
     metaClient.getActiveTimeline().createNewInstant(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "004"));
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "00000000000005"));
     metaClient.getActiveTimeline().transitionRequestedToInflight(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "004"),
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "00000000000005"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
     List<HoodieCleanStat> hoodieCleanStatsFive = runCleaner(config, simulateFailureRetry);
-    HoodieCleanStat cleanStat = getCleanStat(hoodieCleanStatsFive, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
-    assertEquals(0,
-        cleanStat != null ? cleanStat.getSuccessDeleteFiles().size() : 0, "Must not clean any files");
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001",
-        file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001",
-        file2P0C1));
+    HoodieCleanStat cleanStat = getCleanStat(hoodieCleanStatsFive, p0);
+    assertNull(cleanStat, "Must not clean any files");
+    assertTrue(testTable.baseFileExists(p0, "00000000000002", file1P0C0));
+    assertTrue(testTable.baseFileExists(p0, "00000000000002", file2P0C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000005", file3P0C2));
+  }
+
+  /**
+   * Generate Bootstrap index, bootstrap base file and corresponding metaClient.
+   * @return Partition to BootstrapFileMapping Map
+   * @throws IOException
+   */
+  private Map<String, List<BootstrapFileMapping>> generateBootstrapIndexAndSourceData(String... partitions) throws IOException {
+    // create bootstrap source data path
+    java.nio.file.Path sourcePath = tempDir.resolve("data");
+    java.nio.file.Files.createDirectories(sourcePath);
+    assertTrue(new File(sourcePath.toString()).exists());
+
+    // recreate metaClient with Bootstrap base path
+    metaClient = HoodieTestUtils.init(basePath, getTableType(), sourcePath.toString());
+
+    // generate bootstrap index
+    Map<String, List<BootstrapFileMapping>> bootstrapMapping = TestBootstrapIndex.generateBootstrapIndex(metaClient, sourcePath.toString(),
+        partitions, 1);
+
+    for (Map.Entry<String, List<BootstrapFileMapping>> entry : bootstrapMapping.entrySet()) {
+      new File(sourcePath.toString() + "/" + entry.getKey()).mkdirs();
+      assertTrue(new File(entry.getValue().get(0).getBoostrapFileStatus().getPath().getUri()).createNewFile());
+    }
+    return bootstrapMapping;
   }
 
   /**
    * Test Cleaning functionality of table.rollback() API.
    */
   @Test
-  public void testCleanMarkerDataFilesOnRollback() throws IOException {
-    List<String> markerFiles = createMarkerFiles("000", 10);
-    assertEquals(10, markerFiles.size(), "Some marker files are created.");
-    assertEquals(markerFiles.size(), getTotalTempFiles(), "Some marker files are created.");
+  public void testCleanMarkerDataFilesOnRollback() throws Exception {
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient)
+        .addRequestedCommit("000")
+        .withMarkerFiles("default", 10, IOType.MERGE);
+    final int numTempFilesBefore = testTable.listAllFilesInTempFolder().size();
+    assertEquals(10, numTempFilesBefore, "Some marker files are created.");
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
-    table.getActiveTimeline().createNewInstant(new HoodieInstant(State.REQUESTED,
-        HoodieTimeline.COMMIT_ACTION, "000"));
     table.getActiveTimeline().transitionRequestedToInflight(
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "000"), Option.empty());
     metaClient.reloadActiveTimeline();
     table.rollback(jsc, "001", new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "000"), true);
-    assertEquals(0, getTotalTempFiles(), "All temp files are deleted.");
+    final int numTempFilesAfter = testTable.listAllFilesInTempFolder().size();
+    assertEquals(0, numTempFilesAfter, "All temp files are deleted.");
   }
 
   /**
    * Test CLeaner Stat when there are no partition paths.
    */
   @Test
-  public void testCleaningWithZeroPartitionPaths() throws IOException {
+  public void testCleaningWithZeroPartitionPaths() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
@@ -917,7 +997,7 @@ public class TestCleaner extends HoodieClientTestBase {
     // Make a commit, although there are no partitionPaths.
     // Example use-case of this is when a client wants to create a table
     // with just some commit metadata, but no data/partitionPaths.
-    HoodieTestUtils.createCommitFiles(basePath, "000");
+    HoodieTestTable.of(metaClient).addCommit("000");
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -947,24 +1027,11 @@ public class TestCleaner extends HoodieClientTestBase {
   }
 
   /**
-   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files. Here the operations are simulated
-   * such that first clean attempt failed after files were cleaned and a subsequent cleanup succeeds.
-   */
-  @Test
-  public void testKeepLatestVersionsWithPendingCompactions() throws IOException {
-    testKeepLatestVersionsWithPendingCompactions(false);
-  }
-
-
-  /**
    * Test Keep Latest Versions when there are pending compactions.
    */
-  @Test
-  public void testKeepLatestVersionsWithPendingCompactionsAndFailureRetry() throws IOException {
-    testKeepLatestVersionsWithPendingCompactions(true);
-  }
-
-  private void testKeepLatestVersionsWithPendingCompactions(boolean retryFailure) throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testKeepLatestVersionsWithPendingCompactions(boolean retryFailure) throws IOException {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -1114,38 +1181,6 @@ public class TestCleaner extends HoodieClientTestBase {
     assertEquals(expNumFilesDeleted, numDeleted, "Correct number of files deleted");
     assertEquals(expNumFilesUnderCompactionDeleted, numFilesUnderCompactionDeleted,
         "Correct number of files under compaction deleted");
-  }
-
-  /**
-   * Utility method to create temporary data files.
-   *
-   * @param instantTime Commit Timestamp
-   * @param numFiles Number for files to be generated
-   * @return generated files
-   * @throws IOException in case of error
-   */
-  private List<String> createMarkerFiles(String instantTime, int numFiles) throws IOException {
-    List<String> files = new ArrayList<>();
-    for (int i = 0; i < numFiles; i++) {
-      files.add(HoodieTestUtils.createNewMarkerFile(basePath, "2019/03/29", instantTime));
-    }
-    return files;
-  }
-
-  /***
-   * Helper method to return temporary files count.
-   * 
-   * @return Number of temporary files found
-   * @throws IOException in case of error
-   */
-  private int getTotalTempFiles() throws IOException {
-    RemoteIterator<?> itr = fs.listFiles(new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME), true);
-    int count = 0;
-    while (itr.hasNext()) {
-      count++;
-      itr.next();
-    }
-    return count;
   }
 
   private Stream<Pair<String, String>> convertPathToFileIdWithCommitTime(final HoodieTableMetaClient metaClient,

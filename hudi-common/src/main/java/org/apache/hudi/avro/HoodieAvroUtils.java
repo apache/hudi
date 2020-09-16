@@ -18,17 +18,26 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.avro.JsonProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatabilityException;
 
+import org.apache.avro.Conversions.DecimalConversion;
+import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
@@ -43,7 +52,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -63,24 +74,35 @@ public class HoodieAvroUtils {
 
   private static ThreadLocal<BinaryDecoder> reuseDecoder = ThreadLocal.withInitial(() -> null);
 
+  // As per https://avro.apache.org/docs/current/spec.html#names
+  private static String INVALID_AVRO_CHARS_IN_NAMES = "[^A-Za-z0-9_]";
+  private static String INVALID_AVRO_FIRST_CHAR_IN_NAMES = "[^A-Za-z_]";
+  private static String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
+
   // All metadata fields are optional strings.
-  static final Schema METADATA_FIELD_SCHEMA =
+  public static final Schema METADATA_FIELD_SCHEMA =
       Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)));
 
-  private static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
+  public static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
   /**
    * Convert a given avro record to bytes.
    */
-  public static byte[] avroToBytes(GenericRecord record) throws IOException {
-    GenericDatumWriter<GenericRecord> writer = new GenericDatumWriter<>(record.getSchema());
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, reuseEncoder.get());
-    reuseEncoder.set(encoder);
-    writer.write(record, encoder);
-    encoder.flush();
-    out.close();
-    return out.toByteArray();
+  public static byte[] avroToBytes(GenericRecord record) {
+    return indexedRecordToBytes(record);
+  }
+
+  public static <T extends IndexedRecord> byte[] indexedRecordToBytes(T record) {
+    GenericDatumWriter<T> writer = new GenericDatumWriter<>(record.getSchema());
+    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, reuseEncoder.get());
+      reuseEncoder.set(encoder);
+      writer.write(record, encoder);
+      encoder.flush();
+      return out.toByteArray();
+    } catch (IOException e) {
+      throw new HoodieIOException("Cannot convert GenericRecord to bytes", e);
+    }
   }
 
   /**
@@ -102,9 +124,16 @@ public class HoodieAvroUtils {
    * Convert serialized bytes back into avro record.
    */
   public static GenericRecord bytesToAvro(byte[] bytes, Schema schema) throws IOException {
+    return bytesToAvro(bytes, schema, schema);
+  }
+
+  /**
+   * Convert serialized bytes back into avro record.
+   */
+  public static GenericRecord bytesToAvro(byte[] bytes, Schema writerSchema, Schema readerSchema) throws IOException {
     BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, reuseDecoder.get());
     reuseDecoder.set(decoder);
-    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     return reader.read(null, decoder);
   }
 
@@ -251,6 +280,17 @@ public class HoodieAvroUtils {
     return record;
   }
 
+  public static GenericRecord stitchRecords(GenericRecord left, GenericRecord right, Schema stitchedSchema) {
+    GenericRecord result = new Record(stitchedSchema);
+    for (Schema.Field f : left.getSchema().getFields()) {
+      result.put(f.name(), left.get(f.name()));
+    }
+    for (Schema.Field f : right.getSchema().getFields()) {
+      result.put(f.name(), right.get(f.name()));
+    }
+    return result;
+  }
+
   /**
    * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the old
    * schema.
@@ -325,5 +365,141 @@ public class HoodieAvroUtils {
     } catch (IOException e) {
       throw new HoodieIOException("IOException while decompressing text", e);
     }
+  }
+
+  /**
+   * Generate a reader schema off the provided writeSchema, to just project out the provided columns.
+   */
+  public static Schema generateProjectionSchema(Schema originalSchema, List<String> fieldNames) {
+    Map<String, Field> schemaFieldsMap = originalSchema.getFields().stream()
+        .map(r -> Pair.of(r.name().toLowerCase(), r)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+    List<Schema.Field> projectedFields = new ArrayList<>();
+    for (String fn : fieldNames) {
+      Schema.Field field = schemaFieldsMap.get(fn.toLowerCase());
+      if (field == null) {
+        throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
+            + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
+      } else {
+        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
+      }
+    }
+
+    Schema projectedSchema = Schema.createRecord(originalSchema.getName(), originalSchema.getDoc(),
+        originalSchema.getNamespace(), originalSchema.isError());
+    projectedSchema.setFields(projectedFields);
+    return projectedSchema;
+  }
+
+  /**
+   * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
+   */
+  public static String getNestedFieldValAsString(GenericRecord record, String fieldName, boolean returnNullIfNotFound) {
+    Object obj = getNestedFieldVal(record, fieldName, returnNullIfNotFound);
+    return StringUtils.objToString(obj);
+  }
+
+  /**
+   * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c
+   */
+  public static Object getNestedFieldVal(GenericRecord record, String fieldName, boolean returnNullIfNotFound) {
+    String[] parts = fieldName.split("\\.");
+    GenericRecord valueNode = record;
+    int i = 0;
+    for (; i < parts.length; i++) {
+      String part = parts[i];
+      Object val = valueNode.get(part);
+      if (val == null) {
+        break;
+      }
+
+      // return, if last part of name
+      if (i == parts.length - 1) {
+        Schema fieldSchema = valueNode.getSchema().getField(part).schema();
+        return convertValueForSpecificDataTypes(fieldSchema, val);
+      } else {
+        // VC: Need a test here
+        if (!(val instanceof GenericRecord)) {
+          throw new HoodieException("Cannot find a record at part value :" + part);
+        }
+        valueNode = (GenericRecord) val;
+      }
+    }
+
+    if (returnNullIfNotFound) {
+      return null;
+    } else {
+      throw new HoodieException(
+          fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
+              + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+    }
+  }
+
+  /**
+   * This method converts values for fields with certain Avro/Parquet data types that require special handling.
+   *
+   * @param fieldSchema avro field schema
+   * @param fieldValue avro field value
+   * @return field value either converted (for certain data types) or as it is.
+   */
+  private static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue) {
+    if (fieldSchema == null) {
+      return fieldValue;
+    }
+
+    if (fieldSchema.getType() == Schema.Type.UNION) {
+      for (Schema schema : fieldSchema.getTypes()) {
+        if (schema.getType() != Schema.Type.NULL) {
+          return convertValueForAvroLogicalTypes(schema, fieldValue);
+        }
+      }
+    }
+    return convertValueForAvroLogicalTypes(fieldSchema, fieldValue);
+  }
+
+  /**
+   * This method converts values for fields with certain Avro Logical data types that require special handling.
+   *
+   * Logical Date Type is converted to actual Date value instead of Epoch Integer which is how it is
+   * represented/stored in parquet.
+   *
+   * Decimal Data Type is converted to actual decimal value instead of bytes/fixed which is how it is
+   * represented/stored in parquet.
+   *
+   * @param fieldSchema avro field schema
+   * @param fieldValue avro field value
+   * @return field value either converted (for certain data types) or as it is.
+   */
+  private static Object convertValueForAvroLogicalTypes(Schema fieldSchema, Object fieldValue) {
+    if (fieldSchema.getLogicalType() == LogicalTypes.date()) {
+      return LocalDate.ofEpochDay(Long.parseLong(fieldValue.toString()));
+    } else if (fieldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+      Decimal dc = (Decimal) fieldSchema.getLogicalType();
+      DecimalConversion decimalConversion = new DecimalConversion();
+      if (fieldSchema.getType() == Schema.Type.FIXED) {
+        return decimalConversion.fromFixed((GenericFixed) fieldValue, fieldSchema,
+            LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+      } else if (fieldSchema.getType() == Schema.Type.BYTES) {
+        return decimalConversion.fromBytes((ByteBuffer) fieldValue, fieldSchema,
+            LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+      }
+    }
+    return fieldValue;
+  }
+
+  public static Schema getNullSchema() {
+    return Schema.create(Schema.Type.NULL);
+  }
+
+  /**
+   * Sanitizes Name according to Avro rule for names.
+   * Removes characters other than the ones mentioned in https://avro.apache.org/docs/current/spec.html#names .
+   * @param name input name
+   * @return sanitized name
+   */
+  public static String sanitizeName(String name) {
+    if (name.substring(0,1).matches(INVALID_AVRO_FIRST_CHAR_IN_NAMES)) {
+      name = name.replaceFirst(INVALID_AVRO_FIRST_CHAR_IN_NAMES, MASK_FOR_INVALID_CHARS_IN_NAMES);
+    }
+    return name.replaceAll(INVALID_AVRO_CHARS_IN_NAMES, MASK_FOR_INVALID_CHARS_IN_NAMES);
   }
 }

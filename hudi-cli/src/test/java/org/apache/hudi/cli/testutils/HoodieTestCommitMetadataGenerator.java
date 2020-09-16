@@ -23,11 +23,11 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -40,6 +40,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
@@ -67,6 +68,12 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
 
   public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
       Option<Integer> writes, Option<Integer> updates) {
+    createCommitFileWithMetadata(basePath, commitTime, configuration, UUID.randomUUID().toString(),
+        UUID.randomUUID().toString(), writes, updates);
+  }
+
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+      String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates) {
     Arrays.asList(HoodieTimeline.makeCommitFileName(commitTime), HoodieTimeline.makeInflightCommitFileName(commitTime),
         HoodieTimeline.makeRequestedCommitFileName(commitTime))
         .forEach(f -> {
@@ -77,7 +84,8 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
             FileSystem fs = FSUtils.getFs(basePath, configuration);
             os = fs.create(commitFile, true);
             // Generate commitMetadata
-            HoodieCommitMetadata commitMetadata = generateCommitMetadata(basePath, commitTime, writes, updates);
+            HoodieCommitMetadata commitMetadata =
+                generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates);
             // Write empty commit metadata
             os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
           } catch (IOException ioe) {
@@ -103,8 +111,14 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
 
   public static HoodieCommitMetadata generateCommitMetadata(String basePath, String commitTime,
       Option<Integer> writes, Option<Integer> updates) throws IOException {
-    String file1P0C0 = HoodieTestUtils.createNewDataFile(basePath, DEFAULT_FIRST_PARTITION_PATH, commitTime);
-    String file1P1C0 = HoodieTestUtils.createNewDataFile(basePath, DEFAULT_SECOND_PARTITION_PATH, commitTime);
+    return generateCommitMetadata(basePath, commitTime, UUID.randomUUID().toString(), UUID.randomUUID().toString(),
+        writes, updates);
+  }
+
+  public static HoodieCommitMetadata generateCommitMetadata(String basePath, String commitTime, String fileId1,
+      String fileId2, Option<Integer> writes, Option<Integer> updates) throws IOException {
+    String file1P0C0 = HoodieTestUtils.createDataFile(basePath, DEFAULT_FIRST_PARTITION_PATH, commitTime, fileId1);
+    String file1P1C0 = HoodieTestUtils.createDataFile(basePath, DEFAULT_SECOND_PARTITION_PATH, commitTime, fileId2);
     return generateCommitMetadata(new HashMap<String, List<String>>() {
       {
         put(DEFAULT_FIRST_PARTITION_PATH, CollectionUtils.createImmutableList(file1P0C0));

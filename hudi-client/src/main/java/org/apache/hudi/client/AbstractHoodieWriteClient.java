@@ -19,14 +19,16 @@
 package org.apache.hudi.client;
 
 import com.codahale.metrics.Timer;
+import org.apache.hudi.callback.HoodieWriteCommitCallback;
+import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
+import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieRollingStat;
-import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -37,6 +39,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -62,6 +66,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
 
   private transient Timer.Context writeContext = null;
   private transient WriteOperationType operationType;
+  private transient HoodieWriteCommitCallback commitCallback;
 
   public void setOperationType(WriteOperationType operationType) {
     this.operationType = operationType;
@@ -90,22 +95,20 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
    */
   public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata) {
-    HoodieTableMetaClient metaClient = createMetaClient(false);
-    return commit(instantTime, writeStatuses, extraMetadata, metaClient.getCommitActionType());
+    List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();
+    return commitStats(instantTime, stats, extraMetadata);
   }
 
-  private boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses,
-      Option<Map<String, String>> extraMetadata, String actionType) {
-
+  public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata) {
     LOG.info("Committing " + instantTime);
+    HoodieTableMetaClient metaClient = createMetaClient(false);
+    String actionType = metaClient.getCommitActionType();
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.create(config, hadoopConf);
 
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-    List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();
-
-    updateMetadataAndRollingStats(actionType, metadata, stats);
+    stats.forEach(stat -> metadata.addWriteStat(stat.getPartitionPath(), stat));
 
     // Finalize write
     finalizeWrite(table, instantTime, stats);
@@ -120,12 +123,20 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     try {
       activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-      postCommit(metadata, instantTime, extraMetadata);
+      postCommit(table, metadata, instantTime, extraMetadata);
       emitCommitMetrics(instantTime, metadata, actionType);
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
+    }
+
+    // callback if needed.
+    if (config.writeCommitCallbackOn()) {
+      if (null == commitCallback) {
+        commitCallback = HoodieCommitCallbackFactory.create(config);
+      }
+      commitCallback.call(new HoodieWriteCommitCallbackMessage(instantTime, config.getTableName(), config.getBasePath()));
     }
     return true;
   }
@@ -147,11 +158,13 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
 
   /**
    * Post Commit Hook. Derived classes use this method to perform post-commit processing
+   *
+   * @param table         table to commit on
    * @param metadata      Commit Metadata corresponding to committed instant
    * @param instantTime   Instant Time
    * @param extraMetadata Additional Metadata passed by user
    */
-  protected abstract void postCommit(HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata);
+  protected abstract void postCommit(HoodieTable<?> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata);
 
   /**
    * Finalize Write operation.
@@ -175,48 +188,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     }
   }
 
-  private void updateMetadataAndRollingStats(String actionType, HoodieCommitMetadata metadata,
-      List<HoodieWriteStat> writeStats) {
-    // TODO : make sure we cannot rollback / archive last commit file
-    try {
-      // Create a Hoodie table which encapsulated the commits and files visible
-      HoodieTable table = HoodieTable.create(config, hadoopConf);
-      // 0. All of the rolling stat management is only done by the DELTA commit for MOR and COMMIT for COW other wise
-      // there may be race conditions
-      HoodieRollingStatMetadata rollingStatMetadata = new HoodieRollingStatMetadata(actionType);
-      // 1. Look up the previous compaction/commit and get the HoodieCommitMetadata from there.
-      // 2. Now, first read the existing rolling stats and merge with the result of current metadata.
-
-      // Need to do this on every commit (delta or commit) to support COW and MOR.
-
-      for (HoodieWriteStat stat : writeStats) {
-        String partitionPath = stat.getPartitionPath();
-        // TODO: why is stat.getPartitionPath() null at times here.
-        metadata.addWriteStat(partitionPath, stat);
-        HoodieRollingStat hoodieRollingStat = new HoodieRollingStat(stat.getFileId(),
-            stat.getNumWrites() - (stat.getNumUpdateWrites() - stat.getNumDeletes()), stat.getNumUpdateWrites(),
-            stat.getNumDeletes(), stat.getTotalWriteBytes());
-        rollingStatMetadata.addRollingStat(partitionPath, hoodieRollingStat);
-      }
-      // The last rolling stat should be present in the completed timeline
-      Option<HoodieInstant> lastInstant =
-          table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
-      if (lastInstant.isPresent()) {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            table.getActiveTimeline().getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
-        Option<String> lastRollingStat = Option
-            .ofNullable(commitMetadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY));
-        if (lastRollingStat.isPresent()) {
-          rollingStatMetadata = rollingStatMetadata
-              .merge(HoodieCommitMetadata.fromBytes(lastRollingStat.get().getBytes(), HoodieRollingStatMetadata.class));
-        }
-      }
-      metadata.addMetadata(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, rollingStatMetadata.toJsonString());
-    } catch (IOException io) {
-      throw new HoodieCommitException("Unable to save rolling stats");
-    }
-  }
-
   public HoodieMetrics getMetrics() {
     return metrics;
   }
@@ -229,10 +200,16 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
    * Get HoodieTable and init {@link Timer.Context}.
    *
    * @param operationType write operation type
+   * @param instantTime current inflight instant time
    * @return HoodieTable
    */
-  protected HoodieTable getTableAndInitCtx(WriteOperationType operationType) {
+  protected HoodieTable getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
+    UpgradeDowngrade.run(metaClient, HoodieTableVersion.current(), config, jsc, instantTime);
+    return getTableAndInitCtx(metaClient, operationType);
+  }
+
+  private HoodieTable getTableAndInitCtx(HoodieTableMetaClient metaClient, WriteOperationType operationType) {
     if (operationType == WriteOperationType.DELETE) {
       setWriteSchemaForDeletes(metaClient);
     }

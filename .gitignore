@@ -77,3 +77,5 @@ dependency-reduced-pom.xml
 # Docker
 #######################################
 hudi-integ-test/compose_env
+node_modules
+package-lock.json

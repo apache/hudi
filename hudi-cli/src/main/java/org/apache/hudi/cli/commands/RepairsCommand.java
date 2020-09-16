@@ -82,8 +82,7 @@ public class RepairsCommand implements CommandMarker {
       @CliOption(key = {"dedupeType"}, help = "Valid values are - insert_type, update_type and upsert_type",
           unspecifiedDefaultValue = "insert_type") final String dedupeType)
       throws Exception {
-    if (!dedupeType.equals(DeDupeType.INSERT_TYPE().toString()) && !dedupeType.equals(DeDupeType.UPDATE_TYPE().toString())
-        && !dedupeType.equals(DeDupeType.UPSERT_TYPE().toString())) {
+    if (!DeDupeType.values().contains(DeDupeType.withName(dedupeType))) {
       throw new IllegalArgumentException("Please provide valid dedupe type!");
     }
     if (StringUtils.isNullOrEmpty(sparkPropertiesPath)) {

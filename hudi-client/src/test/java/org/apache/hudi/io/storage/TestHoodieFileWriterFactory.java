@@ -19,10 +19,10 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
@@ -49,6 +49,11 @@ public class TestHoodieFileWriterFactory extends HoodieClientTestBase {
     HoodieFileWriter<IndexedRecord> parquetWriter = HoodieFileWriterFactory.getFileWriter(instantTime,
         parquetPath, table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
     assertTrue(parquetWriter instanceof HoodieParquetWriter);
+
+    final Path hfilePath = new Path(basePath + "/partition/path/f1_1-0-1_000.hfile");
+    HoodieFileWriter<IndexedRecord> hfileWriter = HoodieFileWriterFactory.getFileWriter(instantTime,
+        hfilePath, table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
+    assertTrue(hfileWriter instanceof HoodieHFileWriter);
 
     // other file format exception.
     final Path logPath = new Path(basePath + "/partition/path/f.b51192a8-574b-4a85-b246-bcfec03ac8bf_100.log.2_1-0-1");
