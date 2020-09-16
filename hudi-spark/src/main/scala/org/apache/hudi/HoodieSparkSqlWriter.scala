@@ -122,10 +122,11 @@ private[hudi] object HoodieSparkSqlWriter {
         val partitionPathFields = parameters(PARTITIONPATH_FIELD_OPT_KEY).split(",").map{ f => f.trim }.filter { p => !p.isEmpty }.toList
         val precombineField = parameters(PRECOMBINE_FIELD_OPT_KEY).trim
         val keyFields =  recordKeyFields ++ partitionPathFields :+ precombineField
+        val allKeysExist = dfFields.containsAll(keyFields)
 
         val isUpsert = UPSERT_OPERATION_OPT_VAL.equals(parameters(OPERATION_OPT_KEY))
         val isRequiredPayload = classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName.equals(parameters(PAYLOAD_CLASS_OPT_KEY))
-        if (isUpsert && isRequiredPayload && dfFields.containsAll(keyFields) && missingField) {
+        if (isUpsert && isRequiredPayload && allKeysExist && missingField) {
           //missing normal fields except key
           val selectExprs = oldStructType.fields.map(f => {
             if (dfFields.contains(f.name))
