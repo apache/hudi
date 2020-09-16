@@ -172,6 +172,9 @@ public class KafkaOffsetGen {
     Map<TopicPartition, Long> fromOffsets;
     Map<TopicPartition, Long> toOffsets;
     try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
+      if (!checkTopicExists(consumer)) {
+        throw new HoodieException("Kafka topic:" + topicName + " does not exist");
+      }
       List<PartitionInfo> partitionInfoList;
       partitionInfoList = consumer.partitionsFor(topicName);
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
@@ -228,6 +231,16 @@ public class KafkaOffsetGen {
     boolean checkpointOffsetReseter = checkpointOffsets.entrySet().stream()
             .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
     return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
+  }
+
+  /**
+   * Check if topic exists.
+   * @param consumer kafka consumer
+   * @return
+   */
+  public boolean checkTopicExists(KafkaConsumer consumer)  {
+    Map<String, List<PartitionInfo>> result = consumer.listTopics();
+    return result.containsKey(topicName);
   }
 
   public String getTopicName() {
