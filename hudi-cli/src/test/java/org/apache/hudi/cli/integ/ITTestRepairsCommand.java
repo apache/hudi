@@ -23,9 +23,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.RepairsCommand;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -33,7 +31,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.HoodieWriteableTestTable;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileStatus;
@@ -43,17 +41,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
-import java.io.File;
 import java.io.IOException;
-import java.net.URISyntaxException;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.spark.sql.functions.lit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -69,10 +62,10 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
   private String repairedOutputPath;
 
   @BeforeEach
-  public void init() throws IOException, URISyntaxException {
-    String tablePath = basePath + File.separator + "test_table";
-    duplicatedPartitionPath = tablePath + File.separator + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
-    repairedOutputPath = basePath + File.separator + "tmp";
+  public void init() throws Exception {
+    final String tablePath = Paths.get(basePath, "test_table").toString();
+    duplicatedPartitionPath = Paths.get(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).toString();
+    repairedOutputPath = Paths.get(basePath, "tmp").toString();
 
     HoodieCLI.conf = jsc.hadoopConfiguration();
 
@@ -83,33 +76,19 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
 
     // generate 200 records
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(HoodieCLI.getTableMetaClient(), schema);
 
-    String fileName1 = "1_0_20160401010101.parquet";
-    String fileName2 = "2_0_20160401010101.parquet";
-
-    List<HoodieRecord> hoodieRecords1 = SchemaTestUtil.generateHoodieTestRecords(0, 100, schema);
-    HoodieClientTestUtils.writeParquetFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
-        fileName1, hoodieRecords1, schema, null, false);
-    List<HoodieRecord> hoodieRecords2 = SchemaTestUtil.generateHoodieTestRecords(100, 100, schema);
-    HoodieClientTestUtils.writeParquetFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
-        fileName2, hoodieRecords2, schema, null, false);
-
-    // generate commit file
-    String fileId1 = UUID.randomUUID().toString();
-    String testWriteToken = "1-0-1";
-    String commitTime = FSUtils.getCommitTime(fileName1);
-    Files.createFile(Paths.get(duplicatedPartitionPath + "/"
-        + FSUtils.makeLogFileName(fileId1, HoodieLogFile.DELTA_EXTENSION, commitTime, 1, testWriteToken)));
-    Files.createFile(Paths.get(tablePath + "/.hoodie/" + commitTime + ".commit"));
+    HoodieRecord[] hoodieRecords1 = SchemaTestUtil.generateHoodieTestRecords(0, 100, schema).toArray(new HoodieRecord[100]);
+    HoodieRecord[] hoodieRecords2 = SchemaTestUtil.generateHoodieTestRecords(100, 100, schema).toArray(new HoodieRecord[100]);
+    testTable.addCommit("20160401010101")
+        .withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "1", hoodieRecords1)
+        .withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "2", hoodieRecords2)
+        .withLogFile(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
 
     // read records and get 10 to generate duplicates
-    Dataset df = sqlContext.read().parquet(duplicatedPartitionPath);
-
-    String fileName3 = "3_0_20160401010202.parquet";
-    commitTime = FSUtils.getCommitTime(fileName3);
-    df.limit(10).withColumn("_hoodie_commit_time", lit(commitTime))
-        .write().parquet(duplicatedPartitionPath + File.separator + fileName3);
-    Files.createFile(Paths.get(tablePath + "/.hoodie/" + commitTime + ".commit"));
+    HoodieRecord[] dupRecords = Arrays.copyOf(hoodieRecords1, 10);
+    testTable.addCommit("20160401010202")
+        .withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "3", dupRecords);
 
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
   }

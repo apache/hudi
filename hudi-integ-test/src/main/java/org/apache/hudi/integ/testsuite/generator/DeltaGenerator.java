@@ -57,7 +57,7 @@ import scala.Tuple2;
  */
 public class DeltaGenerator implements Serializable {
 
-  private static Logger log = LoggerFactory.getLogger(DFSHoodieDatasetInputReader.class);
+  private static Logger log = LoggerFactory.getLogger(DeltaGenerator.class);
 
   private DeltaConfig deltaOutputConfig;
   private transient JavaSparkContext jsc;
@@ -94,11 +94,12 @@ public class DeltaGenerator implements Serializable {
 
   public JavaRDD<GenericRecord> generateInserts(Config operation) {
     long recordsPerPartition = operation.getNumRecordsInsert();
+    int numPartitions = operation.getNumInsertPartitions();
     int minPayloadSize = operation.getRecordSize();
     JavaRDD<GenericRecord> inputBatch = jsc.parallelize(Collections.EMPTY_LIST)
         .repartition(operation.getNumInsertPartitions()).mapPartitions(p -> {
           return new LazyRecordGeneratorIterator(new FlexibleSchemaRecordGenerationIterator(recordsPerPartition,
-              minPayloadSize, schemaStr, partitionPathFieldNames));
+            minPayloadSize, schemaStr, partitionPathFieldNames, numPartitions));
         });
     return inputBatch;
   }

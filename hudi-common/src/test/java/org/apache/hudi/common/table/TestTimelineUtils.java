@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestTimelineUtils extends HoodieCommonTestHarness {
@@ -68,7 +69,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       String ts = i + "";
       HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, ts);
       activeTimeline.createNewInstant(instant);
-      activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, ts, ts, 2)));
+      activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap())));
 
       HoodieInstant cleanInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, ts);
       activeTimeline.createNewInstant(cleanInstant);
@@ -107,7 +108,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       String ts = i + "";
       HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, ts);
       activeTimeline.createNewInstant(instant);
-      activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, partitionPath, ts, 2)));
+      activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, partitionPath, ts, 2, Collections.emptyMap())));
 
       HoodieInstant cleanInstant = new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, ts);
       activeTimeline.createNewInstant(cleanInstant);
@@ -147,6 +148,42 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     assertEquals(partitions, Arrays.asList(new String[]{"2", "3", "4"}));
   }
 
+  @Test
+  public void testGetExtraMetadata() throws Exception {
+    String extraMetadataKey = "test_key";
+    String extraMetadataValue1 = "test_value1";
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+    assertTrue(activeCommitTimeline.empty());
+    assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, extraMetadataKey).isPresent());
+
+    String ts = "0";
+    HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, ts);
+    activeTimeline.createNewInstant(instant);
+    activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap())));
+
+    ts =  "1";
+    instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, ts);
+    activeTimeline.createNewInstant(instant);
+    Map<String, String> extraMetadata = new HashMap<>();
+    extraMetadata.put(extraMetadataKey, extraMetadataValue1);
+    activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, extraMetadata)));
+
+    metaClient.reloadActiveTimeline();
+
+    // verify modified partitions included cleaned data
+    Option<String> extraLatestValue = TimelineUtils.getExtraMetadataFromLatest(metaClient, extraMetadataKey);
+    assertTrue(extraLatestValue.isPresent());
+    assertEquals(extraMetadataValue1, extraLatestValue.get());
+    assertFalse(TimelineUtils.getExtraMetadataFromLatest(metaClient, "unknownKey").isPresent());
+
+    Map<String, Option<String>> extraMetadataEntries = TimelineUtils.getAllExtraMetadataForKey(metaClient, extraMetadataKey);
+    assertEquals(2, extraMetadataEntries.size());
+    assertFalse(extraMetadataEntries.get("0").isPresent());
+    assertTrue(extraMetadataEntries.get("1").isPresent());
+    assertEquals(extraMetadataValue1, extraMetadataEntries.get("1").get());
+  }
+
   private byte[] getRestoreMetadata(String basePath, String partition, String commitTs, int count) throws IOException {
     HoodieRestoreMetadata metadata = new HoodieRestoreMetadata();
     List<HoodieRollbackMetadata> rollbackM = new ArrayList<>();
@@ -173,7 +210,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     return TimelineMetadataUtils.convertRollbackMetadata(commitTs, Option.empty(), rollbacks, rollbackStats);
   }
 
-  private byte[] getCommitMetadata(String basePath, String partition, String commitTs, int count)
+  private byte[] getCommitMetadata(String basePath, String partition, String commitTs, int count, Map<String, String> extraMetadata)
       throws IOException {
     HoodieCommitMetadata commit = new HoodieCommitMetadata();
     for (int i = 1; i <= count; i++) {
@@ -182,6 +219,9 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       stat.setPartitionPath(Paths.get(basePath, partition).toString());
       stat.setPath(commitTs + "." + i + ".parquet");
       commit.addWriteStat(partition, stat);
+    }
+    for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
+      commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
     }
     return commit.toJsonString().getBytes(StandardCharsets.UTF_8);
   }

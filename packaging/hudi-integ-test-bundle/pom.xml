@@ -6,9 +6,7 @@
   The ASF licenses this file to You under the Apache License, Version 2.0
   (the "License"); you may not use this file except in compliance with
   the License.  You may obtain a copy of the License at
-
        http://www.apache.org/licenses/LICENSE-2.0
-
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,7 +14,7 @@
   limitations under the License.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
@@ -69,42 +67,89 @@
                   <include>commons-dbcp:commons-dbcp</include>
                   <include>commons-lang:commons-lang</include>
                   <include>commons-pool:commons-pool</include>
+
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client</include>
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
+                  <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
                   <include>org.apache.hudi:hudi-integ-test</include>
+
+                  <include>org.jetbrains.kotlin:kotlin-stdlib-jdk8</include>
+                  <include>org.jetbrains.kotlin:kotlin-stdlib</include>
+                  <include>org.jetbrains.kotlin:kotlin-stdlib-common</include>
+                  <include>org.jetbrains:annotations</include>
+                  <include>org.jetbrains.kotlin:kotlin-stdlib-jdk7</include>
+
+                  <include>org.eclipse.jetty:jetty-server</include>
+                  <include>org.eclipse.jetty:jetty-http</include>
+                  <include>org.eclipse.jetty:jetty-util</include>
+                  <include>org.eclipse.jetty:jetty-io</include>
+                  <include>org.eclipse.jetty:jetty-webapp</include>
+                  <include>org.eclipse.jetty:jetty-xml</include>
+                  <include>org.eclipse.jetty:jetty-servlet</include>
+                  <include>org.eclipse.jetty:jetty-security</include>
+                  <include>org.eclipse.jetty.websocket:websocket-server</include>
+                  <include>org.eclipse.jetty.websocket:websocket-common</include>
+                  <include>org.eclipse.jetty.websocket:websocket-api</include>
+                  <include>org.eclipse.jetty.websocket:websocket-client</include>
+                  <include>org.eclipse.jetty:jetty-client</include>
+                  <include>org.eclipse.jetty.websocket:websocket-servlet</include>
+                  <include>org.mortbay.jetty:jetty</include>
+                  <include>org.mortbay.jetty:jetty-util</include>
+
+                  <include>org.rocksdb:rocksdbjni</include>
                   <include>com.beust:jcommander</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>com.twitter:parquet-avro</include>
                   <include>com.twitter.common:objectsize</include>
+
                   <include>io.confluent:kafka-avro-serializer</include>
                   <include>io.confluent:common-config</include>
                   <include>io.confluent:common-utils</include>
                   <include>io.confluent:kafka-schema-registry-client</include>
+                  <include>org.apache.kafka:kafka_${scala.binary.version}</include>
+                  <include>org.apache.kafka:kafka-clients</include>
+
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
+
+                  <include>io.javalin:javalin</include>
+
                   <include>org.apache.spark:spark-streaming-kafka-0-10_${scala.binary.version}</include>
-                  <include>org.apache.kafka:kafka_${scala.binary.version}</include>
                   <include>com.101tec:zkclient</include>
-                  <include>org.apache.kafka:kafka-clients</include>
+
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
                   <include>org.apache.hive:hive-exec</include>
+
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
                   <include>com.yammer.metrics:metrics-core</include>
+
                   <include>org.apache.thrift:libfb303</include>
                   <include>org.apache.thrift:libthrift</include>
+
+                  <include>org.apache.httpcomponents:httpclient</include>
+                  <include>org.apache.httpcomponents:httpcore</include>
+                  <include>org.apache.httpcomponents:fluent-hc</include>
+
+                  <include>org.codehaus.jackson:jackson-core-asl</include>
+                  <include>org.codehaus.jackson:jackson-mapper-asl</include>
+                  <include>com.fasterxml.jackson.core:jackson-annotations</include>
+                  <include>com.fasterxml.jackson.core:jackson-core</include>
+                  <include>com.fasterxml.jackson.core:jackson-databind</include>
                   <include>com.fasterxml.jackson.dataformat:jackson-dataformat-yaml</include>
+
+                  <include>org.apache.htrace:htrace-core</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -245,7 +290,7 @@
     <dependency>
       <groupId>io.javalin</groupId>
       <artifactId>javalin</artifactId>
-      <version>2.4.0</version>
+      <version>2.8.0</version>
     </dependency>
 
     <dependency>
@@ -276,7 +321,7 @@
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
-      <scope>test</scope>
+      <scope>compile</scope>
     </dependency>
 
     <dependency>
@@ -322,7 +367,14 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
-      <classifier>${hive.exec.classifier}</classifier>
+      <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-metastore</artifactId>
+      <version>${hive.version}</version>
+      <scope>provided</scope>
     </dependency>
 
     <dependency>
@@ -387,6 +439,7 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-utilities_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
+      <scope>compile</scope>
     </dependency>
 
     <dependency>
@@ -562,4 +615,3 @@
 
   </dependencies>
 </project>
-

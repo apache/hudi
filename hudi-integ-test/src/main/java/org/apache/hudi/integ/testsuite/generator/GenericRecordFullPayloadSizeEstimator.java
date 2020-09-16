@@ -61,6 +61,12 @@ public class GenericRecordFullPayloadSizeEstimator implements Serializable {
     return (int) size;
   }
 
+  /**
+   * Estimate the size of a given schema according to their type.
+   *
+   * @param schema schema to estimate.
+   * @return Size of the given schema.
+   */
   private long typeEstimate(Schema schema) {
     Schema localSchema = schema;
     if (isOption(schema)) {
@@ -112,6 +118,12 @@ public class GenericRecordFullPayloadSizeEstimator implements Serializable {
         || schema.getTypes().get(1).getType().equals(Schema.Type.NULL));
   }
 
+  /**
+   * Get the nonNull Schema of a given UNION Schema.
+   *
+   * @param schema
+   * @return
+   */
   protected Schema getNonNull(Schema schema) {
     List<Schema> types = schema.getTypes();
     return types.get(0).getType().equals(Schema.Type.NULL) ? types.get(1) : types.get(0);

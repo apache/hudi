@@ -26,6 +26,9 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
+/**
+ * A SparkSQL query node in the DAG of operations for a workflow.
+ */
 public class SparkSQLQueryNode extends DagNode<Boolean> {
 
   HiveServiceProvider hiveServiceProvider;
@@ -35,6 +38,12 @@ public class SparkSQLQueryNode extends DagNode<Boolean> {
     this.hiveServiceProvider = new HiveServiceProvider(config);
   }
 
+  /**
+   * Method helps to execute a sparkSql query from a hive table.
+   *
+   * @param executionContext Execution context to perform this query.
+   * @throws Exception will be thrown if ant error occurred
+   */
   @Override
   public void execute(ExecutionContext executionContext) throws Exception {
     log.info("Executing spark sql query node");

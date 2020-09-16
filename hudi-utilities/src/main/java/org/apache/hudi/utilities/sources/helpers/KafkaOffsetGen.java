@@ -173,6 +173,9 @@ public class KafkaOffsetGen {
     Map<TopicPartition, Long> fromOffsets;
     Map<TopicPartition, Long> toOffsets;
     try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
+      if (!checkTopicExists(consumer)) {
+        throw new HoodieException("Kafka topic:" + topicName + " does not exist");
+      }
       List<PartitionInfo> partitionInfoList;
       partitionInfoList = consumer.partitionsFor(topicName);
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
@@ -196,6 +199,7 @@ public class KafkaOffsetGen {
             throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' ");
         }
       }
+
       // Obtain the latest offsets.
       toOffsets = consumer.endOffsets(topicPartitions);
     }
@@ -241,6 +245,16 @@ public class KafkaOffsetGen {
       delayCount += entry.getValue() - offect > 0 ? entry.getValue() - offect : 0L;
     }
     return delayCount;
+  }
+
+  /**
+   * Check if topic exists.
+   * @param consumer kafka consumer
+   * @return
+   */
+  public boolean checkTopicExists(KafkaConsumer consumer)  {
+    Map<String, List<PartitionInfo>> result = consumer.listTopics();
+    return result.containsKey(topicName);
   }
 
   public String getTopicName() {
