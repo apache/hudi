@@ -181,10 +181,15 @@ docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.6.1-S
 Copy the following test properties file:
 ```
 echo '
+hoodie.insert.shuffle.parallelism=100
+hoodie.upsert.shuffle.parallelism=100
+hoodie.bulkinsert.shuffle.parallelism=100
+
 hoodie.deltastreamer.source.test.num_partitions=100
 hoodie.deltastreamer.source.test.datagen.use_rocksdb_for_storing_existing_keys=false
 hoodie.deltastreamer.source.test.max_unique_records=100000000
 hoodie.embed.timeline.server=false
+hoodie.deltastreamer.source.input.selector=org.apache.hudi.integ.testsuite.helpers.DFSTestSuitePathSelector
 
 hoodie.datasource.write.recordkey.field=_row_key
 hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.TimestampBasedKeyGenerator
@@ -202,9 +207,14 @@ hoodie.datasource.hive_sync.table=table1
 hoodie.datasource.hive_sync.assume_date_partitioning=false
 hoodie.datasource.hive_sync.partition_fields=_hoodie_partition_path
 hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor 
+hoodie.datasource.hive_sync.skip_ro_suffix=true
 ' > test.properties
 
 docker cp test.properties adhoc-2:/opt
+```
+
+```
+docker exec -it adhoc-2 /bin/bash
 ```
 
 Clean the working directories before starting a new test:
@@ -217,7 +227,6 @@ hdfs dfs -rm -r /user/hive/warehouse/hudi-integ-test-suite/input/
 Launch a Copy-on-Write job:
 
 ```
-docker exec -it adhoc-2 /bin/bash
 # COPY_ON_WRITE tables
 =========================
 ## Run the following command to start the test suite
@@ -292,5 +301,4 @@ spark-submit \
 --workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
 --table-type MERGE_ON_READ \
 --compact-scheduling-minshare 1
-```
- 
+``` 

@@ -17,7 +17,7 @@ first_insert:
   config:
     record_size: 70000
     num_insert_partitions: 1
-    repeat_count: 5
+    repeat_count: 1
     num_records_insert: 1000
   type: InsertNode
   deps: none
@@ -25,7 +25,7 @@ second_insert:
   config:
     record_size: 70000
     num_insert_partitions: 1
-    repeat_count: 5
+    repeat_count: 1
     num_records_insert: 10000
   deps: first_insert
   type: InsertNode
@@ -33,7 +33,7 @@ third_insert:
   config:
     record_size: 70000
     num_insert_partitions: 1
-    repeat_count: 2
+    repeat_count: 1
     num_records_insert: 300
   deps: second_insert
   type: InsertNode
@@ -46,7 +46,7 @@ first_upsert:
     record_size: 70000
     num_insert_partitions: 1
     num_records_insert: 300
-    repeat_count: 5
+    repeat_count: 1
     num_records_upsert: 100
     num_upsert_partitions: 10
   type: UpsertNode
@@ -75,7 +75,7 @@ second_upsert:
     record_size: 70000
     num_insert_partitions: 1
     num_records_insert: 300
-    repeat_count: 5
+    repeat_count: 1
     num_records_upsert: 100
     num_upsert_partitions: 10
   type: UpsertNode

@@ -28,12 +28,14 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.integ.testsuite.dag.ComplexDagGenerator;
 import org.apache.hudi.integ.testsuite.dag.HiveSyncDagGenerator;
 import org.apache.hudi.integ.testsuite.dag.HiveSyncDagGeneratorMOR;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator;
+import org.apache.hudi.integ.testsuite.helpers.DFSTestSuitePathSelector;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
@@ -105,6 +107,15 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     props.setProperty("hoodie.compact.inline.max.delta.commits", "3");
     props.setProperty("hoodie.parquet.max.file.size", "1024000");
     props.setProperty("hoodie.compact.inline.max.delta.commits", "0");
+    props.setProperty("hoodie.index.type", HoodieIndex.IndexType.GLOBAL_SIMPLE.name());
+    props.setProperty("hoodie.global.simple.index.parallelism", "2");
+    // Reduce shuffle parallelism, spark hangs when numPartitions >> numRecords to process
+    props.setProperty("hoodie.insert.shuffle.parallelism", "10");
+    props.setProperty("hoodie.upsert.shuffle.parallelism", "10");
+    props.setProperty("hoodie.bulkinsert.shuffle.parallelism", "10");
+    props.setProperty("hoodie.compact.inline.max.delta.commits", "0");
+    // Make path selection test suite specific
+    props.setProperty("hoodie.deltastreamer.source.input.selector", DFSTestSuitePathSelector.class.getName());
     // Hive Configs
     props.setProperty(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), "jdbc:hive2://127.0.0.1:9999/");
     props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "testdb1");
