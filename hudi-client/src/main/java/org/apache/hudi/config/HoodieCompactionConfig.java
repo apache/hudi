@@ -57,7 +57,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   // Upsert uses this file size to compact new data onto existing files..
   public static final String PARQUET_SMALL_FILE_LIMIT_BYTES = "hoodie.parquet.small.file.limit";
   // By default, treat any file <= 100MB as a small file.
-  public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = String.valueOf(0);
+  public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = String.valueOf(104857600);
   // Hudi will use the previous commit to calculate the estimated record size by totalBytesWritten/totalRecordsWritten.
   // If the previous commit is too small to make an accurate estimation, Hudi will search commits in the reverse order,
   // until find a commit has totalBytesWritten larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * RECORD_SIZE_ESTIMATION_THRESHOLD)

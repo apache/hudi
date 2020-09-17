@@ -35,7 +35,6 @@ public class TestConfigDefaultsForUber {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/").build();
 
     // Compaction config defaults
-    assertEquals(0, config.getParquetSmallFileLimit());
     assertEquals(96, config.getMinCommitsToKeep());
     assertEquals(128, config.getMaxCommitsToKeep());
     assertEquals(24, config.getCleanerCommitsRetained());
