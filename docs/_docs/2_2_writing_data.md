@@ -210,7 +210,7 @@ Sample config files for table wise overridden properties can be found under `hud
   --op BULK_INSERT
 ```
 
-For detailed information on how to configure and use `HoodieMultiTableDeltaStreamer`, please refer blog section.
+For detailed information on how to configure and use `HoodieMultiTableDeltaStreamer`, please refer [blog section](/blog/ingest-multiple-tables-using-hudi).
 
 ## Datasource Writer
 

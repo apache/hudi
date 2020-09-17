@@ -1,19 +1,18 @@
 ---
 title: "Ingest multiple tables using Hudi"
 excerpt: "Ingesting multiple tables using Hudi at a single go is now possible. This blog gives a detailed explanation of how to achieve the same using `HoodieMultiTableDeltaStreamer.java`"
-author: pratyakshsharma
+author: pratyaksh.sharma.hudi
 category: blog
 ---
 
-When building a change data capture pipeline for already existing or newly created relational databases, one of the most common problems that one faces is simplifying the onboarding process for multiple tables. Ingesting multiple tables to Hudi dataset at a single go is now possible using `HoodieMultiTableDeltaStreamer` class which is a wrapper on top of the more popular `HoodieDeltaStreamer` class. Currently `HoodieMultiTableDeltaStreamer` supports COPY_ON_WRITE storage type only and the ingestion is done in a sequential way.
+When building a change data capture pipeline for already existing or newly created relational databases, one of the most common problems that one faces is simplifying the onboarding process for multiple tables. Ingesting multiple tables to Hudi dataset at a single go is now possible using `HoodieMultiTableDeltaStreamer` class which is a wrapper on top of the more popular `HoodieDeltaStreamer` class. Currently `HoodieMultiTableDeltaStreamer` supports **COPY_ON_WRITE** storage type only and the ingestion is done in a **sequential** way.
 
 This blog will guide you through configuring and running `HoodieMultiTableDeltaStreamer`.
 
 ### Configuration
 
  - `HoodieMultiTableDeltaStreamer` expects users to maintain table wise overridden properties in separate files in a dedicated config folder. Common properties can be configured via common properties file also.
- - By default, hudi datasets are created under the path `<base-path-prefix>/<database_name>/<name_of_table_to_be_ingested>`.
- - You need to provide the names of tables to be ingested via the property `hoodie.deltastreamer.ingestion.tablesToBeIngested` in the format `<database>.<table>`, for example 
+ - By default, hudi datasets are created under the path `<base-path-prefix>/<database_name>/<name_of_table_to_be_ingested>`. You need to provide the names of tables to be ingested via the property `hoodie.deltastreamer.ingestion.tablesToBeIngested` in the format `<database>.<table>`, for example 
  
 ```java
 hoodie.deltastreamer.ingestion.tablesToBeIngested=db1.table1,db2.table2
@@ -99,3 +98,7 @@ hoodie.datasource.write.recordkey.field=_row_key2
 hoodie.datasource.write.partitionpath.field=created_at
 hoodie.deltastreamer.source.kafka.topic=topic2
 ```
+
+Contributions are welcome for extending multiple tables ingestion support to **MERGE_ON_READ** storage type and enabling `HoodieMultiTableDeltaStreamer` ingest multiple tables parallely. 
+
+Happy ingesting! 
