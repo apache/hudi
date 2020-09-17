@@ -164,11 +164,11 @@
                   <shadedPattern>org.apache.hudi.org.apache.jetty.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern> org.apache.hadoop.hbase.</pattern>
+                  <pattern>org.apache.hadoop.hbase.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern> org.apache.htrace.</pattern>
+                  <pattern>org.apache.htrace.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
                 </relocation>
                 <!-- TODO: Revisit GH ISSUE #533 & PR#633-->

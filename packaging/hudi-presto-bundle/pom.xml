@@ -103,11 +103,11 @@
                   <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern> org.apache.hadoop.hbase.</pattern>
+                  <pattern>org.apache.hadoop.hbase.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern> org.apache.htrace.</pattern>
+                  <pattern>org.apache.htrace.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
                 </relocation>
                 <relocation>
