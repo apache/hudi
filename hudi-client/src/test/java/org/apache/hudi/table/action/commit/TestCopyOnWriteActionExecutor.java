@@ -68,6 +68,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateExpectedPartitionNumRecords;
 import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateTestRecordsForBulkInsert;
@@ -86,7 +87,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     String fileName = UUID.randomUUID().toString();
     String partitionPath = "2016/05/04";
 
-    String instantTime = HoodieTestUtils.makeNewCommitTime();
+    String instantTime = makeNewCommitTime();
     HoodieWriteConfig config = makeHoodieClientConfig();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
@@ -118,7 +119,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
   public void testUpdateRecords() throws Exception {
     // Prepare the AvroParquetIO
     HoodieWriteConfig config = makeHoodieClientConfig();
-    String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
+    String firstCommitTime = makeNewCommitTime();
     HoodieWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -182,7 +183,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     List<HoodieRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
 
     Thread.sleep(1000);
-    String newCommitTime = HoodieTestUtils.makeNewCommitTime();
+    String newCommitTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     writeClient.startCommitWithTime(newCommitTime);
     List<WriteStatus> statuses = writeClient.upsert(jsc.parallelize(updatedRecords), newCommitTime).collect();
@@ -263,7 +264,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     // Prepare the AvroParquetIO
     HoodieWriteConfig config =
         makeHoodieClientConfigBuilder().withWriteStatusClass(MetadataMergeWriteStatus.class).build();
-    String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
+    String firstCommitTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, hadoopConf);
@@ -317,7 +318,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
   @Test
   public void testInsertRecords() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfig();
-    String instantTime = HoodieTestUtils.makeNewCommitTime();
+    String instantTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, hadoopConf);
 
@@ -368,7 +369,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().withStorageConfig(HoodieStorageConfig.newBuilder()
         .parquetMaxFileSize(64 * 1024).hfileMaxFileSize(64 * 1024)
         .parquetBlockSize(64 * 1024).parquetPageSize(64 * 1024).build()).build();
-    String instantTime = HoodieTestUtils.makeNewCommitTime();
+    String instantTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCopyOnWriteTable table = (HoodieCopyOnWriteTable) HoodieTable.create(metaClient, config, hadoopConf);
 
@@ -435,7 +436,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withBulkInsertParallelism(2).withBulkInsertSortMode(bulkInsertMode).build();
-    String instantTime = HoodieTestUtils.makeNewCommitTime();
+    String instantTime = makeNewCommitTime();
     HoodieWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(instantTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);

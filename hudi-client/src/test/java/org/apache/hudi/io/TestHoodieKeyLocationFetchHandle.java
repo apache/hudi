@@ -53,7 +53,7 @@ import scala.Tuple2;
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.makeNewCommitTime;
+import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.Transformations.recordsToPartitionRecordsMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
