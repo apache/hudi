@@ -21,9 +21,10 @@ import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedReco
 import org.apache.hudi.common.model.HoodieKey
 import org.apache.avro.Schema
 import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.SchemaConverters
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 
@@ -41,7 +42,8 @@ object AvroConversionUtils {
     // Use the Avro schema to derive the StructType which has the correct nullability information
     val dataType = SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
     val encoder = RowEncoder.apply(dataType).resolveAndBind()
-    df.queryExecution.toRdd.map(encoder.fromRow)
+    val deserializer = createDeserializer(encoder)
+    df.queryExecution.toRdd.map(row => deserializer.deserializeRow(row))
       .mapPartitions { records =>
         if (records.isEmpty) Iterator.empty
         else {
@@ -95,5 +97,14 @@ object AvroConversionUtils {
   def getAvroRecordNameAndNamespace(tableName: String): (String, String) = {
     val name = HoodieAvroUtils.sanitizeName(tableName)
     (s"${name}_record", s"hoodie.${name}")
+  }
+
+  def createDeserializer(encoder: ExpressionEncoder[Row]): SparkRowDeserializer = {
+    if (SPARK_VERSION.startsWith("2.")) {
+      new Spark2RowDeserializer(encoder)
+    } else {
+      val classInstance = Class.forName("org.apache.hudi.Spark3RowDeserializer")
+      classInstance.getConstructors()(0).newInstance(encoder).asInstanceOf[SparkRowDeserializer]
+    }
   }
 }

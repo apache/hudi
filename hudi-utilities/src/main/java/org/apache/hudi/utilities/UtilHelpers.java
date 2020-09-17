@@ -47,7 +47,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -80,6 +79,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import org.apache.spark.util.LongAccumulator;
 
 /**
  * Bunch of helper methods.
@@ -255,7 +255,7 @@ public class UtilHelpers {
   }
 
   public static int handleErrors(JavaSparkContext jsc, String instantTime, JavaRDD<WriteStatus> writeResponse) {
-    Accumulator<Integer> errors = jsc.accumulator(0);
+    LongAccumulator errors = jsc.sc().longAccumulator();
     writeResponse.foreach(writeStatus -> {
       if (writeStatus.hasErrors()) {
         errors.add(1);
