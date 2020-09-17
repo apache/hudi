@@ -92,13 +92,13 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     testTable.withInserts(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "4", hoodieRecords1)
             .withInserts(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, "6", hoodieRecords1);
 
-      // read records and get 10 to generate duplicates
-      HoodieRecord[] dupRecords = Arrays.copyOf(hoodieRecords1, 10);
-      testTable.withInserts(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "5", dupRecords);
-      testTable.addCommit("20160401010202")
+    // read records and get 10 to generate duplicates
+    HoodieRecord[] dupRecords = Arrays.copyOf(hoodieRecords1, 10);
+    testTable.withInserts(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "5", dupRecords);
+    testTable.addCommit("20160401010202")
         .withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "3", dupRecords);
-      testTable.withInserts(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, "7", dupRecords)
-              .withInserts(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, "8", dupRecords);
+    testTable.withInserts(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, "7", dupRecords)
+            .withInserts(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, "8", dupRecords);
 
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
   }
