@@ -310,14 +310,14 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         """{"id" : 1,  "name": "Jack", "age" : 10, "ts" : 1, "dt" : "20191212"}""",
         """{"id" : 2, "name": "Tom", "age" : 11, "ts" : 1, "dt" : "20191213"}""",
         """{"id" : 3, "name": "Bill", "age" : 12, "ts" : 1, "dt" : "20191212"}""")
-      val df = spark.read.json(spark.sparkContext.parallelize(data, 2))
+      val df = spark.read.json(sc.parallelize(data, 2))
 
       // write to Hudi
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df)
 
       val update = List(
         """{"id" : 1,   "age" : 22, "ts" : 2, "dt" : "20191212"}""")
-      val dfUpdate = spark.read.json(spark.sparkContext.parallelize(update, 2))
+      val dfUpdate = spark.read.json(sc.parallelize(update, 2))
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, dfUpdate)
 
       val dfSaved = spark.read.format("org.apache.hudi").load(path.toAbsolutePath.toAbsolutePath + "/*")
