@@ -90,7 +90,13 @@ public class UtilHelpers {
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
                                     SparkSession sparkSession, SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) throws IOException {
+
     try {
+      if (metrics==null) {
+        return (Source) ReflectionUtils.loadClass(sourceClass,
+                new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class,
+                        SchemaProvider.class, HoodieDeltaStreamerMetrics.class}, cfg, jssc, sparkSession, schemaProvider);
+      }
       return (Source) ReflectionUtils.loadClass(sourceClass,
           new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class,
               SchemaProvider.class, HoodieDeltaStreamerMetrics.class}, cfg, jssc, sparkSession, schemaProvider, metrics);
