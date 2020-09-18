@@ -38,6 +38,13 @@
             {% assign navigation = site.data.navigation["0.5.3_cn_docs"] %}
             {% assign menu_label = "文档菜单" %}
         {% endif %}
+    {% elsif page.version == "0.6.0" %}
+        {% assign navigation = site.data.navigation["0.6.0_docs"] %}
+
+        {% if page.language == "cn" %}
+            {% assign navigation = site.data.navigation["0.6.0_cn_docs"] %}
+            {% assign menu_label = "文档菜单" %}
+        {% endif %}
     {% endif %}
 {% endif %}
 

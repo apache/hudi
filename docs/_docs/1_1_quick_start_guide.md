@@ -19,7 +19,7 @@ From the extracted directory run spark-shell with Hudi as:
 ```scala
 // spark-shell
 spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
-  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3,org.apache.spark:spark-avro_2.11:2.4.4 \
+  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.6.0,org.apache.spark:spark-avro_2.11:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -192,27 +192,23 @@ val ds = spark.sql("select uuid, partitionpath from hudi_trips_snapshot").limit(
 
 // issue deletes
 val deletes = dataGen.generateDeletes(ds.collectAsList())
-val df = spark
-  .read
-  .json(spark.sparkContext.parallelize(deletes, 2))
+val df = spark.read.json(spark.sparkContext.parallelize(deletes, 2))
 
-df
-  .write
-  .format("hudi")
-  .options(getQuickstartWriteConfigs)
-  .option(OPERATION_OPT_KEY,"delete")
-  .option(PRECOMBINE_FIELD_OPT_KEY, "ts")
-  .option(RECORDKEY_FIELD_OPT_KEY, "uuid")
-  .option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath")
-  .option(TABLE_NAME, tableName)
-  .mode(Append)
-  .save(basePath)
+df.write.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(OPERATION_OPT_KEY,"delete").
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, tableName).
+  mode(Append).
+  save(basePath)
 
 // run the same read query as above.
-val roAfterDeleteViewDF = spark
-  .read
-  .format("hudi")
-  .load(basePath + "/*/*/*/*")
+val roAfterDeleteViewDF = spark.
+  read.
+  format("hudi").
+  load(basePath + "/*/*/*/*")
 
 roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 // fetch should return (total - 2) records
@@ -233,7 +229,7 @@ From the extracted directory run spark-shell with Hudi as:
 # pyspark
 export PYSPARK_PYTHON=$(which python3)
 spark-2.4.4-bin-hadoop2.7/bin/pyspark \
-  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3,org.apache.spark:spark-avro_2.11:2.4.4 \
+  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.6.0,org.apache.spark:spark-avro_2.11:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -427,7 +423,7 @@ hudi_delete_options = {
 
 from pyspark.sql.functions import lit
 deletes = list(map(lambda row: (row[0], row[1]), ds.collect()))
-df = spark.sparkContext.parallelize(deletes).toDF(['partitionpath', 'uuid']).withColumn('ts', lit(0.0))
+df = spark.sparkContext.parallelize(deletes).toDF(['uuid', 'partitionpath']).withColumn('ts', lit(0.0))
 df.write.format("hudi"). \
   options(**hudi_delete_options). \
   mode("append"). \
@@ -450,7 +446,7 @@ See the [deletion section](/docs/writing_data.html#deletes) of the writing data 
 
 You can also do the quickstart by [building hudi yourself](https://github.com/apache/hudi#building-apache-hudi-from-source), 
 and using `--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar` in the spark-shell command above
-instead of `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/hudi#build-with-scala-212)
+instead of `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.6.0`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/hudi#build-with-scala-212)
 for more info.
 
 Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 

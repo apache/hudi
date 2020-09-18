@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>云储存 - Apache Hudi</title>
+<meta name="description" content="与云存储连接">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="云储存">
+<meta property="og:url" content="https://hudi.apache.org/cn/docs/0.6.0-cloud.html">
+
+
+  <meta property="og:description" content="与云存储连接">
+
+
+
+
+
+  <meta property="article:modified_time" content="2019-06-16T21:59:57-04:00">
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/cn/docs/quick-start-guide.html" target="_self" >文档</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/community.html" target="_self" >社区</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/activity.html" target="_self" >动态</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/releases.html" target="_self" >发布</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+
+  
+
+    
+      
+
+
+
+
+
+
+
+<nav class="nav__list">
+  
+  <input id="ac-toc" name="accordion-toc" type="checkbox" />
+  <label for="ac-toc">文档菜单</label>
+  <ul class="nav__items">
+    
+      <li>
+        
+          <span class="nav__sub-title">入门指南</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-quick-start-guide.html" class="">快速开始</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-use_cases.html" class="">使用案例</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-powered_by.html" class="">演讲 & hudi 用户</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-comparison.html" class="">对比</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-docker_demo.html" class="">Docker 示例</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">帮助文档</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-concepts.html" class="">概念</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-writing_data.html" class="">写入数据</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-querying_data.html" class="">查询数据</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-configurations.html" class="">配置</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-performance.html" class="">性能</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-deployment.html" class="">管理</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-cloud.html" class="active">云储存</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">其他信息</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-docs-versions.html" class="">文档版本</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/cn/docs/0.6.0-privacy.html" class="">版权信息</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+  </ul>
+</nav>
+
+    
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">云储存
+</h1>
+          <!-- Output author details if some exist. -->
+          
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#与云存储连接">与云存储连接</a></li>
+</ul>
+          </nav>
+        </aside>
+        
+        <h2 id="与云存储连接">与云存储连接</h2>
+
+<p>无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。</p>
+
+<ul>
+  <li><a href="/cn/docs/0.6.0-s3_hoodie.html">AWS S3</a> <br />
+S3和Hudi协同工作所需的配置。</li>
+  <li><a href="/cn/docs/0.6.0-gcs_hoodie.html">Google Cloud Storage</a> <br />
+GCS和Hudi协同工作所需的配置。</li>
+  <li><a href="/cn/docs/0.6.0-oss_hoodie.html">Alibaba Cloud OSS</a> <br />
+阿里云和Hudi协同工作所需的配置。</li>
+  <li><a href="/cn/docs/0.6.0-azure_hoodie.html">Microsoft Azure</a> <br />
+Azure和Hudi协同工作所需的配置。</li>
+  <li><a href="/cn/docs/0.6.0-cos_hoodie.html">Tencent Cloud Object Storage</a> <br />
+COS和Hudi协同工作所需的配置。</li>
+</ul>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+
+  </body>
+</html>

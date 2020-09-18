@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Async Compaction Deployment Models - Apache Hudi</title>
+<meta name="description" content="Mechanisms for executing compaction jobs in Hudi asynchronously">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Async Compaction Deployment Models">
+<meta property="og:url" content="https://hudi.apache.org/blog/async-compaction-deployment-model/">
+
+
+  <meta property="og:description" content="Mechanisms for executing compaction jobs in Hudi asynchronously">
+
+
+
+
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/blog.html" target="_self" >Blog</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+    <div itemscope itemtype="https://schema.org/Person">
+
+  <div class="author__content">
+    
+      <h3 class="author__name" itemprop="name">Quick Links</h3>
+    
+    
+      <div class="author__bio" itemprop="description">
+        <p>Hudi <em>ingests</em> &amp; <em>manages</em> storage of large analytical datasets over DFS.</p>
+
+      </div>
+    
+  </div>
+
+  <div class="author__urls-wrapper">
+    <ul class="author__urls social-icons">
+      
+        
+          <li><a href="/docs/quick-start-guide" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-book" aria-hidden="true"></i> Documentation</a></li>
+
+          
+        
+          <li><a href="https://cwiki.apache.org/confluence/display/HUDI" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-wikipedia-w" aria-hidden="true"></i> Technical Wiki</a></li>
+
+          
+        
+          <li><a href="/contributing" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-thumbs-o-up" aria-hidden="true"></i> Contribution Guide</a></li>
+
+          
+        
+          <li><a href="https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-slack" aria-hidden="true"></i> Join on Slack</a></li>
+
+          
+        
+          <li><a href="https://github.com/apache/hudi" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-github" aria-hidden="true"></i> Fork on GitHub</a></li>
+
+          
+        
+          <li><a href="https://issues.apache.org/jira/projects/HUDI/summary" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Issues</a></li>
+
+          
+        
+          <li><a href="/security" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Security Issues</a></li>
+
+          
+        
+      
+    </ul>
+  </div>
+</div>
+
+  
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Async Compaction Deployment Models
+</h1>
+          <!-- Output author details if some exist. -->
+          <div class="page__author"><a href="https://cwiki.apache.org/confluence/display/~vbalaji">Balaji Varadarajan</a> posted on <time datetime="2020-08-21">August 21, 2020</time></span>
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+          <style>
+            .page {
+              padding-right: 0 !important;
+            }
+          </style>
+        
+        <p>We will look at different deployment models for executing compactions asynchronously.</p>
+
+<h1 id="compaction">Compaction</h1>
+
+<p>For Merge-On-Read table, data is stored using a combination of columnar (e.g parquet) + row based (e.g avro) file formats. 
+Updates are logged to delta files &amp; later compacted to produce new versions of columnar files synchronously or 
+asynchronously. One of th main motivations behind Merge-On-Read is to reduce data latency when ingesting records.
+Hence, it makes sense to run compaction asynchronously without blocking ingestion.</p>
+
+<h1 id="async-compaction">Async Compaction</h1>
+
+<p>Async Compaction is performed in 2 steps:</p>
+
+<ol>
+  <li><strong><em>Compaction Scheduling</em></strong>: This is done by the ingestion job. In this step, Hudi scans the partitions and selects <strong>file 
+slices</strong> to be compacted. A compaction plan is finally written to Hudi timeline.</li>
+  <li><strong><em>Compaction Execution</em></strong>: A separate process reads the compaction plan and performs compaction of file slices.</li>
+</ol>
+
+<h1 id="deployment-models">Deployment Models</h1>
+
+<p>There are few ways by which we can execute compactions asynchronously.</p>
+
+<h2 id="spark-structured-streaming">Spark Structured Streaming</h2>
+
+<p>With 0.6.0, we now have support for running async compactions in Spark 
+Structured Streaming jobs. Compactions are scheduled and executed asynchronously inside the 
+streaming job.  Async Compactions are enabled by default for structured streaming jobs
+on Merge-On-Read table.</p>
+
+<p>Here is an example snippet in java</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">import</span> <span class="err">org.apache.hudi.DataSourceWriteOptions;</span>
+<span class="err">import</span> <span class="err">org.apache.hudi.HoodieDataSourceHelpers;</span>
+<span class="err">import</span> <span class="err">org.apache.hudi.config.HoodieCompactionConfig;</span>
+<span class="err">import</span> <span class="err">org.apache.hudi.config.HoodieWriteConfig;</span>
+
+<span class="err">import</span> <span class="err">org.apache.spark.sql.streaming.OutputMode;</span>
+<span class="err">import</span> <span class="err">org.apache.spark.sql.streaming.ProcessingTime;</span>
+
+
+ <span class="err">DataStreamWriter&lt;Row&gt;</span> <span class="py">writer</span> <span class="p">=</span> <span class="s">streamingInput.writeStream().format("org.apache.hudi")</span>
+        <span class="err">.option(DataSourceWriteOptions.OPERATION_OPT_KEY(),</span> <span class="err">operationType)</span>
+        <span class="err">.option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY(),</span> <span class="err">tableType)</span>
+        <span class="err">.option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(),</span> <span class="err">"_row_key")</span>
+        <span class="err">.option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(),</span> <span class="err">"partition")</span>
+        <span class="err">.option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(),</span> <span class="err">"timestamp")</span>
+        <span class="err">.option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP,</span> <span class="err">"10")</span>
+        <span class="err">.option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(),</span> <span class="err">"true")</span>
+        <span class="err">.option(HoodieWriteConfig.TABLE_NAME,</span> <span class="err">tableName).option("checkpointLocation",</span> <span class="err">checkpointLocation)</span>
+        <span class="err">.outputMode(OutputMode.Append());</span>
+ <span class="err">writer.trigger(new</span> <span class="err">ProcessingTime(30000)).start(tablePath);</span>
+</code></pre></div></div>
+
+<h2 id="deltastreamer-continuous-mode">DeltaStreamer Continuous Mode</h2>
+<p>Hudi DeltaStreamer provides continuous ingestion mode where a single long running spark application<br />
+ingests data to Hudi table continuously from upstream sources. In this mode, Hudi supports managing asynchronous 
+compactions. Here is an example snippet for running in continuous mode with async compactions</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">spark-submit</span> <span class="err">--packages</span> <span class="py">org.apache.hudi</span><span class="p">:</span><span class="s">hudi-utilities-bundle_2.11:0.6.0 </span><span class="se">\
+</span><span class="s">--class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer </span><span class="se">\
+</span><span class="s">--table-type MERGE_ON_READ </span><span class="se">\
+</span><span class="s">--target-base-path &lt;hudi_base_path&gt; </span><span class="se">\
+</span><span class="s">--target-table &lt;hudi_table&gt; </span><span class="se">\
+</span><span class="s">--source-class org.apache.hudi.utilities.sources.JsonDFSSource </span><span class="se">\
+</span><span class="s">--source-ordering-field ts </span><span class="se">\
+</span><span class="s">--schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider </span><span class="se">\
+</span><span class="s">--props /path/to/source.properties </span><span class="se">\
+</span><span class="s">--continous</span>
+</code></pre></div></div>
+
+<h2 id="hudi-cli">Hudi CLI</h2>
+<p>Hudi CLI is yet another way to execute specific compactions asynchronously. Here is an example</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">hudi</span><span class="p">:</span><span class="s">trips-&gt;compaction run --tableName &lt;table_name&gt; --parallelism &lt;parallelism&gt; --compactionInstant &lt;InstantTime&gt;</span>
+<span class="err">...</span>
+</code></pre></div></div>
+
+<h2 id="hudi-compactor-script">Hudi Compactor Script</h2>
+<p>Hudi provides a standalone tool to also execute specific compactions asynchronously. Here is an example</p>
+
+<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">spark-submit</span> <span class="err">--packages</span> <span class="py">org.apache.hudi</span><span class="p">:</span><span class="s">hudi-utilities-bundle_2.11:0.6.0 </span><span class="se">\
+</span><span class="s">--class org.apache.hudi.utilities.HoodieCompactor </span><span class="se">\
+</span><span class="s">--base-path &lt;base_path&gt; </span><span class="se">\
+</span><span class="s">--table-name &lt;table_name&gt; </span><span class="se">\
+</span><span class="s">--instant-time &lt;compaction_instant&gt; </span><span class="se">\
+</span><span class="s">--schema-file &lt;schema_file&gt;</span>
+</code></pre></div></div>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+
+  </body>
+</html>

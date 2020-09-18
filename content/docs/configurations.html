@@ -507,6 +507,10 @@ This is useful to store checkpointing information, in a consistent way with the 
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.hive_sync.assume_date_partitioning</code>, Default: <code class="highlighter-rouge">false</code> <br />
   <span style="color:grey">Assume partitioning is yyyy/mm/dd</span></p>
 
+<h4 id="HIVE_USE_JDBC_OPT_KEY">HIVE_USE_JDBC_OPT_KEY</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.datasource.hive_sync.use_jdbc</code>, Default: <code class="highlighter-rouge">true</code> <br />
+  <span style="color:grey">Use JDBC when hive synchronization is enabled</span></p>
+
 <h3 id="read-options">Read Options</h3>
 
 <p>Options useful for reading tables via <code class="highlighter-rouge">read.format.option(...)</code></p>
@@ -563,6 +567,18 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p>Property: <code class="highlighter-rouge">hoodie.bulkinsert.shuffle.parallelism</code><br />
 <span style="color:grey">Bulk insert is meant to be used for large initial imports and this parallelism determines the initial number of files in your table. Tune this to achieve a desired optimal size during initial import.</span></p>
 
+<h4 id="withUserDefinedBulkInsertPartitionerClass">withUserDefinedBulkInsertPartitionerClass(className = x.y.z.UserDefinedPatitionerClass)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bulkinsert.user.defined.partitioner.class</code><br />
+<span style="color:grey">If specified, this class will be used to re-partition input records before they are inserted.</span></p>
+
+<h4 id="withBulkInsertSortMode">withBulkInsertSortMode(mode = BulkInsertSortMode.GLOBAL_SORT)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bulkinsert.sort.mode</code><br />
+<span style="color:grey">Sorting modes to use for sorting records for bulk insert. This is leveraged when user defined partitioner is not configured. Default is GLOBAL_SORT. 
+   Available values are - <strong>GLOBAL_SORT</strong>:  this ensures best file sizes, with lowest memory overhead at cost of sorting. 
+  <strong>PARTITION_SORT</strong>: Strikes a balance by only sorting within a partition, still keeping the memory overhead of writing lowest and best effort file sizing. 
+  <strong>NONE</strong>: No sorting. Fastest and matches <code class="highlighter-rouge">spark.write.parquet()</code> in terms of number of files, overheads 
+</span></p>
+
 <h4 id="withParallelism">withParallelism(insert_shuffle_parallelism = 1500, upsert_shuffle_parallelism = 1500)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.insert.shuffle.parallelism</code>, <code class="highlighter-rouge">hoodie.upsert.shuffle.parallelism</code><br />
 <span style="color:grey">Once data has been initially imported, this parallelism controls initial parallelism for reading input records. Ensure this value is high enough say: 1 partition for 1 GB of input data</span></p>
@@ -587,10 +603,22 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p>Property: <code class="highlighter-rouge">hoodie.consistency.check.enabled</code><br />
 <span style="color:grey">Should HoodieWriteClient perform additional checks to ensure written files’ are listable on the underlying filesystem/storage. Set this to true, to workaround S3’s eventual consistency model and ensure all data written as a part of a commit is faithfully available for queries. </span></p>
 
+<h4 id="withRollbackParallelism">withRollbackParallelism(rollbackParallelism = 100)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.rollback.parallelism</code><br />
+<span style="color:grey">Determines the parallelism for rollback of commits.</span></p>
+
+<h4 id="withRollbackUsingMarkers">withRollbackUsingMarkers(rollbackUsingMarkers = false)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.rollback.using.markers</code><br />
+<span style="color:grey">Enables a more efficient mechanism for rollbacks based on the marker files generated during the writes. Turned off by default.</span></p>
+
+<h4 id="withMarkersDeleteParallelism">withMarkersDeleteParallelism(parallelism = 100)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.markers.delete.parallelism</code><br />
+<span style="color:grey">Determines the parallelism for deleting marker files.</span></p>
+
 <h3 id="index-configs">Index configs</h3>
 <p>Following configs control indexing behavior, which tags incoming records as either inserts or updates to older records.</p>
 
-<p><a href="#withIndexConfig">withIndexConfig</a> (HoodieIndexConfig) <br />
+<p><a href="#index-configs">withIndexConfig</a> (HoodieIndexConfig) <br />
 <span style="color:grey">This is pluggable to have a external index (HBase) or use the default bloom filter stored in the Parquet files</span></p>
 
 <h4 id="withIndexClass">withIndexClass(indexClass = “x.y.z.UserDefinedIndex”)</h4>
@@ -599,7 +627,9 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 
 <h4 id="withIndexType">withIndexType(indexType = BLOOM)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.index.type</code> <br />
-<span style="color:grey">Type of index to use. Default is Bloom filter. Possible options are [BLOOM | HBASE | INMEMORY]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files</span></p>
+<span style="color:grey">Type of index to use. Default is Bloom filter. Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files</span></p>
+
+<h4 id="bloom-index-configs">Bloom Index configs</h4>
 
 <h4 id="bloomFilterNumEntries">bloomFilterNumEntries(numEntries = 60000)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.index.bloom.num_entries</code> <br />
@@ -608,6 +638,10 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <h4 id="bloomFilterFPP">bloomFilterFPP(fpp = 0.000000001)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.index.bloom.fpp</code> <br />
 <span style="color:grey">Only applies if index type is BLOOM. <br /> Error rate allowed given the number of entries. This is used to calculate how many bits should be assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), we like to tradeoff disk space for lower false positives</span></p>
+
+<h4 id="bloomIndexParallelism">bloomIndexParallelism(0)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bloom.index.parallelism</code> <br />
+<span style="color:grey">Only applies if index type is BLOOM. <br /> This is the amount of parallelism for index lookup, which involves a Spark Shuffle. By default, this is auto computed based on input workload characteristics</span></p>
 
 <h4 id="bloomIndexPruneByRanges">bloomIndexPruneByRanges(pruneRanges = true)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.bloom.index.prune.by.ranges</code> <br />
@@ -625,13 +659,27 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p>Property: <code class="highlighter-rouge">hoodie.bloom.index.bucketized.checking</code> <br />
 <span style="color:grey">Only applies if index type is BLOOM. <br /> When true, bucketized bloom filtering is enabled. This reduces skew seen in sort based bloom index lookup</span></p>
 
+<h4 id="bloomIndexFilterType">bloomIndexFilterType(bucketizedChecking = BloomFilterTypeCode.SIMPLE)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bloom.index.filter.type</code> <br />
+<span style="color:grey">Filter type used. Default is BloomFilterTypeCode.SIMPLE. Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. Dynamic bloom filters auto size themselves based on number of keys</span></p>
+
+<h4 id="bloomIndexFilterDynamicMaxEntries">bloomIndexFilterDynamicMaxEntries(maxNumberOfEntries = 100000)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bloom.index.filter.dynamic.max.entries</code> <br />
+<span style="color:grey">The threshold for the maximum number of keys to record in a dynamic Bloom filter row. Only applies if filter type is BloomFilterTypeCode.DYNAMIC_V0.</span></p>
+
 <h4 id="bloomIndexKeysPerBucket">bloomIndexKeysPerBucket(keysPerBucket = 10000000)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.bloom.index.keys.per.bucket</code> <br />
 <span style="color:grey">Only applies if bloomIndexBucketizedChecking is enabled and index type is bloom. <br /> This configuration controls the “bucket” size which tracks the number of record-key checks made against a single file and is the unit of work allocated to each partition performing bloom filter lookup. A higher value would amortize the fixed cost of reading a bloom filter to memory. </span></p>
 
-<h4 id="bloomIndexParallelism">bloomIndexParallelism(0)</h4>
-<p>Property: <code class="highlighter-rouge">hoodie.bloom.index.parallelism</code> <br />
-<span style="color:grey">Only applies if index type is BLOOM. <br /> This is the amount of parallelism for index lookup, which involves a Spark Shuffle. By default, this is auto computed based on input workload characteristics</span></p>
+<h5 id="withBloomIndexInputStorageLevel">withBloomIndexInputStorageLevel(level = MEMORY_AND_DISK_SER)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.bloom.index.input.storage.level</code> <br />
+<span style="color:grey">Only applies when <a href="#bloomIndexUseCaching">#bloomIndexUseCaching</a> is set. Determine what level of persistence is used to cache input RDDs.<br /> Refer to org.apache.spark.storage.StorageLevel for different values</span></p>
+
+<h5 id="bloomIndexUpdatePartitionPath">bloomIndexUpdatePartitionPath(updatePartitionPath = false)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.bloom.index.update.partition.path</code> <br />
+<span style="color:grey">Only applies if index type is GLOBAL_BLOOM. <br />When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition.</span></p>
+
+<h4 id="hbase-index-configs">HBase Index configs</h4>
 
 <h4 id="hbaseZkQuorum">hbaseZkQuorum(zkString) [Required]</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.index.hbase.zkquorum</code> <br />
@@ -649,9 +697,23 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p>Property: <code class="highlighter-rouge">hoodie.index.hbase.table</code> <br />
 <span style="color:grey">Only applies if index type is HBASE. HBase Table name to use as the index. Hudi stores the row_key and [partition_path, fileID, commitTime] mapping in the table.</span></p>
 
-<h5 id="bloomIndexUpdatePartitionPath">bloomIndexUpdatePartitionPath(updatePartitionPath = false)</h5>
-<p>Property: <code class="highlighter-rouge">hoodie.bloom.index.update.partition.path</code> <br />
-<span style="color:grey">Only applies if index type is GLOBAL_BLOOM. <br />When set to true, an update including the partition path of a record that already exists will result in inserting the incoming record into the new partition and deleting the original record in the old partition. When set to false, the original record will only be updated in the old partition.</span></p>
+<h4 id="simple-index-configs">Simple Index configs</h4>
+
+<h4 id="simpleIndexUseCaching">simpleIndexUseCaching(useCaching = true)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.simple.index.use.caching</code> <br />
+<span style="color:grey">Only applies if index type is SIMPLE. <br /> When true, the input RDD will cached to speed up index lookup by reducing IO for computing parallelism or affected partitions</span></p>
+
+<h5 id="withSimpleIndexInputStorageLevel">withSimpleIndexInputStorageLevel(level = MEMORY_AND_DISK_SER)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.simple.index.input.storage.level</code> <br />
+<span style="color:grey">Only applies when <a href="#simpleIndexUseCaching">#simpleIndexUseCaching</a> is set. Determine what level of persistence is used to cache input RDDs.<br /> Refer to org.apache.spark.storage.StorageLevel for different values</span></p>
+
+<h4 id="withSimpleIndexParallelism">withSimpleIndexParallelism(parallelism = 50)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.simple.index.parallelism</code> <br />
+<span style="color:grey">Only applies if index type is SIMPLE. <br /> This is the amount of parallelism for index lookup, which involves a Spark Shuffle.</span></p>
+
+<h4 id="withGlobalSimpleIndexParallelism">withGlobalSimpleIndexParallelism(parallelism = 100)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.global.simple.index.parallelism</code> <br />
+<span style="color:grey">Only applies if index type is GLOBAL_SIMPLE. <br /> This is the amount of parallelism for index lookup, which involves a Spark Shuffle.</span></p>
 
 <h3 id="storage-configs">Storage configs</h3>
 <p>Controls aspects around sizing parquet and log files.</p>
@@ -706,6 +768,14 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p>Property: <code class="highlighter-rouge">hoodie.cleaner.commits.retained</code> <br />
 <span style="color:grey">Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much you can incrementally pull on this table</span></p>
 
+<h4 id="withAutoClean">withAutoClean(autoClean = true)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.clean.automatic</code> <br />
+<span style="color:grey">Should cleanup if there is anything to cleanup immediately after the commit</span></p>
+
+<h4 id="withAsyncClean">withAsyncClean(asyncClean = false)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.clean.async</code> <br />
+<span style="color:grey">Only applies when <a href="#withAutoClean">#withAutoClean</a> is turned on. When turned on runs cleaner async with writing. </span></p>
+
 <h4 id="archiveCommitsWith">archiveCommitsWith(minCommits = 96, maxCommits = 128)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.keep.min.commits</code>, <code class="highlighter-rouge">hoodie.keep.max.commits</code> <br />
 <span style="color:grey">Each commit is a small file in the <code class="highlighter-rouge">.hoodie</code> directory. Since DFS typically does not favor lots of small files, Hudi archives older commits into a sequential log. A commit is published atomically by a rename of the commit file.</span></p>
@@ -724,7 +794,7 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 
 <h4 id="autoTuneInsertSplits">autoTuneInsertSplits(true)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.copyonwrite.insert.auto.split</code> <br />
-<span style="color:grey">Should hudi dynamically compute the insertSplitSize based on the last 24 commit’s metadata. Turned off by default. </span></p>
+<span style="color:grey">Should hudi dynamically compute the insertSplitSize based on the last 24 commit’s metadata. Turned on by default. </span></p>
 
 <h4 id="approxRecordSize">approxRecordSize(size = 1024)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.copyonwrite.record.size.estimate</code> <br />
@@ -886,7 +956,7 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <span style="color:grey">This property controls what fraction of the failed record, exceptions we report back to driver</span></p>
 
 <h3 id="write-commit-callback-configs">Write commit callback configs</h3>
-<p>Controls callback behavior on write commit. Exception will be thrown if user enabled the callback service and errors occurred during the process of callback. Currently support http callback only, kafka implementation will be supported in the near future. 
+<p>Controls callback behavior on write commit. Exception will be thrown if user enabled the callback service and errors occurred during the process of callback. Currently support HTTP, Kafka type. 
 <a href="#withCallbackConfig">withCallbackConfig</a> (HoodieWriteCommitCallbackConfig) <br />
 <span style="color:grey">Callback related configs</span></p>
 
@@ -896,9 +966,10 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 
 <h5 id="withCallbackClass">withCallbackClass(callbackClass)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.class</code> <br />
-<span style="color:grey">Full path of user-defined callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default</span></p>
+<span style="color:grey">Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default</span></p>
 
-<h4 id="hoodiewritecommithttpcallback">HoodieWriteCommitHttpCallback</h4>
+<h4 id="http-callback">HTTP CALLBACK</h4>
+<p>Callback via HTTP, User does not need to specify this way explicitly, it is the default type.</p>
 
 <h5 id="withCallbackHttpUrl">withCallbackHttpUrl(url)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.http.url</code> <br />
@@ -911,6 +982,29 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <h5 id="withCallbackHttpApiKey">withCallbackHttpApiKey(apiKey)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.http.api.key</code> <br />
 <span style="color:grey">Http callback API key. hudi_write_commit_http_callback by default</span></p>
+
+<h4 id="kafka-callback">KAFKA CALLBACK</h4>
+<p>To use kafka callback, User should set <code class="highlighter-rouge">hoodie.write.commit.callback.class</code> = <code class="highlighter-rouge">org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback</code></p>
+
+<h5 id="callback_kafka_bootstrap_servers">CALLBACK_KAFKA_BOOTSTRAP_SERVERS</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.bootstrap.servers</code> <br />
+<span style="color:grey">Bootstrap servers of kafka callback cluster</span></p>
+
+<h5 id="callback_kafka_topic">CALLBACK_KAFKA_TOPIC</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.topic</code> <br />
+<span style="color:grey">Kafka topic to be sent along with callback messages</span></p>
+
+<h5 id="callback_kafka_partition">CALLBACK_KAFKA_PARTITION</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.partition</code> <br />
+<span style="color:grey">partition of <code class="highlighter-rouge">CALLBACK_KAFKA_TOPIC</code>, 0 by default</span></p>
+
+<h5 id="callback_kafka_acks">CALLBACK_KAFKA_ACKS</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.acks</code> <br />
+<span style="color:grey">kafka acks level, <code class="highlighter-rouge">all</code> by default</span></p>
+
+<h5 id="callback_kafka_retries">CALLBACK_KAFKA_RETRIES</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.retries</code> <br />
+<span style="color:grey">Times to retry. 3 by default</span></p>
 
       </section>
 

@@ -406,7 +406,7 @@ From the extracted directory run spark-shell with Hudi as:</p>
 
 <div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// spark-shell
 </span><span class="n">spark</span><span class="o">-</span><span class="mf">2.4</span><span class="o">.</span><span class="mi">4</span><span class="o">-</span><span class="n">bin</span><span class="o">-</span><span class="n">hadoop2</span><span class="o">.</span><span class="mi">7</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">spark</span><span class="o">-</span><span class="n">shell</span> <span class="o">\</span>
-  <span class="o">--</span><span class="n">packages</span> <span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">hudi</span><span class="k">:</span><span class="kt">hudi-spark-bundle_2.</span><span class="err">11</span><span class="kt">:</span><span class="err">0</span><span class="kt">.</span><span class="err">5</span><span class="kt">.</span><span class="err">3</span><span class="o">,</span><span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">spark</span><span class="k">:</span><span class="kt">spark-avro_2.</span><span class="err">11</span><span class="kt">:</span><span class="err">2</span><span class="kt">.</span><span class="err">4</span><span class="kt">.</span><span class="err">4</span> <span class="kt">\</span>
+  <span class="o">--</span><span class="n">packages</span> <span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">hudi</span><span class="k">:</span><span class="kt">hudi-spark-bundle_2.</span><span class="err">11</span><span class="kt">:</span><span class="err">0</span><span class="kt">.</span><span class="err">6</span><span class="kt">.</span><span class="err">0</span><span class="o">,</span><span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">spark</span><span class="k">:</span><span class="kt">spark-avro_2.</span><span class="err">11</span><span class="kt">:</span><span class="err">2</span><span class="kt">.</span><span class="err">4</span><span class="kt">.</span><span class="err">4</span> <span class="kt">\</span>
   <span class="kt">--conf</span> <span class="kt">'spark.serializer</span><span class="o">=</span><span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">spark</span><span class="o">.</span><span class="py">serializer</span><span class="o">.</span><span class="py">KryoSerializer</span><span class="o">'</span>
 </code></pre></div></div>
 
@@ -566,27 +566,23 @@ specific commit time and beginTime to “000” (denoting earliest possible comm
 
 <span class="c1">// issue deletes
 </span><span class="k">val</span> <span class="nv">deletes</span> <span class="k">=</span> <span class="nv">dataGen</span><span class="o">.</span><span class="py">generateDeletes</span><span class="o">(</span><span class="nv">ds</span><span class="o">.</span><span class="py">collectAsList</span><span class="o">())</span>
-<span class="k">val</span> <span class="nv">df</span> <span class="k">=</span> <span class="n">spark</span>
-  <span class="o">.</span><span class="py">read</span>
-  <span class="o">.</span><span class="py">json</span><span class="o">(</span><span class="nv">spark</span><span class="o">.</span><span class="py">sparkContext</span><span class="o">.</span><span class="py">parallelize</span><span class="o">(</span><span class="n">deletes</span><span class="o">,</span> <span class="mi">2</span><span class="o">))</span>
+<span class="k">val</span> <span class="nv">df</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">read</span><span class="o">.</span><span class="py">json</span><span class="o">(</span><span class="nv">spark</span><span class="o">.</span><span class="py">sparkContext</span><span class="o">.</span><span class="py">parallelize</span><span class="o">(</span><span class="n">deletes</span><span class="o">,</span> <span class="mi">2</span><span class="o">))</span>
 
-<span class="n">df</span>
-  <span class="o">.</span><span class="py">write</span>
-  <span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">option</span><span class="o">(</span><span class="nc">OPERATION_OPT_KEY</span><span class="o">,</span><span class="s">"delete"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">option</span><span class="o">(</span><span class="nc">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">option</span><span class="o">(</span><span class="nc">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">option</span><span class="o">(</span><span class="nc">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">option</span><span class="o">(</span><span class="nc">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">mode</span><span class="o">(</span><span class="nc">Append</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">)</span>
+<span class="nv">df</span><span class="o">.</span><span class="py">write</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+  <span class="nf">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">OPERATION_OPT_KEY</span><span class="o">,</span><span class="s">"delete"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">).</span>
+  <span class="nf">mode</span><span class="o">(</span><span class="nc">Append</span><span class="o">).</span>
+  <span class="nf">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">)</span>
 
 <span class="c1">// run the same read query as above.
-</span><span class="k">val</span> <span class="nv">roAfterDeleteViewDF</span> <span class="k">=</span> <span class="n">spark</span>
-  <span class="o">.</span><span class="py">read</span>
-  <span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">)</span>
-  <span class="o">.</span><span class="py">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">)</span>
+</span><span class="k">val</span> <span class="nv">roAfterDeleteViewDF</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span>
+  <span class="n">read</span><span class="o">.</span>
+  <span class="nf">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+  <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">)</span>
 
 <span class="nv">roAfterDeleteViewDF</span><span class="o">.</span><span class="py">registerTempTable</span><span class="o">(</span><span class="s">"hudi_trips_snapshot"</span><span class="o">)</span>
 <span class="c1">// fetch should return (total - 2) records
@@ -605,7 +601,7 @@ From the extracted directory run spark-shell with Hudi as:</p>
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># pyspark
 </span><span class="n">export</span> <span class="n">PYSPARK_PYTHON</span><span class="o">=</span><span class="err">$</span><span class="p">(</span><span class="n">which</span> <span class="n">python3</span><span class="p">)</span>
 <span class="n">spark</span><span class="o">-</span><span class="mf">2.4.4</span><span class="o">-</span><span class="nb">bin</span><span class="o">-</span><span class="n">hadoop2</span><span class="mf">.7</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">pyspark</span> \
-  <span class="o">--</span><span class="n">packages</span> <span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="p">:</span><span class="n">hudi</span><span class="o">-</span><span class="n">spark</span><span class="o">-</span><span class="n">bundle_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">0.5.3</span><span class="p">,</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">spark</span><span class="p">:</span><span class="n">spark</span><span class="o">-</span><span class="n">avro_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">2.4.4</span> \
+  <span class="o">--</span><span class="n">packages</span> <span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="p">:</span><span class="n">hudi</span><span class="o">-</span><span class="n">spark</span><span class="o">-</span><span class="n">bundle_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">0.6.0</span><span class="p">,</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">spark</span><span class="p">:</span><span class="n">spark</span><span class="o">-</span><span class="n">avro_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">2.4.4</span> \
   <span class="o">--</span><span class="n">conf</span> <span class="s">'spark.serializer=org.apache.spark.serializer.KryoSerializer'</span>
 </code></pre></div></div>
 
@@ -786,7 +782,7 @@ specific commit time and beginTime to “000” (denoting earliest possible comm
 
 <span class="kn">from</span> <span class="nn">pyspark.sql.functions</span> <span class="kn">import</span> <span class="n">lit</span>
 <span class="n">deletes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">ds</span><span class="o">.</span><span class="n">collect</span><span class="p">()))</span>
-<span class="n">df</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">sparkContext</span><span class="o">.</span><span class="n">parallelize</span><span class="p">(</span><span class="n">deletes</span><span class="p">)</span><span class="o">.</span><span class="n">toDF</span><span class="p">([</span><span class="s">'partitionpath'</span><span class="p">,</span> <span class="s">'uuid'</span><span class="p">])</span><span class="o">.</span><span class="n">withColumn</span><span class="p">(</span><span class="s">'ts'</span><span class="p">,</span> <span class="n">lit</span><span class="p">(</span><span class="mf">0.0</span><span class="p">))</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="n">sparkContext</span><span class="o">.</span><span class="n">parallelize</span><span class="p">(</span><span class="n">deletes</span><span class="p">)</span><span class="o">.</span><span class="n">toDF</span><span class="p">([</span><span class="s">'uuid'</span><span class="p">,</span> <span class="s">'partitionpath'</span><span class="p">])</span><span class="o">.</span><span class="n">withColumn</span><span class="p">(</span><span class="s">'ts'</span><span class="p">,</span> <span class="n">lit</span><span class="p">(</span><span class="mf">0.0</span><span class="p">))</span>
 <span class="n">df</span><span class="o">.</span><span class="n">write</span><span class="o">.</span><span class="nb">format</span><span class="p">(</span><span class="s">"hudi"</span><span class="p">)</span><span class="o">.</span> \
   <span class="n">options</span><span class="p">(</span><span class="o">**</span><span class="n">hudi_delete_options</span><span class="p">)</span><span class="o">.</span> \
   <span class="n">mode</span><span class="p">(</span><span class="s">"append"</span><span class="p">)</span><span class="o">.</span> \
@@ -808,7 +804,7 @@ specific commit time and beginTime to “000” (denoting earliest possible comm
 
 <p>You can also do the quickstart by <a href="https://github.com/apache/hudi#building-apache-hudi-from-source">building hudi yourself</a>, 
 and using <code class="highlighter-rouge">--jars &lt;path to hudi_code&gt;/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar</code> in the spark-shell command above
-instead of <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3</code>. Hudi also supports scala 2.12. Refer <a href="https://github.com/apache/hudi#build-with-scala-212">build with scala 2.12</a>
+instead of <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle_2.11:0.6.0</code>. Hudi also supports scala 2.12. Refer <a href="https://github.com/apache/hudi#build-with-scala-212">build with scala 2.12</a>
 for more info.</p>
 
 <p>Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 

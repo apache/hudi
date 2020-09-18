@@ -4,7 +4,7 @@
     <meta charset="utf-8">
 
 <!-- begin _includes/seo.html --><title>Querying Hudi Tables - Apache Hudi</title>
-<meta name="description" content="Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained before. Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi’s custom inputformats. Once the proper hudibundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and Presto.">
+<meta name="description" content="Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained before. Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi’s custom inputformats. Once the proper hudibundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and PrestoDB.">
 
 <meta property="og:type" content="article">
 <meta property="og:locale" content="en_US">
@@ -13,7 +13,7 @@
 <meta property="og:url" content="https://hudi.apache.org/docs/querying_data.html">
 
 
-  <meta property="og:description" content="Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained before. Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi’s custom inputformats. Once the proper hudibundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and Presto.">
+  <meta property="og:description" content="Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained before. Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi’s custom inputformats. Once the proper hudibundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and PrestoDB.">
 
 
 
@@ -384,7 +384,7 @@
       <li><a href="#spark-incr-query">Incremental query</a></li>
     </ul>
   </li>
-  <li><a href="#presto">Presto</a></li>
+  <li><a href="#prestodb">PrestoDB</a></li>
   <li><a href="#impala-34-or-later">Impala (3.4 or later)</a>
     <ul>
       <li><a href="#snapshot-query">Snapshot Query</a></li>
@@ -396,7 +396,7 @@
         
         <p>Conceptually, Hudi stores data physically once on DFS, while providing 3 different ways of querying, as explained <a href="/docs/concepts.html#query-types">before</a>. 
 Once the table is synced to the Hive metastore, it provides external Hive tables backed by Hudi’s custom inputformats. Once the proper hudi
-bundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and Presto.</p>
+bundle has been installed, the table can be queried by popular query engines like Hive, Spark SQL, Spark Datasource API and PrestoDB.</p>
 
 <p>Specifically, following Hive tables are registered based off <a href="/docs/configurations.html#TABLE_NAME_OPT_KEY">table name</a> 
 and <a href="/docs/configurations.html#TABLE_TYPE_OPT_KEY">table type</a> configs passed during write.</p>
@@ -449,7 +449,7 @@ with special configurations that indicates to query planning that only increment
       <td>Y</td>
     </tr>
     <tr>
-      <td><strong>Presto</strong></td>
+      <td><strong>PrestoDB</strong></td>
       <td>Y</td>
       <td>N</td>
     </tr>
@@ -489,13 +489,13 @@ with special configurations that indicates to query planning that only increment
     </tr>
     <tr>
       <td><strong>Spark Datasource</strong></td>
-      <td>N</td>
+      <td>Y</td>
       <td>N</td>
       <td>Y</td>
     </tr>
     <tr>
-      <td><strong>Presto</strong></td>
-      <td>N</td>
+      <td><strong>PrestoDB</strong></td>
+      <td>Y</td>
       <td>N</td>
       <td>Y</td>
     </tr>
@@ -647,8 +647,8 @@ If using spark’s built in support, additionally a path filter needs to be push
 
 <h2 id="spark-datasource">Spark Datasource</h2>
 
-<p>The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi COPY_ON_WRITE tables can be queried via Spark datasource similar to how standard 
-datasources work (e.g: <code class="highlighter-rouge">spark.read.parquet</code>). Both snapshot querying and incremental querying are supported here. Typically spark jobs require adding <code class="highlighter-rouge">--jars &lt;path to jar&gt;/hudi-spark-bundle_2.11-&lt;hudi version&gt;.jar</code> to classpath of drivers 
+<p>The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi COPY_ON_WRITE and MERGE_ON_READ tables can be queried via Spark datasource similar to how standard 
+datasources work (e.g: <code class="highlighter-rouge">spark.read.parquet</code>). MERGE_ON_READ table supports snapshot querying and COPY_ON_WRITE table supports both snapshot and incremental querying via Spark datasource. Typically spark jobs require adding <code class="highlighter-rouge">--jars &lt;path to jar&gt;/hudi-spark-bundle_2.11-&lt;hudi version&gt;.jar</code> to classpath of drivers 
 and executors. Alternatively, hudi-spark-bundle can also fetched via the <code class="highlighter-rouge">--packages</code> options (e.g: <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3</code>).</p>
 
 <h3 id="spark-snap-query">Snapshot query</h3>
@@ -706,10 +706,39 @@ Please refer to <a href="/docs/configurations.html#spark-datasource">configurati
   </tbody>
 </table>
 
-<h2 id="presto">Presto</h2>
+<h2 id="prestodb">PrestoDB</h2>
 
-<p>Presto is a popular query engine, providing interactive query performance. Presto currently supports snapshot queries on COPY_ON_WRITE and read optimized queries 
-on MERGE_ON_READ Hudi tables. This requires the <code class="highlighter-rouge">hudi-presto-bundle</code> jar to be placed into <code class="highlighter-rouge">&lt;presto_install&gt;/plugin/hive-hadoop2/</code>, across the installation.</p>
+<p>PrestoDB is a popular query engine, providing interactive query performance. PrestoDB currently supports snapshot querying on COPY_ON_WRITE tables. 
+Both snapshot and read optimized queries are supported on MERGE_ON_READ Hudi tables. Since PrestoDB-Hudi integration has evolved over time, the installation
+instructions for PrestoDB would vary based on versions. Please check the below table for query types supported and installation instructions 
+for different versions of PrestoDB.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th><strong>PrestoDB Version</strong></th>
+      <th><strong>Installation description</strong></th>
+      <th><strong>Query types supported</strong></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&lt; 0.233</td>
+      <td>Requires the <code class="highlighter-rouge">hudi-presto-bundle</code> jar to be placed into <code class="highlighter-rouge">&lt;presto_install&gt;/plugin/hive-hadoop2/</code>, across the installation.</td>
+      <td>Snapshot querying on COW tables. Read optimized querying on MOR tables.</td>
+    </tr>
+    <tr>
+      <td>&gt;= 0.233</td>
+      <td>No action needed. Hudi (0.5.1-incubating) is a compile time dependency.</td>
+      <td>Snapshot querying on COW tables. Read optimized querying on MOR tables.</td>
+    </tr>
+    <tr>
+      <td>&gt;= 0.240</td>
+      <td>No action needed. Hudi 0.5.3 version is a compile time dependency.</td>
+      <td>Snapshot querying on both COW and MOR tables</td>
+    </tr>
+  </tbody>
+</table>
 
 <h2 id="impala-34-or-later">Impala (3.4 or later)</h2>
 

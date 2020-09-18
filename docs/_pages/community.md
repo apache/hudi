@@ -2,7 +2,7 @@
 permalink: /community
 title: "Community"
 toc: true
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2020-09-01T15:59:57-04:00
 ---
 
 ## Engage with us
@@ -56,16 +56,20 @@ Committers are chosen by a majority vote of the Apache Hudi [PMC](https://www.ap
 | <img src="https://avatars.githubusercontent.com/alunarbeach" style="max-width: 100px" alt="alunarbeach" align="middle" /> | [Anbu Cheeralan](https://github.com/alunarbeach)             | PMC, Committer | anchee       |
 | <img src="https://avatars.githubusercontent.com/bhasudha" style="max-width: 100px" alt="bhasudha" align="middle" /> | [Bhavani Sudha](https://github.com/bhasudha)                 | PMC, Committer | bhavanisudha |
 | <img src="https://avatars.githubusercontent.com/bvaradar" style="max-width: 100px" alt="bvaradar" align="middle" /> | [Balaji Varadarajan](https://github.com/bvaradar)            | PMC, Committer | vbalaji      |
+| <img src="https://avatars.githubusercontent.com/garyli1019" style="max-width: 100px" alt="garyli1019" align="middle" /> | [Gary Li](https://github.com/garyli1019)                      | Committer       | garyli        |
 | <img src="https://avatars.githubusercontent.com/lresende" style="max-width: 100px" alt="lresende" align="middle" /> | [Luciano Resende](https://github.com/lresende)               | PMC, Committer | lresende     |
+| <img src="https://avatars.githubusercontent.com/lamber-ken" alt="lamber-ken" style="max-width: 100px;" align="middle" /> | [lamber-ken](https://github.com/lamber-ken)               | Committer | lamberken     |
 | <img src="https://avatars.githubusercontent.com/n3nash" style="max-width: 100px" alt="n3nash" align="middle" /> | [Nishith Agarwal](https://github.com/n3nash)                 | PMC, Committer | nagarwal     |
 | <img src="https://avatars.githubusercontent.com/prasannarajaperumal" style="max-width: 100px" alt="prasannarajaperumal" align="middle" /> | [Prasanna Rajaperumal](https://github.com/prasannarajaperumal) | PMC, Committer | prasanna     |
+| <img src="https://avatars.githubusercontent.com/pratyakshsharma" style="max-width: 100px" alt="pratyakshsharma" align="middle" /> | [Pratyaksh Sharma](https://github.com/pratyakshsharma)                      | Committer       | pratyakshsharma        |
+| <img src="https://avatars.githubusercontent.com/xushiyan" style="max-width: 100px" alt="xushiyan" align="middle" /> | [Raymond Xu](https://github.com/xushiyan)                      | Committer       | xushiyan        |
 | <img src="https://avatars.githubusercontent.com/leesf" style="max-width: 100px" alt="leesf" align="middle" /> | [Shaofeng Li](https://github.com/leesf)                      | PMC, Committer       | leesf        |
 | <img src="https://avatars.githubusercontent.com/nsivabalan" style="max-width: 100px" alt="nsivabalan" align="middle" /> | [Sivabalan Narayanan](https://github.com/nsivabalan)         | Committer | sivabalan      |
 | <img src="https://avatars.githubusercontent.com/smarthi" style="max-width: 100px" alt="smarthi" align="middle" /> | [Suneel Marthi](https://github.com/smarthi)                  | PMC, Committer | smarthi      |
 | <img src="https://avatars.githubusercontent.com/tweise" style="max-width: 100px" alt="tweise" align="middle" /> | [Thomas Weise](https://github.com/tweise)                    | PMC, Committer | thw          |
+| <img src="https://avatars.githubusercontent.com/umehrot2" style="max-width: 100px" alt="umehrot2" align="middle" /> | [Udit Mehrotra](https://github.com/umehrot2)                      | Committer       | uditme        |
 | <img src="https://avatars.githubusercontent.com/vinothchandar" style="max-width: 100px" alt="vinothchandar" align="middle" /> | [Vinoth Chandar](https://github.com/vinothchandar)           | PMC, Committer | vinoth       |
 | <img src="https://avatars.githubusercontent.com/yanghua" style="max-width: 100px" alt="yanghua" /> | [vinoyang](https://github.com/yanghua)                       | PMC, Committer       | vinoyang     |
-| <img src="https://avatars.githubusercontent.com/lamber-ken" alt="lamber-ken" style="max-width: 100px;" align="middle" /> | [lamber-ken](https://github.com/lamber-ken)               | Committer | lamberken     |
 
 ## Code Contributions
 

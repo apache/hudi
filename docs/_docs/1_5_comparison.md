@@ -31,7 +31,7 @@ we expect Hudi to positioned at something that ingests parquet with superior per
 Hive transactions does not offer the read-optimized storage option or the incremental pulling, that Hudi does. In terms of implementation choices, Hudi leverages
 the full power of a processing framework like Spark, while Hive transactions feature is implemented underneath by Hive tasks/queries kicked off by user or the Hive metastore.
 Based on our production experience, embedding Hudi as a library into existing Spark pipelines was much easier and less operationally heavy, compared with the other approach.
-Hudi is also designed to work with non-hive enginers like Presto/Spark and will incorporate file formats other than parquet over time.
+Hudi is also designed to work with non-hive engines like PrestoDB/Spark and will incorporate file formats other than parquet over time.
 
 ## HBase
 
@@ -49,7 +49,7 @@ integration of Hudi library with Spark/Spark streaming DAGs. In case of Non-Spar
 and later sent into a Hudi table via a Kafka topic/DFS intermediate file. In more conceptual level, data processing
 pipelines just consist of three components : `source`, `processing`, `sink`, with users ultimately running queries against the sink to use the results of the pipeline.
 Hudi can act as either a source or sink, that stores data on DFS. Applicability of Hudi to a given stream processing pipeline ultimately boils down to suitability
-of Presto/SparkSQL/Hive for your queries.
+of PrestoDB/SparkSQL/Hive for your queries.
 
 More advanced use cases revolve around the concepts of [incremental processing](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop), which effectively
 uses Hudi even inside the `processing` engine to speed up typical batch pipelines. For e.g: Hudi can be used as a state store inside a processing DAG (similar

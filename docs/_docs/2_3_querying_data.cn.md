@@ -36,7 +36,7 @@ language: cn
 |**Hive**|Y|Y|
 |**Spark SQL**|Y|Y|
 |**Spark Datasource**|Y|Y|
-|**Presto**|Y|N|
+|**PrestoDB**|Y|N|
 |**Impala**|Y|N|
 
 
@@ -46,8 +46,8 @@ language: cn
 |------------|--------|-----------|--------------|
 |**Hive**|Y|Y|Y|
 |**Spark SQL**|Y|Y|Y|
-|**Spark Datasource**|N|N|Y|
-|**Presto**|N|N|Y|
+|**Spark Datasource**|Y|N|Y|
+|**PrestoDB**|Y|N|Y|
 |**Impala**|N|N|Y|
 
 
@@ -110,7 +110,7 @@ Upsert实用程序（`HoodieDeltaStreamer`）具有目录结构所需的所有�
 
 Spark可将Hudi jars和捆绑包轻松部署和管理到作业/笔记本中。简而言之，通过Spark有两种方法可以访问Hudi数据集。
 
- - **Hudi DataSource**：支持读取优化和增量拉取，类似于标准数据源（例如：`spark.read.parquet`）的工作方式。
+ - **Hudi DataSource**：支持实时视图，读取优化和增量拉取，类似于标准数据源（例如：`spark.read.parquet`）的工作方式。
  - **以Hive表读取**：支持所有三个视图，包括实时视图，依赖于自定义的Hudi输入格式（再次类似Hive）。
  
 通常，您的spark作业需要依赖`hudi-spark`或`hudi-spark-bundle-x.y.z.jar`，
@@ -134,13 +134,30 @@ Dataset<Row> hoodieROViewDF = spark.read().format("org.apache.hudi")
 ```
  
 ### 实时表 {#spark-rt-view}
-当前，实时表只能在Spark中作为Hive表进行查询。为了做到这一点，设置`spark.sql.hive.convertMetastoreParquet = false`，
+将实时表在Spark中作为Hive表进行查询，设置`spark.sql.hive.convertMetastoreParquet = false`，
 迫使Spark回退到使用Hive Serde读取数据（计划/执行仍然是Spark）。
 
 ```scala
 $ spark-shell --jars hudi-spark-bundle-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages com.databricks:spark-avro_2.11:4.0.0 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
 
 scala> sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'").show()
+```
+
+如果您希望通过数据源在DFS上使用全局路径，则只需执行以下类似操作即可得到Spark DataFrame。
+
+```scala
+Dataset<Row> hoodieRealtimeViewDF = spark.read().format("org.apache.hudi")
+// pass any path glob, can include hudi & non-hudi datasets
+.load("/glob/path/pattern");
+```
+
+如果您希望只查询实时表的读优化视图
+
+```scala
+Dataset<Row> hoodieRealtimeViewDF = spark.read().format("org.apache.hudi")
+.option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
+// pass any path glob, can include hudi & non-hudi datasets
+.load("/glob/path/pattern");
 ```
 
 ### 增量拉取 {#spark-incr-pull}
@@ -170,9 +187,9 @@ scala> sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'
 | checkExists(keys) | 检查提供的键是否存在于Hudi数据集中 |
 
 
-## Presto
+## PrestoDB
 
-Presto是一种常用的查询引擎，可提供交互式查询性能。 Hudi RO表可以在Presto中无缝查询。
+PrestoDB是一种常用的查询引擎，可提供交互式查询性能。 Hudi RO表可以在Presto中无缝查询。
 这需要在整个安装过程中将`hudi-presto-bundle` jar放入`<presto_install>/plugin/hive-hadoop2/`中。
 
 ## Impala (3.4 or later)

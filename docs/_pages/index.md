@@ -4,7 +4,7 @@ permalink: /
 title: Welcome to Apache Hudi !
 excerpt: >
   Apache Hudi ingests & manages storage of large analytical datasets over DFS (hdfs or cloud stores).<br />
-  <small><a href="https://github.com/apache/hudi/releases/tag/release-0.5.3" target="_blank">Latest release 0.5.3</a></small>
+  <small><a href="https://github.com/apache/hudi/releases/tag/release-0.6.0" target="_blank">Latest release 0.6.0</a></small>
 power_items:
   - img_path: /assets/images/powers/aws.jpg
   - img_path: /assets/images/powers/emis.jpg

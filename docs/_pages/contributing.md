@@ -110,13 +110,9 @@ and more importantly also try to improve the process along the way as well.
       - Click "Start Progress" on the JIRA, which tells everyone that you are working on the issue actively.
  - [Optional] Familiarize yourself with internals of Hudi using content on this page, as well as [wiki](https://cwiki.apache.org/confluence/display/HUDI)
  - Make your code change
-   - Every source file needs to include the Apache license header. Every new dependency needs to have an 
-     open source license [compatible](https://www.apache.org/legal/resolved.html#criteria) with Apache.
-   - If you are re-using code from another apache/open-source project, licensing needs to be compatible and attribution added to `LICENSE` file
-   - Please DO NOT copy paste any code from StackOverflow or other online sources, since their license attribution would be unclear. Author them yourself!
    - Get existing tests to pass using `mvn clean install -DskipITs`
    - Add adequate tests for your new functionality
-   - For involved changes, it's best to also run the entire integration test suite using `mvn clean install`
+   - For involved changes, it's best to test the changes in real production environments and report the results in the PR. 
    - For website changes, please build the site locally & test navigation, formatting & links thoroughly
    - If your code change changes some aspect of documentation (e.g new config, default value change), 
      please ensure there is another PR to [update the docs](https://github.com/apache/hudi/tree/asf-site/README.md) as well.
@@ -130,6 +126,65 @@ and more importantly also try to improve the process along the way as well.
    - Before your change can be merged, it should be squashed into a single commit for cleaner commit history.
  - Finally, once your pull request is merged, make sure to `Close` the JIRA.
 
+### Coding guidelines 
+
+Our code can benefit from contributors speaking the same "language" when authoring code. After all, it gets read a lot more than it gets
+written. So optimizing for "reads" is a good goal. The list below is a set of guidelines, that contributors strive to upkeep and reflective 
+of how we want to evolve our code in the future.
+
+#### Style 
+
+ - **Formatting** We should rely on checkstyle and spotless to auto fix formatting; automate this completely. Where we cannot,
+    we will err on the side of not taxing contributors with manual effort.
+ - **Refactoring**
+   - Refactor with purpose; any refactor suggested should be attributable to functionality that now becomes easy to implement.
+   - A class is asking to be refactored, when it has several overloaded responsibilities/have sets of fields/methods which are used more cohesively than others. 
+   - Try to name tests using the given-when-then model, that cleans separates preconditions (given), an action (when), and assertions (then).
+ - **Naming things**
+   - Let's name uniformly; using the same word to denote the same concept. e.g: bootstrap vs external vs source, when referring to bootstrapped tables. 
+     Maybe they all mean the same, but having one word makes the code lot more easily readable. 
+   - Let's name consistently with Hudi terminology. e.g dataset vs table, base file vs data file.
+   - Class names preferably are nouns (e.g Runner) which reflect their responsibility and methods are verbs (e.g run()).
+   - Avoid filler words, that don't add value e.g xxxInfo, xxxData, etc.
+   - We name classes in code starting with `Hoodie` and not `Hudi` and we want to keep it that way for consistency/historical reasons. 
+ - **Methods**
+   - Individual methods should short (~20-30 lines) and have a single purpose; If you feel like it has a secondary purpose, then maybe it needs
+     to be broken down more.
+   - Lesser the number of arguments, the better; 
+   - Place caller methods on top of callee methods, whenever possible.
+   - Avoid "output" arguments e.g passing in a list and filling its values within the method.
+   - Try to limit individual if/else blocks to few lines to aid readability.
+   - Separate logical blocks of code with a newline in between e.g read a file into memory, loop over the lines.
+ - **Classes**
+   - Like method, each Class should have a single purpose/responsibility.
+   - Try to keep class files to about 200 lines of length, nothing beyond 500.
+   - Avoid stating the obvious in comments; e.g each line does not deserve a comment; Document corner-cases/special perf considerations etc clearly.
+   - Try creating factory methods/builders and interfaces wherever you feel a specific implementation may be changed down the line.
+
+#### Substance
+
+- Try to avoid large PRs; if unavoidable (many times they are) please separate refactoring with the actual implementation of functionality. 
+  e.g renaming/breaking up a file and then changing code changes, makes the diff very hard to review.
+- **Licensing**
+    - Every source file needs to include the Apache license header. Every new dependency needs to have 
+      an open source license [compatible](https://www.apache.org/legal/resolved.html#criteria) with Apache.
+    - If you are re-using code from another apache/open-source project, licensing needs to be compatible and attribution added to `LICENSE` file
+    - Please DO NOT copy paste any code from StackOverflow or other online sources, since their license attribution would be unclear. Author them yourself!
+- **Code Organization** 
+    - Anything in `hudi-common` cannot depend on a specific engine runtime like Spark. 
+    - Any changes to bundles under `packaging`, will be reviewed with additional scrutiny to avoid breakages across versions.
+- **Code reuse**
+  - Whenever you can, please use/enhance use existing utils classes in code (`CollectionUtils`, `ParquetUtils`, `HoodieAvroUtils`). Search for classes ending in `Utils`.
+  - As a complex project, that must integrate with multiple systems, we tend to avoid dependencies like `guava`, `apache commons` for the sake of easy integration. 
+     Please start a discussion on the mailing list, before attempting to reintroduce them
+  - As a data system, that takes performance seriously, we also write pieces of infrastructure (e.g `ExternalSpillableMap`) natively, that are optimized specifically for our scenarios.
+     Please start with them first, when solving problems.
+ - **Breaking changes**
+   - Any version changes for dependencies, needs to be ideally vetted across different user environments in the community, to get enough confidence before merging.
+   - Any changes to methods annotated with `PublicAPIMethod` or classes annotated with `PublicAPIClass` require upfront discussion and potentially an RFC.
+   - Any non-backwards compatible changes similarly need upfront discussion and the functionality needs to implement an upgrade-downgrade path.
+
+
 ### Reviewing Code/RFCs
 
  - All pull requests would be subject to code reviews, from one or more of the PMC/Committers. 
@@ -140,6 +195,10 @@ and more importantly also try to improve the process along the way as well.
    - Both contributors/reviewers need to keep an open mind and ground themselves to making the most technically sound argument.
    - If progress is hard, please involve another PMC member/Committer to share another perspective.
    - Staying humble and eager to learn, goes a long way in ensuring these reviews are smooth.
+ - Reviewers are expected to uphold the code quality, standards outlined above.
+ - When merging PRs, always make sure you are squashing the commits using the "Squash and Merge" feature in Github
+ - When necessary/appropriate, reviewers could make changes themselves to PR branches, with the intent to get the PR landed sooner. (see [how-to](https://cwiki.apache.org/confluence/display/HUDI/Resources#Resources-PushingChangesToPRs))
+   Reviewers should seek explicit approval from author, before making large changes to the original PR.
 
 ### Suggest Changes
 

@@ -7,6 +7,7 @@ power_items:
   - img_path: /assets/images/powers/uber.png
   - img_path: /assets/images/powers/aws.jpg
   - img_path: /assets/images/powers/alibaba.png
+  - img_path: /assets/images/powers/clinbrain.png
   - img_path: /assets/images/powers/emis.jpg
   - img_path: /assets/images/powers/yield.png
   - img_path: /assets/images/powers/qq.png
@@ -27,6 +28,9 @@ offering real-time analysis on hudi dataset.
 ### Amazon Web Services
 Amazon Web Services is the World's leading cloud services provider. Apache Hudi is [pre-installed](https://aws.amazon.com/emr/features/hudi/) with the AWS Elastic Map Reduce 
 offering, providing means for AWS users to perform record-level updates/deletes and manage storage efficiently.
+
+### Clinbrain
+[Clinbrain](https://www.clinbrain.com/)  is the leader of big data platform and usage in medical industry. We have built 200 medical big data centers by integrating Hudi Data Lake solution in numerous hospitals. Hudi provides the ability to upsert and delete on hdfs, at the same time, it can make the fresh data-stream up-to-date efficiently in hadoop system with the hudi incremental view.
 
 ### EMIS Health
 
@@ -113,6 +117,8 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 14. ["Apache Hudi - Design/Code Walkthrough Session for Contributors"](https://www.youtube.com/watch?v=N2eDfU_rQ_U) - By Vinoth Chandar, July 2020, Hudi community.
 
+15. ["PrestoDB and Apache Hudi"](https://youtu.be/nA3rwOdmm3A) - By Bhavani Sudha Saktheeswaran and Brandon Scheller, Aug 2020, PrestoDB Community Meetup.
+
 ## Articles
 
 1. ["The Case for incremental processing on Hadoop"](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop) - O'reilly Ideas article by Vinoth Chandar
@@ -122,6 +128,7 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 5. ["Apache Hudi grows cloud data lake maturity"](https://searchdatamanagement.techtarget.com/news/252484740/Apache-Hudi-grows-cloud-data-lake-maturity)
 6. ["Building a Large-scale Transactional Data Lake at Uber Using Apache Hudi"](https://eng.uber.com/apache-hudi-graduation/) - Uber eng blog by Nishith Agarwal
 7. ["Hudi On Hops"](https://www.diva-portal.org/smash/get/diva2:1413103/FULLTEXT01.pdf) - By NETSANET GEBRETSADKAN KIDANE
+8. ["PrestoDB and Apachi Hudi](https://prestodb.io/blog/2020/08/04/prestodb-and-hudi) - PrestoDB - Hudi integration blog by Bhavani Sudha Saktheeswaran and Brandon Scheller 
 
 ## Powered by
 
