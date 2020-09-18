@@ -100,6 +100,23 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
   }
 
+  private static void createAuxiliaryMetaFile(String basePath, String instantTime, String suffix) throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
+    Files.createDirectories(parentPath);
+    Path metaFilePath = parentPath.resolve(instantTime + suffix);
+    if (Files.notExists(metaFilePath)) {
+      Files.createFile(metaFilePath);
+    }
+  }
+
+  public static void createRequestedCompaction(String basePath, String instantTime) throws IOException {
+    createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
+  }
+
+  public static void createInflightCompaction(String basePath, String instantTime) throws IOException {
+    createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
+  }
+
   public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);

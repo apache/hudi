@@ -95,7 +95,7 @@ public class QuickstartUtils {
     }
 
     public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
-        double timestamp) {
+        long timestamp) {
       GenericRecord rec = new GenericData.Record(avroSchema);
       rec.put("uuid", rowKey);
       rec.put("ts", timestamp);
@@ -118,7 +118,7 @@ public class QuickstartUtils {
     public static OverwriteWithLatestAvroPayload generateRandomValue(HoodieKey key, String riderDriverSuffix)
         throws IOException {
       GenericRecord rec =
-          generateGenericRecord(key.getRecordKey(), "rider-" + riderDriverSuffix, "driver-" + riderDriverSuffix, 0.0);
+          generateGenericRecord(key.getRecordKey(), "rider-" + riderDriverSuffix, "driver-" + riderDriverSuffix, 0);
       return new OverwriteWithLatestAvroPayload(Option.of(rec));
     }
 
