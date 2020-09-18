@@ -208,7 +208,7 @@ public class HoodieMetadataImpl {
         .withPath(metadataBasePath)
         .withSchema(schemaStr)
         .forTable(tableName)
-        .withParallelism(1, 1)
+        .withParallelism(1, 1).withDeleteParallelism(1).withRollbackParallelism(1).withFinalizeWriteParallelism(1)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexClass(HoodieMetadataIndex.class.getName()).build())
         .withCompactionConfig(writeConfig.getMetadataCompactionConfig().orElseGet(() -> getDefaultCompactionConfig()));
 
