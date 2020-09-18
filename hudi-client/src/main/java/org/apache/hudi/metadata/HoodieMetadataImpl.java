@@ -97,9 +97,6 @@ import scala.Tuple2;
 public class HoodieMetadataImpl {
   private static final Logger LOG = LogManager.getLogger(HoodieMetadataImpl.class);
 
-  // Base path of the Metadata Table relative to the dataset (.hoodie/metadata)
-  private static final String METADATA_TABLE_REL_PATH = HoodieTableMetaClient.METAFOLDER_NAME + Path.SEPARATOR
-      + "metadata";
   // Table name suffix
   private static final String METADATA_TABLE_NAME_SUFFIX = "_metadata";
   // Timestamp for a commit when the base dataset had not had any commits yet.
@@ -122,9 +119,18 @@ public class HoodieMetadataImpl {
   private static final String VALIDATE_ERRORS_STR = "validate_errors";
   private static final String SCAN_STR = "scan";
 
+  // Stats names
+  private static final String STAT_TOTAL_BASE_FILE_SIZE = "totalBaseFileSizeInBytes";
+  private static final String STAT_TOTAL_LOG_FILE_SIZE = "totalLogFileSizeInBytes";
+  private static final String STAT_COUNT_BASE_FILES = "baseFileCount";
+  private static final String STAT_COUNT_LOG_FILES = "logFileCount";
+  private static final String STAT_COUNT_PARTITION = "partitionCount";
+  private static final String STAT_IN_SYNC = "isInSync";
+  private static final String STAT_LAST_COMPACTION_TIMESTAMP = "lastCompactionTimestamp";
+
   private final JavaSparkContext jsc;
   private final Configuration hadoopConf;
-  private final String basePath;
+  private final String datasetBasePath;
   private final String metadataBasePath;
   private final HoodieWriteConfig config;
   private final String tableName;
@@ -145,12 +151,12 @@ public class HoodieMetadataImpl {
   private HoodieFileReader<GenericRecord> basefileReader;
   private HoodieMetadataMergedLogRecordScanner logRecordScanner;
 
-  HoodieMetadataImpl(JavaSparkContext jsc, Configuration hadoopConf, String basePath,
+  HoodieMetadataImpl(JavaSparkContext jsc, Configuration hadoopConf, String datasetBasePath, String metadataBasePath,
                          HoodieWriteConfig writeConfig, boolean readOnly) throws IOException {
     this.jsc = jsc;
     this.hadoopConf = hadoopConf;
-    this.basePath = basePath;
-    this.metadataBasePath = getMetadataTableBasePath(basePath);
+    this.datasetBasePath = datasetBasePath;
+    this.metadataBasePath = metadataBasePath;
     this.readOnly = readOnly;
 
     this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
@@ -257,6 +263,16 @@ public class HoodieMetadataImpl {
   }
 
   /**
+   * Reload the metadata table by syncing it based on the commits on the dataset.
+   *
+   * This is only allowed
+   */
+
+  public void reload() throws IOException {
+    initAndSyncMetadataTable();
+  }
+
+  /**
    * Initialize the metadata table if it does not exist. Update the metadata to bring it in sync with the file system.
    *
    * This can happen in two ways:
@@ -272,9 +288,9 @@ public class HoodieMetadataImpl {
 
     final Timer.Context context = this.metrics.getMetadataCtx(INITIALIZE_STR);
 
-    HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf, basePath);
+    HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf, datasetBasePath);
     FileSystem fs = FSUtils.getFs(metadataBasePath, hadoopConf);
-    boolean exists = fs.exists(new Path(metadataBasePath));
+    boolean exists = fs.exists(new Path(metadataBasePath, HoodieTableMetaClient.METAFOLDER_NAME));
 
     if (!exists) {
       // Initialize for the first time by listing partitions and files directly from the file system
@@ -311,26 +327,10 @@ public class HoodieMetadataImpl {
       }
 
       // Total size of the metadata and count of base/log files
-      long totalBaseFileSizeInBytes = 0;
-      long totalLogFileSizeInBytes = 0;
-      int baseFileCount = 0;
-      int logFileCount = 0;
-      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
-      List<FileSlice> latestSlices = fsView.getLatestFileSlices(METADATA_PARTITION_NAME).collect(Collectors.toList());
-
-      for (FileSlice slice : latestSlices) {
-        if (slice.getBaseFile().isPresent()) {
-          totalBaseFileSizeInBytes += fs.getFileStatus(new Path(slice.getBaseFile().get().getPath())).getLen();
-          ++baseFileCount;
-        }
-        Iterator<HoodieLogFile> it = slice.getLogFiles().iterator();
-        while (it.hasNext()) {
-          totalLogFileSizeInBytes += fs.getFileStatus(it.next().getPath()).getLen();
-          ++logFileCount;
-        }
-      }
-
-      metrics.updateMetadataSizeMetrics(totalBaseFileSizeInBytes, totalLogFileSizeInBytes, baseFileCount, logFileCount);
+      Map<String, String> stats = getStats(false);
+      metrics.updateMetadataSizeMetrics(Long.valueOf(stats.get(STAT_TOTAL_BASE_FILE_SIZE)),
+          Long.valueOf(stats.get(STAT_TOTAL_LOG_FILE_SIZE)), Integer.valueOf(stats.get(STAT_COUNT_BASE_FILES)),
+          Integer.valueOf(stats.get(STAT_COUNT_LOG_FILES)));
     }
   }
 
@@ -352,12 +352,12 @@ public class HoodieMetadataImpl {
         HoodieFileFormat.HFILE.toString());
 
     // List all partitions in the basePath of the containing dataset
-    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
-    List<String> partitions = FSUtils.getAllPartitionPaths(fs, basePath, false);
+    FileSystem fs = FSUtils.getFs(datasetBasePath, hadoopConf);
+    List<String> partitions = FSUtils.getAllPartitionPaths(fs, datasetBasePath, false);
     LOG.info("Initializing metadata table by using file listings in " + partitions.size() + " partitions");
 
     // List all partitions in parallel and collect the files in them
-    final String dbasePath = basePath;
+    final String dbasePath = datasetBasePath;
     final SerializableConfiguration serializedConf = new SerializableConfiguration(hadoopConf);
     int parallelism =  Math.min(partitions.size(), 100) + 1; // +1 to ensure non zero
     JavaPairRDD<String, FileStatus[]> partitionFileListRDD = jsc.parallelize(partitions, parallelism)
@@ -376,7 +376,7 @@ public class HoodieMetadataImpl {
     partitionFileList.forEach(t -> {
       final String partition = t._1;
       try {
-        if (!fs.exists(new Path(basePath, partition + Path.SEPARATOR + HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE))) {
+        if (!fs.exists(new Path(datasetBasePath, partition + Path.SEPARATOR + HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE))) {
           return;
         }
       } catch (IOException e) {
@@ -701,7 +701,7 @@ public class HoodieMetadataImpl {
       // metadata table. Hence, the deleted filed need to be checked against the metadata.
       try {
         int origCount = deletedFiles.size();
-        FileStatus[] existingStatuses = getAllFilesInPartition(new Path(basePath, partition));
+        FileStatus[] existingStatuses = getAllFilesInPartition(new Path(datasetBasePath, partition));
         Set<String> currentFiles =
             Arrays.stream(existingStatuses).map(s -> s.getPath().getName()).collect(Collectors.toSet());
         deletedFiles.removeIf(f -> !currentFiles.contains(f));
@@ -766,10 +766,6 @@ public class HoodieMetadataImpl {
     }
   }
 
-  static String getMetadataTableBasePath(String tableBasePath) {
-    return tableBasePath + Path.SEPARATOR + METADATA_TABLE_REL_PATH;
-  }
-
   /**
    * Returns a list of all partitions.
    */
@@ -793,7 +789,7 @@ public class HoodieMetadataImpl {
     if (validateLookups) {
       // Validate the Metadata Table data by listing the partitions from the file system
       final Timer.Context contextValidate = this.metrics.getMetadataCtx(VALIDATE_PARTITIONS_STR);
-      List<String> actualPartitions  = FSUtils.getAllPartitionPaths(metaClient.getFs(), basePath, false);
+      List<String> actualPartitions  = FSUtils.getAllPartitionPaths(metaClient.getFs(), datasetBasePath, false);
 
       Collections.sort(actualPartitions);
       Collections.sort(partitions);
@@ -831,7 +827,7 @@ public class HoodieMetadataImpl {
   FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException {
     final Timer.Context context = this.metrics.getMetadataCtx(LOOKUP_FILES_STR);
 
-    String partitionName = FSUtils.getRelativePartitionPath(new Path(basePath), partitionPath);
+    String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), partitionPath);
 
     Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getMergedRecordByKey(partitionName);
     FileStatus[] statuses = {};
@@ -920,7 +916,7 @@ public class HoodieMetadataImpl {
     String latestTimestamp = lastInstant.isPresent() ? lastInstant.get().getTimestamp() : "";
 
     logRecordScanner =
-        new HoodieMetadataMergedLogRecordScanner(FSUtils.getFs(basePath, hadoopConf), metadataBasePath,
+        new HoodieMetadataMergedLogRecordScanner(FSUtils.getFs(datasetBasePath, hadoopConf), metadataBasePath,
             logFilePaths, schema, latestTimestamp, maxMemorySizeInBytes, bufferSize,
             config.getSpillableMapBasePath(), null);
 
@@ -972,7 +968,7 @@ public class HoodieMetadataImpl {
    */
   boolean isInSync() {
     // There should not be any instants to sync
-    HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf, basePath);
+    HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf, datasetBasePath);
     List<HoodieInstant> instantsToSync = findInstantsToSync(datasetMetaClient);
     return instantsToSync.isEmpty();
   }
@@ -992,12 +988,41 @@ public class HoodieMetadataImpl {
     }
   }
 
-  /**
-   * Return {@code True} if the given absolute path contains a Metadata Table.
-   *
-   * @param basePath The absolute path to test
-   */
-  static boolean isMetadataTable(String basePath) {
-    return basePath.contains(METADATA_TABLE_REL_PATH);
+  public Map<String, String> getStats(boolean detailed) throws IOException {
+    Map<String, String> stats = new HashMap<>();
+    FileSystem fs = FSUtils.getFs(metadataBasePath, hadoopConf);
+
+    // Total size of the metadata and count of base/log files
+    long totalBaseFileSizeInBytes = 0;
+    long totalLogFileSizeInBytes = 0;
+    int baseFileCount = 0;
+    int logFileCount = 0;
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
+    List<FileSlice> latestSlices = fsView.getLatestFileSlices(METADATA_PARTITION_NAME).collect(Collectors.toList());
+
+    for (FileSlice slice : latestSlices) {
+      if (slice.getBaseFile().isPresent()) {
+        totalBaseFileSizeInBytes += fs.getFileStatus(new Path(slice.getBaseFile().get().getPath())).getLen();
+        ++baseFileCount;
+      }
+      Iterator<HoodieLogFile> it = slice.getLogFiles().iterator();
+      while (it.hasNext()) {
+        totalLogFileSizeInBytes += fs.getFileStatus(it.next().getPath()).getLen();
+        ++logFileCount;
+      }
+    }
+
+    stats.put(STAT_TOTAL_BASE_FILE_SIZE, String.valueOf(totalBaseFileSizeInBytes));
+    stats.put(STAT_TOTAL_LOG_FILE_SIZE, String.valueOf(totalLogFileSizeInBytes));
+    stats.put(STAT_COUNT_BASE_FILES, String.valueOf(baseFileCount));
+    stats.put(STAT_COUNT_LOG_FILES, String.valueOf(logFileCount));
+
+    if (detailed) {
+      stats.put(STAT_COUNT_PARTITION, String.valueOf(getAllPartitionPaths().size()));
+      stats.put(STAT_IN_SYNC, String.valueOf(isInSync()));
+      stats.put(STAT_LAST_COMPACTION_TIMESTAMP, getLatestCompactionTimestamp().orElseGet(() -> "none"));
+    }
+
+    return stats;
   }
 }

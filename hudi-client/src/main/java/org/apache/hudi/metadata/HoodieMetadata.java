@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -53,8 +54,15 @@ import org.apache.spark.api.java.JavaSparkContext;
 public class HoodieMetadata {
   private static final Logger LOG = LogManager.getLogger(HoodieMetadata.class);
 
+  // Base path of the Metadata Table relative to the dataset (.hoodie/metadata)
+  private static final String METADATA_TABLE_REL_PATH = HoodieTableMetaClient.METAFOLDER_NAME + Path.SEPARATOR
+      + "metadata";
+
   // Instances of metadata for each basePath
   private static Map<String, HoodieMetadataImpl> instances = new HashMap<>();
+
+  // A base directory where the metadata tables should be saved outside the dataset directory.
+  private static String metadataBaseDirectory;
 
   /**
    * Initialize the Metadata Table.
@@ -71,7 +79,8 @@ public class HoodieMetadata {
         LOG.warn("Duplicate initialization of metadata for basePath " + basePath);
       }
       if (writeConfig.useFileListingMetadata()) {
-        instances.put(basePath, new HoodieMetadataImpl(jsc, jsc.hadoopConfiguration(), basePath, writeConfig, false));
+        instances.put(basePath, new HoodieMetadataImpl(jsc, jsc.hadoopConfiguration(), basePath,
+            getMetadataTableBasePath(basePath), writeConfig, false));
       } else {
         if (!isMetadataTable(writeConfig.getBasePath())) {
           LOG.info("Metadata table is disabled in write config.");
@@ -96,12 +105,29 @@ public class HoodieMetadata {
       if (instances.containsKey(basePath)) {
         LOG.warn("Duplicate initialization of metadata for basePath " + basePath);
       }
-      instances.put(basePath, new HoodieMetadataImpl(null, hadoopConf, basePath, null, true));
+      instances.put(basePath, new HoodieMetadataImpl(null, hadoopConf, basePath, getMetadataTableBasePath(basePath),
+          null, true));
     } catch (TableNotFoundException e) {
       LOG.warn("Metadata table was not found at path " + getMetadataTableBasePath(basePath));
     } catch (IOException e) {
       throw new HoodieMetadataException("Failed to initialize metadata table", e);
     }
+  }
+
+  /**
+   * Returns true if the Metadata Table for the given basePath has been initialized.
+   */
+  public static synchronized boolean exists(String basePath) {
+    return instances.containsKey(basePath);
+  }
+
+  /**
+   * Remove the Metadata Table object for the given basePath.
+   *
+   * This can be used to reinitialize the metadata table.
+   */
+  public static synchronized void remove(String basePath) {
+    instances.remove(basePath);
   }
 
   /**
@@ -170,7 +196,11 @@ public class HoodieMetadata {
    * @param tableBasePath The base path of the dataset
    */
   public static String getMetadataTableBasePath(String tableBasePath) {
-    return HoodieMetadataImpl.getMetadataTableBasePath(tableBasePath);
+    if (metadataBaseDirectory != null) {
+      return metadataBaseDirectory;
+    }
+
+    return tableBasePath + Path.SEPARATOR + METADATA_TABLE_REL_PATH;
   }
 
   /**
@@ -258,7 +288,7 @@ public class HoodieMetadata {
    * @param basePath The base path to check
    */
   public static boolean isMetadataTable(String basePath) {
-    return HoodieMetadataImpl.isMetadataTable(basePath);
+    return basePath.contains(METADATA_TABLE_REL_PATH);
   }
 
   /**
@@ -268,5 +298,28 @@ public class HoodieMetadata {
    */
   public static HoodieWriteConfig getWriteConfig(String basePath) {
     return instances.containsKey(basePath) ? instances.get(basePath).getWriteConfig() : null;
+  }
+
+  /**
+   * Returns stats from a Metadata Table.
+   *
+   * @param detailed If true, also returns stats which are calculated by reading from the metadata table.
+   * @throws IOException
+   */
+  public static Map<String, String> getStats(String basePath, boolean detailed) throws IOException {
+    return instances.containsKey(basePath) ? instances.get(basePath).getStats(detailed) : Collections.emptyMap();
+  }
+
+  /**
+   * Sets the directory to store Metadata Table.
+   *
+   * This can be used to store the metadata table away from the dataset directory.
+   *  - Useful for testing as well as for using via the HUDI CLI so that the actual dataset is not written to.
+   *  - Useful for testing Metadata Table performance and operations on existing datasets before enabling.
+   */
+  public static void setMetadataBaseDirectory(String metadataDir) {
+    ValidationUtils.checkState(metadataBaseDirectory == null,
+        "metadataBaseDirectory is already set to " + metadataBaseDirectory);
+    metadataBaseDirectory = metadataDir;
   }
 }
