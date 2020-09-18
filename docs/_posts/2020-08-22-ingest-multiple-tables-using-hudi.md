@@ -1,7 +1,7 @@
 ---
 title: "Ingest multiple tables using Hudi"
 excerpt: "Ingesting multiple tables using Hudi at a single go is now possible. This blog gives a detailed explanation of how to achieve the same using `HoodieMultiTableDeltaStreamer.java`"
-author: pratyaksh.sharma.hudi
+author: pratyakshsharma
 category: blog
 ---
 
