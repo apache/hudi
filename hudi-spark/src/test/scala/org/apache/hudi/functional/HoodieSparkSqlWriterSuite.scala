@@ -23,8 +23,7 @@ import java.util.{Date, UUID}
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.HoodieWriteClient
-import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload}
-import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
+import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload, OverwriteNonDefaultsWithLatestAvroPayload}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
@@ -287,16 +286,12 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     })
 
   test("test upsert dataset with specified columns") {
-    val session = SparkSession.builder()
-      .appName("test_upsert_with_specified_columns")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .getOrCreate()
+    initSparkContext("test_upsert_with_specified_columns")
     val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
     try {
 
-      val sqlContext = session.sqlContext
-      val sc = session.sparkContext
+      val sqlContext = spark.sqlContext
+      val sc = spark.sparkContext
       val hoodieFooTableName = "hoodie_foo_tbl"
 
       //create a new table
@@ -315,20 +310,20 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         """{"id" : 1,  "name": "Jack", "age" : 10, "ts" : 1, "dt" : "20191212"}""",
         """{"id" : 2, "name": "Tom", "age" : 11, "ts" : 1, "dt" : "20191213"}""",
         """{"id" : 3, "name": "Bill", "age" : 12, "ts" : 1, "dt" : "20191212"}""")
-      val df = session.read.json(session.sparkContext.parallelize(data, 2))
+      val df = spark.read.json(spark.sparkContext.parallelize(data, 2))
 
       // write to Hudi
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df)
 
       val update = List(
         """{"id" : 1,   "age" : 22, "ts" : 2, "dt" : "20191212"}""")
-      val dfUpdate = session.read.json(session.sparkContext.parallelize(update, 2))
+      val dfUpdate = spark.read.json(spark.sparkContext.parallelize(update, 2))
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, dfUpdate)
 
-      val dfSaved = session.read.format("org.apache.hudi").load(path.toAbsolutePath.toAbsolutePath + "/*")
+      val dfSaved = spark.read.format("org.apache.hudi").load(path.toAbsolutePath.toAbsolutePath + "/*")
       assert(1 == dfSaved.filter("name = 'Jack' and age = 22").count())
     } finally {
-      session.stop()
+      spark.stop()
       FileUtils.deleteDirectory(path.toFile)
     }
   }
