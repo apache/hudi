@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Ingest multiple tables using Hudi - Apache Hudi</title>
+<meta name="description" content="Ingesting multiple tables using Hudi at a single go is now possible. This blog gives a detailed explanation of how to achieve the same using HoodieMultiTableDeltaStreamer.java">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Ingest multiple tables using Hudi">
+<meta property="og:url" content="https://hudi.apache.org/blog/ingest-multiple-tables-using-hudi/">
+
+
+  <meta property="og:description" content="Ingesting multiple tables using Hudi at a single go is now possible. This blog gives a detailed explanation of how to achieve the same using HoodieMultiTableDeltaStreamer.java">
+
+
+
+
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/blog.html" target="_self" >Blog</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+    <div itemscope itemtype="https://schema.org/Person">
+
+  <div class="author__content">
+    
+      <h3 class="author__name" itemprop="name">Quick Links</h3>
+    
+    
+      <div class="author__bio" itemprop="description">
+        <p>Hudi <em>ingests</em> &amp; <em>manages</em> storage of large analytical datasets over DFS.</p>
+
+      </div>
+    
+  </div>
+
+  <div class="author__urls-wrapper">
+    <ul class="author__urls social-icons">
+      
+        
+          <li><a href="/docs/quick-start-guide" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-book" aria-hidden="true"></i> Documentation</a></li>
+
+          
+        
+          <li><a href="https://cwiki.apache.org/confluence/display/HUDI" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-wikipedia-w" aria-hidden="true"></i> Technical Wiki</a></li>
+
+          
+        
+          <li><a href="/contributing" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-thumbs-o-up" aria-hidden="true"></i> Contribution Guide</a></li>
+
+          
+        
+          <li><a href="https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-slack" aria-hidden="true"></i> Join on Slack</a></li>
+
+          
+        
+          <li><a href="https://github.com/apache/hudi" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-github" aria-hidden="true"></i> Fork on GitHub</a></li>
+
+          
+        
+          <li><a href="https://issues.apache.org/jira/projects/HUDI/summary" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Issues</a></li>
+
+          
+        
+          <li><a href="/security" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Security Issues</a></li>
+
+          
+        
+      
+    </ul>
+  </div>
+</div>
+
+  
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Ingest multiple tables using Hudi
+</h1>
+          <!-- Output author details if some exist. -->
+          <div class="page__author"><a href="https://cwiki.apache.org/confluence/display/~pratyakshsharma">Pratyaksh Sharma</a> posted on <time datetime="2020-08-22">August 22, 2020</time></span>
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+          <style>
+            .page {
+              padding-right: 0 !important;
+            }
+          </style>
+        
+        <p>When building a change data capture pipeline for already existing or newly created relational databases, one of the most common problems that one faces is simplifying the onboarding process for multiple tables. Ingesting multiple tables to Hudi dataset at a single go is now possible using <code class="highlighter-rouge">HoodieMultiTableDeltaStreamer</code> class which is a wrapper on top of the more popular <code class="highlighter-rouge">HoodieDeltaStreamer</code> class. Currently <code class="highlighter-rouge">HoodieMultiTableDeltaStreamer</code> supports <strong>COPY_ON_WRITE</strong> storage type only and the ingestion is done in a <strong>sequential</strong> way.</p>
+
+<p>This blog will guide you through configuring and running <code class="highlighter-rouge">HoodieMultiTableDeltaStreamer</code>.</p>
+
+<h3 id="configuration">Configuration</h3>
+
+<ul>
+  <li><code class="highlighter-rouge">HoodieMultiTableDeltaStreamer</code> expects users to maintain table wise overridden properties in separate files in a dedicated config folder. Common properties can be configured via common properties file also.</li>
+  <li>By default, hudi datasets are created under the path <code class="highlighter-rouge">&lt;base-path-prefix&gt;/&lt;database_name&gt;/&lt;name_of_table_to_be_ingested&gt;</code>. You need to provide the names of tables to be ingested via the property <code class="highlighter-rouge">hoodie.deltastreamer.ingestion.tablesToBeIngested</code> in the format <code class="highlighter-rouge">&lt;database&gt;.&lt;table&gt;</code>, for example</li>
+</ul>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">ingestion</span><span class="o">.</span><span class="na">tablesToBeIngested</span><span class="o">=</span><span class="n">db1</span><span class="o">.</span><span class="na">table1</span><span class="o">,</span><span class="n">db2</span><span class="o">.</span><span class="na">table2</span>
+</code></pre></div></div>
+
+<ul>
+  <li>If you do not provide database name, then it is assumed the table belongs to default database and the hudi dataset for the concerned table is created under the path <code class="highlighter-rouge">&lt;base-path-prefix&gt;/default/&lt;name_of_table_to_be_ingested&gt;</code>. Also there is a provision to override the default path for hudi datasets. You can create hudi dataset for a particular table by setting the property <code class="highlighter-rouge">hoodie.deltastreamer.ingestion.targetBasePath</code> in table level config file</li>
+  <li>There are a lot of properties that one might like to override per table, for example</li>
+</ul>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">recordkey</span><span class="o">.</span><span class="na">field</span><span class="o">=</span><span class="n">_row_key</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">partitionpath</span><span class="o">.</span><span class="na">field</span><span class="o">=</span><span class="n">created_at</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">source</span><span class="o">.</span><span class="na">kafka</span><span class="o">.</span><span class="na">topic</span><span class="o">=</span><span class="n">topic2</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">keygen</span><span class="o">.</span><span class="na">timebased</span><span class="o">.</span><span class="na">timestamp</span><span class="o">.</span><span class="na">type</span><span class="o">=</span><span class="no">UNIX_TIMESTAMP</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">keygen</span><span class="o">.</span><span class="na">timebased</span><span class="o">.</span><span class="na">input</span><span class="o">.</span><span class="na">dateformat</span><span class="o">=</span><span class="n">yyyy</span><span class="o">-</span><span class="no">MM</span><span class="o">-</span><span class="n">dd</span> <span class="nl">HH:mm:</span><span class="n">ss</span><span class="o">.</span><span class="na">S</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">hive_sync</span><span class="o">.</span><span class="na">table</span><span class="o">=</span><span class="n">short_trip_uber_hive_dummy_table</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">ingestion</span><span class="o">.</span><span class="na">targetBasePath</span><span class="o">=</span><span class="nl">s3:</span><span class="c1">///temp/hudi/table1</span>
+</code></pre></div></div>
+
+<ul>
+  <li>Properties like above need to be set for every table to be ingested. As already suggested at the beginning, users are expected to maintain separate config files for every table by setting the below property</li>
+</ul>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">ingestion</span><span class="o">.&lt;</span><span class="n">db</span><span class="o">&gt;.&lt;</span><span class="n">table</span><span class="o">&gt;.</span><span class="na">configFile</span><span class="o">=</span><span class="nl">s3:</span><span class="c1">///tmp/config/config1.properties</span>
+</code></pre></div></div>
+
+<p>If you do not want to set the above property for every table, you can simply create config files for every table to be ingested under the config folder with the name - <code class="highlighter-rouge">&lt;database&gt;_&lt;table&gt;_config.properties</code>. For example if you want to ingest table1 and table2 from dummy database, where config folder is set to <code class="highlighter-rouge">s3:///tmp/config</code>, then you need to create 2 config files on the given paths - <code class="highlighter-rouge">s3:///tmp/config/dummy_table1_config.properties</code> and <code class="highlighter-rouge">s3:///tmp/config/dummy_table2_config.properties</code>.</p>
+
+<ul>
+  <li>Finally you can specify all the common properties in a common properties file. Common properties file does not necessarily have to lie under config folder but it is advised to keep it along with other config files. This file will contain the below properties</li>
+</ul>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">ingestion</span><span class="o">.</span><span class="na">tablesToBeIngested</span><span class="o">=</span><span class="n">db1</span><span class="o">.</span><span class="na">table1</span><span class="o">,</span><span class="n">db2</span><span class="o">.</span><span class="na">table2</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">ingestion</span><span class="o">.</span><span class="na">db1</span><span class="o">.</span><span class="na">table1</span><span class="o">.</span><span class="na">configFile</span><span class="o">=</span><span class="nl">s3:</span><span class="c1">///tmp/config_table1.properties</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">ingestion</span><span class="o">.</span><span class="na">db2</span><span class="o">.</span><span class="na">table2</span><span class="o">.</span><span class="na">configFile</span><span class="o">=</span><span class="nl">s3:</span><span class="c1">///tmp/config_table2.properties</span>
+</code></pre></div></div>
+
+<h3 id="run-command">Run Command</h3>
+
+<p><code class="highlighter-rouge">HoodieMultiTableDeltaStreamer</code> can be run similar to how one runs <code class="highlighter-rouge">HoodieDeltaStreamer</code>. Please refer to the example given below for the command.</p>
+
+<h3 id="example">Example</h3>
+
+<p>Suppose you want to ingest table1 and table2 from db1 and want to ingest the 2 tables under the path <code class="highlighter-rouge">s3:///temp/hudi</code>. You can ingest them using the below command</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">[</span><span class="n">hoodie</span><span class="o">]</span><span class="err">$</span> <span class="n">spark</span><span class="o">-</span><span class="n">submit</span> <span class="o">--</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">HoodieMultiTableDeltaStreamer</span> <span class="err">`</span><span class="n">ls</span> <span class="n">packaging</span><span class="o">/</span><span class="n">hudi</span><span class="o">-</span><span class="n">utilities</span><span class="o">-</span><span class="n">bundle</span><span class="o">/</span><span class="n">target</span><span class="o">/</span><span class="n">hudi</span><span class="o">-</span><span class="n">utilities</span><span class="o">-</span><span class="n">bundle</span><span class="o">-*.</span><span class="na">jar</span><span class="err">`</span> <span class="err">\</span>
+  <span class="o">--</span><span class="n">props</span> <span class="nl">s3:</span><span class="c1">///temp/hudi-ingestion-config/kafka-source.properties \</span>
+  <span class="o">--</span><span class="n">config</span><span class="o">-</span><span class="n">folder</span> <span class="nl">s3:</span><span class="c1">///temp/hudi-ingestion-config \</span>
+  <span class="o">--</span><span class="n">schemaprovider</span><span class="o">-</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">schema</span><span class="o">.</span><span class="na">SchemaRegistryProvider</span> <span class="err">\</span>
+  <span class="o">--</span><span class="n">source</span><span class="o">-</span><span class="kd">class</span> <span class="nc">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">utilities</span><span class="o">.</span><span class="na">sources</span><span class="o">.</span><span class="na">AvroKafkaSource</span> <span class="err">\</span>
+  <span class="o">--</span><span class="n">source</span><span class="o">-</span><span class="n">ordering</span><span class="o">-</span><span class="n">field</span> <span class="n">impresssiontime</span> <span class="err">\</span>
+  <span class="o">--</span><span class="n">base</span><span class="o">-</span><span class="n">path</span><span class="o">-</span><span class="n">prefix</span> <span class="nl">s3:</span><span class="c1">///temp/hudi \ </span>
+  <span class="o">--</span><span class="n">target</span><span class="o">-</span><span class="n">table</span> <span class="n">dummy_table</span> <span class="err">\</span>
+  <span class="o">--</span><span class="n">op</span> <span class="no">UPSERT</span>
+</code></pre></div></div>
+
+<p>s3:///temp/config/kafka-source.properties</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">ingestion</span><span class="o">.</span><span class="na">tablesToBeIngested</span><span class="o">=</span><span class="n">db1</span><span class="o">.</span><span class="na">table1</span><span class="o">,</span><span class="n">db1</span><span class="o">.</span><span class="na">table2</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">ingestion</span><span class="o">.</span><span class="na">db1</span><span class="o">.</span><span class="na">table1</span><span class="o">.</span><span class="na">configFile</span><span class="o">=</span><span class="nl">s3:</span><span class="c1">///temp/hudi-ingestion-config/config_table1.properties</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">ingestion</span><span class="o">.</span><span class="na">db21</span><span class="o">.</span><span class="na">table2</span><span class="o">.</span><span class="na">configFile</span><span class="o">=</span><span class="nl">s3:</span><span class="c1">///temp/hudi-ingestion-config/config_table2.properties</span>
+
+<span class="err">#</span><span class="nc">Kafka</span> <span class="n">props</span>
+<span class="n">bootstrap</span><span class="o">.</span><span class="na">servers</span><span class="o">=</span><span class="nl">localhost:</span><span class="mi">9092</span>
+<span class="n">auto</span><span class="o">.</span><span class="na">offset</span><span class="o">.</span><span class="na">reset</span><span class="o">=</span><span class="n">earliest</span>
+<span class="n">schema</span><span class="o">.</span><span class="na">registry</span><span class="o">.</span><span class="na">url</span><span class="o">=</span><span class="nl">http:</span><span class="c1">//localhost:8081</span>
+
+<span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">keygenerator</span><span class="o">.</span><span class="na">class</span><span class="o">=</span><span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">hudi</span><span class="o">.</span><span class="na">keygen</span><span class="o">.</span><span class="na">CustomKeyGenerator</span>
+</code></pre></div></div>
+
+<p>s3:///temp/hudi-ingestion-config/config_table1.properties</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">recordkey</span><span class="o">.</span><span class="na">field</span><span class="o">=</span><span class="n">_row_key1</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">partitionpath</span><span class="o">.</span><span class="na">field</span><span class="o">=</span><span class="n">created_at</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">source</span><span class="o">.</span><span class="na">kafka</span><span class="o">.</span><span class="na">topic</span><span class="o">=</span><span class="n">topic1</span>
+</code></pre></div></div>
+
+<p>s3:///temp/hudi-ingestion-config/config_table2.properties</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">recordkey</span><span class="o">.</span><span class="na">field</span><span class="o">=</span><span class="n">_row_key2</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">datasource</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">partitionpath</span><span class="o">.</span><span class="na">field</span><span class="o">=</span><span class="n">created_at</span>
+<span class="n">hoodie</span><span class="o">.</span><span class="na">deltastreamer</span><span class="o">.</span><span class="na">source</span><span class="o">.</span><span class="na">kafka</span><span class="o">.</span><span class="na">topic</span><span class="o">=</span><span class="n">topic2</span>
+</code></pre></div></div>
+
+<p>Contributions are welcome for extending multiple tables ingestion support to <strong>MERGE_ON_READ</strong> storage type and enabling <code class="highlighter-rouge">HoodieMultiTableDeltaStreamer</code> ingest multiple tables parallely.</p>
+
+<p>Happy ingesting!</p>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+
+  </body>
+</html>

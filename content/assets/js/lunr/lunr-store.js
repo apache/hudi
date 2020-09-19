@@ -1173,4 +1173,9 @@ var store = [{
         "excerpt":"We will look at different deployment models for executing compactions asynchronously. Compaction For Merge-On-Read table, data is stored using a combination of columnar (e.g parquet) + row based (e.g avro) file formats. Updates are logged to delta files &amp; later compacted to produce new versions of columnar files synchronously or...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/async-compaction-deployment-model/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Ingest multiple tables using Hudi",
+        "excerpt":"When building a change data capture pipeline for already existing or newly created relational databases, one of the most common problems that one faces is simplifying the onboarding process for multiple tables. Ingesting multiple tables to Hudi dataset at a single go is now possible using HoodieMultiTableDeltaStreamer class which is...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/ingest-multiple-tables-using-hudi/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]
