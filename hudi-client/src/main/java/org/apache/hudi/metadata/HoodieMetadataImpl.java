@@ -51,7 +51,6 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -72,7 +71,6 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -202,7 +200,6 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
         .withSchema(HoodieMetadataRecord.getClassSchema().toString())
         .forTable(tableName)
         .withParallelism(1, 1).withDeleteParallelism(1).withRollbackParallelism(1).withFinalizeWriteParallelism(1)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexClass(HoodieMetadataIndex.class.getName()).build())
         .withCompactionConfig(writeConfig.getMetadataCompactionConfig());
 
     if (writeConfig.isMetricsOn()) {
@@ -751,7 +748,7 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
   /**
    * Commit the {@code HoodieRecord}s to Metadata Table as a new delta-commit.
    *
-   * @param records The records to commit
+   * @param recordRDD The records to commit
    * @param instantTime The timestamp of instant to create
    */
   private synchronized void commit(JavaRDD<HoodieRecord> recordRDD, String instantTime) {
@@ -1032,7 +1029,7 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
     if (logHoodieRecord.isPresent()) {
       if (hoodieRecord != null) {
         // Merge the payloads
-        HoodieRecordPayload mergedPayload = hoodieRecord.getData().preCombine(logHoodieRecord.get().getData());
+        HoodieRecordPayload mergedPayload = logHoodieRecord.get().getData().preCombine(hoodieRecord.getData());
         hoodieRecord = new HoodieRecord(hoodieRecord.getKey(), mergedPayload);
       } else {
         hoodieRecord = logHoodieRecord.get();
