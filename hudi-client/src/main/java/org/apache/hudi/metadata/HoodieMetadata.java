@@ -288,7 +288,7 @@ public class HoodieMetadata {
    * @param basePath The base path to check
    */
   public static boolean isMetadataTable(String basePath) {
-    return basePath.contains(METADATA_TABLE_REL_PATH);
+    return basePath.endsWith(METADATA_TABLE_REL_PATH);
   }
 
   /**

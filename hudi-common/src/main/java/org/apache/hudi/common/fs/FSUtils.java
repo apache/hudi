@@ -194,7 +194,7 @@ public class FSUtils {
    * Obtain all the partition paths, that are present in this table, denoted by presence of
    * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}.
    *
-   * If thee basePathStr is a subdirectory of .hoodie folder then we assume that the partitions of an internal
+   * If the basePathStr is a subdirectory of .hoodie folder then we assume that the partitions of an internal
    * table (a hoodie table within the .hoodie directory) are to be obtained.
    *
    * @param fs FileSystem instance

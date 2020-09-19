@@ -216,7 +216,7 @@ public class HoodieMetadataImpl {
         .forTable(tableName)
         .withParallelism(1, 1).withDeleteParallelism(1).withRollbackParallelism(1).withFinalizeWriteParallelism(1)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexClass(HoodieMetadataIndex.class.getName()).build())
-        .withCompactionConfig(writeConfig.getMetadataCompactionConfig().orElseGet(() -> getDefaultCompactionConfig()));
+        .withCompactionConfig(writeConfig.getMetadataCompactionConfig());
 
     if (writeConfig.isMetricsOn()) {
       HoodieMetricsConfig.Builder metricsConfig = HoodieMetricsConfig.newBuilder()
@@ -246,16 +246,6 @@ public class HoodieMetadataImpl {
     }
 
     return builder.build();
-  }
-
-  private HoodieCompactionConfig getDefaultCompactionConfig() {
-    return HoodieCompactionConfig.newBuilder()
-            .withAutoClean(true)
-            .withInlineCompaction(true)
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-            .archiveCommitsWith(24, 30)
-            .withMaxNumDeltaCommitsBeforeCompaction(24)
-            .build();
   }
 
   public HoodieWriteConfig getWriteConfig() {

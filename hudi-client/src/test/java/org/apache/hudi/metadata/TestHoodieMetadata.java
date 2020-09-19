@@ -561,7 +561,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     // Files within each partition should match
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
-    TableFileSystemView tableView = table.getFileSystemView();
+    TableFileSystemView tableView = table.getHoodieView();
     fsPartitions.forEach(partition -> {
       try {
         FileStatus[] fsStatuses = FSUtils.getAllDataFilesInPartition(dfs, new Path(basePath, partition));

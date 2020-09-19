@@ -206,8 +206,8 @@ public class HoodieTimelineArchiveLog {
         instants = instants.filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.LESSER_THAN,
             latestCompaction.get()));
       } else {
-        LOG.info("Not arching instants as there is no compaction yet of the metadata table");
-        instants = instants.filter(i -> false);
+        LOG.info("Not archiving instants as there is no compaction yet of the metadata table");
+        instants = Stream.empty();
       }
     }
 
@@ -222,7 +222,7 @@ public class HoodieTimelineArchiveLog {
             latestCompactionInstant.get().getTimestamp()));
       } else {
         LOG.info("Not archiving instants on metdata table as there is no compaction yet");
-        instants = instants.filter(i -> false);
+        instants = Stream.empty();
       }
     }
 

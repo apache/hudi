@@ -120,11 +120,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static int DEFAULT_MAX_CONSISTENCY_CHECKS = 7;
 
   // Enable the internal Metadata Table which saves file listings
-  private static final String USE_FILE_LISTING_METADATA = "hoodie.metadata.enable";
+  private static final String USE_FILE_LISTING_METADATA = "hoodie.metadata.file.listings.enable";
   private static final String DEFAULT_USE_FILE_LISTING_METADATA = "false";
 
   // Validate contents of Metadata Table on each access against the actual filesystem
-  private static final String FILE_LISTING_METADATA_VERIFY = "hoodie.metadata.verify";
+  private static final String FILE_LISTING_METADATA_VERIFY = "hoodie.metadata.file.listings.verify";
   private static final String DEFAULT_FILE_LISTING_METADATA_VERIFY = "false";
 
   // Serialized compaction config to be used for Metadata Table
@@ -686,7 +686,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public boolean getPushGatewayRandomJobNameSuffix() {
     return Boolean.parseBoolean(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX));
   }
-  
+
   /**
    * memory configs.
    */
@@ -780,16 +780,23 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(FILE_LISTING_METADATA_VERIFY));
   }
 
-  public Option<HoodieCompactionConfig> getMetadataCompactionConfig() throws IOException {
+  public HoodieCompactionConfig getMetadataCompactionConfig() throws IOException {
     String serializedCompactionConfig = props.getProperty(HOODIE_METADATA_COMPACTION_CONFIG);
-    if (serializedCompactionConfig == null) {
-      return Option.empty();
+    if (serializedCompactionConfig != null) {
+      StringReader reader = new StringReader(serializedCompactionConfig);
+      Properties loadedProps = new Properties();
+      loadedProps.load(reader);
+      return HoodieCompactionConfig.newBuilder().fromProperties(loadedProps).build();
     }
 
-    StringReader reader = new StringReader(serializedCompactionConfig);
-    Properties loadedProps = new Properties();
-    loadedProps.load(reader);
-    return Option.of(HoodieCompactionConfig.newBuilder().fromProperties(loadedProps).build());
+    // Default config for compacting metadata tables
+    return HoodieCompactionConfig.newBuilder()
+        .withAutoClean(true)
+        .withInlineCompaction(true)
+        .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+        .archiveCommitsWith(24, 30)
+        .withMaxNumDeltaCommitsBeforeCompaction(24)
+        .build();
   }
 
   public static class Builder {
