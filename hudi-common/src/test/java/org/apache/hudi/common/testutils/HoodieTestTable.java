@@ -218,6 +218,13 @@ public class HoodieTestTable {
     return partitionFileIdMap;
   }
 
+  public HoodieTestTable withBaseFilesInPartitions(Map<String, String> partitionAndFileId) throws Exception {
+    for (Map.Entry<String, String> pair : partitionAndFileId.entrySet()) {
+      withBaseFilesInPartition(pair.getKey(), pair.getValue());
+    }
+    return this;
+  }
+
   public HoodieTestTable withBaseFilesInPartition(String partition, String... fileIds) throws Exception {
     for (String f : fileIds) {
       FileCreateUtils.createBaseFile(basePath, partition, currentInstantTime, f);
@@ -248,6 +255,30 @@ public class HoodieTestTable {
     return this;
   }
 
+  public boolean inflightCommitsExist(String... instantTime) {
+    return Arrays.stream(instantTime).allMatch(this::inflightCommitExists);
+  }
+
+  public boolean inflightCommitExists(String instantTime) {
+    try {
+      return fs.exists(getInflightCommitFilePath(instantTime));
+    } catch (IOException e) {
+      throw new HoodieTestTableException(e);
+    }
+  }
+
+  public boolean commitsExist(String... instantTime) {
+    return Arrays.stream(instantTime).allMatch(this::commitExists);
+  }
+
+  public boolean commitExists(String instantTime) {
+    try {
+      return fs.exists(getCommitFilePath(instantTime));
+    } catch (IOException e) {
+      throw new HoodieTestTableException(e);
+    }
+  }
+
   public boolean baseFilesExist(Map<String, String> partitionAndFileId, String instantTime) {
     return partitionAndFileId.entrySet().stream().allMatch(entry -> {
       String partition = entry.getKey();
@@ -268,16 +299,16 @@ public class HoodieTestTable {
     }
   }
 
-  public Path getPartitionPath(String partition) {
-    return new Path(Paths.get(basePath, partition).toUri());
+  public boolean logFilesExist(String partition, String instantTime, String fileId, int... versions) {
+    return Arrays.stream(versions).allMatch(v -> logFileExists(partition, instantTime, fileId, v));
   }
 
-  public String getBaseFileNameById(String fileId) {
-    return baseFileName(currentInstantTime, fileId);
-  }
-
-  public Path getBaseFilePath(String partition, String fileId) {
-    return new Path(Paths.get(basePath, partition, getBaseFileNameById(fileId)).toUri());
+  public boolean logFileExists(String partition, String instantTime, String fileId, int version) {
+    try {
+      return fs.exists(new Path(Paths.get(basePath, partition, logFileName(instantTime, fileId, version)).toString()));
+    } catch (IOException e) {
+      throw new HoodieTestTableException(e);
+    }
   }
 
   public Path getInflightCommitFilePath(String instantTime) {
@@ -292,16 +323,16 @@ public class HoodieTestTable {
     return new Path(Paths.get(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME, instantTime + HoodieTimeline.REQUESTED_COMPACTION_EXTENSION).toUri());
   }
 
-  public boolean logFilesExist(String partition, String instantTime, String fileId, int... versions) {
-    return Arrays.stream(versions).allMatch(v -> logFileExists(partition, instantTime, fileId, v));
+  public Path getPartitionPath(String partition) {
+    return new Path(Paths.get(basePath, partition).toUri());
   }
 
-  public boolean logFileExists(String partition, String instantTime, String fileId, int version) {
-    try {
-      return fs.exists(new Path(Paths.get(basePath, partition, logFileName(instantTime, fileId, version)).toString()));
-    } catch (IOException e) {
-      throw new HoodieTestTableException(e);
-    }
+  public Path getBaseFilePath(String partition, String fileId) {
+    return new Path(Paths.get(basePath, partition, getBaseFileNameById(fileId)).toUri());
+  }
+
+  public String getBaseFileNameById(String fileId) {
+    return baseFileName(currentInstantTime, fileId);
   }
 
   public List<FileStatus> listAllFiles(String partitionPath) throws IOException {
