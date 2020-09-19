@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
@@ -34,15 +35,13 @@ import java.io.IOException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-public class TestSchemaPostProcessor {
+public class TestSchemaPostProcessor extends UtilitiesTestBase {
 
   private TypedProperties properties = new TypedProperties();
 
   @Test
   public void testPostProcessor() throws IOException {
     properties.put(Config.SCHEMA_POST_PROCESSOR_PROP, DummySchemaPostProcessor.class.getName());
-    JavaSparkContext jsc =
-        UtilHelpers.buildSparkContext(this.getClass().getName() + "-hoodie", "local[2]");
     SchemaProvider provider =
         UtilHelpers.wrapSchemaProviderWithPostProcessor(
         UtilHelpers.createSchemaProvider(DummySchemaProvider.class.getName(), properties, jsc),
