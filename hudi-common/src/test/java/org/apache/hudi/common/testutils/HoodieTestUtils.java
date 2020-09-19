@@ -260,29 +260,8 @@ public class HoodieTestUtils {
   /**
    * @deprecated Use {@link HoodieTestTable} instead.
    */
-  public static String getDataFilePath(String basePath, String partitionPath, String instantTime, String fileID) {
-    return basePath + "/" + partitionPath + "/" + FSUtils.makeDataFileName(instantTime, DEFAULT_WRITE_TOKEN, fileID);
-  }
-
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static String getLogFilePath(String basePath, String partitionPath, String instantTime, String fileID,
-      Option<Integer> version) {
-    return basePath + "/" + partitionPath + "/" + FSUtils.makeLogFileName(fileID, ".log", instantTime,
-        version.orElse(DEFAULT_LOG_VERSION), HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
-  }
-
   public static String getCommitFilePath(String basePath, String instantTime) {
     return basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instantTime + HoodieTimeline.COMMIT_EXTENSION;
-  }
-
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static boolean doesDataFileExist(String basePath, String partitionPath, String instantTime,
-      String fileID) {
-    return new File(getDataFilePath(basePath, partitionPath, instantTime, fileID)).exists();
   }
 
   /**
@@ -291,15 +270,6 @@ public class HoodieTestUtils {
   public static boolean doesCommitExist(String basePath, String instantTime) {
     return new File(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instantTime + HoodieTimeline.COMMIT_EXTENSION)
-            .exists();
-  }
-
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static boolean doesInflightExist(String basePath, String instantTime) {
-    return new File(
-        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instantTime + HoodieTimeline.INFLIGHT_EXTENSION)
             .exists();
   }
 
