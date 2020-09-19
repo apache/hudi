@@ -20,7 +20,9 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.AvroSource;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.JsonSource;
@@ -65,17 +67,16 @@ public final class SourceFormatAdapter {
       case ROW: {
         InputBatch<Dataset<Row>> r = ((RowSource) source).fetchNext(lastCkptStr, sourceLimit);
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(
-            rdd -> (
-                (r.getSchemaProvider() instanceof FilebasedSchemaProvider)
-                    // If the source schema is specified through Avro schema,
-                    // pass in the schema for the Row-to-Avro conversion
-                    // to avoid nullability mismatch between Avro schema and Row schema
-                    ? AvroConversionUtils.createRdd(
-                    rdd, r.getSchemaProvider().getSourceSchema(),
-                    HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD()
-                    : AvroConversionUtils.createRdd(
-                        rdd, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD()
-            ))
+            rdd -> {
+              SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
+              return (originalProvider instanceof FilebasedSchemaProvider)
+                  // If the source schema is specified through Avro schema,
+                  // pass in the schema for the Row-to-Avro conversion
+                  // to avoid nullability mismatch between Avro schema and Row schema
+                  ? AvroConversionUtils.createRdd(rdd, r.getSchemaProvider().getSourceSchema(),
+                  HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD() : AvroConversionUtils.createRdd(rdd,
+                  HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD();
+            })
             .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       default:

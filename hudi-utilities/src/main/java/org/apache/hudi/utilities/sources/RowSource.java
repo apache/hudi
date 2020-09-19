@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -42,7 +42,8 @@ public abstract class RowSource extends Source<Dataset<Row>> {
   protected final InputBatch<Dataset<Row>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
     Pair<Option<Dataset<Row>>, String> res = fetchNextBatch(lastCkptStr, sourceLimit);
     return res.getKey().map(dsr -> {
-      SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(dsr.schema());
+      SchemaProvider rowSchemaProvider =
+          UtilHelpers.createRowBasedSchemaProvider(dsr.schema(), props, sparkContext);
       return new InputBatch<>(res.getKey(), res.getValue(), rowSchemaProvider);
     }).orElseGet(() -> new InputBatch<>(res.getKey(), res.getValue()));
   }
