@@ -142,7 +142,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata upsert(JavaSparkContext jsc, String instantTime,
-      JavaRDD<HoodieRecord<T>> records);
+      JavaRDD<HoodieRecord<T>> records, String schema);
 
   /**
    * Insert a batch of new records into Hoodie table at the supplied instantTime.

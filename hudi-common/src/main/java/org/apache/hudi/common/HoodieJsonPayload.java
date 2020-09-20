@@ -55,6 +55,11 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
   }
 
   @Override
+  public HoodieJsonPayload preCombine(HoodieJsonPayload another, Schema schema) throws IOException {
+    return this;
+  }
+
+  @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
     return getInsertValue(schema);
   }

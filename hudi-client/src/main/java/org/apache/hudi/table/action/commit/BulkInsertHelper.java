@@ -50,7 +50,7 @@ public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
 
     if (performDedupe) {
       dedupedRecords = WriteHelper.combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
-          config.getBulkInsertShuffleParallelism(), ((HoodieTable<T>)table));
+          config.getBulkInsertShuffleParallelism(), ((HoodieTable<T>)table), false, null);
     }
 
     final JavaRDD<HoodieRecord<T>> repartitionedRecords;

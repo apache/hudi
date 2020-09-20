@@ -45,6 +45,22 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   T preCombine(T another);
 
   /**
+   * When more than one HoodieRecord have the same HoodieKey, this function combines all fields(which is not null)
+   * before attempting to insert/upsert (if combining turned on in HoodieClientConfig).
+   * eg: 1)
+   * Before:
+   * id name  age   ts
+   * 1  Karl  null  0.0
+   * 1  null  18    0.0
+   * After:
+   * id name  age   ts
+   * 1  Karl  18    0.0
+   *
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  T preCombine(T another, Schema schema) throws IOException;
+
+  /**
    * This methods lets you write custom merging/combining logic to produce new values as a function of current value on
    * storage and whats contained in this object.
    * <p>

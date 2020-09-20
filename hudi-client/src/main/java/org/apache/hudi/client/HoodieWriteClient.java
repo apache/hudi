@@ -190,7 +190,19 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     table.validateUpsertSchema();
     setOperationType(WriteOperationType.UPSERT);
     this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
-    HoodieWriteMetadata result = table.upsert(jsc, instantTime, records);
+    HoodieWriteMetadata result = table.upsert(jsc, instantTime, records, null);
+    if (result.getIndexLookupDuration().isPresent()) {
+      metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
+    }
+    return postWrite(result, instantTime, table);
+  }
+
+  public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String instantTime, String schema) {
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT, instantTime);
+    table.validateUpsertSchema();
+    setOperationType(WriteOperationType.UPSERT);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
+    HoodieWriteMetadata result = table.upsert(jsc, instantTime, records, schema);
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
     }
@@ -198,7 +210,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   * Upserts the given prepared records into the Hoodie table,/TestHoodieClientOnCopyOnWriteStorage at the supplied instantTime.
    * <p>
    * This implementation requires that the input records are already tagged, and de-duped if needed.
    *
