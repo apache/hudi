@@ -232,7 +232,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       // Restore
       client.restoreToInstant("006");
       validateMetadata(client.getConfig());
-     }
+    }
   }
 
   /**
@@ -300,6 +300,38 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       // Rollback of Clean
       newCommitTime = "009";
       client.clean(newCommitTime);
+      validateMetadata(client.getConfig());
+    }
+  }
+
+  /**
+   * Test marker based rollback of various table operations sync to Metadata Table correctly.
+   */
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testMarkerBasedRollbackOperations(HoodieTableType tableType) throws Exception {
+    init(tableType);
+
+    // Initial commit
+    try (HoodieWriteClient client = new HoodieWriteClient<>(jsc,
+        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(true).build())) {
+      String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
+      client.startCommitWithTime(newCommitTime);
+      List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      validateMetadata(client.getConfig());
+    }
+
+    try (HoodieWriteClient client = new HoodieWriteClient<>(jsc,
+        getWriteConfigBuilder(false, true, false).withRollbackUsingMarkers(true).build())) {
+      // Write updates and inserts
+      String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(newCommitTime);
+      List<HoodieRecord> records = dataGen.generateUpdates(newCommitTime, 10);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      // Rollback of uncommitted updates and inserts
+      client.rollback(newCommitTime);
       validateMetadata(client.getConfig());
     }
   }
@@ -547,8 +579,10 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
         // File sizes should be valid
         Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getLen() > 0));
 
-        //LOG.info("````````````````````````` " + Arrays.toString(fsFileNames.toArray()));
-        //LOG.info("````````````````````````` " + Arrays.toString(metadataFilenames.toArray()));
+        if (fsFileNames.size() != metadataFilenames.size()) {
+          LOG.info("*** File system listing = " + Arrays.toString(fsFileNames.toArray()));
+          LOG.info("*** Metadata listing = " + Arrays.toString(metadataFilenames.toArray()));
+        }
         assertEquals(fsFileNames.size(), metadataFilenames.size(), "Files within partition " + partition + " should match");
         assertTrue(fsFileNames.equals(metadataFilenames), "Files within partition " + partition + " should match");
 

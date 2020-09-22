@@ -31,7 +31,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
-
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import scala.Tuple2;
 
@@ -125,10 +126,17 @@ public class MarkerBasedRollbackStrategy implements BaseRollbackActionExecutor.R
       }
     }
 
+    Map<FileStatus, Long> filesToNumBlocksRollback = Collections.emptyMap();
+    if (config.useFileListingMetadata()) {
+      // When metadata is enabled, the information of files appended to is required
+      filesToNumBlocksRollback = Collections.singletonMap(
+        table.getMetaClient().getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
+        1L);
+    }
+
     return HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath)
-        // we don't use this field per se. Avoiding the extra file status call.
-        .withRollbackBlockAppendResults(Collections.emptyMap())
+        .withRollbackBlockAppendResults(filesToNumBlocksRollback)
         .build();
   }
 

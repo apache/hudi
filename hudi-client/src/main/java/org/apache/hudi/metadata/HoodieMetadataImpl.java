@@ -70,7 +70,6 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -744,17 +743,17 @@ public class HoodieMetadataImpl {
     });
 
     partitionToAppendedFiles.forEach((partition, appendedFileMap) -> {
-        fileChangeCount[1] += appendedFileMap.size();
+      fileChangeCount[1] += appendedFileMap.size();
 
-        // Validate that no appended file has been deleted
-        ValidationUtils.checkState(
+      // Validate that no appended file has been deleted
+      ValidationUtils.checkState(
           !appendedFileMap.keySet().removeAll(partitionToDeletedFiles.getOrDefault(partition, Collections.emptyList())),
-          "Rollback file cannot both be appended and deleted");
+            "Rollback file cannot both be appended and deleted");
 
-        // New files added to a partition
-        HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(appendedFileMap),
-            Option.empty());
-        records.add(record);
+      // New files added to a partition
+      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(appendedFileMap),
+          Option.empty());
+      records.add(record);
     });
 
     LOG.info("Updating at " + instantTime + " from " + operation + ". #partitions_updated=" + records.size()
