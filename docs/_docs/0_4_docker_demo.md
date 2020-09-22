@@ -1186,6 +1186,9 @@ and compose scripts are carefully implemented so that they serve dual-purpose
 2. For running integration-tests, we need the jars generated locally to be used for running services within docker. The
    docker-compose scripts (see `docker/compose/docker-compose_hadoop284_hive233_spark231.yml`) ensures local jars override
    inbuilt jars by mounting local HUDI workspace over the docker location
+3. As these docker containers have mounted local HUDI workspace, any changes that happen in the workspace would automatically 
+   reflect in the containers. This is a convenient way for developing and verifying Hudi for
+   developers who do not own a distributed environment. Note that this is how integration tests are run.
 
 This helps avoid maintaining separate docker images and avoids the costly step of building HUDI docker images locally.
 But if users want to test hudi from locations with lower network bandwidth, they can still build local images
