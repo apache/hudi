@@ -22,8 +22,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
-import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.HoodieWriteResult;
+import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -171,9 +172,9 @@ public class DataSourceUtils {
         .withProps(parameters).build();
   }
 
-  public static HoodieWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
-      String tblName, Map<String, String> parameters) {
-    return new HoodieWriteClient<>(jssc, createHoodieConfig(schemaStr, basePath, tblName, parameters), true);
+  public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
+                                                       String tblName, Map<String, String> parameters) {
+    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), createHoodieConfig(schemaStr, basePath, tblName, parameters), true);
   }
 
   public static String getCommitActionType(WriteOperationType operation, HoodieTableType tableType) {
@@ -184,7 +185,7 @@ public class DataSourceUtils {
     }
   }
 
-  public static HoodieWriteResult doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
+  public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
                                                    String instantTime, WriteOperationType operation) throws HoodieException {
     switch (operation) {
       case BULK_INSERT:
@@ -202,7 +203,7 @@ public class DataSourceUtils {
     }
   }
 
-  public static HoodieWriteResult doDeleteOperation(HoodieWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
+  public static HoodieWriteResult doDeleteOperation(SparkRDDWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
       String instantTime) {
     return new HoodieWriteResult(client.delete(hoodieKeys, instantTime));
   }
@@ -224,7 +225,7 @@ public class DataSourceUtils {
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
       HoodieWriteConfig writeConfig) {
     try {
-      HoodieReadClient client = new HoodieReadClient<>(jssc, writeConfig);
+      HoodieReadClient client = new HoodieReadClient<>(new HoodieSparkEngineContext(jssc), writeConfig);
       return client.tagLocation(incomingHoodieRecords)
           .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
     } catch (TableNotFoundException e) {

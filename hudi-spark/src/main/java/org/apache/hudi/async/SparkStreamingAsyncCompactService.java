@@ -18,7 +18,13 @@
 
 package org.apache.hudi.async;
 
-import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.AbstractCompactor;
+import org.apache.hudi.client.AbstractHoodieWriteClient;
+import org.apache.hudi.client.HoodieSparkCompactor;
+import org.apache.hudi.common.HoodieEngineContext;
+import org.apache.hudi.common.HoodieSparkEngineContext;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
@@ -28,8 +34,21 @@ import org.apache.spark.api.java.JavaSparkContext;
 public class SparkStreamingAsyncCompactService extends AsyncCompactService {
 
   private static final long serialVersionUID = 1L;
+  private static final Logger LOG = LogManager.getLogger(SparkStreamingAsyncCompactService.class);
+  private transient JavaSparkContext jssc;
 
-  public SparkStreamingAsyncCompactService(JavaSparkContext jssc, HoodieWriteClient client) {
-    super(jssc, client, true);
+  public SparkStreamingAsyncCompactService(HoodieEngineContext context, AbstractHoodieWriteClient client) {
+    super(context, client);
+    this.jssc = HoodieSparkEngineContext.getSparkContext(context);
+  }
+
+  public SparkStreamingAsyncCompactService(HoodieEngineContext context, AbstractHoodieWriteClient client, boolean runInDaemonMode) {
+    super(context, client, runInDaemonMode);
+    this.jssc = HoodieSparkEngineContext.getSparkContext(context);
+  }
+
+  @Override
+  protected AbstractCompactor createCompactor(AbstractHoodieWriteClient client) {
+    return new HoodieSparkCompactor(client);
   }
 }

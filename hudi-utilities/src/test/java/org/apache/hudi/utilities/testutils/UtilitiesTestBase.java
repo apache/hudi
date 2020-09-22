@@ -19,6 +19,8 @@
 package org.apache.hudi.utilities.testutils;
 
 import java.io.FileInputStream;
+
+import org.apache.hudi.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -84,6 +86,7 @@ public class UtilitiesTestBase {
   protected static MiniDFSCluster dfsCluster;
   protected static DistributedFileSystem dfs;
   protected transient JavaSparkContext jsc = null;
+  protected transient HoodieSparkEngineContext context = null;
   protected transient SparkSession sparkSession = null;
   protected transient SQLContext sqlContext;
   protected static HiveServer2 hiveServer;
@@ -129,6 +132,7 @@ public class UtilitiesTestBase {
   public void setup() throws Exception {
     TestDataSource.initDataGen();
     jsc = UtilHelpers.buildSparkContext(this.getClass().getName() + "-hoodie", "local[2]");
+    context = new HoodieSparkEngineContext(jsc);
     sqlContext = new SQLContext(jsc);
     sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
   }
@@ -138,6 +142,9 @@ public class UtilitiesTestBase {
     TestDataSource.resetDataGen();
     if (jsc != null) {
       jsc.stop();
+    }
+    if (context != null) {
+      context = null;
     }
   }
 
