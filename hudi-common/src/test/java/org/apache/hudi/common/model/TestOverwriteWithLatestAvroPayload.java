@@ -71,7 +71,6 @@ public class TestOverwriteWithLatestAvroPayload {
 
     OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1);
     OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(record2, 2);
-    OverwriteWithLatestAvroPayload payload3 = new OverwriteWithLatestAvroPayload(record3, 2);
     assertEquals(payload1.preCombine(payload2), payload2);
     assertEquals(payload2.preCombine(payload1), payload2);
 
@@ -82,7 +81,7 @@ public class TestOverwriteWithLatestAvroPayload {
     assertEquals(payload2.combineAndGetUpdateValue(record1, schema).get(), record2);
 
     assertEquals(HoodieAvroUtils.bytesToAvro(payload1.preCombine(payload2, schema).recordBytes,schema),
-            HoodieAvroUtils.bytesToAvro(payload3.recordBytes, schema));
+            record3);
   }
 
   @Test
