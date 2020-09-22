@@ -635,12 +635,13 @@ public class HoodieMetadataImpl {
    * @param instantTime Timestamp at which the restore was performed
    */
   void update(HoodieRestoreMetadata restoreMetadata, String instantTime) {
+    Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
     Map<String, List<String>> partitionToDeletedFiles = new HashMap<>();
     restoreMetadata.getHoodieRestoreMetadata().values().forEach(rms -> {
-      rms.forEach(rm -> processRollbackMetadata(rm, partitionToDeletedFiles));
+      rms.forEach(rm -> processRollbackMetadata(rm, partitionToDeletedFiles, partitionToAppendedFiles));
     });
 
-    commitRollbackDeletes(partitionToDeletedFiles, instantTime, "Restore");
+    commitRollback(partitionToDeletedFiles, partitionToAppendedFiles, instantTime, "Restore");
   }
 
   /**
@@ -650,27 +651,50 @@ public class HoodieMetadataImpl {
    * @param instantTime Timestamp at which the rollback was performed
    */
   void update(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
+    Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
     Map<String, List<String>> partitionToDeletedFiles = new HashMap<>();
-    processRollbackMetadata(rollbackMetadata, partitionToDeletedFiles);
-    commitRollbackDeletes(partitionToDeletedFiles, instantTime, "Rollback");
+    processRollbackMetadata(rollbackMetadata, partitionToDeletedFiles, partitionToAppendedFiles);
+    commitRollback(partitionToDeletedFiles, partitionToAppendedFiles, instantTime, "Rollback");
   }
 
   /**
-   * Retrives the partition and deleted files from {@code HoodieRollbackMetadata}.
+   * Extracts information about the deleted and append files from the {@code HoodieRollbackMetadata}.
+   *
+   * During a rollback files may be deleted (COW, MOR) or rollback blocks be appended (MOR only) to files. This
+   * function will extract this change file for each partition.
    *
    * @param rollbackMetadata {@code HoodieRollbackMetadata}
-   * @param partitionToDeletedFiles The {@code Map} to fill with partition and deleted files.
+   * @param partitionToDeletedFiles The {@code Map} to fill with files deleted per partition.
+   * @param partitionToAppendedFiles The {@code Map} to fill with files appended per partition and their sizes.
    */
   private void processRollbackMetadata(HoodieRollbackMetadata rollbackMetadata,
-                                       Map<String, List<String>> partitionToDeletedFiles) {
+                                       Map<String, List<String>> partitionToDeletedFiles,
+                                       Map<String, Map<String, Long>> partitionToAppendedFiles) {
     rollbackMetadata.getPartitionMetadata().values().forEach(pm -> {
-      // Extract deleted file name from the absolute paths saved in getSuccessDeleteFiles()
-      List<String> deletedFiles = pm.getSuccessDeleteFiles().stream().map(p -> new Path(p).getName())
-          .collect(Collectors.toList());
-      if (partitionToDeletedFiles.containsKey(pm.getPartitionPath())) {
-        partitionToDeletedFiles.get(pm.getPartitionPath()).addAll(deletedFiles);
-      } else {
-        partitionToDeletedFiles.put(pm.getPartitionPath(), new ArrayList<>(deletedFiles));
+      final String partition = pm.getPartitionPath();
+
+      if (!pm.getSuccessDeleteFiles().isEmpty()) {
+        if (!partitionToDeletedFiles.containsKey(partition)) {
+          partitionToDeletedFiles.put(partition, new ArrayList<>());
+        }
+
+        // Extract deleted file name from the absolute paths saved in getSuccessDeleteFiles()
+        List<String> deletedFiles = pm.getSuccessDeleteFiles().stream().map(p -> new Path(p).getName())
+            .collect(Collectors.toList());
+        partitionToDeletedFiles.get(partition).addAll(deletedFiles);
+      }
+
+      if (!pm.getAppendFiles().isEmpty()) {
+        if (!partitionToAppendedFiles.containsKey(partition)) {
+          partitionToAppendedFiles.put(partition, new HashMap<>());
+        }
+
+        // Extract appended file name from the absolute paths saved in getAppendFiles()
+        pm.getAppendFiles().forEach((path, size) -> {
+          partitionToAppendedFiles.get(partition).merge(new Path(path).getName(), size, (oldSize, newSizeCopy) -> {
+            return size + oldSize;
+          });
+        });
       }
     });
   }
@@ -682,18 +706,21 @@ public class HoodieMetadataImpl {
    * @param instantTime Timestamp at which the deletes took place
    * @param operation Type of the operation which caused the files to be deleted
    */
-  private void commitRollbackDeletes(Map<String, List<String>> partitionToDeletedFiles, String instantTime,
-                                     String operation) {
+  private void commitRollback(Map<String, List<String>> partitionToDeletedFiles,
+                              Map<String, Map<String, Long>> partitionToAppendedFiles, String instantTime,
+                              String operation) {
     List<HoodieRecord> records = new LinkedList<>();
-    int[] fileDeleteCount = {0};
+    int[] fileChangeCount = {0, 0}; // deletes, appends
+
     partitionToDeletedFiles.forEach((partition, deletedFiles) -> {
       // Rollbacks deletes instants from timeline. The instant being rolled-back may not have been synced to the
       // metadata table. Hence, the deleted filed need to be checked against the metadata.
       try {
-        int origCount = deletedFiles.size();
         FileStatus[] existingStatuses = getAllFilesInPartition(new Path(datasetBasePath, partition));
         Set<String> currentFiles =
             Arrays.stream(existingStatuses).map(s -> s.getPath().getName()).collect(Collectors.toSet());
+
+        int origCount = deletedFiles.size();
         deletedFiles.removeIf(f -> !currentFiles.contains(f));
         if (deletedFiles.size() != origCount) {
           LOG.warn("Some Files to be deleted as part of " + operation + " at " + instantTime + " were not found in the "
@@ -701,25 +728,38 @@ public class HoodieMetadataImpl {
               + ". To delete = " + origCount + ", found=" + deletedFiles.size());
         }
 
-        // Commit this record even if there are no deleted files. This will create a delta-commit corresponding to
-        // the instant being synced.
-        fileDeleteCount[0] += deletedFiles.size();
+        fileChangeCount[0] += deletedFiles.size();
 
-        // Files deleted from a partition
-        HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(),
+        Option<Map<String, Long>> filesAdded = Option.empty();
+        if (partitionToAppendedFiles.containsKey(partition)) {
+          filesAdded = Option.of(partitionToAppendedFiles.remove(partition));
+        }
+
+        HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, filesAdded,
             Option.of(new ArrayList<>(deletedFiles)));
         records.add(record);
-
       } catch (IOException e) {
         throw new HoodieMetadataException("Failed to commit rollback deletes at instant " + instantTime, e);
       }
     });
 
-    if (!records.isEmpty()) {
-      LOG.info("Updating at " + instantTime + " from " + operation + ". #partitions_updated=" + records.size()
-          + ", #files_deleted=" + fileDeleteCount);
-      commit(records, instantTime, true);
-    }
+    partitionToAppendedFiles.forEach((partition, appendedFileMap) -> {
+        fileChangeCount[1] += appendedFileMap.size();
+
+        // Validate that no appended file has been deleted
+        ValidationUtils.checkState(
+          !appendedFileMap.keySet().removeAll(partitionToDeletedFiles.getOrDefault(partition, Collections.emptyList())),
+          "Rollback file cannot both be appended and deleted");
+
+        // New files added to a partition
+        HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.of(appendedFileMap),
+            Option.empty());
+        records.add(record);
+    });
+
+    LOG.info("Updating at " + instantTime + " from " + operation + ". #partitions_updated=" + records.size()
+        + ", #files_deleted=" + fileChangeCount[0] + ", #files_appended=" + fileChangeCount[1]);
+    commit(prepRecords(records, METADATA_PARTITION_NAME), instantTime, true);
   }
 
   /**

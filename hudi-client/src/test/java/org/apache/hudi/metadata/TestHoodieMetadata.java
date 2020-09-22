@@ -208,16 +208,6 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client.getConfig());
 
-      // Savepoint @ 006
-      if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
-        client.savepoint("hoodie", "metadata test");
-        validateMetadata(client.getConfig());
-
-        // Savepoint @ 003
-        client.savepoint("003", "hoodie", "metadata test");
-        validateMetadata(client.getConfig());
-      }
-
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
         newCommitTime = "007";
@@ -242,22 +232,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       // Restore
       client.restoreToInstant("006");
       validateMetadata(client.getConfig());
-
-      // Delete savepoints so we can restore to older commits
-      if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
-        client.deleteSavepoint("003");
-        validateMetadata(client.getConfig());
-        client.deleteSavepoint("005");
-        validateMetadata(client.getConfig());
-      }
-
-      // TODO: This is broken for MOR due to rollback issue. Fix testRollbackOperations first.
-      // Restore
-
-      // Restore
-      //client.restoreToInstant("006");
-      //validateMetadata(client.getConfig());
-    }
+     }
   }
 
   /**
@@ -266,11 +241,6 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testRollbackOperations(HoodieTableType tableType) throws Exception {
-    // TODO: Not supported for MOR tables yet.
-    if (tableType == HoodieTableType.MERGE_ON_READ) {
-      return;
-    }
-
     init(tableType);
 
     try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true))) {

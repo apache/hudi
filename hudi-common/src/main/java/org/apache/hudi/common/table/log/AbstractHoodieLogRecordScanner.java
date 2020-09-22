@@ -148,7 +148,8 @@ public abstract class AbstractHoodieLogRecordScanner {
         switch (r.getBlockType()) {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
-            LOG.info("Reading a data block from file " + logFile.getPath());
+            LOG.info("Reading a data block from file " + logFile.getPath() + " at instant "
+                + r.getLogBlockHeader().get(INSTANT_TIME));
             if (isNewInstantBlock(r) && !readBlocksLazily) {
               // If this is an avro data block belonging to a different commit/instant,
               // then merge the last blocks and records into the main result
