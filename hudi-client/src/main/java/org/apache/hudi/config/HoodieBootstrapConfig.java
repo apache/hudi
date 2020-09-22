@@ -37,6 +37,7 @@ public class HoodieBootstrapConfig extends DefaultHoodieConfig {
   public static final String BOOTSTRAP_BASE_PATH_PROP = "hoodie.bootstrap.base.path";
   public static final String BOOTSTRAP_MODE_SELECTOR = "hoodie.bootstrap.mode.selector";
   public static final String FULL_BOOTSTRAP_INPUT_PROVIDER = "hoodie.bootstrap.full.input.provider";
+  public static final String DEFAULT_FULL_BOOTSTRAP_INPUT_PROVIDER = "org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider";
   public static final String BOOTSTRAP_KEYGEN_CLASS = "hoodie.bootstrap.keygen.class";
   public static final String BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS =
       "hoodie.bootstrap.partitionpath.translator.class";
@@ -135,6 +136,8 @@ public class HoodieBootstrapConfig extends DefaultHoodieConfig {
       BootstrapMode.valueOf(props.getProperty(BOOTSTRAP_MODE_SELECTOR_REGEX_MODE));
       setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_INDEX_CLASS_PROP), BOOTSTRAP_INDEX_CLASS_PROP,
           DEFAULT_BOOTSTRAP_INDEX_CLASS);
+      setDefaultOnCondition(props, !props.containsKey(FULL_BOOTSTRAP_INPUT_PROVIDER), FULL_BOOTSTRAP_INPUT_PROVIDER,
+          DEFAULT_FULL_BOOTSTRAP_INPUT_PROVIDER);
       return config;
     }
   }
