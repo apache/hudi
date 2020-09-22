@@ -251,7 +251,26 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     // Create a temp folder as the base path
     dfs = dfsCluster.getFileSystem();
     dfsBasePath = dfs.getWorkingDirectory().toString();
+    this.basePath = dfsBasePath;
+    this.hadoopConf = dfs.getConf();
     dfs.mkdirs(new Path(dfsBasePath));
+  }
+
+  /**
+   * Initializes an instance of {@link HoodieTableMetaClient} with a special table type specified by
+   * {@code getTableType()}.
+   *
+   * @throws IOException
+   */
+  protected void initDFSMetaClient() throws IOException {
+    if (dfsBasePath == null) {
+      throw new IllegalStateException("The base path has not been initialized.");
+    }
+
+    if (jsc == null) {
+      throw new IllegalStateException("The Spark context has not been initialized.");
+    }
+    metaClient = HoodieTestUtils.init(dfs.getConf(), dfsBasePath, getTableType());
   }
 
   /**
