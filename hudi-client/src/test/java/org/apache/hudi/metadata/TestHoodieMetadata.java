@@ -294,34 +294,35 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       records = dataGen.generateDeletes(newCommitTime, 10);
       JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(records, 1).map(r -> r.getKey());
       client.startCommitWithTime(newCommitTime);
-      client.delete(deleteKeys, newCommitTime);
+      writeStatuses = client.delete(deleteKeys, newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client.getConfig());
+      client.rollback(newCommitTime);
       validateMetadata(client.getConfig());
 
       // Rollback of Clean
       newCommitTime = "009";
       client.clean(newCommitTime);
       validateMetadata(client.getConfig());
+      client.rollback(newCommitTime);
+      validateMetadata(client.getConfig());
+
     }
-  }
 
-  /**
-   * Test marker based rollback of various table operations sync to Metadata Table correctly.
-   */
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  public void testMarkerBasedRollbackOperations(HoodieTableType tableType) throws Exception {
-    init(tableType);
-
-    // Initial commit
+    // Rollback of partial commits
     try (HoodieWriteClient client = new HoodieWriteClient<>(jsc,
-        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(true).build())) {
+        getWriteConfigBuilder(false, true, false).withRollbackUsingMarkers(false).build())) {
+      // Write updates and inserts
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
       client.startCommitWithTime(newCommitTime);
-      List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      List<HoodieRecord> records = dataGen.generateUpdates(newCommitTime, 10);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      client.rollback(newCommitTime);
       validateMetadata(client.getConfig());
     }
 
+    // Marker based rollback of partial commits
     try (HoodieWriteClient client = new HoodieWriteClient<>(jsc,
         getWriteConfigBuilder(false, true, false).withRollbackUsingMarkers(true).build())) {
       // Write updates and inserts
@@ -330,7 +331,6 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       List<HoodieRecord> records = dataGen.generateUpdates(newCommitTime, 10);
       List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      // Rollback of uncommitted updates and inserts
       client.rollback(newCommitTime);
       validateMetadata(client.getConfig());
     }
